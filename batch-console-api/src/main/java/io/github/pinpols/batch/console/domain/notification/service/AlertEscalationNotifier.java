@@ -14,7 +14,9 @@ import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalatio
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxResetStaleParam;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -23,6 +25,7 @@ import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -265,11 +268,16 @@ public class AlertEscalationNotifier {
     }
     int reset = 0;
     for (AlertEscalationNotificationOutboxEntity row : stale) {
+      // 只回收扫描时看到的那一轮：旧扫描不能复位期间被重新领取的行。
       reset += outboxMapper.resetStalePublishing(
-          row.getId(),
-          row.getTenantId(),
-          OutboxPublishStatus.FAILED.code(),
-          OutboxPublishStatus.PUBLISHING.code());
+          AlertEscalationNotificationOutboxResetStaleParam.builder()
+              .id(row.getId())
+              .tenantId(row.getTenantId())
+              .failedStatus(OutboxPublishStatus.FAILED.code())
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .claimToken(row.getClaimToken())
+              .timeoutSeconds(STALE_PUBLISHING_SECONDS)
+              .build());
     }
     if (reset > 0) {
       log.warn("AlertEscalationNotifier reset stale PUBLISHING outbox rows: count={}", reset);
@@ -314,6 +322,7 @@ public class AlertEscalationNotifier {
   }
 
   private void publishOne(AlertEscalationNotificationOutboxEntity row) {
+    String claimToken = UUID.randomUUID().toString();
     AlertEscalationNotificationOutboxMarkPublishingParam
         alertEscalationNotificationOutboxMarkPublishingParam =
             AlertEscalationNotificationOutboxMarkPublishingParam.builder()
@@ -322,6 +331,7 @@ public class AlertEscalationNotifier {
                 .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .claimToken(claimToken)
                 .build();
     int claimed = outboxMapper.markPublishing(alertEscalationNotificationOutboxMarkPublishingParam);
     if (claimed == 0) {
@@ -332,21 +342,25 @@ public class AlertEscalationNotifier {
           JsonUtils.fromJson(row.getPayloadJson(), AlertEscalationNotifyPayload.class);
       domainEventPublisher.publishChanged(
           row.getTenantId(), row.getStream(), row.getEventType(), payload);
-      int marked = outboxMapper.markPublished(
-          row.getId(),
-          row.getTenantId(),
-          OutboxPublishStatus.PUBLISHED.code(),
-          OutboxPublishStatus.PUBLISHING.code());
+      int marked =
+          outboxMapper.markPublished(AlertEscalationNotificationOutboxMarkPublishedParam.builder()
+              .id(row.getId())
+              .tenantId(row.getTenantId())
+              .publishedStatus(OutboxPublishStatus.PUBLISHED.code())
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .claimToken(claimToken)
+              .build());
       if (marked > 0) {
         notifyCounter.increment();
         logPublished(row);
       }
     } catch (Exception ex) {
-      markPublishFailure(row, ex);
+      markPublishFailure(row, ex, claimToken);
     }
   }
 
-  private void markPublishFailure(AlertEscalationNotificationOutboxEntity row, Exception ex) {
+  private void markPublishFailure(
+      AlertEscalationNotificationOutboxEntity row, Exception ex, String claimToken) {
     int nextAttempt = zeroIfNull(row.getAttemptCount()) + 1;
     String error = BizExceptionUtils.ofLiteral(ex.getMessage()).renderedMessage();
     if (nextAttempt >= MAX_PUBLISH_ATTEMPTS) {
@@ -358,6 +372,7 @@ public class AlertEscalationNotifier {
                   .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
                   .lastError(error)
                   .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                  .claimToken(claimToken)
                   .build();
       outboxMapper.markGiveUp(alertEscalationNotificationOutboxMarkGiveUpParam);
       log.error(
@@ -379,6 +394,7 @@ public class AlertEscalationNotifier {
                 .nextPublishAt(nextPublishAt)
                 .lastError(error)
                 .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(claimToken)
                 .build();
     outboxMapper.markFailed(alertEscalationNotificationOutboxMarkFailedParam);
     log.warn(

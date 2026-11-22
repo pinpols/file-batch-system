@@ -81,6 +81,17 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return ctx == null || ctx.charset() == null ? StandardCharsets.UTF_8 : ctx.charset();
   }
 
+  /**
+   * 首次空输入（无列、无行）写出合法空产物：打开文件即截断历史字节，随后直接关闭并 fsync，不写表头或数据行。
+   *
+   * <p>只用于首跑。有断点时列布局不可还原必须抛 {@link ExportResumeLayoutUnknownException}，不能走这里静默返回零行。
+   */
+  protected long completeEmptyFirstRun(ExportFormatContext ctx) throws IOException {
+    try (ResumableExportFile ignored = openExportFile(ctx)) {
+      return 0L;
+    }
+  }
+
   /** 是否写 BOM 前缀（仅对存在 BOM 约定的字符集生效）。 */
   protected boolean withBom(ExportFormatContext ctx) {
     return ctx != null && Boolean.TRUE.equals(ctx.withBom());

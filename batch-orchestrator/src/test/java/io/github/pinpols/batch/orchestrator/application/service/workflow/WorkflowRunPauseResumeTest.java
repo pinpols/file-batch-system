@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -103,13 +104,38 @@ class WorkflowRunPauseResumeTest {
   @DisplayName("PAUSED 可恢复 → RUNNING")
   void shouldResume_whenPaused() {
     when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
-        .thenReturn(1);
+    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(1);
     WorkflowRunResumeProgressor progressor = mock(WorkflowRunResumeProgressor.class);
     when(resumeProgressorProvider.getObject()).thenReturn(progressor);
 
     assertThat(service().resume("t1", 7L).status()).isEqualTo("RUNNING");
     verify(progressor).resume("t1", 7L);
+  }
+
+  @Test
+  @DisplayName("PAUSED 但同组无空槽 → 保持暂停并返回容量错误")
+  void shouldRejectResume_whenNoFreeSlot() {
+    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
+    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
+
+    assertThatThrownBy(() -> service().resume("t1", 7L))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
+          assertThat(failure.getMessageKey()).isEqualTo("error.workflow.resume_capacity_full");
+        });
+  }
+
+  @Test
+  @DisplayName("恢复更新落空且状态已被并发修改 → STATE_CONFLICT")
+  void shouldRejectResume_whenConcurrentlyChanged() {
+    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"), run("RUNNING"));
+    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
+
+    assertThatThrownBy(() -> service().resume("t1", 7L))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getMessageKey())
+                .isEqualTo("error.common.concurrent_modification"));
   }
 
   @Test

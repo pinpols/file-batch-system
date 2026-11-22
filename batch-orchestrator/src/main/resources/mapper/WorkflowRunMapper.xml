@@ -116,6 +116,34 @@
         <include refid="ignoreActiveSlotConflict"/>
     </insert>
 
+    <update id="resumeIntoFreeSlot">
+        update batch.workflow_run run
+        set run_status = #{targetRunStatus},
+            active_slot = chosen.slot,
+            updated_at = current_timestamp
+        from (
+            select candidate.slot
+            from batch.workflow_definition definition
+            cross join lateral generate_series(
+                1, definition.max_active_runs_per_biz_date) as candidate(slot)
+            where definition.id = #{workflowDefinitionId}
+              and not exists (
+                  select 1 from batch.workflow_run active
+                  where active.tenant_id = #{tenantId}
+                    and active.workflow_definition_id = #{workflowDefinitionId}
+                    and active.biz_date = #{bizDate}
+                    and active.dry_run = #{dryRun}
+                    and active.active_slot = candidate.slot
+                    and <include refid="occupiesActiveSlot"/>
+              )
+            order by candidate.slot
+            limit 1
+        ) chosen
+        where run.tenant_id = #{tenantId}
+          and run.id = #{id}
+          and run.run_status = 'PAUSED'
+    </update>
+
     <select id="selectById" resultMap="WorkflowRunResultMap">
         select *
         from batch.workflow_run

@@ -135,6 +135,13 @@ trigger:
 
 orchestrator:
   replicaCount: 2
+  # 双副本取证包必须落共享卷：A 生成、B 下载，A 重建后仍能下载同一 ID。
+  # 站点需提供支持 ReadWriteMany 的 StorageClass，或改用 existingClaim 复用已有 RWX PVC。
+  forensic:
+    persistence:
+      enabled: true
+      accessMode: ReadWriteMany
+      size: 20Gi
   resourceScheduler:
     globalMaxRunningJobs: 1000
   quota:

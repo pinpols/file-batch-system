@@ -26,6 +26,8 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- Orchestrator 取证包改为跨副本共享卷：Helm 新增 `orchestrator.forensic.persistence`，把同一 RWX PVC 挂到所有副本并设置 `BATCH_FORENSIC_STORAGE_DIR`；生产 values 启用，迁移旧包与双 Pod 下载验收要求写入 ADR-022。
+- 投递语义与归档槽位文档校准：系统职责将 Outbox + Kafka 改为“至少一次投递”并写明发布端重试与消费方幂等认领责任；ADR-050 说明归档 `active_slot` 恒为默认 1、不能还原历史槽号。
 - 子 Job 启动返回后只核验 Workflow 节点绑定：`ChildJobLaunchSupport` 读取本次预期的节点尝试，已绑定到同一 Job 实例时不再执行同值 `UPDATE`；仅在绑定为空时补绑，绑定其他实例或跨租户读取失败时按冲突拒绝。首次原子绑定仍在准备事务内完成。
 - Workflow 根运行准入事务内复用一份节点与边：图校验、START 路由和冻结快照不再分别读取，常见成功路径的图相关 Mapper 调用由 6 次降为 2 次；定义版本复核、启用边过滤、边顺序和条件路由保持不变。见[容量复核](docs/audit/backend-capacity-analysis-2026-11-22.md)。
 - Workflow 多槽位准入在一条 SQL 中选择并尝试占用可见空槽，减少同一业务日并行启动时的数据库往返。满载仍逐槽复查后进入容量等待，见 [ADR-050](docs/architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)。
@@ -58,6 +60,12 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 修复导出恢复在首次空输入或断点首页为空时把旧文件登记为成功：`DelimitedExportFormat` / `FixedWidthExportFormat` 区分首跑与续跑，首次为空写出合法空产物并清理旧字节；有断点时按保存的游标、字节偏移和累计行数续写，列布局无法确定时返回 `EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN`，保留位点与残文件并阻止 STORE 和登记。
+- 修复终态补槽在恢复池线程等待子任务：`WorkflowLaunchWaitResumeTrigger` 不再等待逐项恢复，`WorkflowLaunchWaitReconciler` 认领后向有界执行器提交并释放线程；整轮结束（含空批、异常和拒绝提交）后清除租户去重标记，保留租约与定时扫描一轮语义。
+- 修复等待请求在部分空槽时领不到槽：`WorkflowLaunchWaitMapper.claimDue` 按与新 launch 一致的租户、Workflow、业务日、dry-run 和 `max_active_runs_per_biz_date` 可见空槽领取，最终占槽仍由唯一索引裁决。
+- 修复人工恢复 `PAUSED` 运行只能回原槽：新增 `WorkflowRunMapper.resumeIntoFreeSlot`，在同一事务内选择同组空槽，唯一索引冲突在保存点内有限重试；满槽返回 `error.workflow.resume_capacity_full` 并保留暂停。
+- 修复派发与告警 Outbox 旧发布者覆盖新一轮领取：派发 `markPublishingBatch` 返回 `(id, publish_attempt)`，告警 Outbox 增加可空 `claim_token`（V389）；成功、失败、放弃和超时复位都校验本轮凭据，旧持有者回写 0 行。
+- 修复多语言 SDK 有时限存储的旧执行清除新结果：TypeScript、Go、Rust 的 acquire 返回持有者凭据，`record` / `release` 在同一原子操作内比较凭据再变更；旧四方法自定义存储保留兼容路径。
 - 修复导出明细分页在同一排序值跨页时静默漏行：`jdbc_mapped_export` 与 `sql_template_export` 的单列 keyset 游标只读取严格大于上一页末值的记录，`10、10、20` 每页 1 条时只导出 2 条。两种插件现在每页多取一行做边界校验，发现同值跨页即返回 `EXPORT_GENERATE_CONFIG_INVALID` 并阻断文件登记；新增可选唯一排序后缀 `detailTiebreakerColumn` / `cursorTiebreakerColumn`，分页与续跑位点改用 `(排序列, 后缀列)` 复合游标。首屏同时检查排序键 NULL（NULL 行会被 keyset/哈希分片谓词过滤）。真库用例 `ExportKeysetRangeIT` 12/12 通过。
 - 修复增量任务空批成功后水位回落：启动查询原来只取最近一次成功实例的 `high_water_mark_out`，空输入批次不上报 OUT，该 NULL 会遮住上一轮有效水位，下一轮按空水位从头扫并可能重复写入。新查询 `selectLatestEffectiveHighWaterMarkOut` 跳过 NULL/空串 OUT，热表与 `archive.job_instance_archive` 各取最近一次有效成功实例再合并，并排除历史重放与补跑；V388 为热冷两支新增匹配的部分索引。真库用例 `IncrementalWatermarkMapperIntegrationTest` 6/6 通过（`42 → 空批 → 43` 第三轮 IN 仍为 42）。
 - 压测端到端汇总不再把根 Workflow 完成数算成 0：`p2-run-end-to-end-summary.sql` 改为按根请求关联 `workflow_run` 计算完成数、吞吐和 p95，派发 JOB 节点生成的子请求按 `parent_workflow_run_id` 单独计数，直接 Job 入口保留独立行；根请求存在但没有运行或没有完成样本时输出 `INVALID`。见[容量复核](docs/audit/backend-capacity-analysis-2026-11-22.md)。

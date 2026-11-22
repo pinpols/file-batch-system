@@ -3,7 +3,9 @@ package io.github.pinpols.batch.console.domain.notification.mapper;
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxResetStaleParam;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -25,19 +27,14 @@ public interface AlertEscalationNotificationOutboxMapper {
 
   int markPublishing(AlertEscalationNotificationOutboxMarkPublishingParam parameters);
 
-  int markPublished(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("publishedStatus") String publishedStatus,
-      @Param("publishingStatus") String publishingStatus);
+  int markPublished(AlertEscalationNotificationOutboxMarkPublishedParam parameters);
 
   int markFailed(AlertEscalationNotificationOutboxMarkFailedParam parameters);
 
   int markGiveUp(AlertEscalationNotificationOutboxMarkGiveUpParam parameters);
 
-  int resetStalePublishing(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("failedStatus") String failedStatus,
-      @Param("publishingStatus") String publishingStatus);
+  /**
+   * 超时复位：只回收扫描时看到的那一轮凭据，并再次校验状态与超时条件，避免误回收刚被重新领取的通知。
+   */
+  int resetStalePublishing(AlertEscalationNotificationOutboxResetStaleParam parameters);
 }

@@ -35,6 +35,7 @@ import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatContext;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
+import io.github.pinpols.batch.worker.exports.stage.format.ExportResumeLayoutUnknownException;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportRowLimitExceededException;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCheckpoint;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
@@ -302,6 +303,15 @@ public class GenerateStep implements ExportStageStep {
           "error.export.exceeds_max_rows",
           new Object[] {limit.observedRows(), limit.maxRows()},
           limit.getMessage(),
+          objectMapper);
+    }
+    if (ex instanceof ExportResumeLayoutUnknownException layoutUnknown) {
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN",
+          "error.export.generate.resume_layout_unknown",
+          new Object[] {layoutUnknown.formatType()},
+          layoutUnknown.getMessage(),
           objectMapper);
     }
     boolean configError = ex instanceof WorkerConfigException;

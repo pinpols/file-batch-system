@@ -46,10 +46,12 @@
 | 能力 | 范围 | 模块 |
 |---|---|---|
 | **File Object Registry** | MinIO 文件记录 / 校验和 / 生命周期 | batch-orchestrator file-object |
-| **Outbox + Kafka** | 批量交付事件 / 下游订阅 / exactly-once 语义 | batch-orchestrator outbox / batch-common kafka-plugin |
+| **Outbox + Kafka** | 批量交付事件 / 下游订阅 / **至少一次投递**（发布端重试 + Worker 幂等认领） | batch-orchestrator outbox / batch-common kafka-plugin |
 | **Input Staging** | 上游文件接收 / 格式校验 / 去重 | batch-worker-import staging-engine |
 | **Output Distribution** | 下游发送 / 重试 / 回执确认 | batch-worker-dispatch delivery-engine |
 | **数据对账（ADR-021）** | 输入文件行数 ↔ 处理行数 / 金额汇总 / 分区对账 | batch-orchestrator recon-engine |
+
+**投递保证。** Outbox + Kafka 提供的是**至少一次投递**，不是 exactly-once：发布端在 Kafka ACK 后、DB 回写前中断，或超时回收后被另一实例重新领取时，同一事件可能被再次投递。责任按两端划分——发布端负责按领取凭据重试并拒绝旧发布者覆盖新一轮状态（ADR-002）；消费方（Worker / 下游订阅）负责用 `event_key` 或业务幂等键做幂等认领，重复投递不得产生第二次业务副作用。
 
 ### 2.4 故障治理
 

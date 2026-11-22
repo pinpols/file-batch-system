@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
@@ -122,7 +124,10 @@ class AlertEscalationNotifierTest {
             && Objects.equals(parameters.id(), 31L)
             && Objects.equals(parameters.tenantId(), "t1"))))
         .thenReturn(1);
-    when(outboxMapper.markPublished(eq(31L), eq("t1"), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 31L)
+            && Objects.equals(parameters.tenantId(), "t1"))))
+        .thenReturn(1);
 
     notifier.poll();
 
@@ -142,7 +147,10 @@ class AlertEscalationNotifierTest {
     assertThat(payload.severity()).isEqualTo("CRITICAL");
     assertThat(payload.alertType()).isEqualTo("SLA_BREACH");
 
-    verify(outboxMapper).markPublished(eq(31L), eq("t1"), any(), any());
+    verify(outboxMapper)
+        .markPublished(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 31L)
+            && Objects.equals(parameters.tenantId(), "t1")));
     assertThat(meterRegistry.counter("batch.alert.escalation.notifications").count())
         .isEqualTo(1.0);
   }
@@ -189,7 +197,10 @@ class AlertEscalationNotifierTest {
             && Objects.equals(parameters.id(), 41L)
             && Objects.equals(parameters.tenantId(), "t2"))))
         .thenReturn(1);
-    when(outboxMapper.markPublished(eq(41L), eq("t2"), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 41L)
+            && Objects.equals(parameters.tenantId(), "t2"))))
+        .thenReturn(1);
 
     notifier.poll();
 
@@ -197,7 +208,10 @@ class AlertEscalationNotifierTest {
         .enqueue(eq(escalated(15L, "t2", 1, 0)), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(domainEventPublisher)
         .publishChanged(eq("t2"), eq("alerts"), eq("ALERT_ESCALATED"), any());
-    verify(outboxMapper).markPublished(eq(41L), eq("t2"), any(), any());
+    verify(outboxMapper)
+        .markPublished(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 41L)
+            && Objects.equals(parameters.tenantId(), "t2")));
   }
 
   @Test
@@ -222,7 +236,39 @@ class AlertEscalationNotifierTest {
             && Objects.equals(parameters.id(), 51L)
             && Objects.equals(parameters.tenantId(), "t1")
             && Objects.equals(parameters.lastError(), "publish boom")));
-    verify(outboxMapper, never()).markPublished(eq(51L), eq("t1"), any(), any());
+    verify(outboxMapper, never())
+        .markPublished(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 51L)
+            && Objects.equals(parameters.tenantId(), "t1")));
+  }
+
+  @Test
+  @DisplayName("超时复位只提交扫描时看到的凭据、状态和超时条件")
+  void shouldResetStalePublishingOnlyWithScannedClaimToken() {
+    when(alertEventMapper.selectEscalatedPendingNotify(anyInt())).thenReturn(List.of());
+    AlertEscalationNotificationOutboxEntity stale = outbox(71L, "t1", 1);
+    stale.setClaimToken("claim-a");
+    when(outboxMapper.selectStalePublishing(anyInt(), any(), anyLong())).thenReturn(List.of(stale));
+    when(outboxMapper.resetStalePublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 71L)
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.failedStatus(), OutboxPublishStatus.FAILED.code())
+            && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
+            && Objects.equals(parameters.claimToken(), "claim-a")
+            && parameters.timeoutSeconds() == 120L)))
+        .thenReturn(1);
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of());
+
+    notifier.poll();
+
+    verify(outboxMapper)
+        .resetStalePublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 71L)
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.failedStatus(), OutboxPublishStatus.FAILED.code())
+            && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
+            && Objects.equals(parameters.claimToken(), "claim-a")
+            && parameters.timeoutSeconds() == 120L));
   }
 
   @Test
@@ -246,7 +292,7 @@ class AlertEscalationNotifierTest {
     when(outboxMapper.markPublishing(
             ArgumentMatchers.any(AlertEscalationNotificationOutboxMarkPublishingParam.class)))
         .thenReturn(1);
-    when(outboxMapper.markPublished(any(), any(), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(any())).thenReturn(1);
 
     notifier.poll();
 
@@ -254,6 +300,6 @@ class AlertEscalationNotifierTest {
         .enqueue(any(AlertEventEntity.class), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(domainEventPublisher, times(2))
         .publishChanged(any(), eq("alerts"), eq("ALERT_ESCALATED"), any());
-    verify(outboxMapper, times(2)).markPublished(any(), any(), any(), any());
+    verify(outboxMapper, times(2)).markPublished(any());
   }
 }

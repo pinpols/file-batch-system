@@ -125,8 +125,16 @@
     </update>
 
     <!-- PERF(5.4) 阶段一:set-based 抢占。谓词与单条 markPublishing 一致(NEW/FAILED 可重入集 CAS +
-         publish_attempt 递增),RETURNING 返回本 forwarder 胜出的 id 集,天然排斥并发 forwarder。 -->
-    <select id="markPublishingBatch" resultType="java.lang.Long">
+         publish_attempt 递增),RETURNING 返回本轮胜出的 (id, publish_attempt) 凭据,后代写回必须匹配该凭据。 -->
+    <resultMap id="PublishClaimResult"
+               type="io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim">
+        <constructor>
+            <arg column="id" javaType="java.lang.Long"/>
+            <arg column="publish_attempt" javaType="int"/>
+        </constructor>
+    </resultMap>
+
+    <select id="markPublishingBatch" resultMap="PublishClaimResult" flushCache="true" useCache="false">
         update batch.outbox_event
         set publish_status = #{publishingStatus},
             publish_attempt = publish_attempt + 1,
@@ -135,11 +143,11 @@
           and id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
           and publish_status in (#{pendingStatus1}, #{pendingStatus2})
-        returning id
+        returning id, publish_attempt
     </select>
 
-    <!-- PERF(5.4) 阶段三:批量版保留 R3-P0-6 的 publish_status='PUBLISHING' 守卫(与单条对称,
-         防止把已 PUBLISHED 行回退)。 -->
+    <!-- PERF(5.4) 阶段三:批量版保留 R3-P0-6 的 publish_status='PUBLISHING' 守卫,并按本轮
+         publish_attempt 凭据拒绝旧发布者回写。 -->
     <update id="markPublishedBatch">
         update batch.outbox_event
         set publish_status = #{status},
@@ -148,6 +156,7 @@
           and id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
           and publish_status = #{publishingStatus}
+          and publish_attempt = #{publishAttempt}
     </update>
 
     <update id="markFailedBatch">
@@ -159,6 +168,7 @@
           and id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
           and publish_status = #{publishingStatus}
+          and publish_attempt = #{publishAttempt}
     </update>
 
     <update id="markGiveUpBatch">
@@ -169,6 +179,7 @@
           and id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
           and publish_status = #{publishingStatus}
+          and publish_attempt = #{publishAttempt}
     </update>
 
     <delete id="deletePublishedBefore">

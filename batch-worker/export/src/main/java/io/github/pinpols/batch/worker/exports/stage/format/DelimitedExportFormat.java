@@ -41,10 +41,16 @@ public class DelimitedExportFormat extends AbstractExportFormat {
     }
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+    boolean resuming = isResuming(ctx);
     List<ColumnLayout> columns =
         resolveDelimitedColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
     if (columns.isEmpty() && firstPage.rows().isEmpty()) {
-      return 0L;
+      if (resuming) {
+        // 重派时首页已空且模板/插件都没声明列:无法还原残文件布局,保留位点与残文件并明确失败,
+        // 不能用旧字节写出零行成功。
+        throw new ExportResumeLayoutUnknownException(formatType());
+      }
+      return completeEmptyFirstRun(ctx);
     }
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
@@ -54,7 +60,6 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         firstNonNull(templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate"));
     Map<String, Object> trailerTemplate = toMap(trailerTemplateValue);
     boolean trailerEnabled = OutboundTrailerRecord.enabled(trailerTemplate);
-    boolean resuming = isResuming(ctx);
     String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
     BigDecimal resumeControlTotal =
         trailerEnabled && resuming && amountField != null ? batchControlTotal(ctx) : null;

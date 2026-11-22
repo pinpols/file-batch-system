@@ -14,9 +14,11 @@ import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -77,35 +79,68 @@ public class WorkflowLaunchWaitReconciler {
     reconcileTenant(tenantId, properties.getBatchSize());
   }
 
-  /** 终态提交后立即补槽：只处理较小批次，把剩余等待留给定时扫描，避免阻塞完成线程。 */
-  public void resumeTenant(String tenantId) {
-    reconcileTenant(tenantId, properties.getResumeBatchSize());
+  /**
+   * 终态补槽的异步入口：在本线程完成认领后，把逐项恢复提交给恢复池，调用线程立即返回。
+   *
+   * <p>返回的 future 在本轮已提交任务全部结束时完成，空批立即完成。调用方（尤其是恢复池自己的工作线程）不得对它调用
+   * {@code join()}，否则会回到“父任务占着线程等同池子任务”的阻塞模型。
+   */
+  public CompletableFuture<Void> resumeTenantAsync(String tenantId) {
+    return RlsTenantContextHolder.runWithTenant(
+        tenantId, () -> submitTenantResumeInContext(tenantId, properties.getResumeBatchSize()));
   }
 
   public void reconcileTenant(String tenantId, int limit) {
-    RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileTenantInContext(tenantId, limit));
+    RlsTenantContextHolder.runWithTenant(
+        tenantId, () -> submitTenantResumeInContext(tenantId, limit).join());
   }
 
-  private void reconcileTenantInContext(String tenantId, int limit) {
+  private CompletableFuture<Void> submitTenantResumeInContext(String tenantId, int limit) {
     Instant retryCutoffBaseTime = BatchDateTimeSupport.utcNow();
     long retryDelaySeconds = properties.getRetryDelaySeconds();
     Instant claimLease = retryCutoffBaseTime.plusSeconds(properties.getClaimLeaseSeconds());
     List<WorkflowLaunchWaitClaim> waiting = waitingService.claimDue(tenantId, limit, claimLease);
     if (EmptyChecks.isEmpty(waiting)) {
-      return;
+      return CompletableFuture.completedFuture(null);
     }
-    CompletableFuture<?>[] launches = new CompletableFuture<?>[waiting.size()];
-    for (int index = 0; index < waiting.size(); index++) {
-      WorkflowLaunchWaitClaim entry = waiting.get(index);
-      launches[index] = CompletableFuture.runAsync(
-          () ->
-              // Worker 线程没有调用方的租户上下文，RLS 必须逐条绑定。
-              RlsTenantContextHolder.runWithTenant(
-                  tenantId, () -> reconcileClaimInTenant(tenantId, entry, retryDelaySeconds)),
-          resumeExecutor);
+    List<CompletableFuture<Void>> launches = new ArrayList<>(waiting.size());
+    for (WorkflowLaunchWaitClaim entry : waiting) {
+      CompletableFuture<Void> launch = new CompletableFuture<>();
+      try {
+        resumeExecutor.execute(() -> runClaim(tenantId, entry, retryDelaySeconds, launch));
+      } catch (RejectedExecutionException rejected) {
+        // 提交失败时立即释放认领，避免等待行占着租约直到超时；本轮仍按完成收尾。
+        releaseForRetryQuietly(tenantId, entry.requestId(), retryDelaySeconds);
+        launch.complete(null);
+        log.warn(
+            "workflow launch wait resume task rejected: tenantId={}, requestId={}, error={}",
+            tenantId,
+            entry.requestId(),
+            SwallowedExceptionLogger.summary(rejected));
+      }
+      launches.add(launch);
     }
-    // 等本轮全部结束再返回：租约边界与“一轮补满”的既有语义都依赖这个同步点。
-    CompletableFuture.allOf(launches).join();
+    return CompletableFuture.allOf(launches.toArray(CompletableFuture[]::new));
+  }
+
+  private void runClaim(
+      String tenantId,
+      WorkflowLaunchWaitClaim entry,
+      long retryDelaySeconds,
+      CompletableFuture<Void> launch) {
+    try {
+      // Worker 线程没有调用方的租户上下文，RLS 必须逐条绑定。
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> reconcileClaimInTenant(tenantId, entry, retryDelaySeconds));
+    } catch (RuntimeException unexpected) {
+      log.warn(
+          "workflow launch wait resume task failed: tenantId={}, requestId={}, error={}",
+          tenantId,
+          entry.requestId(),
+          SwallowedExceptionLogger.summary(unexpected));
+    } finally {
+      launch.complete(null);
+    }
   }
 
   private void reconcileClaimInTenant(
@@ -152,5 +187,19 @@ public class WorkflowLaunchWaitReconciler {
   private void releaseForRetry(String tenantId, String requestId, long retryDelaySeconds) {
     waitingService.release(
         tenantId, requestId, BatchDateTimeSupport.utcNow().plusSeconds(retryDelaySeconds));
+  }
+
+  private void releaseForRetryQuietly(String tenantId, String requestId, long retryDelaySeconds) {
+    try {
+      releaseForRetry(tenantId, requestId, retryDelaySeconds);
+    } catch (RuntimeException failure) {
+      // 释放失败时由认领租约到期后的定时扫描恢复，不阻断本轮收尾。
+      log.warn(
+          "workflow launch wait release after rejected resume failed:"
+              + " tenantId={}, requestId={}, error={}",
+          tenantId,
+          requestId,
+          SwallowedExceptionLogger.summary(failure));
+    }
   }
 }

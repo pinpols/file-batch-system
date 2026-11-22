@@ -8,6 +8,7 @@ import {
   taskSuccess,
   withIdempotency,
   withRetry,
+  type SdkIdempotencyClaim,
   type SdkIdempotencyEntity,
   type SdkIdempotencyStore,
   type TaskContext,
@@ -158,4 +159,106 @@ test("withIdempotency maps record failure to EXECUTION_FAILED", async () => {
 
   assert.equal(result.success, false);
   assert.equal(result.errorCode, ErrorCode.EXECUTION_FAILED);
+});
+
+test("stale claim cannot release or overwrite a newer successful result", async () => {
+  let now = 1_000;
+  const store = new InMemoryIdempotencyStore(() => now);
+
+  const claimA = await store.acquire("owned", 10);
+  assert.ok(claimA);
+  now = 1_011;
+  const claimB = await store.acquire("owned", 10);
+  assert.ok(claimB);
+  assert.equal(
+    await store.recordOwned("owned", { result: taskSuccess({ winner: "B" }) }, claimB!, 1_000),
+    true,
+  );
+
+  assert.equal(await store.releaseOwned("owned", claimA!), false);
+  assert.equal(
+    await store.recordOwned("owned", { result: taskSuccess({ winner: "A" }) }, claimA!, 1_000),
+    false,
+  );
+
+  const cached = await store.find("owned");
+  assert.deepEqual(cached?.result.outputs, { winner: "B" });
+});
+
+test("withIdempotency keeps working with a legacy four-method store", async () => {
+  const entries = new Map<string, SdkIdempotencyEntity>();
+  const legacyStore: SdkIdempotencyStore = {
+    async tryAcquire(key) {
+      if (entries.has(key)) return false;
+      entries.set(key, { result: taskSuccess(undefined, "placeholder") });
+      return true;
+    },
+    async find(key) {
+      return entries.get(key);
+    },
+    async record(key, entity) {
+      entries.set(key, entity);
+    },
+    async release(key) {
+      entries.delete(key);
+    },
+  };
+  let calls = 0;
+  const handler = withIdempotency(
+    {
+      async execute() {
+        calls += 1;
+        return taskSuccess({ calls }, "done");
+      },
+    },
+    legacyStore,
+  );
+
+  assert.equal((await handler.execute(ctx("legacy"))).success, true);
+  assert.equal((await handler.execute(ctx("legacy"))).success, true);
+  assert.equal(calls, 1);
+});
+
+test("a late executor cannot overwrite the newer executor result", async () => {
+  let now = 1_000;
+  const store = new InMemoryIdempotencyStore(() => now);
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  let releaseA!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    releaseA = resolve;
+  });
+  const handlerA = withIdempotency(
+    {
+      async execute() {
+        markStarted();
+        await gate;
+        return taskSuccess({ winner: "A" }, "A");
+      },
+    },
+    store,
+    { keyResolver: () => "shared", ttlMs: 10 },
+  );
+  const handlerB = withIdempotency(
+    {
+      async execute() {
+        return taskSuccess({ winner: "B" }, "B");
+      },
+    },
+    store,
+    { keyResolver: () => "shared", ttlMs: 10 },
+  );
+
+  const resultA = handlerA.execute(ctx("shared"));
+  await started;
+  now = 1_011;
+  const resultB = await handlerB.execute(ctx("shared"));
+  releaseA();
+  assert.equal((await resultA).success, true);
+
+  assert.deepEqual(resultB.outputs, { winner: "B" });
+  const third = await handlerA.execute(ctx("shared"));
+  assert.deepEqual(third.outputs, { winner: "B" });
 });

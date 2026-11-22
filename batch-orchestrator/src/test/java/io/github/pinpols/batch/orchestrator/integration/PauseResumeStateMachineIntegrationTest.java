@@ -71,6 +71,80 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
     assertThat(statusOfWorkflowRun(terminalId)).isEqualTo("SUCCESS");
   }
 
+  @Test
+  @DisplayName("原槽被占用时，人工恢复为同一运行 ID 取得另一空槽")
+  void shouldResumeIntoAnotherFreeSlot_whenOriginalSlotIsTaken() {
+    Long workflowDefId = insertWorkflowDefinition(2);
+    Long pausedId = insertWorkflowRun(workflowDefId, "PAUSED", 1);
+    Long occupyingId = insertWorkflowRun(workflowDefId, "RUNNING", 1);
+
+    assertThat(workflowRunService.resume(TENANT, pausedId).status()).isEqualTo("RUNNING");
+    assertThat(statusOfWorkflowRun(pausedId)).isEqualTo("RUNNING");
+    assertThat(activeSlotOfWorkflowRun(pausedId)).isEqualTo(2);
+    assertThat(activeSlotOfWorkflowRun(occupyingId)).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("同组槽位全满时恢复保持暂停并返回容量结果")
+  void shouldKeepPausedAndReportCapacity_whenNoFreeSlot() {
+    Long workflowDefId = insertWorkflowDefinition(2);
+    Long pausedId = insertWorkflowRun(workflowDefId, "PAUSED", 1);
+    insertWorkflowRun(workflowDefId, "RUNNING", 1);
+    insertWorkflowRun(workflowDefId, "CREATED", 2);
+
+    assertThatThrownBy(() -> workflowRunService.resume(TENANT, pausedId))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getMessageKey())
+                .isEqualTo("error.workflow.resume_capacity_full"));
+    assertThat(statusOfWorkflowRun(pausedId)).isEqualTo("PAUSED");
+  }
+
+  private Long insertWorkflowDefinition(int maxActiveRuns) {
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String insertWorkflowDefinitionSql = """
+        insert into batch.workflow_definition (
+          tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+          max_active_runs_per_biz_date
+        ) values (?, ?, ?, 'DAG', 1, true, ?)
+        returning id
+        """;
+    return jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql,
+        Long.class,
+        TENANT,
+        "WF-SLOT-" + suffix,
+        "workflow slot " + suffix,
+        maxActiveRuns);
+  }
+
+  private Long insertWorkflowRun(Long workflowDefinitionId, String status, int activeSlot) {
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String insertWorkflowRunSql = """
+        insert into batch.workflow_run (
+          tenant_id, workflow_definition_id, biz_date, run_status, current_node_code,
+          trace_id, active_slot
+        ) values (?, ?, ?, ?, 'N1', ?, ?)
+        returning id
+        """;
+    return jdbcTemplate.queryForObject(
+        insertWorkflowRunSql,
+        Long.class,
+        TENANT,
+        workflowDefinitionId,
+        BIZ_DATE,
+        status,
+        "trace-slot-" + suffix,
+        activeSlot);
+  }
+
+  private Integer activeSlotOfWorkflowRun(Long id) {
+    String selectActiveSlotSql = """
+        select active_slot from batch.workflow_run where tenant_id = ? and id = ?
+        """;
+    return jdbcTemplate.queryForObject(selectActiveSlotSql, Integer.class, TENANT, id);
+  }
+
   private Long insertJobInstance(String status) {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String jobCode = "JOB-" + suffix;

@@ -11,4 +11,5 @@ public record OutboxEventMarkFailedBatchParam(
     List<Long> ids,
     String status,
     Instant nextPublishAt,
-    String publishingStatus) {}
+    String publishingStatus,
+    int publishAttempt) {}

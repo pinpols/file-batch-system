@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
@@ -168,6 +170,101 @@ class WorkflowLaunchWaitResumeTriggerTest {
     trigger.resumeAfterCommit("ta");
 
     verify(waitingService, times(1)).claimDue(eq("ta"), anyInt(), any());
+  }
+
+  @Test
+  @DisplayName("恢复池并发度为 1 时，多租户终态补槽仍能全部推进")
+  void shouldProgressAllTenantsWithSingleThreadResumePool() throws Exception {
+    assertMultiTenantResumeProgress(1);
+  }
+
+  @Test
+  @DisplayName("恢复池默认并发度 4 时，多租户终态补槽仍能全部推进")
+  void shouldProgressAllTenantsWithDefaultParallelism() throws Exception {
+    assertMultiTenantResumeProgress(4);
+  }
+
+  private void assertMultiTenantResumeProgress(int parallelism) throws Exception {
+    WorkflowLaunchWaitProperties properties = properties();
+    ExecutorService pool = Executors.newFixedThreadPool(parallelism);
+    CountDownLatch launched = new CountDownLatch(4);
+    try {
+      when(waitingService.claimDue(any(), anyInt(), any()))
+          .thenAnswer(invocation -> List.of(claim("req-" + invocation.getArgument(0), 1L)));
+      when(waitingService.restoreRequest(any(), any()))
+          .thenAnswer(invocation ->
+              restored(((WorkflowLaunchWaitClaim) invocation.getArgument(1)).requestId()));
+      when(launchService.launch(any())).thenAnswer(invocation -> {
+        launched.countDown();
+        return new LaunchResponse("instance", "trace");
+      });
+      WorkflowLaunchWaitResumeTrigger trigger =
+          trigger(reconciler(properties, pool), properties, pool);
+
+      trigger.resumeAfterCommit("ta");
+      trigger.resumeAfterCommit("tb");
+      trigger.resumeAfterCommit("tc");
+      trigger.resumeAfterCommit("td");
+
+      assertThat(launched.await(10, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      pool.shutdownNow();
+    }
+    verify(launchService, times(4)).launch(any());
+  }
+
+  @Test
+  @DisplayName("一轮结束后清除租户标记，下一轮终态仍能再次补槽")
+  void shouldAllowNextRoundAfterCompletedRound() throws Exception {
+    WorkflowLaunchWaitProperties properties = properties();
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    CountDownLatch firstRound = new CountDownLatch(1);
+    try {
+      when(waitingService.claimDue(eq("ta"), anyInt(), any()))
+          .thenReturn(List.of(claim("req-a", 1L)));
+      when(waitingService.restoreRequest(eq("ta"), any())).thenReturn(restored("req-a"));
+      when(launchService.launch(any())).thenAnswer(invocation -> {
+        firstRound.countDown();
+        return new LaunchResponse("instance", "trace");
+      });
+      WorkflowLaunchWaitResumeTrigger trigger =
+          trigger(reconciler(properties, pool), properties, pool);
+
+      trigger.resumeAfterCommit("ta");
+      assertThat(firstRound.await(5, TimeUnit.SECONDS)).isTrue();
+      // 同池排队屏障：上一轮子任务及其收尾先于屏障执行，确保去重标记已清除。
+      pool.submit(() -> {}).get(5, TimeUnit.SECONDS);
+
+      trigger.resumeAfterCommit("ta");
+      verify(launchService, timeout(5000).times(2)).launch(any());
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("逐项提交被拒绝时释放认领，本轮收尾后下一轮仍可补槽")
+  void shouldReleaseClaimsAndClearMarkerWhenEntrySubmissionRejected() {
+    WorkflowLaunchWaitProperties properties = properties();
+    when(waitingService.claimDue(eq("ta"), anyInt(), any()))
+        .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
+    // 父任务无 RLS 上下文，内联执行；逐项提交时 RLS 已绑定，模拟队列满/停机拒绝。
+    Executor rejectingEntries = task -> {
+      if (RlsTenantContextHolder.get() == null) {
+        task.run();
+        return;
+      }
+      throw new RejectedExecutionException("queue full");
+    };
+
+    WorkflowLaunchWaitResumeTrigger trigger =
+        trigger(reconciler(properties, rejectingEntries), properties, rejectingEntries);
+    trigger.resumeAfterCommit("ta");
+    trigger.resumeAfterCommit("ta");
+
+    verify(waitingService, times(2)).claimDue(eq("ta"), anyInt(), any());
+    verify(waitingService, times(4)).release(eq("ta"), any(), any());
+    verify(launchService, never()).launch(any());
   }
 
   private WorkflowLaunchWaitResumeTrigger trigger(

@@ -81,6 +81,14 @@ type IdempotencyEntity struct {
 	Result TaskResult
 }
 
+// IdempotencyClaim 是取得执行权时返回的持有者凭据。实现 SdkIdempotencyStoreV2
+// 的存储用它拒绝租约已过期执行者的迟到写入。
+type IdempotencyClaim struct {
+	Token string
+}
+
+const legacyIdempotencyToken = "legacy"
+
 // SdkIdempotencyStore is intentionally storage-agnostic. Production tenants can
 // back it with DB/Redis; the SDK ships only noop and in-memory test stores.
 type SdkIdempotencyStore interface {
@@ -88,6 +96,20 @@ type SdkIdempotencyStore interface {
 	Find(ctx context.Context, key string) (IdempotencyEntity, bool, error)
 	Record(ctx context.Context, key string, entity IdempotencyEntity, ttl time.Duration) error
 	Release(ctx context.Context, key string) error
+}
+
+// SdkIdempotencyStoreV2 是 SdkIdempotencyStore 的持有者凭据扩展。既有自定义存储
+// 继续走旧四方法；实现本接口的存储获得原子所有权校验。
+type SdkIdempotencyStoreV2 interface {
+	Acquire(ctx context.Context, key string, ttl time.Duration) (IdempotencyClaim, bool, error)
+	RecordOwned(
+		ctx context.Context,
+		key string,
+		entity IdempotencyEntity,
+		claim IdempotencyClaim,
+		ttl time.Duration,
+	) (bool, error)
+	ReleaseOwned(ctx context.Context, key string, claim IdempotencyClaim) (bool, error)
 }
 
 type IdempotencyKeyFunc func(*TaskContext) (string, error)
@@ -134,7 +156,7 @@ func (h idempotentHandler) Execute(taskCtx *TaskContext) (result TaskResult) {
 	if taskCtx != nil && taskCtx.Cancellation != nil {
 		ctx = taskCtx.Cancellation.Context()
 	}
-	acquired, err := h.store.TryAcquire(ctx, key, h.ttl)
+	claim, acquired, err := acquireIdempotencyClaim(h.store, ctx, key, h.ttl)
 	if err != nil {
 		failureSummary := "idempotency acquire failed: " + err.Error()
 		return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
@@ -153,21 +175,74 @@ func (h idempotentHandler) Execute(taskCtx *TaskContext) (result TaskResult) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			_ = h.store.Release(ctx, key)
+			releaseIdempotencyClaim(h.store, ctx, key, claim)
 			panic(r)
 		}
 	}()
 
 	result = h.inner.Execute(taskCtx)
 	if result.IsSuccess() {
-		if err := h.store.Record(ctx, key, IdempotencyEntity{Result: result}, h.ttl); err != nil {
+		recorded, err := recordIdempotencyClaim(
+			h.store, ctx, key, IdempotencyEntity{Result: result}, claim, h.ttl)
+		if err != nil {
 			failureSummary := "idempotency record failed: " + err.Error()
 			return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
 		}
+		// recorded=false means this executor lost ownership; keep the newer result.
+		_ = recorded
 		return result
 	}
-	_ = h.store.Release(ctx, key)
+	releaseIdempotencyClaim(h.store, ctx, key, claim)
 	return result
+}
+
+func acquireIdempotencyClaim(
+	store SdkIdempotencyStore,
+	ctx context.Context,
+	key string,
+	ttl time.Duration,
+) (IdempotencyClaim, bool, error) {
+	if v2, ok := store.(SdkIdempotencyStoreV2); ok {
+		return v2.Acquire(ctx, key, ttl)
+	}
+	acquired, err := store.TryAcquire(ctx, key, ttl)
+	if err != nil {
+		return IdempotencyClaim{}, false, err
+	}
+	if !acquired {
+		return IdempotencyClaim{}, false, nil
+	}
+	return IdempotencyClaim{Token: legacyIdempotencyToken}, true, nil
+}
+
+func recordIdempotencyClaim(
+	store SdkIdempotencyStore,
+	ctx context.Context,
+	key string,
+	entity IdempotencyEntity,
+	claim IdempotencyClaim,
+	ttl time.Duration,
+) (bool, error) {
+	if v2, ok := store.(SdkIdempotencyStoreV2); ok {
+		return v2.RecordOwned(ctx, key, entity, claim, ttl)
+	}
+	if err := store.Record(ctx, key, entity, ttl); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func releaseIdempotencyClaim(
+	store SdkIdempotencyStore,
+	ctx context.Context,
+	key string,
+	claim IdempotencyClaim,
+) {
+	if v2, ok := store.(SdkIdempotencyStoreV2); ok {
+		_, _ = v2.ReleaseOwned(ctx, key, claim)
+		return
+	}
+	_ = store.Release(ctx, key)
 }
 
 type NoopIdempotencyStore struct{}
@@ -189,14 +264,16 @@ func (NoopIdempotencyStore) Release(context.Context, string) error {
 }
 
 type InMemoryIdempotencyStore struct {
-	mu      sync.Mutex
-	entries map[string]idempotencyEntry
-	now     func() time.Time
+	mu       sync.Mutex
+	entries  map[string]idempotencyEntry
+	now      func() time.Time
+	sequence uint64
 }
 
 type idempotencyEntry struct {
 	entity  *IdempotencyEntity
 	expires time.Time
+	token   string
 }
 
 func NewInMemoryIdempotencyStore() *InMemoryIdempotencyStore {
@@ -206,17 +283,27 @@ func NewInMemoryIdempotencyStore() *InMemoryIdempotencyStore {
 	}
 }
 
-func (s *InMemoryIdempotencyStore) TryAcquire(_ context.Context, key string, ttl time.Duration) (bool, error) {
+func (s *InMemoryIdempotencyStore) TryAcquire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	_, acquired, err := s.Acquire(ctx, key, ttl)
+	return acquired, err
+}
+
+func (s *InMemoryIdempotencyStore) Acquire(
+	_ context.Context,
+	key string,
+	ttl time.Duration,
+) (IdempotencyClaim, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.deleteIfExpiredLocked(key)
 	if _, exists := s.entries[key]; exists {
-		return false, nil
+		return IdempotencyClaim{}, false, nil
 	}
 	currentTime := s.now()
-	expirationTime := expiresAt(currentTime, ttl)
-	s.entries[key] = idempotencyEntry{expires: expirationTime}
-	return true, nil
+	s.sequence++
+	token := fmt.Sprintf("%d-%d", currentTime.UnixNano(), s.sequence)
+	s.entries[key] = idempotencyEntry{expires: expiresAt(currentTime, ttl), token: token}
+	return IdempotencyClaim{Token: token}, true, nil
 }
 
 func (s *InMemoryIdempotencyStore) Find(_ context.Context, key string) (IdempotencyEntity, bool, error) {
@@ -235,8 +322,48 @@ func (s *InMemoryIdempotencyStore) Record(_ context.Context, key string, entity 
 	defer s.mu.Unlock()
 	currentTime := s.now()
 	expirationTime := expiresAt(currentTime, ttl)
-	s.entries[key] = idempotencyEntry{entity: &entity, expires: expirationTime}
+	existing := s.entries[key]
+	s.entries[key] = idempotencyEntry{entity: &entity, expires: expirationTime, token: existing.token}
 	return nil
+}
+
+func (s *InMemoryIdempotencyStore) RecordOwned(
+	_ context.Context,
+	key string,
+	entity IdempotencyEntity,
+	claim IdempotencyClaim,
+	ttl time.Duration,
+) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleteIfExpiredLocked(key)
+	entry, exists := s.entries[key]
+	if !exists || entry.token != claim.Token {
+		return false, nil
+	}
+	currentTime := s.now()
+	s.entries[key] = idempotencyEntry{
+		entity:  &entity,
+		expires: expiresAt(currentTime, ttl),
+		token:   claim.Token,
+	}
+	return true, nil
+}
+
+func (s *InMemoryIdempotencyStore) ReleaseOwned(
+	_ context.Context,
+	key string,
+	claim IdempotencyClaim,
+) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleteIfExpiredLocked(key)
+	entry, exists := s.entries[key]
+	if !exists || entry.token != claim.Token {
+		return false, nil
+	}
+	delete(s.entries, key)
+	return true, nil
 }
 
 func (s *InMemoryIdempotencyStore) Release(_ context.Context, key string) error {

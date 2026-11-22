@@ -1,5 +1,22 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-22 后端架构整改实施
+
+- 导出恢复：`DelimitedExportFormat` / `FixedWidthExportFormat` 区分首跑空输入与断点续跑；续跑首页为空且无列声明时返回 `EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN`，保留位点与残文件，不再用旧文件登记零行成功。
+- Workflow 补槽：`WorkflowLaunchWaitReconciler` 改为认领后逐项提交、返回本轮 future；`WorkflowLaunchWaitResumeTrigger` 不再在恢复池线程等待子任务，整轮结束（含空批、异常、拒绝提交）后清除租户标记。
+- 等待准入：`WorkflowLaunchWaitMapper.claimDue` 按 `1..max_active_runs_per_biz_date` 的实际空槽领取，与新 launch 使用同一容量规则。
+- 人工恢复：新增 `WorkflowRunMapper.resumeIntoFreeSlot`，`PAUSED` 运行在同一事务内取得同组空槽；满槽返回 `error.workflow.resume_capacity_full`，唯一索引冲突在保存点内有限重试。
+- 派发 Outbox：`markPublishingBatch` 返回 `(id, publish_attempt)` 凭据，成功/失败/放弃回写都校验该凭据，旧发布者不能再覆盖新一轮结果。
+- 告警 Outbox：`V389` 增加 `claim_token`；超时复位复核扫描凭据、状态和超时条件，发布结果同样校验凭据。
+- SDK 幂等：TypeScript、Go、Rust 的有时限存储在取得执行权时返回持有者凭据，写结果和释放原子校验；旧四方法自定义存储保留兼容路径。
+- 取证包：Helm 增加 `orchestrator.forensic.persistence`，把同一 RWX 持久卷挂到所有 Orchestrator；生产 values 已启用，双 Pod 下载与重建后下载待目标环境实测。
+- 文档校准：系统职责将 Outbox + Kafka 改为“至少一次投递”并写明两端责任；ADR-050 修正归档 `active_slot` 不能还原历史槽号；ADR-022 补充多副本共享卷设计。
+
+## 2026-11-22 全后端架构审核
+
+- 增加[模块覆盖与新增发现](audit/backend-architecture-review-2026-11-22.md)和[逐文件清单](audit/backend-source-inventory-2026-11-22.csv)。导出恢复、SDK 幂等、备用告警通知和取证包下载的整改入口已加入[待办索引](plans/todo-master.md)。
+- [整改方案](plans/backend-architecture-remediation-2026-11-22.md) 汇总两轮审核事项，列明依赖关系、兼容性与关闭条件。
+
 ## 2026-11-22 Worker 分页与增量水位条款
 
 - [worker-plugins.md](architecture/worker-plugins.md) 导出 GENERATE 明确分页唯一性要求：单列游标只接受可证明唯一的列，排序值可重复时必须配置唯一后缀（`detailTiebreakerColumn` / `cursorTiebreakerColumn`）；同值跨页与排序键 NULL 一律以配置错误阻断，不再产出静默缺行的文件。
@@ -18,6 +35,10 @@
 ## 2026-11-21 后端待办整理
 
 - [TODO Master](plans/todo-master.md#后端执行顺序)按上线依赖、隔离容量复测和工程维护给出后端推进顺序。同步已合入的容量、栅栏和 Trigger 过载状态，并补入当前 Full CI 的文件到达匹配证据。
+
+## 2026-11-21 后端调度与投递恢复架构审核
+
+- [审核记录](audit/backend-architecture-review-2026-11-21.md)保存补槽线程阻塞、多槽位等待与人工恢复、派发事件超时回写的定向反例，并将整改入口加入[待办索引](plans/todo-master.md)。
 
 ## 2026-11-21 Workflow 多槽位准入和 launch 计时复核
 

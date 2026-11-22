@@ -157,6 +157,8 @@ archive_storage = OSS / S3 bucket "batch-forensic-{tenant}"
 
 **主链路影响 = 0**：本服务仅由运维 ops 通过 console 主动 pull，不在 trigger / orchestrator launch / worker claim / report 调用。
 
+**多副本部署（2026-11-22 修订）**：本地文件模式只适用于单副本。生产 Helm 默认 2 个 Orchestrator，生成与下载是两次独立请求，落到另一副本会返回 `export_file_missing`，生成副本被重建后原卷也会消失。chart 因此增加 `orchestrator.forensic.persistence`：把同一个 `ReadWriteMany` 持久卷挂到所有副本的 `batch.forensic.storage-dir`（默认挂载点 `/var/lib/batch-forensic`），生产 values 已启用。切换前须盘点各副本仍在保留期内的旧包，按原路径迁移到共享卷并核对 SHA-256。目标环境没有 RWX 存储时再评估对象存储。A 生成、B 下载、重建 A 后再次下载、两次摘要一致及跨租户拒绝必须在双 Pod 目标环境实测后才能关闭该项。
+
 ### v0.2 / v0.3 排期（按需触发）
 
 | Stage | 范围 | 估算 | 触发条件 |

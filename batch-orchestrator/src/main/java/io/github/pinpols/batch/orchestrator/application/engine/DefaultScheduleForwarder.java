@@ -14,8 +14,11 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkGiveUpBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
@@ -26,11 +29,9 @@ import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -171,8 +172,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         groups.attemptedEvents(), groups.publishSucceeded(), groups.publishFailed());
   }
 
-  /** 抢占成功、Kafka send 已发起的在途事件。 */
-  private record InFlight(OutboxEventEntity event, CompletableFuture<Boolean> future) {}
+  /** 抢占成功、Kafka send 已发起的在途事件；claimAttempt 是本轮回写必须匹配的凭据。 */
+  private record InFlight(
+      OutboxEventEntity event, int claimAttempt, CompletableFuture<Boolean> future) {}
+
+  /** 阶段三按领取凭据分组：同租户同 publish_attempt 的事件共用一条批量 UPDATE。 */
+  private record ClaimGroupKey(String tenantId, int publishAttempt) {}
 
   /** 阶段三失败组键：同租户同 attemptNo 的失败事件共用一条批量 UPDATE 与一次退避抽样。 */
   private record FailedGroupKey(String tenantId, int attemptNo) {}
@@ -185,8 +190,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       int attemptedEvents,
       int publishSucceeded,
       int publishFailed,
-      Map<String, List<Long>> publishedByTenant,
-      Map<String, List<Long>> giveUpByTenant,
+      Map<ClaimGroupKey, List<Long>> publishedByClaim,
+      Map<ClaimGroupKey, List<Long>> giveUpByClaim,
       Map<FailedGroupKey, List<Long>> failedByGroup,
       List<PendingRetry> pendingRetries) {}
 
@@ -221,7 +226,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
           .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
           .add(event.getId());
     }
-    Set<Long> wonIds = new HashSet<>();
+    Map<Long, Integer> claimAttemptById = new LinkedHashMap<>();
     for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
       OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam =
           OutboxEventMarkPublishingBatchParam.builder()
@@ -231,21 +236,26 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
               .pendingStatus1(OutboxPublishStatus.NEW.code())
               .pendingStatus2(OutboxPublishStatus.FAILED.code())
               .build();
-      wonIds.addAll(outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam));
+      for (OutboxPublishClaim claim :
+          outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam)) {
+        claimAttemptById.put(claim.id(), claim.publishAttempt());
+      }
     }
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
     for (OutboxEventEntity event : pendingEvents) {
-      if (wonIds.contains(event.getId())) {
-        CompletableFuture<Boolean> future;
-        try {
-          future = outboxPublisher.publish(event);
-        } catch (RuntimeException exception) {
-          future = CompletableFuture.completedFuture(false);
-        }
-        CompletableFuture<Boolean> publishFuture =
-            EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
-        inFlight.add(new InFlight(event, publishFuture));
+      Integer claimAttempt = claimAttemptById.get(event.getId());
+      if (EmptyChecks.isNull(claimAttempt)) {
+        continue;
       }
+      CompletableFuture<Boolean> future;
+      try {
+        future = outboxPublisher.publish(event);
+      } catch (RuntimeException exception) {
+        future = CompletableFuture.completedFuture(false);
+      }
+      CompletableFuture<Boolean> publishFuture =
+          EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
+      inFlight.add(new InFlight(event, claimAttempt, publishFuture));
     }
     return inFlight;
   }
@@ -279,8 +289,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     int attemptedEvents = 0;
     int publishSucceeded = 0;
     int publishFailed = 0;
-    Map<String, List<Long>> publishedByTenant = new LinkedHashMap<>();
-    Map<String, List<Long>> giveUpByTenant = new LinkedHashMap<>();
+    Map<ClaimGroupKey, List<Long>> publishedByClaim = new LinkedHashMap<>();
+    Map<ClaimGroupKey, List<Long>> giveUpByClaim = new LinkedHashMap<>();
     Map<FailedGroupKey, List<Long>> failedByGroup = new LinkedHashMap<>();
     List<PendingRetry> pendingRetries = new ArrayList<>();
     for (InFlight item : inFlight) {
@@ -289,17 +299,19 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       boolean published = isPublishedNow(item.future());
       if (published) {
         publishSucceeded++;
-        publishedByTenant
-            .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+        publishedByClaim
+            .computeIfAbsent(
+                new ClaimGroupKey(event.getTenantId(), item.claimAttempt()),
+                key -> new ArrayList<>())
             .add(event.getId());
         continue;
       }
       publishFailed++;
-      int publishAttemptNo =
-          EmptyChecks.isNull(event.getPublishAttempt()) ? 1 : event.getPublishAttempt() + 1;
+      int publishAttemptNo = item.claimAttempt();
       if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
-        giveUpByTenant
-            .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+        giveUpByClaim
+            .computeIfAbsent(
+                new ClaimGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
             .add(event.getId());
         giveUpCounter.increment();
       } else {
@@ -314,8 +326,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         attemptedEvents,
         publishSucceeded,
         publishFailed,
-        publishedByTenant,
-        giveUpByTenant,
+        publishedByClaim,
+        giveUpByClaim,
         failedByGroup,
         pendingRetries);
   }
@@ -328,21 +340,30 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    * @return 失败组 → 本轮抽样的 nextRetryAt(供审计记录复用)
    */
   private Map<FailedGroupKey, Instant> flushOutcomeGroups(OutcomeGroups groups) {
-    for (Map.Entry<String, List<Long>> entry : groups.publishedByTenant().entrySet()) {
-      int updated = outboxEventMapper.markPublishedBatch(
-          entry.getKey(),
-          entry.getValue(),
-          OutboxPublishStatus.PUBLISHED.code(),
-          OutboxPublishStatus.PUBLISHING.code());
-      warnOnPartialUpdate("markPublished", entry.getKey(), entry.getValue().size(), updated);
+    for (Map.Entry<ClaimGroupKey, List<Long>> entry : groups.publishedByClaim().entrySet()) {
+      ClaimGroupKey key = entry.getKey();
+      int updated =
+          outboxEventMapper.markPublishedBatch(OutboxEventMarkPublishedBatchParam.builder()
+              .tenantId(key.tenantId())
+              .ids(entry.getValue())
+              .status(OutboxPublishStatus.PUBLISHED.code())
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .publishAttempt(key.publishAttempt())
+              .build());
+      warnOnPartialUpdate(
+          "markPublished", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
     }
-    for (Map.Entry<String, List<Long>> entry : groups.giveUpByTenant().entrySet()) {
-      int updated = outboxEventMapper.markGiveUpBatch(
-          entry.getKey(),
-          entry.getValue(),
-          OutboxPublishStatus.GIVE_UP.code(),
-          OutboxPublishStatus.PUBLISHING.code());
-      warnOnPartialUpdate("markGiveUp", entry.getKey(), entry.getValue().size(), updated);
+    for (Map.Entry<ClaimGroupKey, List<Long>> entry : groups.giveUpByClaim().entrySet()) {
+      ClaimGroupKey key = entry.getKey();
+      int updated = outboxEventMapper.markGiveUpBatch(OutboxEventMarkGiveUpBatchParam.builder()
+          .tenantId(key.tenantId())
+          .ids(entry.getValue())
+          .status(OutboxPublishStatus.GIVE_UP.code())
+          .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+          .publishAttempt(key.publishAttempt())
+          .build());
+      warnOnPartialUpdate(
+          "markGiveUp", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
     }
     Map<FailedGroupKey, Instant> nextRetryAtByGroup = new LinkedHashMap<>();
     for (Map.Entry<FailedGroupKey, List<Long>> entry : groups.failedByGroup().entrySet()) {
@@ -355,10 +376,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
               .status(OutboxPublishStatus.FAILED.code())
               .nextPublishAt(nextRetryAt)
               .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .publishAttempt(entry.getKey().attemptNo())
               .build();
       int updated = outboxEventMapper.markFailedBatch(outboxEventMarkFailedBatchParam);
       warnOnPartialUpdate(
-          "markFailed", entry.getKey().tenantId(), entry.getValue().size(), updated);
+          "markFailed",
+          entry.getKey().tenantId(),
+          entry.getValue().size(),
+          updated,
+          entry.getKey().attemptNo());
     }
     return nextRetryAtByGroup;
   }
@@ -402,13 +428,16 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   }
 
   /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */
-  private void warnOnPartialUpdate(String action, String tenantId, int expected, int updated) {
+  private void warnOnPartialUpdate(
+      String action, String tenantId, int expected, int updated, int publishAttempt) {
     if (updated != expected) {
       log.warn(
-          "outbox batch {} partial update: tenant={} expected={} updated={} — rows guarded by"
-              + " publish_status='PUBLISHING' were advanced concurrently",
+          "outbox batch {} partial update: tenant={} attempt={} expected={} updated={} — rows"
+              + " guarded by publish_status='PUBLISHING' and publish_attempt were advanced"
+              + " concurrently",
           action,
           tenantId,
+          publishAttempt,
           expected,
           updated);
     }

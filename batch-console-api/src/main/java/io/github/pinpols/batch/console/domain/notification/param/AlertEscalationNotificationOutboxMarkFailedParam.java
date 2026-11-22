@@ -11,4 +11,5 @@ public record AlertEscalationNotificationOutboxMarkFailedParam(
     String failedStatus,
     Instant nextPublishAt,
     String lastError,
-    String publishingStatus) {}
+    String publishingStatus,
+    String claimToken) {}

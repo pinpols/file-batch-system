@@ -4,9 +4,12 @@ import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkGiveUpBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -37,27 +40,19 @@ public interface OutboxEventMapper {
    * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
    * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
    */
-  List<Long> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
+  List<OutboxPublishClaim> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
 
   /**
    * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
-   * 守卫；返回命中行数，调用方与入参集合大小比对告警。
+   * 守卫，并要求 {@code publish_attempt} 与领取凭据一致，拒绝旧发布者覆盖新一轮结果。
    */
-  int markPublishedBatch(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
+  int markPublishedBatch(OutboxEventMarkPublishedBatchParam parameters);
 
   /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
   int markFailedBatch(OutboxEventMarkFailedBatchParam parameters);
 
-  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp。 */
-  int markGiveUpBatch(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
+  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp 并校验领取凭据。 */
+  int markGiveUpBatch(OutboxEventMarkGiveUpBatchParam parameters);
 
   /**
    * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久长期停滞。

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -81,11 +82,49 @@ pub struct IdempotencyEntity {
     pub result: TaskResult,
 }
 
+/// Ownership credential returned when execution is acquired. Late writes from
+/// an executor whose lease expired are rejected by claim-aware stores.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdempotencyClaim {
+    pub token: String,
+}
+
+const LEGACY_IDEMPOTENCY_TOKEN: &str = "legacy";
+
 pub trait SdkIdempotencyStore: Send + Sync {
     fn try_acquire(&self, key: &str, ttl: Duration) -> Result<bool, String>;
     fn find(&self, key: &str) -> Result<Option<IdempotencyEntity>, String>;
     fn record(&self, key: &str, entity: IdempotencyEntity, ttl: Duration) -> Result<(), String>;
     fn release(&self, key: &str) -> Result<(), String>;
+
+    /// Claim-aware acquisition. The default keeps legacy stores working.
+    fn acquire(&self, key: &str, ttl: Duration) -> Result<Option<IdempotencyClaim>, String> {
+        if self.try_acquire(key, ttl)? {
+            Ok(Some(IdempotencyClaim {
+                token: LEGACY_IDEMPOTENCY_TOKEN.to_string(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Record only while the claim is still the owner. Returns whether it was written.
+    fn record_owned(
+        &self,
+        key: &str,
+        entity: IdempotencyEntity,
+        _claim: &IdempotencyClaim,
+        ttl: Duration,
+    ) -> Result<bool, String> {
+        self.record(key, entity, ttl)?;
+        Ok(true)
+    }
+
+    /// Release only while the claim is still the owner. Returns whether it was released.
+    fn release_owned(&self, key: &str, _claim: &IdempotencyClaim) -> Result<bool, String> {
+        self.release(key)?;
+        Ok(true)
+    }
 }
 
 pub fn task_id_idempotency_key(ctx: &TaskContext) -> Result<String, String> {
@@ -142,8 +181,8 @@ where
             Err(e) => return TaskResult::failure(error_code::CONFIG_INVALID, &e),
         };
 
-        let acquired = match self.store.try_acquire(&key, self.ttl) {
-            Ok(v) => v,
+        let claim = match self.store.acquire(&key, self.ttl) {
+            Ok(claim) => claim,
             Err(e) => {
                 return TaskResult::failure(
                     error_code::EXECUTION_FAILED,
@@ -152,27 +191,31 @@ where
             }
         };
 
-        if !acquired {
-            return match self.store.find(&key) {
-                Ok(Some(entity)) => entity.result,
-                Ok(None) => TaskResult::failure(
-                    IDEMPOTENT_IN_FLIGHT,
-                    "idempotent execution is already in flight",
-                ),
-                Err(e) => TaskResult::failure(
-                    error_code::EXECUTION_FAILED,
-                    &format!("idempotency lookup failed: {e}"),
-                ),
-            };
-        }
+        let claim = match claim {
+            Some(claim) => claim,
+            None => {
+                return match self.store.find(&key) {
+                    Ok(Some(entity)) => entity.result,
+                    Ok(None) => TaskResult::failure(
+                        IDEMPOTENT_IN_FLIGHT,
+                        "idempotent execution is already in flight",
+                    ),
+                    Err(e) => TaskResult::failure(
+                        error_code::EXECUTION_FAILED,
+                        &format!("idempotency lookup failed: {e}"),
+                    ),
+                };
+            }
+        };
 
         let result = self.inner.execute(ctx);
         if result.is_success() {
-            if let Err(e) = self.store.record(
+            if let Err(e) = self.store.record_owned(
                 &key,
                 IdempotencyEntity {
                     result: result.clone(),
                 },
+                &claim,
                 self.ttl,
             ) {
                 return TaskResult::failure(
@@ -182,7 +225,7 @@ where
             }
             result
         } else {
-            let _ = self.store.release(&key);
+            let _ = self.store.release_owned(&key, &claim);
             result
         }
     }
@@ -212,12 +255,14 @@ impl SdkIdempotencyStore for NoopIdempotencyStore {
 #[derive(Default)]
 pub struct InMemoryIdempotencyStore {
     entries: Mutex<BTreeMap<String, IdempotencyEntry>>,
+    sequence: AtomicU64,
 }
 
 #[derive(Clone)]
 struct IdempotencyEntry {
     entity: Option<IdempotencyEntity>,
     expires_at: Option<Instant>,
+    token: Option<String>,
 }
 
 impl InMemoryIdempotencyStore {
@@ -239,19 +284,26 @@ impl InMemoryIdempotencyStore {
 
 impl SdkIdempotencyStore for InMemoryIdempotencyStore {
     fn try_acquire(&self, key: &str, ttl: Duration) -> Result<bool, String> {
+        Ok(self.acquire(key, ttl)?.is_some())
+    }
+
+    fn acquire(&self, key: &str, ttl: Duration) -> Result<Option<IdempotencyClaim>, String> {
         let mut entries = self.entries.lock().map_err(|e| e.to_string())?;
         Self::delete_if_expired_locked(&mut entries, key);
         if entries.contains_key(key) {
-            return Ok(false);
+            return Ok(None);
         }
+        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed);
+        let token = format!("{sequence}");
         entries.insert(
             key.to_string(),
             IdempotencyEntry {
                 entity: None,
                 expires_at: expires_at(ttl),
+                token: Some(token.clone()),
             },
         );
-        Ok(true)
+        Ok(Some(IdempotencyClaim { token }))
     }
 
     fn find(&self, key: &str) -> Result<Option<IdempotencyEntity>, String> {
@@ -262,11 +314,13 @@ impl SdkIdempotencyStore for InMemoryIdempotencyStore {
 
     fn record(&self, key: &str, entity: IdempotencyEntity, ttl: Duration) -> Result<(), String> {
         let mut entries = self.entries.lock().map_err(|e| e.to_string())?;
+        let existing_token = entries.get(key).and_then(|entry| entry.token.clone());
         entries.insert(
             key.to_string(),
             IdempotencyEntry {
                 entity: Some(entity),
                 expires_at: expires_at(ttl),
+                token: existing_token,
             },
         );
         Ok(())
@@ -276,6 +330,45 @@ impl SdkIdempotencyStore for InMemoryIdempotencyStore {
         let mut entries = self.entries.lock().map_err(|e| e.to_string())?;
         entries.remove(key);
         Ok(())
+    }
+
+    fn record_owned(
+        &self,
+        key: &str,
+        entity: IdempotencyEntity,
+        claim: &IdempotencyClaim,
+        ttl: Duration,
+    ) -> Result<bool, String> {
+        let mut entries = self.entries.lock().map_err(|e| e.to_string())?;
+        Self::delete_if_expired_locked(&mut entries, key);
+        let Some(entry) = entries.get(key) else {
+            return Ok(false);
+        };
+        if entry.token.as_deref() != Some(claim.token.as_str()) {
+            return Ok(false);
+        }
+        entries.insert(
+            key.to_string(),
+            IdempotencyEntry {
+                entity: Some(entity),
+                expires_at: expires_at(ttl),
+                token: Some(claim.token.clone()),
+            },
+        );
+        Ok(true)
+    }
+
+    fn release_owned(&self, key: &str, claim: &IdempotencyClaim) -> Result<bool, String> {
+        let mut entries = self.entries.lock().map_err(|e| e.to_string())?;
+        Self::delete_if_expired_locked(&mut entries, key);
+        let Some(entry) = entries.get(key) else {
+            return Ok(false);
+        };
+        if entry.token.as_deref() != Some(claim.token.as_str()) {
+            return Ok(false);
+        }
+        entries.remove(key);
+        Ok(true)
     }
 }
 
@@ -393,6 +486,44 @@ mod tests {
         assert!(second.is_success());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(second.outputs.get("calls").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn stale_claim_cannot_overwrite_newer_success() {
+        let store = InMemoryIdempotencyStore::new();
+        let claim_a = store
+            .acquire("shared", Duration::from_millis(10))
+            .unwrap()
+            .expect("A acquires");
+        std::thread::sleep(Duration::from_millis(20));
+        let claim_b = store
+            .acquire("shared", Duration::from_secs(60))
+            .unwrap()
+            .expect("B acquires after A expires");
+        assert!(store
+            .record_owned(
+                "shared",
+                IdempotencyEntity {
+                    result: TaskResult::success("B"),
+                },
+                &claim_b,
+                Duration::from_secs(60),
+            )
+            .unwrap());
+
+        assert!(!store.release_owned("shared", &claim_a).unwrap());
+        assert!(!store
+            .record_owned(
+                "shared",
+                IdempotencyEntity {
+                    result: TaskResult::success("A"),
+                },
+                &claim_a,
+                Duration::from_secs(60),
+            )
+            .unwrap());
+        let cached = store.find("shared").unwrap().expect("B result cached");
+        assert_eq!(cached.result.result_summary, "B");
     }
 
     #[test]
