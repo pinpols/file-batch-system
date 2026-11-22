@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
@@ -15,6 +16,7 @@ import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityPro
 import io.github.pinpols.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,30 +120,53 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     }
     JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(securityProperties.getAllowedSchemas());
+    boolean composite = spec.tiebreakerColumnIsConfigured();
+    List<Object> cursorValues = splitCursor(cursor);
+    requireCursorShape(spec, cursorValues, composite);
     String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
         + "."
         + JdbcMappedSqlValidator.quotePg(spec.detailTable());
+    String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
+    String tb = composite ? JdbcMappedSqlValidator.quotePg(spec.detailTiebreakerColumn()) : null;
+    boolean orderColumnSelected = spec.detailSelectColumns().contains(spec.detailOrderByColumn());
+    boolean tiebreakerColumnSelected =
+        composite && spec.detailSelectColumns().contains(spec.detailTiebreakerColumn());
     StringBuilder cols = new StringBuilder();
-    boolean orderColumnSelected = false;
     for (String c : spec.detailSelectColumns()) {
       cols.append(JdbcMappedSqlValidator.quotePg(c)).append(',');
-      if (c.equals(spec.detailOrderByColumn())) {
-        orderColumnSelected = true;
-      }
     }
     if (!orderColumnSelected) {
-      String detailOrderByColumn = spec.detailOrderByColumn();
-      String quotedOrderByColumn = JdbcMappedSqlValidator.quotePg(detailOrderByColumn);
-      cols.append(quotedOrderByColumn).append(" as __cursor_value__,");
+      cols.append(ob).append(" as ").append(ORDER_CURSOR_ALIAS).append(',');
+    }
+    if (composite && !tiebreakerColumnSelected) {
+      cols.append(tb).append(" as ").append(TIEBREAKER_CURSOR_ALIAS).append(',');
     }
     cols.setLength(cols.length() - 1);
     String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
-    String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
+    if (EmptyChecks.isNull(cursor)) {
+      // 首页预检: 排序键含 NULL 的行会被 keyset/哈希分片谓词静默过滤,必须先明确失败。
+      // 检查不受当前 partition 谓词限制,覆盖哈希会过滤掉的行。
+      String nullProbeSql = buildNullSortValueProbeSql(fq, fk, ob, tb);
+      List<Map<String, Object>> nullSortValues = txTemplate.execute(status -> {
+        RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+        return jdbcTemplate.queryForList(nullProbeSql, batchId);
+      });
+      if (EmptyChecks.isNotEmpty(nullSortValues)) {
+        throw new WorkerConfigException("jdbc_mapped_export sort column is NULL for batchId="
+            + batchId
+            + " (orderByColumn="
+            + ob
+            + (EmptyChecks.isNull(tb) ? "" : ", tiebreakerColumn=" + tb)
+            + "); keyset pagination would silently drop those rows.");
+      }
+    }
     ExportKeysetRange keysetRange =
         keysetRangePlanner.resolve(context, () -> minMax(spec, batchId));
-    String detailColumnsSql = cols.toString();
-    DetailSql detailSql = new DetailSql(detailColumnsSql, fq, fk, ob);
-    PagedQuery pq = buildDetailQuery(detailSql, batchId, cursor, pageSize, keysetRange);
+    DetailSql detailSql = new DetailSql(cols.toString(), fq, fk, ob, tb);
+    // 多取一行: 最后一页仍是满页时用来证明下一页起点不会跳过同排序值的行。
+    int limit = Math.max(1, pageSize);
+    int fetchLimit = limit == Integer.MAX_VALUE ? limit : limit + 1;
+    PagedQuery pq = buildDetailQuery(detailSql, batchId, cursorValues, fetchLimit, keysetRange);
     final String finalSql = pq.sql();
     final Object[] sqlArgs = pq.args();
     List<Map<String, Object>> rows = txTemplate.execute(status -> {
@@ -151,13 +176,117 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     if (EmptyChecks.isEmpty(rows)) {
       return DetailPage.empty();
     }
-    Object nextCursor = null;
-    for (Map<String, Object> row : rows) {
-      nextCursor = orderColumnSelected
-          ? row.get(spec.detailOrderByColumn())
-          : row.remove("__cursor_value__");
+    boolean hasOverflowRow = rows.size() > limit;
+    List<Object> lastTuple = cursorTuple(
+        rows.get(hasOverflowRow ? limit - 1 : rows.size() - 1),
+        spec,
+        orderColumnSelected,
+        tiebreakerColumnSelected);
+    if (hasOverflowRow) {
+      List<Object> overflowTuple =
+          cursorTuple(rows.get(limit), spec, orderColumnSelected, tiebreakerColumnSelected);
+      requirePageBoundaryIsUnique(spec, lastTuple, overflowTuple);
+      rows = new ArrayList<>(rows.subList(0, limit));
     }
+    for (Map<String, Object> row : rows) {
+      row.remove(ORDER_CURSOR_ALIAS);
+      row.remove(TIEBREAKER_CURSOR_ALIAS);
+    }
+    Object nextCursor = composite ? lastTuple : lastTuple.getFirst();
     return new DetailPage(rows, nextCursor);
+  }
+
+  private static final String ORDER_CURSOR_ALIAS = "__cursor_value__";
+  private static final String TIEBREAKER_CURSOR_ALIAS = "__cursor_tiebreaker__";
+
+  /** 游标拆为排序键元组: 单列位点是 1 个值,复合位点是 (排序列, 唯一后缀)。 */
+  private static List<Object> splitCursor(Object cursor) {
+    if (EmptyChecks.isNull(cursor)) {
+      return List.of();
+    }
+    if (cursor instanceof List<?> values) {
+      return List.copyOf(values);
+    }
+    return List.of(cursor);
+  }
+
+  /** 位点形状必须与当前冻结配置一致; 排序语义变化后旧的单列位点不能继续使用。 */
+  private static void requireCursorShape(
+      JdbcMappedExportSpec spec, List<Object> cursorValues, boolean composite) {
+    if (EmptyChecks.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "jdbc_mapped_export cursor does not match the configured sort key of detailTable="
+            + spec.detailTable()
+            + ": expected "
+            + (composite ? "(detailOrderByColumn, detailTiebreakerColumn)" : "detailOrderByColumn")
+            + " but the stored GENERATE position has "
+            + cursorValues.size()
+            + " value(s). Start a new run instead of resuming this one.");
+  }
+
+  /** 单列排序在页边界遇到同值时严格大于谓词会漏行: 明确失败,而不是产出静默缺行的文件。 */
+  private static void requirePageBoundaryIsUnique(
+      JdbcMappedExportSpec spec, List<Object> lastTuple, List<Object> overflowTuple) {
+    if (overflowTuple.equals(lastTuple)) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_export would skip rows sharing the page-boundary sort value "
+              + lastTuple
+              + " on detailTable="
+              + spec.detailTable()
+              + ", column="
+              + spec.detailOrderByColumn()
+              + ". Configure jdbc_mapped_export.detailTiebreakerColumn with a non-null unique"
+              + " column (for example the primary key) so pagination can order by"
+              + " (detailOrderByColumn, detailTiebreakerColumn).");
+    }
+  }
+
+  private static List<Object> cursorTuple(
+      Map<String, Object> row,
+      JdbcMappedExportSpec spec,
+      boolean orderColumnSelected,
+      boolean tiebreakerColumnSelected) {
+    Object primary =
+        orderColumnSelected ? row.get(spec.detailOrderByColumn()) : row.remove(ORDER_CURSOR_ALIAS);
+    requireNonNullSortValue(primary, spec.detailOrderByColumn(), spec);
+    if (!spec.tiebreakerColumnIsConfigured()) {
+      return Collections.singletonList(primary);
+    }
+    Object tiebreaker = tiebreakerColumnSelected
+        ? row.get(spec.detailTiebreakerColumn())
+        : row.remove(TIEBREAKER_CURSOR_ALIAS);
+    requireNonNullSortValue(tiebreaker, spec.detailTiebreakerColumn(), spec);
+    return List.of(primary, tiebreaker);
+  }
+
+  private static void requireNonNullSortValue(
+      Object value, String column, JdbcMappedExportSpec spec) {
+    if (EmptyChecks.isNull(value)) {
+      throw new WorkerConfigException("jdbc_mapped_export sort column `"
+          + column
+          + "` is NULL on detailTable="
+          + spec.detailTable()
+          + "; keyset pagination cannot order NULL values. Make the column NOT NULL or"
+          + " filter those rows out of the batch before export.");
+    }
+  }
+
+  /** 首页 NULL 预检 SQL: 标识符均已经 quotePg 校验,谓词不受当前分片限制。 */
+  private static String buildNullSortValueProbeSql(String fq, String fk, String ob, String tb) {
+    StringBuilder sql = new StringBuilder("SELECT 1 FROM ")
+        .append(fq)
+        .append(" WHERE ")
+        .append(fk)
+        .append(" = ? AND (")
+        .append(ob)
+        .append(" IS NULL");
+    if (EmptyChecks.isNotNull(tb)) {
+      sql.append(" OR ").append(tb).append(" IS NULL");
+    }
+    sql.append(") LIMIT 1");
+    return sql.toString();
   }
 
   @Override
@@ -175,14 +304,19 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   static record PagedQuery(String sql, Object[] args) {}
 
   /** 明细 SQL 片段打包(避免 buildDetailQuery 超 6 参,PMD ExcessiveParameterList)。 */
-  static record DetailSql(String cols, String fq, String fk, String ob) {}
+  static record DetailSql(String cols, String fq, String fk, String ob, String tb) {
+    DetailSql(String cols, String fq, String fk, String ob) {
+      this(cols, fq, fk, ob, null);
+    }
+  }
 
   static PagedQuery buildDetailQuery(
-      DetailSql q, Long batchId, Object cursor, int pageSize, ExportKeysetRange range) {
+      DetailSql q, Long batchId, List<Object> cursorValues, int limit, ExportKeysetRange range) {
     String cols = q.cols();
     String fq = q.fq();
     String fk = q.fk();
     String ob = q.ob();
+    String tb = q.tb();
     StringBuilder sql = new StringBuilder("SELECT ")
         .append(cols)
         .append(" FROM ")
@@ -208,15 +342,50 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       args.add(range.partitionCount());
       args.add(range.partitionNo() - 1);
     }
-    if (EmptyChecks.isNotNull(cursor)) {
-      sql.append(" AND ").append(ob).append(" > ?");
-      args.add(cursor);
+    appendCursorPredicate(sql, args, ob, tb, cursorValues);
+    sql.append(" ORDER BY ").append(ob).append(" ASC");
+    if (EmptyChecks.isNotNull(tb)) {
+      sql.append(", ").append(tb).append(" ASC");
     }
-    sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
-    args.add(pageSize);
+    sql.append(" LIMIT ?");
+    args.add(limit);
     String querySql = sql.toString();
     Object[] queryArgs = args.toArray();
     return new PagedQuery(querySql, queryArgs);
+  }
+
+  /**
+   * 复合游标用 {@code (ob > ?) OR (ob = ? AND tb > ?)}: 单列严格大于会跳过与末行同排序值的剩余行。单列游标保持原谓词。
+   */
+  private static void appendCursorPredicate(
+      StringBuilder sql, List<Object> args, String ob, String tb, List<Object> cursorValues) {
+    if (EmptyChecks.isEmpty(cursorValues)) {
+      return;
+    }
+    Object primary = cursorValues.getFirst();
+    if (EmptyChecks.isNull(tb)) {
+      sql.append(" AND ").append(ob).append(" > ?");
+      args.add(primary);
+      return;
+    }
+    Object tiebreaker = cursorValues.get(1);
+    sql.append(" AND (")
+        .append(ob)
+        .append(" > ? OR (")
+        .append(ob)
+        .append(" = ? AND ")
+        .append(tb)
+        .append(" > ?))");
+    args.add(primary);
+    args.add(primary);
+    args.add(tiebreaker);
+  }
+
+  // 兼容旧签名: 单列位点。
+  static PagedQuery buildDetailQuery(
+      DetailSql q, Long batchId, Object cursor, int pageSize, ExportKeysetRange range) {
+    List<Object> cursorValues = EmptyChecks.isNull(cursor) ? List.of() : List.of(cursor);
+    return buildDetailQuery(q, batchId, cursorValues, pageSize, range);
   }
 
   // 兼容旧签名:转调新重载。

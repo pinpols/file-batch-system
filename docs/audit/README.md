@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [五类 Worker 设计复核](worker-design-review-2026-11-22.md) | Export 单列分页同值漏行、Process 空批水位回落、共享恢复和五类 Worker 的已知边界 |
 | [后端性能与容量复核](backend-capacity-analysis-2026-11-22.md) | 复核两组 1,500 请求原始样本及 PostgreSQL 行为，定位根请求统计漏计、子 Job 重复绑定与根运行图读取候选 |
 | [分支、数据结构与设计模式审查](branching-data-structure-pattern-review-2026-11-12.md) | 2026-11-12 全量生产 Java 静态审查：if/switch、集合选型、模式使用；8 项 P3、5 项 P4，整改见本记录「整改记录」 |
 | [Java 可读性复评](java-readability-reassessment-2026-11-11.md) / [候选清单](java-readability-reassessment-2026-11-11-candidates.csv) | 2026-11-11 阶段 9 复评：在 `29cede911` 基线确认 R1–R27；R4 空值写法已裁定、R11 大类拆分暂缓、R24 转有限域计划；整改未开工 |

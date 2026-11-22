@@ -22,6 +22,7 @@ public record JdbcMappedExportSpec(
     String detailTable,
     String detailFkColumn,
     String detailOrderByColumn,
+    String detailTiebreakerColumn,
     List<String> detailSelectColumns) {
 
   /**
@@ -48,6 +49,12 @@ public record JdbcMappedExportSpec(
     String detailTable = required(root, "detailTable");
     String detailFk = required(root, "detailFkColumn");
     String orderCol = required(root, "detailOrderByColumn");
+    String tiebreakerCol =
+        optional(root.get("detailTiebreakerColumn"), root.get("detail_tiebreaker_column"));
+    if (EmptyChecks.isNotNull(tiebreakerCol) && tiebreakerCol.equalsIgnoreCase(orderCol)) {
+      throw new IllegalArgumentException(
+          "jdbc_mapped_export.detailTiebreakerColumn must differ from detailOrderByColumn");
+    }
     // detailSelectColumns 缺省(不写 / 空 [])时,从模板 field_mappings[*].sourceColumn 去重推断,
     // 避免把"导出哪些列"在 field_mappings 与 detailSelectColumns 里写两遍。这是去重而非自动默认:
     // 列归属仍是 SQL 投影,batchSelectColumns 等结构连接列保持显式必填。
@@ -67,6 +74,7 @@ public record JdbcMappedExportSpec(
         detailTable,
         detailFk,
         orderCol,
+        tiebreakerCol,
         detailCols);
   }
 
@@ -87,12 +95,33 @@ public record JdbcMappedExportSpec(
     JdbcMappedSqlValidator.requireIdentifier(detailTable, "detailTable");
     JdbcMappedSqlValidator.requireIdentifier(detailFkColumn, "detailFkColumn");
     JdbcMappedSqlValidator.requireIdentifier(detailOrderByColumn, "detailOrderByColumn");
+    if (tiebreakerColumnIsConfigured()) {
+      JdbcMappedSqlValidator.requireIdentifier(detailTiebreakerColumn, "detailTiebreakerColumn");
+    }
     for (String c : detailSelectColumns) {
       JdbcMappedSqlValidator.requireIdentifier(c, "detailSelectColumns");
     }
     if (!batchSelectColumns.contains("id")) {
       throw new IllegalArgumentException("batchSelectColumns must include id for detail FK join");
     }
+  }
+
+  /** 是否配置了唯一排序后缀；配置后分页使用 (排序列, 后缀列) 复合游标。 */
+  public boolean tiebreakerColumnIsConfigured() {
+    return EmptyChecks.isNotEmpty(detailTiebreakerColumn);
+  }
+
+  private static String optional(Object... values) {
+    for (Object value : values) {
+      if (EmptyChecks.isNull(value)) {
+        continue;
+      }
+      String rawValue = String.valueOf(value);
+      if (Texts.hasText(rawValue)) {
+        return rawValue.trim();
+      }
+    }
+    return null;
   }
 
   private static String required(Map<String, Object> root, String key) {

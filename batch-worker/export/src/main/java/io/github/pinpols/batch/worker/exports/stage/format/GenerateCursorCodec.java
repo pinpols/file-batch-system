@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -7,6 +8,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +23,9 @@ import org.springframework.stereotype.Component;
  * <p>对无法安全往返的类型(如 UUID:{@code uuid > text} 无操作符)返回 {@link Optional#empty()},调用方据此<b>降级为全量重跑</b>
  * 并打日志(对齐 Import LOAD 续跑「plugin 不声明幂等就拒跑」的前置约束 —— 此处是「cursor 类型不支持就不续跑」)。
  *
+ * <p>复合排序键(排序列 + 唯一后缀)以 {@code List} 游标表示,编码为 {@code "K|<len>:<part>..."},每个 part 仍是单值编码,
+ * 长度前缀保证 String 值内的 {@code :}/{@code |} 可安全往返。列表任一元素不可编码时整体返回 empty。
+ *
  * <p>位点 marker 编码为 {@code "<byteOffset>@<encodedCursor>"}:byteOffset 为纯数字不含 {@code '@'},故按<b>首个</b>
  * {@code '@'} 切分即可,encodedCursor 内部允许包含 {@code '@'} / {@code '|'}(String cursor 值)。
  */
@@ -30,13 +36,16 @@ public class GenerateCursorCodec {
   public record Marker(long byteOffset, String encodedCursor) {}
 
   /**
-   * 把 cursor 编码为 {@code "<TYPE>|<value>"};不支持的类型(含 null)返回 empty。
+   * 把 cursor 编码为 {@code "<TYPE>|<value>"};复合游标为 {@code "K|<len>:<part>..."}。不支持的类型(含 null)返回 empty。
    *
-   * @param cursor keyset 分页 cursor(下一页的起点值)
+   * @param cursor keyset 分页 cursor(下一页的起点值,单值或排序键列表)
    */
   public Optional<String> encodeCursor(Object cursor) {
     if (cursor == null) {
       return Optional.empty();
+    }
+    if (cursor instanceof List<?> values) {
+      return encodeTuple(values);
     }
     if (cursor instanceof Long v) {
       return Optional.of("L|" + v);
@@ -85,6 +94,22 @@ public class GenerateCursorCodec {
     return Optional.empty();
   }
 
+  private Optional<String> encodeTuple(List<?> values) {
+    if (EmptyChecks.isEmpty(values)) {
+      return Optional.empty();
+    }
+    StringBuilder encoded = new StringBuilder("K|");
+    for (Object value : values) {
+      Optional<String> part = encodeCursor(value);
+      if (part.isEmpty()) { // empty-check: allow - Optional 没有共享空判断工具
+        return Optional.empty();
+      }
+      String text = part.get();
+      encoded.append(text.length()).append(':').append(text);
+    }
+    return Optional.of(encoded.toString());
+  }
+
   /**
    * 把 {@link #encodeCursor} 的输出还原为精确 Java 类型。marker 损坏 / 标签未知时抛 {@link
    * IllegalArgumentException},调用方按「位点损坏 → 从头跑」回退。
@@ -112,8 +137,32 @@ public class GenerateCursorCodec {
       case "LDT" -> LocalDateTime.parse(value);
       case "DT" -> Date.valueOf(value);
       case "S" -> value;
+      case "K" -> decodeTuple(value);
       default -> throw new IllegalArgumentException("unknown cursor type tag: " + type);
     };
+  }
+
+  private List<Object> decodeTuple(String encoded) {
+    List<Object> values = new ArrayList<>();
+    int index = 0;
+    while (index < encoded.length()) {
+      int colon = encoded.indexOf(':', index);
+      if (colon <= index) {
+        throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
+      }
+      int length = Integer.parseInt(encoded.substring(index, colon));
+      int start = colon + 1;
+      int end = start + length;
+      if (length < 0 || end > encoded.length()) {
+        throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
+      }
+      values.add(decodeCursor(encoded.substring(start, end)));
+      index = end;
+    }
+    if (EmptyChecks.isEmpty(values)) {
+      throw new IllegalArgumentException("empty tuple cursor");
+    }
+    return List.copyOf(values);
   }
 
   /** marker = {@code "<byteOffset>@<encodedCursor>"}。 */

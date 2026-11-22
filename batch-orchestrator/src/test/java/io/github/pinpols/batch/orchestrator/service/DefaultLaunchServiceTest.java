@@ -317,6 +317,93 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("INCREMENTAL 启动把最近有效水位作为本次 IN")
+  void shouldUseLatestEffectiveHighWaterMarkForIncrementalLaunch() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
+    when(jobInstanceMapper.selectLatestEffectiveHighWaterMarkOut("t1", 11L)).thenReturn("42");
+
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, Month.MARCH, 27),
+        TriggerType.API,
+        "req-incremental",
+        "trace-incremental",
+        Map.of());
+    TriggerRequestEntity triggerRequest = acceptedTriggerRequest(request);
+    triggerRequest.setId(101L);
+    triggerRequest.setDedupKey("dedup-incremental");
+    JobDefinitionView incrementalDefinition = JobDefinitionView.builder()
+        .id(11L)
+        .tenantId("t1")
+        .jobCode("IMPORT_JOB")
+        .jobName("Import Job")
+        .jobType("TYPE")
+        .bizType("BIZ")
+        .scheduleType("CRON")
+        .scheduleExpr("0 0/5 * * * ?")
+        .timezone("Asia/Shanghai")
+        .workerGroup("WG")
+        .queueCode("QUEUE")
+        .calendarCode("BIZ_CAL")
+        .windowCode("WINDOW")
+        .triggerMode("DEFAULT")
+        .dagEnabled(true)
+        .shardStrategy("HASH")
+        .retryPolicy("NONE")
+        .retryMaxCount(3)
+        .timeoutSeconds(600)
+        .executionHandler("handler")
+        .paramSchema(Map.of())
+        .priority(5)
+        .defaultParams(Map.of())
+        .version(1)
+        .enabled(true)
+        .description("desc")
+        .executionMode("INCREMENTAL")
+        .watermarkField("updated_at")
+        .build();
+    when(launchValidationService.load(request))
+        .thenReturn(new LaunchValidationService.LaunchLoadResult(
+            triggerRequest, incrementalDefinition, null, "BIZ_CAL", null));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL"))
+        .thenReturn(new BusinessCalendarEntity(
+            1L,
+            "t1",
+            "BIZ_CAL",
+            "biz",
+            "Asia/Shanghai",
+            "SKIP",
+            "AUTO",
+            30,
+            LocalTime.of(6, 0),
+            15,
+            120,
+            true));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    service.launch(request);
+
+    ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
+    verify(jobInstanceMapper).insert(jobCaptor.capture());
+    assertThat(jobCaptor.getValue().getHighWaterMarkIn()).isEqualTo("42");
+    verify(jobInstanceMapper).selectLatestEffectiveHighWaterMarkOut("t1", 11L);
+  }
+
+  @Test
   @DisplayName("外租户或不存在的 rerun 父实例在写入 JobInstance 前被拒绝")
   void shouldRejectMissingTenantParentInstanceBeforeInsert() {
     LaunchRequest request = new LaunchRequest(

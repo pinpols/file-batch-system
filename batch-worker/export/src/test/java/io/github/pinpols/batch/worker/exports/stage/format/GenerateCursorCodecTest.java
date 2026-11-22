@@ -8,6 +8,7 @@ import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,42 @@ class GenerateCursorCodecTest {
     String cursor = "abc|def@ghi";
     Object decoded = codec.decodeCursor(codec.encodeCursor(cursor).orElseThrow());
     assertThat(decoded).isInstanceOf(String.class).isEqualTo(cursor);
+  }
+
+  @Test
+  @DisplayName("复合游标往返后保持元组顺序与各元素类型")
+  void roundTrip_preservesTupleOrderAndElementTypes() {
+    List<Object> cursor =
+        List.of(Timestamp.from(Instant.parse("2026-06-05T01:02:03Z")), 987654L, "k|v@1");
+    Object decoded = codec.decodeCursor(codec.encodeCursor(cursor).orElseThrow());
+
+    assertThat(decoded).isEqualTo(cursor);
+    List<?> values = (List<?>) decoded;
+    assertThat(values.get(0)).isInstanceOf(Timestamp.class);
+    assertThat(values.get(1)).isInstanceOf(Long.class);
+    assertThat(values.get(2)).isInstanceOf(String.class);
+  }
+
+  @Test
+  @DisplayName("复合游标含不可编码元素时整体返回空,交调用方降级")
+  void encodeTuple_returnsEmptyWhenAnyElementIsUnsupported() {
+    assertThat(codec.encodeCursor(List.of(1L, UUID.randomUUID()))).isEmpty();
+    assertThat(codec.encodeCursor(List.of())).isEmpty();
+  }
+
+  @Test
+  @DisplayName("复合游标长度前缀损坏时解码抛参数非法")
+  void decodeTuple_throwsOnCorruptLengthPrefix() {
+    assertThatThrownBy(() -> codec.decodeCursor("K|9:L|42"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> codec.decodeCursor("K|")).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("完成哨兵标签 C 仍不是合法游标,不会与复合游标 K 混淆")
+  void decodeCursor_stillRejectsCompletedSentinel() {
+    assertThatThrownBy(() -> codec.decodeCursor(GenerateCheckpoint.COMPLETED_CURSOR_SENTINEL))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
