@@ -3439,6 +3439,19 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("上限 1 满载时等待不领取,释放唯一槽后原请求启动")
+  void capacityWait_shouldClaimWaitingRequestWhenOnlySlotIsReleased() {
+    CapacityWaitSeed seed = seedCapacityWait();
+    assertThat(waitingLaunchService.claimDue(testTenantId, 100, Instant.now().plusSeconds(5)))
+        .noneMatch(claim -> seed.requestId().equals(claim.requestId()));
+
+    finishCapacityOwner(seed);
+    launchWaitReconciler.reconcileTenant(testTenantId);
+
+    assertCapacityWaitResumed(seed);
+  }
+
+  @Test
   @DisplayName("重插入不得吞掉请求唯一键和外键约束错误")
   void capacityWait_shouldPropagateNonCapacityConstraints() {
     CapacityWaitSeed seed = seedCapacityWait();

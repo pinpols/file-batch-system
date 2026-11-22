@@ -1,5 +1,12 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-22 后端整改 PR4 验收补强
+
+- 增量水位改为热表与归档表各取数值最大的有效成功 OUT：较晚完成的较低 OUT 不再回退后续 IN；新增乱序完成与跨归档最大值真库用例。
+- 新增准入上限 1 的等待恢复、Kafka ACK 与 DB 回写交错的 Outbox 用例，以及端到端汇总 SQL 的真实 PostgreSQL 自动化用例。
+- 新增[三层整改完成度审计](audit/three-layer-remediation-completion-audit-2026-11-22.md)，区分本地已收口与仍需目标环境验证的事项。
+- 仍待目标环境：12/6 同构建压测、JDBC 往返实测、双 Pod 取证下载与混版旧发布器退出顺序。
+
 ## 2026-11-22 后端架构整改实施
 
 - 导出恢复：`DelimitedExportFormat` / `FixedWidthExportFormat` 区分首跑空输入与断点续跑；续跑首页为空且无列声明时返回 `EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN`，保留位点与残文件，不再用旧文件登记零行成功。

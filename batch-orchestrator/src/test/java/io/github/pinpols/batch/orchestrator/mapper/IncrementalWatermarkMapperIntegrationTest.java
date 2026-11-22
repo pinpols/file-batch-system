@@ -39,7 +39,7 @@ class IncrementalWatermarkMapperIntegrationTest {
 
   private static final String STATEMENT =
       "io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper"
-          + ".selectLatestEffectiveHighWaterMarkOut";
+          + ".selectMaxEffectiveHighWaterMarkOut";
 
   @Container
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
@@ -97,6 +97,25 @@ class IncrementalWatermarkMapperIntegrationTest {
 
     insertSuccess("43", 1);
     assertThat(latestEffectiveWatermark()).isEqualTo("43");
+  }
+
+  @Test
+  @DisplayName("晚完成的较低 OUT 不回退后续 IN: 50 先完成、40 后完成仍取 50")
+  void lateLowerOut_doesNotRegressWatermark() {
+    insertSuccess("50", 2);
+    insertSuccess("40", 1);
+
+    assertThat(latestEffectiveWatermark()).as("较晚完成但 OUT 更低,不能把下一轮 IN 拉回 40").isEqualTo("50");
+  }
+
+  @Test
+  @DisplayName("热表与归档各取最大 OUT 后合并")
+  void shouldTakeMaxAcrossHotAndArchive() {
+    Long archived = insertSuccess("60", 5);
+    archiveInstance(archived);
+    insertSuccess("50", 1);
+
+    assertThat(latestEffectiveWatermark()).isEqualTo("60");
   }
 
   @Test

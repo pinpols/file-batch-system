@@ -1,6 +1,6 @@
 # 五类 Worker 整改方案（2026-11-22）
 
-状态：第 1、2 批已在工作树实施并完成本地真实 PostgreSQL 验证；第 3 批已形成仓库默认场景盘点，目标环境与外部接收端证据待取得。基线为后端 `main` 的 `51c82f49b` 和[五类 Worker 设计复核](../audit/worker-design-review-2026-11-22.md)。生产发布、历史数据修补、协议升级和跨 Pod 续跑分别决策。
+状态：第 1、2 批及 PR4 补充项已在工作树实施并完成本地真实 PostgreSQL 验证；第 3 批已形成仓库默认场景盘点，目标环境与外部接收端证据待取得。基线为后端 `main` 的 `51c82f49b` 和[五类 Worker 设计复核](../audit/worker-design-review-2026-11-22.md)。生产发布、历史数据修补、协议升级和跨 Pod 续跑分别决策。
 
 | 顺序 | 范围与责任 | 验收结果 | 状态 |
 |---|---|---|---|
@@ -75,7 +75,7 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 
 实施内容：
 
-- `JobInstanceMapper.selectLatestEffectiveHighWaterMarkOut` 取代 `selectLastSuccessByJobDefinition`：热表与 `archive.job_instance_archive` 各取最近一次完整成功且 OUT 非空的实例，再合并取最新。排除历史重放（`replay_session_id` 非空）、补跑（`rerun_flag=true`）、部分失败与 dry-run。
+- `JobInstanceMapper.selectMaxEffectiveHighWaterMarkOut` 取代 `selectLastSuccessByJobDefinition`：热表与 `archive.job_instance_archive` 各取数值最大的有效成功 OUT，再合并取最大。排除历史重放（`replay_session_id` 非空）、补跑（`rerun_flag=true`）、部分失败、dry-run 以及 NULL/空串/非数值 OUT；较晚完成的较低 OUT 不再回退后续 IN。
 - `DefaultLaunchService.resolveHighWaterMarkIn` 使用新查询，空串按无水位处理。
 - V388 为热表与归档表新增同形状部分索引（租户 + 作业定义 + `finished_at DESC NULLS LAST` + id 倒序，仅覆盖有效成功实例）。索引排序方向与启动查询的 `ORDER BY finished_at DESC NULLS LAST, id DESC` 对齐，查询可直接取索引首行而不必排序。
 - 文档同步：[system-flow-overview.md](../architecture/system-flow-overview.md) §7.8.3 不变量与 §7.9.6。
@@ -85,7 +85,16 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 - `./mvnw -o -pl batch-orchestrator -Dtest=IncrementalWatermarkMapperIntegrationTest test` → 6/6 通过（39s）。覆盖首次无水位、`42 → 空批 → 43`（第三轮仍是 42）、空串、PARTIAL_FAILED/dry-run/重放/补跑不推进、归档后可追溯、热冷合并取最新、租户与作业定义隔离；V388 随 Flyway 全量迁移应用成功。
 - 查询计划（合成对照，非生产数据）：在一次性 PostgreSQL 17 容器按 V388 索引定义建表，热表 15,000 行（每 3 行 1 行空 OUT）、归档 5,000 行，`ANALYZE` 后执行同一 SQL。计划为两支各自 `Index Scan using idx_*_effective_watermark` + `Limit 1`，总耗时 0.148 ms（Planning 0.392 ms）。对照：若索引写成 `finished_at DESC`（默认 NULLS FIRST），查询的 `NULLS LAST` 无法复用索引顺序，规划器退回 Seq Scan + Sort（15.7 ms）。分区父表沿用同一索引定义，分区裁剪后的单分区行为与此一致。
 
-未覆盖：`ProcessPipelineE2eIT` 端到端（Process 插件发布与回报）、并发完成乱序的专门用例、真实归档调度跨月后的连续运行、目标环境大表上的实测计划。
+未覆盖：`ProcessPipelineE2eIT` 端到端（Process 插件发布与回报）、真实归档调度跨月后的连续运行、目标环境大表上的实测计划（最大 OUT 查询需要确认索引与扫描成本）。
+
+### PR4 补充（2026-11-22）
+
+- 水位乱序：新增 `lateLowerOut_doesNotRegressWatermark`（50 先完成、40 后完成仍取 50）与 `takesMaxAcrossHotAndArchive` 真库用例。
+- 准入上限 1：`JobNodeDispatchIntegrationTest` 新增满载不领取、释放唯一槽后原请求恢复的用例。
+- 派发 Outbox：`DefaultScheduleForwarderSetBasedTest` 新增 Kafka ACK 与 DB 回写交错用例，旧发布者领取 1 成功回写 0 行、新发布者领取 2 回写 1 行。
+- 汇总 SQL：新增 `EndToEndSummarySqlIntegrationTest`，在真实 PostgreSQL 上执行 `p2-run-end-to-end-summary.sql`，覆盖根 Workflow/子 Job/直接 Job 分行计数与 `INVALID` 样本状态。
+- 验证：`IncrementalWatermarkMapperIntegrationTest` 8/8、`EndToEndSummarySqlIntegrationTest` 2/2、准入上限 1 用例 1/1、`DefaultScheduleForwarderSetBasedTest` 7/7 通过。
+- 仍未覆盖：Process 端到端、Export 崩溃续跑的文件对账扩展、12/6 同构建压测、JDBC 往返实测、双 Pod 取证与混版旧发布器退出顺序。
 
 ### 第 3 批（恢复合同）
 

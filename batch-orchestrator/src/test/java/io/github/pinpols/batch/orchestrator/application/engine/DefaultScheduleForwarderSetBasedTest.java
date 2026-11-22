@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
@@ -24,6 +25,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -208,6 +214,56 @@ class DefaultScheduleForwarderSetBasedTest {
             && parameters.publishingStatus() != null
             && parameters.pendingStatus1() != null
             && parameters.pendingStatus2() != null));
+  }
+
+  @Test
+  @DisplayName("Kafka ACK 与 DB 回写交错: 旧发布者成功也更新 0 行,新发布者更新 1 行")
+  void shouldRejectStalePublisher_afterEventReclaimed() throws Exception {
+    OutboxEventEntity event = event("ta", 100L, 0);
+    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(event));
+    when(outboxEventMapper.markPublishingBatch(any()))
+        .thenReturn(List.of(new OutboxPublishClaim(100L, 1)))
+        .thenReturn(List.of(new OutboxPublishClaim(100L, 2)));
+    CompletableFuture<Boolean> oldAck = new CompletableFuture<>();
+    CountDownLatch oldPublishStarted = new CountDownLatch(1);
+    when(outboxPublisher.publish(event))
+        .thenAnswer(invocation -> {
+          oldPublishStarted.countDown();
+          return oldAck;
+        })
+        .thenReturn(CompletableFuture.completedFuture(true));
+    when(outboxEventMapper.markPublishedBatch(
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
+                && parameters.publishAttempt() == 2)))
+        .thenReturn(1);
+
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> oldRound = pool.submit(() -> forwarder.advance(null));
+      assertThat(oldPublishStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+      Future<?> newRound = pool.submit(() -> forwarder.advance(null));
+      newRound.get(5, TimeUnit.SECONDS);
+
+      oldAck.complete(true);
+      oldRound.get(5, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+    }
+
+    ArgumentCaptor<OutboxEventMarkPublishedBatchParam> publishedParams =
+        ArgumentCaptor.forClass(OutboxEventMarkPublishedBatchParam.class);
+    verify(outboxEventMapper, times(2)).markPublishedBatch(publishedParams.capture());
+    assertThat(publishedParams.getAllValues()).allSatisfy(parameters -> {
+      assertThat(parameters.tenantId()).isEqualTo("ta");
+      assertThat(parameters.ids()).containsExactly(100L);
+      assertThat(parameters.status()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+      assertThat(parameters.publishingStatus()).isEqualTo(OutboxPublishStatus.PUBLISHING.code());
+    });
+    assertThat(publishedParams.getAllValues().stream()
+            .map(OutboxEventMarkPublishedBatchParam::publishAttempt))
+        .containsExactlyInAnyOrder(1, 2);
   }
 
   @Test
