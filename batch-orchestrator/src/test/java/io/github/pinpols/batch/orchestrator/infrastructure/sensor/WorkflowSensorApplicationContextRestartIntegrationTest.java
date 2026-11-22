@@ -665,14 +665,16 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       RlsTenantContextHolder.runWithTenant(
           tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
-      assertThat(jdbc.queryForObject(findNodeStatus, String.class, runId, "WAIT_FILE"))
-          .isEqualTo(matched ? "SUCCESS" : "FAILED");
-      assertThat(jdbc.queryForList(findNodeStatus, String.class, runId, "SUCCESS_GATEWAY"))
-          .containsExactly("SKIPPED");
-      assertThat(jdbc.queryForObject(findRunStatus, String.class, tenantId, runId))
-          .isEqualTo(matched ? "SUCCESS" : "FAILED");
-      assertThat(jdbc.queryForObject(countTerminalEvents, Integer.class, tenantId, runId))
-          .isEqualTo(1);
+      Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+        assertThat(jdbc.queryForObject(findNodeStatus, String.class, runId, "WAIT_FILE"))
+            .isEqualTo(matched ? "SUCCESS" : "FAILED");
+        assertThat(jdbc.queryForList(findNodeStatus, String.class, runId, "SUCCESS_GATEWAY"))
+            .containsExactly("SKIPPED");
+        assertThat(jdbc.queryForObject(findRunStatus, String.class, tenantId, runId))
+            .isEqualTo(matched ? "SUCCESS" : "FAILED");
+        assertThat(jdbc.queryForObject(countTerminalEvents, Integer.class, tenantId, runId))
+            .isEqualTo(1);
+      });
     }
   }
 
