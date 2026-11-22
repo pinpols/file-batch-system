@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [三层整改完成度审计](three-layer-remediation-completion-audit-2026-11-22.md) | 性能容量、五类 Worker、后端架构三层整改的完成度、PR4 补强与仍未关闭的目标环境验收 |
 | [全后端架构审核](backend-architecture-review-2026-11-22.md) / [逐文件清单](backend-source-inventory-2026-11-22.csv) | 平台 10 个模块、五种语言 SDK、迁移与测试支撑。新增 3 项本地反例和 1 项部署拓扑问题 |
 | [后端架构审核 · 调度准入与投递恢复](backend-architecture-review-2026-11-21.md) | 默认恢复池的线程等待、多槽位排队和人工恢复、派发 Outbox 领取所有权的 JVM 与 PostgreSQL 反例 |
 | [五类 Worker 设计复核](worker-design-review-2026-11-22.md) | Export 单列分页同值漏行、Process 空批水位回落、共享恢复和五类 Worker 的已知边界 |

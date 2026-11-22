@@ -933,7 +933,7 @@ flowchart LR
 | 仅成功路径推水位 | `applyTaskOutcome` 在 success 分支才调 `updateHighWaterMarkOut`;失败/重试/取消保留旧 OUT |
 | OUT 为 null 不推 | worker 没写 OUT(业务暂不接 INCREMENTAL)就别覆盖旧值;允许"灰度切到 INCREMENTAL 再不推水位"过渡 |
 | 启动水位跳过空 OUT | `selectLatestEffectiveHighWaterMarkOut` 取同一租户+作业定义最近一次**完整成功且 OUT 非空**的实例,而不是最近一行。空输入批次成功不产生 OUT,若按完成时间只取一行会把上一轮有效水位遮成 NULL,下一轮按空水位从头扫 |
-| 归档不丢水位 | 成功实例默认 30 天后移入 `archive.job_instance_archive` 并从热表删除;查询在热冷两支各取最近一行再合并,配合部分索引 `idx_job_instance_effective_watermark` / `idx_job_instance_archive_effective_watermark`(V388)保持常数级 |
+| 归档不丢水位 | 成功实例默认 30 天后移入 `archive.job_instance_archive` 并从热表删除;查询在热冷两支各取**数值最大的有效 OUT** 再合并。较晚完成的较低 OUT 不能把后续 IN 拉回。V388 部分索引服务有效成功行的范围裁剪 |
 | 重放与补跑不推进 | `replay_session_id` 非空的历史重放和 `rerun_flag=true` 补跑按各自冻结范围执行,其 OUT 与正式数据流的连续边界不可比,不参与启动水位取值 |
 | OUT 持久化无版本检查 | 水位是单调推进的最终一致字段,并发并不会破坏正确性,SQL 不带 `version = #{expectedVersion}` |
 | IN/OUT 跨子作业不传递 | DAG 的 JOB 节点子作业有自己的 jobDefinition,各自有自己的水位序列;终态直接关联所属 NodeRun；不再经父虚拟任务传递水位 |
@@ -1077,7 +1077,7 @@ sqlTransformCompute:
 
 ### 7.9.6 与 ExecutionMode.INCREMENTAL(§7.8)的协作
 
-PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 指定目标列名，用于计算本批 `highWaterMarkOut`，经 FEEDBACK 透传后由 orchestrator 回写 `job_instance.high_water_mark_out`；下次启动时作为 `highWaterMarkIn` 命名参数，业务 SQL 可用 `WHERE event_id > :highWaterMarkIn` 取增量。JSONB 模式在 COMPUTE 阶段从暂存计算；DIRECT 模式在 COMMIT 阶段计算。DIRECT 的 INSERT / INSERT_IGNORE 使用 `columns` 中对应的源列，在同一语句中物化本批源数据，同时用于发布和计算最高水位，因此冲突跳过的输入也计入水位，但 `publishedCount` 仍只统计实际写入行。空输入不产生新水位；下一次启动仍沿用最近一次**有效** OUT（启动查询跳过空 OUT 行，并覆盖已归档成功实例），所以空批不会让水位回落，也不会因此重扫历史。水位列未出现在 `columns` 中时保留按目标表 `RETURNING` 计算的兼容行为，跳过的冲突行不参与该水位；增量配置应将水位列明确包含在映射中。
+PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 指定目标列名，用于计算本批 `highWaterMarkOut`，经 FEEDBACK 透传后由 orchestrator 回写 `job_instance.high_water_mark_out`；下次启动时作为 `highWaterMarkIn` 命名参数，业务 SQL 可用 `WHERE event_id > :highWaterMarkIn` 取增量。JSONB 模式在 COMPUTE 阶段从暂存计算；DIRECT 模式在 COMMIT 阶段计算。DIRECT 的 INSERT / INSERT_IGNORE 使用 `columns` 中对应的源列，在同一语句中物化本批源数据，同时用于发布和计算最高水位，因此冲突跳过的输入也计入水位，但 `publishedCount` 仍只统计实际写入行。空输入不产生新水位；下一次启动仍沿用已确认的**最大有效** OUT（启动查询跳过空 OUT/非数值行，热冷表各取最大值，并覆盖已归档成功实例），所以空批不会让水位回落、乱序完成的低 OUT 也不会回退后续 IN，更不会因此重扫历史。水位列未出现在 `columns` 中时保留按目标表 `RETURNING` 计算的兼容行为，跳过的冲突行不参与该水位；增量配置应将水位列明确包含在映射中。
 
 ### 7.9.7 资源上限与孤儿清理(P1-6 / P1-7)
 
