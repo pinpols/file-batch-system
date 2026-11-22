@@ -179,8 +179,7 @@ class JobPushDeliveryIntegrationTest extends AbstractIntegrationTest {
 
     String selectedToRegclass = jdbc.queryForObject(selectToRegclassSql, String.class);
     assertThat(selectedToRegclass).isNull();
-    String migration = new ClassPathResource(
-            "db/legacy-migration/V330__persist_job_push_intents.sql")
+    String migration = new ClassPathResource("db/migration/V330__persist_job_push_intents.sql")
         .getContentAsString(StandardCharsets.UTF_8);
     int retirementStart = migration.indexOf("LOCK TABLE batch.console_push_job_notification");
     assertThat(retirementStart).isGreaterThanOrEqualTo(0);

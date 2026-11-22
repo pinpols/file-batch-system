@@ -187,7 +187,7 @@ AtomicLong `lastSeenMillis` CAS 推进，若传入 `nowEpochMillis` 比上次早
 ##### A-3.1 a+c · compensation_checkpoint 表 + runbook
 
 **产出**：
-- `db/legacy-migration/V63__compensation_checkpoint.sql`（compensation_checkpoint 表 + 2 索引 + 注释）
+- `db/migration/V63__compensation_checkpoint.sql`（compensation_checkpoint 表 + 2 索引 + 注释）
 - `docs/runbook/compensation-cleanup.md`（按 JOB / STEP / PARTITION handler 的逆向清理 SQL + 通用安全原则）
 
 代码层 hook（每个 handler 写 checkpoint）未在本轮做，列为 v4 治理候选。

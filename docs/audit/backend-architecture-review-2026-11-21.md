@@ -20,7 +20,7 @@ Workflow 进入终态后，`WorkflowTerminalOutboxService:95` 注册提交后补
 
 ## P2 · 暂停的 Workflow 恢复时只能使用原槽位（ARCH-20261121-03）
 
-[ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 规定运行离开 `CREATED/RUNNING` 即释放槽位。[ADR-044](../architecture/adr/ADR-044-instance-pause-resume-batch-day-serial.md) 规定人工恢复从既有 DAG 继续。Console 的恢复入口转发给 Orchestrator，后者按预期状态把原行从 `PAUSED` 更新为 `RUNNING`，没有重新选择空槽。若另一运行占用了原槽，即使同组其他槽空闲，部分唯一索引也会阻止恢复。[Console 入口，第 79–82 行](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowRunController.java) · [恢复服务，第 109–111、142–148 行](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunManagementApplicationService.java) · [状态更新，第 216 行](../../batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml) · [V386 唯一索引](../../db/legacy-migration/V386__workflow_active_runs_per_biz_date.sql)
+[ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 规定运行离开 `CREATED/RUNNING` 即释放槽位。[ADR-044](../architecture/adr/ADR-044-instance-pause-resume-batch-day-serial.md) 规定人工恢复从既有 DAG 继续。Console 的恢复入口转发给 Orchestrator，后者按预期状态把原行从 `PAUSED` 更新为 `RUNNING`，没有重新选择空槽。若另一运行占用了原槽，即使同组其他槽空闲，部分唯一索引也会阻止恢复。[Console 入口，第 79–82 行](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowRunController.java) · [恢复服务，第 109–111、142–148 行](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunManagementApplicationService.java) · [状态更新，第 216 行](../../batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml) · [V386 唯一索引](../../db/migration/V386__workflow_active_runs_per_biz_date.sql)
 
 **实测**　上限为 2。暂停槽 1 的 A，新请求 B 占槽 1，槽 2 空闲。用正式 SQL 恢复 A，PostgreSQL 返回 `23505`。A 仍为 `PAUSED`，同组活跃运行只有 B。此次未测 HTTP 错误映射。
 
@@ -37,7 +37,7 @@ Orchestrator 领取派发事件时递增 `publish_attempt`，批量领取仅返�
 ## 文档中另有两处需要校准
 
 - [系统职责 §2.3](../architecture/system-scope-boundary.md) 将 Outbox + Kafka 写作 exactly-once。[ADR-002](../architecture/adr/ADR-002-transactional-outbox.md) 定义的是至少一次投递与 Worker 幂等认领，与当前发布过程一致。建议在职责清单明确投递保证和消费者责任。
-- [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 称归档表不保留槽位列。[V386](../../db/legacy-migration/V386__workflow_active_runs_per_biz_date.sql) 实际给冷表添加该列并默认取 1。两条[按运行归档](../../batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml)和[按实例归档](../../batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml)的插入都省略它。按当前实现，冷表该值无法证明历史运行实际使用的槽位。若仅用于并发裁决，说明这一限制即可；若要审计原槽位，需另行调整两条复制路径。这项核对限于 DDL 与 SQL。
+- [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 称归档表不保留槽位列。[V386](../../db/migration/V386__workflow_active_runs_per_biz_date.sql) 实际给冷表添加该列并默认取 1。两条[按运行归档](../../batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml)和[按实例归档](../../batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml)的插入都省略它。按当前实现，冷表该值无法证明历史运行实际使用的槽位。若仅用于并发裁决，说明这一限制即可；若要审计原槽位，需另行调整两条复制路径。这项核对限于 DDL 与 SQL。
 
 ## 审核覆盖与证据边界
 

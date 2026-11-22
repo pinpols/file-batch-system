@@ -320,7 +320,7 @@ Fixture 迁移明细：[test-fixture-path-migration-2026-10-24.json](test-fixtur
 ADR 目录之外的执行和证据文件统一采用业务用途名称；此前映射表涉及编号支持材料的来源列改为历史业务主题标识，目标列保留真实当前链接。正式 ADR 文件和正常决策引用保持原命名，命名检查中的非法反例用于验证拒绝行为。
 
 - 本地负载入口：`scripts/local/batch-consume-load.sh`，同步调用、用法、配套 SQL 索引和传输回归；请求前缀及临时响应文件同样使用用途名称。
-- 文件束迁移：[V183](../../db/legacy-migration/V183__file_bundle_foundation.sql)、[V184](../../db/legacy-migration/V184__file_bundle_export_dispatch.sql)，版本和 SQL 字节不变，仅用于空库重新部署。危险操作预算只移动对应两个文件的键，各1项，不扩大计数。
+- 文件束迁移：[V183](../../db/migration/V183__file_bundle_foundation.sql)、[V184](../../db/migration/V184__file_bundle_export_dispatch.sql)，版本和 SQL 字节不变，仅用于空库重新部署。危险操作预算只移动对应两个文件的键，各1项，不扩大计数。
 - 四份验证日志改为 `logs/verification/workflow/replay-range-*.log`，逐文件 SHA-256 保持一致，已核对无打开句柄；执行日志的证据路径同步更新。
 - 修复能力范围、坏数据隔离等已按业务主题迁移材料的旧路径。源码和日志的原有内容及并行改动保留，未执行数据库操作或真实负载验收。
 

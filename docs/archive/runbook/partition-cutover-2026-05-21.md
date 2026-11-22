@@ -4,7 +4,7 @@
 
 > 文件日期沿革：原文件为 `partition-cutover-2026-05.md`；完整日期依据Git 重命名前首次提交（2026-05-21）。本次仅统一命名，不表示重新评估或验收。
 
-> **状态说明(2026-06)**:`outbox_event` / `job_instance` 的月分区改造**已落 Flyway**:`db/legacy-migration/V172__outbox_event_monthly_partition.sql` 与 `V173__job_instance_monthly_partition.sql`(幂等改造,ON CONFLICT→NOT EXISTS,详见 `partition-idempotency-decision.md`)。本手册描述的手工 `scripts/db/partition-migration/*.sql` cutover 流程为历史遗留,新环境随 Flyway 自动迁移即可,无需手工 cutover;本文保留作背景与回滚参考。
+> **状态说明(2026-06)**:`outbox_event` / `job_instance` 的月分区改造**已落 Flyway**:`db/migration/V172__outbox_event_monthly_partition.sql` 与 `V173__job_instance_monthly_partition.sql`(幂等改造,ON CONFLICT→NOT EXISTS,详见 `partition-idempotency-decision.md`)。本手册描述的手工 `scripts/db/partition-migration/*.sql` cutover 流程为历史遗留,新环境随 Flyway 自动迁移即可,无需手工 cutover;本文保留作背景与回滚参考。
 >
 > 目标：把 `outbox_event` 与 `job_instance` 从普通表改造为按月分区（RANGE on `created_at` / `biz_date`），解除"无界增长 → 单 SELECT 退化 → 调度延迟"的最后一道增长红线。
 >

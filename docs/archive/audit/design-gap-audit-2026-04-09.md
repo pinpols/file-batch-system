@@ -41,7 +41,7 @@
   - [TenantSchedulerSnapshotService.java](../architecture/<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/snapshot/TenantSchedulerSnapshotService.java)
   - [SchedulerSnapshotController.java](../architecture/<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/SchedulerSnapshotController.java)
   - [ConsoleSchedulerSnapshotController.java](../architecture/<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleSchedulerSnapshotController.java)
-  - Flyway [V16__scheduler_fair_share_snapshot_load.sql](../architecture/<repo-root>/db/legacy-migration/V16__scheduler_fair_share_snapshot_load.sql)
+  - Flyway [V16__scheduler_fair_share_snapshot_load.sql](../architecture/<repo-root>/db/migration/V16__scheduler_fair_share_snapshot_load.sql)
   - Worker 排空：[WorkerDrainGovernanceService](../architecture/<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceService.java)、[WorkerDrainTimeoutScheduler](../architecture/<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/WorkerDrainTimeoutScheduler.java)、[docs/runbook/rolling-upgrade-workers.md](../architecture/<repo-root>/docs/runbook/rolling-upgrade-workers.md)
 
 ### 9. 文件处理链路

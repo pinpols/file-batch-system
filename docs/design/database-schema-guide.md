@@ -9,7 +9,7 @@
 | 平台数据库 `batch`、`archive` | [`db/migration/`](../../db/migration) 中已应用的 Flyway migration | 表、字段、约束、索引及迁移顺序以实际目标环境的 Flyway 成功记录为准 |
 | 业务数据库 `biz` 与 `batch.process_staging` | [`scripts/db/business/create_biz_tables.sql`](../../scripts/db/business/create_biz_tables.sql) 及同目录后续脚本 | 业务库不由平台库 Flyway 管理；RLS 安装见 [`rls-phase-a.sql`](../../scripts/db/business/rls-phase-a.sql) |
 | Quartz 元数据 | Quartz PostgreSQL JobStore schema 脚本与 Quartz 版本 | 框架表由 Quartz 持久化调度器使用，不承载 BFS 业务状态 |
-| 表和关键列说明 | 数据库 `COMMENT ON TABLE/COLUMN` migration | 可通过 `psql` 的 `\dt+`、`\d+ schema.table` 查看；对象注释治理见 [`V194`](../../db/legacy-migration/V194__complete_database_object_comments.sql) |
+| 表和关键列说明 | 数据库 `COMMENT ON TABLE/COLUMN` migration | 可通过 `psql` 的 `\dt+`、`\d+ schema.table` 查看；对象注释治理见 [`V194`](../../db/migration/V194__complete_database_object_comments.sql) |
 
 历史设计稿 [`data-model-ddl.md`](./data-model-ddl.md) 保留模型演进背景和部分 DDL 示例。新增表或核对现行字段时，应以已应用迁移和目标数据库 catalog 为准，不要将该早期 DDL 草稿当作完整当前 schema。
 
@@ -117,7 +117,7 @@ flowchart LR
 | `job_execution_log` | 执行日志索引；日志正文由日志系统承载 |
 | `batch_runtime_default_parameter` | 运行时默认参数目录，与架构默认参数文档保持同步 |
 | `resource_queue`、`resource_tag` | 队列容量、公平调度及资源匹配配置 |
-| `waiting_partition_scan_cursor` | 等待分片全局扫描的共享位置与并发版本，仅含扫描水位、周期上界、执行模式和版本，无租户业务数据；见 [V363](../../db/legacy-migration/V363__waiting_partition_scan_cursor.sql)、[V364](../../db/legacy-migration/V364__waiting_partition_scan_cycle.sql)、[V365](../../db/legacy-migration/V365__waiting_partition_scan_mode.sql)；[V366](../../db/legacy-migration/V366__index_waiting_partition_scan_mode.sql) 为模式及 ID 范围查询提供索引 |
+| `waiting_partition_scan_cursor` | 等待分片全局扫描的共享位置与并发版本，仅含扫描水位、周期上界、执行模式和版本，无租户业务数据；见 [V363](../../db/migration/V363__waiting_partition_scan_cursor.sql)、[V364](../../db/migration/V364__waiting_partition_scan_cycle.sql)、[V365](../../db/migration/V365__waiting_partition_scan_mode.sql)；[V366](../../db/migration/V366__index_waiting_partition_scan_mode.sql) 为模式及 ID 范围查询提供索引 |
 | `tenant_quota_policy`、`quota_runtime_state`、`tenant_scheduler_snapshot` | 租户配额、运行时占用和调度决策快照 |
 | `worker_registry`、`worker_report_outbox` | Worker 心跳容量视图及可靠结果回报；V360按租户/任务/执行身份去重并以claim_token保护领取，只用于全新数据库 |
 | `retry_schedule`、`dead_letter_task` | 延迟重试计划和受控死信重放 |
@@ -130,22 +130,22 @@ flowchart LR
 | `workflow_node`、`workflow_edge` | DAG 节点和控制流边；V293以租户复合FK绑定父定义。JOB业务编码在草稿中可暂未就绪，启用/运行另有应用检查 |
 | `workflow_definition_version` | Workflow 定义历史快照 |
 | `workflow_run`、`workflow_node_run` | 一次 Workflow 执行及节点运行状态 |
-| `trigger_request` | 触发请求幂等记录；[V369](../../db/legacy-migration/V369__unique_batch_day_catchup_root.sql) 对批日补跑根请求的租户及业务键建立部分唯一索引，子 Job 可继承同键 |
-| `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开；V297以 `(tenant_id,request_id)` `NO ACTION` FK保护来源请求，应用仍负责同事务创建、payload 身份和业务状态校验；[V361](../../db/legacy-migration/V361__trigger_outbox_claim_fence.sql) 用领取 token 防止超时回收后旧投递者回写新领取，归档表同步镜像字段 |
-| `trigger_request_idempotency_alias` | 将不同 HTTP 幂等键映射到已接纳的 EVENT TriggerRequest；见 [V278](../../db/legacy-migration/V278__trigger_request_idempotency_alias.sql) |
-| `scheduled_occurrence` | Workflow 计划 fire 的唯一 occurrence 台账和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V261](../../db/legacy-migration/V261__scheduled_occurrence_ledger.sql)、[V295](../../db/legacy-migration/V295__protect_scheduled_expected_request_references.sql) |
-| `scheduled_occurrence_fire` | [V374](../../db/legacy-migration/V374__record_quartz_actual_fires.sql) 逐次记录 Quartz 实际回调及重试身份；不同于计划 occurrence 或启动成功，历史缺失和记录失败不回填，以租户隔离。未实现自动过期或归档；授权清理仅覆盖指定租户、截止时间前且批次日已结算的记录，Workflow 删除可级联清理 |
-| `scheduled_occurrence_coverage` | 记录 occurrence 扫描覆盖水位与配置代际；见 [V262](../../db/legacy-migration/V262__scheduled_occurrence_coverage.sql) |
-| `scheduled_occurrence_catch_up_audit` | 审计人工补跑的 occurrence 决策；见 [V274](../../db/legacy-migration/V274__audit_scheduled_occurrence_catch_up.sql) |
-| `scheduled_occurrence_supersession_history` | 保留旧计划 occurrence 被新计划替代的历史；见 [V272](../../db/legacy-migration/V272__scheduled_occurrence_supersession_history.sql) |
-| `expected_work_occurrence` | 每个业务日的预期工作义务及其来源、身份和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V263](../../db/legacy-migration/V263__expected_work_occurrence.sql)、[V295](../../db/legacy-migration/V295__protect_scheduled_expected_request_references.sql) |
-| `file_group_expectation_definition` | 定义按日生成的文件组预期义务；见 [V264](../../db/legacy-migration/V264__file_group_expectation_definition.sql) |
-| `external_event_expectation_definition` | 定义按日生成并绑定 Workflow 的外部事件预期；见 [V265](../../db/legacy-migration/V265__external_event_expectation_definition.sql) |
-| `workflow_launch_wait` | 持久化根 Workflow 执行容量等待及原始请求恢复载荷；V293复合FK保护同租户父定义；[V294](../../db/legacy-migration/V294__protect_wait_request_retention.sql)将原请求租户FK删除动作由级联改为NO ACTION，保留等待及终态审计；首次定义见 [V280](../../db/legacy-migration/V280__workflow_launch_capacity_wait.sql) |
-| `replay_operation` | [V339](../../db/legacy-migration/V339__persist_replay_operations.sql) 将用户重放请求、审批、冻结快照及汇总状态持久化为审计根；按日 replay session 仍是实际执行单元 |
-| `replay_operation_preview_token` | [V339](../../db/legacy-migration/V339__persist_replay_operations.sql) 的短期一次性预览凭证；保存令牌摘要、请求与快照指纹，消费后绑定重放操作 |
-| `external_event_delivery` | 自动事件路由回执，冻结首次接纳的来源事件载荷、业务日和 Workflow 目标集合；见 [V287](../../db/legacy-migration/V287__external_event_delivery_target_snapshot.sql) |
-| `external_event_delivery_alias` | 将同一事件回执绑定到不同 HTTP `Idempotency-Key`，用于事件级状态回查；见 [V287](../../db/legacy-migration/V287__external_event_delivery_target_snapshot.sql) |
+| `trigger_request` | 触发请求幂等记录；[V369](../../db/migration/V369__unique_batch_day_catchup_root.sql) 对批日补跑根请求的租户及业务键建立部分唯一索引，子 Job 可继承同键 |
+| `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开；V297以 `(tenant_id,request_id)` `NO ACTION` FK保护来源请求，应用仍负责同事务创建、payload 身份和业务状态校验；[V361](../../db/migration/V361__trigger_outbox_claim_fence.sql) 用领取 token 防止超时回收后旧投递者回写新领取，归档表同步镜像字段 |
+| `trigger_request_idempotency_alias` | 将不同 HTTP 幂等键映射到已接纳的 EVENT TriggerRequest；见 [V278](../../db/migration/V278__trigger_request_idempotency_alias.sql) |
+| `scheduled_occurrence` | Workflow 计划 fire 的唯一 occurrence 台账和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V261](../../db/migration/V261__scheduled_occurrence_ledger.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
+| `scheduled_occurrence_fire` | [V374](../../db/migration/V374__record_quartz_actual_fires.sql) 逐次记录 Quartz 实际回调及重试身份；不同于计划 occurrence 或启动成功，历史缺失和记录失败不回填，以租户隔离。未实现自动过期或归档；授权清理仅覆盖指定租户、截止时间前且批次日已结算的记录，Workflow 删除可级联清理 |
+| `scheduled_occurrence_coverage` | 记录 occurrence 扫描覆盖水位与配置代际；见 [V262](../../db/migration/V262__scheduled_occurrence_coverage.sql) |
+| `scheduled_occurrence_catch_up_audit` | 审计人工补跑的 occurrence 决策；见 [V274](../../db/migration/V274__audit_scheduled_occurrence_catch_up.sql) |
+| `scheduled_occurrence_supersession_history` | 保留旧计划 occurrence 被新计划替代的历史；见 [V272](../../db/migration/V272__scheduled_occurrence_supersession_history.sql) |
+| `expected_work_occurrence` | 每个业务日的预期工作义务及其来源、身份和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V263](../../db/migration/V263__expected_work_occurrence.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
+| `file_group_expectation_definition` | 定义按日生成的文件组预期义务；见 [V264](../../db/migration/V264__file_group_expectation_definition.sql) |
+| `external_event_expectation_definition` | 定义按日生成并绑定 Workflow 的外部事件预期；见 [V265](../../db/migration/V265__external_event_expectation_definition.sql) |
+| `workflow_launch_wait` | 持久化根 Workflow 执行容量等待及原始请求恢复载荷；V293复合FK保护同租户父定义；[V294](../../db/migration/V294__protect_wait_request_retention.sql)将原请求租户FK删除动作由级联改为NO ACTION，保留等待及终态审计；首次定义见 [V280](../../db/migration/V280__workflow_launch_capacity_wait.sql) |
+| `replay_operation` | [V339](../../db/migration/V339__persist_replay_operations.sql) 将用户重放请求、审批、冻结快照及汇总状态持久化为审计根；按日 replay session 仍是实际执行单元 |
+| `replay_operation_preview_token` | [V339](../../db/migration/V339__persist_replay_operations.sql) 的短期一次性预览凭证；保存令牌摘要、请求与快照指纹，消费后绑定重放操作 |
+| `external_event_delivery` | 自动事件路由回执，冻结首次接纳的来源事件载荷、业务日和 Workflow 目标集合；见 [V287](../../db/migration/V287__external_event_delivery_target_snapshot.sql) |
+| `external_event_delivery_alias` | 将同一事件回执绑定到不同 HTTP `Idempotency-Key`，用于事件级状态回查；见 [V287](../../db/migration/V287__external_event_delivery_target_snapshot.sql) |
 | `trigger_runtime_state`、`trigger_misfire_pending` | 触发器运行位置、misfire 和待审批补跑；V296以 `(tenant_id,catch_up_request_id)` `NO ACTION` FK保护已接纳请求，应用仍校验 Workflow/业务日/状态 |
 
 Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/workflow-dependency-guide.md)；Trigger outbox 的投递边界见 [Outbox 架构说明](../architecture/outbox-architecture.md)。
@@ -156,18 +156,18 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 |---|---|
 | `file_record` | 文件身份、到达、校验、对象存储和生命周期权威记录 |
 | `import_ingress_scan_storage_lease`、`import_ingress_scan_state`、`import_ingress_scan_object` | V377 导入入口按部署与存储范围维护的分页周期、租约围栏和对象版本观察；可重建的热协调状态，不保存清单全文，也不替代文件事实记录 |
-| `import_ingress_ownership`、`import_ingress_ownership_binding` | [V382](../../db/legacy-migration/V382__declare_import_ingress_ownership.sql) 中 Import 与对象对账共用的扫描范围及租户目录、权威清单和渠道绑定；退休范围与停用的历史清单绑定继续受保护，明确释放后才交还普通对账。两表强制 RLS，仅经授权的可信角色读取；声明须在文件写入前完成，切换步骤见[入口归属管理](../../scripts/db/README.md) |
-| `file_governance_reconcile_cursor` | [V383](../../db/legacy-migration/V383__persist_file_governance_reconcile_cursor.sql) 按存储和对账前缀保存有界前向扫描与回访位置、预算及并发版本；只记录对账进度，不替代文件状态 |
+| `import_ingress_ownership`、`import_ingress_ownership_binding` | [V382](../../db/migration/V382__declare_import_ingress_ownership.sql) 中 Import 与对象对账共用的扫描范围及租户目录、权威清单和渠道绑定；退休范围与停用的历史清单绑定继续受保护，明确释放后才交还普通对账。两表强制 RLS，仅经授权的可信角色读取；声明须在文件写入前完成，切换步骤见[入口归属管理](../../scripts/db/README.md) |
+| `file_governance_reconcile_cursor` | [V383](../../db/migration/V383__persist_file_governance_reconcile_cursor.sql) 按存储和对账前缀保存有界前向扫描与回访位置、预算及并发版本；只记录对账进度，不替代文件状态 |
 | `file_channel_config`、`file_channel_health` | 文件通道配置和探活结果 |
 | `file_template_config` | 文件格式、校验、映射和处理目标配置 |
 | 系统固定Pipeline目录 | 文件执行身份和阶段来自 `SystemPipelineCatalog` 及 Job 参数 |
-| `pipeline_definition`、`pipeline_step_definition`（已退役） | 旧租户可编辑 Pipeline 定义与步骤；现行运行从系统目录和 Job 参数选取固定阶段，旧定义没有执行消费者。[V347](../../db/legacy-migration/V347__retire_unused_platform_tables.sql) 仅在空表时删除两表及运行表的旧定义 ID，不迁移历史数据或保留兼容入口 |
+| `pipeline_definition`、`pipeline_step_definition`（已退役） | 旧租户可编辑 Pipeline 定义与步骤；现行运行从系统目录和 Job 参数选取固定阶段，旧定义没有执行消费者。[V347](../../db/migration/V347__retire_unused_platform_tables.sql) 仅在空表时删除两表及运行表的旧定义 ID，不迁移历史数据或保留兼容入口 |
 | `pipeline_instance`、`pipeline_step_run`、`pipeline_progress` | 文件链路运行态、步骤结果和续跑位点 |
 | `file_dispatch_record`、`file_error_record`、`file_audit_log` | 下游投递回执、坏记录明细和文件治理审计 |
 
 导入扫描范围可覆盖多个租户，因此这三张协调表不以单个 `tenant_id` 表示访问范围；对象键和清单可能包含租户信息。三表启用并强制 RLS，仅迁移账号及通过[专用授权脚本](../../scripts/db/import-ingress-scan-role.sql)配置的可信 Import 角色可跨范围访问。对象行按完整扫描周期清理不再发现的条目，不进入冷归档；停用或变更扫描范围后，历史范围状态不会仅凭时间自动删除，须另行确认范围后处置。文件真实性仍以 `file_record` 和对象存储为准。
 
-`pipeline_progress` 的热父关系由 [V292](../../db/legacy-migration/V292__protect_pipeline_checkpoint_parent_lifecycle.sql) 的租户复合 FK 保护，父删除 RESTRICT。正式归档先锁父及位点、保全并核对冷副本，再显式删热子和父；`archive.pipeline_progress_archive` 保留独立历史身份，不引用热父表。应用位点写入0行必须失败，补偿删除0行仍为幂等；完整语义见 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)。
+`pipeline_progress` 的热父关系由 [V292](../../db/migration/V292__protect_pipeline_checkpoint_parent_lifecycle.sql) 的租户复合 FK 保护，父删除 RESTRICT。正式归档先锁父及位点、保全并核对冷副本，再显式删热子和父；`archive.pipeline_progress_archive` 保留独立历史身份，不引用热父表。应用位点写入0行必须失败，补偿删除0行仍为幂等；完整语义见 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)。
 
 ### 3.4 批量日、日历与数据结果
 
@@ -178,7 +178,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `calendar_dependency`、`calendar_dependency_wait`、`disaster_day_override` | 跨日历依赖定义、固定业务日/依赖规则快照的持久化等待事实和灾难日覆盖；等待行由开启调度器恢复重检，超时首次告警由 CAS 认领 |
 | `batch_day_instance`、`batch_day_waiting_launch`、`batch_day_open_cursor`、`batch_day_catchup_control`、`batch_day_catchup_control_event` | 批量日权威状态、等待前序闸门的启动意图、原始日期扫描位置、按日历暂停控制及不可变操作审计 |
 | `batch_day_replay_session`、`batch_day_replay_entry`、`batch_day_operation_audit` | 批量日重放会话、作业重放结果和操作审计 |
-| `batch_day_catchup_operation` | [V367](../../db/legacy-migration/V367__persist_batch_day_catchup_operation.sql) 的批量日补跑原请求、冻结候选与对账状态；[V370](../../db/legacy-migration/V370__batch_day_catchup_abandon_fence.sql) 增加尚未冻结原键的放弃围栏。与重放会话分开，结果不明时不得按当前候选重新提交。 |
+| `batch_day_catchup_operation` | [V367](../../db/migration/V367__persist_batch_day_catchup_operation.sql) 的批量日补跑原请求、冻结候选与对账状态；[V370](../../db/migration/V370__batch_day_catchup_abandon_fence.sql) 增加尚未冻结原键的放弃围栏。与重放会话分开，结果不明时不得按当前候选重新提交。 |
 | `result_version` | 同一业务键的结果版本和有效版本裁决 |
 | `data_asset`、`asset_partition`、`asset_freshness_policy` | 最小资产目录、结果分区新鲜度读模型及 SLA 规则 |
 | `data_quality_rule`、`data_quality_check` | 对账规则和每次实例检查结果 |
@@ -191,10 +191,10 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `outbox_event`、`outbox_event_dedup_key` | 平台状态变更与 Kafka 投递之间的事务 Outbox 及幂等账本 |
 | `event_outbox_retry`、`event_delivery_log` | Outbox 重试信息和实际投递记录 |
 | `archive_policy` | 热表保留和归档策略 |
-| `console_operation_audit`、`approval_command`、`compensation_command`、`compensation_checkpoint` | 管理操作、审批和补偿执行审计；[V362](../../db/legacy-migration/V362__index_catch_up_latest_approval.sql) 为补跑列表按租户、请求查询最新审批建立部分索引；[V368](../../db/legacy-migration/V368__preserve_approval_submission_reason.sql) 分别保留原提交原因和审批决定原因，供同键对账使用（仅空库部署） |
+| `console_operation_audit`、`approval_command`、`compensation_command`、`compensation_checkpoint` | 管理操作、审批和补偿执行审计；[V362](../../db/migration/V362__index_catch_up_latest_approval.sql) 为补跑列表按租户、请求查询最新审批建立部分索引；[V368](../../db/migration/V368__preserve_approval_submission_reason.sql) 分别保留原提交原因和审批决定原因，供同键对账使用（仅空库部署） |
 | `config_release`、`config_approval`、`config_change_log`、`config_sync_log` | 配置发布版本、审批、变更审计和同步记录 |
-| `config_sync_target_receipt` | [V345](../../db/legacy-migration/V345__persist_config_sync_target_receipts.sql) 的逐目标配置导入提交回执；与目标配置同事务保存，聚合审计补录只能据此核对，不得再次导入 |
-| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/legacy-migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功 |
+| `config_sync_target_receipt` | [V345](../../db/migration/V345__persist_config_sync_target_receipts.sql) 的逐目标配置导入提交回执；与目标配置同事务保存，聚合审计补录只能据此核对，不得再次导入 |
+| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功 |
 | `system_parameter`、`batch_runtime_default_parameter` | 系统参数和运行参数基线 |
 | `api_key`、`secret_version` | API 凭据元数据及密钥版本；不存放可直接使用的明文密钥 |
 | `alert_event`、`alert_routing_config` | 告警事件及路由配置；V357 保存新关闭意图的时刻、原因及公平轮询尝试水位，最终渠道回执另由 `alert_notification_receipt` 保存 |
@@ -203,11 +203,11 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `webhook_subscription`、`webhook_delivery_log` | Webhook 订阅及投递重试记录 |
 | `console_user_account`、`console_push_subscription`、`console_push_approval_notification` | Console 账号、浏览器设备订阅与审批通知记录 |
 | `workflow_terminal_notification_receipt`、`console_push_job_delivery` | Job/Workflow 终态的首次消费回执与 Job Push 的首次决定/冻结设备意图；设备投递引用同租户回执并强制 RLS。新库 V330 退役旧 `console_push_job_notification` lookback 去重表，非空旧账本拒绝切换；详见[通知运维说明](../runbook/workflow-terminal-notifications.md) |
-| `console_push_job_notification`（已退役） | 旧 Job Push lookback 去重表没有完整终态消费及逐设备投递证据；[V330](../../db/legacy-migration/V330__persist_job_push_intents.sql) 仅允许空账本退役，改由终态回执和设备投递表记录身份与结果，不保留旧表兼容入口 |
-| `workflow_terminal_notification_receipt_archive` | [V346](../../db/legacy-migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合通知族的首次消费身份；冷存身份持续阻止迟到事件重复展开投递 |
-| `webhook_delivery_log_archive`、`notification_delivery_log_archive` | [V346](../../db/legacy-migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合通知族的 Webhook 与订阅规则投递结果，按同租户冷回执关联 |
-| `console_push_job_delivery_archive` | [V346](../../db/legacy-migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合 Job Web Push 决定与设备投递结果，保留原记录 ID |
-| `console_operation_audit_archive` | [V346](../../db/legacy-migration/V346__archive_closed_terminal_notification_families.sql) 保存通知人工操作审计和原重试请求身份，归档后仍防止相同请求重新开启发送预算 |
+| `console_push_job_notification`（已退役） | 旧 Job Push lookback 去重表没有完整终态消费及逐设备投递证据；[V330](../../db/migration/V330__persist_job_push_intents.sql) 仅允许空账本退役，改由终态回执和设备投递表记录身份与结果，不保留旧表兼容入口 |
+| `workflow_terminal_notification_receipt_archive` | [V346](../../db/migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合通知族的首次消费身份；冷存身份持续阻止迟到事件重复展开投递 |
+| `webhook_delivery_log_archive`、`notification_delivery_log_archive` | [V346](../../db/migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合通知族的 Webhook 与订阅规则投递结果，按同租户冷回执关联 |
+| `console_push_job_delivery_archive` | [V346](../../db/migration/V346__archive_closed_terminal_notification_families.sql) 保存已闭合 Job Web Push 决定与设备投递结果，保留原记录 ID |
+| `console_operation_audit_archive` | [V346](../../db/migration/V346__archive_closed_terminal_notification_families.sql) 保存通知人工操作审计和原重试请求身份，归档后仍防止相同请求重新开启发送预算 |
 | `console_ai_audit_log` | AI 请求审计、token 用量、费用估算和内容哈希；审计表与对话正文分离 |
 | `console_ai_conversation`、`console_ai_turn` | AI 会话和轮次；复合租户键关联，按配置选择持久化，轮次正文由应用加密后保存并按到期时间清理 |
 | `console_ai_monthly_usage` | AI 租户月度 token、已计费用和预算预留台账；不代表供应商最终账单 |
@@ -219,12 +219,12 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `console_user_batch_operation` | Console 批量开户操作及处理结果，不保存初始密码明文 |
 | `console_external_identity` | 外部 OIDC 身份与本地用户的关联，按 issuer/subject 建立外部身份映射 |
 | `workflow_monitoring_policy` | V353 Workflow 根级软时限策略，与同租户定义复合外键绑定；不自动继承到子 Job |
-| `trigger_launch_recovery` | [V348](../../db/legacy-migration/V348__trigger_launch_recovery.sql) Kafka 有限重试耗尽后的加密启动意图；按租户与请求去重，有界退避重投并保留拒绝/耗尽状态；[V371](../../db/legacy-migration/V371__trigger_launch_recovery_generation.sql) 在重新入队时以恢复轮次隔离旧失败回执 |
-| `readiness_wait` | [V351](../../db/legacy-migration/V351__readiness_wait.sql) 根 Workflow 等待执行就绪的持久交接；按租户、定义和计划时刻去重，[V352](../../db/legacy-migration/V352__readiness_wait_definition_fk.sql) 绑定同租户定义身份; [V359](../../db/legacy-migration/V359__readiness_wait_probe_rotation.sql) 支持按探测更新时间轮转 PENDING 扫描, 不新增状态或业务字段 |
+| `trigger_launch_recovery` | [V348](../../db/migration/V348__trigger_launch_recovery.sql) Kafka 有限重试耗尽后的加密启动意图；按租户与请求去重，有界退避重投并保留拒绝/耗尽状态；[V371](../../db/migration/V371__trigger_launch_recovery_generation.sql) 在重新入队时以恢复轮次隔离旧失败回执 |
+| `readiness_wait` | [V351](../../db/migration/V351__readiness_wait.sql) 根 Workflow 等待执行就绪的持久交接；按租户、定义和计划时刻去重，[V352](../../db/migration/V352__readiness_wait_definition_fk.sql) 绑定同租户定义身份; [V359](../../db/migration/V359__readiness_wait_probe_rotation.sql) 支持按探测更新时间轮转 PENDING 扫描, 不新增状态或业务字段 |
 | `job_monitoring_policy`、`job_monitoring_alert_claim` | 作业监控策略和告警认领/去重控制；策略语义见 [SLA 与质量设计](./sla-and-quality.md) |
 | `batch_day_replay_preview_token` | 批量日重放 Preview/Apply 的短期并发与确认令牌，不是业务幂等键 |
 | `tenant_configuration_revision` | 租户配置发布修订栅栏，阻止旧版本配置写入覆盖较新修订 |
-| `config_cache_invalidation_outbox` | [V372](../../db/legacy-migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交，由 Console 投递后删除；不表示各实例均已应用 |
+| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交，由 Console 投递后删除；不表示各实例均已应用 |
 | `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记及可配置任务类型 |
 | `biz_table_schema` | Import Worker 启动时覆盖写入业务库 `biz` schema 快照；当前仓库未接入 Console 基于该快照校验目标表或列的读取链路。读取元数据失败保留旧快照，不能保证快照代表当前业务库；消费与去留待核实。 |
@@ -233,28 +233,14 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `idempotency_record` | 跨业务操作的通用幂等记录 |
 | `shedlock` | ShedLock 定时任务分布式锁；框架维护 |
 
-#### 归档表目录
-
-以下冷表定义见 [平台库 V2](../../db/migration/V2__platform_schema.sql)，归档顺序与范围见 [归档和 Quartz](#37-归档和-quartz)。
-
-| 表 | 职责 |
-|---|---|
-| `job_instance_archive`、`job_partition_archive`、`job_task_archive`、`job_step_instance_archive` | 主作业运行树及其结果，提供按租户和实例的历史回查。 |
-| `workflow_run_archive`、`workflow_node_run_archive` | Workflow 根运行与节点历史，保留来源请求及节点状态。 |
-| `pipeline_instance_archive`、`pipeline_step_run_archive`、`pipeline_progress_archive` | Pipeline 运行、步骤结果和持久化续跑位点的历史镜像。 |
-| `file_record_archive`、`file_dispatch_record_archive`、`result_version_archive` | 文件身份、分发回执及作业结果版本的历史证据。 |
-| `outbox_event_archive`、`trigger_outbox_event_archive`、`event_outbox_retry_archive`、`event_delivery_log_archive` | 平台和 Trigger 消息、重试轨迹及外部投递结果。 |
-| `batch_day_replay_session_archive`、`batch_day_replay_entry_archive` | 批量日补跑会话与逐条回放结果。 |
-| `job_execution_log_archive`、`dead_letter_task_archive`、`compensation_command_archive`、`data_quality_check_archive` | 执行日志、死信、补偿与质量检查结果的历史审计。 |
-
 ### 3.6 AI、维护与使用率表的边界
 
-- AI 表结构定义在 [V218](../../db/legacy-migration/V218__console_ai_conversations_and_cost_usage.sql)：`console_ai_conversation` 与 `console_ai_turn` 通过 `(tenant_id, id)` 复合主外键关联；`console_ai_monthly_usage` 以 `(tenant_id, billing_month)` 为主键。会话、轮次和月度用量表启用并强制 RLS。AI 审计表 `console_ai_audit_log` 独立保留审计元数据，不等同于可恢复的会话记录。
-- 维护单例定义在 [V215](../../db/legacy-migration/V215__create_console_maintenance_state.sql)，固定只有 `id=1`；`affected_services` 当前仅用于公告展示，不据此动态路由。
-- 使用率表定义在 [V216](../../db/legacy-migration/V216__create_console_usage_daily.sql)，主键包含统计日和租户/指标维度，按 `stat_date` 月分区并启用强制 RLS。该表是 best-effort 派生统计，不做 archive 镜像，也不能用作审计、计费或审批证据。
-- AI 附件元数据和对象清理队列定义在 [V219](../../db/legacy-migration/V219__console_ai_image_attachments.sql)；数据库不保存附件字节。批量开户操作记录定义在 [V220](../../db/legacy-migration/V220__console_user_batch_provisioning.sql)，外部 OIDC 身份映射定义在 [V222](../../db/legacy-migration/V222__console_oidc_external_identity.sql)。
-- 作业监控策略及告警认领控制分别定义在 [V224](../../db/legacy-migration/V224__job_monitoring_policy_and_alert_claim.sql)；重放预览令牌定义在 [V230](../../db/legacy-migration/V230__batch_day_replay_preview_token.sql)；租户配置修订栅栏定义在 [V232](../../db/legacy-migration/V232__tenant_configuration_revision_fence.sql)，配置缓存失效意图定义在 [V372](../../db/legacy-migration/V372__persist_config_cache_invalidation.sql)。
-- 告警升级通知 Outbox 定义在 [V214](../../db/legacy-migration/V214__alert_escalation_notification_outbox.sql)，与告警升级状态一同持久化，通知投递可重试；详细投递语义见[运行手册](../runbook/alert-escalation.md)。
+- AI 表结构定义在 [V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)：`console_ai_conversation` 与 `console_ai_turn` 通过 `(tenant_id, id)` 复合主外键关联；`console_ai_monthly_usage` 以 `(tenant_id, billing_month)` 为主键。会话、轮次和月度用量表启用并强制 RLS。AI 审计表 `console_ai_audit_log` 独立保留审计元数据，不等同于可恢复的会话记录。
+- 维护单例定义在 [V215](../../db/migration/V215__create_console_maintenance_state.sql)，固定只有 `id=1`；`affected_services` 当前仅用于公告展示，不据此动态路由。
+- 使用率表定义在 [V216](../../db/migration/V216__create_console_usage_daily.sql)，主键包含统计日和租户/指标维度，按 `stat_date` 月分区并启用强制 RLS。该表是 best-effort 派生统计，不做 archive 镜像，也不能用作审计、计费或审批证据。
+- AI 附件元数据和对象清理队列定义在 [V219](../../db/migration/V219__console_ai_image_attachments.sql)；数据库不保存附件字节。批量开户操作记录定义在 [V220](../../db/migration/V220__console_user_batch_provisioning.sql)，外部 OIDC 身份映射定义在 [V222](../../db/migration/V222__console_oidc_external_identity.sql)。
+- 作业监控策略及告警认领控制分别定义在 [V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)；重放预览令牌定义在 [V230](../../db/migration/V230__batch_day_replay_preview_token.sql)；租户配置修订栅栏定义在 [V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)，配置缓存失效意图定义在 [V372](../../db/migration/V372__persist_config_cache_invalidation.sql)。
+- 告警升级通知 Outbox 定义在 [V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)，与告警升级状态一同持久化，通知投递可重试；详细投递语义见[运行手册](../runbook/alert-escalation.md)。
 
 ### 3.7 归档和 Quartz
 
@@ -330,8 +316,8 @@ ORDER BY conrelid::regclass::text, conname;
 ## 6. 相关资料
 
 - [完整迁移目录](../../db/migration)
-- 日切 catch-up 游标与运维控制：[V239](../../db/legacy-migration/V254__batch_day_open_cursor.sql)、[V244](../../db/legacy-migration/V259__batch_day_catchup_control.sql)
-- Console AI / 维护 / 使用率结构：[V214](../../db/legacy-migration/V214__alert_escalation_notification_outbox.sql)、[V215](../../db/legacy-migration/V215__create_console_maintenance_state.sql)、[V216](../../db/legacy-migration/V216__create_console_usage_daily.sql)、[V218](../../db/legacy-migration/V218__console_ai_conversations_and_cost_usage.sql)、[V219](../../db/legacy-migration/V219__console_ai_image_attachments.sql)、[V220](../../db/legacy-migration/V220__console_user_batch_provisioning.sql)、[V222](../../db/legacy-migration/V222__console_oidc_external_identity.sql)、[V224](../../db/legacy-migration/V224__job_monitoring_policy_and_alert_claim.sql)、[V230](../../db/legacy-migration/V230__batch_day_replay_preview_token.sql)、[V232](../../db/legacy-migration/V232__tenant_configuration_revision_fence.sql)
+- 日切 catch-up 游标与运维控制：[V239](../../db/migration/V254__batch_day_open_cursor.sql)、[V244](../../db/migration/V259__batch_day_catchup_control.sql)
+- Console AI / 维护 / 使用率结构：[V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)、[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)、[V219](../../db/migration/V219__console_ai_image_attachments.sql)、[V220](../../db/migration/V220__console_user_batch_provisioning.sql)、[V222](../../db/migration/V222__console_oidc_external_identity.sql)、[V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)、[V230](../../db/migration/V230__batch_day_replay_preview_token.sql)、[V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)
 - [数据模型 DDL 与演进背景](./data-model-ddl.md)
 - [Outbox 表关系与生命周期](../architecture/outbox-architecture.md)
 - [Workflow DAG 关系](../architecture/workflow-dependency-guide.md)

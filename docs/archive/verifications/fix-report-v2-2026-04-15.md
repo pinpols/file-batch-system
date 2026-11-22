@@ -105,8 +105,8 @@
 
 | 文件 | 用途 |
 |------|------|
-| `db/legacy-migration/V58__add_cascade_delete_constraints.sql` | C-4.1 级联删除 |
-| `db/legacy-migration/V59__add_quota_runtime_state_version.sql` | C-6.1 乐观锁 version 列 |
+| `db/migration/V58__add_cascade_delete_constraints.sql` | C-4.1 级联删除 |
+| `db/migration/V59__add_quota_runtime_state_version.sql` | C-6.1 乐观锁 version 列 |
 | `batch-common/.../application-prod.yml` | A-5.3 生产 profile |
 | `OutboxPublishCircuitBreakerTest.java` | T-1 熔断器测试 |
 

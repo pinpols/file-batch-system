@@ -56,8 +56,8 @@ class AlertNotificationReceiptMapperIntegrationTest {
     String createSchemaSql = "create schema batch";
     jdbc.execute(createSchemaSql);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/legacy-migration/V19__alert_event.sql"),
-            new ClassPathResource("db/legacy-migration/V356__alert_notification_receipts.sql"))
+            new ClassPathResource("db/migration/V19__alert_event.sql"),
+            new ClassPathResource("db/migration/V356__alert_notification_receipts.sql"))
         .execute(dataSource);
     sessions = mapperSessionFactory(new JdbcTransactionFactory());
   }

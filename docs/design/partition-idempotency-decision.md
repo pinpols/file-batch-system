@@ -1,6 +1,6 @@
 # 分区表与全局幂等身份
 
-当前模型由[V182](../../db/legacy-migration/V182__global_idempotency_ledgers.sql)与[Outbox Mapper](../../batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)定义。分区表的唯一键必须带分区维度，因此平台用独立台账承接跨分区幂等，而不是仅依赖NOT EXISTS查询。
+当前模型由[V182](../../db/migration/V182__global_idempotency_ledgers.sql)与[Outbox Mapper](../../batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)定义。分区表的唯一键必须带分区维度，因此平台用独立台账承接跨分区幂等，而不是仅依赖NOT EXISTS查询。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%

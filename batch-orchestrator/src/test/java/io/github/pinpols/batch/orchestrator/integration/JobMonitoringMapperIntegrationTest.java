@@ -192,34 +192,34 @@ class JobMonitoringMapperIntegrationTest {
     jdbcTemplate.execute(createBatchDayWaitingLaunchSql);
     jdbcTemplate.execute(createDependencyWaitingLaunchSql);
     jdbcTemplate.execute(createAlertEventSql);
-    new ResourceDatabasePopulator(new ClassPathResource(
-            "db/legacy-migration/V224__job_monitoring_policy_and_alert_claim.sql"))
-        .execute(dataSource);
-    new ResourceDatabasePopulator(new ClassPathResource(
-            "db/legacy-migration/V225__job_monitoring_failed_partition_alert.sql"))
+    new ResourceDatabasePopulator(
+            new ClassPathResource("db/migration/V224__job_monitoring_policy_and_alert_claim.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/legacy-migration/V226__job_monitoring_policy_severity.sql"))
-        .execute(dataSource);
-    new ResourceDatabasePopulator(new ClassPathResource(
-            "db/legacy-migration/V227__scheduled_job_completion_deadline_time.sql"))
+            new ClassPathResource("db/migration/V225__job_monitoring_failed_partition_alert.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/legacy-migration/V228__job_not_completed_deadline_alert.sql"))
+            new ClassPathResource("db/migration/V226__job_monitoring_policy_severity.sql"))
+        .execute(dataSource);
+    new ResourceDatabasePopulator(
+            new ClassPathResource("db/migration/V227__scheduled_job_completion_deadline_time.sql"))
+        .execute(dataSource);
+    new ResourceDatabasePopulator(
+            new ClassPathResource("db/migration/V228__job_not_completed_deadline_alert.sql"))
         .execute(dataSource);
     Long legacyDefinitionId =
         jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, LEGACY_FIXED_RATE_TENANT);
     jdbcTemplate.update(insertJobMonitoringPolicySql, LEGACY_FIXED_RATE_TENANT, legacyDefinitionId);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/legacy-migration/V229__fixed_rate_completion_grace.sql"))
+            new ClassPathResource("db/migration/V229__fixed_rate_completion_grace.sql"))
         .execute(dataSource);
     String backdateExistingPolicySql = """
         UPDATE batch.job_monitoring_policy SET updated_at = CURRENT_TIMESTAMP - INTERVAL '2 hours'
         WHERE tenant_id = ?
         """;
     jdbcTemplate.update(backdateExistingPolicySql, LEGACY_FIXED_RATE_TENANT);
-    new ResourceDatabasePopulator(new ClassPathResource(
-            "db/legacy-migration/V355__job_monitoring_rule_effective_times.sql"))
+    new ResourceDatabasePopulator(
+            new ClassPathResource("db/migration/V355__job_monitoring_rule_effective_times.sql"))
         .execute(dataSource);
 
     Configuration configuration = new Configuration(

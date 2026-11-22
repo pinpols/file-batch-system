@@ -1,9 +1,5 @@
 # 工程基线规范条款变化日志
 
-## 2026-11-22 平台库 Flyway 重编号
-
-- 现行平台库从 V1 和 V2 初始化，旧链退出部署资源并继续用于历史迁移测试。空库部署与双链验证见 [重编号方案](plans/flyway-platform-renumber-2026-11-22.md)。
-
 ## 2026-11-22 主干 CI 紧急合入例外
 
 - 将主干 8 项必需检查移入独立的 `Main CI required checks` 规则集，仅仓库拥有者 `pinpols` 可在 PR 合入时手动使用例外。主干写入保护与评审要求由 `main protection` 继续执行。操作与验证见 [CI Runbook](runbook/ci.md#开源多人协作策略)。
