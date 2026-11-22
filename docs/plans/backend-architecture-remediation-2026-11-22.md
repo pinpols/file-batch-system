@@ -52,3 +52,7 @@
 | ARCH-20261122-04 · P2 取证包共享卷 | 已实施，待环境验收 | Helm 新增 `orchestrator.forensic.persistence`，同一 RWX PVC 挂到所有 Orchestrator 并设置 `BATCH_FORENSIC_STORAGE_DIR`；生产 values 启用，`helm template` 渲染通过；ADR-022 记录迁移旧包要求。 | 双 Pod 下 A 生成、B 下载、重建 A 后再次下载，两次 SHA-256 一致及跨租户拒绝必须在目标环境实测。 |
 | 文档 · 系统职责 | 已完成 | §2.3 改为“至少一次投递”，写明发布端重试与消费方幂等认领责任。 | — |
 | 文档 · ADR-050 | 已完成 | 明确归档表有 `active_slot` 但两条归档 INSERT 省略该列、归档值恒为默认 1，不能还原历史槽号。 | 如需审计实际槽号，另立数据契约变更。 |
+
+### V389 结构清单跟进
+
+[#1445 合入后的 Full CI](https://github.com/pinpols/file-batch-system/actions/runs/44983932569)执行了 V389。PostgreSQL 实测新增可空列 `batch.alert_escalation_notification_outbox.claim_token`，但提交中的全新库结构清单仍是 5,085 列，造成 `LocalFlywayPlatformMigrationsIntegrationTest` 失败。使用 `bash scripts/local/refresh-fresh-schema-manifest.sh` 在 PostgreSQL 17.11 重生成后，只有 `COLUMN` 类别更新至 5,086 列，约束、索引及迁移种子清单一致。普通校验模式下 `LocalFlywayPlatformMigrationsIntegrationTest` 11 项通过。
