@@ -99,7 +99,7 @@ Java 格式化只针对本任务涉及的文件, 不进行全仓格式改写。
 以下检查实际完成并通过:
 
 - 当前工作树锁定的 `.github/ci-tools/node_modules/.bin/squawk` 为 **2.65.0**;
-  对 `db/legacy-migration/V359__readiness_wait_probe_rotation.sql` 扫描 **0 问题**。
+  对 `db/migration/V359__readiness_wait_probe_rotation.sql` 扫描 **0 问题**。
 - 本任务文件的 `spotless:check` 通过; `check-java-readability.py`、`check-test-conventions.py` 通过。
 - `check-config-defaults-sync.py --check`、`check-helm-env-sync.py`、`check-observability-contract.py` 通过。
 - `check-readiness-doc-sync.py`、`check-script-governance.py`、`check-code-doc-references.py` 通过;

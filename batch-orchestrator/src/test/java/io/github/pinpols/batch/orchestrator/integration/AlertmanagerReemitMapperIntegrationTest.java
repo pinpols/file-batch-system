@@ -43,9 +43,9 @@ class AlertmanagerReemitMapperIntegrationTest {
     String createSchemaSql = "create schema batch";
     jdbc.execute(createSchemaSql);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/legacy-migration/V19__alert_event.sql"),
-            new ClassPathResource("db/legacy-migration/V356__alert_notification_receipts.sql"),
-            new ClassPathResource("db/legacy-migration/V357__alert_resolution_delivery_state.sql"))
+            new ClassPathResource("db/migration/V19__alert_event.sql"),
+            new ClassPathResource("db/migration/V356__alert_notification_receipts.sql"),
+            new ClassPathResource("db/migration/V357__alert_resolution_delivery_state.sql"))
         .execute(source);
     Configuration configuration =
         new Configuration(new Environment("alert-reemit-it", new JdbcTransactionFactory(), source));

@@ -94,8 +94,8 @@ class DispatchSecretVersionMapperIntegrationTest {
         )
         """;
     jdbcTemplate.execute(createBatchConfigChangeLogSql);
-    new ResourceDatabasePopulator(new ClassPathResource(
-            "db/legacy-migration/V234__secret_version_dispatch_revocation.sql"))
+    new ResourceDatabasePopulator(
+            new ClassPathResource("db/migration/V234__secret_version_dispatch_revocation.sql"))
         .execute(dataSource);
 
     Configuration configuration = new Configuration(

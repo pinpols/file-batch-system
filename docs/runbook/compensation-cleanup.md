@@ -97,8 +97,8 @@ SELECT tr.request_id, tr.request_status, wr.id AS workflow_run_id,
 
 - 代码：`batch-orchestrator/.../application/service/governance/DefaultCompensationService.java`
 - Stale 命令回收：`batch-orchestrator/.../infrastructure/scheduler/StaleCompensationCommandReconciler.java`
-- 命令表：`db/legacy-migration/V13__create_compensation_and_step_runtime.sql`
-- V63 checkpoint 表结构：`db/legacy-migration/V63__compensation_checkpoint.sql`（当前未接入命令执行写入）
+- 命令表：`db/migration/V13__create_compensation_and_step_runtime.sql`
+- V63 checkpoint 表结构：`db/migration/V63__compensation_checkpoint.sql`（当前未接入命令执行写入）
 
 ## DLQ 补偿提交边界
 

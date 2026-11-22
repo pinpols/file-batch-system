@@ -722,51 +722,51 @@ V291基线中实际已有9条FK：`asset_partition` 2条、`data_quality_check` 
 
 | 表 | 引用/关联 | 当前约束与替代校验 | 判定与待补 |
 |---|---|---|---|
-| api_key | tenant_id；created_by/revoked_by；scopes | 无 FK；scopes/操作人是授权配置与审计属性。 | 不绑操作人账号；tenant按C06；scope按授权词表校验，不是关系表FK。DDL `db/legacy-migration/V47__create_api_key.sql:2`。 |
-| batch_runtime_default_parameter | module/parameter_key/yaml_path/env_var | 模块默认配置登记，自然键/配置路径，不是数据库父键。 | 不加FK；验证代码配置绑定/重复键，非引用缺口。`db/legacy-migration/V24__batch_runtime_default_parameter.sql:8`。 |
-| biz_table_schema | schema_name/table_name；columns JSON | Worker上报业务库结构快照，父对象在另一个数据库。 | 不跨库加FK；验证注册TTL、实际表结构和允许的列，旧快照不应成为目标表存在性的唯一保证。`db/legacy-migration/V66__create_biz_table_schema.sql:5`。 |
+| api_key | tenant_id；created_by/revoked_by；scopes | 无 FK；scopes/操作人是授权配置与审计属性。 | 不绑操作人账号；tenant按C06；scope按授权词表校验，不是关系表FK。DDL `db/migration/V47__create_api_key.sql:2`。 |
+| batch_runtime_default_parameter | module/parameter_key/yaml_path/env_var | 模块默认配置登记，自然键/配置路径，不是数据库父键。 | 不加FK；验证代码配置绑定/重复键，非引用缺口。`db/migration/V24__batch_runtime_default_parameter.sql:8`。 |
+| biz_table_schema | schema_name/table_name；columns JSON | Worker上报业务库结构快照，父对象在另一个数据库。 | 不跨库加FK；验证注册TTL、实际表结构和允许的列，旧快照不应成为目标表存在性的唯一保证。`db/migration/V66__create_biz_table_schema.sql:5`。 |
 | business_calendar | group_code、cutoff_schedule JSON | 当前无FK；日历自然键依赖由主报告日历章节补充。 | group_code不能仅因字符串就忽略，需同租户组存在性/删除策略；JSON时间表不是FK。 |
 | business_shard_catalog | placement_key；secret_ref | PK placement_key；secret_ref明确为外部secrets/vault引用名。 | secret_ref不绑batch.secret_version；被placement引用的删除/禁用策略见C04。 |
 | business_tenant_placement | tenant_id；placement_key | PK tenant_id；服务从enabled catalog优先、配置后备找合法key；空集合跳过。 | 不直接加统一catalog FK；C04、C06。 |
 | config_approval | release_id；申请/审核操作人 | 无FK；同租户loadRelease+业务锁；pending唯一索引仅防重复申请。 | release身份补复合FK C01；操作人保留快照。 |
 | config_release | config_type/config_key；config_payload；gray_scope | 配置类型/自然键/版本唯一，payload为版本快照；应用按类型validate/apply。 | 不给多态config_key或payload加单表FK；目标已删除后的历史版本仍保留。`DefaultConsoleConfigApprovalApplicationService.java:87`、`DefaultConfigReleaseApplyService`。 |
-| config_change_log | config_type/config_key/version_no；operator_id/trace_id | 配置历史审计，无FK。 | 不绑当前配置/账号；保持历史快照与版本可追踪。`db/legacy-migration/V22__create_config_release_and_secret_version.sql:54`。 |
-| config_sync_log | source_env/target_env/config_types/detail_json；operator_id | 跨环境同步执行记录，无FK。 | 环境/远端资源不能FK；保留结果快照及失败明细。`db/legacy-migration/V49__create_notification_approval_config_sync.sql:93`。 |
+| config_change_log | config_type/config_key/version_no；operator_id/trace_id | 配置历史审计，无FK。 | 不绑当前配置/账号；保持历史快照与版本可追踪。`db/migration/V22__create_config_release_and_secret_version.sql:54`。 |
+| config_sync_log | source_env/target_env/config_types/detail_json；operator_id | 跨环境同步执行记录，无FK。 | 环境/远端资源不能FK；保留结果快照及失败明细。`db/migration/V49__create_notification_approval_config_sync.sql:93`。 |
 | console_ai_attachment | owner_user_id；conversation_id+turn_no；object_key | 已有 `(tenant_id,conversation_id,turn_no)` FK到turn CASCADE；CHECK保证BOUND时两个目标键必填；服务验证同owner附件。 | 保留FK；owner不盲加username FK，见C07；对象键外部存储，清理队列替代数据库级联对象删除。E08。 |
-| console_ai_audit_log | request_id/trace_id/session_id/operator_id | AI审计快照，不是会话表的conversation_id。 | 不加FK；不得把session_id误当AI conversation_id。`db/legacy-migration/V11__create_console_ai_audit_log.sql:5`。 |
+| console_ai_audit_log | request_id/trace_id/session_id/operator_id | AI审计快照，不是会话表的conversation_id。 | 不加FK；不得把session_id误当AI conversation_id。`db/migration/V11__create_console_ai_audit_log.sql:5`。 |
 | console_ai_conversation | owner_user_id | PK(tenant_id,id)，强制RLS；服务检查同owner，owner来自principal.username。 | C07；RLS不能解决同名账号代际问题。 |
-| console_ai_monthly_usage | tenant_id/billing_month | 月度计费聚合，可能比会话留存更久。 | 不绑会话/账号；tenant按C06，但不能因删会话级联删计费。`db/legacy-migration/V218__console_ai_conversations_and_cost_usage.sql:53`。 |
+| console_ai_monthly_usage | tenant_id/billing_month | 月度计费聚合，可能比会话留存更久。 | 不绑会话/账号；tenant按C06，但不能因删会话级联删计费。`db/migration/V218__console_ai_conversations_and_cost_usage.sql:53`。 |
 | console_ai_object_cleanup | object_key | 对象删除重试队列，故意在附件/会话删后保留。 | 不向附件加FK，否则阻碍删除或丢清理任务。E08。 |
 | console_ai_turn | conversation_id | 已有(tenant_id,conversation_id)→conversation复合FK CASCADE；服务持有会话行锁分配turn。 | 保留，已覆盖租户/存在性。E08。 |
-| console_external_identity | account_id；issuer/subject；linked_by | 已有(tenant_id,account_id)→console_user_account复合FK CASCADE。 | 保留；issuer/subject外部身份自然键不再外键；linked_by审计快照。`db/legacy-migration/V222__console_oidc_external_identity.sql:8`。 |
-| console_maintenance_state | affected_services；updated_by | 平台维护状态与模块列表。 | 不加FK；模块枚举/配置校验即可。`db/legacy-migration/V215__create_console_maintenance_state.sql:3`。 |
-| console_operation_audit | aggregate_type/aggregate_id；params；operator_id | 多态历史业务对象与操作者快照。 | 不FK到当前活表，避免资源删除抹除审计；访问查询仍需租户约束。`db/legacy-migration/V130__create_console_operation_audit.sql:13`。 |
+| console_external_identity | account_id；issuer/subject；linked_by | 已有(tenant_id,account_id)→console_user_account复合FK CASCADE。 | 保留；issuer/subject外部身份自然键不再外键；linked_by审计快照。`db/migration/V222__console_oidc_external_identity.sql:8`。 |
+| console_maintenance_state | affected_services；updated_by | 平台维护状态与模块列表。 | 不加FK；模块枚举/配置校验即可。`db/migration/V215__create_console_maintenance_state.sql:3`。 |
+| console_operation_audit | aggregate_type/aggregate_id；params；operator_id | 多态历史业务对象与操作者快照。 | 不FK到当前活表，避免资源删除抹除审计；访问查询仍需租户约束。`db/migration/V130__create_console_operation_audit.sql:13`。 |
 | console_push_approval_notification | approval_no | 从同租户approval查询候选后写去重标记；唯一(tenant_id,approval_no)。 | 不强绑活审批，允许审批清理后保留幂等标记；必须维护去重记录TTL/对应取候选的tenant范围。`ConsolePushApprovalNotificationMapper.xml:19,42`。 |
 | console_push_job_notification（已退役） | job_instance_id | 历史去重标记及旧 Mapper 已在新库 V330 退役；非空旧表拒绝切换。 | 当前设备意图改存 console_push_job_delivery，按 tenant/terminal_event_key 外键关联同事务终态回执，设备凭据仅存摘要，发送时核对原设备；不新增跨归档 Job 外键。见 R32 Push 收口记录。 |
 | console_push_subscription | username；endpoint | 按tenant+username+endpoint唯一；认证服务写入；过期/410清理。 | 外部endpoint不FK；username身份代际见C07。`ConsolePushSubscriptionMapper.xml:23,35,65`。 |
-| console_usage_daily | tenant_id；source/metric_code/page_code/app_version | 使用量日聚合，页面/版本都是指标维度。 | 不FK当前页面/租户配置，保留历史统计；租户写入身份见C06。`db/legacy-migration/V216__create_console_usage_daily.sql:6`。 |
+| console_usage_daily | tenant_id；source/metric_code/page_code/app_version | 使用量日聚合，页面/版本都是指标维度。 | 不FK当前页面/租户配置，保留历史统计；租户写入身份见C06。`db/migration/V216__create_console_usage_daily.sql:6`。 |
 | console_user_account | tenant_id；authorities_csv | 无tenant FK；业务角色服务校验ACTIVE租户，平台角色要求system；角色CHECK。 | 保留system特例后决定tenant FK；C06、C07。 |
-| console_user_batch_operation | operation_id/request_id；actor_username；tenant_ids JSON | 批量开户审计/幂等快照，批处理会验证租户；不具有逐账号子表关系。 | 不给历史JSON/操作者FK；校验结果审计与幂等源摘要。`db/legacy-migration/V220__console_user_batch_provisioning.sql:5`；`ConsoleUserBatchProvisioningService.java:326`。 |
+| console_user_batch_operation | operation_id/request_id；actor_username；tenant_ids JSON | 批量开户审计/幂等快照，批处理会验证租户；不具有逐账号子表关系。 | 不给历史JSON/操作者FK；校验结果审计与幂等源摘要。`db/migration/V220__console_user_batch_provisioning.sql:5`；`ConsoleUserBatchProvisioningService.java:326`。 |
 | flyway_schema_history | version/script/installed_by | Flyway元数据，不是业务实体关系。 | 不加业务FK；版本校验由Flyway负责。 |
-| forensic_export_log | job_codes/scope/biz_date范围；storage_path；requested_by | 导出条件和对象存储产物快照。 | 不FK当前Job/账号或对象键，历史取证要能跨归档保存。`db/legacy-migration/V116__forensic_export_log.sql:17`。 |
-| idempotency_record | idempotency_key；result_payload | 请求幂等记录/结果快照；没有规范化父ID列。 | 不向payload中任意ID补FK；需TTL不短于重试窗口。`db/legacy-migration/V38__create_idempotency_record.sql:5`。 |
+| forensic_export_log | job_codes/scope/biz_date范围；storage_path；requested_by | 导出条件和对象存储产物快照。 | 不FK当前Job/账号或对象键，历史取证要能跨归档保存。`db/migration/V116__forensic_export_log.sql:17`。 |
+| idempotency_record | idempotency_key；result_payload | 请求幂等记录/结果快照；没有规范化父ID列。 | 不向payload中任意ID补FK；需TTL不短于重试窗口。`db/migration/V38__create_idempotency_record.sql:5`。 |
 | notification_channel | channel_code；config_json | UNIQUE(tenant_id,channel_code)；config_json含外部通知地址/凭据配置；软删除。 | 通道是父；C02补子引用。外部地址不FK；软删除依赖状态另管。 |
 | notification_delivery_log | rule_id/channel_code/alert_event_id；payload_json | 无FK；记录真实投递结果，规则可硬删、通道可软删、告警可归档；Alertmanager直投可无rule/alert。 | 不一律加FK，保留审计快照和可空来源；正常dispatcher从同tenant规则派生，其他写入口需同tenant校验。`NotificationDeliveryLogMapper.xml`；`SubscriptionRuleWebhookDispatcher.java:360`；`AlertmanagerNotifyService.java:168`。 |
 | process_staging（平台库） | batch_key；target_schema/target_table；payload | 实际目录存在，但代码约定真正WAP staging在业务库、共享目标表事务。 | 不向Job或biz_table_schema加FK；确认平台副本为兼容DDL/未使用，防误路由。业务库写入/发布核对同租户batch_key与目标白名单。E10/E11。 |
 | quota_runtime_state | quota_scope/owner_code | scope决定tenant/queue/group，owner_code多态；UNIQUE(tenant_id,scope,owner)。CAS version。 | 不向resource_queue单表FK；运行窗口状态允许延迟清理；按scope校验和策略删改时状态收敛。`QuotaRuntimeStateMapper.xml:30,57,60`。 |
 | resource_queue | worker_group；resource_tag；fair_share_group | Worker组/标签/公平组是匹配配置，非固定父ID。 | 不加无权威父表的FK；队列代码作为其他表父引用由各专项处理。`db/migration/V3__create_config_tables.sql:5`。 |
 | resource_tag | resource_type/resource_code | 多态资源标记，类型CHECK；应用和V314按同一 tenant/type/code 身份校验四类父资源；disabled与file-template软删除不改变持久身份，父物理删除/改键在最后匹配父行离开后清理。 | C05/REF-07局部实现及真实PG证据见§2.33–2.34；全写入/运维旁路及并发容量仍开放，不加单表FK。 |
-| secret_version | secret_ref；secret_payload | UNIQUE(tenant_id,ref,version)，当前版本partial唯一；外部密钥引用/加密快照。 | 不以secret_ref再绑自己或外部KMS；引用者需选定版本/当前版本与撤销策略。`db/legacy-migration/V22__create_config_release_and_secret_version.sql:31`、`V210__config_release_and_secret_invariants.sql:20`。 |
+| secret_version | secret_ref；secret_payload | UNIQUE(tenant_id,ref,version)，当前版本partial唯一；外部密钥引用/加密快照。 | 不以secret_ref再绑自己或外部KMS；引用者需选定版本/当前版本与撤销策略。`db/migration/V22__create_config_release_and_secret_version.sql:31`、`V210__config_release_and_secret_invariants.sql:20`。 |
 | shedlock | name/locked_by | 框架分布式锁，locked_by主机实例标识。 | 不FK临时Worker注册表，保留框架生命周期。 |
 | stateful_backend_binding | feature_key/backend_identity/last_cutover_id | feature为配置特性键；后端地址是外部资源；guard以同事务advisory+row lock写binding/history。 | 不外键到外部后端；last_cutover_id是可空审计token，不为此引循环FK；保留一致事务验收。E09。 |
 | stateful_backend_cutover_history | feature_key/cutover_id | 不可变切换审计；(feature_key,cutover_id)partial唯一；同事务写。 | 不向可退役binding级联；历史应独立留存，补检测不等于强制FK。E09。 |
-| step_registry | module/impl_code/impl_class | 应用启动上报bean白名单，不是关系父ID；last_seen心跳。 | 不加FK到Java类；使用配置校验识别当前可用impl_code。`db/legacy-migration/V65__create_step_registry.sql:7`。 |
+| step_registry | module/impl_code/impl_class | 应用启动上报bean白名单，不是关系父ID；last_seen心跳。 | 不加FK到Java类；使用配置校验识别当前可用impl_code。`db/migration/V65__create_step_registry.sql:7`。 |
 | subscription_rule | channel_code；job_code_filter；event_types | channel服务存在性校验+运行时同tenant JOIN；job_code_filter/event_types为筛选表达式。 | channel补FK C02；表达式不按每个token建FK。 |
-| system_parameter | param_key/param_value | 动态参数键值；值可包含外部地址或配置，不是统一父键。 | 不泛化FK；按参数schema校验，tenant根见C06。`db/legacy-migration/V44__create_system_parameter.sql:5`。 |
+| system_parameter | param_key/param_value | 动态参数键值；值可包含外部地址或配置，不是统一父键。 | 不泛化FK；按参数schema校验，tenant根见C06。`db/migration/V44__create_system_parameter.sql:5`。 |
 | tenant | tenant_id；created_by | tenant_id UNIQUE；只见状态停用、更新，没有普通删除Mapper。 | 根实体本身无需FK；created_by审计快照；停止级联清库假设，C06。 |
 | tenant_configuration_revision | tenant_id | 配置表变更触发器upsert revision；非业务状态。 | 不机械加tenant FK：先清system/global配置与登记顺序。revision用于并发版本，不替代配置关系校验。 |
 | tenant_quota_policy | policy_code/fair_share_group | 策略自然键与共享组标识，无独立共享组父表。 | 不对组名FK；租户登记见C06；配置有效性/非负CHECK已有。`db/migration/V3__create_config_tables.sql:31`。 |
-| tenant_scheduler_snapshot | policy_code/fair_share_group/detail_json | 调度决策历史快照，策略后续可删除/更新。 | 不FK当前策略/组，保留当时决策值。`db/legacy-migration/V16__scheduler_fair_share_snapshot_load.sql:25`。 |
+| tenant_scheduler_snapshot | policy_code/fair_share_group/detail_json | 调度决策历史快照，策略后续可删除/更新。 | 不FK当前策略/组，保留当时决策值。`db/migration/V16__scheduler_fair_share_snapshot_load.sql:25`。 |
 | webhook_delivery_log | subscription_id | 单列FK到subscription；relay按(tenant,id)加载，异常GIVE_UP。 | C03升级复合FK，不级联删审计。 |
 | webhook_subscription | callback_url/secret/event_types | 外部地址与密钥/事件筛选配置；软删除。 | 无数据库父引用；保留地址SSRF与配置校验；作为日志父表补租户唯一键。 |
 
@@ -810,12 +810,12 @@ V291基线中实际已有9条FK：`asset_partition` 2条、`data_quality_check` 
 - E01：`batch-console-api/src/main/resources/mapper/ConfigApprovalMapper.xml:43`（裸INSERT）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApprovalApplicationService.java:77`（同tenant load/lock/validate/insert），`:211`（loadRelease），`:218`（业务锁）。
 - E02：`batch-console-api/src/main/resources/mapper/SubscriptionRuleMapper.xml:14`（同tenant JOIN）、`:33`（裸写）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/infrastructure/DefaultConsoleNotificationApplicationService.java:227`（软删入口）、`:248`（createRule）、`:277`（updateRule）；`batch-console-api/src/main/resources/mapper/NotificationChannelMapper.xml:59`（软删除）。
 - E03：`batch-console-api/src/main/resources/mapper/ConsoleWebhookDeliveryLogMapper.xml:40`（裸INSERT）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDeliveryRelay.java:264`（同tenant查订阅，否则GIVE_UP）。
-- E04：`batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleBusinessTenantPlacementService.java:39`、`:62`（配置后备/空拓扑）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleBusinessShardCatalogService.java:39`（无引用检查删除）；`db/legacy-migration/V171__business_shard_catalog.sql:7`（外部secret_ref）；`batch-common/src/main/java/io/github/pinpols/batch/common/tenant/routing/BusinessRoutingDataSourceFactory.java:36`（运行路由按已经构建的shards连接池）。
+- E04：`batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleBusinessTenantPlacementService.java:39`、`:62`（配置后备/空拓扑）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleBusinessShardCatalogService.java:39`（无引用检查删除）；`db/migration/V171__business_shard_catalog.sql:7`（外部secret_ref）；`batch-common/src/main/java/io/github/pinpols/batch/common/tenant/routing/BusinessRoutingDataSourceFactory.java:36`（运行路由按已经构建的shards连接池）。
 - E05：`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleResourceTagService.java:44`、`:76`（只校验资源type）。
 - E06：`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuard.java:42`（作用域，不查tenant表）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserAccountService.java:254`（system例外）、`:265`（真实ACTIVE业务租户）；`batch-console-api/src/main/resources/mapper/TenantMapper.xml:52`（创建与状态更新，未提供普通删除）。
 - E07：`batch-console-api/src/main/java/io/github/pinpols/batch/console/support/web/ConsoleRequestContextFilter.java:131`（operatorId=username）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/web/ConsoleAiController.java:123`（作为附件owner）、`:299`（作为会话owner）；`batch-console-api/src/main/resources/mapper/ConsoleUserAccountMapper.xml:134`（删除SQL，未找到普通业务调用）、`ConsoleAiConversationMapper.xml:150`（只以tenant+owner名称判归属）。
-- E08：`batch-console-api/src/main/resources/mapper/ConsoleAiAttachmentMapper.xml:86`（绑定owner）、`:101`（删前对象清理队列）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/ConsoleAiConversationService.java:87`（锁会话）、`:100`（owner比较）、`:127`（绑定附件）；`db/legacy-migration/V219__console_ai_image_attachments.sql:46`（独立清理队列）。
-- E09：`batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java:86`、`:109`、`:151`、`:187`（事务/row lock/advisory lock协调binding+history）；`db/legacy-migration/V193__stateful_backend_binding.sql:31`（切换token唯一）。
+- E08：`batch-console-api/src/main/resources/mapper/ConsoleAiAttachmentMapper.xml:86`（绑定owner）、`:101`（删前对象清理队列）；`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/ConsoleAiConversationService.java:87`（锁会话）、`:100`（owner比较）、`:127`（绑定附件）；`db/migration/V219__console_ai_image_attachments.sql:46`（独立清理队列）。
+- E09：`batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java:86`、`:109`、`:151`、`:187`（事务/row lock/advisory lock协调binding+history）；`db/migration/V193__stateful_backend_binding.sql:31`（切换token唯一）。
 - E10：`scripts/db/business/create_biz_tables.sql:63`（business staging）、`:102`（customer）、`:139`（batch）、`:174`（detail复合FK）、`:224`（transaction）、`:253`（score）、`:282`（alert）、`:306`（明确process样例）、`:308`、`:316`、`:328`（process三表）。
 - E11：`batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputeSpec.java:186`（动态标识符校验）；`batch-worker/process/src/main/resources/mapper/business/ProcessStagingMapper.xml:11`（时间保留清理）、`:39`（业务库分区）。标识符合法性不等于目标表/列业务授权，需要与运行期mapper/配置审批链共同验收。
 

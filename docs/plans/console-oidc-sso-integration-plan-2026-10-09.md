@@ -20,7 +20,7 @@
 - `console_user_account.username` 当前全局唯一，账号持有 tenant 和 authorities；表中没有 IdP subject 字段。
 - `single-session-enabled` 表示同账号后登录使旧平台会话失效，不是企业 SSO；与 IdP 登录独立。
 
-权威实现：[`ConsoleLoginService`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleLoginService.java)、[`ConsoleJwtService`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java)、[`ConsoleSecurityConfiguration`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfiguration.java)、[`V34`](../../db/legacy-migration/V34__create_console_user_account.sql)、[`V41`](../../db/legacy-migration/V41__console_user_account_unique_username.sql)。
+权威实现：[`ConsoleLoginService`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleLoginService.java)、[`ConsoleJwtService`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java)、[`ConsoleSecurityConfiguration`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfiguration.java)、[`V34`](../../db/migration/V34__create_console_user_account.sql)、[`V41`](../../db/migration/V41__console_user_account_unique_username.sql)。
 
 ## 3. 目标认证流程
 

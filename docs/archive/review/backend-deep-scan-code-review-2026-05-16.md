@@ -42,7 +42,7 @@
 
 **证据**
 
-- `db/legacy-migration/V92__calendar_holiday_tenant_id.sql:18` 将 `tenant_id` 设为 `NOT NULL`。
+- `db/migration/V92__calendar_holiday_tenant_id.sql:18` 将 `tenant_id` 设为 `NOT NULL`。
 - `batch-console-api/src/main/resources/mapper/CalendarHolidayMapper.xml:32` 批量插入包含 `tenant_id`。
 - `batch-console-api/src/main/resources/mapper/CalendarHolidayMapper.xml:37` 从 `#{item.tenantId}` 取值。
 - `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleCalendarApplicationService.java:121` 解析出 `tenantId`。

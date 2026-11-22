@@ -172,10 +172,6 @@ dispatch 的 `RETRY` / `COMPENSATE` 是失败分支步骤：`RETRY` 仅在 `retr
 - Docker（用于本地基础设施）
 - Maven 3.9+
 
-### 初次建库
-
-平台应用从空库执行 Flyway V1 和 V2。业务库建表入口位于 [`scripts/db/business/`](scripts/db/business)。使用旧版 Flyway history 的环境，按[迁移检查手册](docs/runbook/db-migration-checklist.md#当前部署基线)保留备份并切换到新平台库。
-
 ### 环境变量文件
 
 仓库提供统一模板 [`.env.example`](.env.example)。本地首次启动先复制模板：
@@ -444,9 +440,7 @@ DB (job_task: READY)
 | [平台 Worker 续跑位点](docs/runbook/platform-worker-checkpoint-howto.md) | checkpoint 断点续跑的位点语义与运维说明 |
 | [当前架构事实](docs/architecture/architecture-truth.md) | 架构事实与权威文档入口 |
 | [默认运行参数](docs/design/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
-| [平台库 Flyway](db/migration) | V1 建模式，V2 建现行平台表、权限和种子 |
-| [数据库表目录](docs/design/database-schema-guide.md) | 平台库、业务库、归档表和 Quartz 的职责与来源 |
-| [平台库迁移检查](docs/runbook/db-migration-checklist.md) | 空库部署、历史迁移与恢复边界 |
+| [Flyway 迁移脚本](db/migration) | 数据库迁移脚本目录 |
 
 ## 贡献指南
 

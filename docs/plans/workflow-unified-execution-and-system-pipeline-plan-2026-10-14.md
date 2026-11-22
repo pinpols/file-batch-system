@@ -59,7 +59,7 @@ flowchart TB
 | `batch-worker/core/.../support/AbstractPipelineStepExecutionAdapter.java` | 按 tenant/job 读取 Pipeline 定义和步骤，再创建运行实例 | 改为按执行类型读取固定系统定义，拒绝 Worker 类型不匹配 |
 | `batch-worker/process/.../stage/DefaultProcessStageExecutor.java` | COMPUTE 的 `implCode/stepParams` 决定计算插件和参数 | 这部分有效配置必须迁到 Job，不能随退役表丢弃 |
 | `db/migration/V6__create_file_tables.sql` | Pipeline 定义、步骤、实例和运行观测持久化 | 表与历史身份保留；新运行身份以系统 Pipeline code/version 为准，旧外键仅按兼容性需要保留或逐步解除，不删除定义模型 |
-| `db/legacy-migration/V232__tenant_configuration_revision_fence.sql` | 子步骤修订触发器经 Pipeline 定义解析租户 | 仅在定义存储改为系统拥有后，单独评估其修订/租户语义；本方案不清表 |
+| `db/migration/V232__tenant_configuration_revision_fence.sql` | 子步骤修订触发器经 Pipeline 定义解析租户 | 仅在定义存储改为系统拥有后，单独评估其修订/租户语义；本方案不清表 |
 | 前端 `src/constants/navigation.ts`、`src/api/system.ts`、Workflow Designer | 存在三套定义入口和 Pipeline 编码选择 | 两个定义菜单保留，Pipeline 改为作业类型的只读流程信息 |
 
 以上是静态代码调查。没有在本轮执行新模型的运行或迁移验收。旧文档中“JOB 与 TASK 同义”“重试字段可配置即已生效”等描述不能作为迁移依据。

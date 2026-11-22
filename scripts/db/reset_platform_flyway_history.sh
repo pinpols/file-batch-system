@@ -3,8 +3,8 @@
 # 用法：在仓库根目录执行 bash scripts/db/reset_platform_flyway_history.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
-# 仅允许无平台业务对象的本地库清理误写历史，数据库有表时由 SQL 拒绝。
-# 默认连接与 batch-orchestrator application-local.yml 一致。
+# 清空 batch.flyway_schema_history，重启 batch-orchestrator 或 batch-trigger 后会重新执行迁移并回填历史。
+# 默认连接与 batch-orchestrator application-local.yml 一致；可通过环境变量覆盖。
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
