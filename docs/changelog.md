@@ -1,5 +1,15 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-22 容量复核三项前置修正
+
+- 端到端汇总改按根请求关联 `workflow_run` 计算完成数与 p95，子 Job 和直接 Job 入口单独计数；根请求存在但无运行/无完成样本时输出 `INVALID`。[容量复核](audit/backend-capacity-analysis-2026-11-22.md)记录实施与证据。
+- 子 Job 启动返回后只核验节点绑定，已绑定同实例不再执行同值 UPDATE；保留未绑定补绑、冲突和租户校验。
+- 根运行准入事务内复用一份节点与边，校验、START 路由和冻结快照不再重复读取；单测与隔离 PostgreSQL 验证完成，压测收益待下一轮 A/B。
+
+## 2026-11-22 后端容量复核
+
+- [容量复核](audit/backend-capacity-analysis-2026-11-22.md)补充根请求统计、子 Job 绑定与图定义读取的证据及对照条件，并链接到已有容量待办。
+
 ## 2026-11-21 Workflow 多槽位准入和 launch 计时复核
 
 - 更新 [ADR-050](architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 的多槽位准入实现和满槽复查条件。[容量记录](verifications/load-test-local-2026-11-15.md#2026-11-21-workflow-多槽位准入优化)补充隔离 PostgreSQL 对照，并修正子 Job 派发子阶段重复计时。

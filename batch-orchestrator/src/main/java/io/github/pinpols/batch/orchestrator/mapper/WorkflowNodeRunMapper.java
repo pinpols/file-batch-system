@@ -23,6 +23,10 @@ public interface WorkflowNodeRunMapper {
   WorkflowNodeRunEntity selectLatestByWorkflowRunIdAndNodeCode(
       @Param("workflowRunId") Long workflowRunId, @Param("nodeCode") String nodeCode);
 
+  /** 非锁定读取指定租户下的节点尝试，供启动返回后核验 Job 实例绑定。 */
+  WorkflowNodeRunEntity selectByTenantAndId(
+      @Param("tenantId") String tenantId, @Param("nodeRunId") Long nodeRunId);
+
   /** 精确锁定属于给定租户和 RootRun 的节点尝试，供失败节点重放校验来源身份。 */
   WorkflowNodeRunEntity selectByTenantRunAndIdForUpdate(
       @Param("tenantId") String tenantId,

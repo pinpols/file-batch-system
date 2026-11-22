@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.List;
 
 /**
@@ -17,6 +19,15 @@ import java.util.List;
 public interface WorkflowDagService {
 
   List<DagNodeResolution> resolveInitialNodes(Long workflowDefinitionId, String payloadJson);
+
+  /**
+   * 使用调用方已加载的图定义解析 START 出边，避免同一准入事务内重复读取节点与边。
+   *
+   * <p>{@code edges} 需保持 {@code selectAllByWorkflowDefinitionId} 的 id 升序， 且可以包含禁用边；
+   * 本方法按 {@code enabled = true} 过滤，与 {@code selectOutgoingEdges} 的口径一致。
+   */
+  List<DagNodeResolution> resolveInitialNodes(
+      List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges, String payloadJson);
 
   List<DagNodeResolution> resolveNextNodes(
       Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson);

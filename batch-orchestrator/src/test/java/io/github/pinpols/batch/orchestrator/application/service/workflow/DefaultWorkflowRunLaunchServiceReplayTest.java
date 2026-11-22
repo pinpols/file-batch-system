@@ -427,9 +427,11 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         .thenReturn(accepted);
     when(workflowDefinitions.selectByTenantAndIdAndEnabled(TENANT, 81L, true))
         .thenReturn(definition);
-    when(graphValidator.validate(81L)).thenReturn(WorkflowValidationResult.clean());
-    when(dagService.resolveInitialNodes(81L, serializedParams)).thenReturn(List.of());
     when(nodes.selectByWorkflowDefinitionId(81L)).thenReturn(List.of(node));
+    when(edges.selectAllByWorkflowDefinitionId(81L)).thenReturn(List.of());
+    when(graphValidator.validate(any(), any())).thenReturn(WorkflowValidationResult.clean());
+    when(dagService.resolveInitialNodes(List.of(node), List.of(), serializedParams))
+        .thenReturn(List.of());
     when(configCache.findEnabledJobDefinition(TENANT, "BUNDLE_A")).thenReturn(job);
     when(rerunDefinitions.resolve(request, "BUNDLE_A", job)).thenReturn(job);
     String failure = "stop after selected file reference validation";
@@ -442,6 +444,8 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         .hasMessage(failure);
 
     verify(fileReferences).validate(TENANT, expectedFileId);
+    verify(nodes).selectByWorkflowDefinitionId(81L);
+    verify(edges).selectAllByWorkflowDefinitionId(81L);
     verify(workflowRuns, never()).insertIfActiveSlotFree(any(WorkflowRunEntity.class));
     assertThat(job.defaultParams()).isEqualTo(defaultParams);
     assertThat(node.getNodeParams()).isEqualTo(nodeParams);

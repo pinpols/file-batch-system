@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -150,11 +151,34 @@ public class ChildJobLaunchSupport {
         EmptyChecks.isNotNull(childInstance) && EmptyChecks.isNotNull(childInstance.getId()),
         ResultCode.STATE_CONFLICT,
         "error.workflow.child_job_instance_missing");
+    verifyNodeRunBoundToInstance(workflowRun.getTenantId(), nodeRun, childInstance.getId());
+    return 1;
+  }
+
+  /**
+   * 准备事务已完成首次原子绑定；返回后只核验本次预期的节点尝试。仅当绑定为空时才补绑，
+   * 避免同值 UPDATE 产生新的 PostgreSQL 行版本，同时保留租户、节点类型和实例冲突校验。
+   */
+  private void verifyNodeRunBoundToInstance(
+      String tenantId, WorkflowNodeRunEntity expectedNodeRun, Long jobInstanceId) {
+    WorkflowNodeRunEntity boundNodeRun = workflowMappers.workflowNodeRunMapper.selectByTenantAndId(
+        tenantId, expectedNodeRun.getId());
+    Guard.require(
+        EmptyChecks.isNotNull(boundNodeRun)
+            && WorkflowNodeType.JOB.code().equals(boundNodeRun.getNodeType()),
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.node_job_instance_link_conflict");
+    if (jobInstanceId.equals(boundNodeRun.getJobInstanceId())) {
+      return;
+    }
+    Guard.require(
+        EmptyChecks.isNull(boundNodeRun.getJobInstanceId()),
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.node_job_instance_link_conflict");
     int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
-        workflowRun.getTenantId(), nodeRun.getId(), childInstance.getId());
+        tenantId, expectedNodeRun.getId(), jobInstanceId);
     Guard.require(
         linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
-    return 1;
   }
 
   private String resolveChildDedupKey(WorkflowRunEntity workflowRun, String idempotencyKey) {
