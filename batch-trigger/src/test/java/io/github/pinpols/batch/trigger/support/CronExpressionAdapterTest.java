@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.trigger.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -88,11 +87,52 @@ class CronExpressionAdapterTest {
   }
 
   @Test
-  @DisplayName("对已进入缓存的表达式执行 evict 清理不应抛异常")
-  void evict_removesFromCache() {
-    String expr = "0 0 * * * ?";
-    adapter.next(expr, SHANGHAI, BatchDateTimeSupport.utcNow()); // 进缓存
-    assertThatCode(() -> adapter.evict(expr)).doesNotThrowAnyException();
+  @DisplayName("容量淘汰后同一表达式按同一规则重算,结果与淘汰前一致")
+  void evictedExpression_recomputesToSameInstant() {
+    CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
+    Instant base =
+        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
+    Instant beforeEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
+    // 另一组合挤掉上一条,再查原表达式即走重新解析路径。
+    smallCache.next("0 30 7 * * ?", SHANGHAI, base);
+
+    Instant afterEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
+
+    assertThat(afterEviction).isEqualTo(beforeEviction);
+    assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("大量表达式与时区组合下缓存条目不超过容量上限")
+  void cache_staysWithinCapacity() {
+    int capacity = 4;
+    CronExpressionAdapter smallCache = new CronExpressionAdapter(capacity);
+    Instant base =
+        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
+
+    for (int minute = 0; minute < 20; minute++) {
+      assertThat(smallCache.next("0 " + minute + " * * * ?", SHANGHAI, base)).isNotNull();
+      assertThat(smallCache.next("0 " + minute + " * * * ?", ZoneId.of("UTC"), base))
+          .isNotNull();
+    }
+
+    assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(capacity);
+  }
+
+  @Test
+  @DisplayName("同一表达式跨时区在容量淘汰下仍按各自时区计算")
+  void sameExpressionAcrossZones_staysIndependentUnderEviction() {
+    CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
+    Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
+        .atZone(ZoneId.of("UTC"))
+        .toInstant();
+
+    Instant shanghaiFirst = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
+    Instant utc = smallCache.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
+    Instant shanghaiAgain = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
+
+    assertThat(shanghaiAgain).isEqualTo(shanghaiFirst);
+    assertThat(utc.toEpochMilli() - shanghaiAgain.toEpochMilli()).isEqualTo(8 * 3600 * 1000L);
   }
 
   // ── 与 Quartz CronExpression 一致性(切换 sanity check)──

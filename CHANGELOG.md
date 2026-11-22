@@ -9,6 +9,7 @@
 ## [Unreleased]
 
 ### Added
+- `AlertmanagerDeliveryChainE2eIT` 新增租户分流用例：两个租户的告警经同一 AM receiver 回调后分别投递到各自渠道，并断言 `notification_delivery_log` 各记一条 `ALERTMANAGER` SUCCESS。
 - 新增 Process 完整 HTTP E2E 与 Export 复合游标崩溃续跑对账：`ProcessPipelineE2eIT` 经真实 `/internal/orchestrator/launch` 发起并由 Worker 通过 HTTP 认领/回报；`ExportKeysetRangeIntegrationTest` 在真实 PostgreSQL 上从首页复合游标重启续页，校验无重复、无漏行并与库中行数对账。
 - 新增 Workflow 定义级活跃运行上限 `max_active_runs_per_biz_date`（1..64，默认 1）：同一租户、Workflow、业务日与执行模式允许并存多个
   `CREATED`/`RUNNING` 根运行，超出上限的 launch 仍进入 `workflow_launch_wait`。实现用 `workflow_run.active_slot` + 部分唯一索引替代原先
@@ -27,6 +28,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- Trigger 的 `CronExpressionAdapter` 缓存改为 Caffeine 容量淘汰（上限 1024，键为表达式 + 时区），删除生产无调用点的 `evict`；未命中或淘汰后按同一规则重算，Quartz 触发序列与夏令时结果不变。见[联验记录](docs/verifications/backend-oss-reuse-acceptance-2026-11-22.md)。
 - 平台库 Flyway 保持原 V1–V389 迁移链；#1449 的 V1/V2 重编号已回退，恢复 Docker shedlock 初始化与旧链校验。后续数据库结构变更从 V390 开始。
 - Orchestrator 取证包改为跨副本共享卷：Helm 新增 `orchestrator.forensic.persistence`，把同一 RWX PVC 挂到所有副本并设置 `BATCH_FORENSIC_STORAGE_DIR`；生产 values 启用，迁移旧包与双 Pod 下载验收要求写入 ADR-022。
 - 投递语义与归档槽位文档校准：系统职责将 Outbox + Kafka 改为“至少一次投递”并写明发布端重试与消费方幂等认领责任；ADR-050 说明归档 `active_slot` 恒为默认 1、不能还原历史槽号。

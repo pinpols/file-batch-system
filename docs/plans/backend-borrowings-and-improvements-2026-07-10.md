@@ -176,6 +176,115 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 5. **已完成：稳定 Console response DTO 主路径**。新增稳定字段同步 OpenAPI、生成 TS 类型和前端调用方；动态 Map 保留在明确边界。
 6. **持续：真实故障演练**。PG failover、Kafka 短不可用、Redis/ShedLock 故障、全 worker 组崩溃、DLQ replay、PITR 和滚动发布回滚属于环境证据，不由本 PR 虚报“代码已验证”。
 
+## 6. 通用组件复用候选（2026-11-22）
+
+基线为 `origin/main` 的 `37a817471`（#1455）。本轮静态核对 Trigger、Orchestrator、Console API、Worker 和 Java SDK 的依赖及相关生产调用。以下是可行性评估，实施、性能收益和目标环境效果均待验证。
+
+| 顺序 | 现有实现与候选 | 替换前的验收条件 |
+|---|---|---|
+| 1 · 复用已有 Caffeine | [CronExpressionAdapter](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/support/CronExpressionAdapter.java) 用无容量上限的 Map 缓存 Quartz 表达式和时区组合，`evict` 在本基线未找到生产调用。[Trigger POM](../../batch-trigger/pom.xml) 已依赖 Caffeine，可由库负责容量淘汰。[Caffeine 缓存淘汰](https://github.com/ben-manes/caffeine/wiki/Eviction) | 缓存满后旧表达式可重算，同一表达式跨时区并发结果独立。校验夏令时、下一次触发和业务日推导与基线一致。 |
+| 2 · 复用已有 Spring Framework | [HttpTaskExecutor](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java) 手写尝试次数和指数退避，[HttpTaskExecutionClient](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java) 另有 claim、renew 和 report 重试。先评估仅将 Atomic HTTP 执行循环交给 Spring 核心 `RetryTemplate`，由应用确定方法和响应的重试资格。[Spring 重试参考](https://docs.spring.io/spring-framework/reference/core/resilience.html) | 校验首次调用计数、已被显式接受的 5xx、可重试 I/O、非幂等请求只尝试一次及其结果不明分类、线程中断和指标。后续独立评估内部传输路径的各自规则。 |
+| 3 · 对照验证后决定是否引入 Commons CSV | [导入](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/DelimitedFormatParser.java) 已由 uniVocity 解析。[导出](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java) 手写引号、空值和转义处理。优先对照标准 CSV 模板的行编码，现有自定义分隔符及转义策略按兼容证据决定适用范围。[Apache Commons CSV 格式选项](https://commons.apache.org/proper/commons-csv/apidocs/org/apache/commons/csv/CSVFormat.Builder.html) | 对照历史模板逐字节比对，覆盖空值、空白、分隔符、引号、CR/LF、反斜线、编码、表头与尾记录。校验恢复追加后文件及控制总数一致。 |
+| 4 · 先收敛图算法，再衡量 JGraphT | [在线定义校验](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/validation/WorkflowDagValidator.java)、[Excel 导入](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/WorkflowGraphTopologyValidator.java)、[定义诊断](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/workflow/WorkflowDefinitionDagInspector.java)及[编排校验](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java)各有环检测或遍历。先梳理共同输入和输出，可共享纯图算法。只有图建模和错误转换后仍能减少维护量时，再评估 JGraphT。[环检测](https://jgrapht.org/javadoc/org.jgrapht.core/org/jgrapht/alg/cycle/CycleDetector.html) · [拓扑排序](https://jgrapht.org/javadoc/org.jgrapht.core/org/jgrapht/traverse/TopologicalOrderIterator.html) | 对照自环、断图、重复边、环内节点定位和错误顺序。条件分支、Join、补偿规则、Excel 行级报错和编排执行仍由原入口负责。 |
+
+- **已有组件。** Quartz 计算 Cron，ShedLock 负责周期任务的执行锁，Bucket4j 负责令牌桶，Caffeine 负责已有的本地缓存，Resilience4j 负责熔断，POI 负责 Excel，JSch 负责 SFTP，JSqlParser 负责 SQL 语法树解析。自研的 PostgreSQL 与 SDK MySQL 语句切分涉及方言、执行文本及失败定位，现有 AST 校验用法不足以证明可替换。
+- **告警。** Alertmanager 分组、去重、路由和静默已有发射、Webhook 与静默桥接代码。按[现有迁移方案](alertmanager-migration-plan-2026-07-12.md) §7.1 验证通知送达、投递记录和回滚，再决定旧升级通知链路的退役范围。业务告警状态、租户和审计继续在平台内管理。[Alertmanager 能力](https://prometheus.io/docs/alerting/latest/alertmanager/)
+- **批处理主链。** 继续由平台维护业务日、租户范围、状态机与 CAS、租约、持久化重试、断点和补偿重放。整体引入工作流或批处理引擎会牵动持久化、API/SDK 和文件交付语义。当前候选以复用进程内基础组件为主。
+
+
+<a id="backend-oss-reuse-plan"></a>
+
+## 7. 开源组件复用实施方案（2026-11-22）
+
+目标是减少自维护的基础机制和重复算法。验收以同一输入下的调度结果、副作用次数、交付文件和校验结果为准。基线沿用 §6。方案已登记，代码和业务验收待执行。
+
+| 批次 | 工作项 | 交付条件 | 状态 |
+|---|---|---|---|
+| 1A | Trigger Cron 缓存复用 Caffeine | 缓存容量有界，淘汰前后的调度结果一致 | 已实施（2026-11-22） |
+| 1B | Atomic HTTP 验证并复用 Spring 的程序化重试 | HTTP 实际请求次数、终态分类和运行指标与基线一致，重试代码有实质减少 | 关闭：不采纳（2026-11-22） |
+| 2A | 对照 Commons CSV 与现有导出 | 标准模板逐字节兼容，且能减少编码逻辑。否则保留现有编码并记录差异 | 关闭：不做（2026-11-22） |
+| 2B | Workflow 纯图算法复用 | 四个入口的输入、结果、错误定位和顺序经对照。先复用现有图工具，按收益决定是否采用 JGraphT | 暂缓（2026-11-22） |
+| 独立专项 | Alertmanager 通知迁移验收 | 按既有方案验证从告警落库到实际收件、静默和回滚 | 本地联验完成，目标环境送达待验收 |
+
+批次 1A、1B 可独立审查与回退。批次 2A 与 2B 各自做对照，分别决定是否进入实施。Alertmanager 验收按接收渠道和部署条件安排。
+
+### 7.1 Trigger Cron 缓存
+
+1. 在 `CronExpressionAdapter` 将本地 Map 换为 Caffeine 的容量淘汰缓存。容量先按活跃表达式与时区组合数量估算，沿用模块中有界缓存的写法，本批用内部常量即可。缓存仅保存解析结果，记录被淘汰后按同一规则重算。
+2. 保留同一表达式跨时区隔离及构建时设置时区的做法。用生产调用点核对原主动失效方法的用途。当前仅见测试调用，若移除该方法，用容量与重新计算的行为用例替代对实现细节的断言。
+3. 先用小容量测试覆盖超额淘汰和查询重算，再运行 `CronExpressionAdapterTest` 与 `DefaultLaunchAdapterServiceTest`，覆盖 Quartz 时间序列、夏令时切换、跨时区并发、非法表达式和业务日边界。记录容量依据与回归结果。若触发时间或业务日结果变化，撤回本批独立变更。
+
+> **2026-11-22 实施**：缓存换为 Caffeine 容量淘汰，`CACHED_EXPRESSION_LIMIT = 1024`，包级构造器允许测试注入更小容量；删除生产无调用点的 `evict`。新增淘汰后重算、容量上限、跨时区独立三个用例。命令与结果见[联验记录](../verifications/backend-oss-reuse-acceptance-2026-11-22.md)。
+
+### 7.2 Atomic HTTP 重试
+
+1. 用现有 `HttpTaskExecutorTest` 锁定实际下游请求次数、成功返回、异常后的任务状态及输出字段。补齐用例时复用本地 HTTP fixture，覆盖 `maxRetries=0`、重试打满、I/O 恢复、退避被中断、显式接受的 5xx、预期状态不匹配和副作用已发生但响应丢失。
+2. 试用 Spring Framework 7.0.10 的 `org.springframework.core.retry.RetryTemplate`。把现有配置映射为首次调用后最多重试 `maxRetries` 次，退避沿用现有起点与倍数。只有明确可重试的分支进入重试，终止时还原最后一次响应或原异常的业务分类。保留 OkHttp 单次传输、结果输出、耗时、重试日志和实际请求次数的现有语义。[7.0.10 重试配置](https://docs.spring.io/spring-framework/docs/7.0.10/javadoc-api/org/springframework/core/retry/RetryPolicy.Builder.html)
+3. 对照运行 `HttpTaskExecutorTest`、`HttpTaskExecutorIpBlockTest` 和 `HttpTaskExecutorDryRunTest`。非幂等请求实测只发送一次，符合现行规则的失败继续落为 `EXTERNAL_OUTCOME_UNKNOWN`，中断后停止发送。若异常转换、响应恢复和监听器比现有实现更复杂，保留当前实现与新增行为证据。内部 claim、renew、report 各自带传输和回退语义，后续遇到明确维护痛点再单独评估。
+
+> **2026-11-22 关闭：不采纳。** 本机 `spring-core 7.0.10` 的 `RetryPolicy` 只有 `shouldRetry(Throwable)` 和 `predicate(Predicate<Throwable>)`，无法按 `TaskResult.statusCode` 判定重试；`RetryTemplate` 在失败时抛 `RetryException`，中断时恢复 interrupt 后同样抛出。改用它需自造可重试信号异常、在终态还原最后一次响应，并外置记录 `attempts`/`durationMillis`，净减约 20 行而失败模式增加。现有 `HttpTaskExecutorTest` 47 个用例（含 10 个重试语义）保留。
+
+### 7.3 CSV 导出兼容性对照
+
+1. 用现有格式与脱敏历史模板生成基准文件。首轮覆盖逗号或制表符、常规双引号和换行，以及当前模板可配置的空字段、纯空白、反斜线、表头和尾记录。记录标准模板与扩展格式的各自配置组合。
+2. 对照「保留现有编码」与「仅用 Commons CSV 编码标准记录」两种实现。复用现有文件生命周期与续跑逻辑，保持字节偏移、字符集和 checkpoint 的写入顺序。验证一次全写与从已有位点恢复追加得到同一文件。
+3. 以文件字节、业务记录数和控制总数作为退出条件，复用 `GenerateStepCheckpointTest` 的续跑夹具。只有稳定存在兼容范围且能减少维护量时才引入依赖，并按[开源依赖治理](../standards/open-source-governance.md#依赖更新批次)更新许可证与 SBOM 证据。差异模板继续走原编码。若兼容适配器使实现更复杂，保留当前编码。
+
+> **2026-11-22 关闭：不做。** 不引入 Commons CSV，字节级夹具不做。`EscapePolicy.BACKSLASH` 把 `\r`/`\n` 写成字面量、`NONE` 完全不转义，Commons CSV 无等价配置，替换只能覆盖标准组合并形成双路径；仓库也没有导出历史模板可作逐字节基准。现有 `GenerateStepTest` 的 `contains` 断言保留。核对时发现 `csv()` 的 `startsWith(" ")`/`endsWith(" ")` 在 `textValue()` 先 trim 后不可达，属既有死条件，本批未改动。
+
+### 7.4 Workflow 图算法复用
+
+1. 盘点 §6 四个入口的图结构及错误合同。[WorkflowGraphs](../../batch-common/src/main/java/io/github/pinpols/batch/common/validation/WorkflowGraphs.java) 已供 Excel 导入和 Orchestrator 计算可达性。优先复用该工具，按重复程度评估共享环检测。业务入口负责组装图、将结果映射为现有错误和执行合法性规则。
+2. 用同一批图对照各入口原有输出，覆盖自环、多个环、重复边、不可达节点、并列节点顺序、错误节点或行号。复用 `WorkflowGraphsTest`、`WorkflowDagValidatorTest`、`ConfigPackageExcelValidatorWorkflowTest` 和 `WorkflowGraphValidatorTest`。
+3. 只有现有工具难以自然覆盖多个已存在的算法需求时，才用同一批用例比较 JGraphT。选型同时比较图转换、错误转换、依赖和重复遍历的维护量。若库的错误定位或遍历顺序与现有合同有差异，保留原行为，优先落地能独立验证的共享部分。
+
+> **2026-11-22 暂缓。** 触发条件：出现第五个图输入入口、某次环检测缺陷需要同时改四处、或要求统一错误码。届时只抽返回环集合/环边的纯算法，各入口继续负责错误映射；JGraphT 仍不引入（`CycleDetector` 只返回布尔，定位能力弱于现状）。
+
+### 7.5 Alertmanager 迁移与收口
+
+实施和状态继续由[Alertmanager 迁移方案](alertmanager-migration-plan-2026-07-12.md)维护。联验记录覆盖业务告警落库、路由和分组去重、指定收件端实际收到、投递日志、租户隔离、静默及开关回滚。旧升级通知链路的退役以这些证据为依据。
+
+### 7.6 改造量评估（2026-11-22）
+
+基于同一基线 `37a817471` 的只读核对，用于排期与决定“实施/保留现状”。人天为单人粗估，含代码、单测、本地模块回归和文档回填，不含评审排队、CI 等待和目标环境窗口；不改变 §7 各行状态，也不构成本身实施授权。
+
+| 批次 | 代码落点与量级 | 测试落点 | 依赖与治理 | 人天 | 预判 |
+|---|---|---|---|---|---|
+| 1A Cron 缓存 | [CronExpressionAdapter](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/support/CronExpressionAdapter.java) 77 行：第 33 行改为 Caffeine 有界缓存，74–76 行 `evict` 生产无调用点可删；为淘汰用例加包级容量构造。生产调用仅 `DefaultLaunchAdapterService:150` | `CronExpressionAdapterTest` 9 个用例已覆盖 DST、跨年、与 Quartz 序列一致；新增 3–4 个淘汰后重算/跨时区并发用例；回归 `DefaultLaunchAdapterServiceTest` | 无新增依赖（`batch-trigger/pom.xml` 已有 Caffeine） | 0.5–1 | 实施。唯一确定减少自维护机制且 blast radius 最小的批次 |
+| 1B Atomic HTTP 重试 | [HttpTaskExecutor.runWithRetry](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java) 520–598 行约 80 行，改为 `RetryTemplate` + 结果持有/信号异常，净减约 20 行 | `HttpTaskExecutorTest` 47 个用例中 10 个已覆盖 5xx、重试打满、非幂等、中断和 `attempts`；需新增 4–6 个信号异常往返、`RetryException` 解包和响应还原用例 | 无新增依赖（Spring Boot 4.1.2 已带 spring-core 7.0.10） | 1–1.5（验证定论）／2.5–3.5（若替换） | 大概率保留现状。见下方约束 2 |
+| 2A CSV 对照 | [csv()/escapeDelimited](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java) 473–513 行约 40 行；Commons CSV 只能自然覆盖 `REQUIRED/ALL + DOUBLE_QUOTE` | 当前无格式级单测，需新建 golden 夹具（3 引号策略 × 3 转义策略 × 空值/空白/分隔符/引号/CRLF/表头/trailer）；续跑对照复用 `GenerateStepCheckpointTest` 615 行夹具 | 新依赖需同 PR 重建 `docs/compliance/sbom.json` 并更新许可证台账 | 2–3（只对照）／+1.5–2（若引入并保留双路径） | 对照后保留现有编码，把夹具留下；标准组合之外无法合并 |
+| 2B DAG 图算法 | 四个入口环检测约 120 行重复（`WorkflowDagValidator` 254–283、`WorkflowGraphTopologyValidator` 251–275、`WorkflowDefinitionDagInspector` 197–230、`WorkflowGraphValidator` 492–530）；`WorkflowGraphs` 59 行扩环原语后约减 60 行 | 4 个测试类共约 1 386 行；新增原语用例并逐入口对照错误码/定位 | JGraphT 不引入：`CycleDetector` 只返回布尔，拓扑排序成环时抛异常，定位弱于现状 | 2–3 | 只抽共享环原语，保留各入口错误合同 |
+| AM 独立专项 | 代码已在库，本批不改代码：[AlertmanagerNotifyProperties](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/config/AlertmanagerNotifyProperties.java) `enabled` 默认 true、token 未配即 401、`tenantId=system` | 迁移方案 §7.1 十步 smoke、投递日志、静默桥接、开关回滚 | 目标环境与真实渠道 | 2–4（主要是环境协调） | 按专项验收，再决定旧升级链路退役 |
+
+合计：验证型工作约 7.5–12.5 人天；若 1B/2A 均判定采纳并连带清理旧路径，约 12–17 人天；AM 的环境等待不计入。多 agent 并行只压缩 wall-clock，不减少评审与回归样本。
+
+关键约束（影响估算的事实核对）：
+
+1. **1A 淘汰不可断言具体键**：Caffeine 容量淘汰不保证选中哪个键，测试只能断言容量内、命中后结果与 Quartz 一致、超限后按同一规则重算。`Cache.get` 的异常传播与现状 `computeIfAbsent` 一致（表达式非法时不缓存并抛 `IllegalArgumentException`）。容量需按“活跃租户 × 调度 × 时区”估，建议先用内部常量并记录依据。
+2. **1B 的库 API 不按返回值判定重试**：`spring-core 7.0.10` 的 `RetryPolicy` 只有 `shouldRetry(Throwable)` 和 `predicate(Predicate<Throwable>)`；`RetryTemplate` 失败时抛 `RetryException`（中断时恢复 interrupt 后也抛 `RetryException`）。现有代码按 `TaskResult.statusCode >= 500` 决定重试且需还原最后一次响应、保留 `attempts`/`durationMillis` 输出和 `EXTERNAL_OUTCOME_UNKNOWN` 分类，因此必须外置结果持有并自造可重试信号异常。这条正是 §7.2.3 的撤回条件，先花 0.5–1 人天验证再定。
+3. **2A 扩展策略不在 Commons CSV 语义内**：`EscapePolicy.BACKSLASH` 把 `\r`/`\n` 写成字面量、`NONE` 完全不转义，Commons CSV 无等价配置；只替换标准组合会形成双路径，维护量不降。现有断言只在 `GenerateStepTest` 的 4 处策略上下文，缺双引号/反斜线/CRLF 的字节级证据，夹具本身有独立回归价值。
+4. **2B 的“不共享环检测”是既有设计决定**：四处注释已声明差异（首个环即停 vs 多处上报；报节点 vs 报边 vs 报行号；错误码 `V1`/`CYCLE_DETECTED`/`error.workflow.dag.cycle_detected`）。共享只能是“返回环集合/环边”的纯算法，映射仍留在入口，合并时要同步改注释和文档。
+
+#### 必要性判定
+
+必要性按“不做的可观察后果 × 发生概率”判断，与改造量分开；不改变 §7 各行状态。
+
+| 批次 | 必要性 | 主要依据 | 建议动作 |
+|---|---|---|---|
+| AM 通知联验 | 高 | `batch.console.alertmanager.enabled` 默认 true，旧 `AlertEscalationNotifier` 为 `matchIfMissing=false` 默认关闭；AM 只随 observability overlay 部署，送达和静默未在目标环境验证 | 优先做 §7.1 联验，证据到手再定旧链路退役 |
+| 2A 字节基线 | 中 | 导出近半年 17 次提交，含 charset/BOM/CRLF 和 #1445 修复，而格式级没有单测；导出文件是客户可见契约 | 只做夹具；Commons CSV 暂不引入 |
+| 1A Cron 缓存 | 低（卫生项） | 条目只随进程内出现过的“表达式 × 时区”增长，无生产 `evict`；单条内存小；git 历史无相关故障 | 可做，收益是有界资源纪律而非缺陷修复 |
+| 2B 环原语 | 低（条件触发） | 四处环检测输出合同不同且是既有设计；`WorkflowGraphs` 已在 #1356 抽出；无一致性缺陷记录 | 暂缓；出现第五个入口或需同时改四处时再抽 |
+| 1B HTTP 重试 | 不必要 | 近半年 23 次提交均为重构类，无重试缺陷；10 个用例已锁住语义；库 API 只按异常判定 | 直接记录“不采纳”，不再花 spike 人天 |
+
+按必要性排序为 AM → 2A 夹具 → 1A →（2B、1B 按触发条件）；按成本/风险排序则是 1A 在前。两者不一致时以必要性为准，避免为了“用上成熟组件”先做低收益项。
+
+按成本排序的落地顺序（供排期参考）：1A（0.5–1）→ 2A 夹具（2–3，先出字节基线）→ 2B 原语（2–3）→ 1B 验证（1–1.5，结论落计划后决定是否继续）。先做 1A 是因为它独立可回退且净减代码；1B 放最后是因为价值最低且要动生产重试路径。
+
+未覆盖：未运行任何模块测试或编译，未核 AM 运行态与目标环境开关；`HttpTaskExecutionClient` 的 claim/renew/report 重试按 §7.2.3 仍不在本批。
+
+各批实现后回填实际范围、执行命令及结果，在对应计划记录采纳或暂缓原因。应用范围内的复用变更以各自代码差异回退，告警按已有开关回滚。本阶段保留方案与基线证据。
+
 ---
 
 *依据:2026-07 两轮深度审计 + 对抗式复扫(#766–784),及范围边界文档。工作量为单人粗估,多 agent 并行可压缩 wall-clock。*
