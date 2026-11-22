@@ -26,8 +26,10 @@ Java Format 插件，不能自行改用 IntelliJ/Eclipse 格式化后提交。
 | Rust SDK | `rustfmt`，使用 Cargo 默认配置 | `sdk-contract-parity` 的 Rust contract job |
 | Python SDK | Ruff formatter，100 列、4 空格 | `sdk-python` 的 `ruff format --check` |
 | TypeScript SDK | Prettier 3.6.2，100 列、2 空格、LF、分号 | `sdk-contract-parity` 的 TypeScript contract job |
-| Shell / Workflow | ShellCheck + actionlint；脚本保留 `set -euo pipefail` | `workflow-lint` 与脚本安全门禁 |
+| Shell / Workflow | ShellCheck + actionlint + Shell 跨平台兼容（Linux 工具回退、Bash 3.2）；脚本保留 `set -euo pipefail` | `workflow-lint` 与脚本安全门禁 |
 | SQL / YAML / XML | 由 EditorConfig 约束编码、换行、缩进；迁移和 fixture 不使用会重排语义的全量 formatter | 结构、安全及边界检查 |
+
+Shell 脚本默认兼容 macOS 自带 Bash 3.2；确需 Bash 4+ 时在头部声明 `# shell-min-version: 4`。使用 macOS 专有工具时必须给出 Linux 回退（如 `sha256sum` 优先、`shasum` 回退）。
 
 格式化命令：
 
