@@ -761,6 +761,82 @@ class SqlTransformComputePluginIntegrationTest {
         .contains("ON CONFLICT (\"tenant_id\", \"account_id\") DO UPDATE SET");
   }
 
+  @Test
+  @DisplayName("增量业务 SQL:42 起点只处理 43,空批不产生 OUT,下一轮 43 继续处理 44")
+  void shouldConsumeIncrementalBusinessSqlWithoutWatermarkRegression() {
+    jdbcTemplate.execute("""
+        create table biz.incremental_event (
+          event_id bigint primary key,
+          tenant_id text not null,
+          amount numeric(12,2) not null
+        )
+        """);
+    jdbcTemplate.execute("""
+        create table biz.incremental_target (
+          event_id bigint primary key,
+          tenant_id text not null,
+          amount numeric(12,2) not null,
+          high_water_mark bigint not null
+        )
+        """);
+    jdbcTemplate.update("insert into biz.incremental_event(event_id, tenant_id, amount)"
+        + " values (41, 't1', 1.00), (42, 't1', 2.00), (43, 't1', 3.00)");
+
+    ProcessJobContext first = incrementalContext(42L);
+    plugin.prepare(first);
+    plugin.commit(first);
+    plugin.feedback(first);
+    assertThat(jdbcTemplate.queryForList(
+            "select event_id from biz.incremental_target order by event_id", Long.class))
+        .containsExactly(43L);
+    assertThat(first.getAttributes()).containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "43");
+
+    ProcessJobContext empty = incrementalContext(43L);
+    plugin.prepare(empty);
+    plugin.commit(empty);
+    plugin.feedback(empty);
+    assertThat(empty.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);
+
+    jdbcTemplate.update(
+        "insert into biz.incremental_event(event_id, tenant_id, amount) values (44, 't1', 4.00)");
+    ProcessJobContext next = incrementalContext(43L);
+    plugin.prepare(next);
+    plugin.commit(next);
+    plugin.feedback(next);
+    assertThat(jdbcTemplate.queryForList(
+            "select event_id from biz.incremental_target order by event_id", Long.class))
+        .containsExactly(43L, 44L);
+    assertThat(next.getAttributes()).containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "44");
+  }
+
+  private ProcessJobContext incrementalContext(long highWaterMarkIn) {
+    ProcessJobContext context = newContextWithSpec();
+    context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, highWaterMarkIn);
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("sourceSql", """
+        select tenant_id,
+               event_id,
+               amount,
+               event_id as high_water_mark
+        from biz.incremental_event
+        where tenant_id = :tenantId
+          and event_id > cast(:highWaterMarkIn as bigint)
+        """);
+    spec.put("targetTable", "incremental_target");
+    spec.put("stagingMode", "DIRECT");
+    spec.put("writeMode", "UPSERT");
+    spec.put(
+        "columns",
+        List.of(
+            Map.of("source", "tenant_id", "target", "tenant_id"),
+            Map.of("source", "event_id", "target", "event_id"),
+            Map.of("source", "amount", "target", "amount"),
+            Map.of("source", "high_water_mark", "target", "high_water_mark")));
+    spec.put("watermarkColumn", "high_water_mark");
+    spec.put("conflictColumns", List.of("event_id"));
+    return context;
+  }
+
   // ─── 辅助 ────────────────────────────────────────────────────────────────────
 
   private ProcessJobContext newContextWithSpec() {

@@ -61,6 +61,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 补充业务表类型用例：导出覆盖 `updated_at` 可变表与 RANGE 分区表，强制复合游标；Process 增加 `biz.incremental_event` 增量 SQL，验证 42→43、空批不产生 OUT、43→44。
 - 修复导出恢复在首次空输入或断点首页为空时把旧文件登记为成功：`DelimitedExportFormat` / `FixedWidthExportFormat` 区分首跑与续跑，首次为空写出合法空产物并清理旧字节；有断点时按保存的游标、字节偏移和累计行数续写，列布局无法确定时返回 `EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN`，保留位点与残文件并阻止 STORE 和登记。
 - 修复终态补槽在恢复池线程等待子任务：`WorkflowLaunchWaitResumeTrigger` 不再等待逐项恢复，`WorkflowLaunchWaitReconciler` 认领后向有界执行器提交并释放线程；整轮结束（含空批、异常和拒绝提交）后清除租户去重标记，保留租约与定时扫描一轮语义。
 - 修复等待请求在部分空槽时领不到槽：`WorkflowLaunchWaitMapper.claimDue` 按与新 launch 一致的租户、Workflow、业务日、dry-run 和 `max_active_runs_per_biz_date` 可见空槽领取，最终占槽仍由唯一索引裁决。
