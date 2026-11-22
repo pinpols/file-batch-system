@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
@@ -16,6 +17,8 @@ import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityPr
 import io.github.pinpols.batch.worker.exports.sql.SqlTemplateExportSpec;
 import io.github.pinpols.batch.worker.exports.sql.SqlTemplateExportSqlValidator;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -113,6 +116,9 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     SqlTemplateExportSpec spec =
         SqlTemplateExportSpec.parse(context.templateConfig(), objectMapper);
     String baseSql = sqlValidator.validate(spec.detailSql());
+    boolean composite = spec.tiebreakerColumnIsConfigured();
+    List<Object> cursorValues = splitCursor(cursor);
+    requireCursorShape(spec, cursorValues, composite);
 
     int limit = Math.max(1, pageSize);
     if (security.getMaxPageSize() > 0) {
@@ -127,21 +133,40 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     // region 由 allowedRegions 字典在 PREPARE 阶段把关,这里仅透传不再校验。
     baseParams.put("region", regionFromSnapshot(context));
 
+    boolean firstPage = EmptyChecks.isEmpty(cursorValues);
     // 首页（cursor == null）时执行 EXPLAIN 预检
-    boolean shouldRunExplainCheck = EmptyChecks.isNull(cursor) && security.isExplainCheckEnabled();
+    boolean shouldRunExplainCheck = firstPage && security.isExplainCheckEnabled();
     if (shouldRunExplainCheck) {
       runExplainCheck(baseSql, baseParams, context);
+    }
+    if (firstPage) {
+      // 排序键含 NULL 的行会被 keyset/哈希分片谓词静默过滤;检查不受当前 partition 谓词限制。
+      String nullProbeSql = buildNullSortValueProbeSql(baseSql, spec);
+      List<Map<String, Object>> nullSortValues = txTemplate.execute(status -> {
+        RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+        return jdbc.queryForList(nullProbeSql, baseParams);
+      });
+      if (!EmptyChecks.isEmpty(nullSortValues)) {
+        throw new WorkerConfigException(
+            "sql_template_export sort column is NULL for the template query result (cursorColumn="
+                + spec.cursorColumn()
+                + (spec.tiebreakerColumnIsConfigured()
+                    ? ", cursorTiebreakerColumn=" + spec.cursorTiebreakerColumn()
+                    : "")
+                + "); keyset pagination would silently drop those rows.");
+      }
     }
 
     ExportKeysetRange keysetRange =
         keysetRangePlanner.resolve(context, () -> minMax(baseSql, spec.cursorColumn(), baseParams));
-    String sql = buildPagedSql(baseSql, spec.cursorColumn(), cursor != null, keysetRange);
+    String sql = buildPagedSql(
+        baseSql, spec.cursorColumn(), spec.cursorTiebreakerColumn(), !firstPage, keysetRange);
 
     Map<String, Object> params = new LinkedHashMap<>(baseParams);
-    if (cursor != null) {
-      params.put("__cursor", cursor);
-    }
-    params.put("__limit", limit);
+    bindCursor(params, spec, cursorValues);
+    // 多取一行: 最后一页仍是满页时用来证明下一页起点不会跳过同排序值的行。
+    int fetchLimit = limit == Integer.MAX_VALUE ? limit : limit + 1;
+    params.put("__limit", fetchLimit);
     if (keysetRange.active()) {
       params.put("__loN", keysetRange.loN());
       params.put("__hiN", keysetRange.hiN());
@@ -158,12 +183,102 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
     }
-
-    Object nextCursor = null;
-    for (Map<String, Object> row : rows) {
-      nextCursor = row.get(spec.cursorColumn());
+    boolean hasOverflowRow = rows.size() > limit;
+    List<Object> lastTuple =
+        cursorTuple(rows.get(hasOverflowRow ? limit - 1 : rows.size() - 1), spec);
+    if (hasOverflowRow) {
+      List<Object> overflowTuple = cursorTuple(rows.get(limit), spec);
+      requirePageBoundaryIsUnique(spec, lastTuple, overflowTuple);
+      rows = new ArrayList<>(rows.subList(0, limit));
     }
+    Object nextCursor = composite ? lastTuple : lastTuple.getFirst();
     return new DetailPage(rows, nextCursor);
+  }
+
+  private static List<Object> splitCursor(Object cursor) {
+    if (EmptyChecks.isNull(cursor)) {
+      return List.of();
+    }
+    if (cursor instanceof List<?> values) {
+      return List.copyOf(values);
+    }
+    return List.of(cursor);
+  }
+
+  /** 位点形状必须与当前冻结配置一致; 排序语义变化后旧的单列位点不能继续使用。 */
+  private static void requireCursorShape(
+      SqlTemplateExportSpec spec, List<Object> cursorValues, boolean composite) {
+    if (EmptyChecks.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "sql_template_export cursor does not match the configured sort key: expected "
+            + (composite ? "(cursorColumn, cursorTiebreakerColumn)" : "cursorColumn")
+            + " but the stored GENERATE position has "
+            + cursorValues.size()
+            + " value(s). Start a new run instead of resuming this one.");
+  }
+
+  private static void bindCursor(
+      Map<String, Object> params, SqlTemplateExportSpec spec, List<Object> cursorValues) {
+    if (EmptyChecks.isEmpty(cursorValues)) {
+      return;
+    }
+    if (!spec.tiebreakerColumnIsConfigured()) {
+      params.put("__cursor", cursorValues.getFirst());
+      return;
+    }
+    params.put("__cursor0", cursorValues.get(0));
+    params.put("__cursor1", cursorValues.get(1));
+  }
+
+  private static List<Object> cursorTuple(Map<String, Object> row, SqlTemplateExportSpec spec) {
+    Object primary = row.get(spec.cursorColumn());
+    requireNonNullSortValue(primary, spec.cursorColumn());
+    if (!spec.tiebreakerColumnIsConfigured()) {
+      return Collections.singletonList(primary);
+    }
+    Object tiebreaker = row.get(spec.cursorTiebreakerColumn());
+    requireNonNullSortValue(tiebreaker, spec.cursorTiebreakerColumn());
+    return List.of(primary, tiebreaker);
+  }
+
+  private static void requireNonNullSortValue(Object value, String column) {
+    if (EmptyChecks.isNull(value)) {
+      throw new WorkerConfigException("sql_template_export sort column `"
+          + column
+          + "` is NULL in the query result; keyset pagination cannot order NULL values."
+          + " Make the column NOT NULL or filter those rows out of the template query.");
+    }
+  }
+
+  /** 单列排序在页边界遇到同值时严格大于谓词会漏行: 明确失败,而不是产出静默缺行的文件。 */
+  private static void requirePageBoundaryIsUnique(
+      SqlTemplateExportSpec spec, List<Object> lastTuple, List<Object> overflowTuple) {
+    if (overflowTuple.equals(lastTuple)) {
+      throw new WorkerConfigException(
+          "sql_template_export would skip rows sharing the page-boundary sort value "
+              + lastTuple
+              + " on cursorColumn="
+              + spec.cursorColumn()
+              + ". Configure sqlTemplateExport.cursorTiebreakerColumn with a non-null unique"
+              + " column (for example the result-set primary key) so pagination can order by"
+              + " (cursorColumn, cursorTiebreakerColumn).");
+    }
+  }
+
+  /** 首页 NULL 预检 SQL: 列名均经 quotePg 校验,谓词不受当前分片限制。 */
+  private static String buildNullSortValueProbeSql(String baseSql, SqlTemplateExportSpec spec) {
+    StringBuilder nullCondition = new StringBuilder("base.")
+        .append(JdbcMappedSqlValidator.quotePg(spec.cursorColumn()))
+        .append(" IS NULL");
+    if (spec.tiebreakerColumnIsConfigured()) {
+      nullCondition
+          .append(" OR base.")
+          .append(JdbcMappedSqlValidator.quotePg(spec.cursorTiebreakerColumn()))
+          .append(" IS NULL");
+    }
+    return "SELECT 1 FROM (%s) base WHERE %s LIMIT 1".formatted(baseSql, nullCondition);
   }
 
   /** 从 exportSnapshot 取 PrepareStep 已解析的 region(可能为 null:模板未配 region 时)。 */
@@ -268,20 +383,31 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   }
 
   /**
-   * 将基础 SQL 包装为 keyset 分页查询（CTE + 可选分片谓词 + WHERE cursor > :__cursor + LIMIT :__limit）。
+   * 将基础 SQL 包装为 keyset 分页查询（CTE + 可选分片谓词 + 游标谓词 + LIMIT :__limit）。
+   *
+   * <p>单列游标为 {@code base.col > :__cursor};配置唯一排序后缀时改为
+   * {@code base.col > :__cursor0 OR (base.col = :__cursor0 AND base.tie > :__cursor1)} 并按
+   * {@code (col, tie)} 排序,避免同排序值跨页时丢失剩余行。
    *
    * @param baseSql 原始 SELECT SQL
    * @param cursorColumn 游标列名
+   * @param tiebreakerColumn 唯一排序后缀列名,未配置为 null
    * @param hasCursor 是否携带游标（非首页时为 true）
-   * @param partitionCount 分片总数（为 1 时不注入分片谓词）
-   * @param partitionNo 当前分片编号（1-based）
+   * @param range 分片/区间谓词配置
    * @return 分页 SQL 字符串
    */
   static String buildPagedSql(
-      String baseSql, String cursorColumn, boolean hasCursor, ExportKeysetRange range) {
+      String baseSql,
+      String cursorColumn,
+      String tiebreakerColumn,
+      boolean hasCursor,
+      ExportKeysetRange range) {
     // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
     // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
     String cursorIdent = JdbcMappedSqlValidator.quotePg(cursorColumn);
+    String tiebreakerIdent = EmptyChecks.isNull(tiebreakerColumn)
+        ? null
+        : JdbcMappedSqlValidator.quotePg(tiebreakerColumn);
     StringBuilder where = new StringBuilder();
     if (range != null && range.active()) {
       where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
@@ -298,22 +424,33 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       where.append(partitionPredicate);
     }
     if (hasCursor) {
-      where
-          .append(where.isEmpty() ? "WHERE " : "AND ")
-          .append("base.%s > :__cursor%n".formatted(cursorIdent));
+      String cursorPredicate = EmptyChecks.isNull(tiebreakerIdent)
+          ? "base.%s > :__cursor%n".formatted(cursorIdent)
+          : "(base.%s > :__cursor0 OR (base.%s = :__cursor0 AND base.%s > :__cursor1))%n"
+              .formatted(cursorIdent, cursorIdent, tiebreakerIdent);
+      where.append(EmptyChecks.isEmpty(where) ? "WHERE " : "AND ").append(cursorPredicate);
     }
+    String orderBy = EmptyChecks.isNull(tiebreakerIdent)
+        ? "base.%s ASC".formatted(cursorIdent)
+        : "base.%s ASC, base.%s ASC".formatted(cursorIdent, tiebreakerIdent);
     return """
     WITH base AS (
     %s
     )
     SELECT *
     FROM base
-    %sORDER BY base.%s ASC
+    %sORDER BY %s
     LIMIT :__limit
-    """.formatted(baseSql, where, cursorIdent);
+    """.formatted(baseSql, where, orderBy);
   }
 
-  /** 兼容旧签名:转调新重载（inactive → 退回 hashtext 分片谓词）。 */
+  /** 兼容旧签名: 单列游标。 */
+  static String buildPagedSql(
+      String baseSql, String cursorColumn, boolean hasCursor, ExportKeysetRange range) {
+    return buildPagedSql(baseSql, cursorColumn, null, hasCursor, range);
+  }
+
+  /** 兼容旧签名: 单列游标 + 分片参数（inactive → 退回 hashtext 分片谓词）。 */
   static String buildPagedSql(
       String baseSql, String cursorColumn, boolean hasCursor, int partitionCount, int partitionNo) {
     return buildPagedSql(

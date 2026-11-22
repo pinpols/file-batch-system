@@ -716,8 +716,9 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /**
-   * INCREMENTAL 模式下,从同一 (tenant, jobDefinition) 上一次成功实例的 {@code high_water_mark_out} 读出,作为本次
-   * IN。FULL/CDC/未配置时一律返回 null。 首次跑没有历史成功实例时也返回 null,worker 解释为"从头开始扫"。
+   * INCREMENTAL 模式下,从同一 (tenant, jobDefinition) 上一次完整成功且报告了有效 OUT 的实例读出水位,作为本次 IN。
+   * 空输入批次不上报 OUT,这些成功实例会被跳过而不是把水位清空;归档后的成功实例仍可追溯。FULL/CDC/未配置时一律返回
+   * null。首次跑没有可用水位时也返回 null,worker 解释为"从头开始扫"。
    */
   private String resolveHighWaterMarkIn(String tenantId, LaunchLoadResult loaded) {
     String mode = loaded.jobDefinition().executionMode();
@@ -728,9 +729,9 @@ public class DefaultLaunchService implements LaunchService {
     if (jobDefinitionId == null) {
       return null;
     }
-    JobInstanceEntity prev =
-        jobMappers.jobInstanceMapper.selectLastSuccessByJobDefinition(tenantId, jobDefinitionId);
-    return prev == null ? null : prev.getHighWaterMarkOut();
+    String highWaterMarkOut = jobMappers.jobInstanceMapper.selectLatestEffectiveHighWaterMarkOut(
+        tenantId, jobDefinitionId);
+    return EmptyChecks.isBlank(highWaterMarkOut) ? null : highWaterMarkOut;
   }
 
   /**

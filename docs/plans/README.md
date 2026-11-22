@@ -1,12 +1,13 @@
 # 工作台账与阶段计划
 
-[当前待办](todo-master.md) 和 [长期硬化](hardening-backlog.md) 是持续台账；下列方案、矩阵与执行日志属于各自阶段。台账维护原文，阶段文件保留原基线日期。
+[当前待办](todo-master.md)、[后端执行顺序](todo-master.md#后端执行顺序)和[长期硬化](hardening-backlog.md)是日常排期入口。下列方案、矩阵和执行日志保留各自的阶段基线。
 
 近期工程化计划与能力对照：
 
 | 文档 | 用途 |
 |---|---|
-| [批次日结算栅栏共享锁改造方案](batch-day-fence-shared-lock-2026-11-20.md) | 栅栏是运行生命周期锁（准入/派发/回报共用）；把读者改为 `pg_advisory_xact_lock_shared`、写者保持独占，含分类表、正确性论证、迁移与验收；待实施 |
+| [五类 Worker 整改方案](worker-design-remediation-plan-2026-11-22.md) | Export 无漏行、Process 增量水位与跨 Worker 结果确认，含分批、迁移、回退和验收条件 |
+| [批次日结算栅栏共享锁改造方案](batch-day-fence-shared-lock-2026-11-20.md) | 栅栏读者共享、写者独占，两批读者切换已随 #1434、#1438 合入。文件驱动高峰与 launch 容量复测见后端待办。 |
 | [控制面按租户分片评估](control-plane-sharding-assessment-2026-11-19.md) | 单 PG 容量拐点后的架构选项、六项主要风险（全局 ID、跨租户聚合、单主调度器、迁移/备份扇出、租户迁移）与 Tier 0.5 前置门槛；结论 No-Go，评估保留备查 |
 | [其余 Mermaid 图审查与修改计划](diagram-review-remediation-plan-2026-11-13.md) | 导航 17 张核心图之外 110 张图的逐图台账、B0–B10 批次与优先级；只读审查，实施另行授权 |
 | [系统设计核查与容量验证计划](system-design-capacity-validation-plan-2026-11-09.md) | 本地设计核查、修复与小负载证据已收口；完整容量、恢复和目标环境缺项另行验收 |
@@ -31,7 +32,7 @@
 | [Console OIDC SSO 接入方案](./console-oidc-sso-integration-plan-2026-10-09.md) | 企业身份提供方 OIDC 登录边界、账号映射与验收；后端最小闭环及前端 pilot 入口已实现，真实 IdP 试点联测和生产启用仍待完成 |
 | [java-design-expression-improvement-plan-2026-10-08.md](./java-design-expression-improvement-plan-2026-10-08.md) | 注释归属、测试装配、固定载荷、任务结果不变量与协作者内聚的后续改进方案；不重复已有可读性/契约治理 |
 | [typed-contract-enum-constant-governance-plan-2026-10-07.md](./typed-contract-enum-constant-governance-plan-2026-10-07.md) | 固定 Map/Object 契约、有限域裸字符串、重复常量与精准增量门禁的分批治理计划 |
-| [java-readability-phase-9-plan-2026-11-11.md](./java-readability-phase-9-plan-2026-11-11.md) | Java 可读性阶段 9 复评整改实施计划：Task 1–24 的范围、行为保持约束与验收；R4 最后执行，尚未开工 |
+| [java-readability-phase-9-plan-2026-11-11.md](./java-readability-phase-9-plan-2026-11-11.md) | Java 可读性阶段 9 的范围、行为保持约束与验收。待推进 Task 23，随后执行 Task 18（R4）。 |
 | [java-readability-refactoring-roadmap-2026-08-12.md](./java-readability-refactoring-roadmap-2026-08-12.md) | Java 可读性、事务自注入、固定 Map 契约、复杂类拆分，以及 2026-11-10 控制流语义密度批次 |
 | [backend-borrowings-and-improvements-2026-07-10.md](backend-borrowings-and-improvements-2026-07-10.md) | 后端工程化借鉴、已落地能力与剩余治理项 |
 | [bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md](./bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) | 对标开源调度器后的 BFS 调度 / 编排边界、五块强化计划和验证口径 |

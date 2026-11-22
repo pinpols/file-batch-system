@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-22 Worker 分页与增量水位条款
+
+- [worker-plugins.md](architecture/worker-plugins.md) 导出 GENERATE 明确分页唯一性要求：单列游标只接受可证明唯一的列，排序值可重复时必须配置唯一后缀（`detailTiebreakerColumn` / `cursorTiebreakerColumn`）；同值跨页与排序键 NULL 一律以配置错误阻断，不再产出静默缺行的文件。
+- [system-flow-overview.md](architecture/system-flow-overview.md) §7.8.3 / §7.9.6 补启动水位取值口径：空批成功不产生 OUT，下一轮沿用最近一次有效水位；成功实例移入归档后仍可追溯；历史重放与补跑不推进正式增量水位。
+
 ## 2026-11-22 容量复核三项前置修正
 
 - 端到端汇总改按根请求关联 `workflow_run` 计算完成数与 p95，子 Job 和直接 Job 入口单独计数；根请求存在但无运行/无完成样本时输出 `INVALID`。[容量复核](audit/backend-capacity-analysis-2026-11-22.md)记录实施与证据。
@@ -9,6 +14,10 @@
 ## 2026-11-22 后端容量复核
 
 - [容量复核](audit/backend-capacity-analysis-2026-11-22.md)补充根请求统计、子 Job 绑定与图定义读取的证据及对照条件，并链接到已有容量待办。
+
+## 2026-11-21 后端待办整理
+
+- [TODO Master](plans/todo-master.md#后端执行顺序)按上线依赖、隔离容量复测和工程维护给出后端推进顺序。同步已合入的容量、栅栏和 Trigger 过载状态，并补入当前 Full CI 的文件到达匹配证据。
 
 ## 2026-11-21 Workflow 多槽位准入和 launch 计时复核
 

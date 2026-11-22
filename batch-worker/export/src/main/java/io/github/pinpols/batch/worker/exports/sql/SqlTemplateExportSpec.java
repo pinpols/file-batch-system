@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.sql;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.Map;
@@ -15,7 +16,8 @@ import java.util.regex.Pattern;
  * <p>主查询 SQL 来自 {@code default_query_sql}，附加配置来自 {@code query_param_schema.sqlTemplateExport}（或
  * {@code sql_template_export}）。
  */
-public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
+public record SqlTemplateExportSpec(
+    String detailSql, String cursorColumn, String cursorTiebreakerColumn) {
 
   /**
    * 从模板配置中解析 SqlTemplateExportSpec。
@@ -57,6 +59,17 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     }
     cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
 
+    String tiebreakerColumn = textValue(
+        firstNonNull(spec.get("cursorTiebreakerColumn"), spec.get("cursor_tiebreaker_column")));
+    if (EmptyChecks.isNotNull(tiebreakerColumn)) {
+      tiebreakerColumn =
+          JdbcMappedSqlValidator.requireIdentifier(tiebreakerColumn, "cursorTiebreakerColumn");
+      if (tiebreakerColumn.equalsIgnoreCase(cursorColumn)) {
+        throw new IllegalArgumentException(
+            "sqlTemplateExport.cursorTiebreakerColumn must differ from cursorColumn");
+      }
+    }
+
     // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
     // 如果用户 SELECT 里没出这列，运行期才会失败 PostgreSQL `bad SQL grammar`，debug 成本极高。
     // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
@@ -70,8 +83,21 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
               + "` to the SELECT list, or set sqlTemplateExport.cursorColumn to a column actually"
               + " selected by the query.");
     }
+    if (EmptyChecks.isNotNull(tiebreakerColumn)
+        && !mentionsIdentifier(trimmedSql, tiebreakerColumn)) {
+      throw new IllegalArgumentException(
+          "sql_template_export default_query_sql must reference cursorTiebreakerColumn `"
+              + tiebreakerColumn
+              + "` (used by ORDER BY / keyset pagination). Add it to the SELECT list, or remove"
+              + " sqlTemplateExport.cursorTiebreakerColumn.");
+    }
 
-    return new SqlTemplateExportSpec(trimmedSql, cursorColumn);
+    return new SqlTemplateExportSpec(trimmedSql, cursorColumn, tiebreakerColumn);
+  }
+
+  /** 是否配置了唯一排序后缀；配置后分页使用 (cursorColumn, cursorTiebreakerColumn) 复合游标。 */
+  public boolean tiebreakerColumnIsConfigured() {
+    return EmptyChecks.isNotEmpty(cursorTiebreakerColumn);
   }
 
   /** 词界扫描：识别 `\b<name>\b` 是否出现在 SQL 中（不区分大小写）。 */

@@ -32,11 +32,12 @@
 - **通用 JDBC**：`jdbc_mapped_export` → `GenericJdbcMappedExportDataPlugin`  
   - 模板 **`query_param_schema.jdbcMappedExport`**（或 **`jdbc_mapped_export`**）：`batchTable`、`batchTenantColumn`、`batchNoColumn`、`batchSelectColumns`（须含 **`id`**）、`detailTable`、`detailFkColumn`、`detailOrderByColumn`、`detailSelectColumns`。  
   - 明细分页通过 **`detailOrderByColumn` keyset/cursor** 推进，不再依赖 `LIMIT/OFFSET`。  
+  - **分页必须唯一且非空**：单列排序只接受能证明唯一的列（如主键）。排序值可能重复时配置 **`detailTiebreakerColumn`**（非空唯一列，例如主键），分页与续跑位点改用 `(detailOrderByColumn, detailTiebreakerColumn)` 复合游标。未配置且页边界出现同值时，插件返回 `EXPORT_GENERATE_CONFIG_INVALID` 并阻断文件登记，不会产出静默缺行的文件。首屏还会检查排序键 NULL：NULL 行会被 keyset/哈希分片谓词过滤，故明确失败。
   - DELIMITED 时默认表头为 `detailSelectColumns` 顺序；也可由模板 `csv_columns` / `csvColumns` 或插件 `describeDelimitedColumns()` 提供布局。模板还能配置 `delimiter`、`quote_policy`、`escape_policy`、`quote_char`、`header_rows`；JSON 仍为 snapshot+batch+details。  
   - **schema 白名单**：`batch.worker.export.jdbc-mapped.allowed-schemas`（默认 `biz`）。
 - **SQL 模板（更灵活，需治理）**：`sql_template_export` → `SqlTemplateExportDataPlugin`
   - SQL 来源：模板 `default_query_sql`（命名参数：`:tenantId`、`:batchNo` 等）
-  - 游标分页：`query_param_schema.sqlTemplateExport.cursorColumn`（默认 `id`）
+  - 游标分页：`query_param_schema.sqlTemplateExport.cursorColumn`（默认 `id`）；结果集排序值可能重复时配置 **`cursorTiebreakerColumn`**，两列都必须出现在 SELECT 列表中。校验与失败语义同 JDBC 映射插件（页边界同值 → 配置错误；排序键 NULL → 配置错误）。
   - SQL 治理（JSqlParser AST）：仅允许 `SELECT/WITH`；禁止 `SELECT *`（`forbidSelectStar=true`）；schema 白名单（`allowedSchemas`）；必须包含 `:tenantId` / `:batchNo` 等命名参数
   - EXPLAIN 前置检查（`explainCheckEnabled=true`）：首页前执行 `EXPLAIN (FORMAT JSON)`，超过 `maxEstimatedRows` / `maxPlanCost` 则拒绝执行
   - 每页大小受 `batch.worker.export.sql-template.max-page-size` 限制

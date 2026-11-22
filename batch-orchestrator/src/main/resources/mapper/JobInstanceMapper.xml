@@ -643,20 +643,49 @@
           <include refid="NotFromTerminal"/>
     </update>
 
-    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功"(SUCCESS only)实例,
-         供新实例启动时把上一次的 high_water_mark_out 当成本次 IN。
-         不取 PARTIAL_FAILED:partial 完成意味着部分 partition 未覆盖,若把它的水位推给下次,
-         会让下次跳过失败 partition 应处理的数据范围;让下次重新从同一 IN 跑,由 publish 路径
-         的 ON CONFLICT 兜住重复(见 SqlTransformComputeSpec / buildPublishSql)。
-         按 finished_at desc, id desc 排序:finished_at 是真实完成时间(优先);若并发场景下
-         finished_at 出现 NULL/相同,id 回退保证确定性。 -->
-    <select id="selectLastSuccessByJobDefinition" resultMap="JobInstanceResultMap">
-        select *
-        from batch.job_instance
-        where tenant_id = #{tenantId}
-          and job_definition_id = #{jobDefinitionId}
-          and instance_status = 'SUCCESS'
-        order by finished_at desc nulls last, id desc
+    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功且报告了有效 OUT"的实例的
+         high_water_mark_out,供新实例启动时作为本次 IN。
+         为什么不能只取最近一行:
+           1) 空输入批次成功时 worker 不上报 OUT,该行为 NULL/空串;若按完成时间只取一行,上一轮
+              有效水位会被空批遮住,下一轮按空水位从头扫,重读历史数据。
+           2) 成功实例默认 30 天后由归档服务移入 archive.job_instance_archive 并从热表删除;只查热表
+              会让运行间隔较长的增量任务丢失水位。热冷各取最近一行后合并,查询量仍为常数级。
+         过滤口径:
+           - 仅 SUCCESS(dry-run 成功是 SUCCESS_DRY_RUN,自然排除);
+           - replay_session_id 非空的历史重放、rerun_flag=true 的补跑都不推进正式增量水位:
+             它们按各自冻结范围/业务区间执行,水位不可与该数据流的连续边界直接比较;
+           - OUT 为 NULL/空串表示上一轮没有可延续的进度,跳过该行而不是把它当成新起点;
+           - 不取 PARTIAL_FAILED:部分 partition 未覆盖,水位推给下次会跳过失败 partition 的
+             数据范围;由发布路径的 ON CONFLICT 兜住重复执行幂等。
+         排序用 finished_at desc, id desc:finished_at 是真实完成时间,空值/并发相同时 id 回退保证确定性。 -->
+    <select id="selectLatestEffectiveHighWaterMarkOut" resultType="java.lang.String">
+        select latest.high_water_mark_out
+        from (
+            (select high_water_mark_out, finished_at, id
+               from batch.job_instance
+              where tenant_id = #{tenantId}
+                and job_definition_id = #{jobDefinitionId}
+                and instance_status = 'SUCCESS'
+                and replay_session_id is null
+                and rerun_flag = false
+                and high_water_mark_out is not null
+                and high_water_mark_out &lt;&gt; ''
+              order by finished_at desc nulls last, id desc
+              limit 1)
+            union all
+            (select high_water_mark_out, finished_at, id
+               from archive.job_instance_archive
+              where tenant_id = #{tenantId}
+                and job_definition_id = #{jobDefinitionId}
+                and instance_status = 'SUCCESS'
+                and replay_session_id is null
+                and rerun_flag = false
+                and high_water_mark_out is not null
+                and high_water_mark_out &lt;&gt; ''
+              order by finished_at desc nulls last, id desc
+              limit 1)
+        ) latest
+        order by latest.finished_at desc nulls last, latest.id desc
         limit 1
     </select>
 

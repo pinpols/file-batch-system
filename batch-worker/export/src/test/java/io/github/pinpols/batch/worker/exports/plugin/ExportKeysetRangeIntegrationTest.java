@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
@@ -45,6 +47,9 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   private static final String BATCH_NO = "KEYSET-IT-BATCH";
   private static final String SKEW_BATCH_NO = "KEYSET-IT-SKEW";
   private static final long BATCH_ID_SEED = 89_000L;
+  private static final long DUP_BATCH_ID = 91_000L;
+  private static final String DUP_BATCH_NO = "KEYSET-DUP-BATCH";
+  private static final String NULL_BATCH_NO = "KEYSET-NULL-BATCH";
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
@@ -163,6 +168,37 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       }
       String insertSettlementDetailsSql = detail.toString();
       stmt.execute(insertSettlementDetailsSql);
+
+      // 重复排序值对照表: sort_no = 10,10,20 跨页时单列游标会漏行; sort_no 可空,用于 NULL 预检。
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_dup_demo (
+              id        BIGINT PRIMARY KEY,
+              tenant_id VARCHAR(64)  NOT NULL,
+              batch_id  BIGINT       NOT NULL,
+              batch_no  VARCHAR(128) NOT NULL,
+              sort_no   INTEGER
+          )
+          """);
+      stmt.execute("TRUNCATE TABLE biz.keyset_dup_demo");
+      stmt.execute("""
+          INSERT INTO biz.keyset_dup_demo(id, tenant_id, batch_id, batch_no, sort_no) VALUES
+              (1, '%s', %d, '%s', 10),
+              (2, '%s', %d, '%s', 10),
+              (3, '%s', %d, '%s', 20),
+              (4, '%s', %d, '%s', NULL)
+          """.formatted(
+              TENANT_ID,
+              DUP_BATCH_ID,
+              DUP_BATCH_NO,
+              TENANT_ID,
+              DUP_BATCH_ID,
+              DUP_BATCH_NO,
+              TENANT_ID,
+              DUP_BATCH_ID,
+              DUP_BATCH_NO,
+              TENANT_ID,
+              DUP_BATCH_ID + 1,
+              NULL_BATCH_NO));
 
       conn.commit();
     }
@@ -305,6 +341,186 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         collectAllPartitions(jdbcMappedPlugin, templateConfig, BATCH_ID_SEED, BATCH_NO);
 
     assertDisjointAndComplete(partitions, "jdbc_mapped+keyset", ROW_COUNT);
+  }
+
+  // ----------------------------------------------------------------
+  //  用例 5：同排序值跨页 —— 单列游标必须明确失败,配置唯一后缀后逐条导出
+  // ----------------------------------------------------------------
+
+  @Test
+  @DisplayName("jdbc_mapped 同排序值跨页:未配置唯一后缀时明确失败而非静默漏行")
+  void jdbcMapped_duplicateSortValue_withoutTiebreaker_failsExplicitly() {
+    Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedDupSpec(false));
+
+    assertThatThrownBy(() -> jdbcMappedPlugin.loadDetailPage(
+            dupContext(templateConfig, DUP_BATCH_NO, 1, 1), DUP_BATCH_ID, 1, null))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("detailTiebreakerColumn");
+  }
+
+  @Test
+  @DisplayName("jdbc_mapped 同排序值跨页:配置唯一后缀后 10、10、20 逐条导出且每键一次")
+  void jdbcMapped_duplicateSortValue_withTiebreaker_exportsEveryRowOnce() throws Exception {
+    Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedDupSpec(true));
+
+    List<Object> ids = collectIds(jdbcMappedPlugin, templateConfig, DUP_BATCH_ID, DUP_BATCH_NO);
+    assertThat(ids).containsExactlyInAnyOrder(1L, 2L, 3L);
+  }
+
+  @Test
+  @DisplayName("jdbc_mapped 排序列为 NULL 时首页明确失败")
+  void jdbcMapped_nullSortValue_failsExplicitly() {
+    Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedDupSpec(true));
+
+    assertThatThrownBy(() -> jdbcMappedPlugin.loadDetailPage(
+            dupContext(templateConfig, NULL_BATCH_NO, 1, 1), DUP_BATCH_ID + 1, 10, null))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("NULL");
+  }
+
+  @Test
+  @DisplayName("sql_template 同排序值跨页:未配置唯一后缀时明确失败")
+  void sqlTemplate_duplicateSortValue_withoutTiebreaker_failsExplicitly() {
+    Map<String, Object> templateConfig = sqlTemplateDupConfig(false);
+
+    assertThatThrownBy(() -> sqlTemplatePlugin.loadDetailPage(
+            dupContext(templateConfig, DUP_BATCH_NO, 1, 1), 0L, 1, null))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("cursorTiebreakerColumn");
+  }
+
+  @Test
+  @DisplayName("sql_template 同排序值跨页:配置唯一后缀后逐条导出且每键一次")
+  void sqlTemplate_duplicateSortValue_withTiebreaker_exportsEveryRowOnce() throws Exception {
+    Map<String, Object> templateConfig = sqlTemplateDupConfig(true);
+
+    List<Object> ids = collectIds(sqlTemplatePlugin, templateConfig, 0L, DUP_BATCH_NO);
+    assertThat(ids).containsExactlyInAnyOrder(1L, 2L, 3L);
+  }
+
+  @Test
+  @DisplayName("sql_template 排序列为 NULL 时首页明确失败")
+  void sqlTemplate_nullSortValue_failsExplicitly() {
+    Map<String, Object> templateConfig = sqlTemplateDupConfig(true);
+
+    assertThatThrownBy(() -> sqlTemplatePlugin.loadDetailPage(
+            dupContext(templateConfig, NULL_BATCH_NO, 1, 1), 0L, 10, null))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("NULL");
+  }
+
+  @Test
+  @DisplayName("复合排序在多分片下仍无重漏")
+  void compositeOrder_fourPartitions_disjointAndComplete() throws Exception {
+    Map<String, Object> jdbcMappedSpec = jdbcMappedDupSpec(true);
+    Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedSpec);
+
+    List<List<Object>> partitions = new ArrayList<>();
+    for (int partNo = 1; partNo <= PARTITION_COUNT; partNo++) {
+      partitions.add(collectIds(
+          jdbcMappedPlugin,
+          templateConfig,
+          DUP_BATCH_ID,
+          DUP_BATCH_NO,
+          partNo,
+          PARTITION_COUNT,
+          1));
+    }
+
+    Set<Object> union = new HashSet<>();
+    for (List<Object> ids : partitions) {
+      assertThat(ids).doesNotHaveDuplicates();
+      for (Object id : ids) {
+        assertThat(union.add(id)).as("分片间不应重复导出 id=%s", id).isTrue();
+      }
+    }
+    assertThat(union).containsExactlyInAnyOrder(1L, 2L, 3L);
+  }
+
+  private static Map<String, Object> jdbcMappedDupSpec(boolean withTiebreaker) {
+    Map<String, Object> spec = new LinkedHashMap<>();
+    spec.put("schema", "biz");
+    spec.put("batchTable", "settlement_batch");
+    spec.put("batchTenantColumn", "tenant_id");
+    spec.put("batchNoColumn", "batch_no");
+    spec.put("batchSelectColumns", List.of("id", "batch_no", "tenant_id"));
+    spec.put("detailTable", "keyset_dup_demo");
+    spec.put("detailFkColumn", "batch_id");
+    spec.put("detailOrderByColumn", "sort_no");
+    spec.put("detailSelectColumns", List.of("id", "sort_no"));
+    if (withTiebreaker) {
+      spec.put("detailTiebreakerColumn", "id");
+    }
+    return spec;
+  }
+
+  private static Map<String, Object> sqlTemplateDupConfig(boolean withTiebreaker) {
+    Map<String, Object> sqlTemplateSpec = new LinkedHashMap<>();
+    sqlTemplateSpec.put("cursorColumn", "sort_no");
+    if (withTiebreaker) {
+      sqlTemplateSpec.put("cursorTiebreakerColumn", "id");
+    }
+    return Map.of(
+        "default_query_sql",
+        "SELECT id, sort_no FROM biz.keyset_dup_demo"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo",
+        "sql_template_export",
+        sqlTemplateSpec);
+  }
+
+  private static ExportDataContext dupContext(
+      Map<String, Object> templateConfig, String batchNo, int partitionNo, int partitionCount) {
+    return new ExportDataContext(
+        TENANT_ID,
+        "JOB",
+        batchNo,
+        "TPL",
+        templateConfig,
+        new LinkedHashMap<>(),
+        partitionNo,
+        partitionCount);
+  }
+
+  private List<Object> collectIds(
+      ExportDataPlugin plugin, Map<String, Object> templateConfig, long batchId, String batchNo)
+      throws Exception {
+    return collectIds(plugin, templateConfig, batchId, batchNo, 1, 1, 1);
+  }
+
+  private List<Object> collectIds(
+      ExportDataPlugin plugin,
+      Map<String, Object> templateConfig,
+      long batchId,
+      String batchNo,
+      int partitionNo,
+      int partitionCount,
+      int pageSize)
+      throws Exception {
+    List<Object> ids = new ArrayList<>();
+    Object cursor = null;
+    while (true) {
+      ExportDataContext ctx = new ExportDataContext(
+          TENANT_ID,
+          "JOB",
+          batchNo,
+          "TPL",
+          templateConfig,
+          new LinkedHashMap<>(),
+          partitionNo,
+          partitionCount);
+      ExportDataPlugin.DetailPage page = plugin.loadDetailPage(ctx, batchId, pageSize, cursor);
+      if (page.rows().isEmpty()) {
+        break;
+      }
+      for (Map<String, Object> row : page.rows()) {
+        ids.add(row.get("id"));
+      }
+      cursor = page.nextCursor();
+      if (cursor == null) {
+        break;
+      }
+    }
+    return ids;
   }
 
   // ----------------------------------------------------------------
