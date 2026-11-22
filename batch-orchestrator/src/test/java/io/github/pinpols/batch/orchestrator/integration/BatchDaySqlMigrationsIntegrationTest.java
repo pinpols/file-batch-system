@@ -2,13 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
@@ -16,7 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -155,26 +152,6 @@ class BatchDaySqlMigrationsIntegrationTest {
         .toList();
 
     assertThat(applied2).containsExactlyInAnyOrderElementsOf(applied1);
-  }
-
-  @Test
-  @DisplayName("ShedLock 先按自动建表结构创建 batch.shedlock 时,V2 仍能完成迁移")
-  void precreatedShedlock_doesNotBlockPlatformMigrate() {
-    resetDb();
-    DataSource dataSource = new DriverManagerDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-    ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
-
-    flywayConfiguration().load().migrate();
-
-    JdbcTemplate jdbc = jdbc();
-    try {
-      assertThat(tableExists(jdbc, "batch", "shedlock")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "shedlock", "locked_at")).isTrue();
-      assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
-    } finally {
-      closeJdbc(jdbc);
-    }
   }
 
   private static JdbcTemplate jdbc() {

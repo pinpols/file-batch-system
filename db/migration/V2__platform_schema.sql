@@ -8048,8 +8048,7 @@ CREATE SEQUENCE batch.secret_version_id_seq
 ALTER SEQUENCE batch.secret_version_id_seq OWNED BY batch.secret_version.id;
 
 
--- 测试和本地启动可能在 Flyway 之前按同一列结构自动创建该表；空库仍由本语句创建。
-CREATE TABLE IF NOT EXISTS batch.shedlock (
+CREATE TABLE batch.shedlock (
     name character varying(64) NOT NULL,
     lock_until timestamp without time zone NOT NULL,
     locked_at timestamp without time zone NOT NULL,
