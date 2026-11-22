@@ -65,6 +65,49 @@ class ShellLinuxPortabilityTest(unittest.TestCase):
             with patch.object(CHECKER, "ROOT", root):
                 self.assertEqual(CHECKER.scan_file(script), [])
 
+    def test_shasum_requires_linux_checksum_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            unsafe = root / "unsafe.sh"
+            unsafe.write_text("shasum -a 256 data\n", encoding="utf-8")
+            portable = root / "portable.sh"
+            portable.write_text(
+                "if command -v sha256sum >/dev/null 2>&1; then\n"
+                "  sha256sum data\n"
+                "else\n"
+                "  shasum -a 256 data\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            with patch.object(CHECKER, "ROOT", root):
+                self.assertIn(
+                    "shasum-sha256-without-fallback",
+                    "\n".join(CHECKER.scan_file(unsafe)),
+                )
+                self.assertEqual(CHECKER.scan_file(portable), [])
+
+    def test_gnu_xargs_r_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "unsafe.sh"
+            script.write_text("printf '%s\\n' \"$@\" | xargs -r rm -f\n", encoding="utf-8")
+            with patch.object(CHECKER, "ROOT", root):
+                self.assertIn("gnu-xargs-r", "\n".join(CHECKER.scan_file(script)))
+
+    def test_git_hooks_are_scanned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            hooks = root / ".githooks"
+            hooks.mkdir()
+            hook = hooks / "pre-push"
+            hook.write_text("date -v+1d\n", encoding="utf-8")
+            listing = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
+            with patch.object(CHECKER, "ROOT", root), patch.object(
+                CHECKER.subprocess, "run", return_value=listing
+            ):
+                self.assertEqual(CHECKER.tracked_shell_files(), [hook])
+                self.assertIn("bsd-date-v", "\n".join(CHECKER.scan_file(hook)))
+
 
 if __name__ == "__main__":
     unittest.main()
