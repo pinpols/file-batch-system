@@ -93,9 +93,6 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     final String selectOutputSql = """
         select output::text from batch.workflow_node_run where workflow_run_id = ? and node_code = 'WAIT_FILE'\
         """;
-    final String selectRunStatusSql = """
-        select run_status from batch.workflow_run where tenant_id = ? and id = ?
-    """;
     final String deleteWorkflowSensorProbeTestSql = """
         delete from biz.workflow_sensor_probe_test where tenant_id = ? and marker = ?
     """;
@@ -143,14 +140,17 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       RlsTenantContextHolder.runWithTenant(
           tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
+      // 后台扫描也可能先完成 WAIT，Workflow 根状态在节点事务提交后的推进中收敛。
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .untilAsserted(
+              () -> assertThat(workflowRunStatus(jdbc, workflowRunId)).isEqualTo("SUCCESS"));
+
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
       assertThat(selectedNodeStatus).isEqualTo("SUCCESS");
       String selectedOutput = jdbc.queryForObject(selectOutputSql, String.class, workflowRunId);
       assertThat(selectedOutput).contains(marker);
-      String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
-      assertThat(selectedRunStatus).isEqualTo("SUCCESS");
     } finally {
       businessJdbc.update(deleteWorkflowSensorProbeTestSql, tenantId, marker);
     }
