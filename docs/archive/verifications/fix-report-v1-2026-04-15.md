@@ -198,7 +198,7 @@
 
 **修复**：新增 Flyway 迁移 `V57__add_cross_tenant_check_constraints.sql`，通过触发器函数在 `INSERT/UPDATE` 时校验 `workflow_run.tenant_id` 与关联的 `job_instance.tenant_id` 一致。
 
-**文件**：`db/migration/V57__add_cross_tenant_check_constraints.sql`（新建）
+**文件**：`db/legacy-migration/V57__add_cross_tenant_check_constraints.sql`（新建）
 
 ---
 
@@ -230,7 +230,7 @@ console.log 中 41 条 ERROR 均为 `ConsoleApiExceptionHandler` 捕获的客户
 | 文件 | 用途 |
 |------|------|
 | `batch-common/.../persistence/Stateful.java` | Stateful 接口迁移至 common 层 |
-| `db/migration/V57__add_cross_tenant_check_constraints.sql` | 跨租户引用 DB 触发器约束 |
+| `db/legacy-migration/V57__add_cross_tenant_check_constraints.sql` | 跨租户引用 DB 触发器约束 |
 
 ---
 

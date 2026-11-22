@@ -104,7 +104,7 @@ class JobMonitoringPolicyMapperIntegrationTest {
         """;
     jdbcTemplate.execute(createMonitoringPolicyTableSql);
     ClassPathResource migration =
-        new ClassPathResource("db/migration/V355__job_monitoring_rule_effective_times.sql");
+        new ClassPathResource("db/legacy-migration/V355__job_monitoring_rule_effective_times.sql");
     new ResourceDatabasePopulator(migration).execute(dataSource);
     String insertJobDefinitionSql = """
         insert into batch.job_definition(id) values (1)

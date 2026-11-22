@@ -85,7 +85,7 @@ worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worke
 
 ## 实施落地（与代码一致）
 
-- **DB**：`db/migration/V95__job_partition_invocation.sql` — `batch.job_partition` 与 `archive.job_partition_archive` 增加 `current_invocation_id`、`invocation_started_at`。
+- **DB**：`db/legacy-migration/V95__job_partition_invocation.sql` — `batch.job_partition` 与 `archive.job_partition_archive` 增加 `current_invocation_id`、`invocation_started_at`。
 - **Orchestrator**：任务认领路径生成 invocation 并写入分区；`EffectiveTaskConfig` 向下透传；`POST .../renew` 与 `POST .../leases/renew-batch`（ADR-016）请求体可带 `partitionInvocationId`；`report` 携带时若与 `job_partition.current_invocation_id` 不一致 → `CONFLICT`（`error.task.invocation_mismatch`）。
 - **Worker**：claim 快照写入 `PulledTask` / 执行上下文；续租与上报携带；`ActiveTaskLeaseRegistry` 保留 invocation 供续租使用。
 - **兼容**：省略 `partitionInvocationId` 时维持过渡期语义（renew/report 不强依赖 invocation 匹配）。

@@ -26,6 +26,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- 平台库 Flyway 从 V1 重新编号。V2 直接建立现行表、分区、权限和种子，历史链归档用于审计与测试。部署需要空平台库，业务库使用原初始化入口。见 [重编号方案](docs/plans/flyway-platform-renumber-2026-11-22.md)。
 - Orchestrator 取证包改为跨副本共享卷：Helm 新增 `orchestrator.forensic.persistence`，把同一 RWX PVC 挂到所有副本并设置 `BATCH_FORENSIC_STORAGE_DIR`；生产 values 启用，迁移旧包与双 Pod 下载验收要求写入 ADR-022。
 - 投递语义与归档槽位文档校准：系统职责将 Outbox + Kafka 改为“至少一次投递”并写明发布端重试与消费方幂等认领责任；ADR-050 说明归档 `active_slot` 恒为默认 1、不能还原历史槽号。
 - 子 Job 启动返回后只核验 Workflow 节点绑定：`ChildJobLaunchSupport` 读取本次预期的节点尝试，已绑定到同一 Job 实例时不再执行同值 `UPDATE`；仅在绑定为空时补绑，绑定其他实例或跨租户读取失败时按冲突拒绝。首次原子绑定仍在准备事务内完成。

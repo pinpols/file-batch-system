@@ -109,7 +109,7 @@ flowchart TB
 | Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java`   | 全文重写;两阶段占问题 + 4 路 key 绑定 + 失败释放       |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:134-142`       | `approvePendingCatchUp` 短路 LAUNCHED  |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:60-71`         | 类 Javadoc 说明"trigger 层只做尽力去重"        |
-| Layer 3 | `db/migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 回退 |
+| Layer 3 | `db/legacy-migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 回退 |
 | Layer 3 | `db/migration/V`* `uk_job_instance_tenant_dedup`             | 事实源唯一约束(更早 migration)                |
 
 

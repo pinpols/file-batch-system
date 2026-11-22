@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
@@ -15,19 +17,21 @@ import org.springframework.test.context.TestConstructor;
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
-      "spring.flyway.enabled=false",
+      "spring.flyway.enabled=true",
       "spring.quartz.job-store-type=jdbc",
-      "spring.quartz.jdbc.initialize-schema=always"
+      "spring.quartz.jdbc.initialize-schema=never"
     })
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("Trigger 应用启动装配:JDBC JobStore 模式下调度器与密钥 Flyway 回调随上下文就绪")
 class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
+  private final Flyway flyway;
   private final Scheduler scheduler;
   private final SecretPayloadFlywayCallback secretPayloadFlywayCallback;
 
   BatchTriggerApplicationIntegrationTest(
-      Scheduler scheduler, SecretPayloadFlywayCallback secretPayloadFlywayCallback) {
+      Flyway flyway, Scheduler scheduler, SecretPayloadFlywayCallback secretPayloadFlywayCallback) {
+    this.flyway = flyway;
     this.scheduler = scheduler;
     this.secretPayloadFlywayCallback = secretPayloadFlywayCallback;
   }
@@ -37,6 +41,10 @@ class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
   void contextLoads_succeeds() {
     assertThat(scheduler).isNotNull();
     assertThat(secretPayloadFlywayCallback).isNotNull();
+    MigrationInfo[] appliedMigrations = flyway.info().applied();
+    assertThat(appliedMigrations)
+        .extracting(MigrationInfo::getScript)
+        .contains("V2__platform_schema.sql");
   }
 
   @Test

@@ -160,6 +160,6 @@
 ## 关联
 
 - 代码:`batch-orchestrator/.../infrastructure/scheduler/BatchDaySettleScheduler.java`(`claimSettling` / `finalizeSettling` / `driveCatchUp`)
-- schema:`db/migration/V32__add_batch_day_support.sql`(`batch.batch_day_instance`)
+- schema:`db/legacy-migration/V32__add_batch_day_support.sql`(`batch.batch_day_instance`)
 - 状态机:`OPEN → CUTOFF → IN_FLIGHT → SETTLING → SETTLED|FAILED`,详见 [`batch-day-capability-design.md`](../../design/batch-day-capability-design.md)
 - 上一级:[`docs/runbook/incident-response.md`](../incident-response.md)

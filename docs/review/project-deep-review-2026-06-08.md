@@ -150,7 +150,7 @@
   - 70-76 行：Import `chunk-size` 已调优为 2000。
 - `docs/design/runtime-default-parameters.md`
   - 19-25 行：仍写 Import/Export `chunk-size=500`。
-- `db/migration/V24__batch_runtime_default_parameter.sql`
+- `db/legacy-migration/V24__batch_runtime_default_parameter.sql`
   - 61-69 行：DB seed 仍为 Import/Export `chunk_size=500`。
 
 风险：

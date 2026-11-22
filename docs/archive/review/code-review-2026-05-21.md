@@ -12,7 +12,7 @@
 
 ### 1. 当前未提交 V139 会让 Flyway 在 V139 直接失败
 
-位置: `db/migration/V139__create_trigger_outbox_event_archive.sql:44-69`
+位置: `db/legacy-migration/V139__create_trigger_outbox_event_archive.sql:44-69`
 
 当前 unstaged diff 删除了 V139 对 `batch.archive_policy.ck_archive_policy_table` 的白名单扩展，并注释说统一到 V141。但 V139 自己随后立即插入 `target_table='trigger_outbox_event'` 的 policy seed。Flyway 顺序是 V139 -> V140 -> V141，V141 还没执行时旧 CHECK 约束仍不允许 `trigger_outbox_event`，所以 V139 的 `INSERT` 会违反约束。
 
@@ -77,8 +77,8 @@ V139/V140/V141 新增了 archive 表和 `archive_policy` 种子，但这三个�
 ### 8. V136/V137 同批 VALIDATE 可能停滞已有异常数据环境
 
 位置:
-- `db/migration/V136__job_instance_trigger_source_check_not_valid.sql:22-29`
-- `db/migration/V137__validate_job_instance_trigger_source_check.sql:19-23`
+- `db/legacy-migration/V136__job_instance_trigger_source_check_not_valid.sql:22-29`
+- `db/legacy-migration/V137__validate_job_instance_trigger_source_check.sql:19-23`
 
 约束语义本身合理，但 V137 立即 VALIDATE。只要历史存在 `trigger_request_id IS NULL AND trigger_type <> 'MANUAL'` 的行，部署会在 Flyway 阶段失败。脚本注释给了排查 SQL，但没有数据修复 migration 或预检脚本。
 

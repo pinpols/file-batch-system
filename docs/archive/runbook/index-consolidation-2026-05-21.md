@@ -161,7 +161,7 @@ SELECT i.indexrelname
 > `V149__role_redesign_config_admin_upgrade.sql` / `V150__jsonb_partial_gin_index.sql`),
 > 本轮 DROP migration 占用下一个空闲号 V151。
 
-**文件**:`db/migration/V151__drop_redundant_indexes_after_witness.sql`
+**文件**:`db/legacy-migration/V151__drop_redundant_indexes_after_witness.sql`
 
 ```sql
 -- =============================================================================

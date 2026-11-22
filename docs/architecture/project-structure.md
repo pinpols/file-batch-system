@@ -1,6 +1,6 @@
 # file-batch-system 项目结构
 
-> 2026-10-01 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分四件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库、工程治理与示例资产。
+> 2026-11-22 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分四件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库、工程治理与示例资产。
 
 ## 顶层结构
 
@@ -30,7 +30,9 @@ file-batch-system/
 ├── examples/                               自托管 SDK / Task SPI 插件示例(长期示例资产)
 │
 ├── config/                                质量规则 / 日志策略 / 运维治理 profile（见 config/README.md）
-├── db/migration/                           Flyway PostgreSQL migrations（以 db/migration 实际版本为准）
+├── db/
+│   ├── migration/                          平台库发布迁移（V1 建模式，V2 建结构与种子）
+│   └── legacy-migration/                   旧编号 V1–V389，仅用于历史核验和测试
 ├── docs/                                   全文档体系(见下)
 ├── scripts/                                工程脚本（分类与入口见 scripts/README.md）
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
@@ -127,6 +129,17 @@ Console 的 DTO 不应下沉到 `batch-common`，Worker 也不能
 AI 会话附件属于 Console 控制面数据：PostgreSQL 保存租户、所有者、会话绑定、对象键、保留期和审计元数据，文件正文进入与批处理业务文件不同的 S3 bucket。不同 bucket 不代表独立存储故障域。浏览器只调用 Console API；不得直连对象存储、复用批处理文件下载权限或把对象存储凭据下发前端。存储隔离和生命周期配置见 [`../runbook/object-storage-s3-backends.md`](../runbook/object-storage-s3-backends.md)。
 
 配对前端仓库不在本仓内；前后端联调时使用 sibling repo `../batch-console`，约定见根目录 [`../../AGENTS.md`](../../AGENTS.md)。
+
+## 数据库与初始化资源
+
+| 路径 | 责任与消费者 |
+|---|---|
+| [`db/migration/`](../../db/migration) | 平台库当前 Flyway 链。V1 初始化模式边界，V2 创建现行热表、归档表、Quartz、ShedLock、权限、滚动分区和内置种子。Orchestrator 和 Trigger 从运行包加载此目录，CI 使用同一份源码迁移。 |
+| [`db/legacy-migration/`](../../db/legacy-migration) | 原 V1–V389 的归档。只有 `batch-test-support` 将它作为历史测试资源加载。 |
+| [`scripts/db/business/`](../../scripts/db/business) | 业务库建表和权限脚本。Worker 的业务表和 PROCESS 暂存属于业务库。 |
+| [`deploy/docker/postgres/init/`](../../deploy/docker/postgres/init) | 本地 PostgreSQL 初始化，准备库、模式及容器级依赖。平台表由 Flyway 创建。 |
+
+新发布面向空平台库，[数据库表目录](../design/database-schema-guide.md)解释各表职责和归档关系，[迁移检查手册](../runbook/db-migration-checklist.md)说明部署与恢复边界。
 
 ## Maven reactor 边界
 
@@ -355,7 +368,7 @@ scripts/
 ├── ci/        质量与CI守卫（基线在ci/baselines）
 ├── codegen/   代码/契约生成
 ├── data/      场景数据与初始化工具
-├── db/        数据库工具与独立SQL；Flyway在根db/migration
+├── db/        数据库工具与业务库 SQL；平台 Flyway 发布迁移在根目录 db/migration
 ├── deploy/    交付部署工具
 ├── dev/       开发工具与诊断
 ├── docker/    镜像/Compose辅助

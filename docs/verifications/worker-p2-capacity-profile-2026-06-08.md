@@ -68,7 +68,7 @@ P2 storm 后发现 trigger outbox 大量 `NEW` 记录时，relay 卡在 `Trigger
 
 - `batch-trigger/src/main/resources/mapper/TriggerOutboxEventMapper.xml`
   - `ORDER BY created_at` 改为 `ORDER BY next_publish_at, created_at, id`
-- `db/migration/V168__trigger_outbox_pending_order_index.sql`
+- `db/legacy-migration/V168__trigger_outbox_pending_order_index.sql`
   - 新增部分索引：`(next_publish_at, created_at, id) WHERE publish_status IN ('NEW','FAILED')`
 
 本地验证：

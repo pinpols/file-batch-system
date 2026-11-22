@@ -83,7 +83,7 @@
 
 ### PART-03：P2，平台三表只有初始窗口，缺少可确认的持续维护入口
 
-[V172](../../db/migration/V172__outbox_event_monthly_partition.sql)、[V173](../../db/migration/V173__job_instance_monthly_partition.sql) 按执行月生成 `-23..12`；[V216](../../db/migration/V216__create_console_usage_daily.sql) 生成 `-1..14` 月。初次 Flyway 成功不提供持续扩展。
+[V172](../../db/legacy-migration/V172__outbox_event_monthly_partition.sql)、[V173](../../db/legacy-migration/V173__job_instance_monthly_partition.sql) 按执行月生成 `-23..12`；[V216](../../db/legacy-migration/V216__create_console_usage_daily.sql) 生成 `-1..14` 月。初次 Flyway 成功不提供持续扩展。
 
 [现行运维手册](../runbook/pg-table-partitioning.md) 已说明仓库未找到生产自动创建调度器/部署 cron；`partition-migration/03` 归类演练，不能把文件头 cron 示例当成已部署能力。该脚本还遗漏 console_usage_daily。
 

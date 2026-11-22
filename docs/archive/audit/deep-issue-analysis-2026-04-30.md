@@ -215,8 +215,8 @@
 
 - `batch-console-api/src/main/resources/application.yml`
 - `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleJwtService.java`
-- `db/migration/V52__seed_system_tenant_and_builtin_accounts.sql`
-- `db/migration/V42__add_tenant_user_role.sql`
+- `db/legacy-migration/V52__seed_system_tenant_and_builtin_accounts.sql`
+- `db/legacy-migration/V42__add_tenant_user_role.sql`
 
 #### 影响
 
@@ -382,7 +382,7 @@ JWT 会暴露在：
 #### 证据
 
 - `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/DefaultTriggerService.java`
-- `db/migration/V37__fix_trigger_request_dedup_constraint.sql`
+- `db/legacy-migration/V37__fix_trigger_request_dedup_constraint.sql`
 
 #### 影响
 

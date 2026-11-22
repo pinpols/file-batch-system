@@ -1,61 +1,20 @@
 #!/usr/bin/env bash
-# 用途：Dev mode 工具:console-api 启动后,若 orchestrator/trigger 未起(本地常态),。
-# 用法：在仓库根目录执行 bash scripts/local/apply-pending-flyway-migrations.sh；参数与前置环境见下方说明及所属 README。
-# =========================================================
-# apply-pending-flyway-migrations.sh
-#
-# Dev mode 工具:console-api 启动后,若 orchestrator/trigger 未起(本地常态),
-# Flyway 不会跑,新增的 V*.sql 未应用 → console-api 调 mapper 报 column not exist。
-#
-# 本脚本扫 db/migration/V*.sql,对比 batch.flyway_schema_history 表已应用版本,
-# 手动 docker exec psql 跑 pending migration + INSERT history,补齐到最新。
-#
-# 用法:bash scripts/local/apply-pending-flyway-migrations.sh
-# =========================================================
-set -uo pipefail
+# 用途：通过 Flyway 校验并应用本地平台库迁移。
+# 用法：在仓库根目录执行 bash scripts/local/apply-pending-flyway-migrations.sh；连接参数与本地 JVM 一致。
+set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# shellcheck source=../lib/env-common.sh
-source "$ROOT_DIR/scripts/lib/env-common.sh"
-PG="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
-PG_USER="${PG_USER:-$PGUSER}"
-PG_DB="${PG_DB:-$PLATFORM_DB}"
-MIG_DIR="${MIG_DIR:-$ROOT_DIR/db/migration}"
-SQL_DIR="$ROOT_DIR/scripts/local/sql"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+# shellcheck source=scripts/lib/env-common.sh
+source scripts/lib/env-common.sh
+batch_configure_local_jvm_database_env
 
-[[ -d "$MIG_DIR" ]] || { echo "❌ $MIG_DIR not found"; exit 1; }
-docker exec "$PG" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1 \
-  || { echo "❌ PG container $PG 不可达"; exit 1; }
+flyway_classpath="$(mktemp)"
+trap 'rm -f "$flyway_classpath"' EXIT
 
-# 已应用版本
-applied=$(docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" -tA -f /dev/stdin \
-  < "$SQL_DIR/select-applied-flyway-versions.sql" 2>/dev/null | tr '\n' ' ')
-
-# 文件遍历
-applied_count=0; skipped_count=0
-for f in $(ls "$MIG_DIR"/V*.sql 2>/dev/null | sort -t V -k 2 -n); do
-  ver=$(basename "$f" | sed -E 's/^V([0-9]+)__.*/\1/')
-  desc=$(basename "$f" | sed -E 's/^V[0-9]+__//;s/\.sql$//;s/_/ /g')
-  if echo " $applied " | grep -q " $ver "; then
-    skipped_count=$((skipped_count + 1))
-    continue
-  fi
-  echo "==> 应用 V$ver: $desc"
-  if docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" < "$f" > /tmp/mig-V${ver}.log 2>&1; then
-    docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" \
-      -v version="$ver" \
-      -v description="$desc" \
-      -v script="$(basename "$f")" \
-      -f /dev/stdin < "$SQL_DIR/insert-flyway-history.sql" > /dev/null
-    echo "    ✅"
-    applied_count=$((applied_count + 1))
-  else
-    echo "    ❌ 失败 — 看 /tmp/mig-V${ver}.log"
-    cat /tmp/mig-V${ver}.log | tail -5
-    exit 2
-  fi
-done
-
-echo
-echo "==> 完成 — 应用 $applied_count;跳过(已应用)$skipped_count"
-echo "    建议:重启 console-api 让 MyBatis cache 看到新列(bash scripts/local/restart.sh console)"
+./mvnw -q -pl batch-orchestrator dependency:build-classpath \
+  -Dmdep.outputFile="$flyway_classpath"
+java -cp "$(cat "$flyway_classpath")" scripts/ci/FlywayMigrate.java \
+  "$BATCH_PLATFORM_DB_URL" \
+  "$BATCH_PLATFORM_DB_USERNAME" \
+  "$BATCH_PLATFORM_DB_PASSWORD"

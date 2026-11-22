@@ -103,7 +103,7 @@
 
 ## 七、实施结果（2026-11-20）
 
-代码与迁移已落地：`db/migration/V387__batch_day_fence_shared_readers.sql`、`BatchDayInstanceMapper.acquireSettlementFenceShared`、`WorkflowRunReportLock`、`DefaultWorkflowNodeDispatchService`、`TriggerRequestMapper.acquireBatchDaySettlementFence`。开日、人工操作与结算保持独占。
+代码与迁移已落地：`db/legacy-migration/V387__batch_day_fence_shared_readers.sql`、`BatchDayInstanceMapper.acquireSettlementFenceShared`、`WorkflowRunReportLock`、`DefaultWorkflowNodeDispatchService`、`TriggerRequestMapper.acquireBatchDaySettlementFence`。开日、人工操作与结算保持独占。
 
 ### 12 分区 / 6 consumer（10,000 请求 @ 25 rps，槽位 8）
 
