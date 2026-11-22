@@ -19,4 +19,4 @@ spring:
 # IT 让 ShedLockProviderFactory 自动建 batch.shedlock 表(平台库由 Flyway V2 建表)
 batch:
   shedlock:
-    auto-create: true
+    auto-create: false

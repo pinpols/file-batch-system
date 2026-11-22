@@ -10,7 +10,7 @@ spring:
 
 batch:
   shedlock:
-    auto-create: true
+    auto-create: false
   worker:
     execution:
       daemon-threads: true
