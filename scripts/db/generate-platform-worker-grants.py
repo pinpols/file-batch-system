@@ -54,6 +54,10 @@ SHEDLOCK_TABLE = "batch.shedlock"
 # Orchestrator 所有的表：Worker 只获得实际 SET 列的列级 UPDATE（与 job_task 写入守卫白名单一致）。
 COLUMN_SCOPED_UPDATE_TABLES = {"batch.job_task"}
 
+# 控制面按模块收窄的列级 UPDATE：Trigger 只维护 Workflow 定时开关与更新时间，
+# 调度表达式、归属和定义版本仍归 Console。
+CONTROL_PLANE_COLUMN_SCOPED_UPDATE = {"trigger": {"batch.workflow_definition"}}
+
 # 行锁子句所需的“仅锁”列：选择不承载状态语义的列，避免借锁权改写状态；表上没有该列时退回主键首列。
 LOCK_ONLY_COLUMN = "updated_at"
 
@@ -440,7 +444,8 @@ def build_control_plane_manifest() -> dict:
                 if table in existing:
                     access.add(table, "SELECT", ARCHIVE_DRIFT_CHECK_SOURCE)
         expand_trigger_dependencies(access, triggers, revoked)
-        rendered = render_worker(access, existing, column_scoped=set())
+        rendered = render_worker(
+            access, existing, column_scoped=CONTROL_PLANE_COLUMN_SCOPED_UPDATE.get(module, set()))
         rendered["functions"] = sorted(access.functions)
         modules[module] = rendered
     return {

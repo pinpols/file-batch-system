@@ -1307,9 +1307,12 @@
           ]
         },
         "batch.workflow_definition": {
+          "update_columns": [
+            "schedule_enabled",
+            "updated_at"
+          ],
           "privileges": [
-            "SELECT",
-            "UPDATE"
+            "SELECT"
           ],
           "sources": [
             "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml",

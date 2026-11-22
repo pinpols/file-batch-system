@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import java.io.InputStream;
 import java.sql.PreparedStatement;
 import java.util.Arrays;
@@ -24,7 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Workflow 插入 SQL 的调度开关列与参数绑定")
+@DisplayName("Workflow 插入与全量更新 SQL 的调度开关列与参数绑定")
 class WorkflowDefinitionMapperXmlTest {
 
   @Mock
@@ -35,12 +36,7 @@ class WorkflowDefinitionMapperXmlTest {
   @ValueSource(booleans = {true, false})
   @DisplayName("显式开关绑定到调度列,缺省值保留普通创建的启用语义")
   void shouldBindScheduleSwitch_whenInsertingWorkflow(Boolean scheduleEnabled) throws Exception {
-    Configuration configuration = new Configuration();
-    String resource = "mapper/WorkflowDefinitionMapper.xml";
-    try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
-      assertThat(input).isNotNull();
-      new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
-    }
+    Configuration configuration = mapperConfiguration();
     WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
     entity.setTenantId("tenant-a");
     entity.setWorkflowCode("WF_INSERT");
@@ -69,5 +65,46 @@ class WorkflowDefinitionMapperXmlTest {
       new DefaultParameterHandler(mapped, entity, bound).setParameters(statement);
       verify(statement).setBoolean(parameterIndex, scheduleEnabled);
     }
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(booleans = {true, false})
+  @DisplayName("全量更新只在参数显式给出时写定时开关列")
+  void shouldWriteScheduleSwitchOnlyWhenProvided_whenUpdatingWorkflow(Boolean scheduleEnabled)
+      throws Exception {
+    Configuration configuration = mapperConfiguration();
+    WorkflowDefinitionVersionUpdateParam param = WorkflowDefinitionVersionUpdateParam.builder()
+        .tenantId("tenant-a")
+        .id(1L)
+        .expectedVersion(2)
+        .workflowName("WF_UPDATE")
+        .workflowType("DAG")
+        .enabled(true)
+        .scheduleEnabled(scheduleEnabled)
+        .scheduleType("CRON")
+        .scheduleExpr("0 0 1 * * ?")
+        .timezone("UTC")
+        .triggerMode("SCHEDULED")
+        .build();
+    MappedStatement mapped = configuration.getMappedStatement(
+        WorkflowDefinitionMapper.class.getName() + ".updateAndBumpVersion");
+    String sql = mapped.getBoundSql(param).getSql();
+
+    if (scheduleEnabled == null) {
+      assertThat(sql).doesNotContain("schedule_enabled");
+    } else {
+      assertThat(sql).contains("schedule_enabled = ?");
+    }
+  }
+
+  private Configuration mapperConfiguration() throws Exception {
+    Configuration configuration = new Configuration();
+    String resource = "mapper/WorkflowDefinitionMapper.xml";
+    try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+      assertThat(input).isNotNull();
+      new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+    }
+    return configuration;
   }
 }

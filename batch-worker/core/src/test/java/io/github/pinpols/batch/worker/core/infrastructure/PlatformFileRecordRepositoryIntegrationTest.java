@@ -1,12 +1,17 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.io.InputStream;
@@ -14,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -185,6 +191,45 @@ class PlatformFileRecordRepositoryIntegrationTest {
     assertThat(fileCount()).isEqualTo(1);
     assertThat(isLatest(firstId)).isTrue();
     assertThat(generation(firstId)).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("合法状态推进命中前置状态并落库")
+  void shouldApplyStatusTransition_whenPreviousStatusMatches() {
+    Long fileId = create(file("incoming/orders-accepted.csv", null));
+
+    repository.updateFileStatus(fileId, FileStatus.PARSING.code(), Map.of());
+
+    assertThat(fileStatus(fileId)).isEqualTo(FileStatus.PARSING.code());
+  }
+
+  @Test
+  @DisplayName("读取后文件被归档时拒绝迟到的解析写入并保留归档状态")
+  void shouldRejectLateStatusWriteAfterConcurrentArchive() {
+    Long fileId = create(file("incoming/orders-late.csv", null));
+    markFileStatus(fileId, FileStatus.ARCHIVED.code());
+    PlatformFileRecordRepository staleReader = staleStatusReader(fileId);
+
+    assertThatThrownBy(
+            () -> staleReader.updateFileStatus(fileId, FileStatus.PARSING.code(), Map.of()))
+        .isInstanceOfSatisfying(BizException.class, conflict -> {
+          assertThat(conflict.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
+          assertThat(String.valueOf(conflict.getMessageArgs()[0]))
+              .contains("concurrent status change");
+        });
+    assertThat(fileStatus(fileId)).isEqualTo(FileStatus.ARCHIVED.code());
+  }
+
+  @Test
+  @DisplayName("并发写入已到达同一目标状态时按幂等成功处理")
+  void shouldTreatConcurrentSameTargetStatusAsIdempotent() {
+    Long fileId = create(file("incoming/orders-race.csv", null));
+    markFileStatus(fileId, FileStatus.PARSING.code());
+    PlatformFileRecordRepository staleReader = staleStatusReader(fileId);
+
+    assertThatCode(() -> staleReader.updateFileStatus(fileId, FileStatus.PARSING.code(), Map.of()))
+        .doesNotThrowAnyException();
+    assertThat(fileStatus(fileId)).isEqualTo(FileStatus.PARSING.code());
   }
 
   @Test
@@ -413,6 +458,26 @@ class PlatformFileRecordRepositoryIntegrationTest {
 
   private static Long create(FileRecordParam file) {
     return transaction.execute(status -> repository.createFileRecord(file));
+  }
+
+  /** 首次读取仍返回 RECEIVED，模拟读取与写入之间文件已被并发推进。 */
+  private static PlatformFileRecordRepository staleStatusReader(Long fileId) {
+    PlatformFileRuntimeMapper staleReadMapper =
+        mock(PlatformFileRuntimeMapper.class, delegatesTo(mapper));
+    when(staleReadMapper.selectFileStatus(fileId))
+        .thenReturn(FileStatus.RECEIVED.code())
+        .thenAnswer(invocation -> mapper.selectFileStatus(fileId));
+    return new PlatformFileRecordRepository(staleReadMapper);
+  }
+
+  private static void markFileStatus(Long fileId, String fileStatus) {
+    String updateStatusSql = "update batch.file_record set file_status = ? where id = ?";
+    jdbcTemplate.update(updateStatusSql, fileStatus, fileId);
+  }
+
+  private static String fileStatus(Long fileId) {
+    String selectStatusSql = "select file_status from batch.file_record where id = ?";
+    return jdbcTemplate.queryForObject(selectStatusSql, String.class, fileId);
   }
 
   private static boolean isLatest(Long fileId) {

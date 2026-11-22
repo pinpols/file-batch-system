@@ -621,7 +621,8 @@ SELECT (:{?console_role} OR :{?trigger_role} OR :{?orchestrator_role}) AS has_an
               FROM pg_attribute
              WHERE attrelid = 'batch.trigger_request_idempotency_alias'::regclass AND attnum > 0 AND NOT attisdropped) sequences
      WHERE sequence_name IS NOT NULL \gexec
-    SELECT format('GRANT SELECT, UPDATE ON batch.workflow_definition TO %I', :'trigger_role') \gexec
+    SELECT format('GRANT SELECT ON batch.workflow_definition TO %I', :'trigger_role') \gexec
+    SELECT format('GRANT UPDATE (schedule_enabled, updated_at) ON batch.workflow_definition TO %I', :'trigger_role') \gexec
     SELECT format('GRANT SELECT ON batch.workflow_run TO %I', :'trigger_role') \gexec
     SELECT format('GRANT UPDATE (%I) ON batch.workflow_run TO %I', COALESCE(
         (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.workflow_run'::regclass

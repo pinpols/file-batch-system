@@ -107,8 +107,12 @@ final class TenantWorkflowDefinitionApplySupport {
     param.setVersion(EmptyChecks.isNull(current) ? 1 : current.getVersion());
     param.setEnabled(EmptyChecks.isNotNull(spec.getEnabled()) && spec.getEnabled());
     param.setSingleJobDefinitionId(singleJobDefinitionId);
-    param.setScheduleEnabled(
-        EmptyChecks.isNotNull(spec.getScheduleEnabled()) && spec.getScheduleEnabled());
+    // 新定义按显式值或默认关闭落库；已有定义只在配置包显式给出时写开关，避免 upsert 覆盖并发暂停。
+    if (EmptyChecks.isNull(current)) {
+      param.setScheduleEnabled(Boolean.TRUE.equals(spec.getScheduleEnabled()));
+    } else {
+      param.setScheduleEnabled(spec.getScheduleEnabled());
+    }
     String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
     param.setScheduleType(scheduleType);
     param.setScheduleExpr(spec.getScheduleExpr());
@@ -142,7 +146,10 @@ final class TenantWorkflowDefinitionApplySupport {
     boolean effectiveEnabled = EmptyChecks.isNull(current)
         ? Boolean.TRUE.equals(param.getEnabled())
         : Boolean.TRUE.equals(Nullables.coalesce(spec.getEnabled(), current.getEnabled()));
-    if (effectiveEnabled || Boolean.TRUE.equals(param.getScheduleEnabled())) {
+    Boolean effectiveScheduleEnabled = EmptyChecks.isNull(current)
+        ? param.getScheduleEnabled()
+        : Nullables.coalesce(spec.getScheduleEnabled(), current.getScheduleEnabled());
+    if (effectiveEnabled || Boolean.TRUE.equals(effectiveScheduleEnabled)) {
       WorkflowNodeQuery workflowNodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, defId, null);
       List<WorkflowNodeEntity> workflowNodes =
           definitionMappers.workflowNode.selectByQuery(workflowNodeQuery);
@@ -159,7 +166,7 @@ final class TenantWorkflowDefinitionApplySupport {
               .workflowName(Nullables.coalesce(spec.getWorkflowName(), current.getWorkflowName()))
               .workflowType(Nullables.coalesce(spec.getWorkflowType(), current.getWorkflowType()))
               .enabled(Nullables.coalesce(spec.getEnabled(), current.getEnabled()))
-              .scheduleEnabled(param.getScheduleEnabled())
+              .scheduleEnabled(spec.getScheduleEnabled())
               .scheduleType(scheduleType)
               .scheduleExpr(spec.getScheduleExpr())
               .timezone(param.getTimezone())
@@ -185,7 +192,7 @@ final class TenantWorkflowDefinitionApplySupport {
         .workflowCode(workflowCode)
         .version(nextVersion)
         .body(snapshot)
-        .scheduleEnabled(param.getScheduleEnabled())
+        .scheduleEnabled(effectiveScheduleEnabled)
         .savedBy(operator)
         .build();
     workflowWriteSupport.appendVersionSnapshot(snapshotCommand);

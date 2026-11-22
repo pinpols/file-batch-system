@@ -6,6 +6,8 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -175,7 +177,24 @@ public class PlatformFileRecordRepository {
     }
     FileStateMachine.assertTransition(currentStatus, fileStatus);
     String metadataJson = toJson(metadata);
-    mapper.updateFileRecordStatus(fileId, fileStatus, metadataJson);
+    int updated = mapper.updateFileRecordStatus(fileId, currentStatus, fileStatus, metadataJson);
+    if (updated > 0) {
+      return;
+    }
+    String observedStatus = currentFileStatus(fileId);
+    if (fileStatus.equals(observedStatus)) {
+      return;
+    }
+    // 读取后状态被治理侧或另一执行者推进：拒绝迟到写入，由调用方按状态冲突处理。
+    throw BizException.of(
+        ResultCode.STATE_CONFLICT,
+        ResultCode.STATE_CONFLICT.detailKey(),
+        "file "
+            + fileId
+            + " concurrent status change: expected "
+            + currentStatus
+            + ", found "
+            + observedStatus);
   }
 
   public String currentFileStatus(Long fileId) {

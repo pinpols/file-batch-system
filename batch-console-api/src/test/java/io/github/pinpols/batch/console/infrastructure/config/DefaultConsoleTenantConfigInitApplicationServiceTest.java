@@ -869,6 +869,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     existing.setWorkflowType("DAG");
     existing.setVersion(3);
     existing.setEnabled(true);
+    existing.setScheduleEnabled(true);
     JobDefinitionView managedJob = new JobDefinitionView();
     managedJob.setId(70L);
     managedJob.setJobCode("JOB_A");
@@ -887,11 +888,13 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     verify(workflowDefinitionVersionMapper).insertVersionSnapshot(snapshotCaptor.capture());
     assertThat(snapshotCaptor.getValue().getVersion()).isEqualTo(4);
     assertThat(snapshotCaptor.getValue().getWorkflowCode()).isEqualTo("TARGET-WF-55");
+    assertThat(snapshotCaptor.getValue().getScheduleEnabled()).isTrue();
     ArgumentCaptor<WorkflowDefinitionUpsertParam> upsertCaptor =
         ArgumentCaptor.forClass(WorkflowDefinitionUpsertParam.class);
     verify(workflowDefinitionMapper).upsertWorkflowDefinition(upsertCaptor.capture());
     assertThat(upsertCaptor.getValue().getWorkflowCode()).isEqualTo("TARGET-WF-55");
     assertThat(upsertCaptor.getValue().getSingleJobDefinitionId()).isEqualTo(70L);
+    assertThat(upsertCaptor.getValue().getScheduleEnabled()).isNull();
     verify(workflowDefinitionMapper)
         .updateAndBumpVersion(argThat(value -> Objects.equals(value.tenantId(), "t1")
             && Objects.equals(value.id(), 21L)
@@ -899,7 +902,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             && Objects.equals(value.workflowName(), "Existing workflow")
             && Objects.equals(value.workflowType(), "DAG")
             && Objects.equals(value.enabled(), true)
-            && Objects.equals(value.scheduleEnabled(), false)
+            && value.scheduleEnabled() == null
             && Objects.equals(value.scheduleType(), "MANUAL")
             && value.scheduleExpr() == null
             && Objects.equals(value.timezone(), "Asia/Shanghai")

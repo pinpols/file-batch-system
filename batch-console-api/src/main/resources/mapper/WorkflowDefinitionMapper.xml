@@ -231,13 +231,17 @@
           and version = #{expectedVersion}
     </update>
 
-    <!-- 全量替换必须比较原版本，缺版本不能退化为无条件覆盖。 -->
+    <!-- 全量替换必须比较原版本，缺版本不能退化为无条件覆盖。
+         定时开关归显式启停入口（Console 定时启停 / Trigger 运维暂停），画布保存不携带该列；
+         仅配置包显式提供时才随定义写入，避免把读取到的旧开关写回覆盖并发暂停。 -->
     <update id="updateAndBumpVersion">
         update batch.workflow_definition
         set workflow_name = #{workflowName},
             workflow_type = #{workflowType},
             enabled = #{enabled},
-            schedule_enabled = #{scheduleEnabled},
+            <if test="scheduleEnabled != null">
+                schedule_enabled = #{scheduleEnabled},
+            </if>
             schedule_type = #{scheduleType},
             schedule_expr = #{scheduleExpr},
             timezone = #{timezone},
@@ -296,7 +300,10 @@
             enabled = excluded.enabled,
             description = excluded.description,
             single_job_definition_id = excluded.single_job_definition_id,
-            schedule_enabled = excluded.schedule_enabled,
+            <!-- 命中已有定义时同样不覆盖定时开关；显式提供才随冲突更新写入。 -->
+            <if test="scheduleEnabled != null">
+                schedule_enabled = excluded.schedule_enabled,
+            </if>
             schedule_type = excluded.schedule_type,
             schedule_expr = excluded.schedule_expr,
             timezone = excluded.timezone,

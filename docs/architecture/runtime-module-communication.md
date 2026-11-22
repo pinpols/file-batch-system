@@ -111,11 +111,12 @@ flowchart TB
 ## 读图要点
 
 - `console-api` 既查库，也通过 HTTP 把触发和高危动作交给 `trigger` 或 `orchestrator`。
-- `trigger` 自己维护 `batch.trigger_request` 和 Quartz 调度表；启动事件通过 outbox 发布到 Kafka，由 `orchestrator` 消费并发起正式调度。
+- `trigger` 维护 Quartz、定时发生记录及普通触发的接纳和投递。触发请求与触发 Outbox 同事务登记，事件经 Kafka 交给 `orchestrator`。`orchestrator` 回写 `batch.trigger_request` 中的接纳结果及实例关联，也登记补偿、节点作业和业务日补触发等内部请求。Trigger 的运行回执读取关联实例或 Workflow 运行状态。
 - `orchestrator` 是调度状态的收敛点，负责维护 `job_instance`、`job_partition`、`job_task`、`workflow_run`、`workflow_node_run`、`worker_registry`、`retry_schedule`、`dead_letter_task`、`outbox_event` 等核心表。
 - Trigger 状态查询由 Console 按当前租户作用域传递 `tenantId`；Trigger 在构造返回 DTO 前按 Quartz job identity 限域。平台级 Console 调用不传 `tenantId`，可查看全量。Console 仍保留租户过滤作为纵深防御。
 - worker 不是直接从库里扫任务，而是先消费 Kafka，再通过 HTTP 回 `orchestrator` 做 `claim`、`heartbeat`、`renew`、`report`。
 - worker 仍然会直连数据库，但直连的是执行阶段需要的业务表或文件类平台表，不直接接管调度状态主表。
+- Workflow 定时开关只由 Console 定时启停和 Trigger 运维暂停写入；画布保存更新定义与图，不携带 `schedule_enabled`。Worker 推进 `file_record` 状态时按读取到的前置状态比较，未命中即视为并发冲突，不覆盖治理侧归档。
 - **Worker 可写的 `job_task` 列**（白名单，由各 Worker 模块的 `*JobTaskWriteGuardArchTest` 守护；不得写 `task_status`，不得增删行）：
 
   | Worker | 列 | 前置谓词 |

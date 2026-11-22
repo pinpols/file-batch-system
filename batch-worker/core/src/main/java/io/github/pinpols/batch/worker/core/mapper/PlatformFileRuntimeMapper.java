@@ -85,6 +85,7 @@ public interface PlatformFileRuntimeMapper {
 
   int updateFileRecordStatus(
       @Param("fileId") Long fileId,
+      @Param("previousStatus") String previousStatus,
       @Param("fileStatus") String fileStatus,
       @Param("metadataJson") String metadataJson);
 

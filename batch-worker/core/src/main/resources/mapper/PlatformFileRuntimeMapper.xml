@@ -414,6 +414,7 @@
         where id = #{fileId}
     </select>
 
+    <!-- 前置状态条件把 Java 侧的流转校验落到同一条 UPDATE；并发归档/推进后迟到的写入不再命中。 -->
     <update id="updateFileRecordStatus">
         update batch.file_record
         set file_status = #{fileStatus},
@@ -426,6 +427,7 @@
             ) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
             updated_at = current_timestamp
         where id = #{fileId}
+          and file_status = #{previousStatus}
     </update>
 
     <update id="updateFileRecordMetadata">

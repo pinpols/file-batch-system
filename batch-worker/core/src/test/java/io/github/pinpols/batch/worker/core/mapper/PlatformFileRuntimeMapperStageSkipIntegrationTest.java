@@ -931,7 +931,8 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       session
           .getMapper(PlatformFileRuntimeMapper.class)
-          .updateFileRecordStatus(700L, FileStatus.LOADED.code(), "{\"loadedCount\":800000}");
+          .updateFileRecordStatus(
+              700L, FileStatus.FAILED.code(), FileStatus.LOADED.code(), "{\"loadedCount\":800000}");
     }
 
     final String selectBatchFileRecordSql = """
