@@ -35,7 +35,7 @@
 | [typed-contract-enum-constant-governance-plan-2026-10-07.md](./typed-contract-enum-constant-governance-plan-2026-10-07.md) | 固定 Map/Object 契约、有限域裸字符串、重复常量与精准增量门禁的分批治理计划 |
 | [java-readability-phase-9-plan-2026-11-11.md](./java-readability-phase-9-plan-2026-11-11.md) | Java 可读性阶段 9 的范围、行为保持约束与验收。待推进 Task 23，随后执行 Task 18（R4）。 |
 | [java-readability-refactoring-roadmap-2026-08-12.md](./java-readability-refactoring-roadmap-2026-08-12.md) | Java 可读性、事务自注入、固定 Map 契约、复杂类拆分，以及 2026-11-10 控制流语义密度批次 |
-| [backend-borrowings-and-improvements-2026-07-10.md](backend-borrowings-and-improvements-2026-07-10.md) | 后端工程化借鉴、已落地能力与剩余治理项 |
+| [backend-borrowings-and-improvements-2026-07-10.md](backend-borrowings-and-improvements-2026-07-10.md) | 后端工程化借鉴与[开源组件复用实施方案](backend-borrowings-and-improvements-2026-07-10.md#backend-oss-reuse-plan)；2026-11-22 收口：Cron 缓存已实施，HTTP 重试与 CSV 关闭，DAG 暂缓，AM 本地联验完成 |
 | [bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md](./bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) | 对标开源调度器后的 BFS 调度 / 编排边界、五块强化计划和验证口径 |
 | [spring-boot-engineering-patterns-plan-2026-08-02.md](./spring-boot-engineering-patterns-plan-2026-08-02.md) | Spring Boot 工程化样板落地计划 |
 | [engineering-benchmark-comparison-2026-08-02.md](./engineering-benchmark-comparison-2026-08-02.md) | BFS 与优秀系统的工程能力对照表 |

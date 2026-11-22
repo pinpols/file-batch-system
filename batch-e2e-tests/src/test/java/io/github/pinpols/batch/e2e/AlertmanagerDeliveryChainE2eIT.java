@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Alert
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.worker.imports.runtime.ImportWorkerLoop;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
@@ -85,14 +87,8 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
     previousPrivateNetworkOverride = System.getProperty("batch.security.ssrf-guard.allow-private");
     System.setProperty("batch.security.ssrf-guard.allow-private", "true");
     receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    receiver.createContext("/receive", exchange -> {
-      String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-      int status = RECEIVER_AVAILABLE.get() ? 200 : 503;
-      String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-      ATTEMPTS.add(new Attempt(status, key, body));
-      exchange.sendResponseHeaders(status, -1);
-      exchange.close();
-    });
+    receiver.createContext("/receive", AlertmanagerDeliveryChainE2eIT::handleReceive);
+    receiver.createContext("/receive-other", AlertmanagerDeliveryChainE2eIT::handleReceive);
     receiver.start();
     Testcontainers.exposeHostPorts(consolePort);
     String config = """
@@ -127,6 +123,15 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
     registry.add("batch.console.alertmanager.silence.api-base-url", () -> endpoint);
   }
 
+  private static void handleReceive(HttpExchange exchange) throws IOException {
+    String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+    int status = RECEIVER_AVAILABLE.get() ? 200 : 503;
+    String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
+    ATTEMPTS.add(new Attempt(status, key, body, exchange.getRequestURI().getPath()));
+    exchange.sendResponseHeaders(status, -1);
+    exchange.close();
+  }
+
   @AfterAll
   static void stopOwnedResources() {
     if (alertmanager != null) {
@@ -145,14 +150,10 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("真实告警重试送达并关闭后，渠道和数据库均记录发生与恢复")
   void shouldDeliverFiringAndResolvedThroughAlertmanager() throws Exception {
+    RECEIVER_AVAILABLE.set(false);
+    ATTEMPTS.clear();
     String receiverUrl = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/receive";
-    String config = objectMapper.writeValueAsString(Map.of("url", receiverUrl));
-    String insertChannel = """
-        insert into batch.notification_channel
-          (tenant_id, channel_code, channel_name, channel_type, config_json, enabled)
-        values (?, ?, '隔离告警收件端', 'WEBHOOK', ?::jsonb, true)
-        """;
-    jdbc.update(insertChannel, TENANT, RECEIVER, config);
+    insertWebhookChannel(TENANT, RECEIVER, receiverUrl);
     String alertType = "JOB_RUNNING_TOO_LONG";
     String resource = "job:isolated";
     String fingerprint = AlertFingerprints.build(TENANT, alertType, resource);
@@ -227,7 +228,80 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
     assertThat(resolvedBody.path("status").asText()).isEqualTo("resolved");
   }
 
-  private record Attempt(int status, String idempotencyKey, String body) {}
+  @Test
+  @DisplayName("两个租户的告警分别投递到各自渠道，投递日志各记 SUCCESS")
+  void shouldDeliverEachTenantToOwnChannel() throws Exception {
+    RECEIVER_AVAILABLE.set(true);
+    ATTEMPTS.clear();
+    String tenantA = TENANT + "-a";
+    String tenantB = TENANT + "-b";
+    int port = receiver.getAddress().getPort();
+    // 渠道码必须等于 AM receiver 名（AlertmanagerNotifyService 用 receiver 反查渠道），租户由 label 决定。
+    insertWebhookChannel(tenantA, RECEIVER, "http://127.0.0.1:" + port + "/receive");
+    insertWebhookChannel(tenantB, RECEIVER, "http://127.0.0.1:" + port + "/receive-other");
+
+    alerts.emit(alertCommand(tenantA, "JOB_RUNNING_TOO_LONG", "job:tenant-a"));
+    alerts.emit(alertCommand(tenantB, "JOB_SLA_BREACH", "job:tenant-b"));
+
+    String selectFiringReceipt = """
+        select count(*) from batch.alert_notification_receipt
+        where tenant_id = ? and receiver_code = ? and firing_delivered_at is not null
+        """;
+    await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
+      assertThat(jdbc.queryForObject(selectFiringReceipt, Long.class, tenantA, RECEIVER))
+          .isEqualTo(1);
+      assertThat(jdbc.queryForObject(selectFiringReceipt, Long.class, tenantB, RECEIVER))
+          .isEqualTo(1);
+    });
+
+    List<Attempt> delivered = List.copyOf(ATTEMPTS);
+    assertThat(delivered)
+        .anyMatch(attempt -> "/receive".equals(attempt.path()) && attempt.body().contains(tenantA));
+    assertThat(delivered)
+        .noneMatch(
+            attempt -> "/receive".equals(attempt.path()) && attempt.body().contains(tenantB));
+    assertThat(delivered)
+        .anyMatch(
+            attempt -> "/receive-other".equals(attempt.path()) && attempt.body().contains(tenantB));
+    assertThat(delivered)
+        .noneMatch(
+            attempt -> "/receive-other".equals(attempt.path()) && attempt.body().contains(tenantA));
+
+    String selectDeliveryLog = """
+        select count(*) from batch.notification_delivery_log
+        where tenant_id = ? and channel_code = ? and event_type = 'ALERTMANAGER'
+          and delivery_status = 'SUCCESS'
+        """;
+    assertThat(jdbc.queryForObject(selectDeliveryLog, Long.class, tenantA, RECEIVER))
+        .isEqualTo(1);
+    assertThat(jdbc.queryForObject(selectDeliveryLog, Long.class, tenantB, RECEIVER))
+        .isEqualTo(1);
+  }
+
+  private void insertWebhookChannel(String tenant, String channelCode, String url)
+      throws Exception {
+    String insertChannel = """
+        insert into batch.notification_channel
+          (tenant_id, channel_code, channel_name, channel_type, config_json, enabled)
+        values (?, ?, '隔离告警收件端', 'WEBHOOK', ?::jsonb, true)
+        """;
+    String config = objectMapper.writeValueAsString(Map.of("url", url));
+    jdbc.update(insertChannel, tenant, channelCode, config);
+  }
+
+  private AlertEmitCommand alertCommand(String tenant, String alertType, String resourceKey) {
+    return AlertEmitCommand.builder()
+        .tenantId(tenant)
+        .serviceName("batch-orchestrator")
+        .alertType(alertType)
+        .severity("WARN")
+        .title("租户分流验证")
+        .detailJson("{}")
+        .resourceKey(resourceKey)
+        .build();
+  }
+
+  private record Attempt(int status, String idempotencyKey, String body, String path) {}
 
   @TestConfiguration
   static class TestTenantGuardConfig {

@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.trigger.support;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.TimeZone;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.CronExpression;
 
@@ -25,12 +25,29 @@ import org.quartz.CronExpression;
  * <p><b>线程安全</b>:{@link CronExpression} 实例本身不是线程安全的，{@code setTimeZone} 是写操作。 R4-P0-3：之前缓存键只用
  * cronExpr，多个并发线程拿到同一个 instance 互相覆盖 setTimeZone → 算错 next。 现在缓存键改为 {@code cronExpr + "|" +
  * zone.getId()}，时区在构建时固化进 instance； next() 只调 {@code getNextValidTimeAfter}（只读），无并发污染。
+ *
+ * <p><b>容量</b>:缓存以容量淘汰(键 = 表达式 + 时区)，条目上限见 {@link #CACHED_EXPRESSION_LIMIT}；被淘汰的组合在下次调用时按同一规则
+ * 重新解析，结果与命中缓存时一致。调度修改不再需要主动失效——旧键只会随容量淘汰离场。
  */
 @Slf4j
 public class CronExpressionAdapter {
 
-  /** R4-P0-3：缓存键含 zoneId，instance 时区固化，避免跨线程 setTimeZone 污染。 */
-  private final ConcurrentMap<String, CronExpression> cache = new ConcurrentHashMap<>();
+  /** 表达式与时区组合的缓存上限。按活跃租户 × 调度 × 时区的量级估算,超出后由 Caffeine 按使用情况淘汰。 */
+  static final int CACHED_EXPRESSION_LIMIT = 1024;
+
+  /** 缓存键含 zoneId，instance 时区固化，避免跨线程 setTimeZone 污染。 */
+  private final Cache<String, CronExpression> cache;
+
+  public CronExpressionAdapter() {
+    this(CACHED_EXPRESSION_LIMIT);
+  }
+
+  CronExpressionAdapter(int cachedExpressionLimit) {
+    if (cachedExpressionLimit <= 0) {
+      throw new IllegalArgumentException("cachedExpressionLimit must be positive");
+    }
+    this.cache = Caffeine.newBuilder().maximumSize(cachedExpressionLimit).build();
+  }
 
   /**
    * 计算 cron 表达式在指定时区下、{@code after} 之后的下一次 fire 时刻。
@@ -57,9 +74,15 @@ public class CronExpressionAdapter {
     return CronExpression.isValidExpression(cronExpr);
   }
 
+  /** 测试断言容量上限：先做一次维护，再返回当前条目数。 */
+  long cachedExpressionCount() {
+    cache.cleanUp();
+    return cache.estimatedSize();
+  }
+
   private CronExpression parseOrCache(String cronExpr, ZoneId zone) {
     String cacheKey = cronExpr + "|" + zone.getId();
-    return cache.computeIfAbsent(cacheKey, k -> {
+    return cache.get(cacheKey, k -> {
       try {
         CronExpression expr = new CronExpression(cronExpr);
         expr.setTimeZone(TimeZone.getTimeZone(zone));
@@ -68,10 +91,5 @@ public class CronExpressionAdapter {
         throw new IllegalArgumentException("invalid cron expression: " + cronExpr, e);
       }
     });
-  }
-
-  /** trigger schedule_expr 修改时,从缓存清掉旧 cron(防内存累积)。 R4-P0-3：键含 zone，evict 时枚举所有 zone 变体清掉。 */
-  public void evict(String cronExpr) {
-    cache.keySet().removeIf(k -> k.startsWith(cronExpr + "|"));
   }
 }
