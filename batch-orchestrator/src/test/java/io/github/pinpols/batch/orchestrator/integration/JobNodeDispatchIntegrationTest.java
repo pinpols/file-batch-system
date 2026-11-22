@@ -3096,7 +3096,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           return invocation.callRealMethod();
         })
         .when(workflowGraphValidator)
-        .validate(ArgumentMatchers.anyLong());
+        .validate(ArgumentMatchers.any(), ArgumentMatchers.any());
     Mockito.doAnswer(invocation -> {
           String transactionId = jdbcTemplate.queryForObject(currentTransactionSql, String.class);
           waitTransactions.add(transactionId);
@@ -3241,7 +3241,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           return result;
         })
         .when(workflowGraphValidator)
-        .validate(seed.workflowDefinitionId());
+        .validate(ArgumentMatchers.any(), ArgumentMatchers.any());
     LaunchRequest first = LaunchRequest.builder()
         .tenantId(testTenantId)
         .requestId(seed.requestId())

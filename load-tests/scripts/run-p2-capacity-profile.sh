@@ -1056,6 +1056,9 @@ append_sql_summary() {
     echo '```text'
     psql_platform -P pager=off -F ' | ' -A \
       -v run_id="$run_id" \
+      -v tenant_id="$CAPACITY_TENANT_ID" \
+      -v biz_date="$BIZ_DATE" \
+      -v biz_date_cardinality="$CAPACITY_BIZ_DATE_CARDINALITY" \
       -f "$LOAD_DIR/sql/p2-run-end-to-end-summary.sql"
     echo '```'
     echo

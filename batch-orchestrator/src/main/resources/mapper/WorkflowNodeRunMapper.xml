@@ -98,6 +98,15 @@
           )
     </update>
 
+    <select id="selectByTenantAndId" resultMap="WorkflowNodeRunResultMap">
+        select node_run.*
+        from batch.workflow_node_run node_run
+        join batch.workflow_run workflow_run
+          on workflow_run.id = node_run.workflow_run_id
+        where workflow_run.tenant_id = #{tenantId}
+          and node_run.id = #{nodeRunId}
+    </select>
+
     <select id="selectLatestByWorkflowRunIdAndNodeCode" resultMap="WorkflowNodeRunResultMap">
         select *
         from batch.workflow_node_run

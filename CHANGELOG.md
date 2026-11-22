@@ -26,6 +26,8 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- 子 Job 启动返回后只核验 Workflow 节点绑定：`ChildJobLaunchSupport` 读取本次预期的节点尝试，已绑定到同一 Job 实例时不再执行同值 `UPDATE`；仅在绑定为空时补绑，绑定其他实例或跨租户读取失败时按冲突拒绝。首次原子绑定仍在准备事务内完成。
+- Workflow 根运行准入事务内复用一份节点与边：图校验、START 路由和冻结快照不再分别读取，常见成功路径的图相关 Mapper 调用由 6 次降为 2 次；定义版本复核、启用边过滤、边顺序和条件路由保持不变。见[容量复核](docs/audit/backend-capacity-analysis-2026-11-22.md)。
 - Workflow 多槽位准入在一条 SQL 中选择并尝试占用可见空槽，减少同一业务日并行启动时的数据库往返。满载仍逐槽复查后进入容量等待，见 [ADR-050](docs/architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)。
 - 批次日结算栅栏第二批读者改用共享锁：`ExpectedWorkRegistrationService`、`FileGroupExpectationService`、`ExternalEventExpectationService`（物化与结清）和 `BundleArrivalLauncher` 原本用独占栅栏，现改为 `acquire_batch_day_settlement_fence_shared`。这些路径只读业务日状态并写预期/发生行，不修改 `day_status` 或结算统计；开日、人工状态迁移与结算仍保持独占。四个服务单测断言共享调用，锁模式并发语义由 `BatchDayFenceLockModeIntegrationTest` 覆盖。见[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md#43-第二批2026-11-21-已实施)。
 - 批次日结算栅栏拆分共享读者/独占写者（V387）：准入、节点派发与运行回报改用 `acquire_batch_day_settlement_fence_shared`，开日、人工操作与结算保持独占。同业务日的读者不再互相排队，结算仍会等待在读事务提交。1w 验证：launch p95 2,408→457 ms、`job_instance` p95 15.33→11.96 s、栅栏均值 417→2.5 ms。见[压测记录](docs/verifications/load-test-local-2026-11-15.md#2026-11-20-批次日结算栅栏共享锁改造验证)与[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md)。
@@ -56,6 +58,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 压测端到端汇总不再把根 Workflow 完成数算成 0：`p2-run-end-to-end-summary.sql` 改为按根请求关联 `workflow_run` 计算完成数、吞吐和 p95，派发 JOB 节点生成的子请求按 `parent_workflow_run_id` 单独计数，直接 Job 入口保留独立行；根请求存在但没有运行或没有完成样本时输出 `INVALID`。见[容量复核](docs/audit/backend-capacity-analysis-2026-11-22.md)。
 - 过载时数据库资源故障返回可重试语义：`AbstractApiExceptionHandler` 把 `DataAccessResourceFailureException`（含连接池耗尽抛出的 `CannotGetJdbcConnectionException`）映射为 **503 + `Retry-After: 5`**，不再落到通用 500。此前 100k 压测收尾阶段 Trigger 平台连接池耗尽被记成 500（501 次），客户端无法区分可重试背压与服务端故障。
 - 修复 `resume` 后 Worker 状态被下一次心跳改回 `DRAINING`：心跳不再接受 ONLINE 状态下的自报 DRAINING（排空只能由 drain / status 入口发起），否则运维把误排空的 Worker 拉回在线后会被自身心跳立刻覆盖。
 - 修复 CodeQL `java/log-injection`（#1462）：注册 CAS 被并发 drain 挡下时的 WARN 改用 `LogSanitizer`，不再直接拼接注册请求里的租户/Worker/状态值。

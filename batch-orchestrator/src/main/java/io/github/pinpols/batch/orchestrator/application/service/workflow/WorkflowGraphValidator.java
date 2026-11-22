@@ -138,11 +138,15 @@ public class WorkflowGraphValidator {
     if (workflowDefinitionId == null) {
       return WorkflowValidationResult.clean();
     }
-    List<WorkflowNodeEntity> nodeRows =
-        workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId);
+    return validate(
+        workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId),
+        workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId));
+  }
+
+  /** 复用调用方在同一事务内已加载的节点与边，避免启动路径重复读取图定义。 */
+  public WorkflowValidationResult validate(
+      List<WorkflowNodeEntity> nodeRows, List<WorkflowEdgeEntity> edgeRows) {
     List<WorkflowNodeEntity> nodes = nullToEmpty(nodeRows);
-    List<WorkflowEdgeEntity> edgeRows =
-        workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId);
     List<WorkflowEdgeEntity> edges = nullToEmpty(edgeRows);
 
     List<ValidationIssue> errors = new ArrayList<>();

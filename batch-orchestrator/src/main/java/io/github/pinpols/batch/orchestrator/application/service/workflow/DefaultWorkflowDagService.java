@@ -105,6 +105,31 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   }
 
   @Override
+  public List<DagNodeResolution> resolveInitialNodes(
+      List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges, String payloadJson) {
+    if (EmptyChecks.isEmpty(edges)) {
+      return List.of();
+    }
+    Map<String, WorkflowNodeEntity> nodeByCode = new HashMap<>();
+    if (EmptyChecks.isNotNull(nodes)) {
+      for (WorkflowNodeEntity node : nodes) {
+        nodeByCode.put(node.getNodeCode(), node);
+      }
+    }
+    List<WorkflowEdgeEntity> matched = new ArrayList<>();
+    for (WorkflowEdgeEntity edge : edges) {
+      if (!Boolean.TRUE.equals(edge.getEnabled())
+          || !WorkflowNodeCode.START.code().equals(edge.getFromNodeCode())) {
+        continue;
+      }
+      if (matchesOutgoingEdge(edge, true, payloadJson)) {
+        matched.add(edge);
+      }
+    }
+    return toResolutions(matched, nodeByCode);
+  }
+
+  @Override
   public List<DagNodeResolution> resolveNextNodes(
       Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson) {
     if (workflowDefinitionId == null || currentNodeCode == null || currentNodeCode.isBlank()) {
@@ -141,8 +166,13 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         nodeByCode.put(node.getNodeCode(), node);
       }
     }
-    List<DagNodeResolution> resolutions = new ArrayList<>(matched.size());
-    for (WorkflowEdgeEntity edge : matched) {
+    return toResolutions(matched, nodeByCode);
+  }
+
+  private List<DagNodeResolution> toResolutions(
+      List<WorkflowEdgeEntity> matchedEdges, Map<String, WorkflowNodeEntity> nodeByCode) {
+    List<DagNodeResolution> resolutions = new ArrayList<>(matchedEdges.size());
+    for (WorkflowEdgeEntity edge : matchedEdges) {
       WorkflowNodeEntity nextNode = nodeByCode.get(edge.getToNodeCode());
       if (nextNode == null) {
         resolutions.add(new DagNodeResolution(edge.getToNodeCode(), WorkflowNodeType.END.code()));

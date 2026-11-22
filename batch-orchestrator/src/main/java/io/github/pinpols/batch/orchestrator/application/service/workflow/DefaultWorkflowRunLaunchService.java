@@ -522,9 +522,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     throw new CapacityWaitRequired(preparation.originalRequest(), snapshotForWait);
   }
 
-  /** 事务内准入结果：本次运行实际采用的定义与初始节点。 */
+  /** 事务内准入结果：本次运行实际采用的定义、初始节点与已加载图定义。 */
   private record RunAdmission(
-      WorkflowDefinitionView definition, List<DagNodeResolution> initialNodes) {}
+      WorkflowDefinitionView definition,
+      List<DagNodeResolution> initialNodes,
+      LiveGraph liveGraph) {}
+
+  /** 同一次准入事务内已读取的图定义，供校验、START 路由和冻结快照复用。 */
+  private record LiveGraph(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {}
 
   /** 加行锁读取触发请求，并确认它仍是本次启动、且处于待处理状态。 */
   private void lockPendingTriggerRequest(LaunchRequest request) {
@@ -579,7 +584,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     if (EmptyChecks.isEmpty(initialNodes)) {
       throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
     }
-    return new RunAdmission(transactionDefinition, initialNodes);
+    return new RunAdmission(transactionDefinition, initialNodes, null);
   }
 
   private RunAdmission admitFromLiveDefinition(RunPreparation preparation) {
@@ -593,12 +598,18 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     if (!scheduledWorkflowVersionMatches(request, transactionDefinition)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
     }
-    WorkflowValidationResult validation =
-        workflowGraphValidator.validate(transactionDefinition.id());
+    // 校验、START 路由与冻结快照共用同一份图，准入事务内只读取一次节点和边。
+    List<WorkflowNodeEntity> nodes =
+        workflowNodeMapper.selectByWorkflowDefinitionId(transactionDefinition.id());
+    List<WorkflowEdgeEntity> edges =
+        workflowEdgeMapper.selectAllByWorkflowDefinitionId(transactionDefinition.id());
+    WorkflowValidationResult validation = workflowGraphValidator.validate(nodes, edges);
     if (validation.hasErrors()) {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.workflow.definition_invalid");
     }
-    return new RunAdmission(transactionDefinition, initialNodes(request));
+    List<DagNodeResolution> initialNodes =
+        workflowDagService.resolveInitialNodes(nodes, edges, serializeLaunchParams(request));
+    return new RunAdmission(transactionDefinition, initialNodes, new LiveGraph(nodes, edges));
   }
 
   private RunAdmission admitFromReplaySnapshot(RunPreparation preparation) {
@@ -613,7 +624,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     if (EmptyChecks.isEmpty(initialNodes)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
     }
-    return new RunAdmission(preparation.definition(), initialNodes);
+    return new RunAdmission(preparation.definition(), initialNodes, null);
   }
 
   /** 组装根运行实体；快照字段优先取容量等待快照，其次重放快照，最后取事务内定义。 */
@@ -647,7 +658,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         replaySnapshot,
         () -> capacitySnapshot.executionSnapshotJson(),
         () -> replaySnapshot.executionSnapshotJson(),
-        () -> buildExecutionSnapshot(request, definitionForSnapshot, nodesForSnapshot)));
+        () -> buildExecutionSnapshot(
+            request, definitionForSnapshot, nodesForSnapshot, admission.liveGraph())));
     created.setRunStatus(WorkflowRunStatus.CREATED.code());
     created.setCurrentNodeCode(currentNodeCode(nodesForSnapshot));
     created.setTraceId(preparation.traceId());
@@ -731,11 +743,6 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         status -> terminalFinalizer.finalizeIfAllNodesTerminal(run));
   }
 
-  private List<DagNodeResolution> initialNodes(LaunchRequest request) {
-    String serializedParams = serializeLaunchParams(request);
-    return workflowDagService.resolveInitialNodes(request.workflowDefinitionId(), serializedParams);
-  }
-
   private String serializeLaunchParams(LaunchRequest request) {
     Map<String, Object> launchParams =
         EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
@@ -745,11 +752,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   private String buildExecutionSnapshot(
       LaunchRequest request,
       WorkflowDefinitionView definition,
-      List<DagNodeResolution> initialNodes) {
-    List<WorkflowNodeEntity> nodes =
-        workflowNodeMapper.selectByWorkflowDefinitionId(definition.id());
-    List<WorkflowEdgeEntity> edges =
-        workflowEdgeMapper.selectAllByWorkflowDefinitionId(definition.id());
+      List<DagNodeResolution> initialNodes,
+      LiveGraph liveGraph) {
+    List<WorkflowNodeEntity> nodes = EmptyChecks.isNotNull(liveGraph)
+        ? liveGraph.nodes()
+        : workflowNodeMapper.selectByWorkflowDefinitionId(definition.id());
+    List<WorkflowEdgeEntity> edges = EmptyChecks.isNotNull(liveGraph)
+        ? liveGraph.edges()
+        : workflowEdgeMapper.selectAllByWorkflowDefinitionId(definition.id());
     Map<String, Object> jobVersions = new LinkedHashMap<>();
     for (WorkflowNodeEntity node : nodes) {
       if (!WorkflowNodeType.JOB.code().equals(node.getNodeType())

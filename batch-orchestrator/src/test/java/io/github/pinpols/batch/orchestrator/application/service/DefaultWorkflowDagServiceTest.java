@@ -592,6 +592,29 @@ class DefaultWorkflowDagServiceTest {
     verify(nodeRunMapper, never()).insert(any());
   }
 
+  @Test
+  @DisplayName("预加载图按 id 顺序解析 START 出边并忽略禁用边")
+  void shouldResolveInitialNodesFromPreloadedGraph() {
+    WorkflowEdgeEntity disabled = edge("START", "DISABLED_NODE", Edge.ALWAYS, null);
+    disabled.setEnabled(false);
+    WorkflowEdgeEntity toJob = edge("START", "JOB_A", Edge.ALWAYS, null);
+    toJob.setEnabled(true);
+    WorkflowEdgeEntity toMissing = edge("START", "MISSING", Edge.SUCCESS, null);
+    toMissing.setEnabled(true);
+
+    List<WorkflowDagService.DagNodeResolution> resolutions = dagService.resolveInitialNodes(
+        List.of(node("JOB_A", WorkflowNodeType.JOB.code())),
+        List.of(disabled, toJob, toMissing),
+        "{}");
+
+    assertThat(resolutions)
+        .containsExactly(
+            new WorkflowDagService.DagNodeResolution("JOB_A", WorkflowNodeType.JOB.code()),
+            new WorkflowDagService.DagNodeResolution("MISSING", WorkflowNodeType.END.code()));
+    verify(edgeMapper, never()).selectOutgoingEdges(anyLong(), anyString());
+    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any());
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static WorkflowEdgeEntity edge(
