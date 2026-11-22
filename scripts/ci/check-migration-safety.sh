@@ -37,7 +37,10 @@ fi
 # 找出相对 base 新增(A)/改动(M)的迁移文件，并覆盖本地「未暂存」与「已 git add 未提交」两种状态。
 # 四个来源缺一不可：--cached 用 AM 而非 M，否则「新增且已暂存、尚未 commit」的迁移整类漏扫（本地假绿）。
 # CI 中后三个来源为空（工作树干净），但本地必须能扫到未提交的迁移。
-mapfile -t changed < <(
+changed=()
+while IFS= read -r file; do
+  changed+=("$file")
+done < <(
   {
     git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/*.sql' 2>/dev/null || true
     git diff --name-only --diff-filter=AM -- 'db/migration/*.sql'

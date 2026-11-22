@@ -19,6 +19,10 @@ shell_files=()
 while IFS= read -r -d '' file; do
   [[ -f "$file" ]] && shell_files+=("$file")
 done < <(git ls-files --cached --others --exclude-standard -z -- '*.sh')
+# Git 钩子没有 .sh 扩展名，但同样按 Shell 校验。
+for hook in .githooks/pre-commit .githooks/pre-push; do
+  [[ -f "$hook" ]] && shell_files+=("$hook")
+done
 if ((${#shell_files[@]} == 0)); then
   echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME} | reason=no tracked shell scripts"
   exit 0

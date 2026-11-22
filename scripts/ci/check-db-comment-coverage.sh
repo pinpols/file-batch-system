@@ -20,7 +20,10 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   exit 1
 fi
 
-mapfile -t migrations < <(
+migrations=()
+while IFS= read -r file; do
+  migrations+=("$file")
+done < <(
   {
     git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/V*.sql'
     git diff --name-only --diff-filter=AM -- 'db/migration/V*.sql'

@@ -24,7 +24,7 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵；Docker 构建镜像允许 `--platform`，仍须固定 Node 版本和 digest；回归测试 `test_check_sdk_runtime_alignment.py` 属于 Full CI 守卫测试组） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-governance-baseline-expansion.py`（治理基线扩张的限期审批）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收端口及观测脚本 Console/Orchestrator 地址来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（报告/忽略模式责任与期限） |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-shell-bash32-compat.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-governance-baseline-expansion.py`（治理基线扩张的限期审批）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收端口及观测脚本 Console/Orchestrator 地址来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（报告/忽略模式责任与期限） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Sim/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-new-table-doc-coverage.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
@@ -40,7 +40,7 @@
 | 类别 | 主要拦截情形 | 应放行情形 | 代表性守卫 |
 |---|---|---|---|
 | 文档与变更记录 | 破坏文档结构/链接、核心状态字典未同步、版本变更缺少 Changelog | 不影响发布行为的普通文字修订；允许按日期策略存放的归档文档 | `check-docs-structure.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py` |
-| Shell / Python / 仓库卫生 | Shell 语法或 ShellCheck 告警、Linux 不兼容语法、脚本未登记、提交本机产物 | 通过公共配置读取平台服务端口和基础地址；脚本自有的临时端口和显式可覆盖的场景参数 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-hardcoded-runtime-config.sh` |
+| Shell / Python / 仓库卫生 | Shell 语法或 ShellCheck 告警、Linux 不兼容语法、脚本未登记、提交本机产物 | 通过公共配置读取平台服务端口和基础地址；脚本自有的临时端口和显式可覆盖的场景参数 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-shell-bash32-compat.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-hardcoded-runtime-config.sh` |
 | 配置与部署 | 环境默认值、Helm、Compose、功能开关或生产覆盖彼此漂移；生产配置启用不安全值 | 只在一个场景使用且有明确 owner 的测试参数；不属于平台配置源的临时客户端端口 | `check-config-defaults-sync.py`、`check-env-variable-governance.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py` |
 | 数据库 / SQL | 业务表缺租户隔离、迁移有破坏风险、位置式 `INSERT ... SELECT *`、SQL 绕过独立文件与变量传值 | 由权威状态/配置来源驱动的 SQL；经过登记并有专项测试的精确例外 | `check-biz-table-tenant-rls.py`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.sh` |
 | API 与 SDK | OpenAPI 出现未登记破坏性变更、五语言共享契约不一致、运行时版本超出声明范围 | 只改变实现且不改变公开契约的内部重构；允许的兼容新增字段；ADR-048 切换及已授权请求限制仅登记精确差异（含 Workflow 节点名称和边条件长度，详见 [CI 手册](../../docs/runbook/ci.md)），其他 breaking 仍失败 | `check-openapi-breaking.sh`、`check-console-openapi-paths.py`、SDK parity workflow |
@@ -200,7 +200,9 @@ python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
 但工作树已删除的脚本不再作为读取对象。显式文件参数与默认扫描遵循相同的现存文件边界，
 不跳过新脚本的 BSD/macOS 专属命令检查。回归源码见
 [`test_check_shell_linux_portability.py`](tests/test_check_shell_linux_portability.py)，
-覆盖删除路径、未跟踪违规脚本及已有 Linux fallback；实际执行证据单独记录，不将源码存在计为测试通过。
+覆盖删除路径、未跟踪违规脚本、工具回退、GNU 参数及 Git 钩子；实际执行证据单独记录，不将源码存在计为测试通过。
+
+`check-shell-bash32-compat.py` 拦截 macOS 自带 Bash 3.2 不支持的语法，需要 Bash 4+ 的脚本必须在头部声明 `# shell-min-version: 4`。回归源码见 [`test_check_shell_bash32_compat.py`](tests/test_check_shell_bash32_compat.py)。
 
 ## PR 按需路由
 
@@ -988,6 +990,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-sdk-config-env-parity.py](check-sdk-config-env-parity.py) | SDK 配置环境一致性。 |
 | [check-sdk-runtime-alignment.py](check-sdk-runtime-alignment.py) | SDK 与前端运行时版本对齐。 |
 | [check-shell-linux-portability.py](check-shell-linux-portability.py) | Shell Linux 兼容性。 |
+| [check-shell-bash32-compat.py](check-shell-bash32-compat.py) | Shell Bash 3.2 兼容性（macOS 本地）。 |
 | [check-shell-scripts.sh](check-shell-scripts.sh) | Shell 语法与 ShellCheck。 |
 | [check-slo-sli-catalog.py](check-slo-sli-catalog.py) | 校验 SLO / SLI 目录、Runbook 入口和治理文档的一致性。 |
 | [check-soft-gate-governance.py](check-soft-gate-governance.py) | 软门禁治理。 |

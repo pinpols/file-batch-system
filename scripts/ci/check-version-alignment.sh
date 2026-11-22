@@ -249,26 +249,32 @@ echo ""
 echo "── 核心基础设施测试镜像（Testcontainers ↔ .env.example） ─────"
 
 TEST_IMAGE_SOURCE="$ROOT/batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestContainerImages.java"
-declare -A CORE_IMAGE_PREFIXES=(
-  [POSTGRES]="postgres"
-  [KAFKA]="apache/kafka"
-  [VALKEY]="valkey/valkey"
-)
-declare -A CORE_IMAGE_TAGS=(
-  [POSTGRES]="POSTGRES_IMAGE_TAG"
-  [KAFKA]="KAFKA_IMAGE_TAG"
-  [MINIO]="MINIO_IMAGE_TAG"
-  [VALKEY]="VALKEY_IMAGE_TAG"
-)
+core_image_tag_var() {
+  case "$1" in
+    POSTGRES) printf 'POSTGRES_IMAGE_TAG' ;;
+    KAFKA) printf 'KAFKA_IMAGE_TAG' ;;
+    MINIO) printf 'MINIO_IMAGE_TAG' ;;
+    VALKEY) printf 'VALKEY_IMAGE_TAG' ;;
+    *) return 1 ;;
+  esac
+}
+core_image_prefix() {
+  case "$1" in
+    POSTGRES) printf 'postgres' ;;
+    KAFKA) printf 'apache/kafka' ;;
+    VALKEY) printf 'valkey/valkey' ;;
+    *) return 1 ;;
+  esac
+}
 
 for service in POSTGRES KAFKA MINIO VALKEY; do
-  tag_name="${CORE_IMAGE_TAGS[$service]}"
+  tag_name="$(core_image_tag_var "$service")"
   tag_value="$(env_value "$tag_name" "$ROOT/.env.example")"
   if [[ "$service" == "MINIO" ]]; then
     repo_value="$(env_value MINIO_IMAGE_REPOSITORY "$ROOT/.env.example")"
     expected="${repo_value}:${tag_value}"
   else
-    expected="${CORE_IMAGE_PREFIXES[$service]}:${tag_value}"
+    expected="$(core_image_prefix "$service"):${tag_value}"
   fi
   actual=$(sed -nE "s/.*public static final String ${service} = \"([^\"]+)\";.*/\1/p" \
     "$TEST_IMAGE_SOURCE")

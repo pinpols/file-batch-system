@@ -190,31 +190,30 @@ cleanup_observability_volumes() {
     otel-collector-data
     grafana-data
   )
-  local -A candidates=()
-  local suffix candidate
+  local suffix candidate candidates count
   compose_project="${COMPOSE_PROJECT_NAME:-batch-platform}"
 
-  for suffix in "${suffixes[@]}"; do
-    while IFS= read -r candidate; do
-      [ -n "$candidate" ] && candidates["$candidate"]=1
-    done < <(docker volume ls -q --filter "name=${compose_project}_${suffix}" || true)
+  candidates="$(
+    for suffix in "${suffixes[@]}"; do
+      docker volume ls -q --filter "name=${compose_project}_${suffix}" || true
+      docker volume ls -q --filter "name=_${suffix}$" || true
+    done | sed '/^$/d' | sort -u
+  )"
 
-    while IFS= read -r candidate; do
-      [ -n "$candidate" ] && candidates["$candidate"]=1
-    done < <(docker volume ls -q --filter "name=_${suffix}$" || true)
-  done
-
-  if [ "${#candidates[@]}" -eq 0 ]; then
+  if [ -z "$candidates" ]; then
     echo '符合条件的观测栈命名卷: 0'
     return
   fi
 
-  echo "符合条件的观测栈命名卷: ${#candidates[@]}"
-  printf '%s\n' "${!candidates[@]}"
+  count="$(printf '%s\n' "$candidates" | wc -l | tr -d ' ')"
+  echo "符合条件的观测栈命名卷: ${count}"
+  printf '%s\n' "$candidates"
 
   if [ "$APPLY" = true ]; then
-    printf '%s\n' "${!candidates[@]}" | xargs -r docker volume rm -f >/dev/null
-    echo "已删除 ${#candidates[@]} 个观测栈命名卷（注意将触发其内容清空）"
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && docker volume rm -f "$candidate" >/dev/null
+    done <<< "$candidates"
+    echo "已删除 ${count} 个观测栈命名卷（注意将触发其内容清空）"
   fi
 }
 

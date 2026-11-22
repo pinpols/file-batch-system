@@ -81,7 +81,7 @@ for file in "${staged_files[@]}"; do
   if [[ "$file" == */src/main/resources/application*.yml || "$file" == */src/main/resources/application*.yaml ]]; then
     suppression_files+=("$file")
   fi
-  [[ "$file" == *.sh ]] && shell_files+=("$file")
+  [[ "$file" == *.sh || "$file" == .githooks/pre-commit || "$file" == .githooks/pre-push ]] && shell_files+=("$file")
   [[ "$file" == *Mapper.xml ]] && mapper_xml_files+=("$file")
   [[ "$file" == *.md || "$file" == docs/* ]] && docs_changed=1
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] && scripts_changed=1
@@ -251,6 +251,8 @@ if ((${#shell_files[@]} > 0)); then
     check_shell_files
   gate_run PRE_COMMIT_SHELL_LINUX_PORTABILITY "Shell Linux 可移植性" \
     "$PYTHON_BIN" scripts/ci/check-shell-linux-portability.py "${shell_files[@]}"
+  gate_run PRE_COMMIT_SHELL_BASH32_COMPAT "Shell Bash 3.2 兼容性" \
+    "$PYTHON_BIN" scripts/ci/check-shell-bash32-compat.py "${shell_files[@]}"
 fi
 
 if ((workflow_changed == 1 || scripts_changed == 1)); then
@@ -297,6 +299,8 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_detect_change_scope.py \
     scripts/ci/tests/test_check_flaky_test_governance.py \
     scripts/ci/tests/test_check_soft_gate_governance.py \
+    scripts/ci/tests/test_check_shell_linux_portability.py \
+    scripts/ci/tests/test_check_shell_bash32_compat.py \
     scripts/ci/tests/test_check_diff_coverage.py \
     scripts/ci/tests/test_check_java_governance_test_coverage.py \
     scripts/ci/tests/test_daily_validation_workflow.py \

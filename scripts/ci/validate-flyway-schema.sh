@@ -112,7 +112,10 @@ if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/nu
   drifted=""
   restored=""
   comment_only=""
-  mapfile -t migration_changes < <(
+  migration_changes=()
+  while IFS= read -r changed; do
+    migration_changes+=("$changed")
+  done < <(
     {
       git diff --name-only "$BASE_REF...HEAD" 2>/dev/null || true
       git diff --name-only --diff-filter=M -- "$MIGRATION_DIR/V*.sql"

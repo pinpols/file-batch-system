@@ -19,7 +19,10 @@ batch_require_python
 
 cd "$ROOT_DIR"
 
-export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
+# Docker Desktop(macOS) 的 socket 与 Linux 默认路径不同，仅在实例存在时覆盖。
+if [[ -z "${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-}" && -S "$HOME/.docker/run/docker.sock" ]]; then
+  export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="$HOME/.docker/run/docker.sock"
+fi
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
 RUN_DEFAULT_TESTS=true

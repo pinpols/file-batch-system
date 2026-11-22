@@ -55,31 +55,74 @@ RULES = (
     Rule(
         "osascript",
         re.compile(r"\bosascript\b"),
-        "osascript is macOS-only; keep it out of repository automation.",
+        "osascript is macOS-only; keep them out of repository automation.",
+    ),
+    Rule(
+        "gnu-xargs-r",
+        re.compile(r"\bxargs\b[^|;\n]*\s-r\b"),
+        "BSD xargs (macOS) does not support -r; loop over input instead.",
     ),
 )
 
+# 有 Linux 等价物的 macOS 工具：允许保留 macOS 分支，但同一文件必须给出 Linux 回退。
+TOOL_FALLBACK_RULES = (
+    (
+        "shasum-sha256-without-fallback",
+        re.compile(r"\bshasum\s+-a\s+256\b"),
+        re.compile(r"\bsha256sum\b"),
+        "Use sha256sum on Linux and keep shasum only as fallback.",
+    ),
+    (
+        "shasum-sha512-without-fallback",
+        re.compile(r"\bshasum\s+-a\s+512\b"),
+        re.compile(r"\bsha512sum\b"),
+        "Use sha512sum on Linux and keep shasum only as fallback.",
+    ),
+    (
+        "shasum-without-linux-fallback",
+        re.compile(r"\bshasum\b"),
+        re.compile(r"\b(sha1sum|sha256sum|sha512sum)\b"),
+        "shasum is missing from many Linux images; prefer sha*sum with a shasum fallback.",
+    ),
+    (
+        "md5-without-md5sum",
+        re.compile(r"\bmd5\s+-[A-Za-z]"),
+        re.compile(r"\bmd5sum\b"),
+        "md5 is macOS-only; use md5sum with an md5 fallback.",
+    ),
+)
+
+EXTRA_SHELL_FILES = (".githooks/pre-commit", ".githooks/pre-push")
+
 
 def tracked_shell_files(candidates: list[str] | None = None) -> list[Path]:
+    paths: list[Path]
     if candidates is not None:
-        return [
+        paths = [
             ROOT / relative
             for relative in candidates
             if relative.endswith(".sh") and (ROOT / relative).is_file()
         ]
-    result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sh"],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-    )
-    # Git 索引仍可能包含工作树中已删除的脚本，检查对象以现存文件为准。
-    return [
-        ROOT / line
-        for line in result.stdout.splitlines()
-        if line.strip() and (ROOT / line).is_file()
-    ]
+    else:
+        result = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sh"],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        )
+        # Git 索引仍可能包含工作树中已删除的脚本，检查对象以现存文件为准。
+        paths = [
+            ROOT / line
+            for line in result.stdout.splitlines()
+            if line.strip() and (ROOT / line).is_file()
+        ]
+    # Git 钩子没有 .sh 扩展名，但同样按 Shell 执行。
+    for relative in EXTRA_SHELL_FILES:
+        path = ROOT / relative
+        if path.is_file() and path not in paths:
+            paths.append(path)
+    return paths
 
 
 def is_comment_or_blank(line: str) -> bool:
@@ -87,9 +130,19 @@ def is_comment_or_blank(line: str) -> bool:
     return not stripped or stripped.startswith("#")
 
 
+def first_matching_line(lines: list[str], pattern: re.Pattern[str]) -> int:
+    for line_number, line in enumerate(lines, start=1):
+        if pattern.search(line):
+            return line_number
+    return 1
+
+
 def scan_file(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
     errors: list[str] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    relative = path.relative_to(ROOT)
+    for line_number, line in enumerate(lines, start=1):
         if is_comment_or_blank(line):
             continue
         for rule in RULES:
@@ -97,9 +150,11 @@ def scan_file(path: Path) -> list[str]:
                 continue
             if any(allow.search(line) for allow in rule.allow_if_line_matches):
                 continue
-            errors.append(
-                f"{path.relative_to(ROOT)}:{line_number}: {rule.name}: {rule.message}"
-            )
+            errors.append(f"{relative}:{line_number}: {rule.name}: {rule.message}")
+    for name, usage, fallback, message in TOOL_FALLBACK_RULES:
+        if usage.search(text) and not fallback.search(text):
+            line_number = first_matching_line(lines, usage)
+            errors.append(f"{relative}:{line_number}: {name}: {message}")
     return errors
 
 

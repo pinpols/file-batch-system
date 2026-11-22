@@ -26,7 +26,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 # 扫描所有手工/仿真/压测 SQL。
-mapfile -t files < <(
+files=()
+while IFS= read -r file; do
+  files+=("$file")
+done < <(
   find scripts/db scripts/sim scripts/local/sql scripts/sim-4day load-tests/sql \
     -name '*.sql' -type f \
     | sort

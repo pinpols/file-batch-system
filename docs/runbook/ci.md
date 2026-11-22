@@ -276,7 +276,7 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 
 Shell Linux 兼容守卫在 PR / Full 默认扫描工作树中现存的已跟踪及未跟踪 `.sh` 文件，
 避免路径迁移后读取仍在索引中的已删除文件而中断；本地显式文件检查采用相同边界。
-此过滤不改变兼容规则或未跟踪文件覆盖，回归入口见 [CI 脚本说明](../../scripts/ci/README.md)。
+此过滤不改变兼容规则或未跟踪文件覆盖，回归入口见 [CI 脚本说明](../../scripts/ci/README.md)。Bash 3.2 兼容守卫与 Linux 兼容守卫共享文件边界，额外覆盖无扩展名的 `.githooks/pre-commit` 和 `.githooks/pre-push`。
 
 - `pre-commit` 按暂存文件域路由，尽量只扫暂存命中的文件；CI 仍保留全量扫描。
 - `pre-push` 面向分支级轻量契约，允许使用 `origin/main...HEAD` 的增量基线。
@@ -297,7 +297,7 @@ Shell Linux 兼容守卫在 PR / Full 默认扫描工作树中现存的已跟踪
 | Java 暂存文件 | Java 日志治理及扫描器自测、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；日志门禁禁止直接标准输出、`printStackTrace()` 和生产日志中的原始异常 message；对应 CI 无参全量 |
 | Java 暂存文件 | Lombok 与依赖注入规约及其扫描器单测 | **增量**：pre-commit 检查暂存区涉及的生产 Java 文件并运行扫描器单测；PR 对目标分支变更文件检查并运行单测；Full Gate 全量基线与单测 |
 | MyBatis Mapper XML 暂存文件 | PostgreSQL generated key 列约束、禁止位置式 `INSERT ... SELECT *` | **增量**：仅传入暂存 Mapper 文件；对应 CI 无参全量 |
-| Shell 暂存文件 | `bash -n`、ShellCheck、Shell Linux 可移植性 | **增量**：仅暂存 Shell 文件；对应 CI 无参全量 |
+| Shell 暂存文件 | `bash -n`、ShellCheck、Shell Linux 可移植性、Bash 3.2 兼容性 | **增量**：仅暂存 Shell 文件与 Git 钩子；对应 CI 无参全量 |
 | Workflow / composite action | `actionlint` | 全仓 workflow 语义检查 |
 | `scripts/*` / `load-tests/scripts/*` / `.githooks/*` | 脚本治理注册表 | 全局脚本登记与命名约束 |
 | 文档变更 | 文档结构、文档日期策略、代码与文档路径引用、核心术语枚举同步 | 全局文档关系检查 |

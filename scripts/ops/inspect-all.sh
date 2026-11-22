@@ -54,7 +54,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
 overall_status=0
-declare -A script_results=()
+script_result_names=()
+script_result_values=()
+
+set_script_result() {
+  local name="$1" value="$2" index
+  for ((index = 0; index < ${#script_result_names[@]}; index++)); do
+    if [[ "${script_result_names[$index]}" == "$name" ]]; then
+      script_result_values[$index]="$value"
+      return 0
+    fi
+  done
+  script_result_names+=("$name")
+  script_result_values+=("$value")
+}
+
+script_result_for() {
+  local name="$1" index
+  for ((index = 0; index < ${#script_result_names[@]}; index++)); do
+    if [[ "${script_result_names[$index]}" == "$name" ]]; then
+      printf '%s' "${script_result_values[$index]}"
+      return 0
+    fi
+  done
+  printf 'UNKNOWN'
+}
 
 ts() { date '+%Y-%m-%dT%H:%M:%S'; }
 banner() { printf '\n%s\n' "$(printf '=%.0s' {1..60})"; printf '=== %s  [%s]\n' "$1" "$(ts)"; printf '%s\n' "$(printf '=%.0s' {1..60})"; }
@@ -65,13 +89,13 @@ run_script() {
   local skip_flag="$3"
 
   if [[ "${skip_flag}" == "true" ]]; then
-    script_results["${name}"]="SKIPPED"
+    set_script_result "${name}" "SKIPPED"
     return
   fi
 
   if [[ ! -f "${script}" ]]; then
     printf 'WARN: %s not found at %s — skipping\n' "${name}" "${script}"
-    script_results["${name}"]="NOT_FOUND"
+    set_script_result "${name}" "NOT_FOUND"
     return
   fi
 
@@ -80,9 +104,9 @@ run_script() {
   bash "${script}" || exit_code=$?
 
   if [[ "${exit_code}" -eq 0 ]]; then
-    script_results["${name}"]="PASSED"
+    set_script_result "${name}" "PASSED"
   else
-    script_results["${name}"]="FAILED"
+    set_script_result "${name}" "FAILED"
     overall_status=1
   fi
 }
@@ -121,7 +145,7 @@ banner "INSPECTION SUMMARY"
 printf '%-30s  %s\n' "Script" "Result"
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"
 for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies" "inspect-production-capacity" "plan-production-retention" "inspect-runtime-governance"; do
-  result="${script_results[${name}]:-UNKNOWN}"
+  result="$(script_result_for "${name}")"
   printf '%-30s  %s\n' "${name}" "${result}"
 done
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"
