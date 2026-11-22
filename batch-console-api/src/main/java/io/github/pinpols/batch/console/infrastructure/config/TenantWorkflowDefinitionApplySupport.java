@@ -107,12 +107,7 @@ final class TenantWorkflowDefinitionApplySupport {
     param.setVersion(EmptyChecks.isNull(current) ? 1 : current.getVersion());
     param.setEnabled(EmptyChecks.isNotNull(spec.getEnabled()) && spec.getEnabled());
     param.setSingleJobDefinitionId(singleJobDefinitionId);
-    // 新定义按显式值或默认关闭落库；已有定义只在配置包显式给出时写开关，避免 upsert 覆盖并发暂停。
-    if (EmptyChecks.isNull(current)) {
-      param.setScheduleEnabled(Boolean.TRUE.equals(spec.getScheduleEnabled()));
-    } else {
-      param.setScheduleEnabled(spec.getScheduleEnabled());
-    }
+    param.setScheduleEnabled(scheduleEnabledForUpsert(spec, current));
     String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
     param.setScheduleType(scheduleType);
     param.setScheduleExpr(spec.getScheduleExpr());
@@ -146,9 +141,7 @@ final class TenantWorkflowDefinitionApplySupport {
     boolean effectiveEnabled = EmptyChecks.isNull(current)
         ? Boolean.TRUE.equals(param.getEnabled())
         : Boolean.TRUE.equals(Nullables.coalesce(spec.getEnabled(), current.getEnabled()));
-    Boolean effectiveScheduleEnabled = EmptyChecks.isNull(current)
-        ? param.getScheduleEnabled()
-        : Nullables.coalesce(spec.getScheduleEnabled(), current.getScheduleEnabled());
+    Boolean effectiveScheduleEnabled = resolveEffectiveScheduleEnabled(spec, current, param);
     if (effectiveEnabled || Boolean.TRUE.equals(effectiveScheduleEnabled)) {
       WorkflowNodeQuery workflowNodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, defId, null);
       List<WorkflowNodeEntity> workflowNodes =
@@ -196,6 +189,26 @@ final class TenantWorkflowDefinitionApplySupport {
         .savedBy(operator)
         .build();
     workflowWriteSupport.appendVersionSnapshot(snapshotCommand);
+  }
+
+  /** 新定义按显式值或默认关闭落库；已有定义只在配置包显式给出时写开关，避免 upsert 覆盖并发暂停。 */
+  private static Boolean scheduleEnabledForUpsert(
+      WorkflowDefinitionSpec spec, WorkflowDefinitionEntity current) {
+    if (EmptyChecks.isNull(current)) {
+      return Boolean.TRUE.equals(spec.getScheduleEnabled());
+    }
+    return spec.getScheduleEnabled();
+  }
+
+  /** 省略开关列时沿用当前值，供入图校验和版本快照使用。 */
+  private static Boolean resolveEffectiveScheduleEnabled(
+      WorkflowDefinitionSpec spec,
+      WorkflowDefinitionEntity current,
+      WorkflowDefinitionUpsertParam param) {
+    if (EmptyChecks.isNull(current)) {
+      return param.getScheduleEnabled();
+    }
+    return Nullables.coalesce(spec.getScheduleEnabled(), current.getScheduleEnabled());
   }
 
   /** 图的替换与节点/边写入保持在调用方同一事务中，随后仍由定义 CAS 决定整体提交。 */
