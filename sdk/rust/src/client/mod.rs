@@ -62,9 +62,9 @@ pub use lifecycle::{StopReport, StopStep, Worker, WorkerState};
 #[cfg(feature = "http")]
 pub use reqwest_transport::{ReqwestConfig, ReqwestTransport, TransportBuildError};
 pub use resilience::{
-    default_should_retry, task_id_idempotency_key, with_idempotency, with_retry, IdempotencyEntity,
-    IdempotencyHandler, InMemoryIdempotencyStore, NoopIdempotencyStore, RetryHandler, RetryPolicy,
-    SdkIdempotencyStore, IDEMPOTENT_IN_FLIGHT,
+    default_should_retry, task_id_idempotency_key, with_idempotency, with_retry, IdempotencyClaim,
+    IdempotencyEntity, IdempotencyHandler, InMemoryIdempotencyStore, NoopIdempotencyStore,
+    RetryHandler, RetryPolicy, SdkIdempotencyStore, IDEMPOTENT_IN_FLIGHT,
 };
 pub use scheduler::{
     HeartbeatScheduler, HeartbeatTick, LeaseRenewalScheduler, RenewTick,

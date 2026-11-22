@@ -4,6 +4,8 @@
 
 | 文档 | 范围 |
 |---|---|
+| [全后端架构审核](backend-architecture-review-2026-11-22.md) / [逐文件清单](backend-source-inventory-2026-11-22.csv) | 平台 10 个模块、五种语言 SDK、迁移与测试支撑。新增 3 项本地反例和 1 项部署拓扑问题 |
+| [后端架构审核 · 调度准入与投递恢复](backend-architecture-review-2026-11-21.md) | 默认恢复池的线程等待、多槽位排队和人工恢复、派发 Outbox 领取所有权的 JVM 与 PostgreSQL 反例 |
 | [五类 Worker 设计复核](worker-design-review-2026-11-22.md) | Export 单列分页同值漏行、Process 空批水位回落、共享恢复和五类 Worker 的已知边界 |
 | [后端性能与容量复核](backend-capacity-analysis-2026-11-22.md) | 复核两组 1,500 请求原始样本及 PostgreSQL 行为，定位根请求统计漏计、子 Job 重复绑定与根运行图读取候选 |
 | [分支、数据结构与设计模式审查](branching-data-structure-pattern-review-2026-11-12.md) | 2026-11-12 全量生产 Java 静态审查：if/switch、集合选型、模式使用；8 项 P3、5 项 P4，整改见本记录「整改记录」 |

@@ -34,6 +34,13 @@ handler := client.WithRetry(
 Production idempotency stores implement `SdkIdempotencyStore`; the SDK ships only
 `NoopIdempotencyStore` and `InMemoryIdempotencyStore`.
 
+With a positive TTL, implement `SdkIdempotencyStoreV2` as well: `Acquire` returns
+this round's `IdempotencyClaim`, and `RecordOwned` / `ReleaseOwned` must compare the
+claim atomically. A late result from an executor whose lease expired then cannot
+delete or overwrite the new executor's cached success. A store that only implements
+the original four methods keeps the prior behavior and is not protected against this
+race.
+
 ## 实际执行入口计时
 
 默认 `Worker.dispatch` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true` 和本次独立的 `executionAttemptId`，使用 CLAIM 返回的当前 invocation。同一次入口请求的传输重试复用该标识；确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。旧客户端和旧服务混版的保护边界见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。

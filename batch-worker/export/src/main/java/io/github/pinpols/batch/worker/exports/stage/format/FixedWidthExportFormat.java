@@ -38,10 +38,15 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
     }
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+    boolean resuming = isResuming(ctx);
     List<ColumnLayout> columns =
         resolveFixedWidthColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
     if (columns.isEmpty() && firstPage.rows().isEmpty()) {
-      return 0L;
+      if (resuming) {
+        // 与分隔符格式同一语义:有断点但无法还原列布局时保留位点与残文件,不能按旧字节登记零行成功。
+        throw new ExportResumeLayoutUnknownException(formatType());
+      }
+      return completeEmptyFirstRun(ctx);
     }
     int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
     int headerRows =
@@ -52,7 +57,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
         ResumableExportFile file = openExportFile(ctx)) {
       BufferedWriter writer = file.writer();
       // 续跑时残文件已含表头,不可重写。
-      if (!isResuming(ctx)) {
+      if (!resuming) {
         writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows, ctx);
       }
       return ExportPageGenerationCoordinator.generatePaged(

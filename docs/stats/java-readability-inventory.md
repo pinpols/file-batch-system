@@ -7,7 +7,7 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 3116 |
+| 生产 Java 源文件 | 3123 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2110 |
 | 含 Map 的源文件 | 418 |
@@ -24,10 +24,10 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 368 |
-| `batch-console-api` | 1258 |
-| `batch-orchestrator` | 793 |
+| `batch-console-api` | 1260 |
+| `batch-orchestrator` | 797 |
 | `batch-trigger` | 135 |
-| `batch-worker` | 457 |
+| `batch-worker` | 458 |
 | `sdk` | 96 |
 | `security-scan` | 9 |
 
@@ -70,7 +70,7 @@
 | `batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java` | 779 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/observability/DefaultConsoleQueryApplicationService.java` | 778 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowDefinitionService.java` | 765 |
-| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 736 |
+| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 747 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java` | 714 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 712 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/batchday/BatchDayOpenService.java` | 711 |

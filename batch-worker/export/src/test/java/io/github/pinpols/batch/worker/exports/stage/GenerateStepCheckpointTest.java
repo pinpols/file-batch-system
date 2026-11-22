@@ -145,12 +145,14 @@ class GenerateStepCheckpointTest {
         .resolve("inst-" + INSTANCE_ID + ".json");
     Files.deleteIfExists(deterministicFile);
     Files.deleteIfExists(deterministicFile("DELIMITED"));
+    Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
   }
 
   @AfterEach
   void tearDown() throws Exception {
     Files.deleteIfExists(deterministicFile);
     Files.deleteIfExists(deterministicFile("DELIMITED"));
+    Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
   }
 
   @Test
@@ -196,6 +198,108 @@ class GenerateStepCheckpointTest {
     assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
     assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
     assertThat(deterministicFile).exists();
+  }
+
+  @Test
+  @DisplayName("分隔符重派首页为空且无列声明:保留断点失败,不登记旧残文件")
+  void delimitedRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint() throws Exception {
+    assertRedispatchWithoutLayoutFails("DELIMITED");
+  }
+
+  @Test
+  @DisplayName("定长重派首页为空且无列声明:保留断点失败,不登记旧残文件")
+  void fixedWidthRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint()
+      throws Exception {
+    assertRedispatchWithoutLayoutFails("FIXED_WIDTH");
+  }
+
+  private void assertRedispatchWithoutLayoutFails(String format) throws Exception {
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "OLD_ROW")), "cursor-2"));
+    when(dataPlugin.loadDetailPage(
+            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+        .thenThrow(new RuntimeException("simulated crash loading page 2"));
+
+    ExportJobContext first = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+    assertThat(generateStep.execute(first).success()).isFalse();
+    Path file = deterministicFile(format);
+    assertThat(file).exists();
+    long partialSize = Files.size(file);
+    assertThat(partialSize).isGreaterThan(0);
+    assertThat(positionStore.completed).isFalse();
+
+    // 重派:首页已空,模板与插件都未声明列 → 布局不可还原。
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(ExportDataPlugin.DetailPage.empty());
+
+    ExportJobContext rerun = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+    ExportStageResult result = generateStep.execute(rerun);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN");
+    assertThat(rerun.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+    assertThat(positionStore.completed).isFalse();
+    assertThat(file).exists();
+    assertThat(Files.size(file)).isEqualTo(partialSize);
+  }
+
+  @Test
+  @DisplayName("分隔符断点续跑:重派首页为空但模板声明列时按游标续写,登记行数与文件内容一致")
+  void delimitedResume_withDeclaredColumnsAndEmptyFirstPage_continuesFromCursor() throws Exception {
+    Map<String, Object> template =
+        Map.of("export_data_ref", PLUGIN_ID, "csv_columns", List.of(Map.of("source", "id")));
+
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(
+            List.of(Map.of("id", "1"), Map.of("id", "2")), "cursor-2"));
+    when(dataPlugin.loadDetailPage(
+            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+        .thenThrow(new RuntimeException("simulated crash loading page 2"));
+    assertThat(generateStep.execute(buildContext("DELIMITED", template)).success())
+        .isFalse();
+
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(ExportDataPlugin.DetailPage.empty());
+    when(dataPlugin.loadDetailPage(
+            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
+
+    ExportJobContext rerun = buildContext("DELIMITED", template);
+    ExportStageResult result = generateStep.execute(rerun);
+
+    assertThat(result.success()).isTrue();
+    assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
+    assertThat(positionStore.completed).isTrue();
+    List<String> lines = Files.readAllLines(deterministicFile("DELIMITED"));
+    assertThat(lines).containsExactly("id", "1", "2", "3");
+  }
+
+  @Test
+  @DisplayName("分隔符首次空输入:截断历史字节并登记零行")
+  void delimitedFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
+    assertEmptyFirstRun("DELIMITED");
+  }
+
+  @Test
+  @DisplayName("定长首次空输入:截断历史字节并登记零行")
+  void fixedWidthFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
+    assertEmptyFirstRun("FIXED_WIDTH");
+  }
+
+  private void assertEmptyFirstRun(String format) throws Exception {
+    Path file = deterministicFile(format);
+    Files.writeString(file, "STALE-BYTES");
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(ExportDataPlugin.DetailPage.empty());
+
+    ExportJobContext ctx = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+    ExportStageResult result = generateStep.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 0L);
+    assertThat(file).exists();
+    assertThat(Files.size(file)).isZero();
+    assertThat(positionStore.completed).isTrue();
   }
 
   private GenerateStep stepWithMaxRows(long maxRows) {
@@ -477,7 +581,12 @@ class GenerateStepCheckpointTest {
   }
 
   private Path deterministicFile(String fileFormatType) {
-    String suffix = "DELIMITED".equalsIgnoreCase(fileFormatType) ? ".csv" : ".json";
+    String suffix =
+        switch (fileFormatType) {
+          case "DELIMITED" -> ".csv";
+          case "FIXED_WIDTH" -> ".txt";
+          default -> ".json";
+        };
     return PrivateTempFiles.resolveUnderTempRoot("file-batch-export")
         .resolve("inst-" + INSTANCE_ID + suffix);
   }

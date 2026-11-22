@@ -6,6 +6,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [后端架构审核整改方案](backend-architecture-remediation-2026-11-22.md) | 两轮审核的 3 项 P1、5 项 P2 及 2 处文档偏差，含实施顺序与逐项验收标准 |
 | [五类 Worker 整改方案](worker-design-remediation-plan-2026-11-22.md) | Export 无漏行、Process 增量水位与跨 Worker 结果确认，含分批、迁移、回退和验收条件 |
 | [批次日结算栅栏共享锁改造方案](batch-day-fence-shared-lock-2026-11-20.md) | 栅栏读者共享、写者独占，两批读者切换已随 #1434、#1438 合入。文件驱动高峰与 launch 容量复测见后端待办。 |
 | [控制面按租户分片评估](control-plane-sharding-assessment-2026-11-19.md) | 单 PG 容量拐点后的架构选项、六项主要风险（全局 ID、跨租户聚合、单主调度器、迁移/备份扇出、租户迁移）与 Tier 0.5 前置门槛；结论 No-Go，评估保留备查 |

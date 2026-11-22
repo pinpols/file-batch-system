@@ -3019,7 +3019,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       GRANT SELECT, UPDATE ON batch.workflow_launch_wait TO workflow_launch_wait_rls_test
   """;
     final String grantSelectSql2 = """
-      GRANT SELECT ON batch.trigger_request, batch.workflow_run TO workflow_launch_wait_rls_test
+      GRANT SELECT ON batch.trigger_request, batch.workflow_run, batch.workflow_definition
+      TO workflow_launch_wait_rls_test
   """;
     final String setLocalSql = """
       SET LOCAL ROLE workflow_launch_wait_rls_test
@@ -3357,6 +3358,84 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         waitCountSql, Long.class, testTenantId, seed.workflowDefinitionId());
     assertThat(activeCount).isEqualTo(2L);
     assertThat(waitCount).isEqualTo(releaseAfterSnapshot ? 0L : 1L);
+  }
+
+  @Test
+  @DisplayName("上限 2、仅释放 1 个槽时，原等待请求可以启动且不超限")
+  void capacityWait_shouldClaimWaitingRequestWhenOneOfTwoSlotsIsReleased() {
+    DirectWorkflowSeed seed =
+        seedDirectWorkflow(seedChildJob("WG_SLOT_RELEASE_" + System.nanoTime()));
+    jdbcTemplate.update("""
+        update batch.workflow_definition set max_active_runs_per_biz_date = 2
+        where tenant_id = ? and id = ?
+        """, testTenantId, seed.workflowDefinitionId());
+    String secondRequestId = seed.requestId() + "-second";
+    String waitingRequestId = seed.requestId() + "-waiting";
+    String insertRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key, request_status)
+        values (?, ?, 'API', ?, ?, ?, 'ACCEPTED')
+        """;
+    jdbcTemplate.update(
+        insertRequestSql,
+        testTenantId,
+        secondRequestId,
+        seed.workflowDefinitionId(),
+        BIZ_DATE,
+        secondRequestId);
+    jdbcTemplate.update(
+        insertRequestSql,
+        testTenantId,
+        waitingRequestId,
+        seed.workflowDefinitionId(),
+        BIZ_DATE,
+        waitingRequestId);
+    LaunchRequest base = LaunchRequest.builder()
+        .tenantId(testTenantId)
+        .requestId(seed.requestId())
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .build();
+
+    LaunchResponse first = workflowRunLaunchService.launch(base);
+    workflowRunLaunchService.launch(base.toBuilder().requestId(secondRequestId).build());
+    workflowRunLaunchService.launch(base.toBuilder()
+        .requestId(waitingRequestId)
+        .triggerType(TriggerType.CATCH_UP)
+        .build());
+
+    String waitStatusSql = """
+        select wait_status from batch.workflow_launch_wait where tenant_id = ? and request_id = ?
+        """;
+    assertThat(jdbcTemplate.queryForObject(
+            waitStatusSql, String.class, testTenantId, waitingRequestId))
+        .isEqualTo("WAITING");
+    assertThat(waitingLaunchService.claimDue(testTenantId, 100, Instant.now().plusSeconds(5)))
+        .noneMatch(claim -> waitingRequestId.equals(claim.requestId()));
+
+    long firstRunId = Long.parseLong(first.instanceNo());
+    jdbcTemplate.update(
+        "update batch.workflow_run set run_status = 'SUCCESS', finished_at = now() where id = ?",
+        firstRunId);
+
+    launchWaitReconciler.reconcileTenant(testTenantId);
+
+    assertThat(jdbcTemplate.queryForObject(
+            waitStatusSql, String.class, testTenantId, waitingRequestId))
+        .isEqualTo("RESUMED");
+    Long activeCount = jdbcTemplate.queryForObject(
+        """
+        select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?
+            and biz_date = ? and dry_run = false and run_status in ('CREATED', 'RUNNING')
+        """, Long.class, testTenantId, seed.workflowDefinitionId(), BIZ_DATE);
+    assertThat(activeCount).isEqualTo(2L);
+    Long waitingRunCount =
+        jdbcTemplate.queryForObject("""
+        select count(*) from batch.workflow_run where tenant_id = ? and trigger_request_id = (
+            select id from batch.trigger_request where tenant_id = ? and request_id = ?)
+        """, Long.class, testTenantId, testTenantId, waitingRequestId);
+    assertThat(waitingRunCount).isEqualTo(1L);
   }
 
   @Test

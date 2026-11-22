@@ -2812,7 +2812,9 @@
             "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/WorkflowDefinitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowLaunchWaitMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml",
             "trigger on batch.trigger_request"
           ]
         },

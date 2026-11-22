@@ -26,6 +26,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunResumeSlotParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -37,8 +38,11 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -63,6 +67,9 @@ public class WorkflowRunManagementApplicationService {
   // ADR-044:仅 RUNNING 可暂停 DAG 推进;PAUSED 可恢复回 RUNNING。
   private static final Set<String> PAUSABLE = Set.of(WorkflowRunStatus.RUNNING.code());
   private static final Set<String> RESUMABLE = Set.of(WorkflowRunStatus.PAUSED.code());
+
+  /** 恢复时同组唯一索引冲突的最大尝试次数（含首次）；保存点回滚后重选空槽。 */
+  private static final int RESUME_SLOT_RETRY_MAX_ATTEMPTS = 3;
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -104,10 +111,25 @@ public class WorkflowRunManagementApplicationService {
     return lifecycleFlip(tenantId, id, PAUSABLE, WorkflowRunStatus.PAUSED.code());
   }
 
-  /** ADR-044 恢复 PAUSED → RUNNING:重新推进 DAG。 */
+  /** ADR-044 恢复 PAUSED → RUNNING:先在原事务内取得同组空槽,提交后再推进 DAG。 */
   @Transactional
   public RunAction resume(String tenantId, Long id) {
-    RunAction action = lifecycleFlip(tenantId, id, RESUMABLE, WorkflowRunStatus.RUNNING.code());
+    WorkflowRunEntity run = findRun(tenantId, id);
+    if (!RESUMABLE.contains(run.getRunStatus())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          ResultCode.STATE_CONFLICT.detailKey(),
+          "cannot transition from " + run.getRunStatus() + " to "
+              + WorkflowRunStatus.RUNNING.code());
+    }
+    if (!resumeIntoFreeSlot(run)) {
+      WorkflowRunEntity current = workflowRunMapper.selectById(tenantId, id);
+      if (EmptyChecks.isNull(current)
+          || !WorkflowRunStatus.PAUSED.code().equals(current.getRunStatus())) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+      }
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.resume_capacity_full");
+    }
     Runnable progress = () -> resumeProgressorProvider.getObject().resume(tenantId, id);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       // 子 Job 启动会在 REQUIRES_NEW 事务中把其 Job Instance 关联到 workflow_node_run。
@@ -122,7 +144,53 @@ public class WorkflowRunManagementApplicationService {
     } else {
       progress.run();
     }
-    return action;
+    return new RunAction(id, WorkflowRunStatus.RUNNING.code());
+  }
+
+  /**
+   * 为 PAUSED 运行取得同组首个空槽并置为 RUNNING。唯一索引裁决到本事务时回滚到保存点后重选，
+   * 最多 {@value #RESUME_SLOT_RETRY_MAX_ATTEMPTS} 次；返回 {@code false} 表示没有空槽或前态已被并发修改。
+   */
+  private boolean resumeIntoFreeSlot(WorkflowRunEntity run) {
+    for (int attempt = 1; attempt <= RESUME_SLOT_RETRY_MAX_ATTEMPTS; attempt++) {
+      try {
+        return updateResumeSlotInSavepoint(run) == 1;
+      } catch (DuplicateKeyException conflict) {
+        // 保存点已回滚，下一次重选空槽；重试耗尽说明同组并发仍在抢占。
+      }
+    }
+    throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+  }
+
+  private int updateResumeSlotInSavepoint(WorkflowRunEntity run) {
+    boolean dryRun = Boolean.TRUE.equals(run.getDryRun());
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+      return workflowRunMapper.resumeIntoFreeSlot(WorkflowRunResumeSlotParam.builder()
+          .tenantId(run.getTenantId())
+          .id(run.getId())
+          .workflowDefinitionId(run.getWorkflowDefinitionId())
+          .bizDate(run.getBizDate())
+          .dryRun(dryRun)
+          .targetRunStatus(WorkflowRunStatus.RUNNING.code())
+          .build());
+    }
+    TransactionStatus status = TransactionAspectSupport.currentTransactionStatus();
+    Object savepoint = status.createSavepoint();
+    try {
+      int updated = workflowRunMapper.resumeIntoFreeSlot(WorkflowRunResumeSlotParam.builder()
+          .tenantId(run.getTenantId())
+          .id(run.getId())
+          .workflowDefinitionId(run.getWorkflowDefinitionId())
+          .bizDate(run.getBizDate())
+          .dryRun(dryRun)
+          .targetRunStatus(WorkflowRunStatus.RUNNING.code())
+          .build());
+      status.releaseSavepoint(savepoint);
+      return updated;
+    } catch (DuplicateKeyException conflict) {
+      status.rollbackToSavepoint(savepoint);
+      throw conflict;
+    }
   }
 
   /**

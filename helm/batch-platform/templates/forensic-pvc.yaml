@@ -1,0 +1,19 @@
+{{- $svc := .Values.orchestrator }}
+{{- if and $svc.forensic.persistence.enabled (not $svc.forensic.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-forensic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" "orchestrator") .) | nindent 4 }}
+spec:
+  accessModes:
+    - {{ $svc.forensic.persistence.accessMode | default "ReadWriteMany" }}
+  {{- with $svc.forensic.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $svc.forensic.persistence.size | default "10Gi" }}
+{{- end }}

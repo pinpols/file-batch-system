@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkGiveUpBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
+import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -270,7 +274,7 @@ class BatchInsertGeneratedKeysIntegrationTest {
       jdbc.update(insertOutboxEventSql, TENANT_ID, TENANT_ID, TENANT_ID);
       List<Long> ids = jdbc.queryForList(selectIdSql, Long.class, TENANT_ID);
 
-      List<Long> won =
+      List<OutboxPublishClaim> won =
           outboxMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
               .tenantId(TENANT_ID)
               .ids(ids)
@@ -280,15 +284,111 @@ class BatchInsertGeneratedKeysIntegrationTest {
               .build());
 
       // 只有 NEW/FAILED 两行被抢占;PUBLISHED 行不动(可重入集 CAS 与单条 markPublishing 一致)
-      assertThat(won).containsExactlyInAnyOrder(ids.get(0), ids.get(1));
+      assertThat(won)
+          .extracting(OutboxPublishClaim::id)
+          .containsExactlyInAnyOrder(ids.get(0), ids.get(1));
+      assertThat(won)
+          .extracting(OutboxPublishClaim::id, OutboxPublishClaim::publishAttempt)
+          .containsExactlyInAnyOrder(
+              org.assertj.core.groups.Tuple.tuple(ids.get(0), 1),
+              org.assertj.core.groups.Tuple.tuple(ids.get(1), 2));
       Integer selectedPublishAttempt =
           jdbc.queryForObject(selectPublishAttemptSql, Integer.class, TENANT_ID, ids.get(0));
       assertThat(selectedPublishAttempt).isEqualTo(1);
 
       // 阶段三:markPublishedBatch 带 PUBLISHING 守卫 —— 已 PUBLISHED 的第三行不被误改
-      int published = outboxMapper.markPublishedBatch(TENANT_ID, ids, "PUBLISHED", "PUBLISHING");
-      assertThat(published).isEqualTo(2);
+      int staleAttemptUpdated = outboxMapper.markPublishedBatch(publishedBatchParam(ids, 0));
+      assertThat(staleAttemptUpdated).isZero();
+      int publishedFirst =
+          outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(0)), 1));
+      int publishedSecond =
+          outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(1)), 2));
+      assertThat(publishedFirst).isEqualTo(1);
+      assertThat(publishedSecond).isEqualTo(1);
     }
+  }
+
+  @Test
+  @DisplayName("同一事件重新领取后，旧发布者的成功/失败/放弃均更新 0 行，新发布者成功更新 1 行")
+  void shouldRejectStalePublisherWritebacks_whenEventIsReclaimed() {
+    final String insertOutboxEventSql = """
+        insert into batch.outbox_event (tenant_id, aggregate_type, aggregate_id, event_type, event_key,\s\
+        payload_json, publish_status, publish_attempt)\s\
+        values (?,'JOB_TASK',1,'IMPORT','reclaim','{}','NEW',0)\
+        """;
+    final String selectIdSql =
+        "select id from batch.outbox_event where tenant_id=? and event_key='reclaim'";
+    final String resetSql =
+        "update batch.outbox_event set publish_status = 'FAILED' where tenant_id=? and id=?";
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
+      jdbc.update(insertOutboxEventSql, TENANT_ID);
+      Long eventId = jdbc.queryForObject(selectIdSql, Long.class, TENANT_ID);
+
+      OutboxPublishClaim firstClaim = outboxMapper
+          .markPublishingBatch(publishingBatchParam(List.of(eventId)))
+          .getFirst();
+      assertThat(firstClaim.publishAttempt()).isEqualTo(1);
+      // 模拟超时回收后另一实例重新领取。
+      jdbc.update(resetSql, TENANT_ID, eventId);
+      OutboxPublishClaim secondClaim = outboxMapper
+          .markPublishingBatch(publishingBatchParam(List.of(eventId)))
+          .getFirst();
+      assertThat(secondClaim.publishAttempt()).isEqualTo(2);
+
+      assertThat(outboxMapper.markPublishedBatch(
+              publishedBatchParam(List.of(eventId), firstClaim.publishAttempt())))
+          .isZero();
+      assertThat(outboxMapper.markFailedBatch(OutboxEventMarkFailedBatchParam.builder()
+              .tenantId(TENANT_ID)
+              .ids(List.of(eventId))
+              .status("FAILED")
+              .nextPublishAt(Instant.now().plusSeconds(30))
+              .publishingStatus("PUBLISHING")
+              .publishAttempt(firstClaim.publishAttempt())
+              .build()))
+          .isZero();
+      assertThat(outboxMapper.markGiveUpBatch(
+              giveUpBatchParam(List.of(eventId), firstClaim.publishAttempt())))
+          .isZero();
+
+      assertThat(outboxMapper.markPublishedBatch(
+              publishedBatchParam(List.of(eventId), secondClaim.publishAttempt())))
+          .isEqualTo(1);
+    }
+  }
+
+  private static OutboxEventMarkPublishedBatchParam publishedBatchParam(
+      List<Long> ids, int publishAttempt) {
+    return OutboxEventMarkPublishedBatchParam.builder()
+        .tenantId(TENANT_ID)
+        .ids(ids)
+        .status("PUBLISHED")
+        .publishingStatus("PUBLISHING")
+        .publishAttempt(publishAttempt)
+        .build();
+  }
+
+  private static OutboxEventMarkGiveUpBatchParam giveUpBatchParam(
+      List<Long> ids, int publishAttempt) {
+    return OutboxEventMarkGiveUpBatchParam.builder()
+        .tenantId(TENANT_ID)
+        .ids(ids)
+        .status("GIVE_UP")
+        .publishingStatus("PUBLISHING")
+        .publishAttempt(publishAttempt)
+        .build();
+  }
+
+  private static OutboxEventMarkPublishingBatchParam publishingBatchParam(List<Long> ids) {
+    return OutboxEventMarkPublishingBatchParam.builder()
+        .tenantId(TENANT_ID)
+        .ids(ids)
+        .publishingStatus("PUBLISHING")
+        .pendingStatus1("NEW")
+        .pendingStatus2("FAILED")
+        .build();
   }
 
   private static Long seedJobInstance(String suffix) {

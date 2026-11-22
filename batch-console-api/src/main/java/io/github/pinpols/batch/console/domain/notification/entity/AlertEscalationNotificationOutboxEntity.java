@@ -17,6 +17,7 @@ public class AlertEscalationNotificationOutboxEntity {
   private Integer attemptCount;
   private Instant nextPublishAt;
   private String lastError;
+  private String claimToken;
   private Instant createdAt;
   private Instant updatedAt;
 }

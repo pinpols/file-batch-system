@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -121,6 +122,16 @@ func (s failingRecordStore) Record(context.Context, string, IdempotencyEntity, t
 	return errors.New("store down")
 }
 
+func (s failingRecordStore) RecordOwned(
+	context.Context,
+	string,
+	IdempotencyEntity,
+	IdempotencyClaim,
+	time.Duration,
+) (bool, error) {
+	return false, errors.New("store down")
+}
+
 func TestWithIdempotencyRecordFailureReportsFailure(t *testing.T) {
 	store := failingRecordStore{InMemoryIdempotencyStore: NewInMemoryIdempotencyStore()}
 	result := WithIdempotency(HandlerFunc(func(ctx *TaskContext) TaskResult {
@@ -129,5 +140,54 @@ func TestWithIdempotencyRecordFailureReportsFailure(t *testing.T) {
 
 	if result.ErrorCode != protocol.ErrorCodeExecutionFailed {
 		t.Fatalf("expected EXECUTION_FAILED, got %s", result.ErrorCode)
+	}
+}
+
+func TestStaleClaimCannotOverwriteNewerSuccess(t *testing.T) {
+	var nowNanos atomic.Int64
+	nowNanos.Store(time.Unix(1_000, 0).UnixNano())
+	store := NewInMemoryIdempotencyStore()
+	store.now = func() time.Time { return time.Unix(0, nowNanos.Load()) }
+	ctx := context.Background()
+
+	claimA, acquired, err := store.Acquire(ctx, "shared", 10*time.Second)
+	if err != nil || !acquired {
+		t.Fatalf("A acquire failed: acquired=%v err=%v", acquired, err)
+	}
+	nowNanos.Store(time.Unix(1_011, 0).UnixNano())
+	claimB, acquired, err := store.Acquire(ctx, "shared", 10*time.Second)
+	if err != nil || !acquired {
+		t.Fatalf("B acquire failed: acquired=%v err=%v", acquired, err)
+	}
+	recordedB, err := store.RecordOwned(
+		ctx,
+		"shared",
+		IdempotencyEntity{Result: Success(map[string]any{"winner": "B"}, "B")},
+		claimB,
+		time.Minute,
+	)
+	if err != nil || !recordedB {
+		t.Fatalf("B record failed: recorded=%v err=%v", recordedB, err)
+	}
+
+	if released, _ := store.ReleaseOwned(ctx, "shared", claimA); released {
+		t.Fatalf("stale claim must not release the new owner")
+	}
+	recordedA, _ := store.RecordOwned(
+		ctx,
+		"shared",
+		IdempotencyEntity{Result: Success(map[string]any{"winner": "A"}, "A")},
+		claimA,
+		time.Minute,
+	)
+	if recordedA {
+		t.Fatalf("stale claim must not overwrite the new result")
+	}
+	entity, found, err := store.Find(ctx, "shared")
+	if err != nil || !found {
+		t.Fatalf("expected B result, found=%v err=%v", found, err)
+	}
+	if entity.Result.Outputs["winner"] != "B" {
+		t.Fatalf("expected B result, got %#v", entity.Result.Outputs)
 	}
 }

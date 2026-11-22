@@ -6,6 +6,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.config.OrchestratorAsyncConfiguration;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -67,7 +68,7 @@ public class WorkflowLaunchWaitResumeTrigger {
       return;
     }
     if (!resumingTenants.add(tenantId)) {
-      // 该租户已有一轮在排队或执行：它会在本轮内继续认领，不叠加新的扫描。
+      // 该租户已有一轮在排队或执行：本轮结束会清除标记，不叠加新的扫描。
       return;
     }
     try {
@@ -81,16 +82,29 @@ public class WorkflowLaunchWaitResumeTrigger {
     }
   }
 
+  /**
+   * 父任务只做认领和提交，不等待同池子任务；本轮全部结束（含空批、异常和拒绝提交）后清除租户去重标记。
+   */
   private void runResume(String tenantId) {
+    CompletableFuture<Void> round;
     try {
-      reconciler.resumeTenant(tenantId);
+      round = reconciler.resumeTenantAsync(tenantId);
     } catch (RuntimeException failure) {
+      resumingTenants.remove(tenantId);
       log.warn(
           "workflow launch wait resume after terminal run failed: tenantId={}, error={}",
           tenantId,
           SwallowedExceptionLogger.summary(failure));
-    } finally {
-      resumingTenants.remove(tenantId);
+      return;
     }
+    round.whenComplete((ignored, failure) -> {
+      resumingTenants.remove(tenantId);
+      if (EmptyChecks.isNotNull(failure)) {
+        log.warn(
+            "workflow launch wait resume round failed: tenantId={}, error={}",
+            tenantId,
+            SwallowedExceptionLogger.summary(failure));
+      }
+    });
   }
 }

@@ -95,6 +95,11 @@ spec:
             # 会让 livenessProbe / Prometheus scrape 找不到管理 endpoint。
             - name: BATCH_MANAGEMENT_PORT
               value: {{ $svc.port | quote }}
+            {{- if $svc.forensic.persistence.enabled }}
+            # ADR-022：取证包目录必须是所有副本可读写的共享卷，否则 A 生成、B 下载会 404。
+            - name: BATCH_FORENSIC_STORAGE_DIR
+              value: {{ $svc.forensic.persistence.mountPath | default "/var/lib/batch-forensic" }}
+            {{- end }}
             {{- include "batch-platform.controlPlanePlatformDbCredentialsEnv" (dict "root" . "svc" $svc "migrates" true "console" false) | nindent 12 }}
           {{- include "batch-platform.envFrom" . | nindent 10 }}
           {{- with $svc.startupProbe }}
@@ -110,10 +115,19 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if $svc.forensic.persistence.enabled }}
+            - name: forensic
+              mountPath: {{ $svc.forensic.persistence.mountPath | default "/var/lib/batch-forensic" }}
+            {{- end }}
             {{- include "batch-platform.diagnosticsVolumeMount" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if $svc.forensic.persistence.enabled }}
+        - name: forensic
+          persistentVolumeClaim:
+            claimName: {{ $svc.forensic.persistence.existingClaim | default (printf "%s-forensic" (include "batch-platform.fullname" .)) }}
+        {{- end }}
         {{- include "batch-platform.diagnosticsVolume" . | nindent 8 }}
       {{- include "batch-platform.scheduling" . | nindent 6 }}
 ---

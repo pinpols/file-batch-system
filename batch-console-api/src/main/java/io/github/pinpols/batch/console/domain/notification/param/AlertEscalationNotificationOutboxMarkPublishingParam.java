@@ -9,4 +9,5 @@ public record AlertEscalationNotificationOutboxMarkPublishingParam(
     String tenantId,
     String publishingStatus,
     String pendingStatus1,
-    String pendingStatus2) {}
+    String pendingStatus2,
+    String claimToken) {}

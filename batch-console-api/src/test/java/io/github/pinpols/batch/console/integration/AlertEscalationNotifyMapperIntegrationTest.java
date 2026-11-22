@@ -24,7 +24,9 @@ import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapp
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishedParam;
 import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxResetStaleParam;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotificationOutboxService;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
@@ -37,6 +39,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -262,6 +265,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
         .extracting(AlertEscalationNotificationOutboxEntity::getId)
         .contains(publishedId);
 
+    String publishedClaim = UUID.randomUUID().toString();
     assertThat(outboxMapper.markPublishing(
             AlertEscalationNotificationOutboxMarkPublishingParam.builder()
                 .id(publishedId)
@@ -269,23 +273,31 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
                 .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .claimToken(publishedClaim)
                 .build()))
         .isEqualTo(1);
-    assertThat(outboxMapper.markPublished(
-            publishedId,
-            tenantId,
-            OutboxPublishStatus.PUBLISHED.code(),
-            OutboxPublishStatus.PUBLISHING.code()))
+    assertThat(
+            outboxMapper.markPublished(AlertEscalationNotificationOutboxMarkPublishedParam.builder()
+                .id(publishedId)
+                .tenantId(tenantId)
+                .publishedStatus(OutboxPublishStatus.PUBLISHED.code())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(publishedClaim)
+                .build()))
         .isEqualTo(1);
-    assertThat(outboxMapper.markPublished(
-            publishedId,
-            tenantId,
-            OutboxPublishStatus.PUBLISHED.code(),
-            OutboxPublishStatus.PUBLISHING.code()))
+    assertThat(
+            outboxMapper.markPublished(AlertEscalationNotificationOutboxMarkPublishedParam.builder()
+                .id(publishedId)
+                .tenantId(tenantId)
+                .publishedStatus(OutboxPublishStatus.PUBLISHED.code())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(publishedClaim)
+                .build()))
         .isZero();
 
     long failedId =
         insertOutbox(tenantId, alertId, 2, OutboxPublishStatus.NEW.code(), 0, now.minusSeconds(1));
+    String failedClaim = UUID.randomUUID().toString();
     assertThat(outboxMapper.markPublishing(
             AlertEscalationNotificationOutboxMarkPublishingParam.builder()
                 .id(failedId)
@@ -293,6 +305,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
                 .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .claimToken(failedClaim)
                 .build()))
         .isEqualTo(1);
     assertThat(outboxMapper.markFailed(AlertEscalationNotificationOutboxMarkFailedParam.builder()
@@ -302,11 +315,13 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
             .nextPublishAt(now.plusSeconds(60))
             .lastError("publish failed")
             .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .claimToken(failedClaim)
             .build()))
         .isEqualTo(1);
 
     long giveUpId =
         insertOutbox(tenantId, alertId, 3, OutboxPublishStatus.NEW.code(), 9, now.minusSeconds(1));
+    String giveUpClaim = UUID.randomUUID().toString();
     assertThat(outboxMapper.markPublishing(
             AlertEscalationNotificationOutboxMarkPublishingParam.builder()
                 .id(giveUpId)
@@ -314,6 +329,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
                 .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .claimToken(giveUpClaim)
                 .build()))
         .isEqualTo(1);
     assertThat(outboxMapper.markGiveUp(AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
@@ -322,12 +338,73 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
             .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
             .lastError("retry exhausted")
             .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .claimToken(giveUpClaim)
             .build()))
         .isEqualTo(1);
 
     assertThat(statusOf(publishedId)).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
     assertThat(statusOf(failedId)).isEqualTo(OutboxPublishStatus.FAILED.code());
     assertThat(statusOf(giveUpId)).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+  }
+
+  @Test
+  @DisplayName("超时复位只回收扫描时看到的一轮凭据，旧扫描不能复位新领取")
+  void shouldRejectStaleResetAfterNotificationIsReclaimed() {
+    String tenantId = "t-esc-outbox-claim-" + BatchDateTimeSupport.utcEpochMillis();
+    long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);
+    long outboxId = insertOutbox(
+        tenantId, alertId, 1, OutboxPublishStatus.NEW.code(), 0, BatchDateTimeSupport.utcNow());
+    String claimA = UUID.randomUUID().toString();
+    jdbcTemplate.update("""
+        update batch.alert_escalation_notification_outbox
+        set publish_status = 'PUBLISHING', claim_token = ?::uuid,
+            updated_at = CURRENT_TIMESTAMP - interval '200 seconds'
+        where id = ?
+        """, claimA, outboxId);
+
+    // B 先回收 A 的超时租约并重新领取。
+    assertThat(outboxMapper.resetStalePublishing(
+            AlertEscalationNotificationOutboxResetStaleParam.builder()
+                .id(outboxId)
+                .tenantId(tenantId)
+                .failedStatus(OutboxPublishStatus.FAILED.code())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(claimA)
+                .timeoutSeconds(120L)
+                .build()))
+        .isEqualTo(1);
+    String claimB = UUID.randomUUID().toString();
+    assertThat(outboxMapper.markPublishing(
+            AlertEscalationNotificationOutboxMarkPublishingParam.builder()
+                .id(outboxId)
+                .tenantId(tenantId)
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .pendingStatus1(OutboxPublishStatus.NEW.code())
+                .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .claimToken(claimB)
+                .build()))
+        .isEqualTo(1);
+
+    // A 的旧扫描随后复位必须更新 0 行，B 可以确认。
+    assertThat(outboxMapper.resetStalePublishing(
+            AlertEscalationNotificationOutboxResetStaleParam.builder()
+                .id(outboxId)
+                .tenantId(tenantId)
+                .failedStatus(OutboxPublishStatus.FAILED.code())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(claimA)
+                .timeoutSeconds(120L)
+                .build()))
+        .isZero();
+    assertThat(
+            outboxMapper.markPublished(AlertEscalationNotificationOutboxMarkPublishedParam.builder()
+                .id(outboxId)
+                .tenantId(tenantId)
+                .publishedStatus(OutboxPublishStatus.PUBLISHED.code())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .claimToken(claimB)
+                .build()))
+        .isEqualTo(1);
   }
 
   @Test

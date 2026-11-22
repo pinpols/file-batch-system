@@ -377,6 +377,18 @@ orchestrator:
   # 代价:吞吐 -10% 换调度延迟稳定。详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
   javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
   replicaCount: 2
+  # ADR-022 取证包目录。多副本必须挂载所有 Pod 可读写的共享卷（NFS/CephFS/EFS 等 RWX），
+  # 否则生成副本以外的 Pod 无法下载已完成的 ZIP，副本重建后旧包也会丢失。
+  forensic:
+    persistence:
+      enabled: false
+      # 已有 RWX PVC 时直接复用；留空则按 storageClassName/size 创建 <release>-forensic。
+      existingClaim: ""
+      accessMode: ReadWriteMany
+      # 留空使用集群默认 StorageClass；该 StorageClass 必须支持 ReadWriteMany。
+      storageClassName: ""
+      size: 10Gi
+      mountPath: /var/lib/batch-forensic
   replayDryRun:
     enabled: false
     maxActiveEntries: 200

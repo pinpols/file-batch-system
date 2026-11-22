@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunResumeSlotParam;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowRunActiveByTenantWorkflowBizDateQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowRunQuery;
 import java.time.Instant;
@@ -25,6 +26,12 @@ public interface WorkflowRunMapper {
    */
   int insertAtFirstVisibleFreeSlot(
       @Param("run") WorkflowRunEntity entity, @Param("maxActiveRuns") int maxActiveRuns);
+
+  /**
+   * PAUSED → RUNNING 时在同一语句内选择同组首个空槽。返回零表示槽位已满或前态已变化；并发抢占同一槽位时由
+   * {@code uk_workflow_run_active_slot} 抛出唯一键冲突，由调用方在保存点内有限重试。
+   */
+  int resumeIntoFreeSlot(WorkflowRunResumeSlotParam parameters);
 
   WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 

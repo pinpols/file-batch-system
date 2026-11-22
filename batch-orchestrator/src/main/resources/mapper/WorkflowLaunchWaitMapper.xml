@@ -57,7 +57,8 @@
           and batch.workflow_launch_wait.dry_run = excluded.dry_run
     </insert>
 
-    <!-- 名额资格必须与 uk_workflow_run_active 一致，而非涵盖所有非终态。 -->
+    <!-- 名额资格必须与 uk_workflow_run_active_slot 一致:同租户/Workflow/业务日/dry-run 在
+         1..max_active_runs_per_biz_date 内还有空槽才领取。最终占槽仍由唯一索引裁决。 -->
     <select id="claimDue" resultMap="WaitResult" affectData="true" flushCache="true">
         with first_per_slot as (
             select distinct on (waiting.workflow_definition_id, waiting.biz_date, waiting.dry_run)
@@ -65,18 +66,27 @@
             from batch.workflow_launch_wait waiting
             join batch.trigger_request request
               on request.tenant_id = waiting.tenant_id and request.request_id = waiting.request_id
+            join batch.workflow_definition definition
+              on definition.id = waiting.workflow_definition_id
             where waiting.tenant_id = #{tenantId} and waiting.wait_status = 'WAITING'
               and waiting.next_attempt_at &lt;= CURRENT_TIMESTAMP
               and (exists (
                   select 1 from batch.workflow_run own_run
                   where own_run.tenant_id = waiting.tenant_id
                     and own_run.trigger_request_id = request.id
-              ) or not exists (
-                  select 1 from batch.workflow_run run
-                  where run.tenant_id = waiting.tenant_id
-                    and run.workflow_definition_id = waiting.workflow_definition_id
-                    and run.biz_date = waiting.biz_date and run.dry_run = waiting.dry_run
-                    and run.run_status in ('CREATED', 'RUNNING')
+              ) or exists (
+                  <!-- 与新 launch 的 insertAtFirstVisibleFreeSlot 使用同一容量规则。 -->
+                  select 1
+                  from generate_series(1, definition.max_active_runs_per_biz_date) as candidate(slot)
+                  where not exists (
+                      select 1 from batch.workflow_run run
+                      where run.tenant_id = waiting.tenant_id
+                        and run.workflow_definition_id = waiting.workflow_definition_id
+                        and run.biz_date = waiting.biz_date
+                        and run.dry_run = waiting.dry_run
+                        and run.active_slot = candidate.slot
+                        and run.run_status in ('CREATED', 'RUNNING')
+                  )
               ))
             order by waiting.workflow_definition_id, waiting.biz_date, waiting.dry_run,
                      waiting.created_at, waiting.id

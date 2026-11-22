@@ -79,6 +79,12 @@ fn execute_claimed<T: Transport, H: TaskHandler>(
 The runtime stays thin: retry and idempotency are explicit handler wrappers, not
 business templates and not framework wiring.
 
+With a positive TTL, implement `acquire` plus `record_owned` / `release_owned`.
+`acquire` returns this round's `IdempotencyClaim`; the owned methods must compare it
+atomically so a late result from an expired executor cannot delete or overwrite the
+new executor's cached success. The trait defaults fall back to the legacy
+`try_acquire` / `record` / `release` methods, which keep the prior behavior.
+
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
