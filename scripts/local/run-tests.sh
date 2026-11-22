@@ -47,7 +47,12 @@ source "$ROOT_DIR/scripts/local/maven-env.sh"
 # 否则 Ryuk 等容器的 socket 挂载会指向远程主机上不存在的本机路径。
 case "${DOCKER_HOST:-}" in
   tcp://*|ssh://*) ;;
-  *) export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}" ;;
+  *)
+    # 仅当 Docker Desktop(macOS) 的 socket 实际存在时覆盖，Linux 使用默认 /var/run/docker.sock。
+    if [[ -z "${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-}" && -S "$HOME/.docker/run/docker.sock" ]]; then
+      export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="$HOME/.docker/run/docker.sock"
+    fi
+    ;;
 esac
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 

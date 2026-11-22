@@ -50,8 +50,15 @@ fi
 if download "${URL_PRIMARY}.sha512" "$tmpdir/${ARCHIVE}.sha512" \
   || download "${URL_ARCHIVE}.sha512" "$tmpdir/${ARCHIVE}.sha512"; then
   (
-    cd "$tmpdir"
-    shasum -a 512 -c "${ARCHIVE}.sha512"
+    cd "$tmpdir" || exit 1
+    if command -v sha512sum >/dev/null 2>&1; then
+      sha512sum -c "${ARCHIVE}.sha512"
+    elif command -v shasum >/dev/null 2>&1; then
+      shasum -a 512 -c "${ARCHIVE}.sha512"
+    else
+      printf 'Missing required command: sha512sum or shasum\n' >&2
+      exit 2
+    fi
   )
 fi
 

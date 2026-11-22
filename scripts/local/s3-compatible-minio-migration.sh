@@ -8,12 +8,22 @@ TARGET_ENDPOINT="${1:?usage: s3-compatible-minio-migration.sh endpoint access-ke
 TARGET_ACCESS_KEY="${2:?usage: s3-compatible-minio-migration.sh endpoint access-key secret-key}"
 TARGET_SECRET_KEY="${3:?usage: s3-compatible-minio-migration.sh endpoint access-key secret-key}"
 
-for command in mc openssl shasum; do
+for command in mc openssl; do
   if ! command -v "$command" >/dev/null 2>&1; then
     printf 'Missing required command: %s\n' "$command" >&2
     exit 2
   fi
 done
+
+# Linux 通常只有 sha256sum，macOS 使用 shasum。
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$@"; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$@"; }
+else
+  printf 'Missing required command: sha256sum or shasum\n' >&2
+  exit 2
+fi
 
 # shellcheck source=../lib/env-common.sh
 source "$ROOT_DIR/scripts/lib/env-common.sh"
@@ -75,7 +85,7 @@ manifest() {
   (
     cd "$1"
     find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do
-      shasum -a 256 "$file"
+      sha256 "$file"
     done
   )
 }

@@ -63,6 +63,13 @@ fi
 disabled_output="$(BATCH_GATE_ENABLED=0 BATCH_GATE_GROUP=build gate_run TEST_DISABLED "总开关样例" false)"
 assert_contains "$disabled_output" "group=build | mode=ignore"
 
+# macOS 自带 Bash 3.2 不支持 ${var,,}，大写开关也必须可解析。
+disabled_upper_output="$(BATCH_GATE_ENABLED=FALSE BATCH_GATE_GROUP=build gate_run TEST_DISABLED_UPPER "总开关大写样例" false)"
+assert_contains "$disabled_upper_output" "group=build | mode=ignore"
+
+enabled_upper_output="$(BATCH_GATE_ENABLED=On BATCH_GATE_GROUP=build gate_run TEST_ENABLED_UPPER "总开关开启样例" true)"
+assert_contains "$enabled_upper_output" "group=build | mode=enforce"
+
 if BATCH_GATE_MODE=unexpected gate_run TEST_INVALID "非法模式样例" true >"$tmp_dir/invalid.out" 2>&1; then
   echo "非法模式未被拒绝" >&2
   exit 1

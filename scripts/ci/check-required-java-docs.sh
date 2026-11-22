@@ -7,7 +7,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-mapfile -t candidates < <(
+candidates=()
+while IFS= read -r file; do
+  candidates+=("$file")
+done < <(
   rg -l '@(SpringBootApplication|Configuration|AutoConfiguration|ConfigurationProperties)' \
     --glob '*/src/main/java/**/*.java' | sort -u
 )

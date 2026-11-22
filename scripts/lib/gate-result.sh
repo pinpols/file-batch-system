@@ -72,15 +72,21 @@ gate_mode_from_map() {
   printf '%s' "$matched"
 }
 
+# Bash 3.2（macOS 自带）不支持 ${var,,}，统一用 tr 归一化大小写。
+gate_lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 gate_resolve_mode() {
   local code="$1"
   local group="$2"
-  local enabled="${BATCH_GATE_ENABLED:-1}"
+  local enabled
   local mode="${BATCH_GATE_MODE:-enforce}"
   local group_mode
   local code_mode
 
-  case "${enabled,,}" in
+  enabled="$(gate_lowercase "${BATCH_GATE_ENABLED:-1}")"
+  case "$enabled" in
     0|false|no|off) printf 'ignore'; return 0 ;;
     1|true|yes|on) ;;
     *)
