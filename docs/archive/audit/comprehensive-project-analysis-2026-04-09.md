@@ -10,7 +10,7 @@
 
 ### [高危] S-1：V34 种子数据硬编码默认密码
 
-**位置**：`batch-console-api/src/main/resources/db/legacy-migration/V34__create_console_user_account.sql`
+**位置**：`batch-console-api/src/main/resources/db/migration/V34__create_console_user_account.sql`
 
 **现象**：种子数据中 admin 用户密码为 `admin123` 的 Argon2id 哈希值，首次部署未强制修改即投入使用，攻击者可直接尝试该密码登录控制台。
 

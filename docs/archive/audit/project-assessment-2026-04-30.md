@@ -41,7 +41,7 @@
 
 | Stage | 完成证据 |
 |---|---|
-| 1 | `db/legacy-migration/V80__create_trigger_outbox_event.sql` |
+| 1 | `db/migration/V80__create_trigger_outbox_event.sql` |
 | 2 | `batch-trigger/.../application/TriggerOutboxRelay.java` 224 行 + 7 单测 |
 | 3 | `batch-trigger/.../service/DefaultTriggerService.java:202-225` 异步分支 + 灰度开关 |
 | 4 | `batch-trigger/.../infrastructure/mq/KafkaTriggerEventPublisher.java` + `batch-orchestrator/.../application/trigger/TriggerLaunchConsumer.java` |

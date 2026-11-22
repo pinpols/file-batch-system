@@ -6,7 +6,6 @@
 
 | 文档 | 用途 |
 |---|---|
-| [平台库 Flyway 重编号方案](flyway-platform-renumber-2026-11-22.md) | 空库从 V1 重建，退役表排除、历史迁移归档及结构与权限验收 |
 | [后端架构审核整改方案](backend-architecture-remediation-2026-11-22.md) | 两轮审核的 3 项 P1、5 项 P2 及 2 处文档偏差，含实施顺序与逐项验收标准 |
 | [五类 Worker 整改方案](worker-design-remediation-plan-2026-11-22.md) | Export 无漏行、Process 增量水位与跨 Worker 结果确认，含分批、迁移、回退和验收条件 |
 | [批次日结算栅栏共享锁改造方案](batch-day-fence-shared-lock-2026-11-20.md) | 栅栏读者共享、写者独占，两批读者切换已随 #1434、#1438 合入。文件驱动高峰与 launch 容量复测见后端待办。 |

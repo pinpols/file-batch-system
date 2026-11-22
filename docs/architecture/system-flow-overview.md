@@ -1037,7 +1037,7 @@ flowchart LR
 | `batch-worker/process/.../sql/SqlTransformComputePlugin.java` | 内置插件:解析 spec / JSONB staging 或 DIRECT 发布 / 跑 validations / `jsonb_populate_record` 或 `INSERT...SELECT` 发布 / 清 staging |
 | `batch-worker/process/.../sql/SqlTransformComputeSpec.java` | step_params 解析 + identifier 校验 + `stagingMode` + `validations` 列表 |
 | `batch-worker/process/.../sql/SqlTransformComputeSqlValidator.java` | jsqlparser AST 校验 + SELECT-only + schema allowlist + `validateUserCheckSelect`(给 VALIDATE 用,跳过 schema allowlist) |
-| `db/legacy-migration/V75__add_process_staging_table.sql` | 共享 `batch.process_staging` 表(JSONB payload + batch_key/staged_at 索引) |
+| `db/migration/V75__add_process_staging_table.sql` | 共享 `batch.process_staging` 表(JSONB payload + batch_key/staged_at 索引) |
 
 ### 7.9.5 业务侧使用模板
 

@@ -49,7 +49,7 @@ ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS drain_started_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS drain_deadline_at TIMESTAMPTZ;
 
--- 与 db/migration/V2__platform_schema.sql 中 business_calendar 增量语义一致。
+-- 与 db/migration/V32__add_batch_day_support.sql 中 business_calendar 增量语义一致。
 ALTER TABLE batch.business_calendar
     ADD COLUMN IF NOT EXISTS cutoff_time TIME NOT NULL DEFAULT TIME '06:00:00',
     ADD COLUMN IF NOT EXISTS late_arrival_tolerance_min INTEGER NOT NULL DEFAULT 60,

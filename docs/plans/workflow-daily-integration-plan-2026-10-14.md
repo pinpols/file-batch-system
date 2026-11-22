@@ -530,22 +530,22 @@ D1 的 Kafka 隔离配置使用同一个 `BATCH_KAFKA_NAMESPACE`（Spring 属性
 
 | 每日连续性来源文件 | 整合文件 |
 |---|---|
-| `V236__calendar_dependency_wait_reconciliation.sql` | [`V251__calendar_dependency_wait_reconciliation.sql`](../../db/legacy-migration/V251__calendar_dependency_wait_reconciliation.sql) |
-| `V237__calendar_dependency_wait_timeout_alert_claim.sql` | [`V252__calendar_dependency_wait_timeout_alert_claim.sql`](../../db/legacy-migration/V252__calendar_dependency_wait_timeout_alert_claim.sql) |
-| `V238__calendar_dependency_wait_rule_snapshot.sql` | [`V253__calendar_dependency_wait_rule_snapshot.sql`](../../db/legacy-migration/V253__calendar_dependency_wait_rule_snapshot.sql) |
-| `V239__batch_day_open_cursor.sql` | [`V254__batch_day_open_cursor.sql`](../../db/legacy-migration/V254__batch_day_open_cursor.sql) |
-| `V240__calendar_dependency_wait_manual_action.sql` | [`V255__calendar_dependency_wait_manual_action.sql`](../../db/legacy-migration/V255__calendar_dependency_wait_manual_action.sql) |
-| `V241__job_dependency_relation.sql` | [`V256__job_dependency_relation.sql`](../../db/legacy-migration/V256__job_dependency_relation.sql) |
-| `V242__job_dependency_waiting_launch.sql` | [`V257__job_dependency_waiting_launch.sql`](../../db/legacy-migration/V257__job_dependency_waiting_launch.sql) |
-| `V243__job_dependency_wait_timeout_alert.sql` | [`V258__job_dependency_wait_timeout_alert.sql`](../../db/legacy-migration/V258__job_dependency_wait_timeout_alert.sql) |
-| `V244__batch_day_catchup_control.sql` | [`V259__batch_day_catchup_control.sql`](../../db/legacy-migration/V259__batch_day_catchup_control.sql) |
-| `V245__job_dependency_business_date_alignment.sql` | [`V260__job_dependency_business_date_alignment.sql`](../../db/legacy-migration/V260__job_dependency_business_date_alignment.sql) |
-| `V246__scheduled_occurrence_ledger.sql` | [`V261__scheduled_occurrence_ledger.sql`](../../db/legacy-migration/V261__scheduled_occurrence_ledger.sql) |
-| `V247__scheduled_occurrence_coverage.sql` | [`V262__scheduled_occurrence_coverage.sql`](../../db/legacy-migration/V262__scheduled_occurrence_coverage.sql) |
-| `V248__expected_work_occurrence.sql` | [`V263__expected_work_occurrence.sql`](../../db/legacy-migration/V263__expected_work_occurrence.sql) |
-| `V249__file_group_expectation_definition.sql` | [`V264__file_group_expectation_definition.sql`](../../db/legacy-migration/V264__file_group_expectation_definition.sql) |
-| `V250__external_event_expectation_definition.sql` | [`V265__external_event_expectation_definition.sql`](../../db/legacy-migration/V265__external_event_expectation_definition.sql) |
-| `V251__bind_external_event_expectation_to_trigger_request.sql` | [`V266__bind_external_event_expectation_to_trigger_request.sql`](../../db/legacy-migration/V266__bind_external_event_expectation_to_trigger_request.sql) |
+| `V236__calendar_dependency_wait_reconciliation.sql` | [`V251__calendar_dependency_wait_reconciliation.sql`](../../db/migration/V251__calendar_dependency_wait_reconciliation.sql) |
+| `V237__calendar_dependency_wait_timeout_alert_claim.sql` | [`V252__calendar_dependency_wait_timeout_alert_claim.sql`](../../db/migration/V252__calendar_dependency_wait_timeout_alert_claim.sql) |
+| `V238__calendar_dependency_wait_rule_snapshot.sql` | [`V253__calendar_dependency_wait_rule_snapshot.sql`](../../db/migration/V253__calendar_dependency_wait_rule_snapshot.sql) |
+| `V239__batch_day_open_cursor.sql` | [`V254__batch_day_open_cursor.sql`](../../db/migration/V254__batch_day_open_cursor.sql) |
+| `V240__calendar_dependency_wait_manual_action.sql` | [`V255__calendar_dependency_wait_manual_action.sql`](../../db/migration/V255__calendar_dependency_wait_manual_action.sql) |
+| `V241__job_dependency_relation.sql` | [`V256__job_dependency_relation.sql`](../../db/migration/V256__job_dependency_relation.sql) |
+| `V242__job_dependency_waiting_launch.sql` | [`V257__job_dependency_waiting_launch.sql`](../../db/migration/V257__job_dependency_waiting_launch.sql) |
+| `V243__job_dependency_wait_timeout_alert.sql` | [`V258__job_dependency_wait_timeout_alert.sql`](../../db/migration/V258__job_dependency_wait_timeout_alert.sql) |
+| `V244__batch_day_catchup_control.sql` | [`V259__batch_day_catchup_control.sql`](../../db/migration/V259__batch_day_catchup_control.sql) |
+| `V245__job_dependency_business_date_alignment.sql` | [`V260__job_dependency_business_date_alignment.sql`](../../db/migration/V260__job_dependency_business_date_alignment.sql) |
+| `V246__scheduled_occurrence_ledger.sql` | [`V261__scheduled_occurrence_ledger.sql`](../../db/migration/V261__scheduled_occurrence_ledger.sql) |
+| `V247__scheduled_occurrence_coverage.sql` | [`V262__scheduled_occurrence_coverage.sql`](../../db/migration/V262__scheduled_occurrence_coverage.sql) |
+| `V248__expected_work_occurrence.sql` | [`V263__expected_work_occurrence.sql`](../../db/migration/V263__expected_work_occurrence.sql) |
+| `V249__file_group_expectation_definition.sql` | [`V264__file_group_expectation_definition.sql`](../../db/migration/V264__file_group_expectation_definition.sql) |
+| `V250__external_event_expectation_definition.sql` | [`V265__external_event_expectation_definition.sql`](../../db/migration/V265__external_event_expectation_definition.sql) |
+| `V251__bind_external_event_expectation_to_trigger_request.sql` | [`V266__bind_external_event_expectation_to_trigger_request.sql`](../../db/migration/V266__bind_external_event_expectation_to_trigger_request.sql) |
 
 2026-10-15 R26 根 Workflow 跨日恢复缺陷：在将跨日 WAIT 测试推进到生产恢复链时发现，`CrossDayDependencyReconciler` 仍要求 `WorkflowRun.relatedJobInstanceId` 并从父 JobInstance 读取 tenant/bizDate；但新模型根 Workflow 正常没有父实例，导致恢复扫描命中也会直接返回。调整恢复上下文为 WorkflowRun 本身，解析、告警和节点派发都使用根运行 tenant/bizDate，移除对旧父 JobMapper 的依赖。新增单测先失败后通过（`CrossDayDependencyReconcilerTest` 8/8）；真实 PostgreSQL 集成从根 Workflow 首次等待开始，在依赖结果生效后由生产 Reconciler 创建子 JobInstance，并核实根参数及精确结果版本/输出均进入 snapshot，1/1 通过。恢复后的真实 Worker 副作用、多实例竞争及加密密钥故障/轮换演练仍未完成，R26/A1 不关闭。
 

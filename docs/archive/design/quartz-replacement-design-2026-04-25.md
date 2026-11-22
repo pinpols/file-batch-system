@@ -99,7 +99,7 @@
 
 ### 2.2 新增表 schema(必备)
 
-> ℹ️ **状态(2026-05-03)**：本表已落地为 [`V67__create_trigger_runtime_state.sql`](../../../db/legacy-migration/V67__create_trigger_runtime_state.sql)（设计文档当时假设是 V100，实际版本号比设计提案早）。CHECK 约束最终落地 6 个枚举值，比下面 sketch 多 `MISFIRE_SKIPPED` / `MISFIRE_PENDING`（覆盖 catch-up 跳过 + 待恢复两种 misfire 处理路径）。下面 SQL 仅作设计意图追溯。
+> ℹ️ **状态(2026-05-03)**：本表已落地为 [`V67__create_trigger_runtime_state.sql`](../../../db/migration/V67__create_trigger_runtime_state.sql)（设计文档当时假设是 V100，实际版本号比设计提案早）。CHECK 约束最终落地 6 个枚举值，比下面 sketch 多 `MISFIRE_SKIPPED` / `MISFIRE_PENDING`（覆盖 catch-up 跳过 + 待恢复两种 misfire 处理路径）。下面 SQL 仅作设计意图追溯。
 
 ```sql
 -- 实际落地：V67__create_trigger_runtime_state.sql（设计稿写的是 V100）

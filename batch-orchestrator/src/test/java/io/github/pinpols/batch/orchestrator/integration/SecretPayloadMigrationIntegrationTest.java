@@ -97,7 +97,7 @@ class SecretPayloadMigrationIntegrationTest {
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .schemas("batch", "quartz")
         .defaultSchema("batch")
-        .locations("classpath:db/legacy-migration")
+        .locations("classpath:db/migration")
         .callbacks(callback)
         .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
   }

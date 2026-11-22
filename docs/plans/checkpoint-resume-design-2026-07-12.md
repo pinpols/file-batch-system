@@ -19,7 +19,7 @@ ADR-038(2026-06-02 Accepted)已经交付**平台 worker 阶段内(intra-stage)�
 |---|---|---|
 | Import **LOAD** 行号续跑 | ✅ 已合(P1/P2,2026-06-02) | `LoadStep.java`、`pipeline_progress`(V164)、`LoadStepCheckpointTest` |
 | Export **GENERATE** cursor+字节位点续跑 | ✅ 已合(P3,2026-06-05) | `GenerateStep.java`、`GenerateCheckpoint`、`GenerateStepCheckpointTest` |
-| 位点表 `batch.pipeline_progress` + archive 镜像 | ✅ 已合(V164) | `db/legacy-migration/V164__create_pipeline_progress.sql` |
+| 位点表 `batch.pipeline_progress` + archive 镜像 | ✅ 已合(V164) | `db/migration/V164__create_pipeline_progress.sql` |
 | 灰度开关 `batch.worker.checkpoint.enabled`(默认 false) | ✅ 已合 | `WorkerCheckpointProperties`(prefix `batch.worker.checkpoint`) |
 | 幂等前置校验(跨库无 1PC 安全网) | ✅ 已合(R3-3) | `LoadStep.requireIdempotentPluginIfCheckpointEnabled` `:240-258` |
 | 运维 howto + 反例 | ✅ 已合 | `docs/runbook/platform-worker-checkpoint-howto.md` |
@@ -38,7 +38,7 @@ ADR-038(2026-06-02 Accepted)已经交付**平台 worker 阶段内(intra-stage)�
 
 ### 1.1 位点表 `batch.pipeline_progress`(V164 / ADR-038)——已存在,是核心载体
 
-DDL:`db/legacy-migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
+DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 
 - 主键**单列** `id BIGSERIAL`(`V164:26`);逻辑幂等键是 `UNIQUE (tenant_id, pipeline_instance_id, stage)`(`V164:36-37`),即 **UPSERT 冲突目标**。
 - 一行 = 一个 `(tenant_id, pipeline_instance_id, stage)` 的位点,即**每 pipeline 实例每 stage 一行**(粒度不是 chunk、不是 partition)。
@@ -318,14 +318,14 @@ DDL:`db/legacy-migration/V164__create_pipeline_progress.sql:25-42`。关键结�
 
 ## 附:关键文件索引(施工指针)
 
-- 位点表:`db/legacy-migration/V164__create_pipeline_progress.sql`
+- 位点表:`db/migration/V164__create_pipeline_progress.sql`
 - 位点抽象/实现/SQL:`batch-worker/core/.../infrastructure/checkpoint/{ProcessingPositionStore,DefaultProcessingPositionStore}.java`、`batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml`
 - LOAD 续跑:`batch-worker/import/.../stage/LoadStep.java`(`openCheckpoint :302`、`flushAndAdvance :208`、前置校验 `:240`)
 - GENERATE 续跑:`batch-worker/export/.../stage/GenerateStep.java`、`GenerateCheckpoint`、`GenerateCursorCodec`
 - 阶段循环骨架(决策四改造点):`batch-worker/core/.../support/AbstractStageExecutor.java:40-104`
-- PROCESS WAP:`db/legacy-migration/V75__add_process_staging_table.sql`、`batch-worker/process/.../stage/{PrepareStep,ComputeStep,CommitStep}.java`
+- PROCESS WAP:`db/migration/V75__add_process_staging_table.sql`、`batch-worker/process/.../stage/{PrepareStep,ComputeStep,CommitStep}.java`
 - 分区级续跑:`db/migration/V5__create_runtime_tables.sql:59-83`(job_partition)、`TaskControllerApplicationService.java`(claim/claimBatch/reportBatch)
-- 边界机制:`DefaultTaskOutcomeService.java`(retry/终态)、`DefaultCompensationService.java`、`BatchDayReplayDispatcher.java`、`db/legacy-migration/V110__batch_day_replay_session.sql`
+- 边界机制:`DefaultTaskOutcomeService.java`(retry/终态)、`DefaultCompensationService.java`、`BatchDayReplayDispatcher.java`、`db/migration/V110__batch_day_replay_session.sql`
 - ADR/运维:`docs/architecture/adr/ADR-038-platform-worker-checkpoint-resume.md`、`docs/runbook/platform-worker-checkpoint-howto.md`
 
 ---

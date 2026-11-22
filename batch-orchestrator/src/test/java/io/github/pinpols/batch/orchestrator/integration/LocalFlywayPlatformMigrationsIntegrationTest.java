@@ -87,7 +87,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V370 只扩展批日补跑状态约束及其列注释")
   void shouldChangeOnlyCatchUpFenceConstraintAndComment() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -124,7 +124,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V371 只增加启动恢复轮次字段")
   void shouldAddOnlyTriggerRecoveryGeneration() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -159,7 +159,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V376仅替换旧式Webhook重投候选索引,不改变其他数据库对象")
   void shouldReplaceOnlyLegacyWebhookRetryIndex_whenMigratingV376() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -207,7 +207,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V378 将并发提交前的历史文件与迁移后的新文件可靠区分")
   void shouldSeparateLegacyFilesAtMigrationBoundary() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -277,7 +277,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V377 至 V379 的数据库对象变化限定在扫描状态、渠道身份和执行尝试")
   void shouldChangeOnlyReviewedObjectsBetweenV376AndV379() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -315,7 +315,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V376 存量冷热数据升级至 V383 后保留历史语义并兼容新写入")
   void shouldPreserveExistingHotAndArchivedData_whenUpgradingFromV376ToV383() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -643,7 +643,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V347遇到旧表已有数据时拒绝并完整保留结构与数据，不提供旧库迁移")
   void shouldRejectRetirementWhenLegacyTableContainsData() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -678,7 +678,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Test
   @DisplayName("V347只退役明确裁定的九张平台表，保留DQ冷表和在线定义，旧迁移仍可先迁移至V346")
   void shouldRetireOnlyApprovedTablesThroughIncrementalMigration() throws Exception {
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     Flyway.configure()
         .configuration(flyway.getConfiguration())
@@ -695,7 +695,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
             and c.relkind in ('r','p') and not c.relispartition
           """;
       Set<String> before = new TreeSet<>(jdbc.queryForList(logicalTablesSql, String.class));
-      long sourceMigrationsAfterV346 = readSourceMigrationVersions("db/legacy-migration").stream()
+      long sourceMigrationsAfterV346 = readSourceMigrationVersions().stream()
           .filter(version -> version > 346)
           .count();
       assertThat(flyway.migrate().migrationsExecuted).isEqualTo(sourceMigrationsAfterV346);
@@ -926,7 +926,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
     cleanTestDatabase(flyway);
     assertThat(flyway.migrate().migrationsExecuted).isPositive();
     flyway.validate();
-    List<Integer> sourceMigrationVersions = readSourceMigrationVersions("db/migration");
+    List<Integer> sourceMigrationVersions = readSourceMigrationVersions();
     long sourceMigrationCount = sourceMigrationVersions.size();
     int latestSourceMigrationVersion =
         sourceMigrationVersions.stream().mapToInt(Integer::intValue).max().orElseThrow();
@@ -1133,7 +1133,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
         drop table batch.external_event_delivery
     """;
 
-    Flyway flyway = newLegacyFlyway();
+    Flyway flyway = newFlyway();
     cleanTestDatabase(flyway);
     try (Connection connection = POSTGRES.createConnection("");
         Statement statement = connection.createStatement()) {
@@ -1149,7 +1149,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
       statement.execute(dropExternalEventDeliverySql);
     }
     flyway.repair();
-    List<Integer> sourceMigrationVersions = readSourceMigrationVersions("db/legacy-migration");
+    List<Integer> sourceMigrationVersions = readSourceMigrationVersions();
     long migrationsAfterInjectedFailure =
         sourceMigrationVersions.stream().filter(version -> version > 286).count();
     assertThat(flyway.migrate().migrationsExecuted).isEqualTo(migrationsAfterInjectedFailure);
@@ -1160,23 +1160,8 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
         .isEqualTo(Integer.toString(latestSourceMigrationVersion));
   }
 
-  @Test
-  @DisplayName("新平台迁移链拒绝接管已有旧迁移历史的数据库")
-  void shouldRejectLegacyFlywayHistory() throws Exception {
-    Flyway legacy = newLegacyFlyway();
-    cleanTestDatabase(legacy);
-    Flyway.configure()
-        .configuration(legacy.getConfiguration())
-        .target("2")
-        .load()
-        .migrate();
-
-    Flyway active = newFlyway();
-    assertThatThrownBy(active::migrate).hasMessageContaining("Migration checksum mismatch");
-  }
-
-  private static List<Integer> readSourceMigrationVersions(String location) throws Exception {
-    try (var migrations = Files.list(repositoryRoot().resolve(location))) {
+  private static List<Integer> readSourceMigrationVersions() throws Exception {
+    try (var migrations = Files.list(repositoryRoot().resolve("db/migration"))) {
       return migrations
           .map(path -> path.getFileName().toString())
           .filter(name -> name.matches("V[0-9]+__.+[.]sql"))
@@ -1324,20 +1309,12 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   }
 
   private static Flyway newFlyway() {
-    return newFlywayAt("classpath:db/migration");
-  }
-
-  private static Flyway newLegacyFlyway() {
-    return newFlywayAt("classpath:db/legacy-migration");
-  }
-
-  private static Flyway newFlywayAt(String location) {
     return Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .initSql("SET TIME ZONE 'Asia/Shanghai'")
         .schemas("batch", "quartz")
         .defaultSchema("batch")
-        .locations(location)
+        .locations("classpath:db/migration")
         .cleanDisabled(false)
         .configuration(Map.of("flyway.postgresql.transactional.lock", "false"))
         .load();

@@ -211,7 +211,7 @@
 | **R1 详情** | `docs/analysis/backend-deep-scan-bug-audit-round1-2026-05-14.md` | 第一轮完整报告 |
 | **已知跳过** | `docs/analysis/backend-deep-scan-bug-design-review-2026-05-14.md` | 已知设计 trade-off |
 | **修复清单** | git commits: `32288aca`, `9528615b`, `d739ee00`, `a8862766`, `4fbdb3d6`, `ccdf1f77`, `d41673da`, `aa5fcb38` | 逐项修复 |
-| **Flyway** | `db/legacy-migration/V124__r3_constraint_hardening.sql` | 约束硬化 |
+| **Flyway** | `db/migration/V124__r3_constraint_hardening.sql` | 约束硬化 |
 | **docs/agent-baseline.md** | 根目录 docs/agent-baseline.md (已更新) | 模块清单 + 配置规范 |
 
 ---

@@ -8,7 +8,7 @@ import lombok.Data;
  *
  * <p>由 trigger 模块在 fire 时与 trigger_request 同事务写入,TriggerOutboxRelay 周期扫描发布到 Kafka,成功后标 PUBLISHED。
  *
- * <p>字段语义见 {@code db/legacy-migration/V80__create_trigger_outbox_event.sql} 注释 + ADR-010 §Schema 节。
+ * <p>字段语义见 {@code db/migration/V80__create_trigger_outbox_event.sql} 注释 + ADR-010 §Schema 节。
  */
 @Data
 public class TriggerOutboxEventEntity {
