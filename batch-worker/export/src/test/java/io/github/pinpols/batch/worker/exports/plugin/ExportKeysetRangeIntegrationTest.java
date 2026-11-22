@@ -11,6 +11,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -518,6 +519,49 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         1);
 
     assertThat(ids).containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L);
+  }
+
+  @Test
+  @DisplayName("复合游标崩溃续跑:仅保留首页游标后重启,续页与库中行数对账且每键一次")
+  void jdbcMapped_compositeCursor_resumesAfterCrashAndReconciles() throws Exception {
+    Map<String, Object> spec = jdbcMappedCursorSpec(
+        "keyset_updated_at_demo", "updated_at", "id", List.of("id", "updated_at"));
+    Map<String, Object> config = Map.of("jdbc_mapped_export", spec);
+
+    ExportDataPlugin.DetailPage firstPage = jdbcMappedPlugin.loadDetailPage(
+        dupContext(config, UPDATED_AT_BATCH_NO, 1, 1), BATCH_ID_SEED, 2, null);
+    assertThat(firstPage.rows()).hasSize(2);
+    assertThat(firstPage.nextCursor()).isInstanceOf(List.class);
+    assertThat((List<?>) firstPage.nextCursor()).hasSize(2);
+
+    List<Object> ids = new ArrayList<>();
+    firstPage.rows().forEach(row -> ids.add(row.get("id")));
+
+    // 模拟进程崩溃后重启：不依赖插件实例状态，只用持久化游标继续翻页。
+    Object cursor = firstPage.nextCursor();
+    while (cursor != null) {
+      ExportDataPlugin.DetailPage page = jdbcMappedPlugin.loadDetailPage(
+          dupContext(config, UPDATED_AT_BATCH_NO, 1, 1), BATCH_ID_SEED, 2, cursor);
+      page.rows().forEach(row -> ids.add(row.get("id")));
+      cursor = page.nextCursor();
+    }
+
+    assertThat(ids).doesNotHaveDuplicates();
+    assertThat(ids).containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L);
+
+    PGSimpleDataSource ds = new PGSimpleDataSource();
+    ds.setURL(businessJdbcUrl());
+    ds.setUser("batch_user");
+    ds.setPassword("batch_pass_123");
+    try (Connection conn = ds.getConnection();
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery("""
+            SELECT count(*) FROM biz.keyset_updated_at_demo
+            WHERE tenant_id = 'test-tenant' AND batch_no = '%s'
+            """.formatted(UPDATED_AT_BATCH_NO))) {
+      assertThat(rs.next()).isTrue();
+      assertThat(ids).hasSize(rs.getInt(1));
+    }
   }
 
   @Test
