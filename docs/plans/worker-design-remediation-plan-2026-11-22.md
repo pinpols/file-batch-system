@@ -96,6 +96,14 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 - 验证：`IncrementalWatermarkMapperIntegrationTest` 8/8、`EndToEndSummarySqlIntegrationTest` 2/2、准入上限 1 用例 1/1、`DefaultScheduleForwarderSetBasedTest` 7/7 通过。
 - 仍未覆盖：Process 端到端、Export 崩溃续跑的文件对账扩展、12/6 同构建压测、JDBC 往返实测、双 Pod 取证与混版旧发布器退出顺序。
 
+### PR5 业务表类型补充（2026-11-22）
+
+- Export 可变表：`keyset_updated_at_demo` 验证 `updated_at` 同值跨页；单列明确失败，`(updated_at,id)` 复合游标每键一次。
+- Export 分区表：`keyset_partitioned_demo` 三个 RANGE 分区，跨分区同排序值由复合游标完整覆盖且不重复。
+- Process 增量业务 SQL：`biz.incremental_event` + `WHERE event_id > :highWaterMarkIn`，验证 IN=42 只处理 43、空批不产生 OUT、下一轮 43 继续处理 44。
+- 验证：`ExportKeysetRangeIT` 14/14、`SqlTransformComputePluginIntegrationTest` 21/21。
+- 仍未覆盖：完整 Worker 管道 HTTP E2E、复合游标崩溃续跑切换、12/6 同构建压测。
+
 ### 第 3 批（恢复合同）
 
 未实施。Import 分块提交与位点推进窗口、Export 制品摘要确认、Process 暂存代回收、Dispatch 渠道确认、Atomic 外部执行身份，仍按第 3 批的证据矩阵逐项取证。

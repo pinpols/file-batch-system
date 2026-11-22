@@ -31,6 +31,18 @@
   - 结算导出批次头表示例
 - `biz.settlement_detail`
   - 结算导出明细表示例
+- `biz.transaction`
+  - 交易流水导入目标示例；按 `txn_date` RANGE 分区，默认分区兜底
+- `biz.risk_score`
+  - 风险评分导入目标示例；按 `score_date` RANGE 分区
+- `biz.risk_alert`
+  - 风险预警导出源表示例；按 `alert_date` RANGE 分区
+- `biz.process_order_event`
+  - PROCESS 聚合演示源表
+- `biz.process_account_summary`
+  - PROCESS 聚合目标表示例
+- `biz.process_event_copy`
+  - PROCESS 单行到单行压测目标表示例
 
 ## 建模假设
 

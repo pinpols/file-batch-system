@@ -38,6 +38,7 @@
 - **SQL 模板（更灵活，需治理）**：`sql_template_export` → `SqlTemplateExportDataPlugin`
   - SQL 来源：模板 `default_query_sql`（命名参数：`:tenantId`、`:batchNo` 等）
   - 游标分页：`query_param_schema.sqlTemplateExport.cursorColumn`（默认 `id`）；结果集排序值可能重复时配置 **`cursorTiebreakerColumn`**，两列都必须出现在 SELECT 列表中。校验与失败语义同 JDBC 映射插件（页边界同值 → 配置错误；排序键 NULL → 配置错误）。
+  - 可变表用 `updated_at` 排序时必须配唯一后缀（例如主键），否则同值跨页会失败；分区表只要排序键与后缀出现在结果集中即可跨分区翻页，分页谓词由数据库裁剪到相关分区。
   - SQL 治理（JSqlParser AST）：仅允许 `SELECT/WITH`；禁止 `SELECT *`（`forbidSelectStar=true`）；schema 白名单（`allowedSchemas`）；必须包含 `:tenantId` / `:batchNo` 等命名参数
   - EXPLAIN 前置检查（`explainCheckEnabled=true`）：首页前执行 `EXPLAIN (FORMAT JSON)`，超过 `maxEstimatedRows` / `maxPlanCost` 则拒绝执行
   - 每页大小受 `batch.worker.export.sql-template.max-page-size` 限制

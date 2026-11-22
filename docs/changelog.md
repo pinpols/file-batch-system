@@ -4,6 +4,13 @@
 
 - 将主干 8 项必需检查移入独立的 `Main CI required checks` 规则集，仅仓库拥有者 `pinpols` 可在 PR 合入时手动使用例外。主干写入保护与评审要求由 `main protection` 继续执行。操作与验证见 [CI Runbook](runbook/ci.md#开源多人协作策略)。
 
+## 2026-11-22 业务表类型 SQL 覆盖补充
+
+- 导出分页补充可变表 `updated_at` 同值跨页与 RANGE 分区表跨分区用例：单列游标明确失败，复合游标逐键一次。
+- Process 增加 `biz.incremental_event` 增量业务 SQL 用例，覆盖 IN=42 只处理 43、空批不产生 OUT、下一轮 43 处理 44。
+- `scripts/db/business/README.md` 补齐系统示例业务表清单；`worker-plugins.md` 说明 `updated_at` 与分区表的分页要求。
+- 验证：`ExportKeysetRangeIT` 14/14、`SqlTransformComputePluginIntegrationTest` 21/21。
+
 ## 2026-11-22 后端整改 PR4 验收补强
 
 - 增量水位改为热表与归档表各取数值最大的有效成功 OUT：较晚完成的较低 OUT 不再回退后续 IN；新增乱序完成与跨归档最大值真库用例。

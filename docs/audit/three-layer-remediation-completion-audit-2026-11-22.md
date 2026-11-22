@@ -41,7 +41,7 @@ PR4 补充：`EndToEndSummarySqlIntegrationTest` 在真实 PostgreSQL 上执行 
 
 仍未关闭：
 
-- Process 插件发布与回报的端到端用例（`ProcessPipelineE2eIT`）。
+- Process 插件级增量业务 SQL 已补（IN/OUT、空批）；完整 Worker 管道发布与回报的 HTTP E2E（`ProcessPipelineE2eIT`）仍待补。
 - Export 崩溃续跑切换复合游标、JOIN 展开重复行、页大小 1 以外边界组合的文件对账扩展。
 - 第 3 批恢复合同：Import 分块提交与位点推进窗口、Export 制品摘要确认、Process 暂存代回收、Dispatch 渠道确认、Atomic 外部执行身份，仍需目标环境或外部系统证据。
 
@@ -75,6 +75,8 @@ PR4 补充：`EndToEndSummarySqlIntegrationTest` 在真实 PostgreSQL 上执行 
 | `EndToEndSummarySqlIntegrationTest` | 2/2 通过（真实 PostgreSQL 执行汇总 SQL） |
 | `JobNodeDispatchIntegrationTest#capacityWait_shouldClaimWaitingRequestWhenOnlySlotIsReleased` | 1/1 通过 |
 | `DefaultScheduleForwarderSetBasedTest` | 7/7 通过（含 ACK/DB 交错） |
+| `ExportKeysetRangeIT`（可变表 + 分区表） | 14/14 通过 |
+| `SqlTransformComputePluginIntegrationTest`（增量业务 SQL） | 21/21 通过 |
 | `spotless:check`、文档结构/引用/日期检查 | 通过 |
 
 ## 关闭判定

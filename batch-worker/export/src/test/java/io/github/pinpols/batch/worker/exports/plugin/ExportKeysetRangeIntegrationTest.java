@@ -50,6 +50,8 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   private static final long DUP_BATCH_ID = 91_000L;
   private static final String DUP_BATCH_NO = "KEYSET-DUP-BATCH";
   private static final String NULL_BATCH_NO = "KEYSET-NULL-BATCH";
+  private static final String UPDATED_AT_BATCH_NO = "KEYSET-UPDATED-AT-BATCH";
+  private static final String PARTITIONED_BATCH_NO = "KEYSET-PARTITIONED-BATCH";
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
@@ -199,6 +201,88 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
               TENANT_ID,
               DUP_BATCH_ID + 1,
               NULL_BATCH_NO));
+
+      // 可变表：updated_at 同值跨页；只有 (updated_at, id) 复合游标能安全翻页。
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_updated_at_demo (
+              id         BIGINT PRIMARY KEY,
+              tenant_id  VARCHAR(64)  NOT NULL,
+              batch_id   BIGINT       NOT NULL,
+              batch_no   VARCHAR(128) NOT NULL,
+              updated_at TIMESTAMPTZ  NOT NULL
+          )
+          """);
+      stmt.execute("TRUNCATE TABLE biz.keyset_updated_at_demo");
+      stmt.execute("""
+          INSERT INTO biz.keyset_updated_at_demo(id, tenant_id, batch_id, batch_no, updated_at) VALUES
+              (1, 'test-tenant', %d, '%s', '2024-01-01T10:00:00Z'),
+              (2, 'test-tenant', %d, '%s', '2024-01-01T10:00:00Z'),
+              (3, 'test-tenant', %d, '%s', '2024-01-01T10:00:00Z'),
+              (4, 'test-tenant', %d, '%s', '2024-01-01T11:00:00Z'),
+              (5, 'test-tenant', %d, '%s', '2024-01-01T11:00:00Z')
+          """.formatted(
+              BATCH_ID_SEED,
+              UPDATED_AT_BATCH_NO,
+              BATCH_ID_SEED,
+              UPDATED_AT_BATCH_NO,
+              BATCH_ID_SEED,
+              UPDATED_AT_BATCH_NO,
+              BATCH_ID_SEED,
+              UPDATED_AT_BATCH_NO,
+              BATCH_ID_SEED,
+              UPDATED_AT_BATCH_NO));
+
+      // 分区表：跨分区仍存在同排序值；复合游标必须覆盖所有分区且每键一次。
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_partitioned_demo (
+              id        BIGINT       NOT NULL,
+              tenant_id VARCHAR(64)  NOT NULL,
+              batch_id  BIGINT       NOT NULL,
+              batch_no  VARCHAR(128) NOT NULL,
+              sort_no   INTEGER      NOT NULL,
+              PRIMARY KEY (id)
+          ) PARTITION BY RANGE (id)
+          """);
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_partitioned_demo_p0
+              PARTITION OF biz.keyset_partitioned_demo FOR VALUES FROM (0) TO (100)
+          """);
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_partitioned_demo_p1
+              PARTITION OF biz.keyset_partitioned_demo FOR VALUES FROM (100) TO (200)
+          """);
+      stmt.execute("""
+          CREATE TABLE IF NOT EXISTS biz.keyset_partitioned_demo_p2
+              PARTITION OF biz.keyset_partitioned_demo FOR VALUES FROM (200) TO (300)
+          """);
+      stmt.execute("TRUNCATE TABLE biz.keyset_partitioned_demo");
+      stmt.execute("""
+          INSERT INTO biz.keyset_partitioned_demo(id, tenant_id, batch_id, batch_no, sort_no) VALUES
+              (1,   'test-tenant', %d, '%s', 10),
+              (50,  'test-tenant', %d, '%s', 10),
+              (99,  'test-tenant', %d, '%s', 10),
+              (100, 'test-tenant', %d, '%s', 10),
+              (101, 'test-tenant', %d, '%s', 20),
+              (150, 'test-tenant', %d, '%s', 20),
+              (200, 'test-tenant', %d, '%s', 20),
+              (250, 'test-tenant', %d, '%s', 30)
+          """.formatted(
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO,
+              BATCH_ID_SEED,
+              PARTITIONED_BATCH_NO));
 
       conn.commit();
     }
@@ -410,6 +494,50 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("可变表 updated_at 同值跨页:单列失败,复合(updated_at,id)每键一次")
+  void jdbcMapped_updatedAtCompositeCursor_exportsEachRowOnce() throws Exception {
+    Map<String, Object> withoutTiebreaker = jdbcMappedCursorSpec(
+        "keyset_updated_at_demo", "updated_at", null, List.of("id", "updated_at"));
+    assertThatThrownBy(() -> jdbcMappedPlugin.loadDetailPage(
+            dupContext(Map.of("jdbc_mapped_export", withoutTiebreaker), UPDATED_AT_BATCH_NO, 1, 1),
+            BATCH_ID_SEED,
+            1,
+            null))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("detailTiebreakerColumn");
+
+    Map<String, Object> withTiebreaker = jdbcMappedCursorSpec(
+        "keyset_updated_at_demo", "updated_at", "id", List.of("id", "updated_at"));
+    List<Object> ids = collectIds(
+        jdbcMappedPlugin,
+        Map.of("jdbc_mapped_export", withTiebreaker),
+        BATCH_ID_SEED,
+        UPDATED_AT_BATCH_NO,
+        1,
+        1,
+        1);
+
+    assertThat(ids).containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L);
+  }
+
+  @Test
+  @DisplayName("分区表跨分区同排序值:复合游标覆盖所有分区且每键一次")
+  void jdbcMapped_partitionedTable_compositeCursorCoversAllPartitions() throws Exception {
+    Map<String, Object> spec =
+        jdbcMappedCursorSpec("keyset_partitioned_demo", "sort_no", "id", List.of("id", "sort_no"));
+    List<Object> ids = collectIds(
+        jdbcMappedPlugin,
+        Map.of("jdbc_mapped_export", spec),
+        BATCH_ID_SEED,
+        PARTITIONED_BATCH_NO,
+        1,
+        1,
+        1);
+
+    assertThat(ids).containsExactlyInAnyOrder(1L, 50L, 99L, 100L, 101L, 150L, 200L, 250L);
+  }
+
+  @Test
   @DisplayName("复合排序在多分片下仍无重漏")
   void compositeOrder_fourPartitions_disjointAndComplete() throws Exception {
     Map<String, Object> jdbcMappedSpec = jdbcMappedDupSpec(true);
@@ -450,6 +578,27 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
     spec.put("detailSelectColumns", List.of("id", "sort_no"));
     if (withTiebreaker) {
       spec.put("detailTiebreakerColumn", "id");
+    }
+    return spec;
+  }
+
+  private static Map<String, Object> jdbcMappedCursorSpec(
+      String detailTable,
+      String orderByColumn,
+      String tiebreakerColumn,
+      List<String> detailSelectColumns) {
+    Map<String, Object> spec = new LinkedHashMap<>();
+    spec.put("schema", "biz");
+    spec.put("batchTable", "settlement_batch");
+    spec.put("batchTenantColumn", "tenant_id");
+    spec.put("batchNoColumn", "batch_no");
+    spec.put("batchSelectColumns", List.of("id", "batch_no", "tenant_id"));
+    spec.put("detailTable", detailTable);
+    spec.put("detailFkColumn", "batch_id");
+    spec.put("detailOrderByColumn", orderByColumn);
+    spec.put("detailSelectColumns", detailSelectColumns);
+    if (tiebreakerColumn != null) {
+      spec.put("detailTiebreakerColumn", tiebreakerColumn);
     }
     return spec;
   }
