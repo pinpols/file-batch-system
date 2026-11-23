@@ -148,7 +148,7 @@ dispatch 的 `RETRY` / `COMPENSATE` 是失败分支步骤：`RETRY` 仅在 `retr
 
 | 层次 | 选型 |
 |------|------|
-| 运行时 | JDK 21(LTS), Spring Boot 4.1.2(Spring MVC) |
+| 运行时 | JDK 21(LTS), Spring Boot 4.2.0(Spring MVC) |
 | 消息队列 | Apache Kafka(版本由 Spring Boot BOM 管理) |
 | 数据库 | PostgreSQL 17（JSONB、TIMESTAMPTZ），HikariCP 连接池 |
 | 缓存 / 协调 | Valkey 8（Redis 协议，Sentinel 高可用）+ Spring Data Redis：查询缓存、会话与令牌撤销、幂等、限流令牌桶；ShedLock 分布式锁；进程内 Caffeine |
@@ -161,7 +161,7 @@ dispatch 的 `RETRY` / `COMPENSATE` 是失败分支步骤：`RETRY` 仅在 `retr
 | 可观测性 | Micrometer + Prometheus 指标，OpenTelemetry（OTLP）→ Tempo / Loki，Grafana 看板 |
 | 多语言 SDK | Java / Python / TypeScript / Go / Rust（ADR-035，共享契约 fixture） |
 | 前端控制台 | Vue 3 + TypeScript + Vite + Pinia + Element Plus（配对仓库 `../batch-console`） |
-| 测试与压测 | JUnit 5、Testcontainers（PostgreSQL / Kafka / Redis）、ArchUnit、Mockito / AssertJ、Gatling、Jazzer、PIT |
+| 测试与压测 | JUnit 6、Testcontainers（PostgreSQL / Kafka / Redis）、ArchUnit、Mockito / AssertJ、Gatling、Jazzer、PIT |
 | 构建与部署 | Maven 3.9+（Spotless / PMD / SpotBugs / JaCoCo / Enforcer）、Docker Compose、Kubernetes + Helm |
 
 ## 快速开始
@@ -395,7 +395,7 @@ DB (job_task: READY)
 
 | 层次 | 框架 | 范围 |
 |------|------|------|
-| 单元测试 | JUnit 5 + Mockito | 领域逻辑、状态机、路由策略 |
+| 单元测试 | JUnit 6 + Mockito | 领域逻辑、状态机、路由策略 |
 | 集成测试 | Spring Boot Test + Testcontainers | Mapper、Repository、Service 与真实 DB/Kafka |
 | 端到端测试 | Awaitility + 内嵌 App | 完整 Kafka 主链（IMPORT/EXPORT/DISPATCH） |
 

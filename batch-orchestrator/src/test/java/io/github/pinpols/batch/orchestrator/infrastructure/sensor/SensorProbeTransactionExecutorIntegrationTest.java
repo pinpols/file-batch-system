@@ -212,7 +212,13 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     nodeRun.setNodeStatus("RUNNING");
 
     AtomicInteger attempts = new AtomicInteger();
+    // 同类其它用例可能遗留 RUNNING 且 next_probe_at 为空的 WAIT 行，同批扫描时会共用这个 mock。
+    // 只对本用例节点计数和推进，避免其它节点的探测消耗 attempts、把本节点推进到未来而依赖执行顺序。
     doAnswer(invocation -> {
+          WorkflowNodeRunEntity probed = invocation.getArgument(0);
+          if (!nodeRunId.equals(probed.getId())) {
+            return null;
+          }
           if (attempts.incrementAndGet() == 1) {
             jdbcTemplate.update(updateWorkflowNodeRunSql, nodeRunId);
             throw new IllegalStateException("downstream outbox unavailable");

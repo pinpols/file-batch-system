@@ -2,7 +2,7 @@
 
 **ADR-035 租户自托管 Worker SDK** —— Java 端集成测试工具包(SDK-P5-2)。
 
-给租户的 SDK worker 测试用的 fake 平台 + JUnit 5 扩展,让你**不起真 orchestrator** 就能端到端验证 handler 行为(register → claim → report 全链路)。
+给租户的 SDK worker 测试用的 fake 平台 + JUnit 6 扩展,让你**不起真 orchestrator** 就能端到端验证 handler 行为(register → claim → report 全链路)。
 
 > 核心 SDK 见 [`core/`](../core/);Spring Boot 自动装配见 [`spring/`](../spring/);Python 对等实现见 [`../../python/`](../../python/)。
 
@@ -16,7 +16,7 @@
 | 组件 | 作用 |
 |------|------|
 | `FakeBatchPlatform` | 进程内 fake 平台:模拟 `/internal/*`(register/claim/report/renew)+ 派单,记录所有调用 |
-| `@BatchWorkerTest` / `BatchWorkerExtension` | JUnit 5 扩展:自动拉起 FakeBatchPlatform + EmbeddedKafka,注入到测试 |
+| `@BatchWorkerTest` / `BatchWorkerExtension` | JUnit 6 扩展:自动拉起 FakeBatchPlatform + EmbeddedKafka,注入到测试 |
 | `TaskDispatchMessageBuilder` | 构造 `batch.task.dispatch.<tenant>.*` 派单消息的 fluent builder（`TaskDispatchMessageBuilder.dispatch("<taskType>")`） |
 | `RecordedReport` | 断言用 record:捕获 worker 上报的终态(`success()` / `message()` / `errorCode()` / `outputs()`) |
 

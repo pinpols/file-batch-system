@@ -5,6 +5,13 @@
 - [ADR-035](architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) 补充内部 API Key 的 `worker.ops` scope：Worker 执行凭据（`worker.execute`）只用于注册、心跳、认领、回报与续租，强制下线、接管、排空/恢复、状态变更和任务取消改为要求 `worker.ops`；平台 `X-Internal-Secret` 通道与 `*` 通配存量 Key 保持原语义。
 - 判定与验证范围见[后端安全与资源审查](audit/backend-security-resource-audit-2026-11-23.md)：本机单测、真实 PostgreSQL 用例与 SDK 各语言工具链通过；真实拆分账号、目标环境与压测验收待补。
 
+## 2026-11-24 Spring Boot 4.2.0 与 Spring AI 2.1.0 升级
+
+- 根 POM：Boot parent 4.1.2 → 4.2.0，Spring AI 2.0.2 → 2.1.0；移除旧于 Boot 管理版本的 netty/Jackson 2/3/Tomcat/Mockito 覆盖，`opentelemetry-instrumentation` 升到 2.34.0-alpha（API 1.68）。
+- 迁移 OTel appender、`TextMapGetter`、Micrometer observation handler 的废弃 API；两处依赖同类共享数据顺序的测试改为自包含（JUnit 6 默认方法顺序变化）。
+- 同步更新 README、agent 基线、运行时兼容约束、技术栈、许可证清单与 SBOM；本地验证覆盖全 reactor 编译、各模块单测、8 应用启动、Flyway 389、Redis/Kafka 与 36/36 覆盖主链。
+- 真实 Anthropic 端点（Bearer/API 版本/流式/工具）与缓存 token 费率对账仍需外部凭据和供应商账单，未纳入本次本地验证。
+
 ## 2026-11-22 主干 CI 紧急合入例外
 
 - 将主干 8 项必需检查移入独立的 `Main CI required checks` 规则集，仅仓库拥有者 `pinpols` 可在 PR 合入时手动使用例外。主干写入保护与评审要求由 `main protection` 继续执行。操作与验证见 [CI Runbook](runbook/ci.md#开源多人协作策略)。

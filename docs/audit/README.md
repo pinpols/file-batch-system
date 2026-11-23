@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [Spring AI 2.1 与 Boot 4.2 升级评估](spring-ai-2-1-boot-4-2-upgrade-assessment-2026-11-23.md) | Anthropic 认证、缓存计费、根 BOM 与平台回归条件 |
 | [三层整改完成度审计](three-layer-remediation-completion-audit-2026-11-22.md) | 性能容量、五类 Worker、后端架构三层整改的完成度、PR4 补强与仍未关闭的目标环境验收 |
 | [后端安全与运行资源深度审查](backend-security-resource-audit-2026-11-23.md) | SDK 凭据、非幂等接管、依赖告警、权限、连接池、线程池及内存。记录实际扫描和定向验证 |
 | [后端模块与功能职责边界审查](backend-module-boundary-review-2026-11-22.md) | 模块依赖、数据库写权限、触发与文件状态交接。两项 PostgreSQL 状态覆盖反例和一项列授权差异 |

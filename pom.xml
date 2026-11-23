@@ -6,8 +6,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <!-- Stable patch release in the Spring Boot 4.1 line. -->
-        <version>4.1.2</version>
+        <!-- Spring Boot 4.2 线的最新稳定补丁版本。 -->
+        <version>4.2.0</version>
         <relativePath/>
     </parent>
 
@@ -46,12 +46,8 @@
         <maven.compiler.release>21</maven.compiler.release>
         <!-- Testcontainers 默认由 Ryuk 在测试 JVM 退出后清理；仅本地 profile 显式开启跨运行复用。 -->
         <testcontainers.reuse.enable>false</testcontainers.reuse.enable>
-        <!-- 覆盖 Spring Boot 4.1 管理版本，修复 Jackson 反序列化相关高危漏洞。 -->
-        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
-        <jackson-bom.version>3.1.7</jackson-bom.version>
-        <!-- Tomcat 11.0.22 is flagged by the Full Gate security scan. Keep the
-             embedded servlet container on the first patched 11.x release. -->
-        <tomcat.version>11.0.25</tomcat.version>
+        <!-- Jackson 2/3 与 Tomcat 交给 Spring Boot 4.2 管理（2.21.8 / 3.1.8 / 11.0.27）；
+             这些版本均不旧于此前为 CVE 覆盖而固定的版本，不再单独固定。 -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <awssdk.version>2.55.11</awssdk.version>
         <testcontainers.version>2.0.5</testcontainers.version>
@@ -71,16 +67,15 @@
              @Nullable 是 TYPE_USE,该规则不识别,见 utils/package-info.java 说明)。 -->
         <jsr305.version>3.0.2</jsr305.version>
         <lombok.version>1.18.48</lombok.version>
-        <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
-        <spring-ai.version>2.0.2</spring-ai.version>
+        <spring-ai.version>2.1.0</spring-ai.version>
         <jsqlparser.version>5.4</jsqlparser.version>
         <jose4j.version>0.9.7</jose4j.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.13</spring-retry.version>
-        <!-- OTel Logback appender 必须与 Spring Boot 4.1 管理的 OTel 1.62 API 对齐；
-             2.28.0-alpha 对应 API 1.62，后续版本会要求更高 API，不能单独滚动。 -->
-        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
+        <!-- OTel Logback appender 必须与 Spring Boot 4.2 管理的 OTel 1.68 API 对齐；
+             2.34.0-alpha 对应 API 1.68。该 artifact 不在 Boot BOM 内，仍需显式固定。 -->
+        <opentelemetry-instrumentation.version>2.34.0-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.5.1</archunit.version>
@@ -90,18 +85,15 @@
         <commons-compress.version>1.28.0</commons-compress.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
              Spring Boot 默认传递依赖，强制升到已验证的安全 patch 版本。
-             - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
-             - netty 4.2.13.Final → 4.2.15.Final (2026-06-10): CVE-2026-44249 IPv6 subnet filter
-               bypass (netty-handler) + CVE-2026-44894 QUIC token handler (netty-codec-classes-quic)
-             - netty 4.2.15.Final → 4.2.16.Final: CVE-2026-55831/55833/56745/56816/59901
-             - netty 4.2.16.Final → 4.2.17.Final: CVE-2026-75595 netty-handler
+             - netty 由 Spring Boot 4.2 管理到 4.2.20.Final，高于下列历史安全下限，不再固定
+               （历史：4.2.12 → 4.2.13 → 4.2.15 → 4.2.16 → 4.2.17，对应 CVE-2026-42577/42579/42582-42584/42587、
+               CVE-2026-44249、CVE-2026-44894、CVE-2026-55831/55833/56745/56816/59901、CVE-2026-75595）
              - bcprov-jdk18on 1.81 → 1.86: security fixes and current compatible release
              - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
              - postgresql 42.7.11 → 42.7.12: CVE-2026-54291
              - postgresql 42.7.13: SCRAM channel-binding downgrade fix and protocol improvements
              - async-http-client 2.16.1 → 3.0.14: CVE-2026-107227 / CVE-2026-107230
              - lz4-java 1.10.1 → 1.11.4: CVE-2026-106451。 -->
-        <netty.version>4.2.17.Final</netty.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <async-http-client.version>3.0.14</async-http-client.version>
         <lz4-java.version>1.11.4</lz4-java.version>

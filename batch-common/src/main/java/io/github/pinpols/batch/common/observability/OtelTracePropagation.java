@@ -7,7 +7,6 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapGetter;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -19,14 +18,6 @@ public final class OtelTracePropagation {
   private static final W3CTraceContextPropagator PROPAGATOR =
       W3CTraceContextPropagator.getInstance();
   private static final TextMapGetter<Map<String, String>> GETTER = new TextMapGetter<>() {
-    @Override
-    public Iterable<String> keys(Map<String, String> carrier) {
-      if (carrier == null) { // empty-check: allow - Sonar S2259
-        return List.of();
-      }
-      return carrier.keySet();
-    }
-
     @Override
     public String get(@Nullable Map<String, String> carrier, String key) {
       return carrier == null ? null : carrier.get(key); // empty-check: allow - Sonar S2259

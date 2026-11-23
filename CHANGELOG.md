@@ -28,6 +28,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- 依赖升级到 Spring Boot 4.2.0 与 Spring AI 2.1.0：根 POM 的 parent 与 `spring-ai.version` 更新；移除 netty、Jackson 2/3、Tomcat、Mockito 五个已旧于 Boot 管理版本的固定（由 Boot 4.2 管理 4.2.20 / 2.21.8 / 3.1.8 / 11.0.27 / 5.24.0），`opentelemetry-instrumentation` 升到 `2.34.0-alpha` 对齐 OTel API 1.68。同步迁移 OTel appender、`TextMapGetter` 与 Micrometer observation handler 的废弃 API。见[升级评估](docs/audit/spring-ai-2-1-boot-4-2-upgrade-assessment-2026-11-23.md)。
 - Trigger 的 `CronExpressionAdapter` 缓存改为 Caffeine 容量淘汰（上限 1024，键为表达式 + 时区），删除生产无调用点的 `evict`；未命中或淘汰后按同一规则重算，Quartz 触发序列与夏令时结果不变。见[联验记录](docs/verifications/backend-oss-reuse-acceptance-2026-11-22.md)。
 - 平台库 Flyway 保持原 V1–V389 迁移链；#1449 的 V1/V2 重编号已回退，恢复 Docker shedlock 初始化与旧链校验。后续数据库结构变更从 V390 开始。
 - Orchestrator 取证包改为跨副本共享卷：Helm 新增 `orchestrator.forensic.persistence`，把同一 RWX PVC 挂到所有副本并设置 `BATCH_FORENSIC_STORAGE_DIR`；生产 values 启用，迁移旧包与双 Pod 下载验收要求写入 ADR-022。

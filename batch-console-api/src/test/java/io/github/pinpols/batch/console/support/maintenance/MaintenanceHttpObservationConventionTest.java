@@ -20,7 +20,8 @@ class MaintenanceHttpObservationConventionTest {
     PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
     try {
       ObservationRegistry observations = ObservationRegistry.create();
-      DefaultMeterObservationHandler handler = new DefaultMeterObservationHandler(registry);
+      DefaultMeterObservationHandler handler =
+          DefaultMeterObservationHandler.builder(registry).build();
       observations.observationConfig().observationHandler(handler);
       MaintenanceHttpObservationConvention convention = new MaintenanceHttpObservationConvention();
       ServerHttpObservationFilter filter =

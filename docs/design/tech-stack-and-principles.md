@@ -2,11 +2,11 @@
 
 > 拆自 mega 设计文档 ch.3。版本以根 `pom.xml` 的 dependency management 为准；新增依赖须同步更新本文件 + `docs/compliance/THIRD-PARTY-LICENSES.md`。
 
-## 1. 技术栈（截至 2026-09-25）
+## 1. 技术栈（截至 2026-11-24）
 
 | 类别 | 技术 | 版本 | 使用模块 |
 |------|------|------|---------|
-| 框架 | Spring Boot | 4.1.1 | all |
+| 框架 | Spring Boot | 4.2.0 | all |
 | 语言 | Java | 21 | all |
 | 持久化（PG） | MyBatis Spring Boot Starter | 4.1.0 | orchestrator, workers, trigger, console-api | 禁止 Spring Data JDBC |
 | 数据库迁移 | Flyway | managed | all |
@@ -17,7 +17,7 @@
 | 分布式锁 | ShedLock (JDBC + Redis) | 6.3.0 | common |
 | 调度 | Quartz Scheduler (JDBC JobStore) | managed | trigger |
 | 安全 | Spring Security + OAuth2 JOSE | managed | console-api |
-| HTTP 客户端 | OkHttp | 5.5.0 | export, dispatch, Java worker SDK |
+| HTTP 客户端 | OkHttp | 5.5.1 | export, dispatch, Java worker SDK |
 | 断路器 | Resilience4j | 2.4.0 | common, orchestrator, dispatch, console-api |
 | 电子表格 | Apache POI | 5.5.1 | import, export, console-api |
 | 压缩格式 | Apache Commons Compress | 1.28.0 | import |
@@ -29,11 +29,11 @@
 | 分布式追踪 | Micrometer Tracing → OpenTelemetry OTLP | managed | common |
 | 监控可视化 | Grafana | — | 独立运维基础设施 |
 | 日志 | Logback + SLF4J | managed | all |
-| AI 控制台增强 | Spring AI + OpenAI Starter | 2.0.1 | console-api（仅控制面） |
+| AI 控制台增强 | Spring AI + OpenAI Starter | 2.1.0 | console-api（仅控制面） |
 | 代码生成 | Lombok | 1.18.48 | all (provided) |
 | 测试容器 | Testcontainers (PostgreSQL + Kafka + MinIO + Redis) | 2.0.5 | all (test) |
 | 邮件测试 | GreenMail | 2.1.8 | dispatch (test) |
-| HTTP Mock | MockWebServer3 | 5.5.0 | worker-core, trigger, atomic (test) |
+| HTTP Mock | MockWebServer3 | 5.5.1 | worker-core, trigger, atomic (test) |
 
 > **AI 边界**：AI 能力**只**落在 `batch-console-api`，不进入 orchestrator / worker / trigger / common，不参与调度状态机推进和执行内核。
 

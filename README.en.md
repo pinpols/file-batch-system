@@ -146,7 +146,7 @@ Getting started and operations:
 
 | Layer | Choice |
 |---|---|
-| Runtime | JDK 21 (LTS), Spring Boot 4.1.2 (Spring MVC) |
+| Runtime | JDK 21 (LTS), Spring Boot 4.2.0 (Spring MVC) |
 | Messaging | Apache Kafka (version managed by the Spring Boot BOM) |
 | Database | PostgreSQL 17 (JSONB, TIMESTAMPTZ) with HikariCP |
 | Cache / coordination | Valkey 8 (Redis protocol, Sentinel HA) via Spring Data Redis: query cache, session and token revocation, idempotency, token-bucket rate limiting; ShedLock distributed locks; in-process Caffeine |
@@ -159,7 +159,7 @@ Getting started and operations:
 | Observability | Micrometer + Prometheus metrics, OpenTelemetry (OTLP) to Tempo / Loki, Grafana dashboards |
 | Multi-language SDK | Java / Python / TypeScript / Go / Rust (ADR-035, shared contract fixtures) |
 | Console frontend | Vue 3 + TypeScript + Vite + Pinia + Element Plus (paired repo `../batch-console`) |
-| Testing and load | JUnit 5, Testcontainers (PostgreSQL / Kafka / Redis), ArchUnit, Mockito / AssertJ, Gatling, Jazzer, PIT |
+| Testing and load | JUnit 6, Testcontainers (PostgreSQL / Kafka / Redis), ArchUnit, Mockito / AssertJ, Gatling, Jazzer, PIT |
 | Build and deploy | Maven 3.9+ (Spotless / PMD / SpotBugs / JaCoCo / Enforcer), Docker Compose, Kubernetes + Helm |
 
 ## Quick start
@@ -386,7 +386,7 @@ Testing is organized in three layers; see [docs/testing/full-project-test-plan.m
 
 | Layer | Framework | Scope |
 |---|---|---|
-| Unit | JUnit 5 + Mockito | Domain logic, state machines, routing strategies |
+| Unit | JUnit 6 + Mockito | Domain logic, state machines, routing strategies |
 | Integration | Spring Boot Test + Testcontainers | Mappers, repositories, services against real DB/Kafka |
 | End-to-end | Awaitility + embedded apps | Full Kafka main chain (IMPORT/EXPORT/DISPATCH) |
 
