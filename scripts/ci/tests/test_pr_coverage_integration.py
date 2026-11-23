@@ -106,7 +106,7 @@ class PrCoverageIntegrationTest(unittest.TestCase):
     def test_lists_existing_unique_test_classes_in_owned_modules(self) -> None:
         seen = set()
         expected_modules = {
-            "a": {"batch-orchestrator"},
+            "a": {"batch-orchestrator", "batch-worker/core"},
             "a-extra": {"batch-orchestrator"},
             "b1": {"batch-trigger", "batch-worker/process", "batch-worker/dispatch"},
             "b2-workers": {"batch-worker/import", "batch-worker/export"},

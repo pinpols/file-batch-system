@@ -173,8 +173,8 @@ batch-e2e-tests
 |---|---|---|---|
 | `batch-common` | `config`、`events`、`outbox`、`security`、`rls`、`timezone`、`i18n` | 跨模块基础设施、公共协议、自动配置和安全基线 | 不放 Console DTO、业务编排、对象存储/AI/Excel 等重运行时依赖 |
 | `batch-test-support` | Testcontainers、数据库初始化、共享测试资源、测试 fixture、共享断言 | 为 Java 模块提供测试基础设施 | 仅 test scope，不进入生产运行时 |
-| `batch-trigger` | `quartz`、`calendar`、`outbox`、`controller` | 计算触发时间、业务日历、misfire/catch-up，并写入 trigger outbox | 不直接读取或写入 Orchestrator 状态表，不执行 Worker 任务 |
-| `batch-orchestrator` | `controller`、`application`、`domain`、`infrastructure`、`mapper` | 唯一状态主机，负责 launch、claim、report、lease、retry、workflow 编排和任务派发 | 不执行文件/业务处理，不让 Worker 直接改 `job_instance`、`job_task`、`outbox_event` |
+| `batch-trigger` | `quartz`、`calendar`、`outbox`、`controller` | 计算触发时间、业务日历、misfire/catch-up，并写入 trigger outbox | 为回执和调度连续性读取关联的 Job/Workflow 运行信息。对 `workflow_definition` 只写定时开关与更新时间（列级授权）；表达式、归属和版本归 Console。Orchestrator 维护其运行生命周期 |
+| `batch-orchestrator` | `controller`、`application`、`domain`、`infrastructure`、`mapper` | 唯一状态主机，负责 launch、claim、report、lease、retry、workflow 编排和任务派发 | 文件和业务处理由 Worker 执行。Worker 仅按[列白名单](runtime-module-communication.md#读图要点)更新 `job_task` 的执行元数据 |
 | `batch-worker-core` | `support`、`infrastructure`、`mapper`、`route`、pipeline runtime | Worker SPI、任务领取/续租/上报适配、阶段上下文和通用执行骨架 | 不拥有调度状态，不绕过 Orchestrator 写控制面终态 |
 | `batch-worker-import` | `imports/{stage,domain,infrastructure}` | 文件接收、解析、校验、COPY/UPSERT/分区导入、checkpoint；预处理策略由固定阶段调用 | 不负责调度、跨作业 DAG 决策或外部通知编排 |
 | `batch-worker-export` | `exports/{stage,renderer,sink}` | 查询、渲染、分片导出、multipart 和对象存储落地；导出格式策略由固定阶段调用 | 不负责导出任务 launch、租户审批或调度状态推进 |

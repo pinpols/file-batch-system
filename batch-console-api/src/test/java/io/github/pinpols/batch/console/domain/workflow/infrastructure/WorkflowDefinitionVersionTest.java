@@ -35,6 +35,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
@@ -192,7 +193,7 @@ class WorkflowDefinitionVersionTest {
   }
 
   @Test
-  @DisplayName("fullUpdate 成功 → 历史表追加 1 行(version = oldVersion + 1)")
+  @DisplayName("fullUpdate 成功 → 历史表取持久化后的版本与开关，画布不写回定时开关")
   void shouldAppendSnapshot_whenFullUpdateSucceeds() {
     // 准备
     WorkflowDefinitionEntity def = defEntity(3);
@@ -203,11 +204,20 @@ class WorkflowDefinitionVersionTest {
     def.setTriggerMode("SCHEDULED");
     def.setCalendarCode("CN_WORKDAY");
     def.setDependsOnJobCode("PREPARE_DATA");
+    // 保存前的读取仍是开启，保存期间暂停落库：快照必须取保存后的实际开关。
+    WorkflowDefinitionEntity persisted = defEntity(4);
+    persisted.setScheduleEnabled(false);
+    persisted.setScheduleType("CRON");
+    persisted.setScheduleExpr("0 0 * * * ?");
+    persisted.setTimezone("Asia/Shanghai");
+    persisted.setTriggerMode("SCHEDULED");
+    persisted.setCalendarCode("cn_workday");
+    persisted.setDependsOnJobCode("PREPARE_DATA");
     JobDefinitionView dependency = new JobDefinitionView();
     dependency.setId(101L);
     dependency.setJobCode("PREPARE_DATA");
     when(jobDefinitionMapper.selectByUniqueKey(TENANT, "PREPARE_DATA")).thenReturn(dependency);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
+    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, persisted, persisted);
     when(lockService.currentHolder(TENANT, DEF_ID))
         .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
     when(definitionMapper.updateAndBumpVersion(
@@ -224,6 +234,10 @@ class WorkflowDefinitionVersionTest {
     service.fullUpdate(DEF_ID, fullUpdateBody(3), USER);
 
     // 断言
+    ArgumentCaptor<WorkflowDefinitionVersionUpdateParam> updateCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionVersionUpdateParam.class);
+    verify(definitionMapper).updateAndBumpVersion(updateCaptor.capture());
+    assertThat(updateCaptor.getValue().scheduleEnabled()).isNull();
     ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
         ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
     verify(versionMapper, times(1)).insertVersionSnapshot(captor.capture());
@@ -232,7 +246,7 @@ class WorkflowDefinitionVersionTest {
     assertThat(p.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
     assertThat(p.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
     assertThat(p.getVersion()).isEqualTo(4); // bumped from 3
-    assertThat(p.getScheduleEnabled()).isTrue();
+    assertThat(p.getScheduleEnabled()).isFalse();
     assertThat(p.getScheduleType()).isEqualTo("CRON");
     assertThat(p.getScheduleExpr()).isEqualTo("0 0 * * * ?");
     assertThat(p.getTimezone()).isEqualTo("Asia/Shanghai");
@@ -250,8 +264,9 @@ class WorkflowDefinitionVersionTest {
   void shouldAppendMultipleSnapshots_whenFullUpdatedNTimes() {
     // 准备
     WorkflowDefinitionEntity def = defEntity(1);
-    // 模拟主表 version 在两次调用间从 1 → 2 → 3
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, defEntity(2));
+    // 每次保存先读当前定义，写后再读持久化结果并加载详情；version 从 1 → 2 → 3。
+    when(definitionMapper.selectById(TENANT, DEF_ID))
+        .thenReturn(def, defEntity(2), defEntity(2), defEntity(2), defEntity(3), defEntity(3));
     when(lockService.currentHolder(TENANT, DEF_ID))
         .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
     when(definitionMapper.updateAndBumpVersion(argThat(value ->

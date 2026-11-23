@@ -676,8 +676,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
   /**
    * pipeline 失败后的补偿钩子。默认实现：当 attributes 中存在 {@code fileId} 时，把 file_record 状态推进为 FAILED
-   * 并把错误三元组（code / message / errorKey / errorArgs）写进 metadata；不绑定 file_record 的链路（如 PROCESS）应覆盖为
-   * no-op。
+   * 并把错误三元组（code / message / errorKey / errorArgs）写进 metadata；文件已被并发推进或归档时只记录告警，不覆盖新状态；
+   * 不绑定 file_record 的链路（如 PROCESS）应覆盖为 no-op。
    */
   protected void handlePipelineFailure(
       Map<String, Object> attributes,
@@ -697,7 +697,16 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     metadata.put("errorMessage", errorMessage);
     metadata.put("errorKey", errorKey);
     metadata.put("errorArgs", errorArgs);
-    fileRecords.updateFileStatus(fileId, FileStatus.FAILED.code(), metadata);
+    try {
+      fileRecords.updateFileStatus(fileId, FileStatus.FAILED.code(), metadata);
+    } catch (BizException exception) {
+      if (exception.getCode() != ResultCode.STATE_CONFLICT) {
+        throw exception;
+      }
+      // 失败补偿是尽力而为：状态已变说明文件被并发推进，不能覆盖，也不能掩盖原始失败。
+      SwallowedExceptionLogger.warn(
+          AbstractPipelineStepExecutionAdapter.class, "skip:file-status-conflict", exception);
+    }
   }
 
   private void handlePipelineFailureWithoutDetails(

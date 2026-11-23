@@ -107,8 +107,7 @@ final class TenantWorkflowDefinitionApplySupport {
     param.setVersion(EmptyChecks.isNull(current) ? 1 : current.getVersion());
     param.setEnabled(EmptyChecks.isNotNull(spec.getEnabled()) && spec.getEnabled());
     param.setSingleJobDefinitionId(singleJobDefinitionId);
-    param.setScheduleEnabled(
-        EmptyChecks.isNotNull(spec.getScheduleEnabled()) && spec.getScheduleEnabled());
+    param.setScheduleEnabled(scheduleEnabledForUpsert(spec, current));
     String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
     param.setScheduleType(scheduleType);
     param.setScheduleExpr(spec.getScheduleExpr());
@@ -142,7 +141,8 @@ final class TenantWorkflowDefinitionApplySupport {
     boolean effectiveEnabled = EmptyChecks.isNull(current)
         ? Boolean.TRUE.equals(param.getEnabled())
         : Boolean.TRUE.equals(Nullables.coalesce(spec.getEnabled(), current.getEnabled()));
-    if (effectiveEnabled || Boolean.TRUE.equals(param.getScheduleEnabled())) {
+    Boolean effectiveScheduleEnabled = resolveEffectiveScheduleEnabled(spec, current, param);
+    if (effectiveEnabled || Boolean.TRUE.equals(effectiveScheduleEnabled)) {
       WorkflowNodeQuery workflowNodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, defId, null);
       List<WorkflowNodeEntity> workflowNodes =
           definitionMappers.workflowNode.selectByQuery(workflowNodeQuery);
@@ -159,7 +159,7 @@ final class TenantWorkflowDefinitionApplySupport {
               .workflowName(Nullables.coalesce(spec.getWorkflowName(), current.getWorkflowName()))
               .workflowType(Nullables.coalesce(spec.getWorkflowType(), current.getWorkflowType()))
               .enabled(Nullables.coalesce(spec.getEnabled(), current.getEnabled()))
-              .scheduleEnabled(param.getScheduleEnabled())
+              .scheduleEnabled(spec.getScheduleEnabled())
               .scheduleType(scheduleType)
               .scheduleExpr(spec.getScheduleExpr())
               .timezone(param.getTimezone())
@@ -185,10 +185,30 @@ final class TenantWorkflowDefinitionApplySupport {
         .workflowCode(workflowCode)
         .version(nextVersion)
         .body(snapshot)
-        .scheduleEnabled(param.getScheduleEnabled())
+        .scheduleEnabled(effectiveScheduleEnabled)
         .savedBy(operator)
         .build();
     workflowWriteSupport.appendVersionSnapshot(snapshotCommand);
+  }
+
+  /** 新定义按显式值或默认关闭落库；已有定义只在配置包显式给出时写开关，避免 upsert 覆盖并发暂停。 */
+  private static Boolean scheduleEnabledForUpsert(
+      WorkflowDefinitionSpec spec, WorkflowDefinitionEntity current) {
+    if (EmptyChecks.isNull(current)) {
+      return Boolean.TRUE.equals(spec.getScheduleEnabled());
+    }
+    return spec.getScheduleEnabled();
+  }
+
+  /** 省略开关列时沿用当前值，供入图校验和版本快照使用。 */
+  private static Boolean resolveEffectiveScheduleEnabled(
+      WorkflowDefinitionSpec spec,
+      WorkflowDefinitionEntity current,
+      WorkflowDefinitionUpsertParam param) {
+    if (EmptyChecks.isNull(current)) {
+      return param.getScheduleEnabled();
+    }
+    return Nullables.coalesce(spec.getScheduleEnabled(), current.getScheduleEnabled());
   }
 
   /** 图的替换与节点/边写入保持在调用方同一事务中，随后仍由定义 CAS 决定整体提交。 */

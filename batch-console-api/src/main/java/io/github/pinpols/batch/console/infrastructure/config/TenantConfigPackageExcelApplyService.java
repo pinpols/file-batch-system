@@ -941,7 +941,11 @@ public class TenantConfigPackageExcelApplyService {
                 .workflowName(defParam.getWorkflowName())
                 .workflowType(defParam.getWorkflowType())
                 .enabled(defParam.getEnabled())
-                .scheduleEnabled(defParam.getScheduleEnabled())
+                // 只有配置包显式提供开关列时才改定时开关；省略时交给显式启停入口，避免覆盖并发暂停。
+                .scheduleEnabled(
+                    Texts.hasText(row.get(COL_SCHEDULE_ENABLED))
+                        ? defParam.getScheduleEnabled()
+                        : null)
                 .scheduleType(defParam.getScheduleType())
                 .scheduleExpr(defParam.getScheduleExpr())
                 .timezone(defParam.getTimezone())

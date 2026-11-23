@@ -26,6 +26,7 @@ case "$shard" in
   a)
     run_group batch-orchestrator 'WaitingLaunchIdentityIntegrationTest,JobLaunchToFinishLifecycleIntegrationTest,PartitionJoinPromotionIntegrationTest,WorkflowRunResumeRecoveryIntegrationTest'
     run_group batch-orchestrator 'FileGovernanceStaleSweepIntegrationTest,WorkflowFrozenPartitionPlanIntegrationTest,CrossDayDependencyReconcilerIntegrationTest,JobTypeOutboxChainIntegrationTest,ConcurrentTaskFinishIntegrationTest,WorkflowReplayApprovalDecisionIntegrationTest'
+    run_group batch-worker/core 'PlatformFileRecordRepositoryIntegrationTest'
     ;;
   a-extra)
     run_group batch-orchestrator 'JobNodeDispatchIntegrationTest'

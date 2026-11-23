@@ -238,7 +238,6 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             .workflowType(body.getWorkflowType())
             .enabled(
                 EmptyChecks.isNotNull(body.getEnabled()) ? body.getEnabled() : def.getEnabled())
-            .scheduleEnabled(def.getScheduleEnabled())
             .scheduleType(def.getScheduleType())
             .scheduleExpr(def.getScheduleExpr())
             .timezone(def.getTimezone())
@@ -261,17 +260,19 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     edgeMapper.deleteByWorkflowDefinitionId(id);
     writeSupport.upsertNodesAndEdges(resolvedTenant, id, body, existingNodeParams);
 
-    // 同事务追加版本快照(workflow-dag-designer Polish):新 version = 旧 version + 1。
+    // 画布保存不写定时开关，快照必须取保存后的实际值，不能用保存前读取的开关。
+    WorkflowDefinitionEntity persisted = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    // 同事务追加版本快照(workflow-dag-designer Polish):版本号取 CAS 更新后的实际值。
     // 版本协作者序列化当前持久化后的 entity list — 与 detail 读路径一致，
     // 避免基于 request DTO 序列化导致下游字段差异。
-    Integer newVersion = def.getVersion() + 1;
     WorkflowVersionSnapshotCommand snapshotCommand = WorkflowVersionSnapshotCommand.builder()
         .tenantId(resolvedTenant)
         .definitionId(id)
         .workflowCode(def.getWorkflowCode())
-        .version(newVersion)
+        .version(persisted.getVersion())
         .body(body)
-        .scheduleEnabled(def.getScheduleEnabled())
+        .scheduleEnabled(persisted.getScheduleEnabled())
         .savedBy(currentUser)
         .build();
     writeSupport.appendVersionSnapshot(snapshotCommand);

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowScheduleUpdateParam;
 import io.github.pinpols.batch.console.infrastructure.config.TenantConfigPackageExcelApplyService;
@@ -183,6 +184,57 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
     assertThat(saved.getDescription()).isEqualTo("更新后的专业说明");
     assertThat(saved.getVersion()).isEqualTo(2);
     assertThat(result.workflowUpdated()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("全量更新省略定时开关时保留暂停状态,不把读取到的旧值写回")
+  void shouldPreservePausedSchedule_whenDefinitionUpdateOmitsSwitch() {
+    int rows = mapper.updateAndBumpVersion(new WorkflowDefinitionVersionUpdateParam(
+        tenant,
+        id,
+        1,
+        "Canvas save",
+        "DAG",
+        true,
+        null,
+        "CRON",
+        "0 30 3 * * ?",
+        "Asia/Shanghai",
+        "SCHEDULED",
+        "CAL_A",
+        null,
+        null));
+
+    assertThat(rows).isEqualTo(1);
+    WorkflowDefinitionEntity saved = mapper.selectById(tenant, id);
+    assertThat(saved.getVersion()).isEqualTo(2);
+    assertThat(saved.getScheduleEnabled()).isFalse();
+    assertThat(saved.getScheduleExpr()).isEqualTo("0 30 3 * * ?");
+  }
+
+  @Test
+  @DisplayName("按当前版本 upsert 已有定义时保留已开启的定时开关")
+  void shouldPreserveScheduleSwitch_whenUpsertConflictsOnCurrentVersion() {
+    assertThat(mapper.toggleScheduleEnabled(tenant, id, true)).isEqualTo(1);
+    WorkflowDefinitionUpsertParam param = new WorkflowDefinitionUpsertParam();
+    param.setTenantId(tenant);
+    param.setWorkflowCode("WF_WRITE");
+    param.setVersion(1);
+    param.setWorkflowName("Package apply");
+    param.setWorkflowType("DAG");
+    param.setEnabled(true);
+    param.setScheduleEnabled(null);
+    param.setScheduleType("MANUAL");
+    param.setTimezone("UTC");
+    param.setTriggerMode("MANUAL");
+    param.setCalendarCode("CAL_A");
+    param.setSingleJobDefinitionId(managedJobId);
+
+    assertThat(mapper.upsertWorkflowDefinition(param)).isEqualTo(1);
+
+    WorkflowDefinitionEntity saved = mapper.selectById(tenant, id);
+    assertThat(saved.getWorkflowName()).isEqualTo("Package apply");
+    assertThat(saved.getScheduleEnabled()).isTrue();
   }
 
   @Test

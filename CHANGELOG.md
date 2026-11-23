@@ -64,6 +64,8 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 修复 Workflow 定时暂停被其他保存覆盖：画布全量保存与配置包 upsert 冲突更新不再写 `schedule_enabled`，只在显式提供开关时写入，版本快照取保存后的实际开关；Console 定时启停与 Trigger 运维暂停入口不变。
+- 修复 Worker 迟到写入覆盖文件归档：文件状态更新按读取到的前置状态比较，未命中时同态按幂等处理、其余按状态冲突拒绝，pipeline 失败补偿不再覆盖已推进的状态。Trigger 对 `workflow_definition` 改为列级 `UPDATE (schedule_enabled, updated_at)` 授权，表达式、归属和版本仍归 Console。
 - 修正脚本跨平台执行：门禁开关解析不再使用 Bash 4 的 `${var,,}`，macOS 自带 Bash 3.2 可解析大写开关；CI 脚本移除 Bash 4 专有的 `mapfile`，改用 `while read` 收集文件列表；MinIO 迁移校验与 mvnd 安装优先使用 Linux 的 `sha256sum` / `sha512sum`，缺失时回退 `shasum`；本地回归与测试脚本仅在 Docker Desktop socket 实际存在时覆盖 Testcontainers socket，Linux 使用默认 `/var/run/docker.sock`。
 - 补充业务表类型用例：导出覆盖 `updated_at` 可变表与 RANGE 分区表，强制复合游标；Process 增加 `biz.incremental_event` 增量 SQL，验证 42→43、空批不产生 OUT、43→44。
 - 修复导出恢复在首次空输入或断点首页为空时把旧文件登记为成功：`DelimitedExportFormat` / `FixedWidthExportFormat` 区分首跑与续跑，首次为空写出合法空产物并清理旧字节；有断点时按保存的游标、字节偏移和累计行数续写，列布局无法确定时返回 `EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN`，保留位点与残文件并阻止 STORE 和登记。

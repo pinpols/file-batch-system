@@ -1,20 +1,25 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.ContentVerifierRegistry;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
@@ -60,6 +65,46 @@ class AbstractPipelineStepExecutionAdapterDefinitionTest {
             null);
 
     verify(files, never()).updateFileStatus(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("文件状态已被并发推进时失败补偿只告警，不覆盖新状态")
+  void shouldSwallowStateConflict_whenFailureCompensationRunsAfterConcurrentChange() {
+    doThrow(BizException.of(
+            ResultCode.STATE_CONFLICT,
+            ResultCode.STATE_CONFLICT.detailKey(),
+            "file 42 concurrent status change: expected RECEIVED, found ARCHIVED"))
+        .when(files)
+        .updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+
+    adapter()
+        .handlePipelineFailure(
+            Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null);
+
+    verify(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+  }
+
+  @Test
+  @DisplayName("文件状态写入成功时失败补偿正常完成")
+  void shouldCompleteFailureCompensation_whenStatusWriteSucceeds() {
+    adapter()
+        .handlePipelineFailure(
+            Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null);
+
+    verify(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+  }
+
+  @Test
+  @DisplayName("非状态冲突异常仍向外传播")
+  void shouldPropagateNonConflictException_whenFailureCompensationFails() {
+    BizException failure =
+        BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    doThrow(failure).when(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+
+    assertThatThrownBy(() -> adapter()
+            .handlePipelineFailure(
+                Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null))
+        .isSameAs(failure);
   }
 
   @Test

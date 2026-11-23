@@ -3,7 +3,11 @@ package io.github.pinpols.batch.console.domain.workflow.param;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Builder;
 
-/** 带版本比较的全量更新；缺版本必须在构造边界拒绝，不能移除 SQL 的 CAS 条件。 */
+/**
+ * 带版本比较的全量更新；缺版本必须在构造边界拒绝，不能移除 SQL 的 CAS 条件。
+ *
+ * <p>{@code scheduleEnabled} 为空表示本次更新不改动定时开关：该列由显式启停入口维护，只有配置包显式提供时才随定义写入。
+ */
 @Builder(toBuilder = true)
 public record WorkflowDefinitionVersionUpdateParam(
     String tenantId,
