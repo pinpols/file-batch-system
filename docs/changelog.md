@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-25 E2E Maven 依赖准备
+
+- Full CI 和手动 Staging Gate 共用一次 Maven 准备。分片使用同次运行的归档，准备失败计入主干归责。详见 [CI 手册](runbook/ci.md)。
+
 ## 2026-11-24 内部 API Key 运维 scope 条款
 
 - [ADR-035](architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) 补充内部 API Key 的 `worker.ops` scope：Worker 执行凭据（`worker.execute`）只用于注册、心跳、认领、回报与续租，强制下线、接管、排空/恢复、状态变更和任务取消改为要求 `worker.ops`；平台 `X-Internal-Secret` 通道与 `*` 通配存量 Key 保持原语义。

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiDecisionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
@@ -23,6 +24,7 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
       HttpRequestMdcAutoConfiguration.class,
       OpenAiAudioSpeechAutoConfiguration.class,
       OpenAiAudioTranscriptionAutoConfiguration.class,
+      OpenAiDecisionAutoConfiguration.class,
       OpenAiEmbeddingAutoConfiguration.class,
       OpenAiImageAutoConfiguration.class,
       OpenAiModerationAutoConfiguration.class

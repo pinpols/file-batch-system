@@ -10,6 +10,10 @@ inputs:
     description: Whether to compile load-tests module
     required: false
     default: "false"
+  cache-maven:
+    description: Whether to restore and save the Maven dependency cache
+    required: false
+    default: "true"
   cache-testcontainers:
     description: Whether to restore or populate the Testcontainers image cache
     required: false
@@ -26,7 +30,7 @@ runs:
       with:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
-        cache: maven
+        cache: ${{ inputs.cache-maven == 'true' && 'maven' || '' }}
 
     - name: Cache testcontainer Docker images
       if: inputs.cache-testcontainers == 'true'

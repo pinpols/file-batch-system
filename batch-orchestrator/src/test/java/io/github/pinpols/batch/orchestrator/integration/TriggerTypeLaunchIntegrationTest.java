@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.JobDependencyWaitingLaunchReconciler;
@@ -427,15 +428,16 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         select current_user
     """;
 
+    String tenant = "rls-dependency-" + UUID.randomUUID();
     LocalDate bizDate = LocalDate.of(2026, 12, 18);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_RLS", TriggerType.EVENT, bizDate);
+        jdbcTemplate, tenant, "DISPATCH", "IT_DEP_RLS", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_RLS", TriggerType.API, bizDate);
-    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
+        jdbcTemplate, tenant, "DISPATCH", "IT_DEP_RLS", TriggerType.API, bizDate);
+    jdbcTemplate.update(insertJobDependencySql, tenant, downstream.jobCode(), upstream.jobCode());
     String requestId = "rls-dependency-wait-" + UUID.randomUUID();
     LaunchRequest request = LaunchRequest.builder()
-        .tenantId(TENANT)
+        .tenantId(tenant)
         .jobCode(downstream.jobCode())
         .bizDate(bizDate)
         .triggerType(TriggerType.EVENT)
@@ -445,8 +447,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         .build();
     LaunchIntegrationFixture.WorkflowChildTriggerSeed parent =
         LaunchIntegrationFixture.prepareWorkflowChildTriggerRequest(
-            jdbcTemplate, TENANT, downstream, bizDate, TriggerType.EVENT);
-    TriggerRequestEntity original = triggerRequest(TENANT, requestId, null, parent.workflowRunId());
+            jdbcTemplate, tenant, downstream, bizDate, TriggerType.EVENT);
+    TriggerRequestEntity original = triggerRequest(tenant, requestId, null, parent.workflowRunId());
     original.setJobCode(downstream.jobCode());
     original.setBizDate(bizDate);
     assertThat(triggerRequestMapper.insert(original)).isEqualTo(1);
@@ -460,40 +462,43 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     Optional<?> admission = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       return RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> jobDependencyWaitingLaunchService.captureOrDefer(request));
+          tenant, () -> jobDependencyWaitingLaunchService.captureOrDefer(request));
     });
 
     assertThat(admission).isEmpty();
-    List<?> visibleWait = transaction.execute(status -> {
+    var visibleWait = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
-      return RlsTenantContextHolder.runWithTenant(TENANT, () -> {
-        List<?> waiting = jobDependencyWaitingLaunchService.selectWaiting(TENANT, 10);
+      return RlsTenantContextHolder.runWithTenant(tenant, () -> {
+        var waiting = jobDependencyWaitingLaunchService.selectWaiting(tenant, 10);
         assertThat(jobDependencyWaitingLaunchService.recordWaitCheck(
-                TENANT, requestId, "UPSTREAM_NOT_READY"))
+                tenant, requestId, "UPSTREAM_NOT_READY"))
             .isEqualTo(1);
         return waiting;
       });
     });
-    assertThat(visibleWait).hasSize(1);
+    assertThat(visibleWait)
+        .singleElement()
+        .extracting(JobDependencyWaitingLaunchEntity::requestId)
+        .isEqualTo(requestId);
     Integer selectedJobDependencyWaitingLaunchCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, requestId);
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenant, requestId);
     assertThat(selectedJobDependencyWaitingLaunchCount).isEqualTo(1);
 
-    makeUpstreamEffective(upstream, bizDate);
+    makeUpstreamEffective(tenant, upstream, bizDate);
     String snapshot =
-        jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, TENANT, requestId);
+        jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, tenant, requestId);
     String notReady = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       jdbcTemplate.execute(setLocalSql2);
       String selectedCurrentUser = jdbcTemplate.queryForObject(selectCurrentUserSql, String.class);
       assertThat(selectedCurrentUser).isEqualTo("job_dependency_wait_rls_test");
       return RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenant,
           () -> jobDependencyWaitingLaunchService.findNotReadyReason(
-              TENANT, downstream.jobCode(), bizDate, snapshot));
+              tenant, downstream.jobCode(), bizDate, snapshot));
     });
     assertThat(notReady).isNull();
-    String foreignTenant = TENANT + "-foreign";
+    String foreignTenant = tenant + "-foreign";
     String foreignReadiness = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       jdbcTemplate.execute(setLocalSql2);

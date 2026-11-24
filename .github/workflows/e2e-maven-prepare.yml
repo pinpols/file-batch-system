@@ -1,0 +1,45 @@
+name: Backend / Prepare E2E Maven repository
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Install E2E upstream modules once
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Install upstream modules and prefetch E2E dependencies
+        shell: bash
+        run: |
+          bash scripts/ci/install-upstream-modules.sh
+          ./mvnw -B -ntp -pl batch-e2e-tests test-compile
+
+      - name: Archive Maven repository for this workflow run
+        shell: bash
+        run: |
+          tar --zstd --exclude='*.lastUpdated' -cf "$RUNNER_TEMP/e2e-maven-repository.tar.zst" \
+            -C "$HOME/.m2" repository wrapper
+
+      - name: Upload prepared E2E Maven repository
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-maven-repository
+          path: ${{ runner.temp }}/e2e-maven-repository.tar.zst
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+          retention-days: 14

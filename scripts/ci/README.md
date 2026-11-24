@@ -694,9 +694,14 @@ python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
 
 ## `install-upstream-modules.sh`
 
-将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
-排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的离线子构建中生成；安装入口先通过 `spring-boot:help` 解析打包插件依赖，避免全新缓存因跳过 repackage 而缺包。对 Maven Central 的临时 5xx / 传输失败使用 Maven
-强制更新、传输层重试和最多三轮退避重试。重试前删除没有 jar/pom 的 `*.lastUpdated`，避免 Maven 用本地否定缓存跳过后续下载。依赖下载瞬时失败不应当成 E2E 业务失败。 `python3 -m unittest scripts.ci.tests.test_install_upstream_modules` 覆盖安装与预热的成功及失败重试。
+将 E2E 所需的上游 Maven 模块安装到 `~/.m2`。保留 `batch-e2e-tests` 排除和 `-DskipTests`，
+跳过 Spring Boot repackage，并用 `spring-boot:help` 预取离线恢复测试需要的打包插件依赖。
+安装和插件预热最多尝试四次，重试前移除 Maven 解析失败产生的 `*.lastUpdated` 负缓存。
+`python3 -m unittest scripts.ci.tests.test_install_upstream_modules` 覆盖安装、预热及失败传播。
+
+全量门禁与手动 Staging Gate 共用 [E2E Maven 准备工作流](../../.github/workflows/e2e-maven-prepare.yml)。
+准备任务安装当前提交的上游模块并预取 E2E 依赖，分片复用同次运行的 Maven 仓库和 Wrapper 产物。
+准备任务失败时，汇总保留其失败状态，E2E 分片等待准备成功后才执行。失败分片可在产物保留期内单独重跑。
 
 ```bash
 bash scripts/ci/install-upstream-modules.sh
