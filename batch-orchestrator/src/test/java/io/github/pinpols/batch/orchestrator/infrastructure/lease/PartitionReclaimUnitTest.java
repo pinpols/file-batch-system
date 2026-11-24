@@ -13,14 +13,12 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
-import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.UnknownExternalOutcomeCloser;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -50,7 +48,7 @@ class PartitionReclaimUnitTest {
   private JobStepInstanceMapper jobStepInstanceMapper;
   private JobInstanceMapper jobInstanceMapper;
   private TaskDispatchOutboxService outboxService;
-  private TaskOutcomeService taskOutcomeService;
+  private UnknownExternalOutcomeCloser unknownExternalOutcomeCloser;
   private PartitionReclaimUnit unit;
 
   @BeforeEach
@@ -60,7 +58,7 @@ class PartitionReclaimUnitTest {
     jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     outboxService = mock(TaskDispatchOutboxService.class);
-    taskOutcomeService = mock(TaskOutcomeService.class);
+    unknownExternalOutcomeCloser = mock(UnknownExternalOutcomeCloser.class);
 
     PartitionLeaseProperties props = new PartitionLeaseProperties();
     props.setExpireSeconds(60L);
@@ -74,7 +72,7 @@ class PartitionReclaimUnitTest {
         jobStepInstanceMapper,
         jobInstanceMapper,
         outboxService,
-        taskOutcomeService,
+        unknownExternalOutcomeCloser,
         governance);
   }
 
@@ -217,17 +215,11 @@ class PartitionReclaimUnitTest {
     when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     when(jobPartitionMapper.selectById("t1", 1L)).thenReturn(partition);
-    when(taskOutcomeService.applyTaskOutcome(any())).thenReturn(task);
+    when(unknownExternalOutcomeCloser.close(task)).thenReturn(true);
 
     unit.reclaim(partition);
 
-    ArgumentCaptor<TaskOutcomeCommand> outcomeCaptor =
-        ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskOutcomeService).applyTaskOutcome(outcomeCaptor.capture());
-    assertThat(outcomeCaptor.getValue().errorCode())
-        .isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    assertThat(outcomeCaptor.getValue().partitionInvocationId()).isEqualTo("inv-7");
-    assertThat(outcomeCaptor.getValue().workerId()).isEqualTo("worker-1");
+    verify(unknownExternalOutcomeCloser).close(task);
     verify(jobPartitionMapper, never())
         .resetForLeaseReclaim(anyString(), any(), anyString(), any());
     verify(jobTaskMapper, never()).lockForReclaimNoWait(anyString(), any());
@@ -235,6 +227,23 @@ class PartitionReclaimUnitTest {
     verify(outboxService, never())
         .writeDispatchEvent(ArgumentMatchers.argThat(
             command -> command != null && command.traceId() != null && command.eventKey() != null));
+  }
+
+  @Test
+  @DisplayName("非幂等任务收口未落库时本轮回收失败, 等待下一轮重试")
+  void shouldRetryReclaim_whenUnknownOutcomeWasNotRecorded() {
+    JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
+    partition.setCurrentInvocationId("inv-7");
+    JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setNonIdempotentStartedAt(Instant.parse("2026-10-21T00:00:00Z"));
+    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(jobInstance("t1", 10L));
+    when(unknownExternalOutcomeCloser.close(task)).thenReturn(false);
+
+    assertThatThrownBy(() -> unit.reclaim(partition)).isInstanceOf(ReclaimRetryableException.class);
+
+    verify(jobTaskMapper, never()).resetForLeaseReclaim(anyString(), any(), anyString(), any());
   }
 
   // ── 辅助方法 ──

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.DeadLetterErrorClass;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
+import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutbo
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryRequeueCoordinator;
+import io.github.pinpols.batch.orchestrator.application.service.governance.UnknownExternalOutcomeCloser;
 import io.github.pinpols.batch.orchestrator.config.RetryGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
@@ -35,6 +37,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.testing.TestConstants.DeadLetter;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +62,7 @@ class DefaultRetryGovernanceServiceTest {
   private JobInstanceMapper jobInstanceMapper;
   private JobStepInstanceMapper jobStepInstanceMapper;
   private TaskDispatchOutboxService taskDispatchOutboxService;
+  private UnknownExternalOutcomeCloser unknownExternalOutcomeCloser;
   private RetryGovernanceProperties properties;
   private BatchOrchestratorGovernanceProperties governance;
   private DefaultRetryGovernanceService service;
@@ -73,6 +77,7 @@ class DefaultRetryGovernanceServiceTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
     taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+    unknownExternalOutcomeCloser = mock(UnknownExternalOutcomeCloser.class);
     properties = new RetryGovernanceProperties();
     properties.setFixedDelaySeconds(60L);
     properties.setExponentialMultiplier(2L);
@@ -100,7 +105,8 @@ class DefaultRetryGovernanceServiceTest {
         retryRequeueCoordinator,
         governance,
         mock(JobExecutionLogMapper.class),
-        transactionManager);
+        transactionManager,
+        unknownExternalOutcomeCloser);
   }
 
   // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
@@ -454,6 +460,37 @@ class DefaultRetryGovernanceServiceTest {
 
   private JobPartitionMapper partitionMapper() {
     return jobPartitionMapper;
+  }
+
+  @Test
+  @DisplayName("非幂等外部动作已开始的任务被接管时收口为结果不明, 不重新入队")
+  void shouldCloseUnknownOutcomeInsteadOfRequeue_whenReclaimingStartedNonIdempotentTask() {
+    JobTaskEntity task = task("t1", 10L, 1L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
+    when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
+    when(unknownExternalOutcomeCloser.close(task)).thenReturn(true);
+
+    service.reclaimTask("t1", 10L, "evt-1");
+
+    verify(unknownExternalOutcomeCloser).close(task);
+    verify(jobPartitionMapper, never()).resetForDispatch(anyString(), any(), anyString(), any());
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("非幂等任务收口未落库时接管失败, 不重新入队")
+  void shouldFailTakeover_whenUnknownOutcomeWasNotRecorded() {
+    JobTaskEntity task = task("t1", 10L, 1L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
+    when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
+    when(unknownExternalOutcomeCloser.close(task)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.reclaimTask("t1", 10L, "evt-1"))
+        .isInstanceOf(IllegalStateException.class);
+
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
   }
 
   private static JobTaskEntity task(String tenantId, Long taskId, Long jobDefinitionId) {

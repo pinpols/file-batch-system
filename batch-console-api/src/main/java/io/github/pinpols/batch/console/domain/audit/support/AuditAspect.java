@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
 import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
@@ -83,6 +84,7 @@ public class AuditAspect {
   private final ObjectMapper objectMapper;
   private final PlatformTransactionManager transactionManager;
   private final ConsoleUsageRecorder usageDailyRecorder;
+  private final ConsoleUsageProjectionDispatcher usageProjectionDispatcher;
 
   private final ExpressionParser spel = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
@@ -199,7 +201,10 @@ public class AuditAspect {
     }
   }
 
-  /** 审计事务提交后再写派生使用率，避免回滚业务留下幽灵计数。 */
+  /**
+   * 审计事务提交后把派生使用率交给有界异步线程池：afterCommit 仍绑定审计连接，同线程再开使用量事务会再借一个连接；
+   * 异步执行让审计线程先归还连接，队列满时丢弃派生写（审计仍是事实源）。
+   */
   private void recordUsageAfterCommit(OperationAuditEvent event) {
     Runnable recorder = () -> {
       try {
@@ -217,11 +222,11 @@ public class AuditAspect {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
         public void afterCommit() {
-          recorder.run();
+          usageProjectionDispatcher.submit(recorder);
         }
       });
     } else {
-      recorder.run();
+      usageProjectionDispatcher.submit(recorder);
     }
   }
 

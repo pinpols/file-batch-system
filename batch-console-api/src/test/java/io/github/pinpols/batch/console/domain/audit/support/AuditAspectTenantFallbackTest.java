@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
 import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -70,7 +71,11 @@ class AuditAspectTenantFallbackTest {
     mapper = mock(OperationAuditMapper.class);
     usageRecorder = mock(ConsoleUsageRecorder.class);
     aspect = new AuditAspect(
-        mapper, new ObjectMapper(), mock(PlatformTransactionManager.class), usageRecorder);
+        mapper,
+        new ObjectMapper(),
+        mock(PlatformTransactionManager.class),
+        usageRecorder,
+        new ConsoleUsageProjectionDispatcher(Runnable::run));
   }
 
   @AfterEach

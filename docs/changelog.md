@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-24 内部 API Key 运维 scope 条款
+
+- [ADR-035](architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) 补充内部 API Key 的 `worker.ops` scope：Worker 执行凭据（`worker.execute`）只用于注册、心跳、认领、回报与续租，强制下线、接管、排空/恢复、状态变更和任务取消改为要求 `worker.ops`；平台 `X-Internal-Secret` 通道与 `*` 通配存量 Key 保持原语义。
+- 判定与验证范围见[后端安全与资源审查](audit/backend-security-resource-audit-2026-11-23.md)：本机单测、真实 PostgreSQL 用例与 SDK 各语言工具链通过；真实拆分账号、目标环境与压测验收待补。
+
 ## 2026-11-22 主干 CI 紧急合入例外
 
 - 将主干 8 项必需检查移入独立的 `Main CI required checks` 规则集，仅仓库拥有者 `pinpols` 可在 PR 合入时手动使用例外。主干写入保护与评审要求由 `main protection` 继续执行。操作与验证见 [CI Runbook](runbook/ci.md#开源多人协作策略)。

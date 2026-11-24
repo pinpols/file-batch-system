@@ -22,13 +22,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,6 +63,13 @@ public class DispatchChannelHealthService {
   // R-A1-P1：固定 8 线程，每批 5s 等待；1000 个探针全部阻塞时，调度等待约 125*5s，另计取消和日志开销。
   // Future 取消依赖底层 I/O 响应中断，网络客户端仍须设置自身超时。
   private static final int PROBE_PARALLELISM = 8;
+
+  /** 有界提交队列：线程被不响应中断的 I/O 占住时，排队的探针任务不会无限增长。 */
+  private static final int PROBE_QUEUE_CAPACITY = 64;
+
+  /** 单轮探针总预算；超时后剩余到期渠道留到下一轮，避免一轮拖住整个调度周期。 */
+  private static final long PROBE_ROUND_BUDGET_MILLIS = 60_000L;
+
   private static final long PROBE_TIMEOUT_SECONDS = 5L;
 
   /** 指数退避的指数上限，防止 2^n 溢出；与原 SQL least(greatest(...,0),30) 一致。 */
@@ -140,7 +149,14 @@ public class DispatchChannelHealthService {
       thread.setDaemon(true);
       return thread;
     };
-    this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
+    this.probeExecutor = new ThreadPoolExecutor(
+        PROBE_PARALLELISM,
+        PROBE_PARALLELISM,
+        0L,
+        TimeUnit.MILLISECONDS,
+        new ArrayBlockingQueue<>(PROBE_QUEUE_CAPACITY),
+        factory,
+        new ThreadPoolExecutor.AbortPolicy());
     // 中心对象存储仅在 S3 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
     this.objectStore = objectStoreProvider.getIfAvailable();
     this.httpProbeClient = new OkHttpClient.Builder()
@@ -276,18 +292,30 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || stopping.get()) {
       return;
     }
+    Instant now = BatchDateTimeSupport.utcNow();
     List<Map<String, Object>> rows = repository
-        .findEnabledProbeChannels(properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH)
+        .findEnabledProbeChannels(properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH, now)
         .stream()
         .map(DispatchChannelConfigView::toPluginValues)
         .toList();
     if (rows.isEmpty() || stopping.get()) {
       return;
     }
+    long roundBudgetMillis =
+        Math.min(PROBE_ROUND_BUDGET_MILLIS, Math.max(1L, properties.getProbeIntervalMillis()));
+    long roundDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(roundBudgetMillis);
     // 每批最多占满线程池；同批共享 5s 截止时间，避免逐个 get(5s) 把阻塞时间累加到渠道数。
     // 每次只提交一批；取消不响应中断的 I/O 仍可能留下未结束的线程，需由客户端超时兜底。
     for (int start = 0; start < rows.size(); start += PROBE_PARALLELISM) {
       if (stopping.get()) {
+        return;
+      }
+      if (System.nanoTime() >= roundDeadlineNanos) {
+        log.warn(
+            "dispatch channel probe round budget exhausted after {}ms: probed {}/{} candidates",
+            roundBudgetMillis,
+            start,
+            rows.size());
         return;
       }
       List<Map<String, Object>> batch =
@@ -302,6 +330,11 @@ public class DispatchChannelHealthService {
       List<Future<Void>> futures;
       try {
         futures = probeExecutor.invokeAll(tasks, PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      } catch (RejectedExecutionException rejected) {
+        log.warn(
+            "dispatch channel probe queue is full after {} in-flight tasks; remaining candidates stay due",
+            PROBE_QUEUE_CAPACITY);
+        return;
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
         if (stopping.get()) {
@@ -353,6 +386,11 @@ public class DispatchChannelHealthService {
 
   private void recordProbeTimeout(Map<String, Object> row) {
     probeFailureCount.incrementAndGet();
+    if (!stopping.get()) {
+      // 超时也要落失败退避：否则该渠道的 next_probe_at 不变，会永久占住到期候选的头部。
+      recordDispatchOutcome(
+          mergedConfig(row), false, "probe timed out after " + PROBE_TIMEOUT_SECONDS + "s", null);
+    }
     log.warn(
         "dispatch channel probe timed out after {}s: channel={}",
         PROBE_TIMEOUT_SECONDS,

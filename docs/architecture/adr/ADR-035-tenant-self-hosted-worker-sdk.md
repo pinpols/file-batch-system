@@ -86,6 +86,7 @@
 - 校验成功写 `request.attribute("batch.auth.resolvedTenantId")` 让 controller 防租户冒充
 - API Key scope 校验:老 key `scopes='*'` 通配通过;新 key 必须显式包含 `worker.execute` 才放行 `/internal/workers/*` 与 `/internal/tasks/*`(`InternalAuthFilter` 内校验)
 - 读写分级 scope(2026-06-24):写端点(claim/report/register 等非 GET)要求 `worker.execute`;**读端点(GET 查询)接受 `worker.read` 或 `worker.execute`**(execute 是 read 超集)。据此可给监控 / 第三方集成发**只读 key**(`scopes='worker.read'`),只能轮询任务/worker 状态、不能改状态。`*` 通配仍全通,存量 key 零回归
+- 运维 scope(2026-11-24):强制下线、接管、排空/恢复、状态变更与任务取消等运维变更端点只接受 `worker.ops`;执行凭据 `worker.execute` 不能进入这些入口,平台内部调用继续使用 `X-Internal-Secret`。`claimed-tasks` 等只读查询仍接受 `worker.read`/`worker.execute`,`*` 通配存量 key 语义不变
 
 **Kafka ACL**(P3 落地):
 - topic 命名(权威): `batch.task.dispatch.{type}.{tenantId}`(对齐 orchestrator `BatchTopicResolver` + `init-tenant-topics.sh` + `per-tenant-worker-onboarding.md` §1;早期草稿写过 `batch.task.dispatch.tenant.{tenantId}.{type}` 是笔误)

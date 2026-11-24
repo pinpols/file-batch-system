@@ -123,6 +123,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private final BatchOrchestratorGovernanceProperties governance;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
+  private final UnknownExternalOutcomeCloser unknownExternalOutcomeCloser;
 
   @Override
   @Transactional
@@ -396,6 +397,15 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     if (taskStatusIsNotReclaimable) {
       throw new IllegalStateException(
           "reclaim only allowed from RUNNING or terminal state, current status: " + status);
+    }
+    if (TaskStatus.RUNNING.code().equals(status)
+        && EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
+      // 与自动租约回收同一裁定：外部动作已开始且没有回报，重新入队会让新 Worker 再次执行外部动作。
+      if (!unknownExternalOutcomeCloser.close(task)) {
+        throw new IllegalStateException(
+            "non-idempotent task outcome was not recorded: taskId=" + taskId);
+      }
+      return;
     }
     if (task.getJobPartitionId() != null) {
       retryRequeueCoordinator.requeuePartition(tenantId, task.getJobPartitionId(), eventKey);

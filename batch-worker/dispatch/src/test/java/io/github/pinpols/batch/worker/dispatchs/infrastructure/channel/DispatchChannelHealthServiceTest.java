@@ -106,7 +106,7 @@ class DispatchChannelHealthServiceTest {
     for (int index = 1; index <= 9; index++) {
       channels.add(probeChannel("channel-" + index, configJson));
     }
-    when(repository.findEnabledProbeChannels(anyList(), anyInt())).thenReturn(channels);
+    when(repository.findEnabledProbeChannels(anyList(), anyInt(), any())).thenReturn(channels);
     when(repository.findHealth(eq("tenant-a"), any())).thenAnswer(invocation -> {
       String channelCode = invocation.getArgument(1);
       if ("channel-9".equals(channelCode)) {
@@ -135,7 +135,7 @@ class DispatchChannelHealthServiceTest {
   @Test
   @DisplayName("探针任务抛异常时只记录一次失败并结束当批等待")
   void shouldCountProbeExceptionOnce() {
-    when(repository.findEnabledProbeChannels(anyList(), anyInt()))
+    when(repository.findEnabledProbeChannels(anyList(), anyInt(), any()))
         .thenReturn(List.of(probeChannel("channel-a", null)));
     when(repository.findHealth("tenant-a", "channel-a"))
         .thenThrow(new IllegalStateException("probe storage unavailable"));
@@ -154,7 +154,7 @@ class DispatchChannelHealthServiceTest {
 
     service.probeConfiguredChannels();
 
-    verify(repository, never()).findEnabledProbeChannels(anyList(), anyInt());
+    verify(repository, never()).findEnabledProbeChannels(anyList(), anyInt(), any());
   }
 
   @Test

@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -421,5 +423,115 @@ func TestReport_FreshKeyAndPartitionInvocationId(t *testing.T) {
 	}
 	if gotKey == "" || gotKey == "idem-task-1" || !strings.HasPrefix(gotKey, "go-") {
 		t.Fatalf("report must mint a fresh go-<uuid> Idempotency-Key, got %q", gotKey)
+	}
+}
+
+// 控制面 3xx 是终止结果:SDK 不跟随(否则会把 X-Batch-Api-Key 重放到其他主机),
+// 也不重试写请求。
+func TestHTTPTransport_DoesNotFollowRedirectOrRetry(t *testing.T) {
+	var targetHits, originHits atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		originHits.Add(1)
+		http.Redirect(w, r, target.URL+"/stolen", http.StatusFound)
+	}))
+	defer origin.Close()
+
+	transport := NewHTTPTransport(origin.URL, WithAPIKey("secret-key"))
+
+	_, _, err := transport.call(
+		context.Background(),
+		http.MethodPost,
+		"/internal/tasks/7/report",
+		map[string]string{"taskId": "7"},
+		"idem-7",
+		"report",
+		true,
+	)
+
+	var redirectErr *RedirectError
+	if !errors.As(err, &redirectErr) {
+		t.Fatalf("expected RedirectError, got %v", err)
+	}
+	if redirectErr.Status != http.StatusFound {
+		t.Fatalf("expected status 302, got %d", redirectErr.Status)
+	}
+	if originHits.Load() != 1 {
+		t.Fatalf("origin must be called exactly once (no retry), got %d", originHits.Load())
+	}
+	if targetHits.Load() != 0 {
+		t.Fatalf("redirect target received %d request(s)", targetHits.Load())
+	}
+}
+
+// 调用方传入的客户端可能默认跟随跳转;控制面调用仍以 SDK 契约为准。
+func TestHTTPTransport_OverridesCallerRedirectPolicy(t *testing.T) {
+	var targetHits atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetHits.Add(1)
+	}))
+	defer target.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/stolen", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+
+	custom := &http.Client{Timeout: 5 * time.Second} // default policy follows redirects
+	transport := NewHTTPTransport(origin.URL, WithAPIKey("secret-key"), WithHTTPClient(custom))
+
+	_, _, err := transport.call(
+		context.Background(),
+		http.MethodPost,
+		"/internal/workers/register",
+		map[string]string{"workerCode": "w1"},
+		"",
+		"register",
+		true,
+	)
+
+	var redirectErr *RedirectError
+	if !errors.As(err, &redirectErr) {
+		t.Fatalf("expected RedirectError, got %v", err)
+	}
+	if targetHits.Load() != 0 {
+		t.Fatalf("redirect target received %d request(s) with a custom client", targetHits.Load())
+	}
+}
+
+// 超过读取上限的控制面响应是终止结果:不越过上限缓冲,也不重试。
+func TestHTTPTransport_RejectsOversizedResponseWithoutRetry(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bytes.Repeat([]byte("x"), (8<<20)+1))
+	}))
+	defer srv.Close()
+
+	transport := NewHTTPTransport(srv.URL, WithAPIKey("secret-key"), WithSleep(func(time.Duration) {}))
+
+	_, _, err := transport.call(
+		context.Background(),
+		http.MethodPost,
+		"/internal/tasks/7/report",
+		map[string]string{"taskId": "7"},
+		"idem-7",
+		"report",
+		true,
+	)
+
+	var tooLarge *ResponseTooLargeError
+	if !errors.As(err, &tooLarge) {
+		t.Fatalf("expected ResponseTooLargeError, got %v", err)
+	}
+	if tooLarge.Limit != 8<<20 {
+		t.Fatalf("expected limit %d, got %d", 8<<20, tooLarge.Limit)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("oversized response must not be retried, hits=%d", hits.Load())
 	}
 }

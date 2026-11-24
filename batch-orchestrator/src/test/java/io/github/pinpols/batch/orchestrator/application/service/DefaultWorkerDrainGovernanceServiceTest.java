@@ -21,10 +21,13 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
+import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 @DisplayName("工作节点排空治理服务: 排空开启, 强制下线, 超时接管与预热口径")
 class DefaultWorkerDrainGovernanceServiceTest {
@@ -47,6 +50,18 @@ class DefaultWorkerDrainGovernanceServiceTest {
   }
 
   // ── startDrain ────────────────────────────────────────────────────────────
+
+  @Test
+  @DisplayName("接管入口不声明外层事务, 避免逐条回收再借同池连接")
+  void shouldNotOpenOuterTransaction_whenTakingOverTasks() throws Exception {
+    for (String name : List.of("forceOffline", "takeover", "takeoverAfterDrainTimeout")) {
+      Method method =
+          DefaultWorkerDrainGovernanceService.class.getMethod(name, String.class, String.class);
+      assertThat(AnnotationUtils.findAnnotation(method, Transactional.class))
+          .as(name + " must not hold an outer transaction")
+          .isNull();
+    }
+  }
 
   @Test
   @DisplayName("开启排空时租户标识为空则抛出业务异常")

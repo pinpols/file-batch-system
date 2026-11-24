@@ -17,6 +17,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::decide::{classify_http, Decision};
 
+/// 响应体超过 transport 读取上限时使用的内部状态。它不是线上状态码:让引擎把超限正文
+/// 视为终止的协议失败,而不是可重试的传输错误。
+pub(crate) const RESPONSE_TOO_LARGE_STATUS: i64 = -2;
+
 /// CLAIM success body returned by the Orchestrator.
 ///
 /// The business `payload` is read from the persisted task at claim time and is
@@ -121,9 +125,18 @@ pub fn outcome_from_decision(d: &Decision) -> TransportOutcome {
     }
 }
 
-/// Classify a raw response into an actionable outcome. `client_error_count` is
-/// the running count of prior non-auth 4xx (for the cumulative fail-fast rule).
+/// 把原始响应分类为可执行的结果。`client_error_count` 是此前非鉴权 4xx 的累计次数
+/// (用于累计 fail-fast 规则)。
+///
+/// 3xx 是终止结果:transport 不跟随(API Key 不会被重放到其他主机),也不能像 5xx 那样重试。
+/// 映射为 [`TransportOutcome::ClientError`] 既保持决策核不变,又让重定向显式且不可重试。
 pub fn classify_response(resp: &HttpResponse, client_error_count: i64) -> TransportOutcome {
+    if resp.status == RESPONSE_TOO_LARGE_STATUS {
+        return TransportOutcome::FailFast;
+    }
+    if (300..400).contains(&resp.status) {
+        return TransportOutcome::ClientError;
+    }
     let decision = classify_http(resp.status, client_error_count, 0, 0);
     outcome_from_decision(&decision)
 }
@@ -336,6 +349,25 @@ mod tests {
         );
         assert!(decode_claim_response(&HttpResponse::new(409, "{}")).is_err());
         assert!(decode_claim_response(&HttpResponse::new(200, "not-json")).is_err());
+    }
+
+    #[test]
+    fn response_too_large_is_terminal_fail_fast() {
+        assert_eq!(
+            classify_response(&HttpResponse::new(RESPONSE_TOO_LARGE_STATUS, ""), 0),
+            TransportOutcome::FailFast
+        );
+    }
+
+    #[test]
+    fn three_xx_is_terminal_client_error_not_retry() {
+        for status in [300, 301, 302, 303, 307, 308] {
+            assert_eq!(
+                classify_response(&HttpResponse::new(status, ""), 0),
+                TransportOutcome::ClientError,
+                "status {status} must be terminal, not retryable"
+            );
+        }
     }
 
     #[test]

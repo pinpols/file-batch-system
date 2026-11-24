@@ -21,6 +21,8 @@ import (
 const (
 	defaultHTTPTimeout                = 10 * time.Second
 	defaultHappyEyeballsFallbackDelay = 250 * time.Millisecond
+	// maxResponseBytes 限制控制面响应的缓冲上限;响应都是小型 JSON,超限按协议失败处理。
+	maxResponseBytes = 8 << 20
 )
 
 // Transport is the control-plane HTTP surface (byo-sdk-guide §1.1's 8 endpoints,
@@ -203,6 +205,27 @@ func (e *ClientError) Error() string {
 	return fmt.Sprintf("client error on %s: http %d", e.Op, e.Status)
 }
 
+// RedirectError 表示控制面返回 3xx。重定向一律不跟随,避免把 X-Batch-Api-Key 重放到其他主机;
+// 3xx 是终止结果,写请求不隐式重试。
+type RedirectError struct {
+	Status int
+	Op     string
+}
+
+func (e *RedirectError) Error() string {
+	return fmt.Sprintf("redirect not followed on %s: http %d", e.Op, e.Status)
+}
+
+// ResponseTooLargeError 表示响应体超过 maxResponseBytes;重试只会再缓冲一次同样的超限正文。
+type ResponseTooLargeError struct {
+	Limit int
+	Path  string
+}
+
+func (e *ResponseTooLargeError) Error() string {
+	return fmt.Sprintf("response too large on %s: limit %d bytes", e.Path, e.Limit)
+}
+
 // RetryExhaustedError marks a 5xx/transport failure that survived all backoff
 // attempts.
 type RetryExhaustedError struct {
@@ -255,8 +278,8 @@ type HTTPTransport struct {
 // HTTPTransportOption configures an HTTPTransport.
 type HTTPTransportOption func(*HTTPTransport)
 
-// WithHTTPClient overrides the default client (e.g. to inject a test transport).
-// The caller is responsible for setting a sane Timeout.
+// WithHTTPClient 覆盖默认客户端(例如注入测试 transport)。调用方负责设置合理的 Timeout;
+// 重定向总是由 NewHTTPTransport 关闭,控制面凭据不会被重放到跳转目标。
 func WithHTTPClient(c *http.Client) HTTPTransportOption {
 	return func(t *HTTPTransport) { t.httpClient = c }
 }
@@ -327,7 +350,21 @@ func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTranspor
 	for _, o := range opts {
 		o(t)
 	}
+	if t.httpClient == nil {
+		t.httpClient = http.DefaultClient
+	}
+	t.httpClient = withoutRedirects(t.httpClient)
 	return t
+}
+
+// withoutRedirects 返回 c 的浅拷贝并禁止跟随 3xx:不改动调用方传入的客户端,同时保证
+// 控制面 API Key 不会被重放到跳转目标。
+func withoutRedirects(c *http.Client) *http.Client {
+	clone := *c
+	clone.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &clone
 }
 
 // newControlPlaneDialer keeps dual-stack fallback independent from process-wide
@@ -400,7 +437,13 @@ func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body an
 		return 0, nil, err // transport error -> status 0
 	}
 	defer resp.Body.Close()
-	data, _ := io.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if readErr != nil {
+		return 0, nil, fmt.Errorf("read %s response: %w", path, readErr)
+	}
+	if len(data) > maxResponseBytes {
+		return 0, nil, &ResponseTooLargeError{Limit: maxResponseBytes, Path: path}
+	}
 	return resp.StatusCode, data, nil
 }
 
@@ -435,12 +478,20 @@ func (t *HTTPTransport) call(ctx context.Context, method, path string, body any,
 		}
 		status, raw, derr := t.doJSON(ctx, method, path, body, idempotencyKey)
 		if derr != nil {
+			var tooLarge *ResponseTooLargeError
+			if errors.As(derr, &tooLarge) {
+				return nil, false, tooLarge
+			}
 			// context cancellation is not a retryable transport error.
 			if ctx.Err() != nil {
 				return nil, false, derr
 			}
 			lastErr = derr
 			status = 0 // transport error -> classify as retryable
+		}
+		if status >= 300 && status < 400 {
+			// 控制面重定向不跟随也不重试:写请求不能被重放,API Key 也不能到达跳转目标。
+			return nil, false, &RedirectError{Status: status, Op: op}
 		}
 
 		clientErrorCount := int(t.clientErrorCount.Load())

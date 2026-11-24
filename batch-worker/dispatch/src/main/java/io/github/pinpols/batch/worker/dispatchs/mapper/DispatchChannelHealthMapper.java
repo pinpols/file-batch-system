@@ -18,7 +18,7 @@ public interface DispatchChannelHealthMapper {
   }
 
   List<DispatchChannelConfigView> findEnabledProbeChannels(
-      @Param("types") List<String> types, @Param("limit") int limit);
+      @Param("types") List<String> types, @Param("limit") int limit, @Param("now") Timestamp now);
 
   DispatchChannelHealthView findHealth(
       @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);

@@ -9,7 +9,11 @@ import assert from "node:assert/strict";
 import dns from "node:dns";
 import { readFileSync } from "node:fs";
 import http from "node:http";
-import { HttpTransport, FatalTransportError } from "../src/client/transport.ts";
+import {
+  HttpTransport,
+  FatalTransportError,
+  ResponseTooLargeError,
+} from "../src/client/transport.ts";
 
 function startServer(
   handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
@@ -414,4 +418,29 @@ test("transport: request timeout aborts a hung request (treated as transport err
 
   (transport as unknown as { close(): void }).close();
   await srv.close();
+});
+
+test("超大控制面响应立即失败且不重试", async () => {
+  let hits = 0;
+  const srv = await startServer((req, res) => {
+    hits += 1;
+    req.resume();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end("x".repeat(8 * 1024 * 1024 + 1));
+  });
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+  });
+  try {
+    await assert.rejects(
+      () => transport.report("task-1", { success: true }, "idem-1"),
+      (err: unknown) => err instanceof ResponseTooLargeError,
+    );
+    assert.equal(hits, 1, "oversized response must not be retried");
+  } finally {
+    transport.close();
+    await srv.close();
+  }
 });

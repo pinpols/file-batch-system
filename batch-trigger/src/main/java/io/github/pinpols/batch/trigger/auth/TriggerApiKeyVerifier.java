@@ -12,7 +12,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,13 +32,19 @@ public class TriggerApiKeyVerifier {
   private static final Duration TOUCH_INTERVAL = Duration.ofSeconds(60);
   private static final long TOUCH_INTERVAL_NANOS = TOUCH_INTERVAL.toNanos();
 
+  /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
+  private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
+
   private final TriggerApiKeyAuthMapper mapper;
   private final InstantSource instantSource;
   private final Cache<String, TriggerApiKeyPrincipal> verifiedKeys = Caffeine.newBuilder()
       .maximumSize(VERIFIED_KEY_CACHE_MAX_ENTRIES)
       .expireAfterWrite(CACHE_TTL)
       .build();
-  private final ConcurrentHashMap<Long, AtomicLong> lastTouchNanos = new ConcurrentHashMap<>();
+  private final Cache<Long, AtomicLong> lastTouchNanos = Caffeine.newBuilder()
+      .maximumSize(TOUCH_STATE_MAX_ENTRIES)
+      .expireAfterWrite(TOUCH_INTERVAL)
+      .build();
 
   @Autowired
   public TriggerApiKeyVerifier(TriggerApiKeyAuthMapper mapper) {
@@ -123,7 +128,8 @@ public class TriggerApiKeyVerifier {
       return;
     }
     long now = System.nanoTime();
-    AtomicLong last = lastTouchNanos.computeIfAbsent(id, ignored -> new AtomicLong(Long.MIN_VALUE));
+    AtomicLong last =
+        lastTouchNanos.asMap().computeIfAbsent(id, ignored -> new AtomicLong(Long.MIN_VALUE));
     long previous = last.get();
     boolean apiKeyTouchIntervalWasAcquired =
         (previous == Long.MIN_VALUE || now - previous >= TOUCH_INTERVAL_NANOS)
@@ -135,6 +141,6 @@ public class TriggerApiKeyVerifier {
 
   void clearCacheForTests() {
     verifiedKeys.invalidateAll();
-    lastTouchNanos.clear();
+    lastTouchNanos.invalidateAll();
   }
 }

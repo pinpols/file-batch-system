@@ -34,12 +34,13 @@
 //! a non-2xx status is *not* an error here — the body + status are returned
 //! verbatim so the engine's FSM decides what to do.
 
+use std::io::Read;
 use std::time::Duration;
 
 use reqwest::blocking::{Client, ClientBuilder};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE};
 
-use super::transport::{HttpResponse, Transport};
+use super::transport::{HttpResponse, Transport, RESPONSE_TOO_LARGE_STATUS};
 use crate::constants::SUPPORTED_SCHEMA_VERSIONS;
 
 // Header names (lowercase for `HeaderName::from_static`), identical to the
@@ -51,6 +52,9 @@ const HEADER_IDEMPOTENCY_KEY: &str = "idempotency-key";
 const HEADER_TIMESTAMP: &str = "x-batch-timestamp";
 const HEADER_NONCE: &str = "x-batch-nonce";
 const HEADER_SIGNATURE: &str = "x-batch-signature";
+
+/// 控制面响应都是小型 JSON;这里限制 transport 缓冲的字节数,避免超限正文占住任意内存。
+const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 
 /// Construction-time configuration for [`ReqwestTransport`].
 ///
@@ -241,6 +245,9 @@ impl ReqwestTransport {
         let client = client_builder
             .connect_timeout(Duration::from_millis(config.connect_timeout_ms))
             .timeout(Duration::from_millis(config.read_timeout_ms))
+            // 控制面重定向一律不跟随:把 X-Batch-Api-Key 默认请求头重放到其他主机会泄露租户凭据。
+            // 收到 3xx 时直接返回,由上层判定为终止结果。
+            .redirect(reqwest::redirect::Policy::none())
             .default_headers(default_headers)
             .build()
             .map_err(|e| TransportBuildError(e.to_string()))?;
@@ -317,10 +324,19 @@ impl ReqwestTransport {
         match req.send() {
             Ok(resp) => {
                 let status = resp.status().as_u16() as i64;
-                // Read the body for the engine to parse; an unreadable body is
-                // not fatal — surface the status with an empty body.
-                let text = resp.text().unwrap_or_default();
-                HttpResponse::new(status, &text)
+                let mut body = Vec::new();
+                match resp
+                    .take((MAX_RESPONSE_BYTES + 1) as u64)
+                    .read_to_end(&mut body)
+                {
+                    Ok(_) if body.len() > MAX_RESPONSE_BYTES => {
+                        // 终止:超限响应既不缓冲也不重试。
+                        HttpResponse::new(RESPONSE_TOO_LARGE_STATUS, "")
+                    }
+                    // 正文可读或读取失败都返回状态码与已读内容。
+                    Ok(_) => HttpResponse::new(status, &String::from_utf8_lossy(&body)),
+                    Err(_) => HttpResponse::new(status, ""),
+                }
             }
             // DNS / connect / read-timeout / TLS → status 0 (retryable).
             Err(_) => HttpResponse::transport_error(),
@@ -471,6 +487,32 @@ mod tests {
     }
 
     fn handle_connection(mut stream: TcpStream, status: u16, resp_body: &str) -> CapturedRequest {
+        handle_connection_with_location(stream, status, resp_body, None)
+    }
+
+    fn one_shot_redirect_server(location: String) -> (String, mpsc::Receiver<CapturedRequest>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let (tx, rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            let (stream, _) = match listener.accept() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            let captured = handle_connection_with_location(stream, 302, "", Some(&location));
+            let _ = tx.send(captured);
+        });
+
+        (format!("http://{addr}"), rx)
+    }
+
+    fn handle_connection_with_location(
+        mut stream: TcpStream,
+        status: u16,
+        resp_body: &str,
+        location: Option<&str>,
+    ) -> CapturedRequest {
         let mut reader = BufReader::new(stream.try_clone().expect("clone stream"));
         let mut req = CapturedRequest::default();
 
@@ -514,8 +556,11 @@ mod tests {
         } else {
             "ERR"
         };
+        let location_header = location
+            .map(|value| format!("Location: {value}\r\n"))
+            .unwrap_or_default();
         let response = format!(
-            "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{resp_body}",
+            "HTTP/1.1 {status} {reason}\r\n{location_header}Content-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{resp_body}",
             resp_body.len(),
         );
         stream
@@ -877,5 +922,39 @@ mod tests {
         t.register("w1", "{}");
         let req = rx.recv().expect("captured request");
         assert!(req.header("X-Batch-Api-Key").is_none());
+    }
+
+    #[test]
+    fn oversized_response_is_not_buffered_and_classifies_fail_fast() {
+        let oversized: &'static str =
+            Box::leak("x".repeat(MAX_RESPONSE_BYTES + 1).into_boxed_str());
+        let (base, _rx) = one_shot_server(200, oversized);
+        let t = transport(&base);
+
+        let resp = t.report("7", "{}");
+
+        assert_eq!(resp.status, RESPONSE_TOO_LARGE_STATUS);
+        assert!(resp.body.is_empty());
+        assert_eq!(classify_response(&resp, 0), TransportOutcome::FailFast);
+    }
+
+    #[test]
+    fn redirect_is_not_followed_and_never_reaches_the_target() {
+        let (target_base, target_rx) = one_shot_server(200, "");
+        let (origin_base, origin_rx) = one_shot_redirect_server(format!("{target_base}/stolen"));
+        let t = transport(&origin_base);
+
+        let resp = t.report("7", "{}");
+
+        assert_eq!(resp.status, 302);
+        assert_eq!(classify_response(&resp, 0), TransportOutcome::ClientError);
+        let origin = origin_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("origin request");
+        assert_eq!(origin.header("X-Batch-Api-Key"), Some("secret-key"));
+        assert!(
+            target_rx.recv_timeout(Duration::from_millis(300)).is_err(),
+            "redirect target must not receive the API key"
+        );
     }
 }
