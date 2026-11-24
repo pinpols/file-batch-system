@@ -21,6 +21,7 @@ import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoCon
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiDecisionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
@@ -53,6 +54,7 @@ import org.springframework.transaction.PlatformTransactionManager;
       HttpRequestMdcAutoConfiguration.class,
       AnthropicChatAutoConfiguration.class,
       OpenAiChatAutoConfiguration.class,
+      OpenAiDecisionAutoConfiguration.class,
       OpenAiAudioSpeechAutoConfiguration.class,
       OpenAiAudioTranscriptionAutoConfiguration.class,
       OpenAiEmbeddingAutoConfiguration.class,
