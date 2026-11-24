@@ -2,7 +2,7 @@
 
 **Product**: `batch-platform`  
 **Version**: `1.0.0` (与根 POM 默认 GA 版本一致)
-**Generated**: `2026-09-25`
+**Generated**: `2026-11-24`
 **Source**: curated from the current `pom.xml` / module POM files + `sdk/python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底（组件总数以 `sbom.json` 为准）。
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
@@ -14,6 +14,12 @@ Internal modules under `io.github.pinpols.batch:*` are excluded.
 - POI 5.4.0 → **5.5.1**;Commons Compress 1.27.1 → **1.28.0**;JSqlParser 5.3 → **5.4**
 - PostgreSQL JDBC 42.7.12 → **42.7.13**;Resilience4j 2.3.0 → **2.4.0**（改用 Boot 4 专用模块）;Bucket4j 8.14.0 → **8.20.0**
 - 更新 ArchUnit、Lombok、Bouncy Castle、Spring Retry 与构建插件版本；跨主版本升级留待兼容性评估，不由版本扫描自动升级
+
+**变更摘要(2026-11-24)**:
+- Spring Boot 4.1.1 → **4.2.0**;Spring AI 2.0.1 → **2.1.0**（传递 anthropic-java-core 3.8.0）
+- 移除旧于 Boot 管理版本的 netty → **4.2.20.Final**、Jackson 2 → **2.21.8**、Jackson 3 → **3.1.8**、Tomcat → **11.0.27**、Mockito → **5.24.0** 覆盖
+- JUnit 5 → **6.1.3**（Boot 4.2 管理）;opentelemetry-instrumentation 2.28.0-alpha → **2.34.0-alpha**（API 1.68）
+- 机器可读清单以同提交的 `docs/compliance/sbom.json` 为准
 
 For a machine-generated report, run:
 
@@ -46,41 +52,41 @@ These are the main runtime-facing third-party components currently used by the p
 | Component | Version | License | Used By | Notes |
 |---|---|---|---|---|
 | Spring Boot | 4.1.1 | Apache-2.0 | all | Parent BOM |
-| Spring Framework | managed by Spring Boot 4.1.1 | Apache-2.0 | all | Transitive |
-| Spring Kafka | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, worker-core, workers | Runtime messaging |
-| Spring Data Redis (Lettuce) | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, console-api | 分布式缓存、SSE 广播 |
+| Spring Framework | managed by Spring Boot 4.2.0 | Apache-2.0 | all | Transitive |
+| Spring Kafka | managed by Spring Boot 4.2.0 | Apache-2.0 | orchestrator, worker-core, workers | Runtime messaging |
+| Spring Data Redis (Lettuce) | managed by Spring Boot 4.2.0 | Apache-2.0 | orchestrator, console-api | 分布式缓存、SSE 广播 |
 | Spring Security | 7.1.0 | Apache-2.0 | console-api | Console 鉴权 |
-| Spring Security OAuth2 JOSE | managed by Spring Boot 4.1.1 | Apache-2.0 | console-api | JWT Token 签发/验签 |
-| Spring AI Starter Model OpenAI / Anthropic | 2.0.1 | Apache-2.0 | console-api | Console AI feature |
+| Spring Security OAuth2 JOSE | managed by Spring Boot 4.2.0 | Apache-2.0 | console-api | JWT Token 签发/验签 |
+| Spring AI Starter Model OpenAI / Anthropic | 2.1.0 | Apache-2.0 | console-api | Console AI feature |
 | MyBatis Spring Boot Starter | 4.1.0 | Apache-2.0 | orchestrator, workers, trigger, console-api | Runtime persistence layer |
 | Flyway Core | 12.4.0 | Apache-2.0 | all | Platform migrations |
 | Flyway PostgreSQL support | 12.4.0 | Apache-2.0 | all | PostgreSQL dialect |
 | Hibernate Validator | 9.1.0.Final | Apache-2.0 | orchestrator | Bean Validation 实现 |
 | AWS SDK for Java v2 (S3) | 2.55.5 | Apache-2.0 | common, orchestrator, workers | Object storage access(S3 协议,兼容 MinIO) |
-| Jackson Databind | managed by Spring Boot 4.1.1 | Apache-2.0 | common | JSON serialization |
-| Jackson Datatype JSR310 | managed by Spring Boot 4.1.1 | Apache-2.0 | common | Java time module |
-| Micrometer Core | managed by Spring Boot 4.1.1 | Apache-2.0 | worker-core | 应用指标基础 |
-| Micrometer Registry Prometheus | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, workers, trigger, console-api | Metrics export |
-| Micrometer Tracing Bridge OTel | managed by Spring Boot 4.1.1 | Apache-2.0 | common | Observation → OpenTelemetry 桥接 |
-| OpenTelemetry Exporter OTLP | managed by Spring Boot 4.1.1 | Apache-2.0 | common | Trace/Span 推送到 OTel Collector |
-| OpenTelemetry Exporter JDK Sender | managed by Spring Boot 4.1.1 | Apache-2.0 | common | 使用 JDK HttpClient 替代 OkHttp 5.x |
+| Jackson Databind | managed by Spring Boot 4.2.0 | Apache-2.0 | common | JSON serialization |
+| Jackson Datatype JSR310 | managed by Spring Boot 4.2.0 | Apache-2.0 | common | Java time module |
+| Micrometer Core | managed by Spring Boot 4.2.0 | Apache-2.0 | worker-core | 应用指标基础 |
+| Micrometer Registry Prometheus | managed by Spring Boot 4.2.0 | Apache-2.0 | orchestrator, workers, trigger, console-api | Metrics export |
+| Micrometer Tracing Bridge OTel | managed by Spring Boot 4.2.0 | Apache-2.0 | common | Observation → OpenTelemetry 桥接 |
+| OpenTelemetry Exporter OTLP | managed by Spring Boot 4.2.0 | Apache-2.0 | common | Trace/Span 推送到 OTel Collector |
+| OpenTelemetry Exporter JDK Sender | managed by Spring Boot 4.2.0 | Apache-2.0 | common | 使用 JDK HttpClient 替代 OkHttp 5.x |
 | OkHttp (okhttp-jvm) | 5.5.0 | Apache-2.0 | export, dispatch, Java worker SDK | HTTP client(JVM 类在 `okhttp-jvm`) |
 | Apache POI | 5.5.1 | Apache-2.0 | import, export, console-api | Spreadsheet handling |
 | Apache Commons Compress | 1.28.0 | Apache-2.0 | import | tar archive handling |
-| Quartz Scheduler | managed by Spring Boot 4.1.1 | Apache-2.0 | trigger | Cron / FixedRate 调度 |
-| SLF4J API | managed by Spring Boot 4.1.1 | MIT | all (transitive) | Logging facade |
+| Quartz Scheduler | managed by Spring Boot 4.2.0 | Apache-2.0 | trigger | Cron / FixedRate 调度 |
+| SLF4J API | managed by Spring Boot 4.2.0 | MIT | all (transitive) | Logging facade |
 | PostgreSQL JDBC Driver | 42.7.13 | BSD-2-Clause | all | Database driver |
 | JSch (mwiede fork) | 0.2.26 | ISC / BSD-3-Clause | dispatch | SFTP support |
-| Angus Mail | managed by Spring Boot 4.1.1 | EPL-2.0 / GPL-2.0 with Classpath Exception | dispatch | SMTP 邮件分发 |
-| Jakarta EE APIs | managed by Spring Boot 4.1.1 | EPL-2.0 | all | API surface |
+| Angus Mail | managed by Spring Boot 4.2.0 | EPL-2.0 / GPL-2.0 with Classpath Exception | dispatch | SMTP 邮件分发 |
+| Jakarta EE APIs | managed by Spring Boot 4.2.0 | EPL-2.0 | all | API surface |
 | Logback Classic | 1.5.38 | EPL-2.0 + LGPL-2.1 | all (transitive) | Logging backend |
-| Netty DNS Resolver macOS | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
+| Netty DNS Resolver macOS | managed by Spring Boot 4.2.0 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
 | Project Lombok | 1.18.48 | MIT | all (provided) | Annotation processor |
 | JSqlParser | 5.4 | Apache-2.0(LGPL-2.1 OR Apache-2.0,走 Apache) | export | SQL parsing / schema whitelist |
 | ShedLock | 6.3.0 | Apache-2.0 | common | Distributed lock |
 | Resilience4j | 2.4.0 | Apache-2.0 | common, orchestrator, dispatch, console-api | Spring Boot 4 integration |
 | Bucket4j | 8.20.0 | Apache-2.0 | orchestrator, console-api | Distributed rate limiting |
-| Spring Boot Configuration Processor | managed by Spring Boot 4.1.1 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
+| Spring Boot Configuration Processor | managed by Spring Boot 4.2.0 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
 
 ## Test and Tooling Dependencies
 
@@ -90,14 +96,14 @@ These packages are used in test or build tooling and are not shipped as producti
 |---|---|---|---|---|
 | Testcontainers BOM / modules | 2.0.5 | Apache-2.0 | test | all |
 | testcontainers-redis | 2.2.2–2.2.4 | Apache-2.0 | test | dispatch, trigger, console-api |
-| Spring Boot starter test | managed by Spring Boot 4.1.1 | Apache-2.0 | test | all |
-| Spring Kafka Test | managed by Spring Boot 4.1.1 | Apache-2.0 | test | orchestrator, worker-core |
-| MyBatis starter test | managed by Spring Boot 4.1.1 | Apache-2.0 | test | orchestrator, workers, console-api |
+| Spring Boot starter test | managed by Spring Boot 4.2.0 | Apache-2.0 | test | all |
+| Spring Kafka Test | managed by Spring Boot 4.2.0 | Apache-2.0 | test | orchestrator, worker-core |
+| MyBatis starter test | managed by Spring Boot 4.2.0 | Apache-2.0 | test | orchestrator, workers, console-api |
 | mockwebserver3 | 5.5.0 | Apache-2.0 | test | worker-core, trigger, atomic |
 | GreenMail | 2.1.8 | Apache-2.0 | test | dispatch（SMTP 测试） |
 | Okio / Okio JVM | 3.18.2 / 3.18.1 | Apache-2.0 | test/runtime helper | transitive via OkHttp |
-| AssertJ | managed by Spring Boot 4.1.1 | Apache-2.0 | test | all |
-| Mockito | managed by Spring Boot 4.1.1 | MIT | test | all |
+| AssertJ | managed by Spring Boot 4.2.0 | Apache-2.0 | test | all |
+| Mockito | managed by Spring Boot 4.2.0 | MIT | test | all |
 | Kotlin Standard Library | 2.3.21 (transitive via OkHttp 5.x) | Apache-2.0 | transitive | — |
 
 ## SDK 模块覆盖(对外发布物)
@@ -131,7 +137,7 @@ Python SDK 自身按 **Apache-2.0** 发布(与主仓一致);上述传递依赖�
 
 ## Notes
 
-1. Some versions are managed by the Spring Boot 4.1.1 BOM and are intentionally shown as "managed by Spring Boot 4.1.1".
+1. Some versions are managed by the Spring Boot 4.1.1 BOM and are intentionally shown as "managed by Spring Boot 4.2.0".
 2. Test-scoped dependencies are listed for completeness, but they do not ship in production images or jars.
 3. If you need the exact resolved dependency tree, run:
 

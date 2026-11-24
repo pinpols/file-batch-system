@@ -9,7 +9,8 @@
 | 组件 | 基线/范围 | 约束来源 | 说明 |
 |---|---|---|---|
 | 后端 JDK | Java 21 | 根 `pom.xml`、Docker、CI | `maven.compiler.release=21`，不支持 JDK 17 或更低版本 |
-| 后端框架 | Spring Boot 4.1.1 | 根 `pom.xml` | 依赖版本由 BOM 和集中属性管理 |
+| 后端框架 | Spring Boot 4.2.0 | 根 `pom.xml` | 依赖版本由 BOM 和集中属性管理 |
+| 测试框架 | JUnit Jupiter 6.1.3 | 根 `pom.xml`（Boot 4.2 管理） | JUnit 6 默认方法顺序与 JUnit 5 不同，测试不得依赖执行顺序 |
 | Maven | Maven Wrapper / Maven 3.x | `.mvn`、CI | 本地优先使用 `./mvnw`，避免宿主机 Maven 漂移 |
 | 仓库 Node.js 工具 | Node 24.x | `.node-version`、`.nvmrc`、CI | 两个本地版本选择入口必须一致；TypeScript SDK 的兼容矩阵单独覆盖 Node 22 和 24 |
 | 前端 Node.js | Node 24.x | `../batch-console/package.json`、`.nvmrc`、`.node-version`、Dockerfile、配对仓库 CI | `engines.node` 为 `^24`；本地、CI 和完整固定版本 Docker 镜像统一使用 Node 24 |

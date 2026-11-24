@@ -5,6 +5,7 @@ import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.instrumentation.api.config.IncludeExclude;
 import io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender;
 import org.slf4j.LoggerFactory;
 
@@ -29,8 +30,9 @@ public final class OpenTelemetryLogbackBridge implements AutoCloseable {
     OpenTelemetryAppender otelAppender = new OpenTelemetryAppender();
     otelAppender.setName(APPENDER_NAME);
     otelAppender.setContext(loggerContext);
-    otelAppender.setCaptureMdcAttributes(CAPTURED_MDC_ATTRIBUTES);
-    otelAppender.setCaptureKeyValuePairAttributes(false);
+    otelAppender.setMdcAttributesIncluded(CAPTURED_MDC_ATTRIBUTES);
+    // 2.34 起布尔开关废弃，空 IncludeExclude 等价于不采集 key-value pair 属性。
+    otelAppender.setKeyValuePairAttributes(IncludeExclude.builder().build());
     otelAppender.setOpenTelemetry(openTelemetry);
     otelAppender.start();
     rootLogger.addAppender(otelAppender);
