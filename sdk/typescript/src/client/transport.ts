@@ -34,6 +34,9 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 /** RFC 8305 connection-attempt delay used by the Node 22 control-plane client. */
 const HAPPY_EYEBALLS_ATTEMPT_TIMEOUT_MS = 250;
 
+/** 控制面响应都是小型 JSON;这里限制客户端缓冲的字节数。 */
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
   /** 当前 Orchestrator 在任务认领时解析出的持久化任务业务参数。 */
@@ -91,6 +94,16 @@ export class FatalTransportError extends Error {
     super(message);
     this.name = "FatalTransportError";
     this.status = status;
+  }
+}
+
+/** 响应体超过 transport 读取上限;属于终止错误,不重试。 */
+export class ResponseTooLargeError extends Error {
+  readonly limit: number;
+  constructor(limit: number) {
+    super(`control-plane response exceeded ${limit} bytes`);
+    this.name = "ResponseTooLargeError";
+    this.limit = limit;
   }
 }
 
@@ -266,11 +279,12 @@ export class HttpTransport implements Transport {
     body: unknown,
     extraHeaders: Record<string, string> = {},
   ): Promise<RawResponse> {
-    return new Promise<RawResponse>((resolve) => {
+    return new Promise<RawResponse>((resolve, reject) => {
       const url = new URL(path, this.#baseUrl);
       const method = "POST";
       const payload = body === undefined ? "" : JSON.stringify(body);
       const ac = new AbortController();
+      let responseTooLarge = false;
       const req = this.#transport.request(
         url,
         {
@@ -288,9 +302,22 @@ export class HttpTransport implements Transport {
         },
         (res) => {
           const chunks: Buffer[] = [];
-          res.on("data", (c: Buffer) => chunks.push(c));
+          let receivedBytes = 0;
+          res.on("data", (c: Buffer) => {
+            receivedBytes += c.length;
+            if (receivedBytes > MAX_RESPONSE_BYTES) {
+              // 终止:立即 reject 并停止读取;调用方不得重试超限的控制面响应。
+              responseTooLarge = true;
+              clearTimeout(timer);
+              reject(new ResponseTooLargeError(MAX_RESPONSE_BYTES));
+              res.destroy();
+              return;
+            }
+            chunks.push(c);
+          });
           res.on("end", () => {
             clearTimeout(timer);
+            if (responseTooLarge) return;
             const responseStatus = res.statusCode ?? 0;
             const responseBytes = Buffer.concat(chunks);
             const responseBody = responseBytes.toString("utf8");
@@ -316,6 +343,7 @@ export class HttpTransport implements Transport {
 
       req.on("error", () => {
         clearTimeout(timer);
+        if (responseTooLarge) return; // already rejected as terminal
         resolve({ status: 0, body: "" }); // transport error → classify as retry
       });
 

@@ -39,18 +39,26 @@
         </constructor>
     </resultMap>
 
+    <!--
+      只取到期渠道：没有健康行或 next_probe_at 已到期的渠道才进入候选，避免健康/退避中的渠道占满排序头部，
+      让尾部渠道长期轮不到。按最早到期排序，单轮预算用完时下一轮优先处理更早到期的渠道。
+    -->
     <select id="findEnabledProbeChannels" resultMap="dispatchChannelConfigViewMap">
-        select id, tenant_id, channel_code, channel_name, channel_type, target_endpoint,
-               auth_type, config_json, receipt_policy, timeout_seconds, enabled,
-               created_at, updated_at, is_deleted
-          from batch.file_channel_config
-         where enabled = true
-           and is_deleted = false
-           and channel_type in
+        select c.id, c.tenant_id, c.channel_code, c.channel_name, c.channel_type, c.target_endpoint,
+               c.auth_type, c.config_json, c.receipt_policy, c.timeout_seconds, c.enabled,
+               c.created_at, c.updated_at, c.is_deleted
+          from batch.file_channel_config c
+          left join batch.file_channel_health h
+            on h.tenant_id = c.tenant_id
+           and h.channel_code = c.channel_code
+         where c.enabled = true
+           and c.is_deleted = false
+           and c.channel_type in
                <foreach item="t" collection="types" open="(" separator="," close=")">
                    #{t}
                </foreach>
-         order by tenant_id, channel_code
+           and (h.next_probe_at is null or h.next_probe_at &lt;= #{now})
+         order by h.next_probe_at nulls first, c.tenant_id, c.channel_code
          limit #{limit}
     </select>
 

@@ -9,9 +9,11 @@ import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthService;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthSnapshot;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -304,6 +306,33 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     platform.update(updateBatchFileChannelConfigSql);
     assertThat(healthRepository.countByHealthStatus("UNHEALTHY")).isEqualTo(unhealthyBefore);
     assertThat(healthRepository.countProbeOverdue(Instant.now())).isEqualTo(overdueBefore);
+  }
+
+  @Test
+  @DisplayName("候选只取到期渠道并按最早到期排序,未到期渠道不占候选位")
+  void shouldSelectOnlyDueProbeChannels() {
+    String tenant = "probe-due-" + UUID.randomUUID();
+    JdbcTemplate platform = platformJdbcTemplate();
+    Instant now = Instant.parse("2026-11-23T00:00:00Z");
+    for (String code : List.of("a", "b", "c")) {
+      insertChannelConfig(platform, tenant, code);
+    }
+    final String insertHealthSql = """
+        insert into batch.file_channel_health (
+          tenant_id, channel_code, channel_type, health_status, next_probe_at)
+        values (?, ?, 'API', 'HEALTHY', ?)
+        """;
+    platform.update(insertHealthSql, tenant, "a", Timestamp.from(now.minusSeconds(60)));
+    platform.update(insertHealthSql, tenant, "b", Timestamp.from(now.plusSeconds(3600)));
+
+    List<DispatchChannelConfigView> candidates =
+        healthRepository.findEnabledProbeChannels(List.of("API"), 10_000, now);
+
+    List<String> dueForTenant = candidates.stream()
+        .filter(view -> tenant.equals(view.tenantId()))
+        .map(DispatchChannelConfigView::channelCode)
+        .toList();
+    assertThat(dueForTenant).containsExactly("c", "a");
   }
 
   // --- helpers ---

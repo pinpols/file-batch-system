@@ -487,6 +487,7 @@
             result_summary = null,
             started_at = null,
             finished_at = null,
+            non_idempotent_started_at = null,
             version = version + 1,
             updated_at = current_timestamp
     </sql>

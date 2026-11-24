@@ -7,7 +7,7 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 3123 |
+| 生产 Java 源文件 | 3125 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2111 |
 | 含 Map 的源文件 | 418 |
@@ -24,8 +24,8 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 368 |
-| `batch-console-api` | 1260 |
-| `batch-orchestrator` | 797 |
+| `batch-console-api` | 1261 |
+| `batch-orchestrator` | 798 |
 | `batch-trigger` | 135 |
 | `batch-worker` | 458 |
 | `sdk` | 96 |
@@ -53,7 +53,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 997 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowNodeDispatchService.java` | 989 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskAssignmentService.java` | 953 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 925 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 935 |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java` | 917 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowRunLaunchService.java` | 916 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceService.java` | 901 |

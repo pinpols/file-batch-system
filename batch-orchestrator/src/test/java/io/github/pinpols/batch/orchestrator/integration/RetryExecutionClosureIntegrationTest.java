@@ -844,6 +844,67 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("真实 PostgreSQL：已开始非幂等外部动作的任务被手工接管时收口为结果不明，不产生新派发")
+  void shouldCloseUnknownOutcome_whenManualReclaimOfStartedNonIdempotentTask() {
+    Scenario scenario = launch("FIXED", 1);
+    claim(scenario);
+    JobPartitionEntity partition = partition(scenario);
+    assertThat(taskAssignmentService.markNonIdempotentExecutionStarted(
+            scenario.tenant(),
+            scenario.taskId(),
+            scenario.worker(),
+            partition.getCurrentInvocationId()))
+        .isTrue();
+    expirePartitionLease(scenario);
+    long dispatchBefore = dispatchOutboxCount(scenario);
+
+    retries.reclaimTask(scenario.tenant(), scenario.taskId(), "manual-takeover-started");
+
+    JobTaskEntity closed = tasks.selectById(scenario.tenant(), scenario.taskId());
+    assertThat(closed.getStatus()).isEqualTo("FAILED");
+    assertThat(closed.getErrorCode()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(dispatchOutboxCount(scenario)).isEqualTo(dispatchBefore);
+  }
+
+  @Test
+  @DisplayName("真实 PostgreSQL：重试复位清除非幂等启动标记，下一次执行可重新登记")
+  void shouldClearNonIdempotentMarker_whenResettingForRetry() {
+    Scenario scenario = launch("FIXED", 1);
+    claim(scenario);
+    JobPartitionEntity partition = partition(scenario);
+    assertThat(taskAssignmentService.markNonIdempotentExecutionStarted(
+            scenario.tenant(),
+            scenario.taskId(),
+            scenario.worker(),
+            partition.getCurrentInvocationId()))
+        .isTrue();
+    JobTaskEntity running = tasks.selectById(scenario.tenant(), scenario.taskId());
+    assertThat(running.getNonIdempotentStartedAt()).isNotNull();
+
+    assertThat(tasks.resetForRetry(
+            scenario.tenant(), scenario.taskId(), "READY", running.getVersion()))
+        .isOne();
+
+    assertThat(tasks.selectById(scenario.tenant(), scenario.taskId()).getNonIdempotentStartedAt())
+        .isNull();
+  }
+
+  @Test
+  @DisplayName("真实 PostgreSQL：未开始非幂等外部动作的任务接管仍重新入队")
+  void shouldRequeueReplayableTask_whenManualReclaimHasNoStartedMarker() {
+    Scenario scenario = launch("FIXED", 1);
+    claim(scenario);
+    expirePartitionLease(scenario);
+    long dispatchBefore = dispatchOutboxCount(scenario);
+
+    retries.reclaimTask(scenario.tenant(), scenario.taskId(), "manual-takeover-replayable");
+
+    JobTaskEntity requeued = tasks.selectById(scenario.tenant(), scenario.taskId());
+    assertThat(requeued.getStatus()).isEqualTo("READY");
+    assertThat(dispatchOutboxCount(scenario)).isEqualTo(dispatchBefore + 1);
+  }
+
+  @Test
   @DisplayName("已审批死信重放不能绕过外部 UNKNOWN，保留审计且不产生派发副作用")
   void shouldRejectDeadLetterReplay_whenTaskExternalOutcomeIsUnknown() {
     final String updateJobTaskSql = """
@@ -2104,6 +2165,25 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.outbox_event where tenant_id = ?
     """;
 
+    return jdbc.queryForObject(selectCountSql, Long.class, scenario.tenant());
+  }
+
+  private void expirePartitionLease(Scenario scenario) {
+    final String expireLeaseSql = """
+        update batch.job_partition
+        set lease_expire_at = current_timestamp - interval '1 minute',
+            version = version + 1
+        where tenant_id = ? and id = ?
+        """;
+    assertThat(jdbc.update(expireLeaseSql, scenario.tenant(), scenario.partitionId()))
+        .isOne();
+  }
+
+  private long dispatchOutboxCount(Scenario scenario) {
+    final String selectCountSql = """
+        select count(*) from batch.outbox_event
+        where tenant_id = ? and aggregate_type = 'JOB_TASK'
+        """;
     return jdbc.queryForObject(selectCountSql, Long.class, scenario.tenant());
   }
 

@@ -16,7 +16,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -71,6 +70,9 @@ public class ApiKeyVerifier {
   /** last_used_at 两次真实写库的最小间隔;窗口内的命中跳过写库。 */
   static final Duration TOUCH_MIN_INTERVAL = Duration.ofSeconds(60);
 
+  /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
+  private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
+
   private static final long TOUCH_MIN_INTERVAL_NANOS = TOUCH_MIN_INTERVAL.toNanos();
 
   public static final String SCOPE_WORKER_EXECUTE = "worker.execute";
@@ -80,6 +82,12 @@ public class ApiKeyVerifier {
    * 是其超集(可写者必可读),故读端点接受二者之一。用于给监控 / 第三方集成发"只读 key"。
    */
   public static final String SCOPE_WORKER_READ = "worker.read";
+
+  /**
+   * 运维 scope:强制下线、接管、排空/恢复、状态变更与任务取消等运维变更端点只接受该 scope。执行凭据
+   * ({@code worker.execute}) 不能进入这些入口；平台内部调用继续使用 {@code X-Internal-Secret}。
+   */
+  public static final String SCOPE_WORKER_OPS = "worker.ops";
 
   public static final String SCOPE_WILDCARD = "*";
 
@@ -105,8 +113,11 @@ public class ApiKeyVerifier {
 
   private final ApiKeyAsyncMaintenance asyncMaintenance;
 
-  /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。key 数量 ~= 活跃 key 数,极小。 */
-  private final ConcurrentHashMap<Long, Long> lastTouchNanos = new ConcurrentHashMap<>();
+  /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。有界 + 写入过期，避免历史 Key ID 常驻。 */
+  private final Cache<Long, Long> lastTouchNanos = Caffeine.newBuilder()
+      .maximumSize(TOUCH_STATE_MAX_ENTRIES)
+      .expireAfterWrite(TOUCH_MIN_INTERVAL)
+      .build();
 
   /**
    * 生产构造器(Spring):系统时钟。
@@ -232,12 +243,12 @@ public class ApiKeyVerifier {
    * 防并发下同一 key 重复写。
    *
    * <p>last_used_at 的运维语义是<b>僵尸 key 探测</b>(哪些 key 长期未用可回收),分钟级精度足够;同一 key 数百 QPS 打同一行的
-   * 写放大对该语义无收益,故节流。map 逐出不做——key 数量 ~= 活跃 key 数,极小。
+   * 写放大对该语义无收益,故节流。节流状态有界并随写入过期，轮换过的历史 Key ID 不会常驻。
    */
   private void maybeTouch(Long id) {
     long now = ticker.read();
     boolean[] doWrite = {false};
-    lastTouchNanos.compute(id, (k, prev) -> {
+    lastTouchNanos.asMap().compute(id, (k, prev) -> {
       if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
         return prev; // 窗口内,跳过写库
       }

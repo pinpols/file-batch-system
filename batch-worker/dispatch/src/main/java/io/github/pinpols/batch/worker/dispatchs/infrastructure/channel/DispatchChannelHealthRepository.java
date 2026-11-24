@@ -22,11 +22,12 @@ public class DispatchChannelHealthRepository {
 
   private final DispatchChannelHealthMapper mapper;
 
-  public List<DispatchChannelConfigView> findEnabledProbeChannels(List<String> types, int limit) {
+  public List<DispatchChannelConfigView> findEnabledProbeChannels(
+      List<String> types, int limit, Instant now) {
     if (types == null || types.isEmpty()) {
       return List.of();
     }
-    return mapper.findEnabledProbeChannels(types, limit);
+    return mapper.findEnabledProbeChannels(types, limit, toTimestamp(now));
   }
 
   public DispatchChannelHealthSnapshot findHealth(String tenantId, String channelCode) {

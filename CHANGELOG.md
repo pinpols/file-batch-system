@@ -64,6 +64,14 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 收窄租户 API Key 的运维权限：新增 `worker.ops` scope，执行凭据不再能强制下线、接管、排空/恢复、变更状态或取消任务；执行端点与只读查询语义不变。
+- 限制 Go、Rust、TypeScript SDK 的控制面响应读取上限（8 MiB）：超限立即以显式错误终止，不重试、不缓存超限正文，并释放响应体。
+- 修复 Trigger 与 Orchestrator 的 API Key 写节流状态无界滞留：改为有界且随写入过期的缓存，保留同一 Key 的 60s 并发节流语义。
+- 将 Rust SDK 与示例锁定的 `url` 从 2.5.8 升级到 2.5.9（RUSTSEC-2026-0592），同步更新 `form_urlencoded` 1.2.3。
+- 修复 Dispatch 渠道探针覆盖饥饿：候选查询只取到期渠道并按最早到期排序，超时探针写回失败退避；探针线程池改为有界队列并为单轮设置时间预算，剩余渠道留到下一轮。
+- 修复连接池饥饿：Worker 强制下线、接管与排空超时不再持有外层事务逐条开启新事务；Console 审计派生使用量改为有界异步投影，审计事务提交后先归还连接，队列满时丢弃派生写并告警。
+- 修复 Worker 强制下线、手工接管或排空超时可能重新入队已开始非幂等外部动作的任务：接管路径与自动租约回收统一裁定，任务存在 `non_idempotent_started_at` 且无回报时收口为 `EXTERNAL_OUTCOME_UNKNOWN`，不重新派发；合法重试复位时清除该标记。
+- Go 和 Rust SDK 的控制面请求不再自动跟随 3xx 重定向：Go 使用 `ErrUseLastResponse` 并把 3xx 作为 `RedirectError` 终止，Rust 使用 reqwest `Policy::none()` 并把 3xx 归为终止的 `ClientError`；避免 `X-Batch-Api-Key` 被转发到跳转目标，也避免非幂等写请求被隐式重发。
 - 修复同一文件多渠道并发投递停在 `CREATED`：外发已经成功后，若共享 `file_record` 被其他渠道写成 `DISPATCHED`，本渠道不再因状态冲突进入死信，也不把文件状态打回 `DISPATCHING`，只合并投递元数据并继续提交本渠道派发记录。归档和失败状态仍拒绝覆盖。
 - 修复 Workflow 定时暂停被其他保存覆盖：画布全量保存与配置包 upsert 冲突更新不再写 `schedule_enabled`，只在显式提供开关时写入，版本快照取保存后的实际开关；Console 定时启停与 Trigger 运维暂停入口不变。
 - 修复 Worker 迟到写入覆盖文件归档：文件状态更新按读取到的前置状态比较，未命中时同态按幂等处理、其余按状态冲突拒绝，pipeline 失败补偿不再覆盖已推进的状态。Trigger 对 `workflow_definition` 改为列级 `UPDATE (schedule_enabled, updated_at)` 授权，表达式、归属和版本仍归 Console。

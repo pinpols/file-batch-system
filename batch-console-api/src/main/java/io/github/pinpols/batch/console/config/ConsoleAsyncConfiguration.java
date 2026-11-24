@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,17 @@ public class ConsoleAsyncConfiguration {
   public static final String PUSH_TASK_EXECUTOR = "pushTaskExecutor";
   public static final String REALTIME_SCHEDULER = "consoleRealtimeScheduler";
 
+  /** 使用量派生写线程池：固定 2 线程、有界队列，满时由调度器丢弃派生写。 */
+  private static final int USAGE_CORE_POOL_SIZE = 2;
+
+  private static final int USAGE_MAX_POOL_SIZE = 2;
+
+  private static final int USAGE_QUEUE_CAPACITY = 500;
+
+  private static final int USAGE_KEEP_ALIVE_SECONDS = 60;
+
+  private static final int USAGE_AWAIT_TERMINATION_SECONDS = 10;
+
   /** 推送异步线程池核心线程数。 */
   private static final int PUSH_CORE_POOL_SIZE = 4;
 
@@ -39,6 +51,21 @@ public class ConsoleAsyncConfiguration {
 
   /** 关闭时等待在途推送完成的最长秒数。 */
   private static final int PUSH_AWAIT_TERMINATION_SECONDS = 30;
+
+  @Bean(name = ConsoleUsageProjectionDispatcher.EXECUTOR_BEAN_NAME)
+  public Executor usageTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(USAGE_CORE_POOL_SIZE);
+    executor.setMaxPoolSize(USAGE_MAX_POOL_SIZE);
+    executor.setQueueCapacity(USAGE_QUEUE_CAPACITY);
+    executor.setKeepAliveSeconds(USAGE_KEEP_ALIVE_SECONDS);
+    executor.setThreadNamePrefix("usage-async-");
+    // 派生写不是事实源；队列满时丢弃并由调度器告警，避免阻塞审计线程。
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+    executor.setWaitForTasksToCompleteOnShutdown(true);
+    executor.setAwaitTerminationSeconds(USAGE_AWAIT_TERMINATION_SECONDS);
+    return executor;
+  }
 
   @Bean(name = PUSH_TASK_EXECUTOR)
   public Executor pushTaskExecutor() {

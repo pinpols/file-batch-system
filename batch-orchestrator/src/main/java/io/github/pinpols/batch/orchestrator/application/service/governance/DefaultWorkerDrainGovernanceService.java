@@ -64,8 +64,8 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   }
 
   @Override
-  @Transactional
   public WorkerRegistryEntity forceOffline(String tenantId, String workerCode) {
+    // 不声明外层事务：reclaimTask 为 REQUIRES_NEW，持外层连接会再借同池连接，小池下相互等待到借用超时。
     validateTenant(tenantId);
     requireRegistry(tenantId, workerCode);
     takeoverTasks(tenantId, workerCode);
@@ -73,7 +73,6 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   }
 
   @Override
-  @Transactional
   public WorkerRegistryEntity takeover(String tenantId, String workerCode) {
     validateTenant(tenantId);
     WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
@@ -144,7 +143,6 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   }
 
   @Override
-  @Transactional
   public void takeoverAfterDrainTimeout(String tenantId, String workerCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
       return;

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
@@ -45,7 +46,8 @@ class InternalAuthFilterTest {
   @Test
   @DisplayName("接口密钥校验通过时放行,链内租户取密钥归属租户,外层日志上下文不被污染")
   void shouldResolveTenantFromApiKeyAndPreserveOuterMdc_whenKeyHit() throws Exception {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", "/internal/workers/w1/heartbeat");
     req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
     req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
     // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
@@ -86,7 +88,8 @@ class InternalAuthFilterTest {
   @Test
   @DisplayName("携带接口密钥但缺少租户标识时返回 401")
   void shouldReturn401_whenTenantHeaderMissingWithApiKey() throws Exception {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", "/internal/workers/w1/heartbeat");
     req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
     when(verifier.verifyWithScope("raw-key", null, "worker.execute")).thenReturn(Optional.empty());
 
@@ -147,6 +150,74 @@ class InternalAuthFilterTest {
     filter.doFilterInternal(req, resp, chain);
 
     assertThat(resp.getStatus()).isEqualTo(401);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
+  @DisplayName("执行密钥不能进入运维变更端点,只接受 worker.ops")
+  void shouldRejectExecutionKey_whenCallingOpsMutation() throws Exception {
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", "/internal/workers/w1/force-offline");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
+    when(verifier.verifyWithScope("raw-key", "tx", "worker.ops")).thenReturn(Optional.empty());
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(401);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
+  @DisplayName("运维 scope 可进入接管入口并写入解析后的租户")
+  void shouldPass_whenOpsKeyCallsTakeover() throws Exception {
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", "/internal/workers/w1/takeover");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
+    when(verifier.verifyWithScope("raw-key", "tx", "worker.ops"))
+        .thenReturn(Optional.of(
+            new ApiKeyCandidate(1L, "tx", "n", "worker.ops", true, null, "h", "s", "pbkdf2")));
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    verify(chain).doFilter(req, resp);
+    assertThat(req.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID)).isEqualTo("tx");
+  }
+
+  @Test
+  @DisplayName("执行密钥不能取消任务")
+  void shouldRejectExecutionKey_whenCancellingTask() throws Exception {
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/cancel");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
+    when(verifier.verifyWithScope("raw-key", "tx", "worker.ops")).thenReturn(Optional.empty());
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(401);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
+  @DisplayName("执行密钥访问未知 workers 路径时直接 401,不触达密钥校验")
+  void shouldReturn401_whenApiKeyCallsUnknownWorkerPath() throws Exception {
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/w1/unknown");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(401);
+    verifyNoInteractions(verifier);
     verify(chain, never()).doFilter(any(), any());
   }
 
