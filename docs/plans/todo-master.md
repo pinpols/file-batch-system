@@ -977,13 +977,13 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | 🟡 后端已实现 provider 费率估算、原子月预算预留、UTC 台账和摘要 API；供应商账单核对、真实价格校准和 staging 并发/故障验证待做 |
 | **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | 🟡 新请求原文预览默认关闭并暴露成本/token 字段；历史预览清理、生产留存和审计查询角色合规确认仍待做 |
 
-当前依赖升级候选为 Spring AI 2.1.0 + Spring Boot 4.2.0，已在独立分支实施并验证，见[升级评估](../audit/spring-ai-2-1-boot-4-2-upgrade-assessment-2026-11-23.md)。
+Spring AI 2.1.0 + Spring Boot 4.2.0 已在本次依赖升级中实施并完成本地全栈验证；真实 provider、缓存计费与目标环境验收见[升级评估](../audit/spring-ai-2-1-boot-4-2-upgrade-assessment-2026-11-23.md)。
 
 以下是已冻结的范围决策，不重新排成开发待办：
 
 | 决策 | 范围 | 状态 |
 |---|---|---|
-| **AI-DEC-1** | Spring AI M3 → GA | ✅ 当前根 POM 使用 Spring AI 2.0.2 正式版；2.1.0 + Boot 4.2.0 已在独立分支完成本地验证，真实 provider 与目标环境待验收 |
+| **AI-DEC-1** | Spring AI M3 → GA | ✅ 根 POM 已升级到 Spring AI 2.1.0 与 Spring Boot 4.2.0，本地全栈验证完成；真实 provider 与目标环境待验收 |
 | **AI-DEC-2** | 外部 AI provider 契约接入 CI | ❌ 不做；需要外部 secrets，保留人工/受控验证方案 |
 | **AI-DEC-3** | AI 上线判定和受控试生产 | 🟡 暂缓，等待真实质量/成本证据 |
 | **AI-DEC-4** | Phase 3 AI 直接写操作/HITL | 🟡 后置，继续复用现有审批闭环 |
