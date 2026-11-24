@@ -24,7 +24,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +40,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("渠道健康服务:上下文关闭后停止探测,以及失败退避直接采用落库返回的失败计数")
 @ExtendWith(OutputCaptureExtension.class)
@@ -61,6 +66,7 @@ class DispatchChannelHealthServiceTest {
 
   private DispatchChannelHealthRepository repository;
   private DispatchChannelHealthService service;
+  private DispatchChannelHealthProperties properties;
   private CountDownLatch blockedProbeRelease;
   private SimpleMeterRegistry meterRegistry;
 
@@ -70,7 +76,7 @@ class DispatchChannelHealthServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<BatchObjectStore> objectStoreProvider = mock(ObjectProvider.class);
     when(objectStoreProvider.getIfAvailable()).thenReturn(null);
-    DispatchChannelHealthProperties properties = new DispatchChannelHealthProperties();
+    properties = new DispatchChannelHealthProperties();
     DispatchCircuitBreakerProperties circuitBreakerProperties =
         new DispatchCircuitBreakerProperties();
     meterRegistry = new SimpleMeterRegistry();
@@ -168,5 +174,62 @@ class DispatchChannelHealthServiceTest {
 
     verify(repository).recalcBackoff(any(), eq(4));
     verify(repository, never()).findHealth("tenant-a", "channel-a");
+  }
+
+  @Test
+  @DisplayName("单轮预算耗尽后停止后续批次,剩余到期渠道留到下一轮")
+  void shouldStopRemainingBatches_whenRoundBudgetExhausted(CapturedOutput output) {
+    properties.setProbeIntervalMillis(100);
+    List<DispatchChannelConfigView> channels = new ArrayList<>();
+    for (int index = 1; index <= 9; index++) {
+      channels.add(probeChannel("channel-" + index, null));
+    }
+    when(repository.findEnabledProbeChannels(anyList(), anyInt(), any())).thenReturn(channels);
+    when(repository.findHealth(eq("tenant-a"), any())).thenAnswer(invocation -> {
+      Thread.sleep(300);
+      return DispatchChannelHealthSnapshot.builder()
+          .nextProbeAt(Instant.now().plusSeconds(60))
+          .build();
+    });
+
+    assertTimeoutPreemptively(Duration.ofSeconds(5), service::probeConfiguredChannels);
+
+    assertThat(output.getOut()).contains("round budget exhausted");
+    verify(repository, never()).findHealth("tenant-a", "channel-9");
+  }
+
+  @Test
+  @DisplayName("线程全部占用且队列已满时,提交被拒后停止本轮并保留剩余渠道")
+  void shouldStopRound_whenProbeQueueRejectsSubmission(CapturedOutput output) throws Exception {
+    blockedProbeRelease = new CountDownLatch(1);
+    ExecutorService initializedExecutor =
+        (ExecutorService) ReflectionTestUtils.getField(service, "probeExecutor");
+    assertThat(initializedExecutor).isNotNull();
+    initializedExecutor.shutdownNow();
+    ReflectionTestUtils.setField(
+        service,
+        "probeExecutor",
+        new ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(1),
+            new ThreadPoolExecutor.AbortPolicy()));
+    List<DispatchChannelConfigView> channels = List.of(
+        probeChannel("channel-1", null),
+        probeChannel("channel-2", null),
+        probeChannel("channel-3", null));
+    when(repository.findEnabledProbeChannels(anyList(), anyInt(), any())).thenReturn(channels);
+    when(repository.findHealth(eq("tenant-a"), any())).thenAnswer(invocation -> {
+      blockedProbeRelease.await();
+      return DispatchChannelHealthSnapshot.builder()
+          .nextProbeAt(Instant.now().plusSeconds(60))
+          .build();
+    });
+
+    service.probeConfiguredChannels();
+
+    assertThat(output.getOut()).contains("probe queue is full");
   }
 }
