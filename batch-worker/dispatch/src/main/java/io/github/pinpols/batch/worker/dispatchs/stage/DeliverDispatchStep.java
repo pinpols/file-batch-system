@@ -5,7 +5,9 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -156,7 +158,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     if (manifestRef != null) {
       manifestRef.putFileMetadata(fileMetadata);
     }
-    fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHING.code(), fileMetadata);
+    recordDispatchingWithoutRegressingCompletedFile(fileId, fileMetadata);
     if (!dispatchResult.success()) {
       String errorCode = dispatchResult.externalOutcomeUnknown()
           ? TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN
@@ -209,6 +211,36 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     attrs.put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
     return DispatchStageResult.success(stage());
+  }
+
+  /**
+   * 多个渠道共用一个 file_record。外发已经完成后，其他渠道可能已把共享状态写成 {@code DISPATCHED}；
+   * 这时不能打回 {@code DISPATCHING}，也不能让状态冲突丢掉本渠道已经发出的派发记录。归档、失败等不兼容状态仍原样失败。
+   */
+  private void recordDispatchingWithoutRegressingCompletedFile(
+      Long fileId, Map<String, Object> fileMetadata) {
+    try {
+      fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHING.code(), fileMetadata);
+    } catch (BizException exception) {
+      if (!sharedFileAlreadyDispatched(exception, fileId)) {
+        throw exception;
+      }
+      fileRecords.updateFileMetadata(fileId, fileMetadata);
+    }
+  }
+
+  private boolean sharedFileAlreadyDispatched(BizException exception, Long fileId) {
+    if (exception.getCode() != ResultCode.STATE_CONFLICT) {
+      return false;
+    }
+    String observedStatus = fileRecords.currentFileStatus(fileId);
+    boolean alreadyDispatched = FileStatus.DISPATCHED.code().equals(observedStatus);
+    if (alreadyDispatched) {
+      log.info(
+          "shared file already dispatched by another channel; commit this channel without regressing file status: fileId={}",
+          fileId);
+    }
+    return alreadyDispatched;
   }
 
   /** 已持久化结果先恢复，只有创建或取得下一次尝试授权后才允许进入外部渠道。 */
