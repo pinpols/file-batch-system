@@ -65,6 +65,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- Console 启动入口排除未使用的 OpenAI 决策模型，避免 Spring AI 2.1 默认装配要求额外凭据。Full Gate 和手动 Staging Gate 共用一次 E2E Maven 准备，降低并行分片触发 Central 限流的概率。
 - 修复 Spring AI 2.1 升级后的 Full CI E2E 启动失败：`OpenAiDecisionAutoConfiguration` 在未配置 `spring.ai.model.decision` 时默认装配 OpenAI 决策模型，E2E 应用只排除了 2.0 的聊天等自动装配，且没有 API key。九个 E2E 应用同时排除该自动装配。Console 在 API key 为空时仍走无认证启动，显式 key 仍创建决策模型。
 - 收窄租户 API Key 的运维权限：新增 `worker.ops` scope，执行凭据不再能强制下线、接管、排空/恢复、变更状态或取消任务；执行端点与只读查询语义不变。
 - 限制 Go、Rust、TypeScript SDK 的控制面响应读取上限（8 MiB）：超限立即以显式错误终止，不重试、不缓存超限正文，并释放响应体。

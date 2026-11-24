@@ -35,6 +35,8 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
+Full CI 和手动 Staging Gate 通过 [Maven 准备工作流](../../.github/workflows/e2e-maven-prepare.yml) 安装当前提交的 E2E 上游模块并预取依赖。准备任务失败时，先查看该任务日志。已进入测试的分片可在产物保留期内单独重跑。
+
 Actions 页面以 `Backend / ...`、`SDK / ...` 和 `Platform / ...` 标识工作流用途；本文 `pr-gate` 等名称指对应的 workflow 文件标识。Ruleset 必需检查名称保持不变，E2E 分片显示测试业务范围而非历史耗时。
 
 其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；Java、TypeScript、Rust 语言腿复用各自 Kafka，分别补测慢认领心跳、分区暂扣恢复和双成员转交，Go/Python 真实 Kafka 回归仍走现有 SDK live transport。该追加回归不进入 PR 的 live transport 步骤，实际耗时以线上结果为准；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。

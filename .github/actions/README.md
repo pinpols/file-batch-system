@@ -5,5 +5,5 @@
 | 共享动作 | 用途 | 主要输入与调用边界 |
 |---|---|---|
 | [detect-change-scope](detect-change-scope/action.yml) | 调用共享分类器，输出变更范围和测试分片要求 | event-name、base-sha、head-sha；无法获得可信 diff 时回退完整范围 |
-| [setup-build-env](setup-build-env/action.yml) | 准备 JDK、Maven 缓存和可选 Testcontainers 镜像缓存 | java-version、compile-load-tests、cache-testcontainers；非测试 job 可关闭容器缓存 |
+| [setup-build-env](setup-build-env/action.yml) | 准备 JDK、Maven 缓存和可选 Testcontainers 镜像缓存 | java-version、compile-load-tests、cache-maven、cache-testcontainers；E2E 分片复用准备产物时关闭通用 Maven 缓存 |
 | [setup-python-guard-env](setup-python-guard-env/action.yml) | 安装 Python 治理检查共用依赖 | 无自定义输入；调用方负责 checkout 和 Python 运行时准备 |

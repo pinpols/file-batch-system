@@ -33,6 +33,7 @@ Actions 展示名按 `Backend /`、`SDK /`、`Platform /` 区分职责；工作�
 | [daily-sim-strict-validation.yml](daily-sim-strict-validation.yml) | 每天 13:31 UTC、手动 | 按北京时间检查当日代码/配置变更，依次跑 SIM 与 BE strict；SIM 失败仍尝试 strict，两项成功才调用镜像构建。force 可绕过无变更判断 |
 | [daily-backend-reliability.yml](daily-backend-reliability.yml) | 每天 20:17 UTC、手动 | 在隔离 runner 用 Testcontainers 验证并发、checkpoint、文件完整性和依赖故障恢复；不连接已有 SIM/staging |
 | [staging-gate.yml](staging-gate.yml) | 仅手动 | 后端 Java 治理及并行完整 E2E 复验并汇总测试报告；使用 runner/Testcontainers，名称不表示会部署或连接 staging 集群 |
+| [e2e-maven-prepare.yml](e2e-maven-prepare.yml) | 由全量门禁和手动 Staging Gate 调用 | 每次运行统一安装上游模块、预取 E2E 依赖，分片下载同次运行的 Maven 仓库和 Wrapper 产物 |
 | [strict-verify.yml](strict-verify.yml) | 指定严格验收脚本变更的 main PR；手动 | PR 和默认手动模式只跑前置依赖 dry-run；手动 live 启动隔离 PG/Valkey 与 Console API 做真实数据验证，独立于 PR/Full 聚合 |
 | [fuzzing.yml](fuzzing.yml) | 周二 03:15 UTC、手动 | Jazzer 安全边界模糊测试；结果不等同于全系统安全审计 |
 

@@ -5117,7 +5117,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and workflow_definition_id = ? and scheduled_fire_time = ?\
         """;
     final String selectDayStatusSql = """
-        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'e2e_calendar'\s\
+        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
         and biz_date = ?\
         """;
     final String selectCountSql = """
@@ -5130,7 +5130,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).minusDays(3);
-    ManualMisfire misfire = createManualMisfire(seed, bizDate);
+    String calendarCode = "e2e_expire_" + UUID.randomUUID().toString().replace("-", "");
+    isolateScenarioCalendar(calendarCode, seed);
+    ManualMisfire misfire =
+        createManualMisfire(seed, bizDate, calendarCode, ZoneOffset.UTC, LocalTime.of(9, 29));
     int affectedTriggerMisfirePendingRows = jdbcTemplate.update(
         updateTriggerMisfirePendingSql,
         TENANT,
@@ -5162,8 +5165,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         });
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatus =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, bizDate);
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
     assertThat(selectedDayStatus).isEqualTo("SETTLED");
     Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
         selectCountSql, Integer.class, TENANT, seed.workflowDefinitionId(), bizDate);

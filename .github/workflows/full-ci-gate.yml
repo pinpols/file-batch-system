@@ -902,7 +902,11 @@ jobs:
   #
   # 历史基线见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md；近期分片证据见 docs/plans/todo-master.md。
   # ===========================================================================
+  e2e-maven-prepare:
+    uses: ./.github/workflows/e2e-maven-prepare.yml
+
   e2e-shard:
+    needs: e2e-maven-prepare
     name: 'E2E ${{ matrix.shard.id }} / ${{ matrix.shard.label }}'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT') && 30 || 25 }}
@@ -1044,6 +1048,8 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-maven: 'false'
 
       - name: Setup Python for Spark recovery scenarios
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
@@ -1055,10 +1061,17 @@ jobs:
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
         run: python3 scripts/local/spark-e2e-runtime.py --prepare
 
-      - name: Install upstream modules to ~/.m2 (skip tests)
+      - name: Download prepared E2E Maven repository
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: e2e-maven-repository
+          path: ${{ runner.temp }}
+
+      - name: Restore E2E Maven repository
         shell: bash
-        # 共享脚本保留原 reactor 范围，并对 Maven Central 临时 5xx 做有限重试。
-        run: bash scripts/ci/install-upstream-modules.sh
+        run: |
+          mkdir -p "$HOME/.m2"
+          tar --zstd -xf "$RUNNER_TEMP/e2e-maven-repository.tar.zst" -C "$HOME/.m2"
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash
@@ -1142,7 +1155,7 @@ jobs:
   quality-trend:
     name: CI and test quality trend
     if: always()
-    needs: [unit-it-a, unit-it-a-main, unit-it-a-heavy, unit-it-b1, unit-it-b2-workers, unit-it-b2, java-governance, e2e-shard]
+    needs: [unit-it-a, unit-it-a-main, unit-it-a-heavy, unit-it-b1, unit-it-b2-workers, unit-it-b2, java-governance, e2e-maven-prepare, e2e-shard]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1209,6 +1222,7 @@ jobs:
         needs.unit-it-b2.result == 'failure' ||
         needs.java-governance.result == 'failure' ||
         needs.security-scan.result == 'failure' ||
+        needs.e2e-maven-prepare.result == 'failure' ||
         needs.e2e-shard.result == 'failure' ||
         needs.scheduled-test-quality.result == 'failure' ||
         needs.quality-trend.result == 'failure'
@@ -1221,6 +1235,7 @@ jobs:
       - unit-it-b2
       - java-governance
       - security-scan
+      - e2e-maven-prepare
       - e2e-shard
       - scheduled-test-quality
       - quality-trend

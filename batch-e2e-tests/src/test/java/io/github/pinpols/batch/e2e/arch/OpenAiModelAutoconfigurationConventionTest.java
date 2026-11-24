@@ -2,6 +2,7 @@ package io.github.pinpols.batch.e2e.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.e2e.apps.E2eAtomicApplication;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 import io.github.pinpols.batch.e2e.apps.E2eDispatchApplication;
@@ -23,6 +24,7 @@ import org.springframework.ai.openai.OpenAiDecisionModel;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 
 /**
  * Spring AI 2.1 新增 {@link OpenAiDecisionAutoConfiguration}，且 {@code spring.ai.model.decision}
@@ -61,6 +63,13 @@ class OpenAiModelAutoconfigurationConventionTest {
   }
 
   @Test
+  @DisplayName("真实 Console 应用入口排除未使用的 OpenAI 决策模型")
+  void shouldExcludeDecisionModel_inConsoleApplication() {
+    assertThat(excludedAutoConfigurations(BatchConsoleApiApplication.class))
+        .contains(OpenAiDecisionAutoConfiguration.class);
+  }
+
+  @Test
   @DisplayName("未配置任何凭据时,默认决策模型自动装配拒绝启动")
   void shouldFailContext_whenDecisionModelHasNoCredential() {
     decisionRunner.run(context -> {
@@ -92,7 +101,8 @@ class OpenAiModelAutoconfigurationConventionTest {
   }
 
   private static Set<Class<?>> excludedAutoConfigurations(Class<?> application) {
-    EnableAutoConfiguration annotation = application.getAnnotation(EnableAutoConfiguration.class);
+    EnableAutoConfiguration annotation =
+        AnnotatedElementUtils.findMergedAnnotation(application, EnableAutoConfiguration.class);
     assertThat(annotation).as(application.getSimpleName()).isNotNull();
     return Arrays.stream(annotation.exclude()).collect(Collectors.toSet());
   }
