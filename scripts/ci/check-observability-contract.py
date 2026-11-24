@@ -323,7 +323,7 @@ def main() -> int:
         ROOT
         / "batch-common/src/main/java/io/github/pinpols/batch/common/logging/OpenTelemetryLogbackBridge.java"
     ).read_text(encoding="utf-8")
-    if "setCaptureMdcAttributes(CAPTURED_MDC_ATTRIBUTES)" not in bridge:
+    if "setMdcAttributesIncluded(CAPTURED_MDC_ATTRIBUTES)" not in bridge:
         errors.append("OpenTelemetry Logback bridge must use the reviewed MDC allowlist")
     mdc_allowlist = bridge.partition("CAPTURED_MDC_ATTRIBUTES")[2]
     if '"*"' in mdc_allowlist:
