@@ -221,6 +221,28 @@ class PlatformFileRecordRepositoryIntegrationTest {
   }
 
   @Test
+  @DisplayName("读取到可分发状态后，其他渠道已写成已分发时拒绝回写分发中并保留已分发")
+  void shouldRejectDispatchingWriteAfterConcurrentChannelDispatched() {
+    Long fileId = create(file("incoming/orders-already-dispatched.csv", null));
+    markFileStatus(fileId, FileStatus.DISPATCHED.code());
+    PlatformFileRuntimeMapper staleReadMapper =
+        mock(PlatformFileRuntimeMapper.class, delegatesTo(mapper));
+    when(staleReadMapper.selectFileStatus(fileId))
+        .thenReturn(FileStatus.GENERATED.code())
+        .thenAnswer(invocation -> mapper.selectFileStatus(fileId));
+    PlatformFileRecordRepository staleReader = new PlatformFileRecordRepository(staleReadMapper);
+
+    assertThatThrownBy(() -> staleReader.updateFileStatus(
+            fileId, FileStatus.DISPATCHING.code(), Map.of("channelCode", "nas")))
+        .isInstanceOfSatisfying(BizException.class, conflict -> {
+          assertThat(conflict.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
+          assertThat(String.valueOf(conflict.getMessageArgs()[0]))
+              .contains("concurrent status change");
+        });
+    assertThat(fileStatus(fileId)).isEqualTo(FileStatus.DISPATCHED.code());
+  }
+
+  @Test
   @DisplayName("并发写入已到达同一目标状态时按幂等成功处理")
   void shouldTreatConcurrentSameTargetStatusAsIdempotent() {
     Long fileId = create(file("incoming/orders-race.csv", null));

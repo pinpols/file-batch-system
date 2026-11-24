@@ -116,7 +116,7 @@ flowchart TB
 - Trigger 状态查询由 Console 按当前租户作用域传递 `tenantId`；Trigger 在构造返回 DTO 前按 Quartz job identity 限域。平台级 Console 调用不传 `tenantId`，可查看全量。Console 仍保留租户过滤作为纵深防御。
 - worker 不是直接从库里扫任务，而是先消费 Kafka，再通过 HTTP 回 `orchestrator` 做 `claim`、`heartbeat`、`renew`、`report`。
 - worker 仍然会直连数据库，但直连的是执行阶段需要的业务表或文件类平台表，不直接接管调度状态主表。
-- Workflow 定时开关只由 Console 定时启停和 Trigger 运维暂停写入；画布保存更新定义与图，不携带 `schedule_enabled`。Worker 推进 `file_record` 状态时按读取到的前置状态比较，未命中即视为并发冲突，不覆盖治理侧归档。
+- Workflow 定时开关只由 Console 定时启停和 Trigger 运维暂停写入；画布保存更新定义与图，不携带 `schedule_enabled`。Worker 推进 `file_record` 状态时按读取到的前置状态比较，未命中即视为并发冲突，不覆盖治理侧归档。同一文件并发投递多个渠道时，若共享状态已被其他渠道写成 `DISPATCHED`，本渠道不回退该状态，只合并投递元数据并继续提交自己的派发记录；`ARCHIVED`、`FAILED` 等不兼容状态仍按冲突失败。
 - **Worker 可写的 `job_task` 列**（白名单，由各 Worker 模块的 `*JobTaskWriteGuardArchTest` 守护；不得写 `task_status`，不得增删行）：
 
   | Worker | 列 | 前置谓词 |

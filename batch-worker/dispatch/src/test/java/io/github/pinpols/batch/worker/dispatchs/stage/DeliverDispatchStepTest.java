@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,6 +13,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -330,6 +334,67 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("同一文件已被其他渠道推进到已分发时仍提交本渠道派发记录，且不回退文件状态")
+  void execute_commitsChannelWhenSharedFileAlreadyDispatched() {
+    setupMocksForNewRecord();
+    when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
+    doThrow(fileStatusConflict(
+            "file 10 concurrent status change: expected GENERATED, found DISPATCHED"))
+        .when(fileRecords)
+        .updateFileStatus(eq(10L), eq(FileStatus.DISPATCHING.code()), any());
+    when(fileRecords.currentFileStatus(10L)).thenReturn(FileStatus.DISPATCHED.code());
+
+    DispatchStageResult result = step.execute(buildContext());
+
+    assertThat(result.success()).isTrue();
+    verify(fileRecords, times(1))
+        .updateFileStatus(eq(10L), eq(FileStatus.DISPATCHING.code()), any());
+    verify(fileRecords).updateFileMetadata(eq(10L), any());
+    verify(fileDispatchRepository).markSent(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("文件已被归档时状态冲突继续失败，不把已外发结果记成已发送")
+  void execute_keepsStateConflictWhenSharedFileWasArchived() {
+    setupMocksForNewRecord();
+    when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
+    doThrow(fileStatusConflict(
+            "file 10 concurrent status change: expected GENERATED, found ARCHIVED"))
+        .when(fileRecords)
+        .updateFileStatus(eq(10L), eq(FileStatus.DISPATCHING.code()), any());
+    when(fileRecords.currentFileStatus(10L)).thenReturn(FileStatus.ARCHIVED.code());
+
+    assertThatThrownBy(() -> step.execute(buildContext()))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            conflict -> assertThat(conflict.getCode()).isEqualTo(ResultCode.STATE_CONFLICT));
+
+    verify(fileRecords, never()).updateFileMetadata(any(), any());
+    verify(fileDispatchRepository, never()).markSent(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("文件已失败时状态冲突继续失败，不把本渠道记成已发送")
+  void execute_keepsStateConflictWhenSharedFileFailed() {
+    setupMocksForNewRecord();
+    when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
+    doThrow(fileStatusConflict(
+            "file 10 concurrent status change: expected GENERATED, found FAILED"))
+        .when(fileRecords)
+        .updateFileStatus(eq(10L), eq(FileStatus.DISPATCHING.code()), any());
+    when(fileRecords.currentFileStatus(10L)).thenReturn(FileStatus.FAILED.code());
+
+    assertThatThrownBy(() -> step.execute(buildContext()))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            conflict -> assertThat(conflict.getCode()).isEqualTo(ResultCode.STATE_CONFLICT));
+
+    verify(fileDispatchRepository, never()).markSent(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
   @DisplayName("试运行模式下投递成功但跳过全部外部副作用:不碰派发仓库与网关,不更新文件状态,并写入试运行占位回执")
   void execute_dryRunSkipsAllDispatchSideEffects() {
     DispatchJobContext context = buildContext();
@@ -477,6 +542,11 @@ class DeliverDispatchStepTest {
     verify(dispatchChannelGateway, times(1)).dispatch(any());
     verify(fileDispatchRepository, never()).beginAttempt(any(), any(), any());
     assertThat(channelConfig).doesNotContainKey("sftp_password");
+  }
+
+  private static BizException fileStatusConflict(String detail) {
+    return BizException.of(
+        ResultCode.STATE_CONFLICT, ResultCode.STATE_CONFLICT.detailKey(), detail);
   }
 
   private void setupMocksForNewRecord() {
