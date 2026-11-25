@@ -35,7 +35,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
-Full CI 和手动 Staging Gate 通过 [Maven 准备工作流](../../.github/workflows/e2e-maven-prepare.yml) 安装当前提交的 E2E 上游模块并预取依赖。准备任务失败时，先查看该任务日志。已进入测试的分片可在产物保留期内单独重跑。包含活动 Spark 恢复用例的分片失败时，上传 Shell 和 Spark 恢复场景的独立 Worker 及 Kafka 消费组诊断。
+Full CI 和手动 Staging Gate 通过 [Maven 准备工作流](../../.github/workflows/e2e-maven-prepare.yml) 安装当前提交的 E2E 上游模块并预取依赖。准备任务失败时，先查看该任务日志。已进入测试的分片可在产物保留期内单独重跑。任一 E2E 分片失败时，按分片归档 `logs/verification/**/*.log*` 中已生成的测试诊断，保留 14 天。没有匹配文件时不生成诊断包。Surefire 报告仍按现有步骤归档。
 
 Actions 页面以 `Backend / ...`、`SDK / ...` 和 `Platform / ...` 标识工作流用途；本文 `pr-gate` 等名称指对应的 workflow 文件标识。Ruleset 必需检查名称保持不变，E2E 分片显示测试业务范围而非历史耗时。
 
@@ -179,7 +179,7 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 变更运行 Flyway 结构/checksum、迁移安全和数据库注释检查；这些静态检查不依赖 Maven scope，
 不应因 Maven `skip` 而漏跑。OpenAPI 有独立路径同步与破坏性变更检查。
 
-编排集成测试的 MyBatis SQL 明细默认由日志级别控制，避免无条件输出导致 CI 日志截断；排查 SQL 时可临时将对应 Mapper 的日志级别设为 `DEBUG`。批日补跑进程恢复 E2E 失败时会额外保存 Console 子进程日志，供定位请求与启动问题。
+编排集成测试的 MyBatis SQL 明细默认由日志级别控制，避免无条件输出导致 CI 日志截断；排查 SQL 时可临时将对应 Mapper 的日志级别设为 `DEBUG`。批日补跑生成的 Console 子进程日志随失败分片的诊断包归档。
 
 ### 统一变更范围探测
 

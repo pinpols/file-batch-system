@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-25 E2E 分片失败日志统一归档
+
+- Full CI 与手动 Staging Gate 按分片归档测试诊断日志，归档规则与测试类和方法解耦。参见 [CI 手册](runbook/ci.md)。
+
 ## 2026-11-25 全量门禁恢复用例诊断
 
 - Full CI 与手动 Staging Gate 在活动 Spark 恢复用例所在分片失败时保留 Shell 和 Spark 的 Worker 与 Kafka 消费组诊断。编排就绪门闩用例的故障注入限定到发起线程。

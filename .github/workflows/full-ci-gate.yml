@@ -1101,24 +1101,13 @@ jobs:
             "${{ matrix.shard.tests }}" \
             batch-e2e-tests/target/surefire-reports
 
-      - name: Upload catch-up child-process diagnostics
-        if: failure() && contains(matrix.shard.tests, 'WorkflowOccurrenceCatchUpApprovalE2eIT')
+      - name: Upload E2E shard diagnostics
+        if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: full-ci-catchup-process-diagnostics-${{ matrix.shard.id }}
-          path: logs/verification/backend25-2026-10-30/batchday-process/*.log
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload Atomic filesystem recovery diagnostics
-        if: failure() && (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay_whenWorkerJvmCrashesDuringActiveSparkAction') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: full-ci-spark-recovery-diagnostics-${{ matrix.shard.id }}
-          path: |
-            logs/verification/workflow/r25-spark-active-worker-*.log*
-            logs/verification/workflow/r25-atomic-*-effect-worker-*.log*
-          if-no-files-found: warn
+          name: full-ci-e2e-shard-${{ matrix.shard.id }}-diagnostics
+          path: logs/verification/**/*.log*
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Upload E2E shard ${{ matrix.shard.id }} reports

@@ -38,3 +38,12 @@ Maven 准备成功，原来失败的 E2E 2、8、10、12、13、15、19 均通�
 - 原编排重型分片的 235 个用例在本地通过，独立探针复现共享 spy 的并发缺口。修复后 `JobNodeDispatchIntegrationTest` 全类 104 个用例通过。
 - 用仓库固定的 Spark 4.0.1、Python 3.12 与原 E2E 17 方法选择器离线复跑。原版 5 个中 2 个超时，分别为 Shell 副作用及 Spark 输出提交后的恢复。修复版 5 个全部通过，`check-e2e-run-completeness.sh` 确认执行了所有选中的方法。
 - PMD、Spotless、actionlint、Zizmor、分片覆盖、代码量及文档守卫通过。改动后的 GitHub Full CI 仍待验证。
+
+
+## #1464 合入后复核
+
+[Full CI 45554701986](https://github.com/pinpols/file-batch-system/actions/runs/45554701986) 在主干 `a7404bf5d` 运行。编排重型分片和 E2E 17 已通过。唯一失败任务是 `unit-it-b2`，Console 报告有 1 个失败、2 个跳过。
+
+- `ConfigCacheInvalidationOutboxIntegrationTest#shouldRequireTableGrantsAndPolicy_whenDeliveryRoleClaims` 给投递角色添加策略后，首次领取返回空。同一轮测试记录显示多个 Console 上下文仍轮询 同一测试 JVM 内共享的队列。单个上下文停止转发器不能隔离其他上下文，清理其他租户行也不能阻止再次领取。测试改用独立 PostgreSQL 容器，保留真实 Flyway、RLS、事务、领取和确认断言，清理仅限本测试租户和角色。
+- Full CI 与手动 Staging Gate 统一按失败分片归档 `logs/verification/**/*.log*`。规则同时匹配批日 Console 子进程、Worker 及消费组诊断，产物保留 14 天。静态检查确认 E2E 矩阵与 Surefire 报告步骤保持原配置。
+- 本地按 Full Gate 的 Console 分片选测运行 `./mvnw verify -pl batch-console-api -Dtest='!*ArchTest,!*ConventionTest' -DskipITs=false`，共 3034 个用例，0 失败、0 错误、2 跳过。随后 `jacoco:check@check` 通过。原失败类在完整分片中 4 个用例均通过。

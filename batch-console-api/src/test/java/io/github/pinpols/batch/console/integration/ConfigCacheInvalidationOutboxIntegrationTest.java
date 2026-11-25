@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidatio
 import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationRelay;
 import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,8 +18,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -26,6 +31,19 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @DisplayName("配置缓存失效意图的事务和领取栅栏")
 class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTest {
+  // 同 JVM 的其他 Console 上下文仍可能轮询共享的全局队列，测试使用独立平台库。
+  @Container
+  private static final PostgreSQLContainer OUTBOX_POSTGRES =
+      TestPostgresContainers.platform().withInitScript("db/platform-init.sql");
+
+  @DynamicPropertySource
+  protected static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registerDynamicProperties(registry, true);
+    registry.add("spring.datasource.url", OUTBOX_POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", OUTBOX_POSTGRES::getUsername);
+    registry.add("spring.datasource.password", OUTBOX_POSTGRES::getPassword);
+  }
+
   private final ConfigCacheInvalidationRelay relay;
 
   private final ConfigCacheInvalidationOutboxMapper outbox;
@@ -54,9 +72,6 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
   void resetQueue() {
     relay.stop();
     tenant = "cache-" + UUID.randomUUID().toString().substring(0, 8);
-    // lockNext 按到期时间全局领取。共享库里其他用例留下的意图会排在本次行前面，
-    // 或在本次行被并发领走后成为下一条。领取栅栏用例开始前先清掉不属于本租户的行。
-    deleteOtherTenantOutboxRows();
   }
 
   @AfterEach
@@ -112,16 +127,10 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
   @DisplayName("过期领取被重领后，旧令牌不能确认或释放")
   void shouldRejectExpiredClaimForNewClaim() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
-    String prioritizeSql = """
-        update batch.config_cache_invalidation_outbox set next_attempt_at = '-infinity'
-         where tenant_id = ?
-        """;
-    jdbc.update(prioritizeSql, tenant);
     String oldToken = UUID.randomUUID().toString();
     String newToken = UUID.randomUUID().toString();
     TransactionTemplate transaction = new TransactionTemplate(manager);
     ConfigCacheInvalidationIntent first = transaction.execute(status -> {
-      deleteOtherTenantOutboxRows();
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
       assertThat(intent.tenantId()).isEqualTo(tenant);
@@ -135,7 +144,6 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
         """;
     jdbc.update(expireClaimSql, first.id());
     ConfigCacheInvalidationIntent second = transaction.execute(status -> {
-      deleteOtherTenantOutboxRows();
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
       assertThat(intent.tenantId()).isEqualTo(tenant);
@@ -177,11 +185,6 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
   @DisplayName("独立投递角色需同时获得表权限和专属 RLS 策略才能领取确认")
   void shouldRequireTableGrantsAndPolicy_whenDeliveryRoleClaims() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
-    String prioritizeSql = """
-        update batch.config_cache_invalidation_outbox set next_attempt_at = '-infinity'
-         where tenant_id = ?
-        """;
-    jdbc.update(prioritizeSql, tenant);
 
     String role = "config_cache_delivery_" + UUID.randomUUID().toString().replace("-", "");
     String createRoleSql = "create role %s nologin nosuperuser nobypassrls".formatted(role);
@@ -211,7 +214,6 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
     createdPolicy = policy;
     String token = UUID.randomUUID().toString();
     transaction.executeWithoutResult(status -> {
-      deleteOtherTenantOutboxRows();
       jdbc.execute(setRoleSql);
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
@@ -220,13 +222,6 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
       assertThat(outbox.acknowledge(intent.id(), intent.tenantId(), token)).isOne();
     });
     assertThat(count(tenant)).isZero();
-  }
-
-  private void deleteOtherTenantOutboxRows() {
-    String deleteOtherTenantOutboxSql = """
-        delete from batch.config_cache_invalidation_outbox where tenant_id <> ?
-        """;
-    jdbc.update(deleteOtherTenantOutboxSql, tenant);
   }
 
   private int count(String tenant) {
