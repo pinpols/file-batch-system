@@ -86,10 +86,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
+import org.aopalliance.intercept.MethodInterceptor;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.DisplayName;
@@ -102,8 +104,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.aop.Advisor;
+import org.springframework.aop.support.NameMatchMethodPointcutAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -129,6 +136,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = "batch.resource-scheduler.waiting-dispatch-interval-millis=5000")
+@Import(JobNodeDispatchIntegrationTest.ReadinessGateFault.class)
 @DisplayName("Workflow Job 节点集成验证: 独立 JobInstance 与根运行状态推进")
 class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
@@ -157,8 +165,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private WorkflowGraphValidator workflowGraphValidator;
 
-  @MockitoSpyBean
-  private JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
+  private final ReadinessGateFault readinessGateFault;
 
   @MockitoSpyBean
   private TriggerRequestMapper triggerRequestMapper;
@@ -803,7 +810,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       BatchDaySettleScheduler batchDaySettleScheduler,
       BatchDayInstanceMapper batchDayInstanceMapper,
       WorkflowRunManagementApplicationService workflowRunManagementApplicationService,
-      OrchestratorRedisSupport orchestratorRedisSupport) {
+      OrchestratorRedisSupport orchestratorRedisSupport,
+      ReadinessGateFault readinessGateFault) {
     this.launchWaitReconciler = launchWaitReconciler;
     this.batchDayWaitingReleaseScheduler = batchDayWaitingReleaseScheduler;
     this.platformTransactionManager = platformTransactionManager;
@@ -824,6 +832,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     this.batchDayInstanceMapper = batchDayInstanceMapper;
     this.workflowRunManagementApplicationService = workflowRunManagementApplicationService;
     this.orchestratorRedisSupport = orchestratorRedisSupport;
+    this.readinessGateFault = readinessGateFault;
   }
 
   @Test
@@ -1165,21 +1174,6 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
     String childCode = seedChildJob("WG_T1_REQUEST_" + System.nanoTime());
     DirectWorkflowSeed seed = seedDirectWorkflow(childCode);
-    AtomicInteger interventions = new AtomicInteger();
-    Mockito.doAnswer(invocation -> {
-          Object captured = invocation.callRealMethod();
-          LaunchRequest child = invocation.getArgument(0);
-          if ("DRY_RUN".equals(change)) {
-            jdbcTemplate.update(updateTriggerRequestSql, child.tenantId(), child.requestId());
-          } else {
-            jdbcTemplate.update(
-                updateTriggerRequestSql2, change, child.tenantId(), child.requestId());
-          }
-          interventions.incrementAndGet();
-          return captured;
-        })
-        .when(jobDependencyWaitingLaunchService)
-        .captureOrDefer(ArgumentMatchers.any());
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(testTenantId)
         .workflowDefinitionId(seed.workflowDefinitionId())
@@ -1188,7 +1182,27 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         .requestId(seed.requestId())
         .build();
 
-    Throwable rejected = Assertions.catchThrowable(() -> workflowRunLaunchService.launch(request));
+    AtomicInteger interventions = new AtomicInteger();
+    Throwable rejected;
+    readinessGateFault.afterCapture.set(child -> {
+      assertThat(child.tenantId()).isEqualTo(testTenantId);
+      assertThat(child.jobCode()).isEqualTo(childCode);
+      int updated;
+      if ("DRY_RUN".equals(change)) {
+        updated = jdbcTemplate.update(updateTriggerRequestSql, child.tenantId(), child.requestId());
+      } else {
+        updated = jdbcTemplate.update(
+            updateTriggerRequestSql2, change, child.tenantId(), child.requestId());
+      }
+      assertThat(updated).isOne();
+      interventions.incrementAndGet();
+    });
+    try {
+      rejected = Assertions.catchThrowable(() -> workflowRunLaunchService.launch(request));
+    } finally {
+      readinessGateFault.afterCapture.remove();
+    }
+    assertThat(interventions).hasValue(1);
     if ("REJECTED".equals(change)) {
       // 子请求的业务拒绝由 Workflow 节点消费，根运行以失败终态收敛。
       assertThat(rejected).isNull();
@@ -1205,7 +1219,6 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       assertThat(rejected).isInstanceOf(UnexpectedRollbackException.class);
     }
 
-    assertThat(interventions.get()).isEqualTo(1);
     Long selectedJobInstanceCount =
         jdbcTemplate.queryForObject(selectCountSql, Long.class, testTenantId, childCode);
     assertThat(selectedJobInstanceCount).isZero();
@@ -1214,9 +1227,6 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     assertThat(selectedJobTaskCount).isZero();
 
     // 撤销故障后重复调用：失败终态不复活，其他非终态场景恢复并创建一个子实例。
-    Mockito.doCallRealMethod()
-        .when(jobDependencyWaitingLaunchService)
-        .captureOrDefer(ArgumentMatchers.any());
     workflowRunLaunchService.launch(request);
     Long selectedJobInstanceCountRead2 =
         jdbcTemplate.queryForObject(selectCountSql, Long.class, testTenantId, childCode);
@@ -1229,6 +1239,28 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     Long selectedWorkflowRunCount = jdbcTemplate.queryForObject(
         selectCountSql3, Long.class, testTenantId, seed.workflowDefinitionId());
     assertThat(selectedWorkflowRunCount).isEqualTo(1);
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class ReadinessGateFault {
+    // 对账线程也调用就绪服务。让故障只作用于当前测试发起的启动，避免竞争配置共享 spy。
+    private final ThreadLocal<Consumer<LaunchRequest>> afterCapture = new ThreadLocal<>();
+
+    @Bean
+    Advisor readinessGateFaultAdvisor() {
+      MethodInterceptor interceptor = invocation -> {
+        Object captured = invocation.proceed();
+        Consumer<LaunchRequest> fault = afterCapture.get();
+        if (fault != null) {
+          fault.accept((LaunchRequest) invocation.getArguments()[0]);
+        }
+        return captured;
+      };
+      NameMatchMethodPointcutAdvisor advisor = new NameMatchMethodPointcutAdvisor(interceptor);
+      advisor.setClassFilter(JobDependencyWaitingLaunchService.class::isAssignableFrom);
+      advisor.setMappedName("captureOrDefer");
+      return advisor;
+    }
   }
 
   @Test

@@ -34,6 +34,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.TestContainerLabels;
@@ -148,6 +149,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
   private final PartitionReclaimUnit partitionReclaimUnit;
 
+  private final WorkerRegistryCache workerRegistryCache;
+
   private final ObjectMapper objectMapper;
 
   private final DataSource businessDataSource;
@@ -183,7 +186,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       JobPartitionMapper jobPartitionMapper,
       PartitionReclaimUnit partitionReclaimUnit,
       ObjectMapper objectMapper,
-      @Qualifier("e2eBusinessDataSource") DataSource businessDataSource) {
+      @Qualifier("e2eBusinessDataSource") DataSource businessDataSource,
+      WorkerRegistryCache workerRegistryCache) {
     this.launchService = launchService;
     this.outboxPublishSupport = outboxPublishSupport;
     this.platformJdbc = platformJdbc;
@@ -192,6 +196,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     this.partitionReclaimUnit = partitionReclaimUnit;
     this.objectMapper = objectMapper;
     this.businessDataSource = businessDataSource;
+    this.workerRegistryCache = workerRegistryCache;
   }
 
   @Test
@@ -2743,7 +2748,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
             max_running_partitions, max_qps, worker_group, resource_tag,
             priority_policy, fair_share_weight, enabled, quota_reset_policy,
             group_shared_max_running_jobs, burst_limit
-        ) values (?, ?, 'R25 atomic filesystem commit', 'MIXED', 0, 0, 0, 'ATOMIC', null,
+        ) values (?, ?, 'R25 atomic filesystem commit', 'MIXED', 0, 0, 0, 'ATOMIC', ?,
                   'FIFO', 1, true, 'NONE', 0, 0)
         """;
     final String updateJobSql = """
@@ -2773,11 +2778,6 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                count(*) filter (where next_replay_at is not null)::int as scheduled_replay_count
         from batch.dead_letter_task
         where tenant_id = ? and source_type = 'JOB_PARTITION' and source_id = ?
-        """;
-    final String selectDispatchSql = """
-        select payload_json::text from batch.outbox_event
-        where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
-        order by id limit 1
         """;
     final String selectWorkflowStatusSql = """
         select run.run_status from batch.trigger_request request
@@ -2843,7 +2843,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     try {
       Map<String, Object> parameters = new LinkedHashMap<>();
       parameters.put("taskType", taskType);
-      List<String> executorOptions;
+      List<String> executorOptions = new ArrayList<>();
+      executorOptions.add("--batch.worker.atomic.capability-tags[0]=" + workerPoolCode);
       if (sparkTask) {
         String sparkHomeSetting = System.getProperty("r25.spark.home");
         assertThat(sparkHomeSetting)
@@ -2894,14 +2895,14 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                 effectDirectory.resolve("spark-local").toString(),
                 "spark.sql.warehouse.dir",
                 effectDirectory.resolve("warehouse").toUri().toString()));
-        executorOptions = List.of(
+        executorOptions.addAll(List.of(
             "--batch.worker.executors.spark-submit.enabled=true",
             "--batch.worker.executors.spark-submit.spark-submit-bin=" + sparkSubmit,
             "--batch.worker.executors.spark-submit.app-resource-allowlist[0]=" + effectDirectory
                 + "/",
             "--batch.worker.executors.spark-submit.allowed-master-prefixes[0]=local[1]",
             "--batch.worker.executors.spark-submit.allowed-conf-key-prefixes[0]=spark.",
-            "--batch.worker.executors.spark-submit.verify-local-success-marker=true");
+            "--batch.worker.executors.spark-submit.verify-local-success-marker=true"));
       } else {
         String shellApplication = """
             import os
@@ -2916,23 +2917,22 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         Path ledger = effectDirectory.resolve("shell-ledger.txt");
         parameters.put("command", "/usr/bin/python3");
         parameters.put("args", List.of(application.toString(), ledger.toString()));
-        executorOptions = List.of(
+        executorOptions.addAll(List.of(
             "--batch.worker.executors.shell.enabled=true",
             "--batch.worker.executors.shell.command-whitelist=/usr/bin/python3",
             "--batch.worker.executors.shell.workdir-base="
-                + effectDirectory.resolve("shell-workdirs"));
+                + effectDirectory.resolve("shell-workdirs")));
       }
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           platformJdbc, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
-      platformJdbc.update(insertQueueSql, TENANT, queueCode);
+      platformJdbc.update(insertQueueSql, TENANT, queueCode, workerPoolCode);
       platformJdbc.update(updateJobSql, queueCode, TENANT, seed.jobCode());
       String dispatchTopic =
           BatchTopics.directDispatchTopic(BatchTopics.TASK_DISPATCH_ATOMIC, workerPoolCode);
       ensureKafkaTopicsExist(List.of(BatchTopics.TASK_DISPATCH_ATOMIC, dispatchTopic));
       firstWorker = startAtomicWorker(
           workerPoolCode, consumerGroupId, firstWorkerLog, "attempt-1", executorOptions);
-      awaitAtomicWorkerStarted(firstWorker, firstWorkerLog);
-      awaitWorkerPoolOnline(workerPoolCode, "ATOMIC");
+      awaitFilesystemWorkerReady(firstWorker, firstWorkerLog, workerPoolCode, consumerGroupId);
       LaunchRequest request = new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
@@ -2942,6 +2942,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           "r25-atomic-fs-effect-" + suffix,
           parameters);
       launchService.launch(request);
+      String dispatchPayload = readFilesystemDispatchPayload(seed, workerPoolCode);
       outboxPublishSupport.publishAllPending(TENANT);
 
       boolean completedBeforeReport = firstReportStarted.await(300, TimeUnit.SECONDS);
@@ -2966,8 +2967,6 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       assertThat(beforeCrash.get("non_idempotent_started_at")).isNotNull();
       Long taskId = ((Number) beforeCrash.get("id")).longValue();
       Long partitionId = ((Number) beforeCrash.get("job_partition_id")).longValue();
-      String dispatchPayload =
-          platformJdbc.queryForObject(selectDispatchSql, String.class, TENANT, taskId);
       TaskDispatchMessage dispatch = JsonUtils.fromJson(dispatchPayload, TaskDispatchMessage.class);
       assertThat(dispatch).isNotNull();
       Set<String> originalConsumerIds = atomicConsumerIds(consumerGroupId);
@@ -3010,7 +3009,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       observedTaskId.set(taskId);
       Path consumerGroupLog = replacementWorkerLog.resolveSibling(
           replacementWorkerLog.getFileName() + ".consumer-group.log");
-      awaitAtomicConsumerReplacement(
+      awaitAtomicConsumerAssignment(
           consumerGroupId, originalConsumerIds, dispatchTopic, consumerGroupLog);
       String dispatchKey =
           TENANT + ":" + dispatch.jobCode() + ":" + dispatch.instanceNo() + ":task:" + taskId;
@@ -3092,7 +3091,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
             max_running_partitions, max_qps, worker_group, resource_tag,
             priority_policy, fair_share_weight, enabled, quota_reset_policy,
             group_shared_max_running_jobs, burst_limit
-        ) values (?, ?, 'R25 active Spark action', 'MIXED', 0, 0, 0, 'ATOMIC', null,
+        ) values (?, ?, 'R25 active Spark action', 'MIXED', 0, 0, 0, 'ATOMIC', ?,
                   'FIFO', 1, true, 'NONE', 0, 0)
         """;
     final String updateJobSql = """
@@ -3122,11 +3121,6 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                count(*) filter (where next_replay_at is not null)::int as scheduled_replay_count
         from batch.dead_letter_task
         where tenant_id = ? and source_type = 'JOB_PARTITION' and source_id = ?
-        """;
-    final String selectDispatchSql = """
-        select payload_json::text from batch.outbox_event
-        where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
-        order by id limit 1
         """;
     final String selectWorkflowStatusSql = """
         select run.run_status from batch.trigger_request request
@@ -3275,6 +3269,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
               "spark.sql.warehouse.dir",
               effectDirectory.resolve("warehouse").toUri().toString()));
       List<String> executorOptions = List.of(
+          "--batch.worker.atomic.capability-tags[0]=" + workerPoolCode,
           "--batch.worker.executors.spark-submit.enabled=true",
           "--batch.worker.executors.spark-submit.spark-submit-bin=" + sparkSubmit,
           "--batch.worker.executors.spark-submit.app-resource-allowlist[0]=" + effectDirectory
@@ -3284,15 +3279,14 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           "--batch.worker.executors.spark-submit.verify-local-success-marker=true");
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           platformJdbc, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
-      platformJdbc.update(insertQueueSql, TENANT, queueCode);
+      platformJdbc.update(insertQueueSql, TENANT, queueCode, workerPoolCode);
       platformJdbc.update(updateJobSql, queueCode, TENANT, seed.jobCode());
       String dispatchTopic =
           BatchTopics.directDispatchTopic(BatchTopics.TASK_DISPATCH_ATOMIC, workerPoolCode);
       ensureKafkaTopicsExist(List.of(BatchTopics.TASK_DISPATCH_ATOMIC, dispatchTopic));
       firstWorker = startAtomicWorker(
           workerPoolCode, consumerGroupId, firstWorkerLog, "attempt-1", executorOptions);
-      awaitAtomicWorkerStarted(firstWorker, firstWorkerLog);
-      awaitWorkerPoolOnline(workerPoolCode, "ATOMIC");
+      awaitFilesystemWorkerReady(firstWorker, firstWorkerLog, workerPoolCode, consumerGroupId);
       ProcessHandle workerHandle = firstWorker.toHandle();
       captureActiveSparkOwnedProcesses(workerHandle, ownedProcesses, ownedStartTimes);
       LaunchRequest request = new LaunchRequest(
@@ -3304,8 +3298,11 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           "r25-spark-active-action-" + suffix,
           parameters);
       launchService.launch(request);
+      String dispatchPayload = readFilesystemDispatchPayload(seed, workerPoolCode);
+      TaskDispatchMessage dispatch = JsonUtils.fromJson(dispatchPayload, TaskDispatchMessage.class);
       outboxPublishSupport.publishAllPending(TENANT);
       await()
+          .alias("第二个 Spark action 进入执行，Worker 日志 " + firstWorkerLog)
           .atMost(Duration.ofSeconds(180))
           .pollInterval(Duration.ofMillis(100))
           .until(() -> {
@@ -3366,10 +3363,6 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       assertThat(beforeCrash.get("non_idempotent_started_at")).isNotNull();
       Long taskId = ((Number) beforeCrash.get("id")).longValue();
       Long partitionId = ((Number) beforeCrash.get("job_partition_id")).longValue();
-      String dispatchPayload =
-          platformJdbc.queryForObject(selectDispatchSql, String.class, TENANT, taskId);
-      TaskDispatchMessage dispatch = JsonUtils.fromJson(dispatchPayload, TaskDispatchMessage.class);
-      assertThat(dispatch).isNotNull();
       Set<String> originalConsumerIds = atomicConsumerIds(consumerGroupId);
       recordActiveSparkProcessEvidence(
           processEvidence,
@@ -3426,7 +3419,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       awaitWorkerPoolOnline(workerPoolCode, "ATOMIC");
       Path consumerGroupLog = replacementWorkerLog.resolveSibling(
           replacementWorkerLog.getFileName() + ".consumer-group.log");
-      awaitAtomicConsumerReplacement(
+      awaitAtomicConsumerAssignment(
           consumerGroupId, originalConsumerIds, dispatchTopic, consumerGroupLog);
       String dispatchKey =
           TENANT + ":" + dispatch.jobCode() + ":" + dispatch.instanceNo() + ":task:" + taskId;
@@ -3500,6 +3493,39 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       boolean effectDirectoryStillExists = Files.exists(effectDirectory);
       assertThat(effectDirectoryStillExists).isFalse();
     }
+  }
+
+  private void awaitFilesystemWorkerReady(
+      Process worker, Path workerLog, String workerPoolCode, String consumerGroupId)
+      throws Exception {
+    awaitAtomicWorkerStarted(worker, workerLog);
+    awaitWorkerPoolOnline(workerPoolCode, "ATOMIC");
+    String dispatchTopic =
+        BatchTopics.directDispatchTopic(BatchTopics.TASK_DISPATCH_ATOMIC, workerPoolCode);
+    Path consumerGroupLog =
+        workerLog.resolveSibling(workerLog.getFileName() + ".consumer-group.log");
+    awaitAtomicConsumerAssignment(consumerGroupId, Set.of(), dispatchTopic, consumerGroupLog);
+    // 共享测试上下文可能缓存了上个用例的 Worker 列表。
+    workerRegistryCache.evict(TENANT, "ATOMIC");
+  }
+
+  private String readFilesystemDispatchPayload(LaunchSeed seed, String workerPoolCode) {
+    final String selectDispatchSql = """
+        select event.payload_json::text
+        from batch.job_instance instance
+        join batch.job_task task on task.tenant_id = instance.tenant_id
+            and task.job_instance_id = instance.id
+        join batch.outbox_event event on event.tenant_id = task.tenant_id
+            and event.aggregate_type = 'JOB_TASK' and event.aggregate_id = task.id
+        where instance.tenant_id = ? and instance.dedup_key = ?
+        order by event.id limit 1
+        """;
+    String payload =
+        platformJdbc.queryForObject(selectDispatchSql, String.class, TENANT, seed.dedupKey());
+    TaskDispatchMessage dispatch = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+    assertThat(dispatch).isNotNull();
+    assertThat(dispatch.selectedWorkerId()).isEqualTo(workerPoolCode);
+    return payload;
   }
 
   private boolean activeSparkMarkerComplete(Path marker) throws IOException {
@@ -3801,7 +3827,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           BatchTopics.directDispatchTopic(BatchTopics.TASK_DISPATCH_ATOMIC, workerPoolCode);
       Path consumerGroupLog = replacementWorkerLog.resolveSibling(
           replacementWorkerLog.getFileName() + ".consumer-group.log");
-      awaitAtomicConsumerReplacement(
+      awaitAtomicConsumerAssignment(
           consumerGroupId, originalConsumerIds, dispatchTopic, consumerGroupLog);
       String dispatchKey =
           TENANT + ":" + dispatch.jobCode() + ":" + dispatch.instanceNo() + ":task:" + taskId;
@@ -3855,9 +3881,9 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     }
   }
 
-  private void awaitAtomicConsumerReplacement(
+  private void awaitAtomicConsumerAssignment(
       String consumerGroupId,
-      Set<String> originalConsumerIds,
+      Set<String> previousConsumerIds,
       String dispatchTopic,
       Path evidenceLog)
       throws Exception {
@@ -3877,7 +3903,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                   .get(consumerGroupId);
             } catch (ExecutionException exception) {
               if (exception.getCause() instanceof GroupIdNotFoundException) {
-                throw new AssertionError("replacement Worker has not joined its group", exception);
+                throw new AssertionError("Worker has not joined its consumer group", exception);
               }
               throw exception;
             }
@@ -3897,7 +3923,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                   .forEach(partition -> assignedTopics.add(partition.topic()));
             });
             assertThat(group.groupState()).isEqualTo(GroupState.STABLE);
-            assertThat(consumerIds).isNotEmpty().doesNotContainAnyElementsOf(originalConsumerIds);
+            assertThat(consumerIds).isNotEmpty();
+            assertThat(consumerIds).filteredOn(previousConsumerIds::contains).isEmpty();
             assertThat(assignedTopics).contains(dispatchTopic);
           });
     }

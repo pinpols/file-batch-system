@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-25 全量门禁恢复用例诊断
+
+- Full CI 与手动 Staging Gate 在活动 Spark 恢复用例所在分片失败时保留 Shell 和 Spark 的 Worker 与 Kafka 消费组诊断。编排就绪门闩用例的故障注入限定到发起线程。
+
 ## 2026-11-25 E2E Maven 依赖准备
 
 - Full CI 和手动 Staging Gate 共用一次 Maven 准备。分片使用同次运行的归档，准备失败计入主干归责。详见 [CI 手册](runbook/ci.md)。
