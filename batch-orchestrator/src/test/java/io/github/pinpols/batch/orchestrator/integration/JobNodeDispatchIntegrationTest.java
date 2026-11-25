@@ -165,8 +165,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private WorkflowGraphValidator workflowGraphValidator;
 
-  @Autowired
-  private ReadinessGateFault readinessGateFault;
+  private final ReadinessGateFault readinessGateFault;
 
   @MockitoSpyBean
   private TriggerRequestMapper triggerRequestMapper;
@@ -811,7 +810,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       BatchDaySettleScheduler batchDaySettleScheduler,
       BatchDayInstanceMapper batchDayInstanceMapper,
       WorkflowRunManagementApplicationService workflowRunManagementApplicationService,
-      OrchestratorRedisSupport orchestratorRedisSupport) {
+      OrchestratorRedisSupport orchestratorRedisSupport,
+      ReadinessGateFault readinessGateFault) {
     this.launchWaitReconciler = launchWaitReconciler;
     this.batchDayWaitingReleaseScheduler = batchDayWaitingReleaseScheduler;
     this.platformTransactionManager = platformTransactionManager;
@@ -832,6 +832,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     this.batchDayInstanceMapper = batchDayInstanceMapper;
     this.workflowRunManagementApplicationService = workflowRunManagementApplicationService;
     this.orchestratorRedisSupport = orchestratorRedisSupport;
+    this.readinessGateFault = readinessGateFault;
   }
 
   @Test

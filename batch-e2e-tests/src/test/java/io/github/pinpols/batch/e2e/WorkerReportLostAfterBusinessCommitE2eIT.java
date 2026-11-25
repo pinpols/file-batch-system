@@ -149,8 +149,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
   private final PartitionReclaimUnit partitionReclaimUnit;
 
-  @Autowired
-  private WorkerRegistryCache workerRegistryCache;
+  private final WorkerRegistryCache workerRegistryCache;
 
   private final ObjectMapper objectMapper;
 
@@ -187,7 +186,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       JobPartitionMapper jobPartitionMapper,
       PartitionReclaimUnit partitionReclaimUnit,
       ObjectMapper objectMapper,
-      @Qualifier("e2eBusinessDataSource") DataSource businessDataSource) {
+      @Qualifier("e2eBusinessDataSource") DataSource businessDataSource,
+      WorkerRegistryCache workerRegistryCache) {
     this.launchService = launchService;
     this.outboxPublishSupport = outboxPublishSupport;
     this.platformJdbc = platformJdbc;
@@ -196,6 +196,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     this.partitionReclaimUnit = partitionReclaimUnit;
     this.objectMapper = objectMapper;
     this.businessDataSource = businessDataSource;
+    this.workerRegistryCache = workerRegistryCache;
   }
 
   @Test
