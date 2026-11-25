@@ -23,4 +23,18 @@
 - `./mvnw -o -B -ntp -fae -DskipTests test-compile pmd:check spotless:check` 通过。
 - `actionlint`、`zizmor --min-severity medium`、Action SHA 固定检查、脚本治理及文档守卫通过。
   安装脚本和分片守卫的 19 个 Python 用例通过。两套工作流仍各覆盖全部 58 个 E2E 类。
-- 修复提交的 GitHub Full Gate、Maven Central 限流缓解效果以及真实 runner 上的准备耗时和产物大小待验证。
+- #1463 的 GitHub Full CI 结果见下节。长期限流缓解效果仍需观察后续运行。
+
+## #1463 合入后复核
+
+[Full CI 45514356520](https://github.com/pinpols/file-batch-system/actions/runs/45514356520) 在主干 `0ec523dc9` 运行。
+Maven 准备成功，原来失败的 E2E 2、8、10、12、13、15、19 均通过。最终 19 个 E2E 分片通过，E2E 17 和编排重型分片失败。编排汇总 `unit-it-a` 随重型分片失败。
+
+- 编排重型分片的 `JobNodeDispatchIntegrationTest#jobPreparation_shouldRecheckOriginalAfterReadinessGate` 一次读取根状态为 `RUNNING`，预期 `FAILED`。同一用例日志显示后台对账调用共享 spy 时收到 null。用 Mockito 5.24.0 通过两个线程控制调用顺序，复现后台调用抢占配置窗口、启动故障没有注入。见 [Mockito 并发说明](https://github.com/mockito/mockito/wiki/FAQ#is-mockito-thread-safe)。测试用固定拦截器，在当前发起线程的就绪检查成功返回后注入故障，并断言只改动目标请求。对账器和数据库事务照常运行。
+- E2E 17 的前 4 个用例通过，第 5 个在注入崩溃之前等待 Spark 运行标记超时。原运行没有归档独立 Worker 日志，因此无法从留存报告确定 Worker 停在哪一步。本地按原分片顺序复跑时，Shell 场景也出现等待无进展。查库确认其任务停在 `READY`，Outbox 指向前序用例残留的 Worker 池，而非已注册的新进程。Shell 与两个 Spark 场景现使用专属资源标签，Kafka 专属 topic 确认分配后清除测试上下文的 Worker 选择缓存，再启动并核对 Outbox 指向。强杀、UNKNOWN 阻止重投和精确业务副作用断言保留。Full CI 与手动 Staging Gate 会在该用例所在分片失败时上传 Worker 和消费组诊断。
+
+### 本地回归
+
+- 原编排重型分片的 235 个用例在本地通过，独立探针复现共享 spy 的并发缺口。修复后 `JobNodeDispatchIntegrationTest` 全类 104 个用例通过。
+- 用仓库固定的 Spark 4.0.1、Python 3.12 与原 E2E 17 方法选择器离线复跑。原版 5 个中 2 个超时，分别为 Shell 副作用及 Spark 输出提交后的恢复。修复版 5 个全部通过，`check-e2e-run-completeness.sh` 确认执行了所有选中的方法。
+- PMD、Spotless、actionlint、Zizmor、分片覆盖、代码量及文档守卫通过。改动后的 GitHub Full CI 仍待验证。
