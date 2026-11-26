@@ -329,12 +329,13 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
   # 生成只含"本 PR 新增行"的临时 diff 文件
   TMP_DIFF=$(mktemp)
   trap 'rm -f "$TMP_DIFF"' EXIT
-  # 用 git diff -U0 + 解析 hunk header 得到"文件:行号:内容"
+  # 用 git diff -w -U0 + 解析 hunk header 得到"文件:行号:内容"；-w 忽略纯空白变更
+  # (整仓格式化不应把既有代码判成"新增违规")。
   # 只保留 + 行(新增),过滤掉 +++ 头部
   for f in $CHANGED_JAVA; do
     [[ -f "$f" ]] || continue
     # 跳过 test 文件的某些检查会单独标记
-    git diff -U0 "$BASE_REF...HEAD" -- "$f" 2>/dev/null | \
+    git diff -w -U0 "$BASE_REF...HEAD" -- "$f" 2>/dev/null | \
       awk -v file="$f" '
         /^@@/ {
           # @@ -a,b +c,d @@ 格式
@@ -488,7 +489,7 @@ if [[ -n "$CHANGED_CTL" ]]; then
   while IFS= read -r ctl; do
     [[ -z "$ctl" ]] && continue
     if [[ -z "$BASE_REF" ]] \
-        || git diff -U0 "$BASE_REF...HEAD" -- "$ctl" | grep -E \
+        || git diff -w -U0 "$BASE_REF...HEAD" -- "$ctl" | grep -E \
           '^[+-][^+-].*@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestBody|PathVariable|RequestParam|RequestHeader)|^[+-][^+-].*public[[:space:]]+(void|[A-Za-z_][A-Za-z0-9_]*(<[^(){};]*>)?(\[\])?)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
           >/dev/null; then
       API_CONTRACT_CTL+="$ctl"$'\n'

@@ -17,8 +17,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 
 CHECK_PATTERNS = (
@@ -148,6 +150,94 @@ def added_lines(base: str | None) -> list[tuple[str, int, str]]:
     return additions
 
 
+def matches_gate(source: str) -> bool:
+    stripped = source.strip()
+    if not stripped or stripped.startswith(("//", "/*", "*")):
+        return False
+    if ALLOW_MARKER.search(source):
+        return False
+    return any(pattern.search(source) for _, pattern in CHECK_PATTERNS)
+
+
+def matched_lines(lines: list[str]) -> list[str]:
+    return [line for line in lines if matches_gate(line)]
+
+
+def pattern_occurrences(lines: list[str]) -> int:
+    """匹配模式的累计出现次数；格式化只改换行，不改变次数。"""
+    total = 0
+    for source in lines:
+        stripped = source.strip()
+        if not stripped or stripped.startswith(("//", "/*", "*")):
+            continue
+        if ALLOW_MARKER.search(source):
+            continue
+        for _, pattern in CHECK_PATTERNS:
+            total += len(pattern.findall(source))
+    return total
+
+
+def extract_base_tree(base: str, target: Path) -> None:
+    """一次解包 base 的 Java 树，避免逐文件 git show 在大 diff 上过慢。"""
+    archive = subprocess.Popen(
+        ["git", "archive", base, "--", "*.java"], stdout=subprocess.PIPE
+    )
+    try:
+        subprocess.run(["tar", "-x", "-C", str(target)], stdin=archive.stdout, check=True)
+    finally:
+        if archive.stdout:
+            archive.stdout.close()
+        archive.wait()
+
+
+def read_base_lines(base_dir: Path, path: str) -> list[str]:
+    file = base_dir / path
+    return file.read_text(encoding="utf-8").splitlines() if file.is_file() else []
+
+
+def read_head_lines(path: str) -> list[str]:
+    file = Path(path)
+    return file.read_text(encoding="utf-8").splitlines() if file.is_file() else []
+
+
+def normalize_line(source: str) -> str:
+    return re.sub(r"\s+", "", source)
+
+
+def new_violations(
+    violations: list[tuple[str, int, str, str]], base: str
+) -> list[tuple[str, int, str, str]]:
+    """按文件对比 base 与 head 的匹配次数，只保留真正新增的空值判断。
+
+    整仓格式化会改变换行与缩进，使既有判断在逐行 diff 中表现为“新增行”；
+    这里按文件比较模式出现次数（格式化不改变次数），次数增加时才上报。
+    """
+    by_path: dict[str, list[tuple[str, int, str, str]]] = {}
+    for violation in violations:
+        by_path.setdefault(violation[0], []).append(violation)
+
+    base_dir = Path(tempfile.mkdtemp(prefix="empty-checks-base-"))
+    remaining: list[tuple[str, int, str, str]] = []
+    try:
+        extract_base_tree(base, base_dir)
+        for path, path_violations in by_path.items():
+            base_lines = read_base_lines(base_dir, path)
+            base_matched = matched_lines(base_lines)
+            extra = pattern_occurrences(read_head_lines(path)) - pattern_occurrences(base_lines)
+            if extra <= 0:
+                continue
+            base_normalized = {normalize_line(line) for line in base_matched}
+            candidates = [
+                violation
+                for violation in path_violations
+                if normalize_line(violation[3]) not in base_normalized
+            ] or path_violations
+            remaining.extend(candidates[:extra])
+    finally:
+        shutil.rmtree(base_dir, ignore_errors=True)
+    return remaining
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -184,6 +274,8 @@ def main() -> int:
         for path, line_no, source in bad_allows:
             print(f"  {path}:{line_no}: {source}", file=sys.stderr)
         return 1
+
+    violations = new_violations(violations, args.base or "HEAD") if violations else violations
 
     if violations:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
