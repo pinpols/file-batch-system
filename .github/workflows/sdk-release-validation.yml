@@ -279,9 +279,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Package + install batch-worker-sdk to local m2
-        # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
-        run: ./mvnw -B -pl sdk/java/core -am -DskipTests install
+      - name: Package + install Java SDK core and starter to local m2
+        # -am 拉父 reactor 依赖；core 与 starter 都装到 ~/.m2，供下面的独立消费工程引用。
+        run: ./mvnw -B -pl sdk/java/core,sdk/java/spring -am -DskipTests install
       - name: Validate -Prelease packaging (sources + javadoc + ossrh flatten, no sign)
         # 非 gated:每次 release-validation 都验"发布 profile 真能产出 Central 合规产物"
         # (源码 jar / javadoc jar / 去父化独立 pom)。-Dgpg.skip 跳过签名(无密钥),
@@ -292,12 +292,18 @@ jobs:
           test -n "$(ls sdk/java/core/target/*-javadoc.jar 2>/dev/null)" || { echo "missing javadoc jar"; exit 1; }
           test -f sdk/java/core/.flattened-pom.xml || { echo "missing flattened pom"; exit 1; }
           ! grep -q '<parent>' sdk/java/core/.flattened-pom.xml || { echo "ossrh flatten must strip parent"; exit 1; }
-          echo "SMOKE OK: -Prelease produced Central-compliant artifacts (sources+javadoc+self-contained pom)"
-      - name: Smoke consumer project(独立 pom 引依赖 + 编译最小 handler)
+          STARTER_JAR="$(find sdk/java/spring/target -maxdepth 1 -name 'batch-worker-sdk-spring-boot-starter-*.jar' -print -quit)"
+          test -n "$STARTER_JAR" || { echo "missing starter jar"; exit 1; }
+          unzip -p "$STARTER_JAR" META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports \
+            | grep -q 'BatchWorkerSdkAutoConfiguration' \
+            || { echo "starter must register BatchWorkerSdkAutoConfiguration"; exit 1; }
+          echo "SMOKE OK: -Prelease produced Central-compliant core artifacts; starter registers its auto-configuration"
+      - name: Smoke consumer project(独立 pom 引 core + starter 并启动最小上下文)
         shell: bash
         run: |
           REV="$(./mvnw -q -N help:evaluate -Dexpression=revision -DforceStdout)"
-          echo "platform revision: $REV"
+          BOOT_VERSION="$(./mvnw -q -N help:evaluate -Dexpression=project.parent.version -DforceStdout)"
+          echo "platform revision: $REV, Spring Boot: $BOOT_VERSION"
           SMOKE="$(mktemp -d)"
           mkdir -p "$SMOKE/src/main/java/smoke"
           cat > "$SMOKE/pom.xml" <<EOF
@@ -312,27 +318,90 @@ jobs:
               <maven.compiler.release>21</maven.compiler.release>
               <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
             </properties>
+            <dependencyManagement>
+              <dependencies>
+                <dependency>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-dependencies</artifactId>
+                  <version>${BOOT_VERSION}</version>
+                  <type>pom</type>
+                  <scope>import</scope>
+                </dependency>
+              </dependencies>
+            </dependencyManagement>
             <dependencies>
               <dependency>
                 <groupId>io.github.pinpols.batch</groupId>
                 <artifactId>batch-worker-sdk</artifactId>
                 <version>${REV}</version>
               </dependency>
+              <dependency>
+                <groupId>io.github.pinpols.batch</groupId>
+                <artifactId>batch-worker-sdk-spring-boot-starter</artifactId>
+                <version>${REV}</version>
+              </dependency>
+              <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter</artifactId>
+              </dependency>
             </dependencies>
+            <build>
+              <plugins>
+                <plugin>
+                  <groupId>org.codehaus.mojo</groupId>
+                  <artifactId>exec-maven-plugin</artifactId>
+                  <version>3.5.0</version>
+                  <configuration>
+                    <mainClass>smoke.Smoke</mainClass>
+                  </configuration>
+                </plugin>
+              </plugins>
+            </build>
           </project>
           EOF
-          # 最小消费:引用 SDK 公共类型,证明发布 jar 的入口 + 依赖闭包能被独立工程解析编译。
+          # 独立消费:不仅编译,还启动最小 Spring 上下文,验证 starter 的自动装配、
+          # 属性绑定和依赖闭包在"打包后的 jar"上成立;enabled=false 避免启动 worker 生命周期。
           cat > "$SMOKE/src/main/java/smoke/Smoke.java" <<'EOF'
           package smoke;
+
+          import io.github.pinpols.batch.sdk.autoconfigure.BatchWorkerSdkProperties;
+          import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+          import org.springframework.boot.SpringApplication;
+          import org.springframework.boot.WebApplicationType;
+          import org.springframework.boot.autoconfigure.SpringBootApplication;
+          import org.springframework.context.ConfigurableApplicationContext;
+
+          @SpringBootApplication
           public final class Smoke {
-              public static void main(String[] args) {
-                  System.out.println("SMOKE OK: batch-worker-sdk resolved + compiled in standalone consumer project");
+
+            public static void main(String[] args) {
+              SpringApplication application = new SpringApplication(Smoke.class);
+              application.setWebApplicationType(WebApplicationType.NONE);
+              try (ConfigurableApplicationContext context =
+                  application.run(
+                      "--batch.worker-sdk.enabled=false",
+                      "--batch.worker-sdk.base-url=https://batch.example.com",
+                      "--batch.worker-sdk.api-key=smoke",
+                      "--batch.worker-sdk.tenant-id=tenant-smoke",
+                      "--batch.worker-sdk.worker-code=worker-smoke",
+                      "--batch.worker-sdk.kafka-bootstrap=kafka:9092",
+                      "--batch.worker-sdk.kafka-topic-pattern=batch.task.dispatch.*.tenant-smoke",
+                      "--batch.worker-sdk.kafka-group-id=tenant-smoke-workers")) {
+                if (context.getBean(BatchPlatformClient.class) == null) {
+                  throw new IllegalStateException("starter did not expose BatchPlatformClient");
+                }
+                if (!"tenant-smoke".equals(context.getBean(BatchWorkerSdkProperties.class).getTenantId())) {
+                  throw new IllegalStateException("starter properties were not bound");
+                }
+                System.out.println(
+                    "SMOKE OK: starter autoconfiguration started a context with bound properties");
               }
+            }
           }
           EOF
           # SDK 产物来自上一步的本地仓库；构建插件仍允许从 Maven Central 解析，
           # 避免把 runner 是否恰好缓存 Maven 默认插件误判为 SDK 包装失败。
-          ( cd "$SMOKE" && "$GITHUB_WORKSPACE/mvnw" -B compile )
+          ( cd "$SMOKE" && "$GITHUB_WORKSPACE/mvnw" -B -q compile exec:java )
 
   package-go:
     name: package check (go tag-based, no artifact)

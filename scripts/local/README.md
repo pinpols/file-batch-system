@@ -51,6 +51,7 @@
   - `--e2e`：仅 E2E 测试（`*E2eIT`）
   - `--all`：单元 + 集成 + E2E 全量
   - `-- <mvn args>`：透传 Maven 参数
+  - 构建前先执行根 POM 安装（`-N install`），避免 `~/.m2` 中旧父 POM 让模块测试混用旧依赖管理
   - 集成/E2E 测试类因 Docker 不可用被 Testcontainers 跳过时按失败处理；确需跳过设置 `ALLOW_DOCKER_SKIP=1`
   - 远程 Docker：本机不装 Docker 时设置 `DOCKER_HOST=tcp://<host>:2375`（或 `ssh://user@host`），
     本机须能访问远程主机上的容器映射端口，必要时设置 `TESTCONTAINERS_HOST_OVERRIDE=<host>`
