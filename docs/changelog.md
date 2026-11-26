@@ -6,6 +6,12 @@
 - Java SDK 发布冒烟安装 core + starter，并在独立消费工程启动最小 Spring 上下文，校验 starter 自动装配与属性绑定；starter 仍未进入 Central 发布集合。
 - 统一 starter README 的 Spring Boot 兼容口径；发布与滚动升级 runbook 增加 Ingress 入口和混合版本 staging 验收项。
 
+## 2026-11-26 Java 格式化统一为 Palantir 120 列 / 4 空格
+
+- Spotless 的 `palantirJavaFormat` 从 `GOOGLE` 兼容模式（实际 100 列 / 2 空格）切换为 `PALANTIR`（120 列 / 4 空格），与仓库文档、`.editorconfig` 及 Spring Boot / IntelliJ 主流约定一致。
+- 全仓机械重排 4 673 个 Java 文件，仅格式化、无业务变更；`docs/coding-conventions.md` 与 README 同步说明，`.editorconfig` 的 `[*.java]` 补 `indent_size = 4`。
+- 该提交必须独立于业务改动审查；如需回退，整文件集合按格式化提交回退即可。
+
 ## 2026-11-25 E2E 分片失败日志统一归档
 
 - Full CI 与手动 Staging Gate 按分片归档测试诊断日志，归档规则与测试类和方法解耦。参见 [CI 手册](runbook/ci.md)。

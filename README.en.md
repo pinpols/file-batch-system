@@ -160,6 +160,7 @@ Getting started and operations:
 | Multi-language SDK | Java / Python / TypeScript / Go / Rust (ADR-035, shared contract fixtures) |
 | Console frontend | Vue 3 + TypeScript + Vite + Pinia + Element Plus (paired repo `../batch-console`) |
 | Testing and load | JUnit 6, Testcontainers (PostgreSQL / Kafka / Redis), ArchUnit, Mockito / AssertJ, Gatling, Jazzer, PIT |
+| Code formatting | Palantir Java Format 2.92.0: 120 columns, 4-space indent; enforced by Spotless (`spotless:check` / `spotless:apply`) |
 | Build and deploy | Maven 3.9+ (Spotless / PMD / SpotBugs / JaCoCo / Enforcer), Docker Compose, Kubernetes + Helm |
 
 ## Quick start

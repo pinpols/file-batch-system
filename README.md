@@ -162,6 +162,7 @@ dispatch 的 `RETRY` / `COMPENSATE` 是失败分支步骤：`RETRY` 仅在 `retr
 | 多语言 SDK | Java / Python / TypeScript / Go / Rust（ADR-035，共享契约 fixture） |
 | 前端控制台 | Vue 3 + TypeScript + Vite + Pinia + Element Plus（配对仓库 `../batch-console`） |
 | 测试与压测 | JUnit 6、Testcontainers（PostgreSQL / Kafka / Redis）、ArchUnit、Mockito / AssertJ、Gatling、Jazzer、PIT |
+| 代码格式化 | Palantir Java Format 2.92.0：120 列、4 空格；由 Spotless 强制（`spotless:check` / `spotless:apply`） |
 | 构建与部署 | Maven 3.9+（Spotless / PMD / SpotBugs / JaCoCo / Enforcer）、Docker Compose、Kubernetes + Helm |
 
 ## 快速开始
