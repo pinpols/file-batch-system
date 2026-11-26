@@ -107,6 +107,7 @@ curl -X POST "http://<orchestrator>/internal/workers/<workerCode>/resume" \
 - [x] 本地 E2E：超时后 Orchestrator 能完成接管并将 Worker 标为下线。
 - [x] 本地 E2E：`force-offline` 能立即移交任务并下线。
 - [ ] staging：验证真实 Pod 排空、监听器暂停、负载均衡、Kafka lag 收敛与操作留痕。
+- [ ] staging：在同一存量库验证上一版本 Worker 与新版本 Orchestrator 混跑时的领取、回报、租约接管与重复投递（仅限协议/库结构兼容的版本）；未实测即视为未验证，不能以 CI/E2E 通过代替。
 
 ## 后端本地验收
 

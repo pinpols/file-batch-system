@@ -48,6 +48,7 @@
 ## 子集构建注意事项
 
 - `scripts/local/run-tests.sh` 会先执行 `clean install -DskipTests -pl <13 个模块>`，不包含根 POM。若本机 `~/.m2` 中的 `batch-platform:1.0.0` 仍是旧父 POM，子模块会解析到旧的 `opentelemetry-instrumentation.version=2.28.0-alpha`，与 Boot 4.2 管理的 API 1.68 混用，报 `NoClassDefFoundError: io/opentelemetry/api/internal/ConfigUtil`（2.28 的 `opentelemetry-api-incubator 1.62.0-alpha` 引用该内部类）。升级根 POM 后须先在仓库根执行一次 `mvn install -DskipTests` 更新父 POM，再运行测试脚本；这是升级分支的复现前提，不是产品代码缺陷。执行根安装后 `dependency:tree` 已确认解析为 `opentelemetry-logback-appender 2.34.0-alpha` + `opentelemetry-api 1.68.0` + `opentelemetry-api-incubator 1.68.0-alpha`。
+- 2026-11-26 更新：`run-tests.sh` 已在构建前执行根 POM 安装（`-N install`），使用该脚本不再需要手工先跑根安装；直接对子模块执行 Maven 命令时仍须自行保证父 POM 与源码一致。
 
 ## 仍需外部条件或后续变更
 - **Anthropic 网关**：`spring-ai-anthropic 2.1.0` 传递 `anthropic-java-core 3.8.0`。反编译该 jar 可确认存在 `Authorization` + `Bearer ` 头、`anthropic-version` 头与 API 版本字面量 `2026-10-21`（同时保留 `x-api-key` 兼容路径）；Bearer 认证、API 版本、采样参数丢弃与流式/工具回合仍必须用实际启用的端点验证，本机没有可用凭据，未执行。

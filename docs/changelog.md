@@ -1,5 +1,11 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-26 升级后验证与发布边界补强
+
+- `run-tests.sh` 构建前先安装根 POM，避免 `-pl` 模式读取旧缓存父 POM 导致本地测试混用旧依赖管理。
+- Java SDK 发布冒烟安装 core + starter，并在独立消费工程启动最小 Spring 上下文，校验 starter 自动装配与属性绑定；starter 仍未进入 Central 发布集合。
+- 统一 starter README 的 Spring Boot 兼容口径；发布与滚动升级 runbook 增加 Ingress 入口和混合版本 staging 验收项。
+
 ## 2026-11-25 E2E 分片失败日志统一归档
 
 - Full CI 与手动 Staging Gate 按分片归档测试诊断日志，归档规则与测试类和方法解耦。参见 [CI 手册](runbook/ci.md)。
