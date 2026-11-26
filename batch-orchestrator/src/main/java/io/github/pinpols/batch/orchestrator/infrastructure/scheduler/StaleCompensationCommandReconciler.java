@@ -21,48 +21,42 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    prefix = "batch.compensation.stale-running-reconciler",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.compensation.stale-running-reconciler",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class StaleCompensationCommandReconciler {
 
-  static final String ERROR_CODE = "STALE_RUNNING_TIMEOUT";
+    static final String ERROR_CODE = "STALE_RUNNING_TIMEOUT";
 
-  private final CompensationCommandMapper compensationCommandMapper;
-  private final StaleCompensationReconcilerProperties properties;
+    private final CompensationCommandMapper compensationCommandMapper;
+    private final StaleCompensationReconcilerProperties properties;
 
-  @Scheduled(
-      initialDelayString =
-          "${batch.compensation.stale-running-reconciler.initial-delay-millis:60000}",
-      fixedDelayString = "${batch.compensation.stale-running-reconciler.fixed-delay-millis:60000}")
-  @SchedulerLock(
-      name = "stale_compensation_reconcile",
-      lockAtMostFor = "PT15M",
-      lockAtLeastFor = "PT1M")
-  public void reconcile() {
-    long timeoutSeconds = properties.getTimeoutSeconds();
-    int batchSize = properties.getBatchSize();
-    if (timeoutSeconds <= 0 || batchSize <= 0) {
-      return;
+    @Scheduled(
+            initialDelayString = "${batch.compensation.stale-running-reconciler.initial-delay-millis:60000}",
+            fixedDelayString = "${batch.compensation.stale-running-reconciler.fixed-delay-millis:60000}")
+    @SchedulerLock(name = "stale_compensation_reconcile", lockAtMostFor = "PT15M", lockAtLeastFor = "PT1M")
+    public void reconcile() {
+        long timeoutSeconds = properties.getTimeoutSeconds();
+        int batchSize = properties.getBatchSize();
+        if (timeoutSeconds <= 0 || batchSize <= 0) {
+            return;
+        }
+        StaleCompensationFailureParam staleCompensationFailureParam = StaleCompensationFailureParam.builder()
+                .runningStatus(CompensationCommandStatus.RUNNING.code())
+                .failedStatus(CompensationCommandStatus.FAILED.code())
+                .cutoff(BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds))
+                .errorCode(ERROR_CODE)
+                .errorMessage("compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
+                .limit(batchSize)
+                .build();
+        int updated = compensationCommandMapper.markStaleRunningFailed(staleCompensationFailureParam);
+        if (updated > 0) {
+            log.warn(
+                    "stale compensation RUNNING reconciled: updated={}, timeoutSeconds={}, batchSize={}",
+                    updated,
+                    timeoutSeconds,
+                    batchSize);
+        }
     }
-    StaleCompensationFailureParam staleCompensationFailureParam =
-        StaleCompensationFailureParam.builder()
-            .runningStatus(CompensationCommandStatus.RUNNING.code())
-            .failedStatus(CompensationCommandStatus.FAILED.code())
-            .cutoff(BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds))
-            .errorCode(ERROR_CODE)
-            .errorMessage(
-                "compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
-            .limit(batchSize)
-            .build();
-    int updated = compensationCommandMapper.markStaleRunningFailed(staleCompensationFailureParam);
-    if (updated > 0) {
-      log.warn(
-          "stale compensation RUNNING reconciled: updated={}, timeoutSeconds={}, batchSize={}",
-          updated,
-          timeoutSeconds,
-          batchSize);
-    }
-  }
 }

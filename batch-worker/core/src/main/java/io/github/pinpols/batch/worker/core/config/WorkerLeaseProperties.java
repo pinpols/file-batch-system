@@ -24,19 +24,19 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.worker.lease")
 public class WorkerLeaseProperties {
 
-  /** 续租周期（毫秒）；执行包装器用同一周期判断租约是否过期。 */
-  @Min(value = 1, message = "worker lease renew interval must be positive")
-  private long renewIntervalMillis = 10_000L;
+    /** 续租周期（毫秒）；执行包装器用同一周期判断租约是否过期。 */
+    @Min(value = 1, message = "worker lease renew interval must be positive")
+    private long renewIntervalMillis = 10_000L;
 
-  /** 连续 renew 失败到该阈值时发告警(默认 3 次)。 */
-  @Min(value = 1, message = "worker lease failure alert threshold must be positive")
-  private int consecutiveFailureAlertThreshold = 3;
+    /** 连续 renew 失败到该阈值时发告警(默认 3 次)。 */
+    @Min(value = 1, message = "worker lease failure alert threshold must be positive")
+    private int consecutiveFailureAlertThreshold = 3;
 
-  /** 熔断 OPEN 后每 N 个 tick 强制半开探测一次。默认 5 = ~50s @ renew 周期 10s。 */
-  @Min(value = 1, message = "worker lease half-open tick interval must be positive")
-  private int circuitHalfOpenTickInterval = 5;
+    /** 熔断 OPEN 后每 N 个 tick 强制半开探测一次。默认 5 = ~50s @ renew 周期 10s。 */
+    @Min(value = 1, message = "worker lease half-open tick interval must be positive")
+    private int circuitHalfOpenTickInterval = 5;
 
-  /** 单次 renewBatch 请求最多带几条 lease(超出会拆批)。默认 256。 */
-  @Min(value = 1, message = "worker lease renew batch max items must be positive")
-  private int renewBatchMaxItems = 256;
+    /** 单次 renewBatch 请求最多带几条 lease(超出会拆批)。默认 256。 */
+    @Min(value = 1, message = "worker lease renew batch max items must be positive")
+    private int renewBatchMaxItems = 256;
 }

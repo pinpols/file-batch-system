@@ -14,16 +14,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Component
 public class ImportStepBeanRegistrar extends AbstractStepBeanRegistrar<ImportStageStep> {
 
-  public ImportStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
-    super(
-        applicationContext,
-        stepRegistryMapper,
-        transactionManager,
-        ImportStageStep.class,
-        "IMPORT",
-        ImportStageStep::implCode);
-  }
+    public ImportStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager) {
+        super(
+                applicationContext,
+                stepRegistryMapper,
+                transactionManager,
+                ImportStageStep.class,
+                "IMPORT",
+                ImportStageStep::implCode);
+    }
 }

@@ -26,78 +26,76 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("Outbox 运维编排:统计, 清理与重投递委托下游, 响应回填租户与计数")
 class DefaultConsoleOutboxOpsApplicationServiceTest {
 
-  private ConsoleTenantGuard tenantGuard;
-  private ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
-  private ConsoleOrchestratorPort orchestratorProxy;
-  private ConsoleQueryCacheService cacheService;
-  private DefaultConsoleOutboxOpsApplicationService service;
+    private ConsoleTenantGuard tenantGuard;
+    private ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
+    private ConsoleOrchestratorPort orchestratorProxy;
+    private ConsoleQueryCacheService cacheService;
+    private DefaultConsoleOutboxOpsApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    tenantGuard = mock(ConsoleTenantGuard.class);
-    consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
-    orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-    cacheService = passThroughCache();
-    service = new DefaultConsoleOutboxOpsApplicationService(
-        tenantGuard,
-        consoleOutboxEventReadMapper,
-        mock(ConsoleRealtimeEventPort.class),
-        orchestratorProxy,
-        cacheService);
-  }
+    @BeforeEach
+    void setUp() {
+        tenantGuard = mock(ConsoleTenantGuard.class);
+        consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
+        orchestratorProxy = mock(ConsoleOrchestratorPort.class);
+        cacheService = passThroughCache();
+        service = new DefaultConsoleOutboxOpsApplicationService(
+                tenantGuard,
+                consoleOutboxEventReadMapper,
+                mock(ConsoleRealtimeEventPort.class),
+                orchestratorProxy,
+                cacheService);
+    }
 
-  private static ConsoleQueryCacheService passThroughCache() {
-    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.<Object>getOrLoad(anyString(), any(), ArgumentMatchers.<Class<Object>>any(), any()))
-        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
-    return cache;
-  }
+    private static ConsoleQueryCacheService passThroughCache() {
+        ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
+        when(cache.<Object>getOrLoad(anyString(), any(), ArgumentMatchers.<Class<Object>>any(), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
+        return cache;
+    }
 
-  @Test
-  @DisplayName("统计查询:按状态分组的明细原样返回, 并回填请求租户")
-  void shouldReturnStats() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    List<OutboxEventStatusStat> breakdown = List.of(
-        new OutboxEventStatusStat("NEW", 10, null, null),
-        new OutboxEventStatusStat("PUBLISHED", 50, null, null));
-    when(consoleOutboxEventReadMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
+    @Test
+    @DisplayName("统计查询:按状态分组的明细原样返回, 并回填请求租户")
+    void shouldReturnStats() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        List<OutboxEventStatusStat> breakdown = List.of(
+                new OutboxEventStatusStat("NEW", 10, null, null),
+                new OutboxEventStatusStat("PUBLISHED", 50, null, null));
+        when(consoleOutboxEventReadMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
 
-    ConsoleOutboxStatsResponse response = service.stats("tenant-a");
+        ConsoleOutboxStatsResponse response = service.stats("tenant-a");
 
-    assertThat(response.tenantId()).isEqualTo("tenant-a");
-    assertThat(response.statusBreakdown()).hasSize(2);
-  }
+        assertThat(response.tenantId()).isEqualTo("tenant-a");
+        assertThat(response.statusBreakdown()).hasSize(2);
+    }
 
-  @Test
-  @DisplayName("清理委托:保留天数与删除计数透传编排层, 已发布与放弃数分别回填")
-  void shouldDelegateCleanupToOrchestrator() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(orchestratorProxy.outboxCleanup("tenant-a", 30))
-        .thenReturn(new OutboxCleanupProxyResponse(5, 3));
+    @Test
+    @DisplayName("清理委托:保留天数与删除计数透传编排层, 已发布与放弃数分别回填")
+    void shouldDelegateCleanupToOrchestrator() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(orchestratorProxy.outboxCleanup("tenant-a", 30)).thenReturn(new OutboxCleanupProxyResponse(5, 3));
 
-    ConsoleOutboxCleanupResponse response = service.cleanup("tenant-a", 30);
+        ConsoleOutboxCleanupResponse response = service.cleanup("tenant-a", 30);
 
-    assertThat(response.tenantId()).isEqualTo("tenant-a");
-    assertThat(response.retainDays()).isEqualTo(30);
-    assertThat(response.deletedPublished()).isEqualTo(5);
-    assertThat(response.deletedGiveUp()).isEqualTo(3);
-    assertThat(response.totalDeleted()).isEqualTo(8);
-    verify(orchestratorProxy).outboxCleanup("tenant-a", 30);
-  }
+        assertThat(response.tenantId()).isEqualTo("tenant-a");
+        assertThat(response.retainDays()).isEqualTo(30);
+        assertThat(response.deletedPublished()).isEqualTo(5);
+        assertThat(response.deletedGiveUp()).isEqualTo(3);
+        assertThat(response.totalDeleted()).isEqualTo(8);
+        verify(orchestratorProxy).outboxCleanup("tenant-a", 30);
+    }
 
-  @Test
-  @DisplayName("重投递委托:请求标识列表提交编排层, 请求数与重置数按返回值回填")
-  void shouldDelegateRepublishToOrchestrator() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    List<Long> ids = List.of(1L, 2L, 3L);
-    when(orchestratorProxy.outboxRepublish("tenant-a", ids))
-        .thenReturn(new OutboxRepublishProxyResponse(3, 2, 0));
+    @Test
+    @DisplayName("重投递委托:请求标识列表提交编排层, 请求数与重置数按返回值回填")
+    void shouldDelegateRepublishToOrchestrator() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        List<Long> ids = List.of(1L, 2L, 3L);
+        when(orchestratorProxy.outboxRepublish("tenant-a", ids)).thenReturn(new OutboxRepublishProxyResponse(3, 2, 0));
 
-    ConsoleOutboxRepublishResponse response = service.republish("tenant-a", ids);
+        ConsoleOutboxRepublishResponse response = service.republish("tenant-a", ids);
 
-    assertThat(response.tenantId()).isEqualTo("tenant-a");
-    assertThat(response.requestedCount()).isEqualTo(3);
-    assertThat(response.resetCount()).isEqualTo(2);
-    verify(orchestratorProxy).outboxRepublish("tenant-a", ids);
-  }
+        assertThat(response.tenantId()).isEqualTo("tenant-a");
+        assertThat(response.requestedCount()).isEqualTo(3);
+        assertThat(response.resetCount()).isEqualTo(2);
+        verify(orchestratorProxy).outboxRepublish("tenant-a", ids);
+    }
 }

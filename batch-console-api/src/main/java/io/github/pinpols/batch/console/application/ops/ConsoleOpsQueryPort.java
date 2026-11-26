@@ -29,30 +29,29 @@ import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse
 /** Ops 只读查询端口，供跨领域聚合服务依赖。 */
 public interface ConsoleOpsQueryPort {
 
-  PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request);
+    PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request);
 
-  PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request);
+    PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request);
 
-  PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
+    PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
 
-  PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
-      OutboxDeliveryLogQueryRequest request);
+    PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request);
 
-  PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request);
+    PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request);
 
-  PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request);
+    PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request);
 
-  PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request);
+    PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request);
 
-  PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request);
+    PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request);
 
-  PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request);
+    PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request);
 
-  PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request);
+    PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request);
 
-  PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request);
+    PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request);
 
-  ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
+    ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
 
-  PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request);
+    PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request);
 }

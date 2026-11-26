@@ -21,61 +21,59 @@ import org.springframework.stereotype.Service;
  * "import-task-consumer"}，与 ShedLock / 指标标签一致。
  */
 @Service
-@SuppressWarnings(
-    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class ImportTaskConsumer extends AbstractTaskConsumer {
 
-  private final ImportWorkerLoop workerLoop;
-  private final ImportWorkerConfiguration configuration;
-  private final TaskDispatchExecutor taskDispatchExecutor;
-  private final DeadLetterPublisher deadLetterPublisher;
+    private final ImportWorkerLoop workerLoop;
+    private final ImportWorkerConfiguration configuration;
+    private final TaskDispatchExecutor taskDispatchExecutor;
+    private final DeadLetterPublisher deadLetterPublisher;
 
-  public ImportTaskConsumer(
-      ImportWorkerLoop workerLoop,
-      ImportWorkerConfiguration configuration,
-      TaskDispatchExecutor taskDispatchExecutor,
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      DeadLetterPublisher deadLetterPublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      WorkerConcurrencyProperties concurrencyProperties) {
-    super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
-    this.workerLoop = workerLoop;
-    this.configuration = configuration;
-    this.taskDispatchExecutor = taskDispatchExecutor;
-    this.deadLetterPublisher = deadLetterPublisher;
-  }
-
-  @Override
-  protected AbstractWorkerLoop workerLoop() {
-    return workerLoop;
-  }
-
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
-
-  @Override
-  protected TaskDispatchExecutor taskDispatchExecutor() {
-    return taskDispatchExecutor;
-  }
-
-  @Override
-  protected DeadLetterPublisher deadLetterPublisher() {
-    return deadLetterPublisher;
-  }
-
-  @Override
-  protected boolean acceptsConfiguredTenantScope(
-      WorkerConfiguration cfg, TaskDispatchMessage message) {
-    if (Boolean.TRUE.equals(configuration.acceptCrossTenantDispatch())) {
-      return true;
+    public ImportTaskConsumer(
+            ImportWorkerLoop workerLoop,
+            ImportWorkerConfiguration configuration,
+            TaskDispatchExecutor taskDispatchExecutor,
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+            DeadLetterPublisher deadLetterPublisher,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            WorkerConcurrencyProperties concurrencyProperties) {
+        super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
+        this.workerLoop = workerLoop;
+        this.configuration = configuration;
+        this.taskDispatchExecutor = taskDispatchExecutor;
+        this.deadLetterPublisher = deadLetterPublisher;
     }
-    return super.acceptsConfiguredTenantScope(cfg, message);
-  }
 
-  @Override
-  public String listenerId() {
-    return "import-task-consumer";
-  }
+    @Override
+    protected AbstractWorkerLoop workerLoop() {
+        return workerLoop;
+    }
+
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
+
+    @Override
+    protected TaskDispatchExecutor taskDispatchExecutor() {
+        return taskDispatchExecutor;
+    }
+
+    @Override
+    protected DeadLetterPublisher deadLetterPublisher() {
+        return deadLetterPublisher;
+    }
+
+    @Override
+    protected boolean acceptsConfiguredTenantScope(WorkerConfiguration cfg, TaskDispatchMessage message) {
+        if (Boolean.TRUE.equals(configuration.acceptCrossTenantDispatch())) {
+            return true;
+        }
+        return super.acceptsConfiguredTenantScope(cfg, message);
+    }
+
+    @Override
+    public String listenerId() {
+        return "import-task-consumer";
+    }
 }

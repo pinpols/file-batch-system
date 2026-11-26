@@ -36,415 +36,370 @@ import lombok.experimental.Accessors;
  */
 public final class FileTemplateExcelRowParser {
 
-  /** file_template_config.created_by / updated_by VARCHAR(64)（V6__create_file_tables.sql）。 */
-  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+    /** file_template_config.created_by / updated_by VARCHAR(64)（V6__create_file_tables.sql）。 */
+    private static final int OPERATOR_ID_MAX_LENGTH = 64;
 
-  /** file_template_config.template_code VARCHAR(128)（V6__create_file_tables.sql）。 */
-  private static final int TEMPLATE_CODE_MAX_LENGTH = 128;
+    /** file_template_config.template_code VARCHAR(128)（V6__create_file_tables.sql）。 */
+    private static final int TEMPLATE_CODE_MAX_LENGTH = 128;
 
-  /** file_template_config.template_name VARCHAR(256)（V6__create_file_tables.sql）。 */
-  private static final int TEMPLATE_NAME_MAX_LENGTH = 256;
+    /** file_template_config.template_name VARCHAR(256)（V6__create_file_tables.sql）。 */
+    private static final int TEMPLATE_NAME_MAX_LENGTH = 256;
 
-  /** file_template_config.template_type VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int TEMPLATE_TYPE_MAX_LENGTH = 32;
+    /** file_template_config.template_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int TEMPLATE_TYPE_MAX_LENGTH = 32;
 
-  /** file_template_config.biz_type VARCHAR(64)（V6__create_file_tables.sql）。 */
-  private static final int BIZ_TYPE_MAX_LENGTH = 64;
+    /** file_template_config.biz_type VARCHAR(64)（V6__create_file_tables.sql）。 */
+    private static final int BIZ_TYPE_MAX_LENGTH = 64;
 
-  /** file_template_config.file_format_type VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int FILE_FORMAT_TYPE_MAX_LENGTH = 32;
+    /** file_template_config.file_format_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int FILE_FORMAT_TYPE_MAX_LENGTH = 32;
 
-  /** file_template_config.description VARCHAR(1024)（V6__create_file_tables.sql）。 */
-  private static final int DESCRIPTION_MAX_LENGTH = 1024;
+    /** file_template_config.description VARCHAR(1024)（V6__create_file_tables.sql）。 */
+    private static final int DESCRIPTION_MAX_LENGTH = 1024;
 
-  /** file_template_config.charset VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int CHARSET_MAX_LENGTH = 32;
+    /** file_template_config.charset VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int CHARSET_MAX_LENGTH = 32;
 
-  /** file_template_config.target_charset VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int TARGET_CHARSET_MAX_LENGTH = 32;
+    /** file_template_config.target_charset VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int TARGET_CHARSET_MAX_LENGTH = 32;
 
-  /** file_template_config.line_separator VARCHAR(16)（V6__create_file_tables.sql）。 */
-  private static final int LINE_SEPARATOR_MAX_LENGTH = 16;
+    /** file_template_config.line_separator VARCHAR(16)（V6__create_file_tables.sql）。 */
+    private static final int LINE_SEPARATOR_MAX_LENGTH = 16;
 
-  /** file_template_config.checksum_type VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int CHECKSUM_TYPE_MAX_LENGTH = 32;
+    /** file_template_config.checksum_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int CHECKSUM_TYPE_MAX_LENGTH = 32;
 
-  /** file_template_config.compress_type VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int COMPRESS_TYPE_MAX_LENGTH = 32;
+    /** file_template_config.compress_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int COMPRESS_TYPE_MAX_LENGTH = 32;
 
-  /** file_template_config.encrypt_type VARCHAR(32)（V6__create_file_tables.sql）。 */
-  private static final int ENCRYPT_TYPE_MAX_LENGTH = 32;
+    /** file_template_config.encrypt_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+    private static final int ENCRYPT_TYPE_MAX_LENGTH = 32;
 
-  /** file_template_config.naming_rule VARCHAR(512)（V6__create_file_tables.sql）。 */
-  private static final int NAMING_RULE_MAX_LENGTH = 512;
+    /** file_template_config.naming_rule VARCHAR(512)（V6__create_file_tables.sql）。 */
+    private static final int NAMING_RULE_MAX_LENGTH = 512;
 
-  /** file_template_config.default_query_code VARCHAR(128)（V6__create_file_tables.sql）。 */
-  private static final int DEFAULT_QUERY_CODE_MAX_LENGTH = 128;
+    /** file_template_config.default_query_code VARCHAR(128)（V6__create_file_tables.sql）。 */
+    private static final int DEFAULT_QUERY_CODE_MAX_LENGTH = 128;
 
-  /**
-   * 导入时 default_query_sql 的长度上限；列 file_template_config.default_query_sql 为 TEXT
-   * （V6__create_file_tables.sql），此上限是导入策略，不是列宽。
-   */
-  private static final int DEFAULT_QUERY_SQL_MAX_LENGTH = 10000;
+    /**
+     * 导入时 default_query_sql 的长度上限；列 file_template_config.default_query_sql 为 TEXT
+     * （V6__create_file_tables.sql），此上限是导入策略，不是列宽。
+     */
+    private static final int DEFAULT_QUERY_SQL_MAX_LENGTH = 10000;
 
-  /**
-   * 加密密钥引用的导入上限，与列 file_template_config.encryption_key_ref 的 VARCHAR(256)
-   * （V18__file_template_security_flags.sql）一致。
-   */
-  private static final int ENCRYPTION_KEY_REF_MAX_LENGTH = 256;
+    /**
+     * 加密密钥引用的导入上限，与列 file_template_config.encryption_key_ref 的 VARCHAR(256)
+     * （V18__file_template_security_flags.sql）一致。
+     */
+    private static final int ENCRYPTION_KEY_REF_MAX_LENGTH = 256;
 
-  /**
-   * 脱敏规则集的导入上限，与列 file_template_config.masking_rule_set 的 VARCHAR(128)
-   * （V18__file_template_security_flags.sql）一致，避免 129～256 字符通过校验后写库失败。
-   */
-  private static final int MASKING_RULE_SET_MAX_LENGTH = 128;
+    /**
+     * 脱敏规则集的导入上限，与列 file_template_config.masking_rule_set 的 VARCHAR(128)
+     * （V18__file_template_security_flags.sql）一致，避免 129～256 字符通过校验后写库失败。
+     */
+    private static final int MASKING_RULE_SET_MAX_LENGTH = 128;
 
-  /** 单元格留空时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
-  private static final int DEFAULT_PAGE_SIZE = 1000;
+    /** 单元格留空时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
+    private static final int DEFAULT_PAGE_SIZE = 1000;
 
-  /** 单元格留空时的 fetch_size，与 file_template_config.fetch_size 列默认值一致（V6）。 */
-  private static final int DEFAULT_FETCH_SIZE = 1000;
+    /** 单元格留空时的 fetch_size，与 file_template_config.fetch_size 列默认值一致（V6）。 */
+    private static final int DEFAULT_FETCH_SIZE = 1000;
 
-  /** 单元格留空时的 chunk_size，与 file_template_config.chunk_size 列默认值一致（V6、V14）。 */
-  private static final int DEFAULT_CHUNK_SIZE = 500;
+    /** 单元格留空时的 chunk_size，与 file_template_config.chunk_size 列默认值一致（V6、V14）。 */
+    private static final int DEFAULT_CHUNK_SIZE = 500;
 
-  /** file_template_config 表名（与 sheet 名一致）。 */
-  public static final String SHEET_NAME = "file_template_config";
+    /** file_template_config 表名（与 sheet 名一致）。 */
+    public static final String SHEET_NAME = "file_template_config";
 
-  private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
-  private static final Set<String> TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
-  private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
-  private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
-  private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
+    private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
+    private static final Set<String> TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
+    private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
+    private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
+    private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
 
-  private static final String COL_TEMPLATE_TYPE =
-      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE;
-  private static final String COL_TEMPLATE_CODE =
-      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE;
-  private static final String COL_TEMPLATE_NAME =
-      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME;
-  private static final String COL_FILE_FORMAT_TYPE =
-      ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE;
-  private static final String COL_BIZ_TYPE = ConfigPackageExcelSchema.COL_BIZ_TYPE;
-  private static final String COL_CHECKSUM_TYPE =
-      ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE;
-  private static final String COL_COMPRESS_TYPE =
-      ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE;
-  private static final String COL_ENCRYPT_TYPE =
-      ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE;
-  private static final String COL_WITH_BOM = ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM;
-  private static final String COL_VERSION = ConfigPackageExcelSchema.COL_VERSION;
-  private static final String COL_STREAMING_ENABLED =
-      ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED;
-  private static final String COL_CHARSET = ConfigPackageExcelSchema.FileTemplate.COL_CHARSET;
-  private static final String COL_TARGET_CHARSET =
-      ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET;
-  private static final String COL_LINE_SEPARATOR =
-      ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR;
-  private static final String COL_DELIMITER = ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER;
-  private static final String COL_QUOTE_CHAR = ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR;
-  private static final String COL_ESCAPE_CHAR =
-      ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR;
-  private static final String COL_RECORD_LENGTH =
-      ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH;
-  private static final String COL_HEADER_ROWS =
-      ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS;
-  private static final String COL_FOOTER_ROWS =
-      ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS;
-  private static final String COL_HEADER_TEMPLATE =
-      ConfigPackageExcelSchema.FileTemplate.COL_HEADER_TEMPLATE;
-  private static final String COL_TRAILER_TEMPLATE =
-      ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE;
-  private static final String COL_NAMING_RULE =
-      ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE;
-  private static final String COL_FIELD_MAPPINGS =
-      ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS;
-  private static final String COL_VALIDATION_RULE_SET =
-      ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET;
-  private static final String COL_DEFAULT_QUERY_CODE =
-      ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE;
-  private static final String COL_DEFAULT_QUERY_SQL =
-      ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL;
-  private static final String COL_QUERY_PARAM_SCHEMA =
-      ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA;
-  private static final String COL_PAGE_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_PAGE_SIZE;
-  private static final String COL_FETCH_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_FETCH_SIZE;
-  private static final String COL_CHUNK_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_CHUNK_SIZE;
-  private static final String COL_PREVIEW_MASKING_ENABLED =
-      ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED;
-  private static final String COL_ERROR_LINE_MASKING_ENABLED =
-      ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED;
-  private static final String COL_LOG_MASKING_ENABLED =
-      ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED;
-  private static final String COL_CONTENT_ENCRYPTION_ENABLED =
-      ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED;
-  private static final String COL_ENCRYPTION_KEY_REF =
-      ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPTION_KEY_REF;
-  private static final String COL_DOWNLOAD_REQUIRES_APPROVAL =
-      ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL;
-  private static final String COL_MASKING_RULE_SET =
-      ConfigPackageExcelSchema.FileTemplate.COL_MASKING_RULE_SET;
-  private static final String COL_ENABLED = ConfigPackageExcelSchema.COL_ENABLED;
-  private static final String COL_DESCRIPTION = ConfigPackageExcelSchema.COL_DESCRIPTION;
+    private static final String COL_TEMPLATE_TYPE = ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE;
+    private static final String COL_TEMPLATE_CODE = ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE;
+    private static final String COL_TEMPLATE_NAME = ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME;
+    private static final String COL_FILE_FORMAT_TYPE = ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE;
+    private static final String COL_BIZ_TYPE = ConfigPackageExcelSchema.COL_BIZ_TYPE;
+    private static final String COL_CHECKSUM_TYPE = ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE;
+    private static final String COL_COMPRESS_TYPE = ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE;
+    private static final String COL_ENCRYPT_TYPE = ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE;
+    private static final String COL_WITH_BOM = ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM;
+    private static final String COL_VERSION = ConfigPackageExcelSchema.COL_VERSION;
+    private static final String COL_STREAMING_ENABLED = ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED;
+    private static final String COL_CHARSET = ConfigPackageExcelSchema.FileTemplate.COL_CHARSET;
+    private static final String COL_TARGET_CHARSET = ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET;
+    private static final String COL_LINE_SEPARATOR = ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR;
+    private static final String COL_DELIMITER = ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER;
+    private static final String COL_QUOTE_CHAR = ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR;
+    private static final String COL_ESCAPE_CHAR = ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR;
+    private static final String COL_RECORD_LENGTH = ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH;
+    private static final String COL_HEADER_ROWS = ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS;
+    private static final String COL_FOOTER_ROWS = ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS;
+    private static final String COL_HEADER_TEMPLATE = ConfigPackageExcelSchema.FileTemplate.COL_HEADER_TEMPLATE;
+    private static final String COL_TRAILER_TEMPLATE = ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE;
+    private static final String COL_NAMING_RULE = ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE;
+    private static final String COL_FIELD_MAPPINGS = ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS;
+    private static final String COL_VALIDATION_RULE_SET = ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET;
+    private static final String COL_DEFAULT_QUERY_CODE = ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE;
+    private static final String COL_DEFAULT_QUERY_SQL = ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL;
+    private static final String COL_QUERY_PARAM_SCHEMA = ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA;
+    private static final String COL_PAGE_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_PAGE_SIZE;
+    private static final String COL_FETCH_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_FETCH_SIZE;
+    private static final String COL_CHUNK_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_CHUNK_SIZE;
+    private static final String COL_PREVIEW_MASKING_ENABLED =
+            ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED;
+    private static final String COL_ERROR_LINE_MASKING_ENABLED =
+            ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED;
+    private static final String COL_LOG_MASKING_ENABLED = ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED;
+    private static final String COL_CONTENT_ENCRYPTION_ENABLED =
+            ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED;
+    private static final String COL_ENCRYPTION_KEY_REF = ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPTION_KEY_REF;
+    private static final String COL_DOWNLOAD_REQUIRES_APPROVAL =
+            ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL;
+    private static final String COL_MASKING_RULE_SET = ConfigPackageExcelSchema.FileTemplate.COL_MASKING_RULE_SET;
+    private static final String COL_ENABLED = ConfigPackageExcelSchema.COL_ENABLED;
+    private static final String COL_DESCRIPTION = ConfigPackageExcelSchema.COL_DESCRIPTION;
 
-  private FileTemplateExcelRowParser() {}
+    private FileTemplateExcelRowParser() {}
 
-  /**
-   * 解析一行 file_template_config Excel 数据。
-   *
-   * @param tenantId 默认租户（行内 tenant_id 留空时回退）
-   * @param rowNo 行号（用于 issue 定位）
-   * @param values 列名 → 单元格文本
-   * @param issues 校验问题集合（in-out，解析失败时追加描述）
-   * @return 解析后的 TemplateRow；即使有 issue 也返回（部分字段可能为空）
-   */
-  public static TemplateRow parseRow(
-      String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    TemplateRow.TemplateRowBuilder builder =
-        TemplateRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
-    extractBasicFields(builder, values, issues);
-    extractFieldMappings(builder, values, issues);
-    extractStepConfig(builder, values, issues);
-    extractSecurityConfig(builder, values, issues);
-    return builder.build();
-  }
+    /**
+     * 解析一行 file_template_config Excel 数据。
+     *
+     * @param tenantId 默认租户（行内 tenant_id 留空时回退）
+     * @param rowNo 行号（用于 issue 定位）
+     * @param values 列名 → 单元格文本
+     * @param issues 校验问题集合（in-out，解析失败时追加描述）
+     * @return 解析后的 TemplateRow；即使有 issue 也返回（部分字段可能为空）
+     */
+    public static TemplateRow parseRow(String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
+        String effectiveTenant = resolveTenantField(values, tenantId, issues);
+        TemplateRow.TemplateRowBuilder builder =
+                TemplateRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
+        extractBasicFields(builder, values, issues);
+        extractFieldMappings(builder, values, issues);
+        extractStepConfig(builder, values, issues);
+        extractSecurityConfig(builder, values, issues);
+        return builder.build();
+    }
 
-  /** 把 TemplateRow 转 mapper 用的 upsert param。 */
-  public static FileTemplateConfigUpsertParam toUpsertParam(
-      String tenantId, TemplateRow row, String operatorId) {
-    FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
-    param.setTenantId(tenantId);
-    param.setTemplateCode(row.templateCode());
+    /** 把 TemplateRow 转 mapper 用的 upsert param。 */
+    public static FileTemplateConfigUpsertParam toUpsertParam(String tenantId, TemplateRow row, String operatorId) {
+        FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
+        param.setTenantId(tenantId);
+        param.setTemplateCode(row.templateCode());
 
-    FileTemplateConfigUpsertParam.BasicInfo basicInfo =
-        new FileTemplateConfigUpsertParam.BasicInfo();
-    basicInfo.setTemplateName(row.templateName());
-    basicInfo.setTemplateType(row.templateType());
-    basicInfo.setBizType(row.bizType());
-    basicInfo.setEnabled(row.enabled());
-    basicInfo.setVersion(row.version());
-    basicInfo.setDescription(row.description());
-    param.setBasicInfo(basicInfo);
+        FileTemplateConfigUpsertParam.BasicInfo basicInfo = new FileTemplateConfigUpsertParam.BasicInfo();
+        basicInfo.setTemplateName(row.templateName());
+        basicInfo.setTemplateType(row.templateType());
+        basicInfo.setBizType(row.bizType());
+        basicInfo.setEnabled(row.enabled());
+        basicInfo.setVersion(row.version());
+        basicInfo.setDescription(row.description());
+        param.setBasicInfo(basicInfo);
 
-    FileTemplateConfigUpsertParam.FormatOptions format =
-        new FileTemplateConfigUpsertParam.FormatOptions();
-    format.setFileFormatType(row.fileFormatType());
-    format.setCharset(row.charset());
-    format.setTargetCharset(row.targetCharset());
-    format.setWithBom(row.withBom());
-    format.setLineSeparator(row.lineSeparator());
-    format.setDelimiter(row.delimiter());
-    format.setQuoteChar(row.quoteChar());
-    format.setEscapeChar(row.escapeChar());
-    format.setRecordLength(row.recordLength());
-    format.setHeaderRows(row.headerRows());
-    format.setFooterRows(row.footerRows());
-    format.setHeaderTemplateJson(row.headerTemplateJson());
-    format.setTrailerTemplateJson(row.trailerTemplateJson());
-    format.setChecksumType(row.checksumType());
-    format.setCompressType(row.compressType());
-    format.setEncryptType(row.encryptType());
-    format.setNamingRule(row.namingRule());
-    format.setFieldMappingsJson(row.fieldMappingsJson());
-    format.setValidationRuleSetJson(row.validationRuleSetJson());
-    param.setFormat(format);
+        FileTemplateConfigUpsertParam.FormatOptions format = new FileTemplateConfigUpsertParam.FormatOptions();
+        format.setFileFormatType(row.fileFormatType());
+        format.setCharset(row.charset());
+        format.setTargetCharset(row.targetCharset());
+        format.setWithBom(row.withBom());
+        format.setLineSeparator(row.lineSeparator());
+        format.setDelimiter(row.delimiter());
+        format.setQuoteChar(row.quoteChar());
+        format.setEscapeChar(row.escapeChar());
+        format.setRecordLength(row.recordLength());
+        format.setHeaderRows(row.headerRows());
+        format.setFooterRows(row.footerRows());
+        format.setHeaderTemplateJson(row.headerTemplateJson());
+        format.setTrailerTemplateJson(row.trailerTemplateJson());
+        format.setChecksumType(row.checksumType());
+        format.setCompressType(row.compressType());
+        format.setEncryptType(row.encryptType());
+        format.setNamingRule(row.namingRule());
+        format.setFieldMappingsJson(row.fieldMappingsJson());
+        format.setValidationRuleSetJson(row.validationRuleSetJson());
+        param.setFormat(format);
 
-    FileTemplateConfigUpsertParam.QueryOptions query =
-        new FileTemplateConfigUpsertParam.QueryOptions();
-    query.setDefaultQueryCode(row.defaultQueryCode());
-    query.setDefaultQuerySql(row.defaultQuerySql());
-    query.setQueryParamSchemaJson(row.queryParamSchemaJson());
-    param.setQuery(query);
+        FileTemplateConfigUpsertParam.QueryOptions query = new FileTemplateConfigUpsertParam.QueryOptions();
+        query.setDefaultQueryCode(row.defaultQueryCode());
+        query.setDefaultQuerySql(row.defaultQuerySql());
+        query.setQueryParamSchemaJson(row.queryParamSchemaJson());
+        param.setQuery(query);
 
-    FileTemplateConfigUpsertParam.RuntimeOptions runtime =
-        new FileTemplateConfigUpsertParam.RuntimeOptions();
-    runtime.setStreamingEnabled(row.streamingEnabled());
-    runtime.setPageSize(row.pageSize());
-    runtime.setFetchSize(row.fetchSize());
-    runtime.setChunkSize(row.chunkSize());
-    param.setRuntime(runtime);
+        FileTemplateConfigUpsertParam.RuntimeOptions runtime = new FileTemplateConfigUpsertParam.RuntimeOptions();
+        runtime.setStreamingEnabled(row.streamingEnabled());
+        runtime.setPageSize(row.pageSize());
+        runtime.setFetchSize(row.fetchSize());
+        runtime.setChunkSize(row.chunkSize());
+        param.setRuntime(runtime);
 
-    FileTemplateConfigUpsertParam.SecurityOptions security =
-        new FileTemplateConfigUpsertParam.SecurityOptions();
-    security.setPreviewMaskingEnabled(row.previewMaskingEnabled());
-    security.setErrorLineMaskingEnabled(row.errorLineMaskingEnabled());
-    security.setLogMaskingEnabled(row.logMaskingEnabled());
-    security.setContentEncryptionEnabled(row.contentEncryptionEnabled());
-    security.setEncryptionKeyRef(row.encryptionKeyRef());
-    security.setDownloadRequiresApproval(row.downloadRequiresApproval());
-    security.setMaskingRuleSet(row.maskingRuleSet());
-    param.setSecurity(security);
+        FileTemplateConfigUpsertParam.SecurityOptions security = new FileTemplateConfigUpsertParam.SecurityOptions();
+        security.setPreviewMaskingEnabled(row.previewMaskingEnabled());
+        security.setErrorLineMaskingEnabled(row.errorLineMaskingEnabled());
+        security.setLogMaskingEnabled(row.logMaskingEnabled());
+        security.setContentEncryptionEnabled(row.contentEncryptionEnabled());
+        security.setEncryptionKeyRef(row.encryptionKeyRef());
+        security.setDownloadRequiresApproval(row.downloadRequiresApproval());
+        security.setMaskingRuleSet(row.maskingRuleSet());
+        param.setSecurity(security);
 
-    FileTemplateConfigUpsertParam.AuditOptions audit =
-        new FileTemplateConfigUpsertParam.AuditOptions();
-    audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
-    audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
-    param.setAudit(audit);
-    return param;
-  }
+        FileTemplateConfigUpsertParam.AuditOptions audit = new FileTemplateConfigUpsertParam.AuditOptions();
+        audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
+        audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
+        param.setAudit(audit);
+        return param;
+    }
 
-  // ─── 私有 extract 拆分（保持原逻辑分组，避免单方法过长触发 PMD NcssCount） ──────────────
+    // ─── 私有 extract 拆分（保持原逻辑分组，避免单方法过长触发 PMD NcssCount） ──────────────
 
-  private static void extractBasicFields(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String templateCodeText =
-        requireText(values, COL_TEMPLATE_CODE, TEMPLATE_CODE_MAX_LENGTH, issues);
-    String templateCode = CodeNormalizer.toConfigFormOrNull(templateCodeText);
-    builder.templateCode(templateCode);
-    String templateName = requireText(values, COL_TEMPLATE_NAME, TEMPLATE_NAME_MAX_LENGTH, issues);
-    builder.templateName(templateName);
-    String templateType =
-        requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, TEMPLATE_TYPE_MAX_LENGTH, issues);
-    builder.templateType(templateType);
-    String bizType = optionalText(values, COL_BIZ_TYPE, BIZ_TYPE_MAX_LENGTH, issues);
-    builder.bizType(bizType);
-    String fileFormatType = requireEnum(
-        values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, FILE_FORMAT_TYPE_MAX_LENGTH, issues);
-    builder.fileFormatType(fileFormatType);
-    Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
-    builder.enabled(enabled);
-    Integer version = optionalInteger(values, COL_VERSION, 1, 1, issues);
-    builder.version(version);
-    String description = optionalText(values, COL_DESCRIPTION, DESCRIPTION_MAX_LENGTH, issues);
-    builder.description(description);
-  }
+    private static void extractBasicFields(
+            TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        String templateCodeText = requireText(values, COL_TEMPLATE_CODE, TEMPLATE_CODE_MAX_LENGTH, issues);
+        String templateCode = CodeNormalizer.toConfigFormOrNull(templateCodeText);
+        builder.templateCode(templateCode);
+        String templateName = requireText(values, COL_TEMPLATE_NAME, TEMPLATE_NAME_MAX_LENGTH, issues);
+        builder.templateName(templateName);
+        String templateType = requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, TEMPLATE_TYPE_MAX_LENGTH, issues);
+        builder.templateType(templateType);
+        String bizType = optionalText(values, COL_BIZ_TYPE, BIZ_TYPE_MAX_LENGTH, issues);
+        builder.bizType(bizType);
+        String fileFormatType =
+                requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, FILE_FORMAT_TYPE_MAX_LENGTH, issues);
+        builder.fileFormatType(fileFormatType);
+        Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
+        builder.enabled(enabled);
+        Integer version = optionalInteger(values, COL_VERSION, 1, 1, issues);
+        builder.version(version);
+        String description = optionalText(values, COL_DESCRIPTION, DESCRIPTION_MAX_LENGTH, issues);
+        builder.description(description);
+    }
 
-  private static void extractFieldMappings(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String charset = optionalText(values, COL_CHARSET, CHARSET_MAX_LENGTH, issues);
-    builder.charset(charset);
-    String targetCharset =
-        optionalText(values, COL_TARGET_CHARSET, TARGET_CHARSET_MAX_LENGTH, issues);
-    builder.targetCharset(targetCharset);
-    Boolean withBom = optionalBoolean(values, COL_WITH_BOM, false, issues);
-    builder.withBom(withBom);
-    String lineSeparator =
-        optionalText(values, COL_LINE_SEPARATOR, LINE_SEPARATOR_MAX_LENGTH, issues);
-    builder.lineSeparator(lineSeparator);
-    String delimiter = optionalText(values, COL_DELIMITER, 8, issues);
-    builder.delimiter(delimiter);
-    String quoteChar = optionalText(values, COL_QUOTE_CHAR, 8, issues);
-    builder.quoteChar(quoteChar);
-    String escapeChar = optionalText(values, COL_ESCAPE_CHAR, 8, issues);
-    builder.escapeChar(escapeChar);
-    Integer recordLength = optionalInteger(values, COL_RECORD_LENGTH, 0, 0, issues);
-    builder.recordLength(recordLength);
-    Integer headerRows = optionalInteger(values, COL_HEADER_ROWS, 0, 0, issues);
-    builder.headerRows(headerRows);
-    Integer footerRows = optionalInteger(values, COL_FOOTER_ROWS, 0, 0, issues);
-    builder.footerRows(footerRows);
-    String headerTemplateJson = optionalJson(values, COL_HEADER_TEMPLATE, issues);
-    builder.headerTemplateJson(headerTemplateJson);
-    String trailerTemplateJson = optionalJson(values, COL_TRAILER_TEMPLATE, issues);
-    builder.trailerTemplateJson(trailerTemplateJson);
-    String checksumType = optionalEnum(
-        values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, CHECKSUM_TYPE_MAX_LENGTH, "NONE", issues);
-    builder.checksumType(checksumType);
-    String compressType = optionalEnum(
-        values, COL_COMPRESS_TYPE, COMPRESS_TYPES, COMPRESS_TYPE_MAX_LENGTH, "NONE", issues);
-    builder.compressType(compressType);
-    String encryptType = optionalEnum(
-        values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, ENCRYPT_TYPE_MAX_LENGTH, "NONE", issues);
-    builder.encryptType(encryptType);
-    String namingRule = optionalText(values, COL_NAMING_RULE, NAMING_RULE_MAX_LENGTH, issues);
-    builder.namingRule(namingRule);
-    String fieldMappingsJson = optionalJson(values, COL_FIELD_MAPPINGS, issues);
-    builder.fieldMappingsJson(fieldMappingsJson);
-    String validationRuleSetJson = optionalJson(values, COL_VALIDATION_RULE_SET, issues);
-    builder.validationRuleSetJson(validationRuleSetJson);
-  }
+    private static void extractFieldMappings(
+            TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        String charset = optionalText(values, COL_CHARSET, CHARSET_MAX_LENGTH, issues);
+        builder.charset(charset);
+        String targetCharset = optionalText(values, COL_TARGET_CHARSET, TARGET_CHARSET_MAX_LENGTH, issues);
+        builder.targetCharset(targetCharset);
+        Boolean withBom = optionalBoolean(values, COL_WITH_BOM, false, issues);
+        builder.withBom(withBom);
+        String lineSeparator = optionalText(values, COL_LINE_SEPARATOR, LINE_SEPARATOR_MAX_LENGTH, issues);
+        builder.lineSeparator(lineSeparator);
+        String delimiter = optionalText(values, COL_DELIMITER, 8, issues);
+        builder.delimiter(delimiter);
+        String quoteChar = optionalText(values, COL_QUOTE_CHAR, 8, issues);
+        builder.quoteChar(quoteChar);
+        String escapeChar = optionalText(values, COL_ESCAPE_CHAR, 8, issues);
+        builder.escapeChar(escapeChar);
+        Integer recordLength = optionalInteger(values, COL_RECORD_LENGTH, 0, 0, issues);
+        builder.recordLength(recordLength);
+        Integer headerRows = optionalInteger(values, COL_HEADER_ROWS, 0, 0, issues);
+        builder.headerRows(headerRows);
+        Integer footerRows = optionalInteger(values, COL_FOOTER_ROWS, 0, 0, issues);
+        builder.footerRows(footerRows);
+        String headerTemplateJson = optionalJson(values, COL_HEADER_TEMPLATE, issues);
+        builder.headerTemplateJson(headerTemplateJson);
+        String trailerTemplateJson = optionalJson(values, COL_TRAILER_TEMPLATE, issues);
+        builder.trailerTemplateJson(trailerTemplateJson);
+        String checksumType =
+                optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, CHECKSUM_TYPE_MAX_LENGTH, "NONE", issues);
+        builder.checksumType(checksumType);
+        String compressType =
+                optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, COMPRESS_TYPE_MAX_LENGTH, "NONE", issues);
+        builder.compressType(compressType);
+        String encryptType =
+                optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, ENCRYPT_TYPE_MAX_LENGTH, "NONE", issues);
+        builder.encryptType(encryptType);
+        String namingRule = optionalText(values, COL_NAMING_RULE, NAMING_RULE_MAX_LENGTH, issues);
+        builder.namingRule(namingRule);
+        String fieldMappingsJson = optionalJson(values, COL_FIELD_MAPPINGS, issues);
+        builder.fieldMappingsJson(fieldMappingsJson);
+        String validationRuleSetJson = optionalJson(values, COL_VALIDATION_RULE_SET, issues);
+        builder.validationRuleSetJson(validationRuleSetJson);
+    }
 
-  private static void extractStepConfig(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String defaultQueryCode =
-        optionalText(values, COL_DEFAULT_QUERY_CODE, DEFAULT_QUERY_CODE_MAX_LENGTH, issues);
-    builder.defaultQueryCode(defaultQueryCode);
-    String defaultQuerySql =
-        optionalText(values, COL_DEFAULT_QUERY_SQL, DEFAULT_QUERY_SQL_MAX_LENGTH, issues);
-    builder.defaultQuerySql(defaultQuerySql);
-    String queryParamSchemaJson = optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues);
-    builder.queryParamSchemaJson(queryParamSchemaJson);
-    Boolean streamingEnabled = optionalBoolean(values, COL_STREAMING_ENABLED, true, issues);
-    builder.streamingEnabled(streamingEnabled);
-    Integer pageSize = optionalInteger(values, COL_PAGE_SIZE, 0, DEFAULT_PAGE_SIZE, issues);
-    builder.pageSize(pageSize);
-    Integer fetchSize = optionalInteger(values, COL_FETCH_SIZE, 0, DEFAULT_FETCH_SIZE, issues);
-    builder.fetchSize(fetchSize);
-    Integer chunkSize = optionalInteger(values, COL_CHUNK_SIZE, 0, DEFAULT_CHUNK_SIZE, issues);
-    builder.chunkSize(chunkSize);
-  }
+    private static void extractStepConfig(
+            TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        String defaultQueryCode = optionalText(values, COL_DEFAULT_QUERY_CODE, DEFAULT_QUERY_CODE_MAX_LENGTH, issues);
+        builder.defaultQueryCode(defaultQueryCode);
+        String defaultQuerySql = optionalText(values, COL_DEFAULT_QUERY_SQL, DEFAULT_QUERY_SQL_MAX_LENGTH, issues);
+        builder.defaultQuerySql(defaultQuerySql);
+        String queryParamSchemaJson = optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues);
+        builder.queryParamSchemaJson(queryParamSchemaJson);
+        Boolean streamingEnabled = optionalBoolean(values, COL_STREAMING_ENABLED, true, issues);
+        builder.streamingEnabled(streamingEnabled);
+        Integer pageSize = optionalInteger(values, COL_PAGE_SIZE, 0, DEFAULT_PAGE_SIZE, issues);
+        builder.pageSize(pageSize);
+        Integer fetchSize = optionalInteger(values, COL_FETCH_SIZE, 0, DEFAULT_FETCH_SIZE, issues);
+        builder.fetchSize(fetchSize);
+        Integer chunkSize = optionalInteger(values, COL_CHUNK_SIZE, 0, DEFAULT_CHUNK_SIZE, issues);
+        builder.chunkSize(chunkSize);
+    }
 
-  private static void extractSecurityConfig(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    Boolean previewMaskingEnabled =
-        optionalBoolean(values, COL_PREVIEW_MASKING_ENABLED, false, issues);
-    builder.previewMaskingEnabled(previewMaskingEnabled);
-    Boolean errorLineMaskingEnabled =
-        optionalBoolean(values, COL_ERROR_LINE_MASKING_ENABLED, false, issues);
-    builder.errorLineMaskingEnabled(errorLineMaskingEnabled);
-    Boolean logMaskingEnabled = optionalBoolean(values, COL_LOG_MASKING_ENABLED, false, issues);
-    builder.logMaskingEnabled(logMaskingEnabled);
-    Boolean contentEncryptionEnabled =
-        optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues);
-    builder.contentEncryptionEnabled(contentEncryptionEnabled);
-    String encryptionKeyRef =
-        optionalText(values, COL_ENCRYPTION_KEY_REF, ENCRYPTION_KEY_REF_MAX_LENGTH, issues);
-    builder.encryptionKeyRef(encryptionKeyRef);
-    Boolean downloadRequiresApproval =
-        optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues);
-    builder.downloadRequiresApproval(downloadRequiresApproval);
-    String maskingRuleSet =
-        optionalText(values, COL_MASKING_RULE_SET, MASKING_RULE_SET_MAX_LENGTH, issues);
-    builder.maskingRuleSet(maskingRuleSet);
-  }
+    private static void extractSecurityConfig(
+            TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        Boolean previewMaskingEnabled = optionalBoolean(values, COL_PREVIEW_MASKING_ENABLED, false, issues);
+        builder.previewMaskingEnabled(previewMaskingEnabled);
+        Boolean errorLineMaskingEnabled = optionalBoolean(values, COL_ERROR_LINE_MASKING_ENABLED, false, issues);
+        builder.errorLineMaskingEnabled(errorLineMaskingEnabled);
+        Boolean logMaskingEnabled = optionalBoolean(values, COL_LOG_MASKING_ENABLED, false, issues);
+        builder.logMaskingEnabled(logMaskingEnabled);
+        Boolean contentEncryptionEnabled = optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues);
+        builder.contentEncryptionEnabled(contentEncryptionEnabled);
+        String encryptionKeyRef = optionalText(values, COL_ENCRYPTION_KEY_REF, ENCRYPTION_KEY_REF_MAX_LENGTH, issues);
+        builder.encryptionKeyRef(encryptionKeyRef);
+        Boolean downloadRequiresApproval = optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues);
+        builder.downloadRequiresApproval(downloadRequiresApproval);
+        String maskingRuleSet = optionalText(values, COL_MASKING_RULE_SET, MASKING_RULE_SET_MAX_LENGTH, issues);
+        builder.maskingRuleSet(maskingRuleSet);
+    }
 
-  /** Excel 行模型，单一来源；独立 service 与 9+2 config-package service 共用。 */
-  @Getter
-  @Builder
-  @Accessors(fluent = true)
-  public static class TemplateRow {
-    private final Integer rowNo;
-    private final String tenantId;
-    private final String templateCode;
-    private final String templateName;
-    private final String templateType;
-    private final String bizType;
-    private final String fileFormatType;
-    private final String charset;
-    private final String targetCharset;
-    private final Boolean withBom;
-    private final String lineSeparator;
-    private final String delimiter;
-    private final String quoteChar;
-    private final String escapeChar;
-    private final Integer recordLength;
-    private final Integer headerRows;
-    private final Integer footerRows;
-    private final String headerTemplateJson;
-    private final String trailerTemplateJson;
-    private final String checksumType;
-    private final String compressType;
-    private final String encryptType;
-    private final String namingRule;
-    private final String fieldMappingsJson;
-    private final String validationRuleSetJson;
-    private final String defaultQueryCode;
-    private final String defaultQuerySql;
-    private final String queryParamSchemaJson;
-    private final Boolean streamingEnabled;
-    private final Integer pageSize;
-    private final Integer fetchSize;
-    private final Integer chunkSize;
-    private final Boolean previewMaskingEnabled;
-    private final Boolean errorLineMaskingEnabled;
-    private final Boolean logMaskingEnabled;
-    private final Boolean contentEncryptionEnabled;
-    private final String encryptionKeyRef;
-    private final Boolean downloadRequiresApproval;
-    private final String maskingRuleSet;
-    private final Boolean enabled;
-    private final Integer version;
-    private final String description;
-  }
+    /** Excel 行模型，单一来源；独立 service 与 9+2 config-package service 共用。 */
+    @Getter
+    @Builder
+    @Accessors(fluent = true)
+    public static class TemplateRow {
+        private final Integer rowNo;
+        private final String tenantId;
+        private final String templateCode;
+        private final String templateName;
+        private final String templateType;
+        private final String bizType;
+        private final String fileFormatType;
+        private final String charset;
+        private final String targetCharset;
+        private final Boolean withBom;
+        private final String lineSeparator;
+        private final String delimiter;
+        private final String quoteChar;
+        private final String escapeChar;
+        private final Integer recordLength;
+        private final Integer headerRows;
+        private final Integer footerRows;
+        private final String headerTemplateJson;
+        private final String trailerTemplateJson;
+        private final String checksumType;
+        private final String compressType;
+        private final String encryptType;
+        private final String namingRule;
+        private final String fieldMappingsJson;
+        private final String validationRuleSetJson;
+        private final String defaultQueryCode;
+        private final String defaultQuerySql;
+        private final String queryParamSchemaJson;
+        private final Boolean streamingEnabled;
+        private final Integer pageSize;
+        private final Integer fetchSize;
+        private final Integer chunkSize;
+        private final Boolean previewMaskingEnabled;
+        private final Boolean errorLineMaskingEnabled;
+        private final Boolean logMaskingEnabled;
+        private final Boolean contentEncryptionEnabled;
+        private final String encryptionKeyRef;
+        private final Boolean downloadRequiresApproval;
+        private final String maskingRuleSet;
+        private final Boolean enabled;
+        private final Integer version;
+        private final String description;
+    }
 }

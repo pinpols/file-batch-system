@@ -19,210 +19,198 @@ import org.apache.ibatis.annotations.Param;
 
 public interface JobInstanceMapper {
 
-  /**
-   * perf/并发：对同一 (tenantId, jobInstanceId) 取事务级 advisory lock,把同一 instance 的并发 report
-   * 串行化(替代此前对全兄弟分区的 whole-instance FOR UPDATE)。调用方必须在写 task、partition 或 instance
-   * 之前取得本锁，统一保持 {@code instance lock -> task -> partition} 顺序。
-   *
-   * <p>{@code pg_advisory_xact_lock} 阻塞获取、随事务提交/回滚自动释放,无需手动 unlock。锁的是逻辑序(hash key), 不锁任何行,因此在
-   * Citus coordinator 上同样成立(死锁排序不再依赖行锁顺序)。返回值仅为满足 MyBatis select 需要行集,调用方忽略。
-   */
-  Integer acquireInstanceAdvisoryLock(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    /**
+     * perf/并发：对同一 (tenantId, jobInstanceId) 取事务级 advisory lock,把同一 instance 的并发 report
+     * 串行化(替代此前对全兄弟分区的 whole-instance FOR UPDATE)。调用方必须在写 task、partition 或 instance
+     * 之前取得本锁，统一保持 {@code instance lock -> task -> partition} 顺序。
+     *
+     * <p>{@code pg_advisory_xact_lock} 阻塞获取、随事务提交/回滚自动释放,无需手动 unlock。锁的是逻辑序(hash key), 不锁任何行,因此在
+     * Citus coordinator 上同样成立(死锁排序不再依赖行锁顺序)。返回值仅为满足 MyBatis select 需要行集,调用方忽略。
+     */
+    Integer acquireInstanceAdvisoryLock(@Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  /** 父作业已处于指定终态后，把未收尾的 Pipeline 尝试记录为中断，不冒报成功。 */
-  int closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam parameters);
+    /** 父作业已处于指定终态后，把未收尾的 Pipeline 尝试记录为中断，不冒报成功。 */
+    int closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam parameters);
 
-  /** 通过根请求解析当前受管 Workflow JOB；绝不使用根显示 ID 推断。 */
-  JobInstanceEntity selectCurrentByWorkflowRequest(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("jobCode") String jobCode);
+    /** 通过根请求解析当前受管 Workflow JOB；绝不使用根显示 ID 推断。 */
+    JobInstanceEntity selectCurrentByWorkflowRequest(
+            @Param("tenantId") String tenantId, @Param("requestId") String requestId, @Param("jobCode") String jobCode);
 
-  JobInstanceEntity selectByInstanceNo(
-      @Param("tenantId") String tenantId, @Param("instanceNo") String instanceNo);
+    JobInstanceEntity selectByInstanceNo(@Param("tenantId") String tenantId, @Param("instanceNo") String instanceNo);
 
-  JobInstanceEntity selectByTenantAndDedupKey(
-      @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
+    JobInstanceEntity selectByTenantAndDedupKey(@Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
-  /** 同一 dedup_key 下已用到的最大 run_attempt，未出现过则返回 null。供 RERUN 路径原子推进。 */
-  Integer selectMaxRunAttemptByDedupKey(
-      @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
+    /** 同一 dedup_key 下已用到的最大 run_attempt，未出现过则返回 null。供 RERUN 路径原子推进。 */
+    Integer selectMaxRunAttemptByDedupKey(@Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
-  /**
-   * 指定租户 + jobCode + bizDate 下**最新一次 attempt**(run_attempt 最大、同值取 id 最大)的实例状态。
-   *
-   * <p>供 ADR-043 依赖感知 fire 就绪查询:只有最新 attempt 为 {@code SUCCESS} 才算就绪。
-   *
-   * <p>相较"存在任意 SUCCESS",此口径能正确处理「先成功、后 rerun 失败 / rerun 正在跑」—— 此时最新 attempt 非
-   * SUCCESS,下游不应按过期结果放行(防结算级误放行)。无任何实例时返回 null。
-   */
-  String selectLatestStatusByBizDate(
-      @Param("tenantId") String tenantId,
-      @Param("jobCode") String jobCode,
-      @Param("bizDate") LocalDate bizDate);
+    /**
+     * 指定租户 + jobCode + bizDate 下**最新一次 attempt**(run_attempt 最大、同值取 id 最大)的实例状态。
+     *
+     * <p>供 ADR-043 依赖感知 fire 就绪查询:只有最新 attempt 为 {@code SUCCESS} 才算就绪。
+     *
+     * <p>相较"存在任意 SUCCESS",此口径能正确处理「先成功、后 rerun 失败 / rerun 正在跑」—— 此时最新 attempt 非
+     * SUCCESS,下游不应按过期结果放行(防结算级误放行)。无任何实例时返回 null。
+     */
+    String selectLatestStatusByBizDate(
+            @Param("tenantId") String tenantId, @Param("jobCode") String jobCode, @Param("bizDate") LocalDate bizDate);
 
-  int insert(JobInstanceEntity entity);
+    int insert(JobInstanceEntity entity);
 
-  List<JobInstanceEntity> selectByQuery(JobInstanceQuery query);
+    List<JobInstanceEntity> selectByQuery(JobInstanceQuery query);
 
-  int updateProgress(UpdateInstanceProgressParam param);
+    int updateProgress(UpdateInstanceProgressParam param);
 
-  int markRunning(MarkInstanceRunningParam param);
+    int markRunning(MarkInstanceRunningParam param);
 
-  /** 当前租约已验证后记录首次执行入口；不覆盖原始派发时间或推进生命周期。 */
-  int markExecutionStarted(@Param("tenantId") String tenantId, @Param("id") Long id);
+    /** 当前租约已验证后记录首次执行入口；不覆盖原始派发时间或推进生命周期。 */
+    int markExecutionStarted(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int updateExpectedPartitionCount(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("expectedPartitionCount") Integer expectedPartitionCount,
-      @Param("expectedVersion") Long expectedVersion);
+    int updateExpectedPartitionCount(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("expectedPartitionCount") Integer expectedPartitionCount,
+            @Param("expectedVersion") Long expectedVersion);
 
-  /**
-   * 选至少一个子任务已进入 RUNNING，且超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
-   *
-   * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
-   *
-   * <p>实例进入 RUNNING 只表示已完成派发，并不代表 worker 已开始执行。排队等待由背压和 SLA 观察，不能消耗执行
-   * timeout；否则高峰队列会把尚未 claim 的任务错误终止。
-   *
-   * <p>SLA 看 {@code deadline_at / expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看
-   * {@code job_definition.timeout_seconds}（硬
-   * fail 终态）。
-   */
-  List<JobInstanceEntity> selectTimedOutCandidates(@Param("limit") int limit);
+    /**
+     * 选至少一个子任务已进入 RUNNING，且超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
+     *
+     * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
+     *
+     * <p>实例进入 RUNNING 只表示已完成派发，并不代表 worker 已开始执行。排队等待由背压和 SLA 观察，不能消耗执行
+     * timeout；否则高峰队列会把尚未 claim 的任务错误终止。
+     *
+     * <p>SLA 看 {@code deadline_at / expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看
+     * {@code job_definition.timeout_seconds}（硬
+     * fail 终态）。
+     */
+    List<JobInstanceEntity> selectTimedOutCandidates(@Param("limit") int limit);
 
-  /**
-   * 选 launch T1 已提交但 T2 从未完成的非 workflow 实例。仅包含 CREATED、零 partition、零 task、trigger_request 仍
-   * ACCEPTED 或 LAUNCHED 的实例,以及旧版本把同一请求重投误标为 DUPLICATE 的同源实例，供保守恢复调度器
-   * 重驱 T2。请求标签不是实际派发事实；只有零子项的结构性条件才表示 T2 未完成。
-   */
-  List<JobInstanceEntity> selectStaleCreatedLaunchCandidates(
-      @Param("olderThan") Instant olderThan, @Param("limit") int limit);
+    /**
+     * 选 launch T1 已提交但 T2 从未完成的非 workflow 实例。仅包含 CREATED、零 partition、零 task、trigger_request 仍
+     * ACCEPTED 或 LAUNCHED 的实例,以及旧版本把同一请求重投误标为 DUPLICATE 的同源实例，供保守恢复调度器
+     * 重驱 T2。请求标签不是实际派发事实；只有零子项的结构性条件才表示 T2 未完成。
+     */
+    List<JobInstanceEntity> selectStaleCreatedLaunchCandidates(
+            @Param("olderThan") Instant olderThan, @Param("limit") int limit);
 
-  long countActiveByTenant(@Param("tenantId") String tenantId);
+    long countActiveByTenant(@Param("tenantId") String tenantId);
 
-  long countActiveByTenantAndQueueCode(
-      @Param("tenantId") String tenantId, @Param("queueCode") String queueCode);
+    long countActiveByTenantAndQueueCode(@Param("tenantId") String tenantId, @Param("queueCode") String queueCode);
 
-  long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
+    long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
 
-  /**
-   * 获取平台全局 job 准入事务锁。调用方必须在同一事务内完成活跃数检查并把新实例推进到 RUNNING。
-   */
-  Integer acquireGlobalJobAdmissionLock();
+    /**
+     * 获取平台全局 job 准入事务锁。调用方必须在同一事务内完成活跃数检查并把新实例推进到 RUNNING。
+     */
+    Integer acquireGlobalJobAdmissionLock();
 
-  /** 同租户 Job/分区准入共用的事务锁；计数到状态与 outbox 提交前持有。 */
-  Integer acquireTenantResourceAdmissionLock(@Param("tenantId") String tenantId);
+    /** 同租户 Job/分区准入共用的事务锁；计数到状态与 outbox 提交前持有。 */
+    Integer acquireTenantResourceAdmissionLock(@Param("tenantId") String tenantId);
 
-  /**
-   * 获取公平共享组的事务级 advisory lock。
-   *
-   * <p>锁必须覆盖共享组活跃实例计数到实例状态提交的整个事务，避免并发 admission 同时读到同一个空余槽位。
-   */
-  Integer acquireFairShareGroupAdvisoryLock(@Param("fairShareGroup") String fairShareGroup);
+    /**
+     * 获取公平共享组的事务级 advisory lock。
+     *
+     * <p>锁必须覆盖共享组活跃实例计数到实例状态提交的整个事务，避免并发 admission 同时读到同一个空余槽位。
+     */
+    Integer acquireFairShareGroupAdvisoryLock(@Param("fairShareGroup") String fairShareGroup);
 
-  /** 批量预聚合多个 fair_share_group → count；未出现的 group 由调用方按 0 处理。 */
-  List<FairShareGroupActiveCountView> countActiveByFairShareGroups(
-      @Param("fairShareGroups") Collection<String> fairShareGroups);
+    /** 批量预聚合多个 fair_share_group → count；未出现的 group 由调用方按 0 处理。 */
+    List<FairShareGroupActiveCountView> countActiveByFairShareGroups(
+            @Param("fairShareGroups") Collection<String> fairShareGroups);
 
-  /** 批量预聚合多个 queue_code → count；未出现的 queue 由调用方按 0 处理。 */
-  List<QueueActiveCountView> countActiveByTenantAndQueueCodes(
-      @Param("tenantId") String tenantId, @Param("queueCodes") Collection<String> queueCodes);
+    /** 批量预聚合多个 queue_code → count；未出现的 queue 由调用方按 0 处理。 */
+    List<QueueActiveCountView> countActiveByTenantAndQueueCodes(
+            @Param("tenantId") String tenantId, @Param("queueCodes") Collection<String> queueCodes);
 
-  /** 统计所有租户已经占用执行容量的实例总量（READY/RUNNING）。 */
-  long countActiveAll();
+    /** 统计所有租户已经占用执行容量的实例总量（READY/RUNNING）。 */
+    long countActiveAll();
 
-  long countTerminalInstancesWithActiveChildren();
+    long countTerminalInstancesWithActiveChildren();
 
-  BatchDayInstanceMetrics selectBatchDayMetrics(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    BatchDayInstanceMetrics selectBatchDayMetrics(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  List<JobInstanceEntity> selectBatchDayCatchUpCandidates(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    List<JobInstanceEntity> selectBatchDayCatchUpCandidates(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  /**
-   * ADR-020 batch_day_replay 候选筛选：按 (tenant, calendarCode, bizDate) 内每个 job_code 取最新一行实例， 由
-   * statuses 与 jobCodes 双重过滤。
-   *
-   * <ul>
-   *   <li>{@code statuses} 非空 → 实例状态在集合内（如 ALL: SUCCESS/FAILED/PARTIAL_FAILED；ALL_FAILED:
-   *       FAILED/PARTIAL_FAILED）；空集合等价于不限；
-   *   <li>{@code jobCodes} 非空 → 仅这些 jobCode 的实例（SUBSET_JOB_CODES 模式）；空集合等价于不限。
-   * </ul>
-   */
-  List<JobInstanceEntity> selectBatchDayCandidates(JobInstanceBatchDayCandidatesQuery parameters);
+    /**
+     * ADR-020 batch_day_replay 候选筛选：按 (tenant, calendarCode, bizDate) 内每个 job_code 取最新一行实例， 由
+     * statuses 与 jobCodes 双重过滤。
+     *
+     * <ul>
+     *   <li>{@code statuses} 非空 → 实例状态在集合内（如 ALL: SUCCESS/FAILED/PARTIAL_FAILED；ALL_FAILED:
+     *       FAILED/PARTIAL_FAILED）；空集合等价于不限；
+     *   <li>{@code jobCodes} 非空 → 仅这些 jobCode 的实例（SUBSET_JOB_CODES 模式）；空集合等价于不限。
+     * </ul>
+     */
+    List<JobInstanceEntity> selectBatchDayCandidates(JobInstanceBatchDayCandidatesQuery parameters);
 
-  int updateStatus(JobInstanceUpdateStatusParam parameters);
+    int updateStatus(JobInstanceUpdateStatusParam parameters);
 
-  /** 实例超时终结时重新确认硬超时已到且实例和至少一个子任务仍在运行。 */
-  int updateStatusWhenTaskRunning(JobInstanceUpdateStatusParam parameters);
+    /** 实例超时终结时重新确认硬超时已到且实例和至少一个子任务仍在运行。 */
+    int updateStatusWhenTaskRunning(JobInstanceUpdateStatusParam parameters);
 
-  /**
-   * 非终态生命周期状态 CAS 更新(ADR-044 pause/resume)。
-   *
-   * <p>仅当 version 匹配且当前非终态时推进,不动 finished_at。返回 0 表示版本冲突或已终态。
-   */
-  int updateLifecycleStatus(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("instanceStatus") String instanceStatus,
-      @Param("expectedVersion") Long expectedVersion);
+    /**
+     * 非终态生命周期状态 CAS 更新(ADR-044 pause/resume)。
+     *
+     * <p>仅当 version 匹配且当前非终态时推进,不动 finished_at。返回 0 表示版本冲突或已终态。
+     */
+    int updateLifecycleStatus(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("instanceStatus") String instanceStatus,
+            @Param("expectedVersion") Long expectedVersion);
 
-  /**
-   * 取同一 (tenantId, jobDefinitionId) 下数值最大的有效成功 {@code high_water_mark_out}。
-   *
-   * <p>空输入批次不上报 OUT;若按完成时间只取一行,该 NULL 会遮住上一轮有效水位,下一轮按空水位从头扫。乱序完成时,
-   * 较晚完成的较低 OUT 也不能把后续 IN 拉回。因此查询跳过 NULL/空串/非数值 OUT,热表与 archive 冷表各取数值最大值
-   * 后合并,避免长间隔任务因归档丢失水位。
-   *
-   * <p>不取 PARTIAL_FAILED:部分 partition 未覆盖时若把它的水位推给下次,会让下次跳过失败 partition 应处理的数据范围;由
-   * publish 的 {@code ON CONFLICT} 兜住重复执行幂等。首次运行没有可用水位时返回 null,worker 在业务侧按"从头跑"处理。
-   */
-  String selectMaxEffectiveHighWaterMarkOut(
-      @Param("tenantId") String tenantId, @Param("jobDefinitionId") Long jobDefinitionId);
+    /**
+     * 取同一 (tenantId, jobDefinitionId) 下数值最大的有效成功 {@code high_water_mark_out}。
+     *
+     * <p>空输入批次不上报 OUT;若按完成时间只取一行,该 NULL 会遮住上一轮有效水位,下一轮按空水位从头扫。乱序完成时,
+     * 较晚完成的较低 OUT 也不能把后续 IN 拉回。因此查询跳过 NULL/空串/非数值 OUT,热表与 archive 冷表各取数值最大值
+     * 后合并,避免长间隔任务因归档丢失水位。
+     *
+     * <p>不取 PARTIAL_FAILED:部分 partition 未覆盖时若把它的水位推给下次,会让下次跳过失败 partition 应处理的数据范围;由
+     * publish 的 {@code ON CONFLICT} 兜住重复执行幂等。首次运行没有可用水位时返回 null,worker 在业务侧按"从头跑"处理。
+     */
+    String selectMaxEffectiveHighWaterMarkOut(
+            @Param("tenantId") String tenantId, @Param("jobDefinitionId") Long jobDefinitionId);
 
-  /**
-   * worker report 成功时把 OUT 水位回写。numeric CAS 守护:仅当新值更大时才推进,防止多 partition 并发回报顺序乱时慢 partition 用低水位
-   * 覆写快 partition 已写的高水位。返回 0 行表示水位未推进(已被更高值占据 / 新值格式非法),调用方按 debug 记录不抛错。
-   */
-  int updateHighWaterMarkOut(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("highWaterMarkOut") String highWaterMarkOut);
+    /**
+     * worker report 成功时把 OUT 水位回写。numeric CAS 守护:仅当新值更大时才推进,防止多 partition 并发回报顺序乱时慢 partition 用低水位
+     * 覆写快 partition 已写的高水位。返回 0 行表示水位未推进(已被更高值占据 / 新值格式非法),调用方按 debug 记录不抛错。
+     */
+    int updateHighWaterMarkOut(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("highWaterMarkOut") String highWaterMarkOut);
 
-  /**
-   * 同一 (tenantId, jobCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的 SAME_JOB
-   * scope 用此 判断"前一日同 job 是否已完结"。
-   *
-   * <p>非终态: CREATED / WAITING / READY / RUNNING / PAUSED。终态集合以 LifecycleStatusCatalog 为准；失败状态是否允许放行由调用方根据
-   * batch_day_instance.day_status 决定。
-   */
-  int countNonTerminalByJobCodeAndBizDate(
-      @Param("tenantId") String tenantId,
-      @Param("jobCode") String jobCode,
-      @Param("bizDate") LocalDate bizDate);
+    /**
+     * 同一 (tenantId, jobCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的 SAME_JOB
+     * scope 用此 判断"前一日同 job 是否已完结"。
+     *
+     * <p>非终态: CREATED / WAITING / READY / RUNNING / PAUSED。终态集合以 LifecycleStatusCatalog 为准；失败状态是否允许放行由调用方根据
+     * batch_day_instance.day_status 决定。
+     */
+    int countNonTerminalByJobCodeAndBizDate(
+            @Param("tenantId") String tenantId, @Param("jobCode") String jobCode, @Param("bizDate") LocalDate bizDate);
 
-  /**
-   * 同一 (tenantId, jobGroupCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的
-   * SAME_JOB_GROUP scope 用此判断"前一日同组是否全部完结"。 通过 JOIN job_definition.job_group_code 收敛同组 jobCode。
-   */
-  int countNonTerminalByJobGroupAndBizDate(
-      @Param("tenantId") String tenantId,
-      @Param("jobGroupCode") String jobGroupCode,
-      @Param("bizDate") LocalDate bizDate);
+    /**
+     * 同一 (tenantId, jobGroupCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的
+     * SAME_JOB_GROUP scope 用此判断"前一日同组是否全部完结"。 通过 JOIN job_definition.job_group_code 收敛同组 jobCode。
+     */
+    int countNonTerminalByJobGroupAndBizDate(
+            @Param("tenantId") String tenantId,
+            @Param("jobGroupCode") String jobGroupCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  /**
-   * ADR-022 v0.1 forensic 取证：按 (tenantId, bizDate 范围, 可选 jobCodes) 拉取所有 instance。 仅 forensic
-   * 路径用，不在主链路。
-   */
-  List<JobInstanceEntity> selectForensicByBizDateRange(
-      JobInstanceForensicByBizDateRangeQuery parameters);
+    /**
+     * ADR-022 v0.1 forensic 取证：按 (tenantId, bizDate 范围, 可选 jobCodes) 拉取所有 instance。 仅 forensic
+     * 路径用，不在主链路。
+     */
+    List<JobInstanceEntity> selectForensicByBizDateRange(JobInstanceForensicByBizDateRangeQuery parameters);
 }

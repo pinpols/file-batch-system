@@ -27,208 +27,199 @@ import java.util.Set;
  */
 public class DelimitedFormatParser implements FormatParser {
 
-  /** 解析器允许的最大列数；字段长度不设限，整体大小由预处理落盘阈值约束。 */
-  private static final int MAX_COLUMNS = 10_000;
+    /** 解析器允许的最大列数；字段长度不设限，整体大小由预处理落盘阈值约束。 */
+    private static final int MAX_COLUMNS = 10_000;
 
-  private static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
-  private static final String ERROR_CODE_LINE_INVALID = "IMPORT_PARSE_LINE_INVALID";
+    private static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
+    private static final String ERROR_CODE_LINE_INVALID = "IMPORT_PARSE_LINE_INVALID";
 
-  private final ParseSupport support;
+    private final ParseSupport support;
 
-  public DelimitedFormatParser(ParseSupport support) {
-    this.support = support;
-  }
-
-  // CPD-OFF: 分隔文本解析器和定长文本解析器有意共用格式解析器生命周期。
-  @Override
-  public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
-      throws Exception {
-    boolean preserveLogicalRow = request.preserveLogicalRow();
-    if (!request.hasText()) {
-      return 0L;
+    public DelimitedFormatParser(ParseSupport support) {
+        this.support = support;
     }
-    ImportPayload importPayload = request.importPayload();
-    Object templateConfig = request.templateConfig();
-    int footerRows = support.resolveInt(
-        importPayload == null ? null : importPayload.footerRows(),
-        templateConfig,
-        "footer_rows",
-        0);
-    int headerRows = support.resolveInt(
-        importPayload == null ? null : importPayload.headerRows(),
-        templateConfig,
-        "header_rows",
-        0);
-    boolean withHeader = importPayload != null && importPayload.withHeader() != null
-        ? importPayload.withHeader()
-        : headerRows > 0;
-    String delimiter = resolveDelimiter(importPayload, templateConfig);
 
-    CsvParserSettings parserSettings = buildSettings(delimiter);
-    CsvParser parser = new CsvParser(parserSettings);
-    // 无表头时按位置绑定:列名取模板 field_mappings 的 name 顺序(模板缺省才回退硬编码示例 schema);
-    // 有表头时此初值会被文件首行覆盖(见下方 withHeader 分支)。
-    List<String> headers = support.positionalHeaders(templateConfig);
-    long recordNo = 0L;
-    List<String[]> footerBuffer = footerRows > 0 ? new ArrayList<>(footerRows + 1) : null;
-
-    try (BufferedReader reader = request.openTextReader()) {
-      parser.beginParsing(reader);
-      String[] row;
-      int nonBlankLineNo = 0;
-      while ((row = parser.parseNext()) != null) {
-        nonBlankLineNo++;
-        boolean lineBelongsToHeader =
-            (withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1);
-        if (lineBelongsToHeader) {
-          if (nonBlankLineNo == 1) {
-            headers = toHeaders(row);
-            // 与 Excel 对齐:配了 field_mappings 时,required 列必须在文件表头里找到——
-            // 缺列即 PARSE 期 fail-fast 报"缺哪列",而非静默整列 null 让 VALIDATE 误报"字段缺失"。
-            validateRequiredHeaders(headers, templateConfig);
-            context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(headers));
-          }
-          continue;
+    // CPD-OFF: 分隔文本解析器和定长文本解析器有意共用格式解析器生命周期。
+    @Override
+    public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer) throws Exception {
+        boolean preserveLogicalRow = request.preserveLogicalRow();
+        if (!request.hasText()) {
+            return 0L;
         }
-        if (footerRows > 0) {
-          footerBuffer.add(row);
-          if (footerBuffer.size() <= footerRows) {
-            continue;
-          }
-          row = footerBuffer.remove(0);
+        ImportPayload importPayload = request.importPayload();
+        Object templateConfig = request.templateConfig();
+        int footerRows = support.resolveInt(
+                importPayload == null ? null : importPayload.footerRows(), templateConfig, "footer_rows", 0);
+        int headerRows = support.resolveInt(
+                importPayload == null ? null : importPayload.headerRows(), templateConfig, "header_rows", 0);
+        boolean withHeader = importPayload != null && importPayload.withHeader() != null
+                ? importPayload.withHeader()
+                : headerRows > 0;
+        String delimiter = resolveDelimiter(importPayload, templateConfig);
+
+        CsvParserSettings parserSettings = buildSettings(delimiter);
+        CsvParser parser = new CsvParser(parserSettings);
+        // 无表头时按位置绑定:列名取模板 field_mappings 的 name 顺序(模板缺省才回退硬编码示例 schema);
+        // 有表头时此初值会被文件首行覆盖(见下方 withHeader 分支)。
+        List<String> headers = support.positionalHeaders(templateConfig);
+        long recordNo = 0L;
+        List<String[]> footerBuffer = footerRows > 0 ? new ArrayList<>(footerRows + 1) : null;
+
+        try (BufferedReader reader = request.openTextReader()) {
+            parser.beginParsing(reader);
+            String[] row;
+            int nonBlankLineNo = 0;
+            while ((row = parser.parseNext()) != null) {
+                nonBlankLineNo++;
+                boolean lineBelongsToHeader =
+                        (withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1);
+                if (lineBelongsToHeader) {
+                    if (nonBlankLineNo == 1) {
+                        headers = toHeaders(row);
+                        // 与 Excel 对齐:配了 field_mappings 时,required 列必须在文件表头里找到——
+                        // 缺列即 PARSE 期 fail-fast 报"缺哪列",而非静默整列 null 让 VALIDATE 误报"字段缺失"。
+                        validateRequiredHeaders(headers, templateConfig);
+                        context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(headers));
+                    }
+                    continue;
+                }
+                if (footerRows > 0) {
+                    footerBuffer.add(row);
+                    if (footerBuffer.size() <= footerRows) {
+                        continue;
+                    }
+                    row = footerBuffer.remove(0);
+                }
+                recordNo++;
+                try {
+                    if (row.length == 0 || isAllBlank(row)) {
+                        support.recordParseError(context, recordNo, ERROR_CODE_LINE_INVALID, "empty line", "");
+                        continue;
+                    }
+                    Map<String, String> rowMap = new LinkedHashMap<>();
+                    for (int i = 0; i < headers.size(); i++) {
+                        rowMap.put(headers.get(i), i < row.length ? row[i] : null);
+                    }
+                    support.collectSchemaFields(context, rowMap);
+                    ParseSupport.ParsedRecordWriteParam writeParam = ParseSupport.ParsedRecordWriteParam.builder()
+                            .context(context)
+                            .writer(writer)
+                            .row(rowMap)
+                            .preserveLogicalRow(preserveLogicalRow)
+                            .recordNo(recordNo)
+                            .errorCode(ERROR_CODE_LINE_INVALID)
+                            .rawRecord(rowMap)
+                            .build();
+                    support.writeParsedRecord(writeParam);
+                } catch (Exception exception) {
+                    SwallowedExceptionLogger.warn(DelimitedFormatParser.class, "catch:Exception", exception);
+
+                    support.recordParseError(context, recordNo, ERROR_CODE_LINE_INVALID, exception.getMessage(), row);
+                }
+            }
+        } finally {
+            parser.stopParsing();
         }
-        recordNo++;
-        try {
-          if (row.length == 0 || isAllBlank(row)) {
-            support.recordParseError(context, recordNo, ERROR_CODE_LINE_INVALID, "empty line", "");
-            continue;
-          }
-          Map<String, String> rowMap = new LinkedHashMap<>();
-          for (int i = 0; i < headers.size(); i++) {
-            rowMap.put(headers.get(i), i < row.length ? row[i] : null);
-          }
-          support.collectSchemaFields(context, rowMap);
-          ParseSupport.ParsedRecordWriteParam writeParam =
-              ParseSupport.ParsedRecordWriteParam.builder()
-                  .context(context)
-                  .writer(writer)
-                  .row(rowMap)
-                  .preserveLogicalRow(preserveLogicalRow)
-                  .recordNo(recordNo)
-                  .errorCode(ERROR_CODE_LINE_INVALID)
-                  .rawRecord(rowMap)
-                  .build();
-          support.writeParsedRecord(writeParam);
-        } catch (Exception exception) {
-          SwallowedExceptionLogger.warn(DelimitedFormatParser.class, "catch:Exception", exception);
+        return recordNo;
+    }
 
-          support.recordParseError(
-              context, recordNo, ERROR_CODE_LINE_INVALID, exception.getMessage(), row);
+    // CPD-ON
+    private static CsvParserSettings buildSettings(String delimiter) {
+        CsvParserSettings settings = new CsvParserSettings();
+        settings.getFormat().setDelimiter(delimiter.isEmpty() ? ',' : delimiter.charAt(0));
+        settings.getFormat().setQuote('"');
+        settings.getFormat().setQuoteEscape('"');
+        settings.setLineSeparatorDetectionEnabled(true);
+        // headerRows / footerRows / schema fields 由本层按行逻辑处理，不让 Univocity 自动抽 header
+        settings.setHeaderExtractionEnabled(false);
+        settings.setSkipEmptyLines(true);
+        // 任何字段长度 / 列数 的硬限都由 PreprocessStep.SPOOL_THRESHOLD_BYTES / ReceiveStep 的堆联动回退；
+        // 解析器自身放开上限避免宽字段/宽表误拒
+        settings.setMaxCharsPerColumn(-1);
+        settings.setMaxColumns(MAX_COLUMNS);
+        // 对齐原手写实现的 `current.toString().trim()` 语义
+        settings.trimValues(true);
+        return settings;
+    }
+
+    private static List<String> toHeaders(String[] row) {
+        List<String> headers = new ArrayList<>(row.length);
+        for (String value : row) {
+            headers.add(value == null ? "" : value);
         }
-      }
-    } finally {
-      parser.stopParsing();
+        return headers;
     }
-    return recordNo;
-  }
 
-  // CPD-ON
-  private static CsvParserSettings buildSettings(String delimiter) {
-    CsvParserSettings settings = new CsvParserSettings();
-    settings.getFormat().setDelimiter(delimiter.isEmpty() ? ',' : delimiter.charAt(0));
-    settings.getFormat().setQuote('"');
-    settings.getFormat().setQuoteEscape('"');
-    settings.setLineSeparatorDetectionEnabled(true);
-    // headerRows / footerRows / schema fields 由本层按行逻辑处理，不让 Univocity 自动抽 header
-    settings.setHeaderExtractionEnabled(false);
-    settings.setSkipEmptyLines(true);
-    // 任何字段长度 / 列数 的硬限都由 PreprocessStep.SPOOL_THRESHOLD_BYTES / ReceiveStep 的堆联动回退；
-    // 解析器自身放开上限避免宽字段/宽表误拒
-    settings.setMaxCharsPerColumn(-1);
-    settings.setMaxColumns(MAX_COLUMNS);
-    // 对齐原手写实现的 `current.toString().trim()` 语义
-    settings.trimValues(true);
-    return settings;
-  }
+    /**
+     * 表头存在性校验(仅 required 列):配了 {@code field_mappings} 时,每个 {@code required:true} 列的来源名 （{@code
+     * name},兼容 {@code source}）必须出现在文件实际表头里;缺列即 fail-fast 报"缺哪列"。 可选列允许缺失。
+     */
+    private void validateRequiredHeaders(List<String> headers, Object templateConfig) {
+        Object fieldMappings = support.templateFieldMappings(templateConfig);
+        if (!(fieldMappings instanceof List<?> list) || list.isEmpty()) {
+            return;
+        }
+        Set<String> headerKeys = new HashSet<>();
+        for (String h : headers) {
+            headerKeys.add(ParseSupport.matchKey(h));
+        }
+        List<String> missing = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map) || !isRequired(map.get("required"))) {
+                continue;
+            }
+            Object src = map.get("name") != null ? map.get("name") : map.get("source");
+            if (src == null || !Texts.hasText(String.valueOf(src))) {
+                continue;
+            }
+            String rawSource = String.valueOf(src);
+            String source = rawSource.trim();
+            // 大小写/下划线容错:与 LOAD 的 from↔表头匹配一致
+            String sourceMatchKey = ParseSupport.matchKey(source);
+            if (!headerKeys.contains(sourceMatchKey)) {
+                missing.add(source);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    "error.import.parse.delimited_header_missing",
+                    missing.toString(),
+                    headers.toString());
+        }
+    }
 
-  private static List<String> toHeaders(String[] row) {
-    List<String> headers = new ArrayList<>(row.length);
-    for (String value : row) {
-      headers.add(value == null ? "" : value);
+    private static boolean isRequired(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return false;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return "true".equalsIgnoreCase(text);
     }
-    return headers;
-  }
 
-  /**
-   * 表头存在性校验(仅 required 列):配了 {@code field_mappings} 时,每个 {@code required:true} 列的来源名 （{@code
-   * name},兼容 {@code source}）必须出现在文件实际表头里;缺列即 fail-fast 报"缺哪列"。 可选列允许缺失。
-   */
-  private void validateRequiredHeaders(List<String> headers, Object templateConfig) {
-    Object fieldMappings = support.templateFieldMappings(templateConfig);
-    if (!(fieldMappings instanceof List<?> list) || list.isEmpty()) {
-      return;
+    private static boolean isAllBlank(String[] row) {
+        for (String value : row) {
+            if (value != null && !value.trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
-    Set<String> headerKeys = new HashSet<>();
-    for (String h : headers) {
-      headerKeys.add(ParseSupport.matchKey(h));
-    }
-    List<String> missing = new ArrayList<>();
-    for (Object item : list) {
-      if (!(item instanceof Map<?, ?> map) || !isRequired(map.get("required"))) {
-        continue;
-      }
-      Object src = map.get("name") != null ? map.get("name") : map.get("source");
-      if (src == null || !Texts.hasText(String.valueOf(src))) {
-        continue;
-      }
-      String rawSource = String.valueOf(src);
-      String source = rawSource.trim();
-      // 大小写/下划线容错:与 LOAD 的 from↔表头匹配一致
-      String sourceMatchKey = ParseSupport.matchKey(source);
-      if (!headerKeys.contains(sourceMatchKey)) {
-        missing.add(source);
-      }
-    }
-    if (!missing.isEmpty()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.import.parse.delimited_header_missing",
-          missing.toString(),
-          headers.toString());
-    }
-  }
 
-  private static boolean isRequired(Object value) {
-    if (value instanceof Boolean b) {
-      return b;
+    private String resolveDelimiter(ImportPayload importPayload, Object templateConfigObject) {
+        if (importPayload != null && Texts.hasText(importPayload.delimiter())) {
+            return importPayload.delimiter();
+        }
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object value = templateConfig.get("delimiter");
+            if (value != null && Texts.hasText(String.valueOf(value))) {
+                return String.valueOf(value);
+            }
+        }
+        return ",";
     }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return "true".equalsIgnoreCase(text);
-  }
-
-  private static boolean isAllBlank(String[] row) {
-    for (String value : row) {
-      if (value != null && !value.trim().isEmpty()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private String resolveDelimiter(ImportPayload importPayload, Object templateConfigObject) {
-    if (importPayload != null && Texts.hasText(importPayload.delimiter())) {
-      return importPayload.delimiter();
-    }
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get("delimiter");
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return String.valueOf(value);
-      }
-    }
-    return ",";
-  }
 }

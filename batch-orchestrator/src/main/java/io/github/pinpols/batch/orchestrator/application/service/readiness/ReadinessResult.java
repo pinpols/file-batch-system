@@ -23,61 +23,59 @@ import lombok.Builder;
  */
 @Builder
 public record ReadinessResult(
-    boolean ready,
-    String reason,
-    String assetCode,
-    LocalDate bizDate,
-    String partitionKey,
-    String businessKey,
-    String freshnessStatus,
-    Integer versionNo,
-    Long jobInstanceId,
-    Instant readyAt,
-    String payloadStorage,
-    String payloadRef) {
+        boolean ready,
+        String reason,
+        String assetCode,
+        LocalDate bizDate,
+        String partitionKey,
+        String businessKey,
+        String freshnessStatus,
+        Integer versionNo,
+        Long jobInstanceId,
+        Instant readyAt,
+        String payloadStorage,
+        String payloadRef) {
 
-  public static ReadinessResult ofReady() {
-    return new ReadinessResult(
-        true, null, null, null, null, null, null, null, null, null, null, null);
-  }
-
-  public static ReadinessResult ofReady(AssetPartitionSnapshot partition) {
-    if (partition == null) {
-      return ofReady();
+    public static ReadinessResult ofReady() {
+        return new ReadinessResult(true, null, null, null, null, null, null, null, null, null, null, null);
     }
-    return ReadinessResult.builder()
-        .ready(true)
-        .assetCode(partition.assetCode())
-        .bizDate(partition.bizDate())
-        .partitionKey(partition.partitionKey())
-        .businessKey(partition.businessKey())
-        .freshnessStatus(partition.freshnessStatus())
-        .versionNo(partition.versionNo())
-        .jobInstanceId(partition.jobInstanceId())
-        .readyAt(partition.effectiveAt())
-        .payloadStorage(partition.payloadStorage())
-        .payloadRef(partition.payloadRef())
-        .build();
-  }
 
-  public static ReadinessResult ofNotReady(String reason) {
-    return new ReadinessResult(
-        false, reason, null, null, null, null, null, null, null, null, null, null);
-  }
+    public static ReadinessResult ofReady(AssetPartitionSnapshot partition) {
+        if (partition == null) {
+            return ofReady();
+        }
+        return ReadinessResult.builder()
+                .ready(true)
+                .assetCode(partition.assetCode())
+                .bizDate(partition.bizDate())
+                .partitionKey(partition.partitionKey())
+                .businessKey(partition.businessKey())
+                .freshnessStatus(partition.freshnessStatus())
+                .versionNo(partition.versionNo())
+                .jobInstanceId(partition.jobInstanceId())
+                .readyAt(partition.effectiveAt())
+                .payloadStorage(partition.payloadStorage())
+                .payloadRef(partition.payloadRef())
+                .build();
+    }
 
-  public static ReadinessResult ofNotReady(String reason, String assetCode, LocalDate bizDate) {
-    return new ReadinessResult(
-        false,
-        reason,
-        assetCode,
-        bizDate,
-        bizDate == null ? null : bizDate.toString(),
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
-  }
+    public static ReadinessResult ofNotReady(String reason) {
+        return new ReadinessResult(false, reason, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    public static ReadinessResult ofNotReady(String reason, String assetCode, LocalDate bizDate) {
+        return new ReadinessResult(
+                false,
+                reason,
+                assetCode,
+                bizDate,
+                bizDate == null ? null : bizDate.toString(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
 }

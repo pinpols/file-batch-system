@@ -5,7 +5,7 @@ import java.time.Duration;
 /** SSE 一次性 ticket 存储端口。 */
 public interface SseTicketStore {
 
-  void save(String ticket, String value, Duration ttl);
+    void save(String ticket, String value, Duration ttl);
 
-  String consume(String ticket);
+    String consume(String ticket);
 }

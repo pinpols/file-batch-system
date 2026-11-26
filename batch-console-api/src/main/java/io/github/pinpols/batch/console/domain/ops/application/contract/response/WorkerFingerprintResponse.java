@@ -13,27 +13,26 @@ import java.time.Instant;
  * 不支持协议的 worker。
  */
 public record WorkerFingerprintResponse(
-    Long id,
-    String tenantId,
-    String workerCode,
-    String buildId,
-    String processId,
-    String sdkVersion,
-    String status,
-    Instant heartbeatAt,
-    WorkerCompatibility compatibility) {
+        Long id,
+        String tenantId,
+        String workerCode,
+        String buildId,
+        String processId,
+        String sdkVersion,
+        String status,
+        Instant heartbeatAt,
+        WorkerCompatibility compatibility) {
 
-  public static WorkerFingerprintResponse from(
-      WorkerFingerprintRow row, WorkerCompatibility compatibility) {
-    return new WorkerFingerprintResponse(
-        row.getId(),
-        row.getTenantId(),
-        row.getWorkerCode(),
-        row.getBuildId(),
-        row.getProcessId(),
-        row.getSdkVersion(),
-        row.getStatus(),
-        row.getHeartbeatAt(),
-        compatibility);
-  }
+    public static WorkerFingerprintResponse from(WorkerFingerprintRow row, WorkerCompatibility compatibility) {
+        return new WorkerFingerprintResponse(
+                row.getId(),
+                row.getTenantId(),
+                row.getWorkerCode(),
+                row.getBuildId(),
+                row.getProcessId(),
+                row.getSdkVersion(),
+                row.getStatus(),
+                row.getHeartbeatAt(),
+                compatibility);
+    }
 }

@@ -96,773 +96,743 @@ import reactor.core.publisher.Sinks;
 @DisplayName("AI 应用服务:防护决策、流式对话与审计结算边界")
 class DefaultConsoleAiApplicationServiceTest {
 
-  @Mock
-  private ObjectProvider<ConsoleAiClients> chatClientsProvider;
+    @Mock
+    private ObjectProvider<ConsoleAiClients> chatClientsProvider;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Mock
-  private ConsoleAiAuthorizationService authorizationService;
+    @Mock
+    private ConsoleAiAuthorizationService authorizationService;
 
-  @Mock
-  private ConsoleAiPromptGuard promptGuard;
+    @Mock
+    private ConsoleAiPromptGuard promptGuard;
 
-  @Mock
-  private ConsoleAiAuditService auditService;
+    @Mock
+    private ConsoleAiAuditService auditService;
 
-  @Mock
-  private ConsoleAiConversationService conversationService;
+    @Mock
+    private ConsoleAiConversationService conversationService;
 
-  @Mock
-  private ConsoleAiAttachmentService attachmentService;
+    @Mock
+    private ConsoleAiAttachmentService attachmentService;
 
-  private ConsoleAiCostService costService;
+    private ConsoleAiCostService costService;
 
-  @Mock
-  private ConsoleAiMonthlyUsageMapper monthlyUsageMapper;
+    @Mock
+    private ConsoleAiMonthlyUsageMapper monthlyUsageMapper;
 
-  @Mock
-  private ConsoleAiKnowledgeBase knowledgeBase;
+    @Mock
+    private ConsoleAiKnowledgeBase knowledgeBase;
 
-  @Mock
-  private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
+    @Mock
+    private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
 
-  @Mock
-  private ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
+    @Mock
+    private ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
 
-  @Mock
-  private SlidingWindowRateLimiter rateLimiter;
+    @Mock
+    private SlidingWindowRateLimiter rateLimiter;
 
-  @Mock
-  private BatchDateTimeSupport dateTimeSupport;
+    @Mock
+    private BatchDateTimeSupport dateTimeSupport;
 
-  private ConsoleAiProperties aiProperties;
-  private SimpleMeterRegistry meterRegistry;
-  private ConsoleAiMetrics aiMetrics;
-  private DefaultConsoleAiApplicationService service;
+    private ConsoleAiProperties aiProperties;
+    private SimpleMeterRegistry meterRegistry;
+    private ConsoleAiMetrics aiMetrics;
+    private DefaultConsoleAiApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    LocaleContextHolder.setLocale(Locale.ENGLISH);
-    aiProperties = new ConsoleAiProperties();
-    aiProperties.setEnabled(true);
-    aiProperties.setMaxPromptLength(4000);
-    aiProperties.setMaxResponseLength(3000);
-    // 默认关闭限流,让既有决策路径用例不触达 rateLimiter(strict stubbing);限流由专门用例开启。
-    aiProperties.setRateLimitPerMinute(0);
-    aiProperties.setRequestTimeout(Duration.ofSeconds(5));
-    meterRegistry = new SimpleMeterRegistry();
-    aiMetrics = new ConsoleAiMetrics(meterRegistry);
-    costService = spy(new ConsoleAiCostService(monthlyUsageMapper, aiProperties));
-    service = new DefaultConsoleAiApplicationService(
-        chatClientsProvider,
-        aiProperties,
-        requestMetadataResolver,
-        authorizationService,
-        promptGuard,
-        auditService,
-        conversationService,
-        attachmentService,
-        costService,
-        knowledgeBase,
-        queryServiceProvider,
-        diagnosticServiceProvider,
-        rateLimiter,
-        dateTimeSupport,
-        aiMetrics,
-        messageSource());
-  }
+    @BeforeEach
+    void setUp() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        aiProperties = new ConsoleAiProperties();
+        aiProperties.setEnabled(true);
+        aiProperties.setMaxPromptLength(4000);
+        aiProperties.setMaxResponseLength(3000);
+        // 默认关闭限流,让既有决策路径用例不触达 rateLimiter(strict stubbing);限流由专门用例开启。
+        aiProperties.setRateLimitPerMinute(0);
+        aiProperties.setRequestTimeout(Duration.ofSeconds(5));
+        meterRegistry = new SimpleMeterRegistry();
+        aiMetrics = new ConsoleAiMetrics(meterRegistry);
+        costService = spy(new ConsoleAiCostService(monthlyUsageMapper, aiProperties));
+        service = new DefaultConsoleAiApplicationService(
+                chatClientsProvider,
+                aiProperties,
+                requestMetadataResolver,
+                authorizationService,
+                promptGuard,
+                auditService,
+                conversationService,
+                attachmentService,
+                costService,
+                knowledgeBase,
+                queryServiceProvider,
+                diagnosticServiceProvider,
+                rateLimiter,
+                dateTimeSupport,
+                aiMetrics,
+                messageSource());
+    }
 
-  @AfterEach
-  void clearLocale() {
-    LocaleContextHolder.resetLocaleContext();
-  }
+    @AfterEach
+    void clearLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
 
-  private static MessageSource messageSource() {
-    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
-    source.setBasename("messages");
-    source.setDefaultEncoding("UTF-8");
-    source.setFallbackToSystemLocale(false);
-    return source;
-  }
+    private static MessageSource messageSource() {
+        ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        return source;
+    }
 
-  private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
-    return new ConsoleRequestMetadata(
-        requestId, traceId, tenantId, "operator-1", "idem-1", "1.1.1.1");
-  }
+    private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
+        return new ConsoleRequestMetadata(requestId, traceId, tenantId, "operator-1", "idem-1", "1.1.1.1");
+    }
 
-  @Test
-  @DisplayName("应用入口拒绝未授权流式请求，不进入模型执行")
-  void shouldRejectStreamPreparationWithoutAuthorization() {
-    doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
-        .when(authorizationService)
-        .assertAllowed();
-    AiChatRequest request = request("tenant-1", "查询失败作业");
-    assertThatThrownBy(() -> service.prepareStream(request, "idem"))
-        .isInstanceOf(BizException.class);
-    verify(requestMetadataResolver, never()).current();
-    verify(promptGuard, never()).check(any());
-  }
+    @Test
+    @DisplayName("应用入口拒绝未授权流式请求，不进入模型执行")
+    void shouldRejectStreamPreparationWithoutAuthorization() {
+        doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
+                .when(authorizationService)
+                .assertAllowed();
+        AiChatRequest request = request("tenant-1", "查询失败作业");
+        assertThatThrownBy(() -> service.prepareStream(request, "idem")).isInstanceOf(BizException.class);
+        verify(requestMetadataResolver, never()).current();
+        verify(promptGuard, never()).check(any());
+    }
 
-  @Test
-  @DisplayName("应用入口拒绝跨租户或跨用户的会话查询与删除")
-  void shouldRejectMismatchedConversationIdentity() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req", "trace"));
-    assertThatThrownBy(() -> service.conversations("tenant-2", "operator-1", 10))
-        .isInstanceOf(BizException.class);
-    assertThatThrownBy(() -> service.deleteConversation("tenant-1", "other", "conversation"))
-        .isInstanceOf(BizException.class);
-    verify(conversationService, never()).list(anyString(), anyString(), anyInt());
-    verify(conversationService, never()).delete(anyString(), anyString(), anyString());
-  }
+    @Test
+    @DisplayName("应用入口拒绝跨租户或跨用户的会话查询与删除")
+    void shouldRejectMismatchedConversationIdentity() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req", "trace"));
+        assertThatThrownBy(() -> service.conversations("tenant-2", "operator-1", 10))
+                .isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.deleteConversation("tenant-1", "other", "conversation"))
+                .isInstanceOf(BizException.class);
+        verify(conversationService, never()).list(anyString(), anyString(), anyInt());
+        verify(conversationService, never()).delete(anyString(), anyString(), anyString());
+    }
 
-  private static AiChatRequest request(String tenantId, String prompt) {
-    AiChatRequest req = new AiChatRequest();
-    req.setTenantId(tenantId);
-    req.setPrompt(prompt);
-    return req;
-  }
+    private static AiChatRequest request(String tenantId, String prompt) {
+        AiChatRequest req = new AiChatRequest();
+        req.setTenantId(tenantId);
+        req.setPrompt(prompt);
+        return req;
+    }
 
-  @Test
-  @DisplayName("授权失败 → 透传 BizException，prompt guard / chat client 完全不触达")
-  void shouldPropagateAuthorizationException_whenAuthorizationDenies() {
-    BizException denied = BizException.of(ResultCode.FORBIDDEN, "error.ai.forbidden");
-    doThrow(denied).when(authorizationService).assertAllowed();
+    @Test
+    @DisplayName("授权失败 → 透传 BizException，prompt guard / chat client 完全不触达")
+    void shouldPropagateAuthorizationException_whenAuthorizationDenies() {
+        BizException denied = BizException.of(ResultCode.FORBIDDEN, "error.ai.forbidden");
+        doThrow(denied).when(authorizationService).assertAllowed();
 
-    assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1")).isSameAs(denied);
-    verify(promptGuard, never()).check(any());
-    verify(chatClientsProvider, never()).getIfAvailable();
-    verify(auditService, never()).record(any());
-  }
+        assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1"))
+                .isSameAs(denied);
+        verify(promptGuard, never()).check(any());
+        verify(chatClientsProvider, never()).getIfAvailable();
+        verify(auditService, never()).record(any());
+    }
 
-  @Test
-  @DisplayName("request.tenantId 与 header tenantId 都非空且不一致 → FORBIDDEN（tenant_id_mismatch）")
-  void shouldThrowForbidden_whenTenantIdMismatch() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-HEADER", "req-1", "trace-1"));
+    @Test
+    @DisplayName("request.tenantId 与 header tenantId 都非空且不一致 → FORBIDDEN（tenant_id_mismatch）")
+    void shouldThrowForbidden_whenTenantIdMismatch() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-HEADER", "req-1", "trace-1"));
 
-    assertThatThrownBy(() -> service.chat(request("tenant-BODY", "查询作业"), "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
-    verify(promptGuard, never()).check(any());
-  }
+        assertThatThrownBy(() -> service.chat(request("tenant-BODY", "查询作业"), "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
+        verify(promptGuard, never()).check(any());
+    }
 
-  @Test
-  @DisplayName("request 与 header 都缺 tenantId → INVALID_ARGUMENT（Guard.requireText）")
-  void shouldThrowInvalidArgument_whenTenantIdMissingFromBoth() {
-    when(requestMetadataResolver.current()).thenReturn(meta(null, "req-1", "trace-1"));
+    @Test
+    @DisplayName("request 与 header 都缺 tenantId → INVALID_ARGUMENT（Guard.requireText）")
+    void shouldThrowInvalidArgument_whenTenantIdMissingFromBoth() {
+        when(requestMetadataResolver.current()).thenReturn(meta(null, "req-1", "trace-1"));
 
-    assertThatThrownBy(() -> service.chat(request(null, "查询作业"), "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
-  }
+        assertThatThrownBy(() -> service.chat(request(null, "查询作业"), "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+    }
 
-  @Test
-  @DisplayName("Prompt guard REJECTED_SAFETY → refusal 响应 + 审计写入数据库（含"
-      + " refusalReason，decision=REJECTED_SAFETY）")
-  void shouldReturnRefusalResponse_andRecordAudit_whenSafetyRejected() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SAFETY, AiPromptCategory.OUT_OF_SCOPE, "blocked-by-keyword"));
+    @Test
+    @DisplayName("Prompt guard REJECTED_SAFETY → refusal 响应 + 审计写入数据库（含" + " refusalReason，decision=REJECTED_SAFETY）")
+    void shouldReturnRefusalResponse_andRecordAudit_whenSafetyRejected() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SAFETY, AiPromptCategory.OUT_OF_SCOPE, "blocked-by-keyword"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "提示词包含密码"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "提示词包含密码"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
-    assertThat(response.getAnswer()).contains("safety policy");
-    assertThat(response.getRefusalReason()).isEqualTo("blocked-by-keyword");
-    assertThat(response.getSources()).isEmpty();
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
+        assertThat(response.getAnswer()).contains("safety policy");
+        assertThat(response.getRefusalReason()).isEqualTo("blocked-by-keyword");
+        assertThat(response.getSources()).isEmpty();
 
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    AiAuditCommand audit = captor.getValue();
-    assertThat(audit.tenantId()).isEqualTo("tenant-1");
-    assertThat(audit.promptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
-    assertThat(audit.promptCategory()).isEqualTo(AiPromptCategory.OUT_OF_SCOPE.code());
-    assertThat(audit.refusalReason()).isEqualTo("blocked-by-keyword");
-    // 审计默认不保留原文预览。
-    assertThat(audit.promptHash()).hasSize(64); // SHA-256 hex
-    assertThat(audit.promptPreview()).isNull();
-    // ChatClient 完全不被触达
-    verify(chatClientsProvider, never()).getIfAvailable();
-  }
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        AiAuditCommand audit = captor.getValue();
+        assertThat(audit.tenantId()).isEqualTo("tenant-1");
+        assertThat(audit.promptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
+        assertThat(audit.promptCategory()).isEqualTo(AiPromptCategory.OUT_OF_SCOPE.code());
+        assertThat(audit.refusalReason()).isEqualTo("blocked-by-keyword");
+        // 审计默认不保留原文预览。
+        assertThat(audit.promptHash()).hasSize(64); // SHA-256 hex
+        assertThat(audit.promptPreview()).isNull();
+        // ChatClient 完全不被触达
+        verify(chatClientsProvider, never()).getIfAvailable();
+    }
 
-  @Test
-  @DisplayName("Prompt guard REJECTED_SCOPE → refusal 文案 outside scope")
-  void shouldReturnScopeRefusal_whenScopeRejected() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+    @Test
+    @DisplayName("Prompt guard REJECTED_SCOPE → refusal 文案 outside scope")
+    void shouldReturnScopeRefusal_whenScopeRejected() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE.code());
-    assertThat(response.getAnswer()).contains("outside the batch platform scope");
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE.code());
+        assertThat(response.getAnswer()).contains("outside the batch platform scope");
+    }
 
-  @Test
-  @DisplayName("Prompt guard REJECTED_DISABLED → refusal 文案 disabled")
-  void shouldReturnDisabledRefusal_whenDisabledRejected() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_DISABLED, AiPromptCategory.OUT_OF_SCOPE, "disabled"));
+    @Test
+    @DisplayName("Prompt guard REJECTED_DISABLED → refusal 文案 disabled")
+    void shouldReturnDisabledRefusal_whenDisabledRejected() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_DISABLED, AiPromptCategory.OUT_OF_SCOPE, "disabled"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_DISABLED.code());
-    assertThat(response.getAnswer()).contains("disabled");
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_DISABLED.code());
+        assertThat(response.getAnswer()).contains("disabled");
+    }
 
-  @Test
-  @DisplayName("Prompt guard 放行 + ChatClient 未配置 → FORBIDDEN（assistant_not_configured）")
-  void shouldThrowForbidden_whenPromptApprovedButChatClientUnavailable() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(chatClientsProvider.getIfAvailable()).thenReturn(null);
+    @Test
+    @DisplayName("Prompt guard 放行 + ChatClient 未配置 → FORBIDDEN（assistant_not_configured）")
+    void shouldThrowForbidden_whenPromptApprovedButChatClientUnavailable() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(chatClientsProvider.getIfAvailable()).thenReturn(null);
 
-    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
-    // 走到 chat client 前不应有 audit（approved 路径只在成功后写 audit）
-    verify(auditService, never()).record(any());
-  }
+        assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
+        // 走到 chat client 前不应有 audit（approved 路径只在成功后写 audit）
+        verify(auditService, never()).record(any());
+    }
 
-  @Test
-  @DisplayName("prompt 超长 → safeInput 截断；默认审计仍不保留预览")
-  void shouldTruncatePrompt_whenExceedsMaxLength() {
-    aiProperties.setMaxPromptLength(50);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+    @Test
+    @DisplayName("prompt 超长 → safeInput 截断；默认审计仍不保留预览")
+    void shouldTruncatePrompt_whenExceedsMaxLength() {
+        aiProperties.setMaxPromptLength(50);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
-    String longPrompt = "batch ".repeat(200); // 1200 chars
-    service.chat(request("tenant-1", longPrompt), "idem-1");
+        String longPrompt = "batch ".repeat(200); // 1200 chars
+        service.chat(request("tenant-1", longPrompt), "idem-1");
 
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptPreview()).isNull();
-    assertThat(captor.getValue().promptHash()).hasSize(64);
-  }
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().promptPreview()).isNull();
+        assertThat(captor.getValue().promptHash()).hasSize(64);
+    }
 
-  @Test
-  @DisplayName("requestId 缺失 → fallback 生成 ai- 前缀业务号（IdGenerator）")
-  void shouldGenerateRequestId_whenMetadataAbsent() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", null, null));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "x"));
+    @Test
+    @DisplayName("requestId 缺失 → fallback 生成 ai- 前缀业务号（IdGenerator）")
+    void shouldGenerateRequestId_whenMetadataAbsent() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", null, null));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "x"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "x"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "x"), "idem-1");
 
-    assertThat(response.getRequestId()).isNotBlank();
-    assertThat(response.getTraceId()).isNotBlank();
-  }
+        assertThat(response.getRequestId()).isNotBlank();
+        assertThat(response.getTraceId()).isNotBlank();
+    }
 
-  // ── ① 成本计量 ────────────────────────────────────────────────────────────
+    // ── ① 成本计量 ────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("模型成功应答 → token 用量打指标 + 落审计;requests{decision=approved} 自增")
-  void shouldRecordTokenMetricsAndAudit_whenModelSucceeds() {
-    stubApprovedChatClient(chatResponseWithUsage("按需重试即可。", 120, 45));
+    @Test
+    @DisplayName("模型成功应答 → token 用量打指标 + 落审计;requests{decision=approved} 自增")
+    void shouldRecordTokenMetricsAndAudit_whenModelSucceeds() {
+        stubApprovedChatClient(chatResponseWithUsage("按需重试即可。", 120, 45));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-    assertThat(response.getAnswer()).contains("按需重试即可。");
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+        assertThat(response.getAnswer()).contains("按需重试即可。");
 
-    assertThat(tokenCount("prompt")).isEqualTo(120.0);
-    assertThat(tokenCount("completion")).isEqualTo(45.0);
-    assertThat(decisionCount("approved")).isEqualTo(1.0);
+        assertThat(tokenCount("prompt")).isEqualTo(120.0);
+        assertThat(tokenCount("completion")).isEqualTo(45.0);
+        assertThat(decisionCount("approved")).isEqualTo(1.0);
 
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptTokens()).isEqualTo(120);
-    assertThat(captor.getValue().completionTokens()).isEqualTo(45);
-    assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-  }
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().promptTokens()).isEqualTo(120);
+        assertThat(captor.getValue().completionTokens()).isEqualTo(45);
+        assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+    }
 
-  @Test
-  @DisplayName("模型成功且命中知识库 → 返回去重后的结构化来源，不透出片段正文")
-  void shouldReturnDistinctStructuredSources_whenKnowledgeBaseMatches() {
-    stubApprovedChatClient(chatResponseWithUsage("按需重试即可。", 20, 8));
-    when(knowledgeBase.retrieve(any()))
-        .thenReturn(List.of(
-            new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段一", 0.92),
-            new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段二", 0.88),
-            new ConsoleAiKnowledgeBase.Snippet("workflow.md", "内部片段三", 0.81)));
+    @Test
+    @DisplayName("模型成功且命中知识库 → 返回去重后的结构化来源，不透出片段正文")
+    void shouldReturnDistinctStructuredSources_whenKnowledgeBaseMatches() {
+        stubApprovedChatClient(chatResponseWithUsage("按需重试即可。", 20, 8));
+        when(knowledgeBase.retrieve(any()))
+                .thenReturn(List.of(
+                        new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段一", 0.92),
+                        new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段二", 0.88),
+                        new ConsoleAiKnowledgeBase.Snippet("workflow.md", "内部片段三", 0.81)));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getSources())
-        .extracting("source")
-        .containsExactly("operations.md", "workflow.md");
-    assertThat(response.getSources().toString()).doesNotContain("内部片段");
-  }
+        assertThat(response.getSources()).extracting("source").containsExactly("operations.md", "workflow.md");
+        assertThat(response.getSources().toString()).doesNotContain("内部片段");
+    }
 
-  @Test
-  @DisplayName("流式对话:逐片下发内容,并按最终用量记录审计")
-  void shouldStreamProviderChunksAndAuditFinalResponse() throws Exception {
-    aiProperties.getTools().setEnabled(false);
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
-    ChatClient chatClient = mock(ChatClient.class);
-    ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
-    ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(
-            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
-    when(chatClient.prompt()).thenReturn(requestSpec);
-    when(requestSpec.system(anyString())).thenReturn(requestSpec);
-    when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
-    when(requestSpec.stream()).thenReturn(streamSpec);
-    when(streamSpec.chatResponse())
-        .thenReturn(Flux.just(
-            chatResponseWithUsage("hello ", 10, 2), chatResponseWithUsage("world", 10, 4)));
-    List<String> deltas = new ArrayList<>();
-    ConsoleAiApplicationService.StreamObserver observer =
-        new ConsoleAiApplicationService.StreamObserver() {
-          @Override
-          public void onDelta(String text) {
-            deltas.add(text);
-          }
+    @Test
+    @DisplayName("流式对话:逐片下发内容,并按最终用量记录审计")
+    void shouldStreamProviderChunksAndAuditFinalResponse() throws Exception {
+        aiProperties.getTools().setEnabled(false);
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+        ChatClient chatClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
+        when(requestSpec.stream()).thenReturn(streamSpec);
+        when(streamSpec.chatResponse())
+                .thenReturn(Flux.just(chatResponseWithUsage("hello ", 10, 2), chatResponseWithUsage("world", 10, 4)));
+        List<String> deltas = new ArrayList<>();
+        ConsoleAiApplicationService.StreamObserver observer = new ConsoleAiApplicationService.StreamObserver() {
+            @Override
+            public void onDelta(String text) {
+                deltas.add(text);
+            }
 
-          @Override
-          public boolean isCancelled() {
-            return false;
-          }
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
 
-          @Override
-          public boolean hasEmitted() {
-            return !deltas.isEmpty();
-          }
+            @Override
+            public boolean hasEmitted() {
+                return !deltas.isEmpty();
+            }
 
-          @Override
-          public Mono<Void> cancellationSignal() {
-            return Mono.never();
-          }
+            @Override
+            public Mono<Void> cancellationSignal() {
+                return Mono.never();
+            }
         };
 
-    Thread requestThread = Thread.currentThread();
-    doAnswer(invocation -> {
-          assertThat(Thread.currentThread()).isSameAs(requestThread);
-          return null;
-        })
-        .when(authorizationService)
-        .assertAllowed();
-    when(requestMetadataResolver.current()).thenAnswer(invocation -> {
-      assertThat(Thread.currentThread()).isSameAs(requestThread);
-      return meta("tenant-1", "req-stream", "trace-1");
-    });
-    ConsoleAiApplicationService.PreparedStream prepared =
-        service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1");
-    AiChatResponse response =
-        CompletableFuture.supplyAsync(() -> prepared.execute(observer)).get(10, TimeUnit.SECONDS);
+        Thread requestThread = Thread.currentThread();
+        doAnswer(invocation -> {
+                    assertThat(Thread.currentThread()).isSameAs(requestThread);
+                    return null;
+                })
+                .when(authorizationService)
+                .assertAllowed();
+        when(requestMetadataResolver.current()).thenAnswer(invocation -> {
+            assertThat(Thread.currentThread()).isSameAs(requestThread);
+            return meta("tenant-1", "req-stream", "trace-1");
+        });
+        ConsoleAiApplicationService.PreparedStream prepared =
+                service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response =
+                CompletableFuture.supplyAsync(() -> prepared.execute(observer)).get(10, TimeUnit.SECONDS);
 
-    assertThat(deltas).containsExactly("hello ", "world");
-    assertThat(response.getAnswer()).contains("hello world");
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().completionTokens()).isEqualTo(4);
-  }
+        assertThat(deltas).containsExactly("hello ", "world");
+        assertThat(response.getAnswer()).contains("hello world");
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().completionTokens()).isEqualTo(4);
+    }
 
-  @Test
-  @DisplayName("流式对话中断:按失败结算与审计,且不再继续下发")
-  void shouldSettleAndAuditStoppedStreamAsFailed() {
-    aiProperties.getTools().setEnabled(false);
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
-    ChatClient chatClient = mock(ChatClient.class);
-    ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
-    ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(
-            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
-    when(chatClient.prompt()).thenReturn(requestSpec);
-    when(requestSpec.system(anyString())).thenReturn(requestSpec);
-    when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
-    when(requestSpec.stream()).thenReturn(streamSpec);
-    when(streamSpec.chatResponse())
-        .thenReturn(Flux.just(
-            chatResponseWithUsage("partial", 10, 2), chatResponseWithUsage(" later", 10, 4)));
-    AtomicBoolean cancelled = new AtomicBoolean();
-    Sinks.Empty<Void> cancellation = Sinks.empty();
-    ConsoleAiApplicationService.StreamObserver observer =
-        new ConsoleAiApplicationService.StreamObserver() {
-          @Override
-          public void onDelta(String text) {
-            cancelled.set(true);
-            cancellation.tryEmitEmpty();
-          }
+    @Test
+    @DisplayName("流式对话中断:按失败结算与审计,且不再继续下发")
+    void shouldSettleAndAuditStoppedStreamAsFailed() {
+        aiProperties.getTools().setEnabled(false);
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+        ChatClient chatClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
+        when(requestSpec.stream()).thenReturn(streamSpec);
+        when(streamSpec.chatResponse())
+                .thenReturn(Flux.just(chatResponseWithUsage("partial", 10, 2), chatResponseWithUsage(" later", 10, 4)));
+        AtomicBoolean cancelled = new AtomicBoolean();
+        Sinks.Empty<Void> cancellation = Sinks.empty();
+        ConsoleAiApplicationService.StreamObserver observer = new ConsoleAiApplicationService.StreamObserver() {
+            @Override
+            public void onDelta(String text) {
+                cancelled.set(true);
+                cancellation.tryEmitEmpty();
+            }
 
-          @Override
-          public boolean isCancelled() {
-            return cancelled.get();
-          }
+            @Override
+            public boolean isCancelled() {
+                return cancelled.get();
+            }
 
-          @Override
-          public boolean hasEmitted() {
-            return true;
-          }
+            @Override
+            public boolean hasEmitted() {
+                return true;
+            }
 
-          @Override
-          public Mono<Void> cancellationSignal() {
-            return cancellation.asMono();
-          }
+            @Override
+            public Mono<Void> cancellationSignal() {
+                return cancellation.asMono();
+            }
         };
 
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-stream", "trace-1"));
-    AiChatResponse response =
-        service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1").execute(observer);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-stream", "trace-1"));
+        AiChatResponse response =
+                service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1").execute(observer);
 
-    assertThat(cancelled.get()).isTrue();
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    verify(costService).settleReserved(any());
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-  }
+        assertThat(cancelled.get()).isTrue();
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        verify(costService).settleReserved(any());
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+    }
 
-  @Test
-  @DisplayName("成功但 metadata 无 usage(EmptyUsage 归 0)→ 不打 token 指标,仍正常返回")
-  void shouldTolerateMissingUsage_whenModelSucceedsWithoutMetadata() {
-    ChatResponse noUsage = new ChatResponse(List.of(new Generation(new AssistantMessage("答复"))));
-    stubApprovedChatClient(noUsage);
+    @Test
+    @DisplayName("成功但 metadata 无 usage(EmptyUsage 归 0)→ 不打 token 指标,仍正常返回")
+    void shouldTolerateMissingUsage_whenModelSucceedsWithoutMetadata() {
+        ChatResponse noUsage = new ChatResponse(List.of(new Generation(new AssistantMessage("答复"))));
+        stubApprovedChatClient(noUsage);
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-    // EmptyUsage 的 token 计数为 0,不触发指标自增(仅 >0 才 increment)
-    assertThat(tokenCount("prompt")).isZero();
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptTokens()).isZero();
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+        // EmptyUsage 的 token 计数为 0,不触发指标自增(仅 >0 才 increment)
+        assertThat(tokenCount("prompt")).isZero();
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().promptTokens()).isZero();
+    }
 
-  @Test
-  @DisplayName("成功响应缺少 metadata 时按预留金额结算")
-  void shouldSettleReserved_whenSuccessfulResponseHasNoMetadata() {
-    ChatResponse noMetadata = mock(ChatResponse.class);
-    when(noMetadata.getResult()).thenReturn(new Generation(new AssistantMessage("答复")));
-    when(noMetadata.getMetadata()).thenReturn(null);
-    stubApprovedChatClient(noMetadata);
+    @Test
+    @DisplayName("成功响应缺少 metadata 时按预留金额结算")
+    void shouldSettleReserved_whenSuccessfulResponseHasNoMetadata() {
+        ChatResponse noMetadata = mock(ChatResponse.class);
+        when(noMetadata.getResult()).thenReturn(new Generation(new AssistantMessage("答复")));
+        when(noMetadata.getMetadata()).thenReturn(null);
+        stubApprovedChatClient(noMetadata);
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-    verify(costService).settleReserved(any());
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+        verify(costService).settleReserved(any());
+    }
 
-  // ── ② 调用限流 ────────────────────────────────────────────────────────────
+    // ── ② 调用限流 ────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName(
-      "AI 限流超限 → 429 RATE_LIMITED;key 含 tenant + user;门禁/模型不触达,requests{decision=rate_limited}")
-  void shouldReturn429_whenRateLimitExceeded() {
-    aiProperties.setRateLimitPerMinute(20);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-    when(rateLimiter.tryAcquire(keyCaptor.capture(), eq(20))).thenReturn(false);
+    @Test
+    @DisplayName("AI 限流超限 → 429 RATE_LIMITED;key 含 tenant + user;门禁/模型不触达,requests{decision=rate_limited}")
+    void shouldReturn429_whenRateLimitExceeded() {
+        aiProperties.setRateLimitPerMinute(20);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        when(rateLimiter.tryAcquire(keyCaptor.capture(), eq(20))).thenReturn(false);
 
-    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
+        assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
 
-    // #779:限流 key 必须含 tenant,防跨租户互相压制;同时含 user 做 per-user 限流
-    assertThat(keyCaptor.getValue()).contains("tenant:tenant-1").contains("user:operator-1");
-    assertThat(decisionCount("rate_limited")).isEqualTo(1.0);
-    verify(promptGuard, never()).check(any());
-    verify(chatClientsProvider, never()).getIfAvailable();
-    verify(auditService, never()).record(any());
-  }
+        // #779:限流 key 必须含 tenant,防跨租户互相压制;同时含 user 做 per-user 限流
+        assertThat(keyCaptor.getValue()).contains("tenant:tenant-1").contains("user:operator-1");
+        assertThat(decisionCount("rate_limited")).isEqualTo(1.0);
+        verify(promptGuard, never()).check(any());
+        verify(chatClientsProvider, never()).getIfAvailable();
+        verify(auditService, never()).record(any());
+    }
 
-  @Test
-  @DisplayName("日预算按平台业务自然日隔离，而不是滚动 24 小时")
-  void shouldScopeDailyBudgetToBusinessDate() {
-    aiProperties.setDailyRequestLimit(2);
-    when(dateTimeSupport.todayInDefaultBusinessZone()).thenReturn(LocalDate.of(2026, 9, 30));
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(rateLimiter.tryAcquire(
-            eq("ai:budget:tenant:tenant-1:date:2026-09-30"), eq(2), eq(Duration.ofDays(1))))
-        .thenReturn(false);
+    @Test
+    @DisplayName("日预算按平台业务自然日隔离，而不是滚动 24 小时")
+    void shouldScopeDailyBudgetToBusinessDate() {
+        aiProperties.setDailyRequestLimit(2);
+        when(dateTimeSupport.todayInDefaultBusinessZone()).thenReturn(LocalDate.of(2026, 9, 30));
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(rateLimiter.tryAcquire(eq("ai:budget:tenant:tenant-1:date:2026-09-30"), eq(2), eq(Duration.ofDays(1))))
+                .thenReturn(false);
 
-    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
-  }
+        assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
+    }
 
-  @Test
-  @DisplayName("不同租户限流 key 不同 → 跨租户不互相压制")
-  void shouldUseTenantScopedKey_soTenantsDoNotSuppressEachOther() {
-    aiProperties.setRateLimitPerMinute(20);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-A", "req-1", "trace-1"));
-    ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-    when(rateLimiter.tryAcquire(keyCaptor.capture(), anyInt())).thenReturn(false);
+    @Test
+    @DisplayName("不同租户限流 key 不同 → 跨租户不互相压制")
+    void shouldUseTenantScopedKey_soTenantsDoNotSuppressEachOther() {
+        aiProperties.setRateLimitPerMinute(20);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-A", "req-1", "trace-1"));
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        when(rateLimiter.tryAcquire(keyCaptor.capture(), anyInt())).thenReturn(false);
 
-    assertThatThrownBy(() -> service.chat(request("tenant-A", "查询失败作业"), "idem-1"))
-        .isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.chat(request("tenant-A", "查询失败作业"), "idem-1"))
+                .isInstanceOf(BizException.class);
 
-    assertThat(keyCaptor.getValue()).contains("tenant-A").doesNotContain("tenant-B");
-  }
+        assertThat(keyCaptor.getValue()).contains("tenant-A").doesNotContain("tenant-B");
+    }
 
-  @Test
-  @DisplayName("限流器 Redis 不可达 → fail-open,不 429,继续走门禁(与限流过滤器一致)")
-  void shouldFailOpen_whenRateLimiterRedisUnavailable() {
-    aiProperties.setRateLimitPerMinute(20);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(rateLimiter.tryAcquire(anyString(), anyInt()))
-        .thenThrow(new QueryTimeoutException("redis down"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+    @Test
+    @DisplayName("限流器 Redis 不可达 → fail-open,不 429,继续走门禁(与限流过滤器一致)")
+    void shouldFailOpen_whenRateLimiterRedisUnavailable() {
+        aiProperties.setRateLimitPerMinute(20);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(rateLimiter.tryAcquire(anyString(), anyInt())).thenThrow(new QueryTimeoutException("redis down"));
+        when(promptGuard.check(any()))
+                .thenReturn(AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
 
-    // 未被 429 拦截,正常走到门禁(此处被 scope 拒绝)
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE.code());
-  }
+        // 未被 429 拦截,正常走到门禁(此处被 scope 拒绝)
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE.code());
+    }
 
-  // ── ③ 优雅降级 ────────────────────────────────────────────────────────────
+    // ── ③ 优雅降级 ────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("模型调用抛异常 → 优雅降级(FAILED,非 500)+ 审计记失败;requests{decision=failed}")
-  void shouldDegradeGracefully_whenModelCallThrows() {
-    ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
-    when(callSpec.chatResponse()).thenThrow(new RuntimeException("provider 503"));
+    @Test
+    @DisplayName("模型调用抛异常 → 优雅降级(FAILED,非 500)+ 审计记失败;requests{decision=failed}")
+    void shouldDegradeGracefully_whenModelCallThrows() {
+        ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
+        when(callSpec.chatResponse()).thenThrow(new RuntimeException("provider 503"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    // 关键:不裸抛 500,返回降级响应
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    assertThat(response.getAnswer()).contains("temporarily unavailable");
-    assertThat(decisionCount("failed")).isEqualTo(1.0);
+        // 关键:不裸抛 500,返回降级响应
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        assertThat(response.getAnswer()).contains("temporarily unavailable");
+        assertThat(decisionCount("failed")).isEqualTo(1.0);
 
-    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    assertThat(captor.getValue().refusalReason()).startsWith("model_call_failed");
-  }
+        ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(captor.capture());
+        assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        assertThat(captor.getValue().refusalReason()).startsWith("model_call_failed");
+    }
 
-  @Test
-  @DisplayName("模型降级文案随请求语言切换")
-  void shouldLocalizeDegradedAnswer() {
-    LocaleContextHolder.setLocale(Locale.SIMPLIFIED_CHINESE);
-    ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
-    when(callSpec.chatResponse()).thenThrow(new RuntimeException("provider 503"));
+    @Test
+    @DisplayName("模型降级文案随请求语言切换")
+    void shouldLocalizeDegradedAnswer() {
+        LocaleContextHolder.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
+        when(callSpec.chatResponse()).thenThrow(new RuntimeException("provider 503"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    assertThat(response.getAnswer()).contains("暂时不可用");
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        assertThat(response.getAnswer()).contains("暂时不可用");
+    }
 
-  @Test
-  @DisplayName("主模型发生传输故障时切换备用模型，并记录备用模型的实际标识")
-  void shouldFailOverToSecondaryProviderAndRecordItsModel() {
-    aiProperties.getTools().setEnabled(false);
-    aiProperties.setFailoverEnabled(true);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
-    ChatClient primary = mock(ChatClient.class);
-    ChatClient fallback = mock(ChatClient.class);
-    ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
-    ChatClient.CallResponseSpec fallbackCall = stubProviderClient(fallback);
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(new ConsoleAiClients(
-            new ConsoleAiClients.ProviderClient("openai", primary),
-            new ConsoleAiClients.ProviderClient("anthropic", fallback)));
-    when(primaryCall.chatResponse()).thenThrow(new ResourceAccessException("provider unavailable"));
-    when(fallbackCall.chatResponse())
-        .thenReturn(chatResponseWithModel("fallback answer", "claude-live"));
+    @Test
+    @DisplayName("主模型发生传输故障时切换备用模型，并记录备用模型的实际标识")
+    void shouldFailOverToSecondaryProviderAndRecordItsModel() {
+        aiProperties.getTools().setEnabled(false);
+        aiProperties.setFailoverEnabled(true);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+        ChatClient primary = mock(ChatClient.class);
+        ChatClient fallback = mock(ChatClient.class);
+        ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
+        ChatClient.CallResponseSpec fallbackCall = stubProviderClient(fallback);
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(
+                        new ConsoleAiClients.ProviderClient("openai", primary),
+                        new ConsoleAiClients.ProviderClient("anthropic", fallback)));
+        when(primaryCall.chatResponse()).thenThrow(new ResourceAccessException("provider unavailable"));
+        when(fallbackCall.chatResponse()).thenReturn(chatResponseWithModel("fallback answer", "claude-live"));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
-    assertThat(response.getModelName()).isEqualTo("anthropic:claude-live");
-    verify(fallbackCall).chatResponse();
-    ArgumentCaptor<AiAuditCommand> audit = ArgumentCaptor.forClass(AiAuditCommand.class);
-    verify(auditService).record(audit.capture());
-    assertThat(audit.getValue().modelName()).isEqualTo("anthropic:claude-live");
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+        assertThat(response.getModelName()).isEqualTo("anthropic:claude-live");
+        verify(fallbackCall).chatResponse();
+        ArgumentCaptor<AiAuditCommand> audit = ArgumentCaptor.forClass(AiAuditCommand.class);
+        verify(auditService).record(audit.capture());
+        assertThat(audit.getValue().modelName()).isEqualTo("anthropic:claude-live");
+    }
 
-  @Test
-  @DisplayName("模型返回不可重试的 4xx 时不切换 provider")
-  void shouldNotFailOverForNonRetryableClientError() {
-    aiProperties.getTools().setEnabled(false);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
-    ChatClient primary = mock(ChatClient.class);
-    ChatClient fallback = mock(ChatClient.class);
-    ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(new ConsoleAiClients(
-            new ConsoleAiClients.ProviderClient("openai", primary),
-            new ConsoleAiClients.ProviderClient("anthropic", fallback)));
-    when(primaryCall.chatResponse())
-        .thenThrow(new RestClientResponseException(
-            "bad request", 400, "Bad Request", HttpHeaders.EMPTY, new byte[0], null));
+    @Test
+    @DisplayName("模型返回不可重试的 4xx 时不切换 provider")
+    void shouldNotFailOverForNonRetryableClientError() {
+        aiProperties.getTools().setEnabled(false);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+        ChatClient primary = mock(ChatClient.class);
+        ChatClient fallback = mock(ChatClient.class);
+        ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(
+                        new ConsoleAiClients.ProviderClient("openai", primary),
+                        new ConsoleAiClients.ProviderClient("anthropic", fallback)));
+        when(primaryCall.chatResponse())
+                .thenThrow(new RestClientResponseException(
+                        "bad request", 400, "Bad Request", HttpHeaders.EMPTY, new byte[0], null));
 
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    verify(fallback, never()).prompt();
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        verify(fallback, never()).prompt();
+    }
 
-  @Test
-  @DisplayName("包含凭据字段的请求上下文在任何模型或 embedding 调用前被拒绝")
-  void shouldRejectSensitiveContextBeforeExternalModelCalls() {
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    AiChatRequest request = request("tenant-1", "查询失败作业");
-    request.setContext(Map.of("diagnostic", List.of(Map.of("access_token", "secret"))));
+    @Test
+    @DisplayName("包含凭据字段的请求上下文在任何模型或 embedding 调用前被拒绝")
+    void shouldRejectSensitiveContextBeforeExternalModelCalls() {
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        AiChatRequest request = request("tenant-1", "查询失败作业");
+        request.setContext(Map.of("diagnostic", List.of(Map.of("access_token", "secret"))));
 
-    assertThatThrownBy(() -> service.chat(request, "idem-1"))
-        .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+        assertThatThrownBy(() -> service.chat(request, "idem-1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
 
-    verify(knowledgeBase, never()).retrieve(any());
-    verify(chatClientsProvider, never()).getIfAvailable();
-    verify(auditService, never()).record(any());
-  }
+        verify(knowledgeBase, never()).retrieve(any());
+        verify(chatClientsProvider, never()).getIfAvailable();
+        verify(auditService, never()).record(any());
+    }
 
-  @Test
-  @DisplayName("模型调用超时(超 requestTimeout)→ 优雅降级 FAILED,不无限等")
-  void shouldDegradeGracefully_whenModelCallTimesOut() {
-    aiProperties.setRequestTimeout(Duration.ofMillis(150));
-    ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
-    when(callSpec.chatResponse()).thenAnswer(invocation -> {
-      Thread.sleep(2000);
-      return chatResponseWithUsage("迟到的答复", 1, 1);
-    });
+    @Test
+    @DisplayName("模型调用超时(超 requestTimeout)→ 优雅降级 FAILED,不无限等")
+    void shouldDegradeGracefully_whenModelCallTimesOut() {
+        aiProperties.setRequestTimeout(Duration.ofMillis(150));
+        ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
+        when(callSpec.chatResponse()).thenAnswer(invocation -> {
+            Thread.sleep(2000);
+            return chatResponseWithUsage("迟到的答复", 1, 1);
+        });
 
-    long start = System.currentTimeMillis();
-    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
-    long elapsed = System.currentTimeMillis() - start;
+        long start = System.currentTimeMillis();
+        AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+        long elapsed = System.currentTimeMillis() - start;
 
-    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    assertThat(elapsed).isLessThan(1500); // 被 150ms 硬超时兜住,没等满 2s
-    assertThat(decisionCount("failed")).isEqualTo(1.0);
-  }
+        assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+        assertThat(elapsed).isLessThan(1500); // 被 150ms 硬超时兜住,没等满 2s
+        assertThat(decisionCount("failed")).isEqualTo(1.0);
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private static ChatResponse chatResponseWithUsage(String text, int prompt, int completion) {
-    return chatResponseWithModel(text, "test-model", prompt, completion);
-  }
+    private static ChatResponse chatResponseWithUsage(String text, int prompt, int completion) {
+        return chatResponseWithModel(text, "test-model", prompt, completion);
+    }
 
-  private static ChatResponse chatResponseWithModel(String text, String model) {
-    return chatResponseWithModel(text, model, 1, 1);
-  }
+    private static ChatResponse chatResponseWithModel(String text, String model) {
+        return chatResponseWithModel(text, model, 1, 1);
+    }
 
-  private static ChatResponse chatResponseWithModel(
-      String text, String model, int prompt, int completion) {
-    return new ChatResponse(
-        List.of(new Generation(new AssistantMessage(text))),
-        ChatResponseMetadata.builder()
-            .model(model)
-            .usage(new DefaultUsage(prompt, completion))
-            .build());
-  }
+    private static ChatResponse chatResponseWithModel(String text, String model, int prompt, int completion) {
+        return new ChatResponse(
+                List.of(new Generation(new AssistantMessage(text))),
+                ChatResponseMetadata.builder()
+                        .model(model)
+                        .usage(new DefaultUsage(prompt, completion))
+                        .build());
+    }
 
-  /** stub 授权/门禁放行 + RAG 空 + 工具关 + ChatClient fluent 链,返回可继续 stub 的 CallResponseSpec。 */
-  private ChatClient.CallResponseSpec stubApprovedChatClientChain() {
-    aiProperties.getTools().setEnabled(false);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    /** stub 授权/门禁放行 + RAG 空 + 工具关 + ChatClient fluent 链,返回可继续 stub 的 CallResponseSpec。 */
+    private ChatClient.CallResponseSpec stubApprovedChatClientChain() {
+        aiProperties.getTools().setEnabled(false);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
 
-    ChatClient chatClient = mock(ChatClient.class);
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(
-            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
-    return stubProviderClient(chatClient);
-  }
+        ChatClient chatClient = mock(ChatClient.class);
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+        return stubProviderClient(chatClient);
+    }
 
-  @Test
-  @DisplayName("月度预算拒绝后将持久化会话标记为拒绝，不遗留 IN_PROGRESS")
-  void shouldClosePersistedTurnWhenBudgetReservationIsRejected() {
-    aiProperties.getPersistence().setEnabled(true);
-    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
-    when(promptGuard.check(any()))
-        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
-    when(chatClientsProvider.getIfAvailable())
-        .thenReturn(new ConsoleAiClients(
-            new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
-    ConsoleAiConversationService.StartedTurn turn =
-        new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
-    when(conversationService.beginTurn(
-            ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
-                && input.tenantId() != null
-                && input.ownerUserId() != null
-                && input.contextVersion() != null
-                && input.prompt() != null
-                && input.clientTurnId() == null
-                && input.attachmentIds() == null)))
-        .thenReturn(turn);
-    BizException budgetDenied =
-        BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
-    doThrow(budgetDenied)
-        .when(costService)
-        .reserve(anyString(), anyString(), anyString(), anyInt());
+    @Test
+    @DisplayName("月度预算拒绝后将持久化会话标记为拒绝，不遗留 IN_PROGRESS")
+    void shouldClosePersistedTurnWhenBudgetReservationIsRejected() {
+        aiProperties.getPersistence().setEnabled(true);
+        when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+        when(promptGuard.check(any())).thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+        when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+        when(chatClientsProvider.getIfAvailable())
+                .thenReturn(new ConsoleAiClients(
+                        new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
+        ConsoleAiConversationService.StartedTurn turn =
+                new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
+        when(conversationService.beginTurn(ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
+                        && input.tenantId() != null
+                        && input.ownerUserId() != null
+                        && input.contextVersion() != null
+                        && input.prompt() != null
+                        && input.clientTurnId() == null
+                        && input.attachmentIds() == null)))
+                .thenReturn(turn);
+        BizException budgetDenied = BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
+        doThrow(budgetDenied).when(costService).reserve(anyString(), anyString(), anyString(), anyInt());
 
-    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
-        .isSameAs(budgetDenied);
-    verify(conversationService)
-        .completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
-            .tenantId("tenant-1")
-            .conversationId("conversation-1")
-            .turnNo(1L)
-            .decision("REJECTED_BUDGET")
-            .build());
-    verify(auditService, never()).record(any());
-  }
+        assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
+                .isSameAs(budgetDenied);
+        verify(conversationService)
+                .completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+                        .tenantId("tenant-1")
+                        .conversationId("conversation-1")
+                        .turnNo(1L)
+                        .decision("REJECTED_BUDGET")
+                        .build());
+        verify(auditService, never()).record(any());
+    }
 
-  private ChatClient.CallResponseSpec stubProviderClient(ChatClient chatClient) {
-    ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
-    ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
-    when(chatClient.prompt()).thenReturn(requestSpec);
-    when(requestSpec.system(anyString())).thenReturn(requestSpec);
-    when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
-    when(requestSpec.call()).thenReturn(callSpec);
-    return callSpec;
-  }
+    private ChatClient.CallResponseSpec stubProviderClient(ChatClient chatClient) {
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        return callSpec;
+    }
 
-  private void stubApprovedChatClient(ChatResponse chatResponse) {
-    ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
-    when(callSpec.chatResponse()).thenReturn(chatResponse);
-  }
+    private void stubApprovedChatClient(ChatResponse chatResponse) {
+        ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
+        when(callSpec.chatResponse()).thenReturn(chatResponse);
+    }
 
-  private double tokenCount(String type) {
-    Counter counter =
-        meterRegistry.find("batch.console.ai.tokens.total").tag("type", type).counter();
-    return counter == null ? 0.0 : counter.count();
-  }
+    private double tokenCount(String type) {
+        Counter counter = meterRegistry
+                .find("batch.console.ai.tokens.total")
+                .tag("type", type)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
 
-  private double decisionCount(String decision) {
-    Counter counter = meterRegistry
-        .find("batch.console.ai.requests.total")
-        .tag("decision", decision)
-        .counter();
-    return counter == null ? 0.0 : counter.count();
-  }
+    private double decisionCount(String decision) {
+        Counter counter = meterRegistry
+                .find("batch.console.ai.requests.total")
+                .tag("decision", decision)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
 }

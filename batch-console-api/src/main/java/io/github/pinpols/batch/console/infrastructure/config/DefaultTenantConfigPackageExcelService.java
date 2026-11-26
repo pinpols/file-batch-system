@@ -125,873 +125,826 @@ import org.springframework.web.multipart.MultipartFile;
 @SuppressWarnings({"java:S2259", "java:S2583"})
 public class DefaultTenantConfigPackageExcelService implements TenantConfigPackageExcelService {
 
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final TenantConfigPackageExcelImportStore importStore;
-  private final TenantConfigRevisionMapper tenantConfigRevisionMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final CalendarHolidayMapper calendarHolidayMapper;
-  private final BatchWindowMapper batchWindowMapper;
-  private final FileChannelConfigMapper fileChannelConfigMapper;
-  private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final WorkflowMonitoringPolicyMapper workflowMonitoringPolicyMapper;
-  private final TenantConfigPackageRowProjections rowProjections;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final MessageSource messageSource;
-  private final TenantConfigPackageExcelApplyService applyService;
-  private final TenantConfigPackageExcelApplyAuthorization applyAuthorization;
+    private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final TenantConfigPackageExcelImportStore importStore;
+    private final TenantConfigRevisionMapper tenantConfigRevisionMapper;
+    private final JobDefinitionMapper jobDefinitionMapper;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
+    private final CalendarHolidayMapper calendarHolidayMapper;
+    private final BatchWindowMapper batchWindowMapper;
+    private final FileChannelConfigMapper fileChannelConfigMapper;
+    private final FileTemplateConfigMapper fileTemplateConfigMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final WorkflowMonitoringPolicyMapper workflowMonitoringPolicyMapper;
+    private final TenantConfigPackageRowProjections rowProjections;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final MessageSource messageSource;
+    private final TenantConfigPackageExcelApplyService applyService;
+    private final TenantConfigPackageExcelApplyAuthorization applyAuthorization;
 
-  private ConfigPackageExcelValidator validator() {
-    return new ConfigPackageExcelValidator(
-        jobDefinitionMapper,
-        fileTemplateConfigMapper,
-        resourceQueueMapper,
-        businessCalendarMapper,
-        batchWindowMapper,
-        workflowDefinitionMapper);
-  }
-
-  private ConfigPackageExcelWorkbookWriter workbookWriter() {
-    return new ConfigPackageExcelWorkbookWriter(messageSource);
-  }
-
-  private ConfigPackageExcelWorkbookWriter workbookWriter(List<String> scenarios) {
-    return new ConfigPackageExcelWorkbookWriter(messageSource, scenarios);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public ExcelDownload exportPackage(String tenantId) {
-    String tid = tenantGuard.resolveTenant(tenantId);
-    boolean includePlatformFields = applyAuthorization.canViewPlatformFields();
-    // R2-P1-9: 数据快照在请求线程里取（事务上下文），但 workbook 写入流的动作推迟到
-    // StreamingResponseBody 阶段——Spring 在响应渲染时调用 lambda，避免堆里 buffer 整份 byte[]。
-    List<Map<String, Object>> resourceQueues = List.of();
-    if (includePlatformFields) {
-      ResourceQueueQuery queueQuery = ResourceQueueQuery.allForTenant(tid);
-      resourceQueues = resourceQueueMapper.selectByQuery(queueQuery).stream()
-          .map(ResourceQueueRow::toMap)
-          .toList();
+    private ConfigPackageExcelValidator validator() {
+        return new ConfigPackageExcelValidator(
+                jobDefinitionMapper,
+                fileTemplateConfigMapper,
+                resourceQueueMapper,
+                businessCalendarMapper,
+                batchWindowMapper,
+                workflowDefinitionMapper);
     }
-    List<Map<String, Object>> businessCalendars =
-        withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
-    List<Map<String, Object>> batchWindows =
-        batchWindowMapper.selectByQuery(tid, null, null, null).stream()
-            .map(BatchWindowRow::toMap)
-            .toList();
-    JobDefinitionQuery jobDefinitionQuery = JobDefinitionQuery.ofTenant(tid, null);
-    List<JobDefinitionView> jobDefinitions = jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
-    List<Map<String, Object>> jobs =
-        rowProjections.toJobRows(jobDefinitions, includePlatformFields);
-    List<Map<String, Object>> jobMonitoringPolicies =
-        rowProjections.toJobMonitoringPolicyRows(jobDefinitions, includePlatformFields);
-    FileChannelConfigQuery fileChannelConfigQuery = FileChannelConfigQuery.builder()
-        .tenantId(tid)
-        .channelCode(null)
-        .channelType(null)
-        .enabled(null)
-        .pageRequest(null)
-        .build();
-    List<FileChannelConfigQueryView> channelViews =
-        fileChannelConfigMapper.selectByQuery(fileChannelConfigQuery);
-    List<Map<String, Object>> channels = rowProjections.toExportableChannelRows(channelViews);
-    FileTemplateConfigQuery fileTemplateQuery = FileTemplateConfigQuery.ofTenant(tid, null);
-    List<FileTemplateConfigQueryView> templateViews =
-        fileTemplateConfigMapper.selectByQuery(fileTemplateQuery);
-    List<Map<String, Object>> fileTemplates = rowProjections.toExcelFileTemplateRows(templateViews);
-    WorkflowDefinitionQuery workflowDefinitionQuery = WorkflowDefinitionQuery.ofTenant(tid, null);
-    List<WorkflowDefinitionEntity> wfEntities =
-        workflowDefinitionMapper.selectByQuery(workflowDefinitionQuery);
-    Map<Long, String> jobCodeById = jobDefinitions.stream()
-        .collect(Collectors.toMap(JobDefinitionView::getId, JobDefinitionView::getJobCode));
-    List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities, jobCodeById);
-    List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
-    if (!includePlatformFields) {
-      wfNodes = rowProjections.withoutPlatformWorkerGroups(wfNodes);
+
+    private ConfigPackageExcelWorkbookWriter workbookWriter() {
+        return new ConfigPackageExcelWorkbookWriter(messageSource);
     }
-    List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
-    workflowMonitoringPolicyMapper.setTenantContext(tid);
-    List<Map<String, Object>> workflowMonitoringPolicies = toWorkflowMonitoringPolicyRows(
-        tid, wfEntities, workflowMonitoringPolicyMapper.selectByTenant(tid), includePlatformFields);
-    List<List<Map<String, Object>>> sheets = List.of(
-        resourceQueues,
-        businessCalendars,
-        batchWindows,
-        jobs,
-        jobMonitoringPolicies,
-        channels,
-        fileTemplates,
-        wfDefs,
-        wfNodes,
-        wfEdges,
-        workflowMonitoringPolicies);
-    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    String fileName =
-        "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
-  }
 
-  private static List<Map<String, Object>> toWorkflowMonitoringPolicyRows(
-      String tenantId,
-      List<WorkflowDefinitionEntity> definitions,
-      List<WorkflowMonitoringPolicyEntity> policies,
-      boolean includeTenantColumn) {
-    Map<Long, WorkflowMonitoringPolicyEntity> policyByDefinitionId = policies.stream()
-        .collect(Collectors.toMap(
-            WorkflowMonitoringPolicyEntity::getWorkflowDefinitionId, policy -> policy));
-    return definitions.stream()
-        .map(definition -> {
-          WorkflowMonitoringPolicyEntity policy = policyByDefinitionId.get(definition.getId());
-          Map<String, Object> row = new LinkedHashMap<>();
-          if (includeTenantColumn) {
-            row.put(COL_TENANT_ID, tenantId);
-          }
-          row.put(COL_WORKFLOW_CODE, definition.getWorkflowCode());
-          row.put(COL_WORKFLOW_VERSION, definition.getVersion());
-          row.put(
-              COL_SOFT_RUNTIME_SECONDS,
-              EmptyChecks.isNull(policy) ? 0 : policy.getSoftRuntimeSeconds());
-          row.put(
-              COL_SOFT_RUNTIME_SEVERITY,
-              EmptyChecks.isNull(policy) ? "WARN" : policy.getSoftRuntimeSeverity());
-          row.put(
-              COL_START_GRACE_SECONDS,
-              EmptyChecks.isNull(policy) ? 0 : policy.getStartGraceSeconds());
-          row.put(
-              COL_START_GRACE_SEVERITY,
-              EmptyChecks.isNull(policy) ? "WARN" : policy.getStartGraceSeverity());
-          row.put(
-              COL_COMPLETION_DEADLINE_LOCAL_TIME,
-              EmptyChecks.isNull(policy) ? null : policy.getCompletionDeadlineLocalTime());
-          row.put(
-              COL_COMPLETION_DEADLINE_DAY_OFFSET,
-              EmptyChecks.isNull(policy) ? 0 : policy.getCompletionDeadlineDayOffset());
-          row.put(
-              COL_COMPLETION_DEADLINE_SEVERITY,
-              EmptyChecks.isNull(policy) ? "WARN" : policy.getCompletionDeadlineSeverity());
-          return row;
-        })
-        .toList();
-  }
+    private ConfigPackageExcelWorkbookWriter workbookWriter(List<String> scenarios) {
+        return new ConfigPackageExcelWorkbookWriter(messageSource, scenarios);
+    }
 
-  @Override
-  public ExcelDownload downloadTemplate() {
-    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    return new ExcelDownload("tenant-config-package-template.xlsx", writer::writeTemplateWorkbook);
-  }
-
-  @Override
-  public ExcelDownload downloadScenarioTemplate(List<String> scenarios) {
-    List<String> selectedScenarios =
-        ConfigPackageSampleDataFactory.tenantTemplateScenarios(scenarios).stream()
-            .sorted()
-            .toList();
-    ConfigPackageExcelWorkbookWriter writer = workbookWriter(selectedScenarios);
-    String scenarioName = String.join("-", selectedScenarios).toLowerCase(Locale.ROOT);
-    return new ExcelDownload(
-        "tenant-config-package-" + scenarioName + ".xlsx", writer::writeFocusedTemplateWorkbook);
-  }
-
-  @Override
-  public ExcelDownload downloadSampleTemplate(String scenario, List<String> scenarios) {
-    List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
-        ? scenarios
-        : EmptyChecks.isNotBlank(scenario) ? List.of(scenario) : List.of();
-    List<String> normalizedScenarios =
-        ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios).stream().toList();
-    ConfigPackageExcelWorkbookWriter writer = workbookWriter(normalizedScenarios);
-    List<List<Map<String, Object>>> sheets =
-        ConfigPackageSampleDataFactory.sampleSheets(normalizedScenarios);
-    String scenarioName = String.join("-", normalizedScenarios).toLowerCase(Locale.ROOT);
-    String fileName = "tenant-config-package-sample-" + scenarioName + ".xlsx";
-    return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
-  }
-
-  @Override
-  public TenantConfigPackageExcelGuideResponse guide() {
-    List<TenantConfigPackageExcelGuideResponse.SheetGuide> sheets = new ArrayList<>();
-    ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource);
-    for (ConfigPackageSheetSpecs.SheetDef sheet : specs.build().stream()
-        .filter(def -> !PIPELINE_SHEET.equals(def.name()) && !STEP_SHEET.equals(def.name()))
-        .toList()) {
-      List<TenantConfigPackageExcelGuideResponse.ColumnGuide> columns = new ArrayList<>();
-      String sheetAppliesTo = appliesToFor(sheet.name(), "");
-      for (String column : sheet.columns()) {
-        ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
-        boolean required = EmptyChecks.isNotNull(guide) && guide.required();
-        TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
-            TenantConfigPackageExcelGuideResponse.ColumnGuide.builder()
-                .columnName(column)
-                .required(required)
-                .readOnly(EmptyChecks.isNotNull(guide) && guide.readOnly())
-                .guideLevel(guideLevelFor(sheet.name(), column, required))
-                .format(EmptyChecks.isNull(guide) ? "" : guide.formatHint())
-                .allowedValues(EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues())
-                .description(EmptyChecks.isNull(guide) ? "" : guide.description())
-                .example(EmptyChecks.isNull(guide) ? "" : guide.example())
-                .fillExample(fillExampleFor(sheet.name(), column, guide))
-                .defaultBehavior(defaultBehaviorFor(column, guide))
-                .appliesTo(appliesToFor(sheet.name(), column))
+    @Override
+    @Transactional(readOnly = true)
+    public ExcelDownload exportPackage(String tenantId) {
+        String tid = tenantGuard.resolveTenant(tenantId);
+        boolean includePlatformFields = applyAuthorization.canViewPlatformFields();
+        // R2-P1-9: 数据快照在请求线程里取（事务上下文），但 workbook 写入流的动作推迟到
+        // StreamingResponseBody 阶段——Spring 在响应渲染时调用 lambda，避免堆里 buffer 整份 byte[]。
+        List<Map<String, Object>> resourceQueues = List.of();
+        if (includePlatformFields) {
+            ResourceQueueQuery queueQuery = ResourceQueueQuery.allForTenant(tid);
+            resourceQueues = resourceQueueMapper.selectByQuery(queueQuery).stream()
+                    .map(ResourceQueueRow::toMap)
+                    .toList();
+        }
+        List<Map<String, Object>> businessCalendars =
+                withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
+        List<Map<String, Object>> batchWindows = batchWindowMapper.selectByQuery(tid, null, null, null).stream()
+                .map(BatchWindowRow::toMap)
+                .toList();
+        JobDefinitionQuery jobDefinitionQuery = JobDefinitionQuery.ofTenant(tid, null);
+        List<JobDefinitionView> jobDefinitions = jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
+        List<Map<String, Object>> jobs = rowProjections.toJobRows(jobDefinitions, includePlatformFields);
+        List<Map<String, Object>> jobMonitoringPolicies =
+                rowProjections.toJobMonitoringPolicyRows(jobDefinitions, includePlatformFields);
+        FileChannelConfigQuery fileChannelConfigQuery = FileChannelConfigQuery.builder()
+                .tenantId(tid)
+                .channelCode(null)
+                .channelType(null)
+                .enabled(null)
+                .pageRequest(null)
                 .build();
-        columns.add(columnGuide);
-      }
-      sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(
-          sheet.name(), sheetAppliesTo, columns));
-    }
-    return new TenantConfigPackageExcelGuideResponse(sheets);
-  }
-
-  private List<Map<String, Object>> withCalendarHolidayValues(List<CalendarQueryRow> rows) {
-    List<Map<String, Object>> out = new ArrayList<>();
-    for (CalendarQueryRow row : rows) {
-      Long calendarId = row.id();
-      String holidayDatesText = calendarHolidaysText(calendarId);
-      Map<String, Object> exportRow =
-          ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, holidayDatesText);
-      out.add(exportRow);
-    }
-    return out;
-  }
-
-  private String calendarHolidaysText(Long calendarId) {
-    if (EmptyChecks.isNull(calendarId)) {
-      return null;
-    }
-    List<CalendarHolidayRow> holidayRows = calendarHolidayMapper.selectByCalendarId(calendarId);
-    List<String> dates = holidayRows.stream().map(h -> h.bizDate().toString()).toList();
-    return dates.isEmpty() ? null : String.join(",", dates);
-  }
-
-  @Override
-  public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
-      throws IOException {
-    Guard.require(file != null && !file.isEmpty(), "file is required");
-    UploadFileGuard.requireExcel(file);
-    String tenantId = tenantGuard.resolveTenant(requestTenantId);
-    String fileName = fileNameOrDefault(file.getOriginalFilename());
-    String uploadedBy = requestMetadataResolver.current().operatorId();
-    if (!Texts.hasText(uploadedBy)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_actor_required");
-    }
-    PackageExcelSession session;
-    Path temporaryWorkbook = PrivateTempFiles.createTempFile("tenant-config-package-", ".xlsx");
-    try {
-      file.transferTo(temporaryWorkbook);
-      session = parseWorkbook(temporaryWorkbook, tenantId, fileName)
-          .withUploadContext(uploadedBy, currentPermissionScope());
-    } finally {
-      Files.deleteIfExists(temporaryWorkbook);
-    }
-    String token = importStore.save(session);
-    return TenantConfigPackageExcelUploadResponse.builder()
-        .uploadToken(token)
-        .fileName(fileName)
-        .resourceQueueRows(session.resourceQueueRows().size())
-        .businessCalendarRows(session.businessCalendarRows().size())
-        .batchWindowRows(session.batchWindowRows().size())
-        .jobRows(session.jobRows().size())
-        .fileChannelRows(session.fileChannelRows().size())
-        .fileTemplateRows(session.fileTemplateRows().size())
-        .pipelineRows(session.pipelineRows().size())
-        .pipelineStepRows(session.pipelineStepRows().size())
-        .workflowDefinitionRows(session.workflowDefinitionRows().size())
-        .workflowNodeRows(session.workflowNodeRows().size())
-        .workflowEdgeRows(session.workflowEdgeRows().size())
-        .build();
-  }
-
-  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
-  // 版本行，因此不能用只读事务。
-  @Override
-  @Transactional
-  public TenantConfigPackageExcelPreviewResponse preview(String uploadToken) {
-    // 先校验上传会话归属再轮换一次性令牌，避免未授权请求使上传者当前预览失效。
-    PackageExcelSession currentSession = loadSession(uploadToken);
-    long configurationRevision = currentConfigurationRevision(currentSession.tenantId());
-    PreviewSnapshot snapshot = importStore.issuePreviewSnapshot(uploadToken, configurationRevision);
-    if (EmptyChecks.isNull(snapshot)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.apply_in_progress");
-    }
-    PackageExcelSession session = snapshot.session();
-    tenantGuard.assertTenantAllowed(session.tenantId());
-    assertSessionOwner(session);
-    PackageValidationResult result = validator().validate(session);
-    return toPreviewResponse(uploadToken, snapshot.previewToken(), session, result);
-  }
-
-  /**
-   * 内联编辑回写:把出错行被改动的单元格合并进 session 对应行（{@code rowNo - 2} = 列表下标），再重校验并返回新预览。 不落库——仍走原 apply
-   * 闸门（invalid > 0 拒绝）。会话仍按 token 持有,30 分钟 TTL。
-   */
-  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
-  // 版本行，因此不能用只读事务。
-  @Override
-  @Transactional
-  public TenantConfigPackageExcelPreviewResponse patchRow(
-      String uploadToken,
-      String previewToken,
-      String sheetName,
-      int rowNo,
-      Map<String, String> values) {
-    PackageExcelSession session = loadSession(uploadToken);
-    requireNotApplying(uploadToken);
-    PackageExcelSession patched = copySession(session);
-    List<Map<String, String>> rows = sheetRowsByName(patched).get(sheetName);
-    Guard.require(rows != null, "unknown sheet: " + sheetName);
-    Guard.require(rowNo >= 2, "row out of range: " + rowNo);
-    int idx = rowNo - 2;
-    Guard.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
-    Map<String, String> target = rows.get(idx);
-    if (values != null) {
-      values.forEach((k, v) -> {
-        if (target.containsKey(k)) {
-          target.put(k, v == null ? "" : v.trim());
+        List<FileChannelConfigQueryView> channelViews = fileChannelConfigMapper.selectByQuery(fileChannelConfigQuery);
+        List<Map<String, Object>> channels = rowProjections.toExportableChannelRows(channelViews);
+        FileTemplateConfigQuery fileTemplateQuery = FileTemplateConfigQuery.ofTenant(tid, null);
+        List<FileTemplateConfigQueryView> templateViews = fileTemplateConfigMapper.selectByQuery(fileTemplateQuery);
+        List<Map<String, Object>> fileTemplates = rowProjections.toExcelFileTemplateRows(templateViews);
+        WorkflowDefinitionQuery workflowDefinitionQuery = WorkflowDefinitionQuery.ofTenant(tid, null);
+        List<WorkflowDefinitionEntity> wfEntities = workflowDefinitionMapper.selectByQuery(workflowDefinitionQuery);
+        Map<Long, String> jobCodeById = jobDefinitions.stream()
+                .collect(Collectors.toMap(JobDefinitionView::getId, JobDefinitionView::getJobCode));
+        List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities, jobCodeById);
+        List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
+        if (!includePlatformFields) {
+            wfNodes = rowProjections.withoutPlatformWorkerGroups(wfNodes);
         }
-      });
+        List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
+        workflowMonitoringPolicyMapper.setTenantContext(tid);
+        List<Map<String, Object>> workflowMonitoringPolicies = toWorkflowMonitoringPolicyRows(
+                tid, wfEntities, workflowMonitoringPolicyMapper.selectByTenant(tid), includePlatformFields);
+        List<List<Map<String, Object>>> sheets = List.of(
+                resourceQueues,
+                businessCalendars,
+                batchWindows,
+                jobs,
+                jobMonitoringPolicies,
+                channels,
+                fileTemplates,
+                wfDefs,
+                wfNodes,
+                wfEdges,
+                workflowMonitoringPolicies);
+        ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+        String fileName = "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
+        return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
     }
-    PackageValidationResult result = validator().validate(patched);
-    UUID previewTokenId = UUID.randomUUID();
-    String previewTokenText = previewTokenId.toString();
-    String nextPreviewToken = previewTokenText.replace("-", "");
-    long configurationRevision = currentConfigurationRevision(session.tenantId());
-    if (!importStore.replaceSession(
-        uploadToken, previewToken, patched, nextPreviewToken, configurationRevision)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
+
+    private static List<Map<String, Object>> toWorkflowMonitoringPolicyRows(
+            String tenantId,
+            List<WorkflowDefinitionEntity> definitions,
+            List<WorkflowMonitoringPolicyEntity> policies,
+            boolean includeTenantColumn) {
+        Map<Long, WorkflowMonitoringPolicyEntity> policyByDefinitionId = policies.stream()
+                .collect(Collectors.toMap(WorkflowMonitoringPolicyEntity::getWorkflowDefinitionId, policy -> policy));
+        return definitions.stream()
+                .map(definition -> {
+                    WorkflowMonitoringPolicyEntity policy = policyByDefinitionId.get(definition.getId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    if (includeTenantColumn) {
+                        row.put(COL_TENANT_ID, tenantId);
+                    }
+                    row.put(COL_WORKFLOW_CODE, definition.getWorkflowCode());
+                    row.put(COL_WORKFLOW_VERSION, definition.getVersion());
+                    row.put(COL_SOFT_RUNTIME_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getSoftRuntimeSeconds());
+                    row.put(
+                            COL_SOFT_RUNTIME_SEVERITY,
+                            EmptyChecks.isNull(policy) ? "WARN" : policy.getSoftRuntimeSeverity());
+                    row.put(COL_START_GRACE_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getStartGraceSeconds());
+                    row.put(
+                            COL_START_GRACE_SEVERITY,
+                            EmptyChecks.isNull(policy) ? "WARN" : policy.getStartGraceSeverity());
+                    row.put(
+                            COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                            EmptyChecks.isNull(policy) ? null : policy.getCompletionDeadlineLocalTime());
+                    row.put(
+                            COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                            EmptyChecks.isNull(policy) ? 0 : policy.getCompletionDeadlineDayOffset());
+                    row.put(
+                            COL_COMPLETION_DEADLINE_SEVERITY,
+                            EmptyChecks.isNull(policy) ? "WARN" : policy.getCompletionDeadlineSeverity());
+                    return row;
+                })
+                .toList();
     }
-    return toPreviewResponse(uploadToken, nextPreviewToken, patched, result);
-  }
 
-  private static PackageExcelSession copySession(PackageExcelSession session) {
-    String fileName = session.fileName();
-    String tenantId = session.tenantId();
-    Instant uploadedAt = session.uploadedAt();
-    List<Map<String, String>> resourceQueueRows = copyRows(session.resourceQueueRows());
-    List<Map<String, String>> businessCalendarRows = copyRows(session.businessCalendarRows());
-    List<Map<String, String>> batchWindowRows = copyRows(session.batchWindowRows());
-    List<Map<String, String>> jobRows = copyRows(session.jobRows());
-    List<Map<String, String>> jobMonitoringPolicyRows = copyRows(session.jobMonitoringPolicyRows());
-    List<Map<String, String>> fileChannelRows = copyRows(session.fileChannelRows());
-    List<Map<String, String>> fileTemplateRows = copyRows(session.fileTemplateRows());
-    List<Map<String, String>> pipelineRows = copyRows(session.pipelineRows());
-    List<Map<String, String>> pipelineStepRows = copyRows(session.pipelineStepRows());
-    List<Map<String, String>> workflowDefinitionRows = copyRows(session.workflowDefinitionRows());
-    List<Map<String, String>> workflowNodeRows = copyRows(session.workflowNodeRows());
-    List<Map<String, String>> workflowEdgeRows = copyRows(session.workflowEdgeRows());
-    List<Map<String, String>> workflowMonitoringPolicyRows =
-        copyRows(session.workflowMonitoringPolicyRows());
-    String uploadedBy = session.uploadedBy();
-    Set<String> permissionScope = session.permissionScope();
-    return new PackageExcelSession(
-        fileName,
-        tenantId,
-        uploadedAt,
-        resourceQueueRows,
-        businessCalendarRows,
-        batchWindowRows,
-        jobRows,
-        jobMonitoringPolicyRows,
-        fileChannelRows,
-        fileTemplateRows,
-        pipelineRows,
-        pipelineStepRows,
-        workflowDefinitionRows,
-        workflowNodeRows,
-        workflowEdgeRows,
-        workflowMonitoringPolicyRows,
-        uploadedBy,
-        permissionScope);
-  }
-
-  private static List<Map<String, String>> copyRows(List<Map<String, String>> rows) {
-    return rows.stream().<Map<String, String>>map(LinkedHashMap::new).toList();
-  }
-
-  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
-  // 版本行，因此不能用只读事务。
-  @Override
-  @Transactional
-  public ExcelDownload downloadPreviewWorkbook(String uploadToken) {
-    PackageExcelSession session = loadSession(uploadToken);
-    PackageValidationResult result = validator().validate(session);
-    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    String fileName =
-        ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName());
-    return new ExcelDownload(fileName, out -> writer.writePreviewWorkbook(out, session, result));
-  }
-
-  @Override
-  @Transactional
-  public TenantConfigPackageExcelApplyResponse apply(
-      String uploadToken, TenantConfigPackageExcelApplyRequest request) {
-    PackageExcelSession session = loadSession(uploadToken);
-    String previewToken = request.getPreviewToken();
-    if (EmptyChecks.isNull(previewToken)) {
-      PreviewSnapshot currentPreview = importStore.issuePreviewSnapshot(
-          uploadToken, currentConfigurationRevision(session.tenantId()));
-      if (EmptyChecks.isNull(currentPreview)) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
-      }
-      previewToken = currentPreview.previewToken();
+    @Override
+    public ExcelDownload downloadTemplate() {
+        ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+        return new ExcelDownload("tenant-config-package-template.xlsx", writer::writeTemplateWorkbook);
     }
-    UUID applyOwnerTokenId = UUID.randomUUID();
-    String applyOwnerTokenText = applyOwnerTokenId.toString();
-    String applyOwnerToken = applyOwnerTokenText.replace("-", "");
-    if (!importStore.claimForApply(uploadToken, previewToken, applyOwnerToken)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
-    }
-    boolean completionRegistered = false;
-    try {
-      long expectedRevision =
-          importStore.configurationRevisionForApply(uploadToken, applyOwnerToken);
-      // 租户自有 Pipeline 配置。
-      // 读取依赖图前，使用与 Job 服务及 V301 触发器相同的租户图锁。
-      if (EmptyChecks.isNotEmpty(session.jobRows())) {
-        jobDefinitionMapper.lockDependencyGraph(session.tenantId());
-      }
-      long actualRevision = lockConfigurationRevision(session.tenantId());
-      if (expectedRevision != actualRevision) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.config_changed");
-      }
-      PackageValidationResult result = validator().validate(session);
-      if (result.totalInvalid() > 0) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
-      }
-      applyAuthorization.assertAllowed(result);
-      ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-      TenantConfigPackageExcelApplyService.ApplyContext ctx =
-          new TenantConfigPackageExcelApplyService.ApplyContext(
-              session.tenantId(), metadata.operatorId(), request.getReason(), metadata.traceId());
 
-      TenantConfigPackageExcelApplyService.ApplyCounts counts = applyService.applyAll(result, ctx);
-      registerApplyCompletion(uploadToken, applyOwnerToken);
-      completionRegistered = true;
-      return TenantConfigPackageExcelApplyResponse.builder()
-          .uploadToken(uploadToken)
-          .tenantId(session.tenantId())
-          .resourceQueueInserted(counts.resourceQueueInserted())
-          .resourceQueueUpdated(counts.resourceQueueUpdated())
-          .businessCalendarInserted(counts.businessCalendarInserted())
-          .businessCalendarUpdated(counts.businessCalendarUpdated())
-          .batchWindowInserted(counts.batchWindowInserted())
-          .batchWindowUpdated(counts.batchWindowUpdated())
-          .jobInserted(counts.jobInserted())
-          .jobUpdated(counts.jobUpdated())
-          .channelInserted(counts.channelInserted())
-          .channelUpdated(counts.channelUpdated())
-          .fileTemplateInserted(counts.fileTemplateInserted())
-          .fileTemplateUpdated(counts.fileTemplateUpdated())
-          .workflowInserted(counts.workflowInserted())
-          .workflowUpdated(counts.workflowUpdated())
-          .jobMonitoringPoliciesApplied(counts.jobMonitoringPoliciesApplied())
-          .workflowMonitoringPoliciesApplied(counts.workflowMonitoringPoliciesApplied())
-          .build();
-    } finally {
-      if (!completionRegistered) {
-        importStore.releaseApply(uploadToken, applyOwnerToken);
-      }
+    @Override
+    public ExcelDownload downloadScenarioTemplate(List<String> scenarios) {
+        List<String> selectedScenarios = ConfigPackageSampleDataFactory.tenantTemplateScenarios(scenarios).stream()
+                .sorted()
+                .toList();
+        ConfigPackageExcelWorkbookWriter writer = workbookWriter(selectedScenarios);
+        String scenarioName = String.join("-", selectedScenarios).toLowerCase(Locale.ROOT);
+        return new ExcelDownload(
+                "tenant-config-package-" + scenarioName + ".xlsx", writer::writeFocusedTemplateWorkbook);
     }
-  }
 
-  private long currentConfigurationRevision(String tenantId) {
-    Long revision = tenantConfigRevisionMapper.currentConfigurationRevision(tenantId);
-    if (EmptyChecks.isNull(revision)) {
-      throw new IllegalStateException("tenant configuration revision is missing");
+    @Override
+    public ExcelDownload downloadSampleTemplate(String scenario, List<String> scenarios) {
+        List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
+                ? scenarios
+                : EmptyChecks.isNotBlank(scenario) ? List.of(scenario) : List.of();
+        List<String> normalizedScenarios = ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios).stream()
+                .toList();
+        ConfigPackageExcelWorkbookWriter writer = workbookWriter(normalizedScenarios);
+        List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets(normalizedScenarios);
+        String scenarioName = String.join("-", normalizedScenarios).toLowerCase(Locale.ROOT);
+        String fileName = "tenant-config-package-sample-" + scenarioName + ".xlsx";
+        return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
     }
-    return revision;
-  }
 
-  private long lockConfigurationRevision(String tenantId) {
-    Long revision = tenantConfigRevisionMapper.lockConfigurationRevision(tenantId);
-    if (EmptyChecks.isNull(revision)) {
-      throw new IllegalStateException("tenant configuration revision is missing");
+    @Override
+    public TenantConfigPackageExcelGuideResponse guide() {
+        List<TenantConfigPackageExcelGuideResponse.SheetGuide> sheets = new ArrayList<>();
+        ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource);
+        for (ConfigPackageSheetSpecs.SheetDef sheet : specs.build().stream()
+                .filter(def -> !PIPELINE_SHEET.equals(def.name()) && !STEP_SHEET.equals(def.name()))
+                .toList()) {
+            List<TenantConfigPackageExcelGuideResponse.ColumnGuide> columns = new ArrayList<>();
+            String sheetAppliesTo = appliesToFor(sheet.name(), "");
+            for (String column : sheet.columns()) {
+                ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
+                boolean required = EmptyChecks.isNotNull(guide) && guide.required();
+                TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
+                        TenantConfigPackageExcelGuideResponse.ColumnGuide.builder()
+                                .columnName(column)
+                                .required(required)
+                                .readOnly(EmptyChecks.isNotNull(guide) && guide.readOnly())
+                                .guideLevel(guideLevelFor(sheet.name(), column, required))
+                                .format(EmptyChecks.isNull(guide) ? "" : guide.formatHint())
+                                .allowedValues(EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues())
+                                .description(EmptyChecks.isNull(guide) ? "" : guide.description())
+                                .example(EmptyChecks.isNull(guide) ? "" : guide.example())
+                                .fillExample(fillExampleFor(sheet.name(), column, guide))
+                                .defaultBehavior(defaultBehaviorFor(column, guide))
+                                .appliesTo(appliesToFor(sheet.name(), column))
+                                .build();
+                columns.add(columnGuide);
+            }
+            sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(sheet.name(), sheetAppliesTo, columns));
+        }
+        return new TenantConfigPackageExcelGuideResponse(sheets);
     }
-    return revision;
-  }
 
-  private void registerApplyCompletion(String uploadToken, String applyOwnerToken) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      throw new IllegalStateException(
-          "configuration package apply requires transaction synchronization");
+    private List<Map<String, Object>> withCalendarHolidayValues(List<CalendarQueryRow> rows) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (CalendarQueryRow row : rows) {
+            Long calendarId = row.id();
+            String holidayDatesText = calendarHolidaysText(calendarId);
+            Map<String, Object> exportRow =
+                    ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, holidayDatesText);
+            out.add(exportRow);
+        }
+        return out;
     }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        importStore.completeApply(uploadToken, applyOwnerToken);
-      }
 
-      @Override
-      public void afterCompletion(int status) {
-        importStore.releaseApply(uploadToken, applyOwnerToken);
-      }
-    });
-  }
-
-  private void requireNotApplying(String uploadToken) {
-    if (importStore.isApplyInProgress(uploadToken)) {
-      throw BizException.of(ResultCode.CONFLICT, "error.config_package.apply_in_progress");
+    private String calendarHolidaysText(Long calendarId) {
+        if (EmptyChecks.isNull(calendarId)) {
+            return null;
+        }
+        List<CalendarHolidayRow> holidayRows = calendarHolidayMapper.selectByCalendarId(calendarId);
+        List<String> dates =
+                holidayRows.stream().map(h -> h.bizDate().toString()).toList();
+        return dates.isEmpty() ? null : String.join(",", dates);
     }
-  }
 
-  private PackageExcelSession parseWorkbook(Path workbookPath, String tenantId, String fileName) {
-    ConfigPackageWorkbookLimits.configurePoiZipLimits();
-    try (Workbook wb = WorkbookFactory.create(workbookPath.toFile())) {
-      ConfigPackageWorkbookLimits.validate(wb);
-      rejectExternalWorkbookFeatures(wb);
-      rejectFormulaCells(wb);
-      validateWorkbookSheetNames(wb);
-      Instant parsedAt = dateTimeSupport.nowInstant();
-      List<Map<String, String>> resourceQueueRows =
-          parseOptionalSheet(wb, RESOURCE_QUEUE_SHEET, RESOURCE_QUEUE_COLUMNS, tenantId);
-      List<Map<String, String>> businessCalendarRows =
-          parseOptionalSheet(wb, BUSINESS_CALENDAR_SHEET, BUSINESS_CALENDAR_COLUMNS, tenantId);
-      List<Map<String, String>> batchWindowRows =
-          parseOptionalSheet(wb, BATCH_WINDOW_SHEET, BATCH_WINDOW_COLUMNS, tenantId);
-      List<Map<String, String>> jobRows = parseOptionalSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId);
-      List<Map<String, String>> jobMonitoringPolicyRows = parseOptionalSheet(
-          wb, JOB_MONITORING_POLICY_SHEET, JOB_MONITORING_POLICY_COLUMNS, tenantId);
-      List<Map<String, String>> channelRows =
-          parseOptionalSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId);
-      List<Map<String, String>> fileTemplateRows =
-          parseOptionalSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId);
-      if (EmptyChecks.isNotNull(wb.getSheet(PIPELINE_SHEET))
-          || EmptyChecks.isNotNull(wb.getSheet(STEP_SHEET))) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.package.retired_sheet");
-      }
-      List<Map<String, String>> pipelineRows = List.of();
-      List<Map<String, String>> stepRows = List.of();
-      List<Map<String, String>> workflowDefinitionRows =
-          parseOptionalSheet(wb, WF_DEF_SHEET, WF_DEF_COLUMNS, tenantId);
-      List<Map<String, String>> workflowNodeRows =
-          parseOptionalSheet(wb, WF_NODE_SHEET, WF_NODE_COLUMNS, tenantId);
-      List<Map<String, String>> workflowEdgeRows =
-          parseOptionalSheet(wb, WF_EDGE_SHEET, WF_EDGE_COLUMNS, tenantId);
-      List<Map<String, String>> workflowMonitoringPolicyRows = parseOptionalSheet(
-          wb, WORKFLOW_MONITORING_POLICY_SHEET, WORKFLOW_MONITORING_POLICY_COLUMNS, tenantId);
-      return new PackageExcelSession(
-          fileName,
-          tenantId,
-          parsedAt,
-          resourceQueueRows,
-          businessCalendarRows,
-          batchWindowRows,
-          jobRows,
-          jobMonitoringPolicyRows,
-          channelRows,
-          fileTemplateRows,
-          pipelineRows,
-          stepRows,
-          workflowDefinitionRows,
-          workflowNodeRows,
-          workflowEdgeRows,
-          workflowMonitoringPolicyRows,
-          null,
-          Set.of());
-    } catch (BizException e) {
-      throw e;
-    } catch (Exception e) {
-      SwallowedExceptionLogger.info(
-          DefaultTenantConfigPackageExcelService.class, "config-package-workbook-rejected", e);
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "failed to read excel workbook");
+    @Override
+    public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
+            throws IOException {
+        Guard.require(file != null && !file.isEmpty(), "file is required");
+        UploadFileGuard.requireExcel(file);
+        String tenantId = tenantGuard.resolveTenant(requestTenantId);
+        String fileName = fileNameOrDefault(file.getOriginalFilename());
+        String uploadedBy = requestMetadataResolver.current().operatorId();
+        if (!Texts.hasText(uploadedBy)) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_actor_required");
+        }
+        PackageExcelSession session;
+        Path temporaryWorkbook = PrivateTempFiles.createTempFile("tenant-config-package-", ".xlsx");
+        try {
+            file.transferTo(temporaryWorkbook);
+            session = parseWorkbook(temporaryWorkbook, tenantId, fileName)
+                    .withUploadContext(uploadedBy, currentPermissionScope());
+        } finally {
+            Files.deleteIfExists(temporaryWorkbook);
+        }
+        String token = importStore.save(session);
+        return TenantConfigPackageExcelUploadResponse.builder()
+                .uploadToken(token)
+                .fileName(fileName)
+                .resourceQueueRows(session.resourceQueueRows().size())
+                .businessCalendarRows(session.businessCalendarRows().size())
+                .batchWindowRows(session.batchWindowRows().size())
+                .jobRows(session.jobRows().size())
+                .fileChannelRows(session.fileChannelRows().size())
+                .fileTemplateRows(session.fileTemplateRows().size())
+                .pipelineRows(session.pipelineRows().size())
+                .pipelineStepRows(session.pipelineStepRows().size())
+                .workflowDefinitionRows(session.workflowDefinitionRows().size())
+                .workflowNodeRows(session.workflowNodeRows().size())
+                .workflowEdgeRows(session.workflowEdgeRows().size())
+                .build();
     }
-  }
 
-  private static void rejectExternalWorkbookFeatures(Workbook workbook)
-      throws InvalidFormatException {
-    if (!(workbook instanceof XSSFWorkbook xssf)) {
-      return;
+    // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+    // 版本行，因此不能用只读事务。
+    @Override
+    @Transactional
+    public TenantConfigPackageExcelPreviewResponse preview(String uploadToken) {
+        // 先校验上传会话归属再轮换一次性令牌，避免未授权请求使上传者当前预览失效。
+        PackageExcelSession currentSession = loadSession(uploadToken);
+        long configurationRevision = currentConfigurationRevision(currentSession.tenantId());
+        PreviewSnapshot snapshot = importStore.issuePreviewSnapshot(uploadToken, configurationRevision);
+        if (EmptyChecks.isNull(snapshot)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.apply_in_progress");
+        }
+        PackageExcelSession session = snapshot.session();
+        tenantGuard.assertTenantAllowed(session.tenantId());
+        assertSessionOwner(session);
+        PackageValidationResult result = validator().validate(session);
+        return toPreviewResponse(uploadToken, snapshot.previewToken(), session, result);
     }
-    boolean hasExternalLinks = xssf.getPackagePart()
-        .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
-        .iterator()
-        .hasNext();
-    boolean hasVbaProject = xssf.getPackagePart()
-        .getRelationshipsByType(XSSFRelation.VBA_MACROS.getRelation())
-        .iterator()
-        .hasNext();
-    if (hasExternalLinks || hasVbaProject) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "external links and macros are not allowed in configuration packages");
-    }
-  }
 
-  private static void rejectFormulaCells(Workbook workbook) {
-    for (Sheet sheet : workbook) {
-      for (Row row : sheet) {
-        for (Cell cell : row) {
-          if (cell.getCellType() == CellType.FORMULA) {
+    /**
+     * 内联编辑回写:把出错行被改动的单元格合并进 session 对应行（{@code rowNo - 2} = 列表下标），再重校验并返回新预览。 不落库——仍走原 apply
+     * 闸门（invalid > 0 拒绝）。会话仍按 token 持有,30 分钟 TTL。
+     */
+    // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+    // 版本行，因此不能用只读事务。
+    @Override
+    @Transactional
+    public TenantConfigPackageExcelPreviewResponse patchRow(
+            String uploadToken, String previewToken, String sheetName, int rowNo, Map<String, String> values) {
+        PackageExcelSession session = loadSession(uploadToken);
+        requireNotApplying(uploadToken);
+        PackageExcelSession patched = copySession(session);
+        List<Map<String, String>> rows = sheetRowsByName(patched).get(sheetName);
+        Guard.require(rows != null, "unknown sheet: " + sheetName);
+        Guard.require(rowNo >= 2, "row out of range: " + rowNo);
+        int idx = rowNo - 2;
+        Guard.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
+        Map<String, String> target = rows.get(idx);
+        if (values != null) {
+            values.forEach((k, v) -> {
+                if (target.containsKey(k)) {
+                    target.put(k, v == null ? "" : v.trim());
+                }
+            });
+        }
+        PackageValidationResult result = validator().validate(patched);
+        UUID previewTokenId = UUID.randomUUID();
+        String previewTokenText = previewTokenId.toString();
+        String nextPreviewToken = previewTokenText.replace("-", "");
+        long configurationRevision = currentConfigurationRevision(session.tenantId());
+        if (!importStore.replaceSession(uploadToken, previewToken, patched, nextPreviewToken, configurationRevision)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
+        }
+        return toPreviewResponse(uploadToken, nextPreviewToken, patched, result);
+    }
+
+    private static PackageExcelSession copySession(PackageExcelSession session) {
+        String fileName = session.fileName();
+        String tenantId = session.tenantId();
+        Instant uploadedAt = session.uploadedAt();
+        List<Map<String, String>> resourceQueueRows = copyRows(session.resourceQueueRows());
+        List<Map<String, String>> businessCalendarRows = copyRows(session.businessCalendarRows());
+        List<Map<String, String>> batchWindowRows = copyRows(session.batchWindowRows());
+        List<Map<String, String>> jobRows = copyRows(session.jobRows());
+        List<Map<String, String>> jobMonitoringPolicyRows = copyRows(session.jobMonitoringPolicyRows());
+        List<Map<String, String>> fileChannelRows = copyRows(session.fileChannelRows());
+        List<Map<String, String>> fileTemplateRows = copyRows(session.fileTemplateRows());
+        List<Map<String, String>> pipelineRows = copyRows(session.pipelineRows());
+        List<Map<String, String>> pipelineStepRows = copyRows(session.pipelineStepRows());
+        List<Map<String, String>> workflowDefinitionRows = copyRows(session.workflowDefinitionRows());
+        List<Map<String, String>> workflowNodeRows = copyRows(session.workflowNodeRows());
+        List<Map<String, String>> workflowEdgeRows = copyRows(session.workflowEdgeRows());
+        List<Map<String, String>> workflowMonitoringPolicyRows = copyRows(session.workflowMonitoringPolicyRows());
+        String uploadedBy = session.uploadedBy();
+        Set<String> permissionScope = session.permissionScope();
+        return new PackageExcelSession(
+                fileName,
+                tenantId,
+                uploadedAt,
+                resourceQueueRows,
+                businessCalendarRows,
+                batchWindowRows,
+                jobRows,
+                jobMonitoringPolicyRows,
+                fileChannelRows,
+                fileTemplateRows,
+                pipelineRows,
+                pipelineStepRows,
+                workflowDefinitionRows,
+                workflowNodeRows,
+                workflowEdgeRows,
+                workflowMonitoringPolicyRows,
+                uploadedBy,
+                permissionScope);
+    }
+
+    private static List<Map<String, String>> copyRows(List<Map<String, String>> rows) {
+        return rows.stream().<Map<String, String>>map(LinkedHashMap::new).toList();
+    }
+
+    // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+    // 版本行，因此不能用只读事务。
+    @Override
+    @Transactional
+    public ExcelDownload downloadPreviewWorkbook(String uploadToken) {
+        PackageExcelSession session = loadSession(uploadToken);
+        PackageValidationResult result = validator().validate(session);
+        ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+        String fileName = ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName());
+        return new ExcelDownload(fileName, out -> writer.writePreviewWorkbook(out, session, result));
+    }
+
+    @Override
+    @Transactional
+    public TenantConfigPackageExcelApplyResponse apply(
+            String uploadToken, TenantConfigPackageExcelApplyRequest request) {
+        PackageExcelSession session = loadSession(uploadToken);
+        String previewToken = request.getPreviewToken();
+        if (EmptyChecks.isNull(previewToken)) {
+            PreviewSnapshot currentPreview =
+                    importStore.issuePreviewSnapshot(uploadToken, currentConfigurationRevision(session.tenantId()));
+            if (EmptyChecks.isNull(currentPreview)) {
+                throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
+            }
+            previewToken = currentPreview.previewToken();
+        }
+        UUID applyOwnerTokenId = UUID.randomUUID();
+        String applyOwnerTokenText = applyOwnerTokenId.toString();
+        String applyOwnerToken = applyOwnerTokenText.replace("-", "");
+        if (!importStore.claimForApply(uploadToken, previewToken, applyOwnerToken)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
+        }
+        boolean completionRegistered = false;
+        try {
+            long expectedRevision = importStore.configurationRevisionForApply(uploadToken, applyOwnerToken);
+            // 租户自有 Pipeline 配置。
+            // 读取依赖图前，使用与 Job 服务及 V301 触发器相同的租户图锁。
+            if (EmptyChecks.isNotEmpty(session.jobRows())) {
+                jobDefinitionMapper.lockDependencyGraph(session.tenantId());
+            }
+            long actualRevision = lockConfigurationRevision(session.tenantId());
+            if (expectedRevision != actualRevision) {
+                throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.config_changed");
+            }
+            PackageValidationResult result = validator().validate(session);
+            if (result.totalInvalid() > 0) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
+            }
+            applyAuthorization.assertAllowed(result);
+            ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+            TenantConfigPackageExcelApplyService.ApplyContext ctx =
+                    new TenantConfigPackageExcelApplyService.ApplyContext(
+                            session.tenantId(), metadata.operatorId(), request.getReason(), metadata.traceId());
+
+            TenantConfigPackageExcelApplyService.ApplyCounts counts = applyService.applyAll(result, ctx);
+            registerApplyCompletion(uploadToken, applyOwnerToken);
+            completionRegistered = true;
+            return TenantConfigPackageExcelApplyResponse.builder()
+                    .uploadToken(uploadToken)
+                    .tenantId(session.tenantId())
+                    .resourceQueueInserted(counts.resourceQueueInserted())
+                    .resourceQueueUpdated(counts.resourceQueueUpdated())
+                    .businessCalendarInserted(counts.businessCalendarInserted())
+                    .businessCalendarUpdated(counts.businessCalendarUpdated())
+                    .batchWindowInserted(counts.batchWindowInserted())
+                    .batchWindowUpdated(counts.batchWindowUpdated())
+                    .jobInserted(counts.jobInserted())
+                    .jobUpdated(counts.jobUpdated())
+                    .channelInserted(counts.channelInserted())
+                    .channelUpdated(counts.channelUpdated())
+                    .fileTemplateInserted(counts.fileTemplateInserted())
+                    .fileTemplateUpdated(counts.fileTemplateUpdated())
+                    .workflowInserted(counts.workflowInserted())
+                    .workflowUpdated(counts.workflowUpdated())
+                    .jobMonitoringPoliciesApplied(counts.jobMonitoringPoliciesApplied())
+                    .workflowMonitoringPoliciesApplied(counts.workflowMonitoringPoliciesApplied())
+                    .build();
+        } finally {
+            if (!completionRegistered) {
+                importStore.releaseApply(uploadToken, applyOwnerToken);
+            }
+        }
+    }
+
+    private long currentConfigurationRevision(String tenantId) {
+        Long revision = tenantConfigRevisionMapper.currentConfigurationRevision(tenantId);
+        if (EmptyChecks.isNull(revision)) {
+            throw new IllegalStateException("tenant configuration revision is missing");
+        }
+        return revision;
+    }
+
+    private long lockConfigurationRevision(String tenantId) {
+        Long revision = tenantConfigRevisionMapper.lockConfigurationRevision(tenantId);
+        if (EmptyChecks.isNull(revision)) {
+            throw new IllegalStateException("tenant configuration revision is missing");
+        }
+        return revision;
+    }
+
+    private void registerApplyCompletion(String uploadToken, String applyOwnerToken) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("configuration package apply requires transaction synchronization");
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                importStore.completeApply(uploadToken, applyOwnerToken);
+            }
+
+            @Override
+            public void afterCompletion(int status) {
+                importStore.releaseApply(uploadToken, applyOwnerToken);
+            }
+        });
+    }
+
+    private void requireNotApplying(String uploadToken) {
+        if (importStore.isApplyInProgress(uploadToken)) {
+            throw BizException.of(ResultCode.CONFLICT, "error.config_package.apply_in_progress");
+        }
+    }
+
+    private PackageExcelSession parseWorkbook(Path workbookPath, String tenantId, String fileName) {
+        ConfigPackageWorkbookLimits.configurePoiZipLimits();
+        try (Workbook wb = WorkbookFactory.create(workbookPath.toFile())) {
+            ConfigPackageWorkbookLimits.validate(wb);
+            rejectExternalWorkbookFeatures(wb);
+            rejectFormulaCells(wb);
+            validateWorkbookSheetNames(wb);
+            Instant parsedAt = dateTimeSupport.nowInstant();
+            List<Map<String, String>> resourceQueueRows =
+                    parseOptionalSheet(wb, RESOURCE_QUEUE_SHEET, RESOURCE_QUEUE_COLUMNS, tenantId);
+            List<Map<String, String>> businessCalendarRows =
+                    parseOptionalSheet(wb, BUSINESS_CALENDAR_SHEET, BUSINESS_CALENDAR_COLUMNS, tenantId);
+            List<Map<String, String>> batchWindowRows =
+                    parseOptionalSheet(wb, BATCH_WINDOW_SHEET, BATCH_WINDOW_COLUMNS, tenantId);
+            List<Map<String, String>> jobRows = parseOptionalSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId);
+            List<Map<String, String>> jobMonitoringPolicyRows =
+                    parseOptionalSheet(wb, JOB_MONITORING_POLICY_SHEET, JOB_MONITORING_POLICY_COLUMNS, tenantId);
+            List<Map<String, String>> channelRows = parseOptionalSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId);
+            List<Map<String, String>> fileTemplateRows =
+                    parseOptionalSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId);
+            if (EmptyChecks.isNotNull(wb.getSheet(PIPELINE_SHEET)) || EmptyChecks.isNotNull(wb.getSheet(STEP_SHEET))) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.package.retired_sheet");
+            }
+            List<Map<String, String>> pipelineRows = List.of();
+            List<Map<String, String>> stepRows = List.of();
+            List<Map<String, String>> workflowDefinitionRows =
+                    parseOptionalSheet(wb, WF_DEF_SHEET, WF_DEF_COLUMNS, tenantId);
+            List<Map<String, String>> workflowNodeRows =
+                    parseOptionalSheet(wb, WF_NODE_SHEET, WF_NODE_COLUMNS, tenantId);
+            List<Map<String, String>> workflowEdgeRows =
+                    parseOptionalSheet(wb, WF_EDGE_SHEET, WF_EDGE_COLUMNS, tenantId);
+            List<Map<String, String>> workflowMonitoringPolicyRows = parseOptionalSheet(
+                    wb, WORKFLOW_MONITORING_POLICY_SHEET, WORKFLOW_MONITORING_POLICY_COLUMNS, tenantId);
+            return new PackageExcelSession(
+                    fileName,
+                    tenantId,
+                    parsedAt,
+                    resourceQueueRows,
+                    businessCalendarRows,
+                    batchWindowRows,
+                    jobRows,
+                    jobMonitoringPolicyRows,
+                    channelRows,
+                    fileTemplateRows,
+                    pipelineRows,
+                    stepRows,
+                    workflowDefinitionRows,
+                    workflowNodeRows,
+                    workflowEdgeRows,
+                    workflowMonitoringPolicyRows,
+                    null,
+                    Set.of());
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            SwallowedExceptionLogger.info(
+                    DefaultTenantConfigPackageExcelService.class, "config-package-workbook-rejected", e);
             throw BizException.of(
-                ResultCode.INVALID_ARGUMENT,
-                ResultCode.INVALID_ARGUMENT.detailKey(),
-                "formula cells are not allowed in configuration packages");
-          }
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "failed to read excel workbook");
         }
-      }
     }
-  }
 
-  private static void validateWorkbookSheetNames(Workbook workbook) {
-    Set<String> accepted = Set.of(
-        RESOURCE_QUEUE_SHEET,
-        BUSINESS_CALENDAR_SHEET,
-        BATCH_WINDOW_SHEET,
-        JOB_SHEET,
-        JOB_MONITORING_POLICY_SHEET,
-        CHANNEL_SHEET,
-        FILE_TEMPLATE_SHEET,
-        WF_DEF_SHEET,
-        WF_NODE_SHEET,
-        WF_EDGE_SHEET,
-        WORKFLOW_MONITORING_POLICY_SHEET,
-        ConsoleExcelStyles.SHEET_NAME_README,
-        "填写顺序",
-        "依赖说明",
-        "五类Worker示例",
-        "文件束示例",
-        ConsoleExcelStyles.SHEET_NAME_FIELD_GUIDE,
-        ConsoleExcelStyles.SHEET_NAME_VALIDATION,
-        ConsoleExcelStyles.SHEET_NAME_DICT);
-    for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
-      String name = workbook.getSheetName(i);
-      Guard.require(accepted.contains(name), "unsupported excel sheet: " + name);
+    private static void rejectExternalWorkbookFeatures(Workbook workbook) throws InvalidFormatException {
+        if (!(workbook instanceof XSSFWorkbook xssf)) {
+            return;
+        }
+        boolean hasExternalLinks = xssf.getPackagePart()
+                .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
+                .iterator()
+                .hasNext();
+        boolean hasVbaProject = xssf.getPackagePart()
+                .getRelationshipsByType(XSSFRelation.VBA_MACROS.getRelation())
+                .iterator()
+                .hasNext();
+        if (hasExternalLinks || hasVbaProject) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "external links and macros are not allowed in configuration packages");
+        }
     }
-  }
 
-  private List<Map<String, String>> parseSheet(
-      Workbook wb, String sheetName, List<String> columns, String tenantId) {
-    Sheet sheet = wb.getSheet(sheetName);
-    Guard.require(sheet != null, "excel sheet missing: " + sheetName);
-    DataFormatter fmt = new DataFormatter();
-    Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-    Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
-    Map<String, Integer> headerIndex = buildHeaderIndex(sheetName, headerRow, fmt);
-    Set<String> requiredHeaders = ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
-    validateSheetHeaders(sheetName, headerIndex, requiredHeaders, Set.copyOf(columns));
-    List<Map<String, String>> rows = new ArrayList<>();
-    for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
-      Row row = sheet.getRow(i);
-      if (row == null || isRowBlank(row, fmt)) {
-        continue;
-      }
-      Map<String, String> values = new LinkedHashMap<>();
-      for (String col : columns) {
-        Integer colIdx = headerIndex.get(col);
+    private static void rejectFormulaCells(Workbook workbook) {
+        for (Sheet sheet : workbook) {
+            for (Row row : sheet) {
+                for (Cell cell : row) {
+                    if (cell.getCellType() == CellType.FORMULA) {
+                        throw BizException.of(
+                                ResultCode.INVALID_ARGUMENT,
+                                ResultCode.INVALID_ARGUMENT.detailKey(),
+                                "formula cells are not allowed in configuration packages");
+                    }
+                }
+            }
+        }
+    }
+
+    private static void validateWorkbookSheetNames(Workbook workbook) {
+        Set<String> accepted = Set.of(
+                RESOURCE_QUEUE_SHEET,
+                BUSINESS_CALENDAR_SHEET,
+                BATCH_WINDOW_SHEET,
+                JOB_SHEET,
+                JOB_MONITORING_POLICY_SHEET,
+                CHANNEL_SHEET,
+                FILE_TEMPLATE_SHEET,
+                WF_DEF_SHEET,
+                WF_NODE_SHEET,
+                WF_EDGE_SHEET,
+                WORKFLOW_MONITORING_POLICY_SHEET,
+                ConsoleExcelStyles.SHEET_NAME_README,
+                "填写顺序",
+                "依赖说明",
+                "五类Worker示例",
+                "文件束示例",
+                ConsoleExcelStyles.SHEET_NAME_FIELD_GUIDE,
+                ConsoleExcelStyles.SHEET_NAME_VALIDATION,
+                ConsoleExcelStyles.SHEET_NAME_DICT);
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            String name = workbook.getSheetName(i);
+            Guard.require(accepted.contains(name), "unsupported excel sheet: " + name);
+        }
+    }
+
+    private List<Map<String, String>> parseSheet(Workbook wb, String sheetName, List<String> columns, String tenantId) {
+        Sheet sheet = wb.getSheet(sheetName);
+        Guard.require(sheet != null, "excel sheet missing: " + sheetName);
+        DataFormatter fmt = new DataFormatter();
+        Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+        Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
+        Map<String, Integer> headerIndex = buildHeaderIndex(sheetName, headerRow, fmt);
+        Set<String> requiredHeaders = ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
+        validateSheetHeaders(sheetName, headerIndex, requiredHeaders, Set.copyOf(columns));
+        List<Map<String, String>> rows = new ArrayList<>();
+        for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null || isRowBlank(row, fmt)) {
+                continue;
+            }
+            Map<String, String> values = new LinkedHashMap<>();
+            for (String col : columns) {
+                Integer colIdx = headerIndex.get(col);
+                if (colIdx == null) {
+                    continue;
+                }
+                String rawCellText = cellText(row, colIdx, fmt);
+                String normalizedCellText = TenantConfigPackageExcelValueSupport.normalize(rawCellText);
+                values.put(col, normalizedCellText);
+            }
+            if (tenantId != null && !Texts.hasText(values.get(COL_TENANT_ID))) {
+                values.put(COL_TENANT_ID, tenantId);
+            }
+            rows.add(values);
+        }
+        return rows;
+    }
+
+    private List<Map<String, String>> parseOptionalSheet(
+            Workbook wb, String sheetName, List<String> columns, String tenantId) {
+        return wb.getSheet(sheetName) == null ? List.of() : parseSheet(wb, sheetName, columns, tenantId);
+    }
+
+    private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
+            String uploadToken, String previewToken, PackageExcelSession session, PackageValidationResult result) {
+        Map<String, Set<Integer>> crossReferenceInvalidRows = result.crossRefIssues().stream()
+                .filter(issue -> issue.rowNo() >= 2)
+                .collect(Collectors.groupingBy(
+                        WorkbookIssue::sheetName, Collectors.mapping(WorkbookIssue::rowNo, Collectors.toSet())));
+        List<SheetStats> sheets = List.of(
+                toSheetStats(result.resourceQueues(), crossReferenceInvalidRows),
+                toSheetStats(result.businessCalendars(), crossReferenceInvalidRows),
+                toSheetStats(result.batchWindows(), crossReferenceInvalidRows),
+                toSheetStats(result.jobs(), crossReferenceInvalidRows),
+                toSheetStats(result.jobMonitoringPolicies(), crossReferenceInvalidRows),
+                toSheetStats(result.channels(), crossReferenceInvalidRows),
+                toSheetStats(result.fileTemplates(), crossReferenceInvalidRows),
+                toSheetStats(result.pipelines(), crossReferenceInvalidRows),
+                toSheetStats(result.steps(), crossReferenceInvalidRows),
+                toSheetStats(result.wfDefs(), crossReferenceInvalidRows),
+                toSheetStats(result.wfNodes(), crossReferenceInvalidRows),
+                toSheetStats(result.wfEdges(), crossReferenceInvalidRows),
+                toSheetStats(result.workflowMonitoringPolicies(), crossReferenceInvalidRows));
+        List<IssueDto> issues = result.allIssues().stream()
+                .map(i -> new IssueDto(i.sheetName(), i.rowNo(), i.columnName(), i.message()))
+                .toList();
+        int total = sheets.stream().mapToInt(SheetStats::totalRows).sum();
+        int valid = sheets.stream().mapToInt(SheetStats::validRows).sum();
+        String sourceFileName = session.fileName();
+        List<ErrorRowDto> errorRows = toErrorRows(session, result);
+        return new TenantConfigPackageExcelPreviewResponse(
+                uploadToken, previewToken, sourceFileName, total, valid, total - valid, sheets, issues, errorRows);
+    }
+
+    /** 按 (sheet, rowNo) 聚合出错行 + 该行整行单元格值,供前端内联编辑。保持 issue 出现顺序。 */
+    private List<ErrorRowDto> toErrorRows(PackageExcelSession session, PackageValidationResult result) {
+        Map<String, List<Map<String, String>>> rowsBySheet = sheetRowsByName(session);
+        Map<String, ErrorRowAccumulator> grouped = new LinkedHashMap<>();
+        for (WorkbookIssue issue : result.allIssues()) {
+            String key = issue.sheetName() + "#" + issue.rowNo();
+            ErrorRowAccumulator accumulator = grouped.computeIfAbsent(
+                    key, k -> new ErrorRowAccumulator(issue.sheetName(), issue.rowNo(), new ArrayList<>()));
+            accumulator.messages().add(issue.message());
+        }
+        List<ErrorRowDto> out = new ArrayList<>(grouped.size());
+        for (ErrorRowAccumulator acc : grouped.values()) {
+            Map<String, String> values = Map.of();
+            List<Map<String, String>> rows = rowsBySheet.get(acc.sheetName());
+            int idx = acc.rowNo() - 2;
+            if (rows != null && idx >= 0 && idx < rows.size()) {
+                values = new LinkedHashMap<>(rows.get(idx));
+            }
+            List<String> messages = List.copyOf(acc.messages());
+            out.add(new ErrorRowDto(acc.sheetName(), acc.rowNo(), values, messages));
+        }
+        return out;
+    }
+
+    private record ErrorRowAccumulator(String sheetName, int rowNo, List<String> messages) {}
+
+    /** sheet 名(validator SHEET 常量)→ session 对应行列表。内联编辑 patch 与出错行回填共用。 */
+    private Map<String, List<Map<String, String>>> sheetRowsByName(PackageExcelSession session) {
+        Map<String, List<Map<String, String>>> m = new LinkedHashMap<>();
+        m.put(RESOURCE_QUEUE_SHEET, session.resourceQueueRows());
+        m.put(BUSINESS_CALENDAR_SHEET, session.businessCalendarRows());
+        m.put(BATCH_WINDOW_SHEET, session.batchWindowRows());
+        m.put(JOB_SHEET, session.jobRows());
+        m.put(JOB_MONITORING_POLICY_SHEET, session.jobMonitoringPolicyRows());
+        m.put(CHANNEL_SHEET, session.fileChannelRows());
+        m.put(FILE_TEMPLATE_SHEET, session.fileTemplateRows());
+        m.put(PIPELINE_SHEET, session.pipelineRows());
+        m.put(STEP_SHEET, session.pipelineStepRows());
+        m.put(WF_DEF_SHEET, session.workflowDefinitionRows());
+        m.put(WF_NODE_SHEET, session.workflowNodeRows());
+        m.put(WF_EDGE_SHEET, session.workflowEdgeRows());
+        m.put(WORKFLOW_MONITORING_POLICY_SHEET, session.workflowMonitoringPolicyRows());
+        return m;
+    }
+
+    private SheetStats toSheetStats(SheetResult result, Map<String, Set<Integer>> crossReferenceInvalidRows) {
+        int crossReferenceInvalidCount = crossReferenceInvalidRows
+                .getOrDefault(result.sheetName(), Set.of())
+                .size();
+        int invalidRows = Math.min(result.total(), result.invalid() + crossReferenceInvalidCount);
+        return new SheetStats(result.sheetName(), result.total(), result.total() - invalidRows, invalidRows);
+    }
+
+    private PackageExcelSession loadSession(String uploadToken) {
+        PackageExcelSession session =
+                Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
+        tenantGuard.assertTenantAllowed(session.tenantId());
+        assertSessionOwner(session);
+        return session;
+    }
+
+    private void assertSessionOwner(PackageExcelSession session) {
+        if (EmptyChecks.isNull(session.uploadedBy())) {
+            return;
+        }
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        if (!session.uploadedBy().equals(metadata.operatorId())
+                || !session.permissionScope().equals(currentPermissionScope())) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_owner_mismatch");
+        }
+    }
+
+    private static Set<String> currentPermissionScope() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+            return Set.of();
+        }
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static Map<String, Integer> buildHeaderIndex(String sheetName, Row headerRow, DataFormatter fmt) {
+        Map<String, Integer> index = new LinkedHashMap<>();
+        for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
+            String header = TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
+            if (Texts.hasText(header)) {
+                if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
+                    throw BizException.of(
+                            ResultCode.INVALID_ARGUMENT,
+                            ResultCode.INVALID_ARGUMENT.detailKey(),
+                            "sheet [" + sheetName + "] contains duplicate headers: " + header);
+                }
+            }
+        }
+        return index;
+    }
+
+    private static void validateSheetHeaders(
+            String sheetName, Map<String, Integer> headerIndex, Set<String> required, Set<String> supported) {
+        List<String> missing =
+                required.stream().filter(h -> !headerIndex.containsKey(h)).toList();
+        if (!missing.isEmpty()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "sheet [" + sheetName + "] missing required headers: " + missing);
+        }
+        List<String> unknown = headerIndex.keySet().stream()
+                .filter(header -> !supported.contains(header))
+                .toList();
+        if (EmptyChecks.isNotEmpty(unknown)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "sheet [" + sheetName + "] contains unsupported headers: " + unknown);
+        }
+    }
+
+    private static boolean isRowBlank(Row row, DataFormatter fmt) {
+        for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
+            if (Texts.hasText(fmt.formatCellValue(row.getCell(c)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String cellText(Row row, Integer colIdx, DataFormatter fmt) {
         if (colIdx == null) {
-          continue;
+            return null;
         }
-        String rawCellText = cellText(row, colIdx, fmt);
-        String normalizedCellText = TenantConfigPackageExcelValueSupport.normalize(rawCellText);
-        values.put(col, normalizedCellText);
-      }
-      if (tenantId != null && !Texts.hasText(values.get(COL_TENANT_ID))) {
-        values.put(COL_TENANT_ID, tenantId);
-      }
-      rows.add(values);
+        Cell cell = row.getCell(colIdx);
+        return cell == null ? null : fmt.formatCellValue(cell);
     }
-    return rows;
-  }
 
-  private List<Map<String, String>> parseOptionalSheet(
-      Workbook wb, String sheetName, List<String> columns, String tenantId) {
-    return wb.getSheet(sheetName) == null
-        ? List.of()
-        : parseSheet(wb, sheetName, columns, tenantId);
-  }
-
-  private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
-      String uploadToken,
-      String previewToken,
-      PackageExcelSession session,
-      PackageValidationResult result) {
-    Map<String, Set<Integer>> crossReferenceInvalidRows = result.crossRefIssues().stream()
-        .filter(issue -> issue.rowNo() >= 2)
-        .collect(Collectors.groupingBy(
-            WorkbookIssue::sheetName,
-            Collectors.mapping(WorkbookIssue::rowNo, Collectors.toSet())));
-    List<SheetStats> sheets = List.of(
-        toSheetStats(result.resourceQueues(), crossReferenceInvalidRows),
-        toSheetStats(result.businessCalendars(), crossReferenceInvalidRows),
-        toSheetStats(result.batchWindows(), crossReferenceInvalidRows),
-        toSheetStats(result.jobs(), crossReferenceInvalidRows),
-        toSheetStats(result.jobMonitoringPolicies(), crossReferenceInvalidRows),
-        toSheetStats(result.channels(), crossReferenceInvalidRows),
-        toSheetStats(result.fileTemplates(), crossReferenceInvalidRows),
-        toSheetStats(result.pipelines(), crossReferenceInvalidRows),
-        toSheetStats(result.steps(), crossReferenceInvalidRows),
-        toSheetStats(result.wfDefs(), crossReferenceInvalidRows),
-        toSheetStats(result.wfNodes(), crossReferenceInvalidRows),
-        toSheetStats(result.wfEdges(), crossReferenceInvalidRows),
-        toSheetStats(result.workflowMonitoringPolicies(), crossReferenceInvalidRows));
-    List<IssueDto> issues = result.allIssues().stream()
-        .map(i -> new IssueDto(i.sheetName(), i.rowNo(), i.columnName(), i.message()))
-        .toList();
-    int total = sheets.stream().mapToInt(SheetStats::totalRows).sum();
-    int valid = sheets.stream().mapToInt(SheetStats::validRows).sum();
-    String sourceFileName = session.fileName();
-    List<ErrorRowDto> errorRows = toErrorRows(session, result);
-    return new TenantConfigPackageExcelPreviewResponse(
-        uploadToken,
-        previewToken,
-        sourceFileName,
-        total,
-        valid,
-        total - valid,
-        sheets,
-        issues,
-        errorRows);
-  }
-
-  /** 按 (sheet, rowNo) 聚合出错行 + 该行整行单元格值,供前端内联编辑。保持 issue 出现顺序。 */
-  private List<ErrorRowDto> toErrorRows(
-      PackageExcelSession session, PackageValidationResult result) {
-    Map<String, List<Map<String, String>>> rowsBySheet = sheetRowsByName(session);
-    Map<String, ErrorRowAccumulator> grouped = new LinkedHashMap<>();
-    for (WorkbookIssue issue : result.allIssues()) {
-      String key = issue.sheetName() + "#" + issue.rowNo();
-      ErrorRowAccumulator accumulator = grouped.computeIfAbsent(
-          key, k -> new ErrorRowAccumulator(issue.sheetName(), issue.rowNo(), new ArrayList<>()));
-      accumulator.messages().add(issue.message());
+    private static String fileNameOrDefault(String originalFileName) {
+        return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
     }
-    List<ErrorRowDto> out = new ArrayList<>(grouped.size());
-    for (ErrorRowAccumulator acc : grouped.values()) {
-      Map<String, String> values = Map.of();
-      List<Map<String, String>> rows = rowsBySheet.get(acc.sheetName());
-      int idx = acc.rowNo() - 2;
-      if (rows != null && idx >= 0 && idx < rows.size()) {
-        values = new LinkedHashMap<>(rows.get(idx));
-      }
-      List<String> messages = List.copyOf(acc.messages());
-      out.add(new ErrorRowDto(acc.sheetName(), acc.rowNo(), values, messages));
-    }
-    return out;
-  }
-
-  private record ErrorRowAccumulator(String sheetName, int rowNo, List<String> messages) {}
-
-  /** sheet 名(validator SHEET 常量)→ session 对应行列表。内联编辑 patch 与出错行回填共用。 */
-  private Map<String, List<Map<String, String>>> sheetRowsByName(PackageExcelSession session) {
-    Map<String, List<Map<String, String>>> m = new LinkedHashMap<>();
-    m.put(RESOURCE_QUEUE_SHEET, session.resourceQueueRows());
-    m.put(BUSINESS_CALENDAR_SHEET, session.businessCalendarRows());
-    m.put(BATCH_WINDOW_SHEET, session.batchWindowRows());
-    m.put(JOB_SHEET, session.jobRows());
-    m.put(JOB_MONITORING_POLICY_SHEET, session.jobMonitoringPolicyRows());
-    m.put(CHANNEL_SHEET, session.fileChannelRows());
-    m.put(FILE_TEMPLATE_SHEET, session.fileTemplateRows());
-    m.put(PIPELINE_SHEET, session.pipelineRows());
-    m.put(STEP_SHEET, session.pipelineStepRows());
-    m.put(WF_DEF_SHEET, session.workflowDefinitionRows());
-    m.put(WF_NODE_SHEET, session.workflowNodeRows());
-    m.put(WF_EDGE_SHEET, session.workflowEdgeRows());
-    m.put(WORKFLOW_MONITORING_POLICY_SHEET, session.workflowMonitoringPolicyRows());
-    return m;
-  }
-
-  private SheetStats toSheetStats(
-      SheetResult result, Map<String, Set<Integer>> crossReferenceInvalidRows) {
-    int crossReferenceInvalidCount =
-        crossReferenceInvalidRows.getOrDefault(result.sheetName(), Set.of()).size();
-    int invalidRows = Math.min(result.total(), result.invalid() + crossReferenceInvalidCount);
-    return new SheetStats(
-        result.sheetName(), result.total(), result.total() - invalidRows, invalidRows);
-  }
-
-  private PackageExcelSession loadSession(String uploadToken) {
-    PackageExcelSession session =
-        Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
-    tenantGuard.assertTenantAllowed(session.tenantId());
-    assertSessionOwner(session);
-    return session;
-  }
-
-  private void assertSessionOwner(PackageExcelSession session) {
-    if (EmptyChecks.isNull(session.uploadedBy())) {
-      return;
-    }
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    if (!session.uploadedBy().equals(metadata.operatorId())
-        || !session.permissionScope().equals(currentPermissionScope())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_owner_mismatch");
-    }
-  }
-
-  private static Set<String> currentPermissionScope() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
-      return Set.of();
-    }
-    return authentication.getAuthorities().stream()
-        .map(authority -> authority.getAuthority())
-        .collect(Collectors.toUnmodifiableSet());
-  }
-
-  private static Map<String, Integer> buildHeaderIndex(
-      String sheetName, Row headerRow, DataFormatter fmt) {
-    Map<String, Integer> index = new LinkedHashMap<>();
-    for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
-      String header =
-          TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
-      if (Texts.hasText(header)) {
-        if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
-          throw BizException.of(
-              ResultCode.INVALID_ARGUMENT,
-              ResultCode.INVALID_ARGUMENT.detailKey(),
-              "sheet [" + sheetName + "] contains duplicate headers: " + header);
-        }
-      }
-    }
-    return index;
-  }
-
-  private static void validateSheetHeaders(
-      String sheetName,
-      Map<String, Integer> headerIndex,
-      Set<String> required,
-      Set<String> supported) {
-    List<String> missing =
-        required.stream().filter(h -> !headerIndex.containsKey(h)).toList();
-    if (!missing.isEmpty()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "sheet [" + sheetName + "] missing required headers: " + missing);
-    }
-    List<String> unknown = headerIndex.keySet().stream()
-        .filter(header -> !supported.contains(header))
-        .toList();
-    if (EmptyChecks.isNotEmpty(unknown)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "sheet [" + sheetName + "] contains unsupported headers: " + unknown);
-    }
-  }
-
-  private static boolean isRowBlank(Row row, DataFormatter fmt) {
-    for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
-      if (Texts.hasText(fmt.formatCellValue(row.getCell(c)))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static String cellText(Row row, Integer colIdx, DataFormatter fmt) {
-    if (colIdx == null) {
-      return null;
-    }
-    Cell cell = row.getCell(colIdx);
-    return cell == null ? null : fmt.formatCellValue(cell);
-  }
-
-  private static String fileNameOrDefault(String originalFileName) {
-    return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
-  }
 }

@@ -9,13 +9,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchDayReplayCandidateSource implements DictEnum {
-  EXISTING_INSTANCES("EXISTING_INSTANCES", "已有实例"),
-  SCHEDULE_PLAN("SCHEDULE_PLAN", "调度计划");
+    EXISTING_INSTANCES("EXISTING_INSTANCES", "已有实例"),
+    SCHEDULE_PLAN("SCHEDULE_PLAN", "调度计划");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static BatchDayReplayCandidateSource fromCodeOrNull(String value) {
-    return DictEnum.fromCode(BatchDayReplayCandidateSource.class, value);
-  }
+    public static BatchDayReplayCandidateSource fromCodeOrNull(String value) {
+        return DictEnum.fromCode(BatchDayReplayCandidateSource.class, value);
+    }
 }

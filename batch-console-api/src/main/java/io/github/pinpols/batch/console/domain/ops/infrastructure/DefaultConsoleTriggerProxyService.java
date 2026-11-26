@@ -20,152 +20,146 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxyService {
 
-  private static final String SVC = "trigger";
-  private static final String TENANT_ID = "tenantId";
-  // 固定内部路由属于 API 契约，部署地址由 TriggerInternalRestClient 的配置提供。
-  @SuppressWarnings("java:S1075")
-  private static final String MANAGEMENT_PATH = "/api/triggers/management";
+    private static final String SVC = "trigger";
+    private static final String TENANT_ID = "tenantId";
+    // 固定内部路由属于 API 契约，部署地址由 TriggerInternalRestClient 的配置提供。
+    @SuppressWarnings("java:S1075")
+    private static final String MANAGEMENT_PATH = "/api/triggers/management";
 
-  private static final String ACTION_PATH = MANAGEMENT_PATH + "/{action}";
-  private static final String WORKFLOW_ACTION_PATH = MANAGEMENT_PATH + "/workflow/{action}";
+    private static final String ACTION_PATH = MANAGEMENT_PATH + "/{action}";
+    private static final String WORKFLOW_ACTION_PATH = MANAGEMENT_PATH + "/workflow/{action}";
 
-  private static final ParameterizedTypeReference<CommonResponse<ConsoleSchedulerCommandResponse>>
-      SCHEDULER_RESPONSE = new ParameterizedTypeReference<>() {};
-  private static final ParameterizedTypeReference<CommonResponse<ConsoleTriggerActionResponse>>
-      ACTION_RESPONSE = new ParameterizedTypeReference<>() {};
-  private static final ParameterizedTypeReference<
-          CommonResponse<List<ConsoleTriggerStatusResponse>>>
-      LIST_RESPONSE = new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<CommonResponse<ConsoleSchedulerCommandResponse>>
+            SCHEDULER_RESPONSE = new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<CommonResponse<ConsoleTriggerActionResponse>> ACTION_RESPONSE =
+            new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<CommonResponse<List<ConsoleTriggerStatusResponse>>> LIST_RESPONSE =
+            new ParameterizedTypeReference<>() {};
 
-  private final TriggerInternalRestClient triggerInternalRestClient;
-  private final TenantScopeResolver tenantGuard;
-  private final DownstreamFallback downstreamFallback;
+    private final TriggerInternalRestClient triggerInternalRestClient;
+    private final TenantScopeResolver tenantGuard;
+    private final DownstreamFallback downstreamFallback;
 
-  @Override
-  public ConsoleSchedulerCommandResponse schedulerStatus() {
-    return downstreamFallback.callOrFallback(
-        SVC,
-        "scheduler-status",
-        () -> {
-          CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
-              .client()
-              .get()
-              .uri("/api/triggers/management/scheduler-status")
-              .retrieve()
-              .body(SCHEDULER_RESPONSE);
-          return EmptyChecks.isNotNull(response)
-              ? response.data()
-              : new ConsoleSchedulerCommandResponse(null);
-        },
-        ex -> new ConsoleSchedulerCommandResponse("UNKNOWN"));
-  }
-
-  @Override
-  public ConsoleSchedulerCommandResponse schedulerPauseAll() {
-    return downstreamFallback.callOrThrow(
-        SVC, "scheduler-pause-all", () -> schedulerCommand("pause-all"));
-  }
-
-  @Override
-  public ConsoleSchedulerCommandResponse schedulerResumeAll() {
-    return downstreamFallback.callOrThrow(
-        SVC, "scheduler-resume-all", () -> schedulerCommand("resume-all"));
-  }
-
-  @Override
-  public List<ConsoleTriggerStatusResponse> triggerList() {
-    String tenantScope = tenantGuard.currentTenantScopeOrNull();
-    return downstreamFallback.callOrFallback(
-        SVC,
-        "list",
-        () -> {
-          CommonResponse<List<ConsoleTriggerStatusResponse>> response = triggerInternalRestClient
-              .client()
-              .get()
-              .uri(
-                  EmptyChecks.isNotNull(tenantScope)
-                      ? "/api/triggers/management/list?tenantId={tenantId}"
-                      : "/api/triggers/management/list",
-                  tenantScope)
-              .retrieve()
-              .body(LIST_RESPONSE);
-          List<ConsoleTriggerStatusResponse> responseItems =
-              EmptyChecks.isNotNull(response) ? response.data() : List.of();
-          return filterByTenant(responseItems, tenantScope);
-        },
-        ex -> List.of());
-  }
-
-  /** 下游不提供租户筛选；缺失租户标识的条目在租户作用域内按失败关闭处理。 */
-  static List<ConsoleTriggerStatusResponse> filterByTenant(
-      List<ConsoleTriggerStatusResponse> data, String tenantScope) {
-    if (EmptyChecks.isNull(data)) {
-      return List.of();
+    @Override
+    public ConsoleSchedulerCommandResponse schedulerStatus() {
+        return downstreamFallback.callOrFallback(
+                SVC,
+                "scheduler-status",
+                () -> {
+                    CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
+                            .client()
+                            .get()
+                            .uri("/api/triggers/management/scheduler-status")
+                            .retrieve()
+                            .body(SCHEDULER_RESPONSE);
+                    return EmptyChecks.isNotNull(response)
+                            ? response.data()
+                            : new ConsoleSchedulerCommandResponse(null);
+                },
+                ex -> new ConsoleSchedulerCommandResponse("UNKNOWN"));
     }
-    if (EmptyChecks.isNull(tenantScope)) {
-      return data;
+
+    @Override
+    public ConsoleSchedulerCommandResponse schedulerPauseAll() {
+        return downstreamFallback.callOrThrow(SVC, "scheduler-pause-all", () -> schedulerCommand("pause-all"));
     }
-    return data.stream()
-        .filter(item -> EmptyChecks.isNotNull(item) && tenantScope.equals(item.tenantId()))
-        .toList();
-  }
 
-  @Override
-  public ConsoleTriggerActionResponse triggerAction(
-      String tenantId, String workflowCode, String action) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return downstreamFallback.callOrThrow(SVC, "action", () -> {
-      CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
-          .client()
-          .post()
-          .uri(uriBuilder -> uriBuilder
-              .path(WORKFLOW_ACTION_PATH)
-              .queryParam(TENANT_ID, resolved)
-              .queryParam("workflowCode", workflowCode)
-              .build(action))
-          .retrieve()
-          .body(ACTION_RESPONSE);
-      return EmptyChecks.isNotNull(response)
-          ? response.data()
-          : ConsoleTriggerActionResponse.empty();
-    });
-  }
+    @Override
+    public ConsoleSchedulerCommandResponse schedulerResumeAll() {
+        return downstreamFallback.callOrThrow(SVC, "scheduler-resume-all", () -> schedulerCommand("resume-all"));
+    }
 
-  @Override
-  public ConsoleTriggerActionResponse pauseByTenant(String tenantId) {
-    return downstreamFallback.callOrThrow(
-        SVC, "pause-tenant", () -> tenantCommand("pause-tenant", tenantId));
-  }
+    @Override
+    public List<ConsoleTriggerStatusResponse> triggerList() {
+        String tenantScope = tenantGuard.currentTenantScopeOrNull();
+        return downstreamFallback.callOrFallback(
+                SVC,
+                "list",
+                () -> {
+                    CommonResponse<List<ConsoleTriggerStatusResponse>> response = triggerInternalRestClient
+                            .client()
+                            .get()
+                            .uri(
+                                    EmptyChecks.isNotNull(tenantScope)
+                                            ? "/api/triggers/management/list?tenantId={tenantId}"
+                                            : "/api/triggers/management/list",
+                                    tenantScope)
+                            .retrieve()
+                            .body(LIST_RESPONSE);
+                    List<ConsoleTriggerStatusResponse> responseItems =
+                            EmptyChecks.isNotNull(response) ? response.data() : List.of();
+                    return filterByTenant(responseItems, tenantScope);
+                },
+                ex -> List.of());
+    }
 
-  @Override
-  public ConsoleTriggerActionResponse resumeByTenant(String tenantId) {
-    return downstreamFallback.callOrThrow(
-        SVC, "resume-tenant", () -> tenantCommand("resume-tenant", tenantId));
-  }
+    /** 下游不提供租户筛选；缺失租户标识的条目在租户作用域内按失败关闭处理。 */
+    static List<ConsoleTriggerStatusResponse> filterByTenant(
+            List<ConsoleTriggerStatusResponse> data, String tenantScope) {
+        if (EmptyChecks.isNull(data)) {
+            return List.of();
+        }
+        if (EmptyChecks.isNull(tenantScope)) {
+            return data;
+        }
+        return data.stream()
+                .filter(item -> EmptyChecks.isNotNull(item) && tenantScope.equals(item.tenantId()))
+                .toList();
+    }
 
-  private ConsoleSchedulerCommandResponse schedulerCommand(String action) {
-    CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
-        .client()
-        .post()
-        .uri(ACTION_PATH, action)
-        .retrieve()
-        .body(SCHEDULER_RESPONSE);
-    // 只归一化缺失的响应信封，已有信封中的 data=null 保持原样。
-    return Objects.requireNonNullElseGet(
-            response, () -> CommonResponse.success(new ConsoleSchedulerCommandResponse(null)))
-        .data();
-  }
+    @Override
+    public ConsoleTriggerActionResponse triggerAction(String tenantId, String workflowCode, String action) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return downstreamFallback.callOrThrow(SVC, "action", () -> {
+            CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
+                    .client()
+                    .post()
+                    .uri(uriBuilder -> uriBuilder
+                            .path(WORKFLOW_ACTION_PATH)
+                            .queryParam(TENANT_ID, resolved)
+                            .queryParam("workflowCode", workflowCode)
+                            .build(action))
+                    .retrieve()
+                    .body(ACTION_RESPONSE);
+            return EmptyChecks.isNotNull(response) ? response.data() : ConsoleTriggerActionResponse.empty();
+        });
+    }
 
-  private ConsoleTriggerActionResponse tenantCommand(String action, String tenantId) {
-    CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
-        .client()
-        .post()
-        .uri(uriBuilder ->
-            uriBuilder.path(ACTION_PATH).queryParam(TENANT_ID, tenantId).build(action))
-        .retrieve()
-        .body(ACTION_RESPONSE);
-    return Objects.requireNonNullElseGet(
-            response, () -> CommonResponse.success(ConsoleTriggerActionResponse.empty()))
-        .data();
-  }
+    @Override
+    public ConsoleTriggerActionResponse pauseByTenant(String tenantId) {
+        return downstreamFallback.callOrThrow(SVC, "pause-tenant", () -> tenantCommand("pause-tenant", tenantId));
+    }
+
+    @Override
+    public ConsoleTriggerActionResponse resumeByTenant(String tenantId) {
+        return downstreamFallback.callOrThrow(SVC, "resume-tenant", () -> tenantCommand("resume-tenant", tenantId));
+    }
+
+    private ConsoleSchedulerCommandResponse schedulerCommand(String action) {
+        CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
+                .client()
+                .post()
+                .uri(ACTION_PATH, action)
+                .retrieve()
+                .body(SCHEDULER_RESPONSE);
+        // 只归一化缺失的响应信封，已有信封中的 data=null 保持原样。
+        return Objects.requireNonNullElseGet(
+                        response, () -> CommonResponse.success(new ConsoleSchedulerCommandResponse(null)))
+                .data();
+    }
+
+    private ConsoleTriggerActionResponse tenantCommand(String action, String tenantId) {
+        CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
+                .client()
+                .post()
+                .uri(uriBuilder -> uriBuilder
+                        .path(ACTION_PATH)
+                        .queryParam(TENANT_ID, tenantId)
+                        .build(action))
+                .retrieve()
+                .body(ACTION_RESPONSE);
+        return Objects.requireNonNullElseGet(
+                        response, () -> CommonResponse.success(ConsoleTriggerActionResponse.empty()))
+                .data();
+    }
 }

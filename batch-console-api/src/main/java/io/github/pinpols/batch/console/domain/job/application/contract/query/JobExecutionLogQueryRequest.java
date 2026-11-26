@@ -10,23 +10,23 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class JobExecutionLogQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
+    private String tenantId;
 
-  @NotNull
-  private Long jobInstanceId;
+    @NotNull
+    private Long jobInstanceId;
 
-  /** 可选:只看某个分区的日志。 */
-  private Long jobPartitionId;
+    /** 可选:只看某个分区的日志。 */
+    private Long jobPartitionId;
 
-  /** 可选:DEBUG / INFO / WARN / ERROR 单值过滤。 */
-  private String logLevel;
+    /** 可选:DEBUG / INFO / WARN / ERROR 单值过滤。 */
+    private String logLevel;
 
-  /** 可选:SYSTEM / BUSINESS / RETRY / ALARM / AUDIT 单值过滤。 */
-  private String logType;
+    /** 可选:SYSTEM / BUSINESS / RETRY / ALARM / AUDIT 单值过滤。 */
+    private String logType;
 
-  /** 可选:trace snapshot 内部聚合使用；外部日志查看仍要求 jobInstanceId。 */
-  private String traceId;
+    /** 可选:trace snapshot 内部聚合使用；外部日志查看仍要求 jobInstanceId。 */
+    private String traceId;
 
-  /** 可选:message 模糊匹配。 */
-  private String keyword;
+    /** 可选:message 模糊匹配。 */
+    private String keyword;
 }

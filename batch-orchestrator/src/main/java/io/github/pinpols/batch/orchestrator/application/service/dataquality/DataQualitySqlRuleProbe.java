@@ -6,5 +6,5 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 /** DQ SQL 规则执行端口。 */
 public interface DataQualitySqlRuleProbe {
 
-  long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule);
+    long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule);
 }

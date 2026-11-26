@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface FileErrorRecordMapper {
 
-  List<FileErrorRecordEntity> selectByQuery(FileErrorRecordQuery query);
+    List<FileErrorRecordEntity> selectByQuery(FileErrorRecordQuery query);
 
-  long countByQuery(FileErrorRecordQuery query);
+    long countByQuery(FileErrorRecordQuery query);
 }

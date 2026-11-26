@@ -52,391 +52,374 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("出箱转发批量推进: 三阶段批量语句, 并行回写与等待超时口径")
 class DefaultScheduleForwarderSetBasedTest {
 
-  @Mock
-  private OutboxEventMapper outboxEventMapper;
+    @Mock
+    private OutboxEventMapper outboxEventMapper;
 
-  @Mock
-  private OutboxChildRecordService outboxChildRecordService;
+    @Mock
+    private OutboxChildRecordService outboxChildRecordService;
 
-  @Mock
-  private OutboxPublisher outboxPublisher;
+    @Mock
+    private OutboxPublisher outboxPublisher;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  private DefaultScheduleForwarder forwarder;
-  private SimpleMeterRegistry meterRegistry;
-  private final OutboxProperties outboxProperties = new OutboxProperties();
+    private DefaultScheduleForwarder forwarder;
+    private SimpleMeterRegistry meterRegistry;
+    private final OutboxProperties outboxProperties = new OutboxProperties();
 
-  @BeforeEach
-  void setUp() {
-    when(governance.outbox()).thenReturn(outboxProperties);
-    meterRegistry = new SimpleMeterRegistry();
-    forwarder = new DefaultScheduleForwarder(
-        outboxEventMapper, outboxChildRecordService, outboxPublisher, governance, meterRegistry);
-    forwarder.initMetrics();
-  }
-
-  @Test
-  @DisplayName("三阶段 set-based:抢占/成功/失败/GIVE_UP 各走批量 SQL,单条 mark* 零调用")
-  void shouldUseBatchStatements_whenAdvancingOutcomeGroups() {
-    OutboxEventEntity ok = event("ta", 1L, 0);
-    OutboxEventEntity fail = event("ta", 2L, 0);
-    // publish_attempt=4 → 本次为第 5 次(=maxRetryAttempts 默认 5)→ GIVE_UP
-    OutboxEventEntity exhausted = event("ta", 3L, 4);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail, exhausted));
-    when(outboxEventMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
-            .tenantId("ta")
-            .ids(List.of(1L, 2L, 3L))
-            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-            .pendingStatus1(OutboxPublishStatus.NEW.code())
-            .pendingStatus2(OutboxPublishStatus.FAILED.code())
-            .build()))
-        .thenReturn(List.of(
-            new OutboxPublishClaim(1L, 1),
-            new OutboxPublishClaim(2L, 1),
-            new OutboxPublishClaim(3L, 5)));
-    when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
-    when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
-    when(outboxPublisher.publish(exhausted)).thenReturn(CompletableFuture.completedFuture(false));
-    when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
-    when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.ids() != null
-            && parameters.status() != null
-            && parameters.publishingStatus() != null)))
-        .thenReturn(1);
-    when(outboxEventMapper.markGiveUpBatch(any())).thenReturn(1);
-
-    ScheduleForwarderResult result = forwarder.advance(null);
-
-    assertThat(result.attemptedEvents()).isEqualTo(3);
-    assertThat(result.publishSucceeded()).isEqualTo(1);
-    assertThat(result.publishFailed()).isEqualTo(2);
-    // 阶段三守卫:批量版必须保留 publish_status='PUBLISHING'(R3-P0-6)
-    verify(outboxEventMapper)
-        .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(1L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
-            && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
-            && parameters.publishAttempt() == 1));
-    verify(outboxEventMapper)
-        .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(2L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
-            && Objects.equals(
-                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(outboxEventMapper)
-        .markGiveUpBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(3L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code())
-            && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
-            && parameters.publishAttempt() == 5));
-    // 单条路径彻底退役
-    verify(outboxEventMapper, never())
-        .markPublishing(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.publishingStatus() != null
-            && parameters.pendingStatus1() != null
-            && parameters.pendingStatus2() != null));
-    verify(outboxEventMapper, never())
-        .markPublished(anyString(), anyLong(), anyString(), anyString());
-    verify(outboxEventMapper, never())
-        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.status() != null
-            && parameters.publishingStatus() != null));
-    verify(outboxEventMapper, never()).markGiveUp(anyString(), anyLong(), anyString(), anyString());
-    // 失败 + GIVE_UP 各一条 event_outbox_retry 审计
-    ArgumentCaptor<EventOutboxRetryEntity> retryCap =
-        ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
-    verify(outboxChildRecordService, times(2)).recordRetry(retryCap.capture());
-    assertThat(retryCap.getAllValues())
-        .extracting(EventOutboxRetryEntity::getOutboxEventId)
-        .containsExactlyInAnyOrder(2L, 3L);
-  }
-
-  @Test
-  @DisplayName("抢占胜出集是发送边界:未胜出(被并发 forwarder 抢走)的事件不发 Kafka")
-  void shouldPublishOnlyWinners_whenBatchClaimContended() {
-    OutboxEventEntity won = event("ta", 1L, 0);
-    OutboxEventEntity lost = event("ta", 2L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(won, lost));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of(new OutboxPublishClaim(1L, 1)));
-    when(outboxPublisher.publish(won)).thenReturn(CompletableFuture.completedFuture(true));
-    when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
-
-    ScheduleForwarderResult result = forwarder.advance(null);
-
-    assertThat(result.attemptedEvents()).isEqualTo(1);
-    verify(outboxPublisher).publish(won);
-    verify(outboxPublisher, never()).publish(lost);
-  }
-
-  @Test
-  @DisplayName("跨租户批:阶段一按租户分组各一条批量抢占(保留复合分布键裁剪)")
-  void shouldGroupClaimByTenant_whenAdvancingAcrossTenants() {
-    OutboxEventEntity ta = event("ta", 1L, 0);
-    OutboxEventEntity tb = event("tb", 2L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ta, tb));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of());
-
-    forwarder.advance(null);
-
-    verify(outboxEventMapper)
-        .markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(1L))
-            && parameters.publishingStatus() != null
-            && parameters.pendingStatus1() != null
-            && parameters.pendingStatus2() != null));
-    verify(outboxEventMapper)
-        .markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "tb")
-            && Objects.equals(parameters.ids(), List.of(2L))
-            && parameters.publishingStatus() != null
-            && parameters.pendingStatus1() != null
-            && parameters.pendingStatus2() != null));
-  }
-
-  @Test
-  @DisplayName("Kafka ACK 与 DB 回写交错: 旧发布者成功也更新 0 行,新发布者更新 1 行")
-  void shouldRejectStalePublisher_afterEventReclaimed() throws Exception {
-    OutboxEventEntity event = event("ta", 100L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(event));
-    when(outboxEventMapper.markPublishingBatch(any()))
-        .thenReturn(List.of(new OutboxPublishClaim(100L, 1)))
-        .thenReturn(List.of(new OutboxPublishClaim(100L, 2)));
-    CompletableFuture<Boolean> oldAck = new CompletableFuture<>();
-    CountDownLatch oldPublishStarted = new CountDownLatch(1);
-    when(outboxPublisher.publish(event))
-        .thenAnswer(invocation -> {
-          oldPublishStarted.countDown();
-          return oldAck;
-        })
-        .thenReturn(CompletableFuture.completedFuture(true));
-    when(outboxEventMapper.markPublishedBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
-                && parameters.publishAttempt() == 2)))
-        .thenReturn(1);
-
-    ExecutorService pool = Executors.newFixedThreadPool(2);
-    try {
-      Future<?> oldRound = pool.submit(() -> forwarder.advance(null));
-      assertThat(oldPublishStarted.await(5, TimeUnit.SECONDS)).isTrue();
-
-      Future<?> newRound = pool.submit(() -> forwarder.advance(null));
-      newRound.get(5, TimeUnit.SECONDS);
-
-      oldAck.complete(true);
-      oldRound.get(5, TimeUnit.SECONDS);
-    } finally {
-      pool.shutdownNow();
+    @BeforeEach
+    void setUp() {
+        when(governance.outbox()).thenReturn(outboxProperties);
+        meterRegistry = new SimpleMeterRegistry();
+        forwarder = new DefaultScheduleForwarder(
+                outboxEventMapper, outboxChildRecordService, outboxPublisher, governance, meterRegistry);
+        forwarder.initMetrics();
     }
 
-    ArgumentCaptor<OutboxEventMarkPublishedBatchParam> publishedParams =
-        ArgumentCaptor.forClass(OutboxEventMarkPublishedBatchParam.class);
-    verify(outboxEventMapper, times(2)).markPublishedBatch(publishedParams.capture());
-    assertThat(publishedParams.getAllValues()).allSatisfy(parameters -> {
-      assertThat(parameters.tenantId()).isEqualTo("ta");
-      assertThat(parameters.ids()).containsExactly(100L);
-      assertThat(parameters.status()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-      assertThat(parameters.publishingStatus()).isEqualTo(OutboxPublishStatus.PUBLISHING.code());
-    });
-    assertThat(publishedParams.getAllValues().stream()
-            .map(OutboxEventMarkPublishedBatchParam::publishAttempt))
-        .containsExactlyInAnyOrder(1, 2);
-  }
+    @Test
+    @DisplayName("三阶段 set-based:抢占/成功/失败/GIVE_UP 各走批量 SQL,单条 mark* 零调用")
+    void shouldUseBatchStatements_whenAdvancingOutcomeGroups() {
+        OutboxEventEntity ok = event("ta", 1L, 0);
+        OutboxEventEntity fail = event("ta", 2L, 0);
+        // publish_attempt=4 → 本次为第 5 次(=maxRetryAttempts 默认 5)→ GIVE_UP
+        OutboxEventEntity exhausted = event("ta", 3L, 4);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail, exhausted));
+        when(outboxEventMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
+                        .tenantId("ta")
+                        .ids(List.of(1L, 2L, 3L))
+                        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                        .pendingStatus1(OutboxPublishStatus.NEW.code())
+                        .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                        .build()))
+                .thenReturn(List.of(
+                        new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1), new OutboxPublishClaim(3L, 5)));
+        when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
+        when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
+        when(outboxPublisher.publish(exhausted)).thenReturn(CompletableFuture.completedFuture(false));
+        when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
+        when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.status() != null
+                        && parameters.publishingStatus() != null)))
+                .thenReturn(1);
+        when(outboxEventMapper.markGiveUpBatch(any())).thenReturn(1);
 
-  @Test
-  @DisplayName("A6:每轮批填充 attempted/succeeded 进 DistributionSummary(饱和信号)")
-  void shouldRecordBatchFillSummaries_whenAdvancing() {
-    OutboxEventEntity ok = event("ta", 1L, 0);
-    OutboxEventEntity fail = event("ta", 2L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
-    when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
-    when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
-    when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
-    when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.ids() != null
-            && parameters.status() != null
-            && parameters.publishingStatus() != null)))
-        .thenReturn(1);
+        ScheduleForwarderResult result = forwarder.advance(null);
 
-    forwarder.advance(null);
+        assertThat(result.attemptedEvents()).isEqualTo(3);
+        assertThat(result.publishSucceeded()).isEqualTo(1);
+        assertThat(result.publishFailed()).isEqualTo(2);
+        // 阶段三守卫:批量版必须保留 publish_status='PUBLISHING'(R3-P0-6)
+        verify(outboxEventMapper)
+                .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(1L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
+                        && parameters.publishAttempt() == 1));
+        verify(outboxEventMapper)
+                .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(2L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+        verify(outboxEventMapper)
+                .markGiveUpBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(3L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
+                        && parameters.publishAttempt() == 5));
+        // 单条路径彻底退役
+        verify(outboxEventMapper, never())
+                .markPublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null));
+        verify(outboxEventMapper, never()).markPublished(anyString(), anyLong(), anyString(), anyString());
+        verify(outboxEventMapper, never())
+                .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.status() != null
+                        && parameters.publishingStatus() != null));
+        verify(outboxEventMapper, never()).markGiveUp(anyString(), anyLong(), anyString(), anyString());
+        // 失败 + GIVE_UP 各一条 event_outbox_retry 审计
+        ArgumentCaptor<EventOutboxRetryEntity> retryCap = ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
+        verify(outboxChildRecordService, times(2)).recordRetry(retryCap.capture());
+        assertThat(retryCap.getAllValues())
+                .extracting(EventOutboxRetryEntity::getOutboxEventId)
+                .containsExactlyInAnyOrder(2L, 3L);
+    }
 
-    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().totalAmount())
-        .isEqualTo(2.0d);
-    assertThat(meterRegistry.get("batch.outbox.forward.succeeded").summary().totalAmount())
-        .isEqualTo(1.0d);
-    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count())
-        .isEqualTo(1L);
-  }
+    @Test
+    @DisplayName("抢占胜出集是发送边界:未胜出(被并发 forwarder 抢走)的事件不发 Kafka")
+    void shouldPublishOnlyWinners_whenBatchClaimContended() {
+        OutboxEventEntity won = event("ta", 1L, 0);
+        OutboxEventEntity lost = event("ta", 2L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(won, lost));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of(new OutboxPublishClaim(1L, 1)));
+        when(outboxPublisher.publish(won)).thenReturn(CompletableFuture.completedFuture(true));
+        when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
 
-  @Test
-  @DisplayName("B2:publish 返回 failedFuture → 阶段三照常回写 FAILED,不整批停摆")
-  void shouldMarkFailedWithoutStalling_whenPublishFutureFails() {
-    OutboxEventEntity ok = event("ta", 1L, 0);
-    OutboxEventEntity boom = event("ta", 2L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, boom));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
-    when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
-    // 关键:异步 exceptionally-completed future(非同步抛异常,claimAndPublish 的 try/catch 抓不到)。
-    when(outboxPublisher.publish(boom))
-        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka send blew up")));
-    when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
-    when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.ids() != null
-            && parameters.status() != null
-            && parameters.publishingStatus() != null)))
-        .thenReturn(1);
+        ScheduleForwarderResult result = forwarder.advance(null);
 
-    ScheduleForwarderResult result = forwarder.advance(null);
+        assertThat(result.attemptedEvents()).isEqualTo(1);
+        verify(outboxPublisher).publish(won);
+        verify(outboxPublisher, never()).publish(lost);
+    }
 
-    // 不整批停摆:成功的照常 PUBLISHED,失败的照常 FAILED 回写。
-    assertThat(result.attemptedEvents()).isEqualTo(2);
-    assertThat(result.publishSucceeded()).isEqualTo(1);
-    assertThat(result.publishFailed()).isEqualTo(1);
-    verify(outboxEventMapper)
-        .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(1L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
-            && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
-            && parameters.publishAttempt() == 1));
-    verify(outboxEventMapper)
-        .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(2L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
-            && Objects.equals(
-                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    // 失败事件落一条 event_outbox_retry 审计。
-    ArgumentCaptor<EventOutboxRetryEntity> retryCap =
-        ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
-    verify(outboxChildRecordService, times(1)).recordRetry(retryCap.capture());
-    assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(2L);
-  }
+    @Test
+    @DisplayName("跨租户批:阶段一按租户分组各一条批量抢占(保留复合分布键裁剪)")
+    void shouldGroupClaimByTenant_whenAdvancingAcrossTenants() {
+        OutboxEventEntity ta = event("ta", 1L, 0);
+        OutboxEventEntity tb = event("tb", 2L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ta, tb));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of());
 
-  @Test
-  @DisplayName("ACK 等待受 publishingTimeoutSeconds 约束:未完成 future 按 FAILED 回写")
-  void shouldMarkFailed_whenPublishFutureTimesOut() {
-    outboxProperties.setPublishingTimeoutSeconds(1);
-    OutboxEventEntity stalled = event("ta", 4L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(stalled));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of(new OutboxPublishClaim(4L, 1)));
-    when(outboxPublisher.publish(stalled)).thenReturn(new CompletableFuture<>());
-    when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.ids() != null
-            && parameters.status() != null
-            && parameters.publishingStatus() != null)))
-        .thenReturn(1);
+        forwarder.advance(null);
 
-    long startedNanos = System.nanoTime();
-    ScheduleForwarderResult result = forwarder.advance(null);
-    Duration elapsed = Duration.ofNanos(System.nanoTime() - startedNanos);
+        verify(outboxEventMapper)
+                .markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(1L))
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null));
+        verify(outboxEventMapper)
+                .markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "tb")
+                        && Objects.equals(parameters.ids(), List.of(2L))
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null));
+    }
 
-    assertThat(elapsed).isLessThan(Duration.ofSeconds(3));
-    assertThat(result.attemptedEvents()).isEqualTo(1);
-    assertThat(result.publishSucceeded()).isZero();
-    assertThat(result.publishFailed()).isEqualTo(1);
-    verify(outboxEventMapper)
-        .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(4L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
-            && Objects.equals(
-                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(outboxEventMapper, never()).markPublishedBatch(any());
-    ArgumentCaptor<EventOutboxRetryEntity> retryCap =
-        ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
-    verify(outboxChildRecordService).recordRetry(retryCap.capture());
-    assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(4L);
-  }
+    @Test
+    @DisplayName("Kafka ACK 与 DB 回写交错: 旧发布者成功也更新 0 行,新发布者更新 1 行")
+    void shouldRejectStalePublisher_afterEventReclaimed() throws Exception {
+        OutboxEventEntity event = event("ta", 100L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(event));
+        when(outboxEventMapper.markPublishingBatch(any()))
+                .thenReturn(List.of(new OutboxPublishClaim(100L, 1)))
+                .thenReturn(List.of(new OutboxPublishClaim(100L, 2)));
+        CompletableFuture<Boolean> oldAck = new CompletableFuture<>();
+        CountDownLatch oldPublishStarted = new CountDownLatch(1);
+        when(outboxPublisher.publish(event))
+                .thenAnswer(invocation -> {
+                    oldPublishStarted.countDown();
+                    return oldAck;
+                })
+                .thenReturn(CompletableFuture.completedFuture(true));
+        when(outboxEventMapper.markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
+                        && parameters.publishAttempt() == 2)))
+                .thenReturn(1);
 
-  @Test
-  @DisplayName("B2:markPublishedBatch 命中行数 < 期望 → warnOnPartialUpdate 并发守卫分支(不抛)")
-  void shouldWarnWithoutThrowing_whenPartialUpdateDetected() {
-    OutboxEventEntity a = event("ta", 1L, 0);
-    OutboxEventEntity b = event("ta", 2L, 0);
-    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(a, b));
-    when(outboxEventMapper.markPublishingBatch(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.ids() != null
-                && parameters.publishingStatus() != null
-                && parameters.pendingStatus1() != null
-                && parameters.pendingStatus2() != null)))
-        .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
-    when(outboxPublisher.publish(a)).thenReturn(CompletableFuture.completedFuture(true));
-    when(outboxPublisher.publish(b)).thenReturn(CompletableFuture.completedFuture(true));
-    // 期望更新 2 行,实际只命中 1(另一行被并发方 resetStalePublishing 推走)→ 触发 warnOnPartialUpdate。
-    when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> oldRound = pool.submit(() -> forwarder.advance(null));
+            assertThat(oldPublishStarted.await(5, TimeUnit.SECONDS)).isTrue();
 
-    ScheduleForwarderResult result = forwarder.advance(null);
+            Future<?> newRound = pool.submit(() -> forwarder.advance(null));
+            newRound.get(5, TimeUnit.SECONDS);
 
-    // 守卫只 log.warn,不抛不停摆;结果计数按发送结果如实统计。
-    assertThat(result.attemptedEvents()).isEqualTo(2);
-    assertThat(result.publishSucceeded()).isEqualTo(2);
-    verify(outboxEventMapper)
-        .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.ids(), List.of(1L, 2L))
-            && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
-            && parameters.publishingStatus() != null));
-  }
+            oldAck.complete(true);
+            oldRound.get(5, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
 
-  private OutboxEventEntity event(String tenantId, Long id, int publishAttempt) {
-    OutboxEventEntity event = new OutboxEventEntity();
-    event.setTenantId(tenantId);
-    event.setId(id);
-    event.setPublishAttempt(publishAttempt);
-    event.setCreatedAt(BatchDateTimeSupport.utcNow());
-    event.setEventKey(tenantId + ":" + id);
-    event.setTraceId("trace-" + id);
-    return event;
-  }
+        ArgumentCaptor<OutboxEventMarkPublishedBatchParam> publishedParams =
+                ArgumentCaptor.forClass(OutboxEventMarkPublishedBatchParam.class);
+        verify(outboxEventMapper, times(2)).markPublishedBatch(publishedParams.capture());
+        assertThat(publishedParams.getAllValues()).allSatisfy(parameters -> {
+            assertThat(parameters.tenantId()).isEqualTo("ta");
+            assertThat(parameters.ids()).containsExactly(100L);
+            assertThat(parameters.status()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+            assertThat(parameters.publishingStatus()).isEqualTo(OutboxPublishStatus.PUBLISHING.code());
+        });
+        assertThat(publishedParams.getAllValues().stream().map(OutboxEventMarkPublishedBatchParam::publishAttempt))
+                .containsExactlyInAnyOrder(1, 2);
+    }
+
+    @Test
+    @DisplayName("A6:每轮批填充 attempted/succeeded 进 DistributionSummary(饱和信号)")
+    void shouldRecordBatchFillSummaries_whenAdvancing() {
+        OutboxEventEntity ok = event("ta", 1L, 0);
+        OutboxEventEntity fail = event("ta", 2L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
+        when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
+        when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
+        when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
+        when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.status() != null
+                        && parameters.publishingStatus() != null)))
+                .thenReturn(1);
+
+        forwarder.advance(null);
+
+        assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().totalAmount())
+                .isEqualTo(2.0d);
+        assertThat(meterRegistry.get("batch.outbox.forward.succeeded").summary().totalAmount())
+                .isEqualTo(1.0d);
+        assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count())
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("B2:publish 返回 failedFuture → 阶段三照常回写 FAILED,不整批停摆")
+    void shouldMarkFailedWithoutStalling_whenPublishFutureFails() {
+        OutboxEventEntity ok = event("ta", 1L, 0);
+        OutboxEventEntity boom = event("ta", 2L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, boom));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
+        when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
+        // 关键:异步 exceptionally-completed future(非同步抛异常,claimAndPublish 的 try/catch 抓不到)。
+        when(outboxPublisher.publish(boom))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka send blew up")));
+        when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
+        when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.status() != null
+                        && parameters.publishingStatus() != null)))
+                .thenReturn(1);
+
+        ScheduleForwarderResult result = forwarder.advance(null);
+
+        // 不整批停摆:成功的照常 PUBLISHED,失败的照常 FAILED 回写。
+        assertThat(result.attemptedEvents()).isEqualTo(2);
+        assertThat(result.publishSucceeded()).isEqualTo(1);
+        assertThat(result.publishFailed()).isEqualTo(1);
+        verify(outboxEventMapper)
+                .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(1L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())
+                        && parameters.publishAttempt() == 1));
+        verify(outboxEventMapper)
+                .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(2L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+        // 失败事件落一条 event_outbox_retry 审计。
+        ArgumentCaptor<EventOutboxRetryEntity> retryCap = ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
+        verify(outboxChildRecordService, times(1)).recordRetry(retryCap.capture());
+        assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("ACK 等待受 publishingTimeoutSeconds 约束:未完成 future 按 FAILED 回写")
+    void shouldMarkFailed_whenPublishFutureTimesOut() {
+        outboxProperties.setPublishingTimeoutSeconds(1);
+        OutboxEventEntity stalled = event("ta", 4L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(stalled));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of(new OutboxPublishClaim(4L, 1)));
+        when(outboxPublisher.publish(stalled)).thenReturn(new CompletableFuture<>());
+        when(outboxEventMapper.markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.status() != null
+                        && parameters.publishingStatus() != null)))
+                .thenReturn(1);
+
+        long startedNanos = System.nanoTime();
+        ScheduleForwarderResult result = forwarder.advance(null);
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - startedNanos);
+
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(3));
+        assertThat(result.attemptedEvents()).isEqualTo(1);
+        assertThat(result.publishSucceeded()).isZero();
+        assertThat(result.publishFailed()).isEqualTo(1);
+        verify(outboxEventMapper)
+                .markFailedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(4L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+                        && Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+        verify(outboxEventMapper, never()).markPublishedBatch(any());
+        ArgumentCaptor<EventOutboxRetryEntity> retryCap = ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
+        verify(outboxChildRecordService).recordRetry(retryCap.capture());
+        assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("B2:markPublishedBatch 命中行数 < 期望 → warnOnPartialUpdate 并发守卫分支(不抛)")
+    void shouldWarnWithoutThrowing_whenPartialUpdateDetected() {
+        OutboxEventEntity a = event("ta", 1L, 0);
+        OutboxEventEntity b = event("ta", 2L, 0);
+        when(outboxEventMapper.selectPending(any())).thenReturn(List.of(a, b));
+        when(outboxEventMapper.markPublishingBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.ids() != null
+                        && parameters.publishingStatus() != null
+                        && parameters.pendingStatus1() != null
+                        && parameters.pendingStatus2() != null)))
+                .thenReturn(List.of(new OutboxPublishClaim(1L, 1), new OutboxPublishClaim(2L, 1)));
+        when(outboxPublisher.publish(a)).thenReturn(CompletableFuture.completedFuture(true));
+        when(outboxPublisher.publish(b)).thenReturn(CompletableFuture.completedFuture(true));
+        // 期望更新 2 行,实际只命中 1(另一行被并发方 resetStalePublishing 推走)→ 触发 warnOnPartialUpdate。
+        when(outboxEventMapper.markPublishedBatch(any())).thenReturn(1);
+
+        ScheduleForwarderResult result = forwarder.advance(null);
+
+        // 守卫只 log.warn,不抛不停摆;结果计数按发送结果如实统计。
+        assertThat(result.attemptedEvents()).isEqualTo(2);
+        assertThat(result.publishSucceeded()).isEqualTo(2);
+        verify(outboxEventMapper)
+                .markPublishedBatch(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.ids(), List.of(1L, 2L))
+                        && Objects.equals(parameters.status(), OutboxPublishStatus.PUBLISHED.code())
+                        && parameters.publishingStatus() != null));
+    }
+
+    private OutboxEventEntity event(String tenantId, Long id, int publishAttempt) {
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(tenantId);
+        event.setId(id);
+        event.setPublishAttempt(publishAttempt);
+        event.setCreatedAt(BatchDateTimeSupport.utcNow());
+        event.setEventKey(tenantId + ":" + id);
+        event.setTraceId("trace-" + id);
+        return event;
+    }
 }

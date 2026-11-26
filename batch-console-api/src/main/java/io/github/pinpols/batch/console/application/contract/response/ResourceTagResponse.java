@@ -5,24 +5,24 @@ import java.time.Instant;
 
 /** Public resource tag view. */
 public record ResourceTagResponse(
-    Long id,
-    String tenantId,
-    String resourceType,
-    String resourceCode,
-    String tagKey,
-    String tagValue,
-    String createdBy,
-    Instant createdAt) {
+        Long id,
+        String tenantId,
+        String resourceType,
+        String resourceCode,
+        String tagKey,
+        String tagValue,
+        String createdBy,
+        Instant createdAt) {
 
-  public static ResourceTagResponse from(ResourceTagEntity entity) {
-    return new ResourceTagResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getResourceType(),
-        entity.getResourceCode(),
-        entity.getTagKey(),
-        entity.getTagValue(),
-        entity.getCreatedBy(),
-        entity.getCreatedAt());
-  }
+    public static ResourceTagResponse from(ResourceTagEntity entity) {
+        return new ResourceTagResponse(
+                entity.getId(),
+                entity.getTenantId(),
+                entity.getResourceType(),
+                entity.getResourceCode(),
+                entity.getTagKey(),
+                entity.getTagValue(),
+                entity.getCreatedBy(),
+                entity.getCreatedAt());
+    }
 }

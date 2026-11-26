@@ -35,322 +35,308 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class ExternalEventExpectationService {
 
-  /**
-   * external_event_expectation_definition.tenant_id VARCHAR(64)
-   * （V265__external_event_expectation_definition.sql）。
-   */
-  private static final int TENANT_ID_MAX_LENGTH = 64;
+    /**
+     * external_event_expectation_definition.tenant_id VARCHAR(64)
+     * （V265__external_event_expectation_definition.sql）。
+     */
+    private static final int TENANT_ID_MAX_LENGTH = 64;
 
-  /**
-   * external_event_expectation_definition.calendar_code VARCHAR(128)
-   * （V265__external_event_expectation_definition.sql）。
-   */
-  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+    /**
+     * external_event_expectation_definition.calendar_code VARCHAR(128)
+     * （V265__external_event_expectation_definition.sql）。
+     */
+    private static final int CALENDAR_CODE_MAX_LENGTH = 128;
 
-  /**
-   * external_event_expectation_definition.event_code VARCHAR(128)
-   * （V265__external_event_expectation_definition.sql）。
-   */
-  private static final int EVENT_CODE_MAX_LENGTH = 128;
+    /**
+     * external_event_expectation_definition.event_code VARCHAR(128)
+     * （V265__external_event_expectation_definition.sql）。
+     */
+    private static final int EVENT_CODE_MAX_LENGTH = 128;
 
-  /**
-   * 满足期望时记录的触发请求 ID，对应 expected_work_occurrence.trigger_request_id VARCHAR(128)
-   * （V263__expected_work_occurrence.sql）。
-   */
-  private static final int TRIGGER_REQUEST_ID_MAX_LENGTH = 128;
+    /**
+     * 满足期望时记录的触发请求 ID，对应 expected_work_occurrence.trigger_request_id VARCHAR(128)
+     * （V263__expected_work_occurrence.sql）。
+     */
+    private static final int TRIGGER_REQUEST_ID_MAX_LENGTH = 128;
 
-  private final ExternalEventExpectationDefinitionMapper definitionMapper;
-  private final BatchDayInstanceMapper batchDayInstanceMapper;
-  private final ExpectedWorkOccurrenceMapper occurrenceMapper;
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final PlatformTransactionManager transactionManager;
+    private final ExternalEventExpectationDefinitionMapper definitionMapper;
+    private final BatchDayInstanceMapper batchDayInstanceMapper;
+    private final ExpectedWorkOccurrenceMapper occurrenceMapper;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final PlatformTransactionManager transactionManager;
 
-  public ExternalEventExpectationService(
-      ExternalEventExpectationDefinitionMapper definitionMapper,
-      BatchDayInstanceMapper batchDayInstanceMapper,
-      ExpectedWorkOccurrenceMapper occurrenceMapper,
-      TriggerRequestMapper triggerRequestMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper,
-      PlatformTransactionManager transactionManager) {
-    this.definitionMapper = definitionMapper;
-    this.batchDayInstanceMapper = batchDayInstanceMapper;
-    this.occurrenceMapper = occurrenceMapper;
-    this.triggerRequestMapper = triggerRequestMapper;
-    this.workflowDefinitionMapper = workflowDefinitionMapper;
-    this.transactionManager = transactionManager;
-  }
-
-  public int configure(DefinitionRequest request) {
-    validate(request);
-    try {
-      return RlsTenantContextHolder.runWithTenant(request.tenantId(), () -> {
-        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-        return transaction.execute(status -> {
-          occurrenceMapper.setTenantContext(request.tenantId());
-          validateWorkflowCalendar(
-              request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
-          ExternalEventExpectationDefinitionUpsertParam
-              externalEventExpectationDefinitionUpsertParam =
-                  ExternalEventExpectationDefinitionUpsertParam.builder()
-                      .tenantId(request.tenantId())
-                      .calendarCode(request.calendarCode())
-                      .workflowDefinitionId(request.workflowDefinitionId())
-                      .eventCode(request.eventCode())
-                      .expectedLocalTime(request.expectedLocalTime())
-                      .dueLocalTime(request.dueLocalTime())
-                      .enabled(request.enabled())
-                      .build();
-          return definitionMapper.upsert(externalEventExpectationDefinitionUpsertParam);
-        });
-      });
-    } catch (DataIntegrityViolationException failure) {
-      if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
-          failure, "fk_external_event_expectation_workflow_calendar")) {
-        throw new OperationFailure(
-            Kind.CONFLICT,
-            "Workflow calendar changed while configuring the external-event expectation",
-            failure);
-      }
-      throw failure;
+    public ExternalEventExpectationService(
+            ExternalEventExpectationDefinitionMapper definitionMapper,
+            BatchDayInstanceMapper batchDayInstanceMapper,
+            ExpectedWorkOccurrenceMapper occurrenceMapper,
+            TriggerRequestMapper triggerRequestMapper,
+            WorkflowDefinitionMapper workflowDefinitionMapper,
+            PlatformTransactionManager transactionManager) {
+        this.definitionMapper = definitionMapper;
+        this.batchDayInstanceMapper = batchDayInstanceMapper;
+        this.occurrenceMapper = occurrenceMapper;
+        this.triggerRequestMapper = triggerRequestMapper;
+        this.workflowDefinitionMapper = workflowDefinitionMapper;
+        this.transactionManager = transactionManager;
     }
-  }
 
-  /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
-  public boolean deleteDefinition(
-      String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {
-    boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
-        || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
-        || EmptyChecks.isNull(workflowDefinitionId)
-        || workflowDefinitionId <= 0
-        || !valid(eventCode, EVENT_CODE_MAX_LENGTH);
-    if (eventDefinitionIdentityIsInvalid) {
-      throw new IllegalArgumentException(
-          "tenant, calendar, workflowDefinitionId and eventCode are required");
-    }
-    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-      return transaction.execute(status -> {
-        occurrenceMapper.setTenantContext(tenantId);
-        return definitionMapper.delete(tenantId, calendarCode, workflowDefinitionId, eventCode)
-            == 1;
-      });
-    });
-  }
-
-  /** 在批次日开启事务内调用；重试会复用稳定的每日事件标识。 */
-  public int materializeForOpenedBusinessDay(
-      String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId,
-        () -> materializeOpenedBusinessDayInTransaction(
-            tenantId, calendarCode, bizDate, timezoneSnapshot));
-  }
-
-  /** 只有相关联的 EVENT 请求进入 LAUNCHED 后，才能关闭预期。 */
-  public boolean markSatisfied(SatisfactionRequest request) {
-    validate(request);
-    return RlsTenantContextHolder.runWithTenant(
-        request.tenantId(), () -> markSatisfiedInTransaction(request));
-  }
-
-  private int materializeOpenedBusinessDayInTransaction(
-      String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
-    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-    return transactionTemplate.execute(status -> {
-      occurrenceMapper.setTenantContext(tenantId);
-      batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
-      BatchDayInstanceEntity batchDay =
-          batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
-      boolean existingBatchDayIsTerminal =
-          EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus());
-      if (existingBatchDayIsTerminal) {
-        throw new OperationFailure(
-            Kind.CONFLICT,
-            "Cannot materialize an external-event expectation for a terminal batch day");
-      }
-      ZoneId zone = ZoneId.of(timezoneSnapshot);
-      int inserted = 0;
-      for (ExternalEventExpectationDefinition definition :
-          definitionMapper.selectEnabledByCalendar(tenantId, calendarCode)) {
-        Long workflowDefinitionId = definition.workflowDefinitionId();
-        String eventCode = definition.eventCode();
-        Instant expectedAt = resolve(bizDate, definition.expectedLocalTime(), zone);
-        Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
-            ? null
-            : resolve(bizDate, definition.dueLocalTime(), zone);
-        ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
-            ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-                .tenantId(tenantId)
-                .calendarCode(calendarCode)
-                .bizDate(bizDate)
-                .workflowDefinitionId(workflowDefinitionId)
-                .sourceType("EXTERNAL_EVENT")
-                .sourceKey(eventCode)
-                .expectedAt(expectedAt)
-                .dueAt(dueAt)
-                .build();
-        inserted += occurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
-        String launchedRequestId = triggerRequestMapper.selectLaunchedExternalEventRequestId(
-            tenantId, definition.workflowDefinitionId(), definition.eventCode(), bizDate);
-        if (Texts.hasText(launchedRequestId)) {
-          ExpectedWorkOccurrenceTransitionStatusByGenerationParam
-              expectedWorkOccurrenceTransitionStatusByGenerationParam =
-                  ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-                      .tenantId(tenantId)
-                      .calendarCode(calendarCode)
-                      .workflowDefinitionId(definition.workflowDefinitionId())
-                      .sourceType("EXTERNAL_EVENT")
-                      .sourceKey(definition.eventCode())
-                      .bizDate(bizDate)
-                      .generation(null)
-                      .expectedStatus("EXPECTED")
-                      .newStatus("SATISFIED")
-                      .triggerRequestId(launchedRequestId)
-                      .build();
-          occurrenceMapper.transitionStatus(
-              expectedWorkOccurrenceTransitionStatusByGenerationParam);
+    public int configure(DefinitionRequest request) {
+        validate(request);
+        try {
+            return RlsTenantContextHolder.runWithTenant(request.tenantId(), () -> {
+                TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+                return transaction.execute(status -> {
+                    occurrenceMapper.setTenantContext(request.tenantId());
+                    validateWorkflowCalendar(
+                            request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
+                    ExternalEventExpectationDefinitionUpsertParam externalEventExpectationDefinitionUpsertParam =
+                            ExternalEventExpectationDefinitionUpsertParam.builder()
+                                    .tenantId(request.tenantId())
+                                    .calendarCode(request.calendarCode())
+                                    .workflowDefinitionId(request.workflowDefinitionId())
+                                    .eventCode(request.eventCode())
+                                    .expectedLocalTime(request.expectedLocalTime())
+                                    .dueLocalTime(request.dueLocalTime())
+                                    .enabled(request.enabled())
+                                    .build();
+                    return definitionMapper.upsert(externalEventExpectationDefinitionUpsertParam);
+                });
+            });
+        } catch (DataIntegrityViolationException failure) {
+            if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
+                    failure, "fk_external_event_expectation_workflow_calendar")) {
+                throw new OperationFailure(
+                        Kind.CONFLICT,
+                        "Workflow calendar changed while configuring the external-event expectation",
+                        failure);
+            }
+            throw failure;
         }
-      }
-      return inserted;
-    });
-  }
-
-  private boolean markSatisfiedInTransaction(SatisfactionRequest request) {
-    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-    return transactionTemplate.execute(status -> {
-      occurrenceMapper.setTenantContext(request.tenantId());
-      batchDayInstanceMapper.acquireSettlementFenceShared(
-          request.tenantId(), request.calendarCode(), request.bizDate());
-      TriggerRequestEntity triggerRequest = triggerRequestMapper.selectByTenantAndRequestId(
-          request.tenantId(), request.triggerRequestId());
-      boolean launchedEventMatchesExpectation = EmptyChecks.isNotNull(triggerRequest)
-          && request.workflowDefinitionId().equals(triggerRequest.getWorkflowDefinitionId())
-          && request.bizDate().equals(triggerRequest.getBizDate())
-          && TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
-          && request.eventCode().equals(triggerRequest.getExternalEventCode())
-          && TriggerRequestStatus.LAUNCHED.code().equals(triggerRequest.getRequestStatus());
-      if (!launchedEventMatchesExpectation) {
-        throw new OperationFailure(
-            Kind.CONFLICT, "Expected event can be satisfied only by its launched EVENT request");
-      }
-      validateWorkflowCalendarForLaunchedEvent(
-          request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
-          expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
-              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-                  .tenantId(request.tenantId())
-                  .calendarCode(request.calendarCode())
-                  .workflowDefinitionId(request.workflowDefinitionId())
-                  .sourceType("EXTERNAL_EVENT")
-                  .sourceKey(request.eventCode())
-                  .bizDate(request.bizDate())
-                  .generation(null)
-                  .expectedStatus("EXPECTED")
-                  .newStatus("SATISFIED")
-                  .triggerRequestId(request.triggerRequestId())
-                  .build();
-      return occurrenceMapper.transitionStatus(
-              expectedWorkOccurrenceTransitionStatusByGenerationParam2)
-          == 1;
-    });
-  }
-
-  private void validateWorkflowCalendar(
-      String tenantId, String calendarCode, Long workflowDefinitionId) {
-    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
-        tenantId, workflowDefinitionId, true);
-    boolean workflowIsMissingOrUsesAnotherCalendar =
-        EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
-    if (workflowIsMissingOrUsesAnotherCalendar) {
-      throw new OperationFailure(
-          Kind.INVALID_CONFIGURATION,
-          "External-event expectation must target an enabled Workflow on the same calendar");
     }
-  }
 
-  private void validateWorkflowCalendarForLaunchedEvent(
-      String tenantId, String calendarCode, Long workflowDefinitionId) {
-    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
-        tenantId, workflowDefinitionId, true);
-    if (EmptyChecks.isNull(workflow)) {
-      workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
-          tenantId, workflowDefinitionId, false);
+    /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
+    public boolean deleteDefinition(String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {
+        boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
+                || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
+                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId <= 0
+                || !valid(eventCode, EVENT_CODE_MAX_LENGTH);
+        if (eventDefinitionIdentityIsInvalid) {
+            throw new IllegalArgumentException("tenant, calendar, workflowDefinitionId and eventCode are required");
+        }
+        return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+            TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            return transaction.execute(status -> {
+                occurrenceMapper.setTenantContext(tenantId);
+                return definitionMapper.delete(tenantId, calendarCode, workflowDefinitionId, eventCode) == 1;
+            });
+        });
     }
-    boolean workflowIsMissingOrUsesAnotherCalendar =
-        EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
-    if (workflowIsMissingOrUsesAnotherCalendar) {
-      throw new OperationFailure(
-          Kind.INVALID_CONFIGURATION,
-          "External-event expectation must target a Workflow on the same calendar");
+
+    /** 在批次日开启事务内调用；重试会复用稳定的每日事件标识。 */
+    public int materializeForOpenedBusinessDay(
+            String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
+        return RlsTenantContextHolder.runWithTenant(
+                tenantId,
+                () -> materializeOpenedBusinessDayInTransaction(tenantId, calendarCode, bizDate, timezoneSnapshot));
     }
-  }
 
-  private static Instant resolve(LocalDate bizDate, LocalTime localTime, ZoneId zone) {
-    LocalDateTime localOccurrenceTime = LocalDateTime.of(bizDate, localTime);
-    ZonedDateTime zonedOccurrenceTime = localOccurrenceTime.atZone(zone);
-    return zonedOccurrenceTime.toInstant();
-  }
-
-  private static boolean isTerminal(String dayStatus) {
-    return "SETTLED".equals(dayStatus)
-        || "FAILED".equals(dayStatus)
-        || "SKIPPED".equals(dayStatus)
-        || "MANUAL_RELEASED".equals(dayStatus);
-  }
-
-  private static void validate(DefinitionRequest request) {
-    boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
-        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-        && EmptyChecks.isNotNull(request.workflowDefinitionId())
-        && request.workflowDefinitionId() > 0
-        && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
-        && EmptyChecks.isNotNull(request.expectedLocalTime());
-    boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
-        || EmptyChecks.isNull(request.dueLocalTime())
-        || request.dueLocalTime().isAfter(request.expectedLocalTime());
-    boolean definitionIsValid =
-        requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
-    if (!definitionIsValid) {
-      throw new IllegalArgumentException(
-          "tenant, calendar, workflowDefinitionId, eventCode and expectedLocalTime are required; dueLocalTime must be later on the same business date");
+    /** 只有相关联的 EVENT 请求进入 LAUNCHED 后，才能关闭预期。 */
+    public boolean markSatisfied(SatisfactionRequest request) {
+        validate(request);
+        return RlsTenantContextHolder.runWithTenant(request.tenantId(), () -> markSatisfiedInTransaction(request));
     }
-  }
 
-  private static void validate(SatisfactionRequest request) {
-    boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
-        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-        && EmptyChecks.isNotNull(request.workflowDefinitionId())
-        && request.workflowDefinitionId() > 0
-        && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
-        && valid(request.triggerRequestId(), TRIGGER_REQUEST_ID_MAX_LENGTH)
-        && EmptyChecks.isNotNull(request.bizDate());
-    if (!requestHasRequiredFields) {
-      throw new IllegalArgumentException(
-          "tenant, calendar, workflowDefinitionId, eventCode, bizDate and triggerRequestId are required");
+    private int materializeOpenedBusinessDayInTransaction(
+            String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate.execute(status -> {
+            occurrenceMapper.setTenantContext(tenantId);
+            batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
+            BatchDayInstanceEntity batchDay =
+                    batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
+            boolean existingBatchDayIsTerminal = EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus());
+            if (existingBatchDayIsTerminal) {
+                throw new OperationFailure(
+                        Kind.CONFLICT, "Cannot materialize an external-event expectation for a terminal batch day");
+            }
+            ZoneId zone = ZoneId.of(timezoneSnapshot);
+            int inserted = 0;
+            for (ExternalEventExpectationDefinition definition :
+                    definitionMapper.selectEnabledByCalendar(tenantId, calendarCode)) {
+                Long workflowDefinitionId = definition.workflowDefinitionId();
+                String eventCode = definition.eventCode();
+                Instant expectedAt = resolve(bizDate, definition.expectedLocalTime(), zone);
+                Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
+                        ? null
+                        : resolve(bizDate, definition.dueLocalTime(), zone);
+                ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
+                        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+                                .tenantId(tenantId)
+                                .calendarCode(calendarCode)
+                                .bizDate(bizDate)
+                                .workflowDefinitionId(workflowDefinitionId)
+                                .sourceType("EXTERNAL_EVENT")
+                                .sourceKey(eventCode)
+                                .expectedAt(expectedAt)
+                                .dueAt(dueAt)
+                                .build();
+                inserted += occurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
+                String launchedRequestId = triggerRequestMapper.selectLaunchedExternalEventRequestId(
+                        tenantId, definition.workflowDefinitionId(), definition.eventCode(), bizDate);
+                if (Texts.hasText(launchedRequestId)) {
+                    ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+                            expectedWorkOccurrenceTransitionStatusByGenerationParam =
+                                    ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                                            .tenantId(tenantId)
+                                            .calendarCode(calendarCode)
+                                            .workflowDefinitionId(definition.workflowDefinitionId())
+                                            .sourceType("EXTERNAL_EVENT")
+                                            .sourceKey(definition.eventCode())
+                                            .bizDate(bizDate)
+                                            .generation(null)
+                                            .expectedStatus("EXPECTED")
+                                            .newStatus("SATISFIED")
+                                            .triggerRequestId(launchedRequestId)
+                                            .build();
+                    occurrenceMapper.transitionStatus(expectedWorkOccurrenceTransitionStatusByGenerationParam);
+                }
+            }
+            return inserted;
+        });
     }
-  }
 
-  private static boolean valid(String value, int maxLength) {
-    return Texts.hasText(value) && value.trim().length() <= maxLength;
-  }
+    private boolean markSatisfiedInTransaction(SatisfactionRequest request) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate.execute(status -> {
+            occurrenceMapper.setTenantContext(request.tenantId());
+            batchDayInstanceMapper.acquireSettlementFenceShared(
+                    request.tenantId(), request.calendarCode(), request.bizDate());
+            TriggerRequestEntity triggerRequest =
+                    triggerRequestMapper.selectByTenantAndRequestId(request.tenantId(), request.triggerRequestId());
+            boolean launchedEventMatchesExpectation = EmptyChecks.isNotNull(triggerRequest)
+                    && request.workflowDefinitionId().equals(triggerRequest.getWorkflowDefinitionId())
+                    && request.bizDate().equals(triggerRequest.getBizDate())
+                    && TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
+                    && request.eventCode().equals(triggerRequest.getExternalEventCode())
+                    && TriggerRequestStatus.LAUNCHED.code().equals(triggerRequest.getRequestStatus());
+            if (!launchedEventMatchesExpectation) {
+                throw new OperationFailure(
+                        Kind.CONFLICT, "Expected event can be satisfied only by its launched EVENT request");
+            }
+            validateWorkflowCalendarForLaunchedEvent(
+                    request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
+            ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+                    expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
+                            ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                                    .tenantId(request.tenantId())
+                                    .calendarCode(request.calendarCode())
+                                    .workflowDefinitionId(request.workflowDefinitionId())
+                                    .sourceType("EXTERNAL_EVENT")
+                                    .sourceKey(request.eventCode())
+                                    .bizDate(request.bizDate())
+                                    .generation(null)
+                                    .expectedStatus("EXPECTED")
+                                    .newStatus("SATISFIED")
+                                    .triggerRequestId(request.triggerRequestId())
+                                    .build();
+            return occurrenceMapper.transitionStatus(expectedWorkOccurrenceTransitionStatusByGenerationParam2) == 1;
+        });
+    }
 
-  public record DefinitionRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String eventCode,
-      LocalTime expectedLocalTime,
-      LocalTime dueLocalTime,
-      boolean enabled) {}
+    private void validateWorkflowCalendar(String tenantId, String calendarCode, Long workflowDefinitionId) {
+        WorkflowDefinitionView workflow =
+                workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, true);
+        boolean workflowIsMissingOrUsesAnotherCalendar =
+                EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
+        if (workflowIsMissingOrUsesAnotherCalendar) {
+            throw new OperationFailure(
+                    Kind.INVALID_CONFIGURATION,
+                    "External-event expectation must target an enabled Workflow on the same calendar");
+        }
+    }
 
-  public record SatisfactionRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String eventCode,
-      LocalDate bizDate,
-      String triggerRequestId) {}
+    private void validateWorkflowCalendarForLaunchedEvent(
+            String tenantId, String calendarCode, Long workflowDefinitionId) {
+        WorkflowDefinitionView workflow =
+                workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, true);
+        if (EmptyChecks.isNull(workflow)) {
+            workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, false);
+        }
+        boolean workflowIsMissingOrUsesAnotherCalendar =
+                EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
+        if (workflowIsMissingOrUsesAnotherCalendar) {
+            throw new OperationFailure(
+                    Kind.INVALID_CONFIGURATION,
+                    "External-event expectation must target a Workflow on the same calendar");
+        }
+    }
+
+    private static Instant resolve(LocalDate bizDate, LocalTime localTime, ZoneId zone) {
+        LocalDateTime localOccurrenceTime = LocalDateTime.of(bizDate, localTime);
+        ZonedDateTime zonedOccurrenceTime = localOccurrenceTime.atZone(zone);
+        return zonedOccurrenceTime.toInstant();
+    }
+
+    private static boolean isTerminal(String dayStatus) {
+        return "SETTLED".equals(dayStatus)
+                || "FAILED".equals(dayStatus)
+                || "SKIPPED".equals(dayStatus)
+                || "MANUAL_RELEASED".equals(dayStatus);
+    }
+
+    private static void validate(DefinitionRequest request) {
+        boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+                && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+                && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
+                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() > 0
+                && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
+                && EmptyChecks.isNotNull(request.expectedLocalTime());
+        boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
+                || EmptyChecks.isNull(request.dueLocalTime())
+                || request.dueLocalTime().isAfter(request.expectedLocalTime());
+        boolean definitionIsValid = requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
+        if (!definitionIsValid) {
+            throw new IllegalArgumentException(
+                    "tenant, calendar, workflowDefinitionId, eventCode and expectedLocalTime are required; dueLocalTime must be later on the same business date");
+        }
+    }
+
+    private static void validate(SatisfactionRequest request) {
+        boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+                && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+                && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
+                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() > 0
+                && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
+                && valid(request.triggerRequestId(), TRIGGER_REQUEST_ID_MAX_LENGTH)
+                && EmptyChecks.isNotNull(request.bizDate());
+        if (!requestHasRequiredFields) {
+            throw new IllegalArgumentException(
+                    "tenant, calendar, workflowDefinitionId, eventCode, bizDate and triggerRequestId are required");
+        }
+    }
+
+    private static boolean valid(String value, int maxLength) {
+        return Texts.hasText(value) && value.trim().length() <= maxLength;
+    }
+
+    public record DefinitionRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String eventCode,
+            LocalTime expectedLocalTime,
+            LocalTime dueLocalTime,
+            boolean enabled) {}
+
+    public record SatisfactionRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String eventCode,
+            LocalDate bizDate,
+            String triggerRequestId) {}
 }

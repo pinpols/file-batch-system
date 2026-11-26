@@ -13,15 +13,15 @@ import java.util.Map;
  */
 public final class SdkTaskStoppedException extends RuntimeException {
 
-  private final transient Map<String, Object> breakPosition;
+    private final transient Map<String, Object> breakPosition;
 
-  public SdkTaskStoppedException(Map<String, Object> breakPosition) {
-    super("task stopped cooperatively at break position: " + breakPosition);
-    this.breakPosition = breakPosition == null ? Map.of() : Map.copyOf(breakPosition);
-  }
+    public SdkTaskStoppedException(Map<String, Object> breakPosition) {
+        super("task stopped cooperatively at break position: " + breakPosition);
+        this.breakPosition = breakPosition == null ? Map.of() : Map.copyOf(breakPosition);
+    }
 
-  /** 取消生效时已提交的断点坐标(续跑从此处往后)。 */
-  public Map<String, Object> breakPosition() {
-    return breakPosition;
-  }
+    /** 取消生效时已提交的断点坐标(续跑从此处往后)。 */
+    public Map<String, Object> breakPosition() {
+        return breakPosition;
+    }
 }

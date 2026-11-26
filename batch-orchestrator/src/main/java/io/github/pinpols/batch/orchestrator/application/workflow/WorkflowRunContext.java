@@ -15,15 +15,15 @@ import java.util.Map;
  */
 public interface WorkflowRunContext {
 
-  /** 是否含某节点(已经 RUNNING/SUCCESS/FAILED 终态过的 node code 都视为已知)。 */
-  boolean hasNode(String nodeCode);
+    /** 是否含某节点(已经 RUNNING/SUCCESS/FAILED 终态过的 node code 都视为已知)。 */
+    boolean hasNode(String nodeCode);
 
-  /**
-   * 取某节点 output(由 worker 上报后由 orchestrator 反序列化为 Map)。节点已知但未上报 output 时返回 null。 调用前应先 {@link
-   * #hasNode(String)} 拦截未知 node。
-   */
-  Map<String, Object> nodeOutput(String nodeCode);
+    /**
+     * 取某节点 output(由 worker 上报后由 orchestrator 反序列化为 Map)。节点已知但未上报 output 时返回 null。 调用前应先 {@link
+     * #hasNode(String)} 拦截未知 node。
+     */
+    Map<String, Object> nodeOutput(String nodeCode);
 
-  /** workflow 级共享字段。 */
-  Map<String, Object> workflowRunFields();
+    /** workflow 级共享字段。 */
+    Map<String, Object> workflowRunFields();
 }

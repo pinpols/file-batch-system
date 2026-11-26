@@ -36,144 +36,138 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleConfigControllerTest {
 
-  @Mock
-  private ConsoleConfigApplicationService configApplicationService;
+    @Mock
+    private ConsoleConfigApplicationService configApplicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleConfigController(configApplicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleConfigController(configApplicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询配置发布单列表时, 响应返回配置键")
-  void shouldReturnConfigReleaseListAsDtos() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(configApplicationService.configReleases(any()))
-        .thenReturn(List.of(ConsoleConfigReleaseResponse.builder()
-            .id(1L)
-            .tenantId("t1")
-            .configType("FILE")
-            .configKey("KEY")
-            .configName("Name")
-            .configStatus("DRAFT")
-            .versionNo(1)
-            .configSource("DYNAMIC_DB")
-            .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
-            .restartRequired(false)
-            .applyConfirmationStatus("NOT_RELEASED")
-            .grayScopeJson("{}")
-            .configPayloadJson("{\"a\":1}")
-            .effectiveFromAt(Instant.EPOCH)
-            .effectiveToAt(Instant.EPOCH)
-            .createdBy("u1")
-            .updatedBy("u2")
-            .createdAt(Instant.EPOCH)
-            .updatedAt(Instant.EPOCH)
-            .build()));
+    @Test
+    @DisplayName("查询配置发布单列表时, 响应返回配置键")
+    void shouldReturnConfigReleaseListAsDtos() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(configApplicationService.configReleases(any()))
+                .thenReturn(List.of(ConsoleConfigReleaseResponse.builder()
+                        .id(1L)
+                        .tenantId("t1")
+                        .configType("FILE")
+                        .configKey("KEY")
+                        .configName("Name")
+                        .configStatus("DRAFT")
+                        .versionNo(1)
+                        .configSource("DYNAMIC_DB")
+                        .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
+                        .restartRequired(false)
+                        .applyConfirmationStatus("NOT_RELEASED")
+                        .grayScopeJson("{}")
+                        .configPayloadJson("{\"a\":1}")
+                        .effectiveFromAt(Instant.EPOCH)
+                        .effectiveToAt(Instant.EPOCH)
+                        .createdBy("u1")
+                        .updatedBy("u2")
+                        .createdAt(Instant.EPOCH)
+                        .updatedAt(Instant.EPOCH)
+                        .build()));
 
-    mockMvc
-        .perform(get("/api/console/config/releases").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].configKey").value("KEY"));
-  }
+        mockMvc.perform(get("/api/console/config/releases").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].configKey").value("KEY"));
+    }
 
-  @Test
-  @DisplayName("调用已废弃的直接发布端点时, 返回资源已下线")
-  void shouldReturnGoneForDeprecatedDirectPublishEndpoint() throws Exception {
-    mockMvc
-        .perform(post("/api/console/config/releases/1/publish")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("调用已废弃的直接发布端点时, 返回资源已下线")
+    void shouldReturnGoneForDeprecatedDirectPublishEndpoint() throws Exception {
+        mockMvc.perform(post("/api/console/config/releases/1/publish")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","traceId":"trace-1","reason":"ok","expectedVersionNo":1}
                     """))
-        .andExpect(status().isGone());
-  }
+                .andExpect(status().isGone());
+    }
 
-  @Test
-  @DisplayName("查询密钥版本与变更日志时, 响应分别返回密钥引用与变更动作")
-  void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(configApplicationService.secretVersions(any()))
-        .thenReturn(List.of(ConsoleSecretVersionResponse.builder()
-            .id(1L)
-            .tenantId("t1")
-            .secretRef("REF")
-            .secretName("Secret")
-            .versionNo(2)
-            .secretStatus("ACTIVE")
-            .currentVersion(true)
-            .rotationWindowStartAt(Instant.EPOCH)
-            .rotationWindowEndAt(Instant.EPOCH)
-            .effectiveFromAt(Instant.EPOCH)
-            .effectiveToAt(Instant.EPOCH)
-            .rotationReason("reason")
-            .createdBy("u1")
-            .updatedBy("u2")
-            .createdAt(Instant.EPOCH)
-            .updatedAt(Instant.EPOCH)
-            .build()));
-    when(configApplicationService.configChangeLogs(any()))
-        .thenReturn(List.of(ConsoleConfigChangeLogResponse.builder()
-            .id(2L)
-            .tenantId("t1")
-            .configType("FILE")
-            .configKey("KEY")
-            .versionNo(1)
-            .changeAction("CREATE")
-            .changeResult("SUCCESS")
-            .operatorType("API")
-            .operatorId("u1")
-            .traceId("trace-1")
-            .changeSummaryJson("{}")
-            .createdAt(Instant.EPOCH)
-            .build()));
+    @Test
+    @DisplayName("查询密钥版本与变更日志时, 响应分别返回密钥引用与变更动作")
+    void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(configApplicationService.secretVersions(any()))
+                .thenReturn(List.of(ConsoleSecretVersionResponse.builder()
+                        .id(1L)
+                        .tenantId("t1")
+                        .secretRef("REF")
+                        .secretName("Secret")
+                        .versionNo(2)
+                        .secretStatus("ACTIVE")
+                        .currentVersion(true)
+                        .rotationWindowStartAt(Instant.EPOCH)
+                        .rotationWindowEndAt(Instant.EPOCH)
+                        .effectiveFromAt(Instant.EPOCH)
+                        .effectiveToAt(Instant.EPOCH)
+                        .rotationReason("reason")
+                        .createdBy("u1")
+                        .updatedBy("u2")
+                        .createdAt(Instant.EPOCH)
+                        .updatedAt(Instant.EPOCH)
+                        .build()));
+        when(configApplicationService.configChangeLogs(any()))
+                .thenReturn(List.of(ConsoleConfigChangeLogResponse.builder()
+                        .id(2L)
+                        .tenantId("t1")
+                        .configType("FILE")
+                        .configKey("KEY")
+                        .versionNo(1)
+                        .changeAction("CREATE")
+                        .changeResult("SUCCESS")
+                        .operatorType("API")
+                        .operatorId("u1")
+                        .traceId("trace-1")
+                        .changeSummaryJson("{}")
+                        .createdAt(Instant.EPOCH)
+                        .build()));
 
-    mockMvc
-        .perform(get("/api/console/config/secrets").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].secretRef").value("REF"));
+        mockMvc.perform(get("/api/console/config/secrets").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].secretRef").value("REF"));
 
-    mockMvc
-        .perform(get("/api/console/config/change-logs").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].changeAction").value("CREATE"));
-  }
+        mockMvc.perform(get("/api/console/config/change-logs").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].changeAction").value("CREATE"));
+    }
 
-  @Test
-  @DisplayName("撤销指定密钥版本时, 将租户与原因交给应用服务并返回成功")
-  void shouldRevokeSecretVersion() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(post("/api/console/config/secrets/42/revoke")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-42")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("撤销指定密钥版本时, 将租户与原因交给应用服务并返回成功")
+    void shouldRevokeSecretVersion() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(post("/api/console/config/secrets/42/revoke")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-42")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"t1","reason":"credential compromised"}
                 """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(configApplicationService).revokeSecretVersion(ArgumentMatchers.eq(42L), any());
-  }
+        verify(configApplicationService).revokeSecretVersion(ArgumentMatchers.eq(42L), any());
+    }
 }

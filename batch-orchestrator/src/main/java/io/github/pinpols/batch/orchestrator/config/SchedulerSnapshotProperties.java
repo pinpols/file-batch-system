@@ -13,6 +13,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.scheduler")
 public class SchedulerSnapshotProperties {
 
-  /** 是否把租户调度快照持久化到 PG；false 时跳过写库。 */
-  private boolean snapshotPersistEnabled = true;
+    /** 是否把租户调度快照持久化到 PG；false 时跳过写库。 */
+    private boolean snapshotPersistEnabled = true;
 }

@@ -7,16 +7,16 @@ import lombok.Builder;
 
 @Builder
 public record FileRecordQuery(
-    String tenantId,
-    String bizType,
-    String fileStatus,
-    Long fileId,
-    String fileName,
-    String jobCode,
-    String traceId,
-    LocalDate startDate,
-    LocalDate endDate,
-    Instant fromTime,
-    Instant toTime,
-    PageRequest pageRequest,
-    Long cursorId) {}
+        String tenantId,
+        String bizType,
+        String fileStatus,
+        Long fileId,
+        String fileName,
+        String jobCode,
+        String traceId,
+        LocalDate startDate,
+        LocalDate endDate,
+        Instant fromTime,
+        Instant toTime,
+        PageRequest pageRequest,
+        Long cursorId) {}

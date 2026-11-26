@@ -29,60 +29,59 @@ import org.springframework.util.AntPathMatcher;
 @DisplayName("E2E 控制台应用 MapperScan 覆盖守护:校验 console mapper 包被端到端应用扫描,防 P1-A 迁移后上下文启动失败")
 class E2eConsoleMapperScanGuardArchTest {
 
-  private static final String CONSOLE_DOMAIN_PREFIX = "io.github.pinpols.batch.console.domain.";
-  private static final String CONSOLE_MAPPER_PACKAGE_PREFIX = "io.github.pinpols.batch.console.";
+    private static final String CONSOLE_DOMAIN_PREFIX = "io.github.pinpols.batch.console.domain.";
+    private static final String CONSOLE_MAPPER_PACKAGE_PREFIX = "io.github.pinpols.batch.console.";
 
-  /** 显式声明 console mapper 扫描的 E2E 应用/测试配置。 */
-  private static final List<Class<?>> CONSOLE_MAPPER_SCAN_APPS = List.of(
-      E2eConsoleImportApplication.class, RuntimeConfigImportDispatchE2eIT.ConsoleConfig.class);
+    /** 显式声明 console mapper 扫描的 E2E 应用/测试配置。 */
+    private static final List<Class<?>> CONSOLE_MAPPER_SCAN_APPS =
+            List.of(E2eConsoleImportApplication.class, RuntimeConfigImportDispatchE2eIT.ConsoleConfig.class);
 
-  private static final JavaClasses ALL_CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
-      .importPackages("io.github.pinpols.batch");
+    private static final JavaClasses ALL_CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+            .importPackages("io.github.pinpols.batch");
 
-  private static final AntPathMatcher PACKAGE_MATCHER = new AntPathMatcher();
+    private static final AntPathMatcher PACKAGE_MATCHER = new AntPathMatcher();
 
-  @Test
-  @DisplayName("所有 console mapper 包必须位于 domain.<ctx>.mapper,且被端到端控制台应用的 MapperScan 覆盖")
-  void shouldCoverAllConsoleMapperPackages_whenE2eAppsDeclareMapperScan() {
-    Set<String> consoleMapperPackages = ALL_CLASSES.stream()
-        .filter(javaClass -> javaClass.isInterface())
-        .map(javaClass -> javaClass.getPackageName())
-        .filter(packageName -> packageName.startsWith(CONSOLE_MAPPER_PACKAGE_PREFIX))
-        .filter(packageName -> packageName.endsWith(".mapper"))
-        .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+    @Test
+    @DisplayName("所有 console mapper 包必须位于 domain.<ctx>.mapper,且被端到端控制台应用的 MapperScan 覆盖")
+    void shouldCoverAllConsoleMapperPackages_whenE2eAppsDeclareMapperScan() {
+        Set<String> consoleMapperPackages = ALL_CLASSES.stream()
+                .filter(javaClass -> javaClass.isInterface())
+                .map(javaClass -> javaClass.getPackageName())
+                .filter(packageName -> packageName.startsWith(CONSOLE_MAPPER_PACKAGE_PREFIX))
+                .filter(packageName -> packageName.endsWith(".mapper"))
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
 
-    assertThat(consoleMapperPackages).as("未找到任何 console mapper 包,守护本身可能失效").isNotEmpty();
+        assertThat(consoleMapperPackages).as("未找到任何 console mapper 包,守护本身可能失效").isNotEmpty();
 
-    Set<String> legacyMapperPackages = new TreeSet<>(consoleMapperPackages);
-    legacyMapperPackages.removeIf(packageName -> packageName.startsWith(CONSOLE_DOMAIN_PREFIX));
-    assertThat(legacyMapperPackages)
-        .as("console mapper 仍位于旧顶层包,需归入 console.domain.<ctx>.mapper:" + legacyMapperPackages)
-        .isEmpty();
+        Set<String> legacyMapperPackages = new TreeSet<>(consoleMapperPackages);
+        legacyMapperPackages.removeIf(packageName -> packageName.startsWith(CONSOLE_DOMAIN_PREFIX));
+        assertThat(legacyMapperPackages)
+                .as("console mapper 仍位于旧顶层包,需归入 console.domain.<ctx>.mapper:" + legacyMapperPackages)
+                .isEmpty();
 
-    for (Class<?> app : CONSOLE_MAPPER_SCAN_APPS) {
-      Set<String> uncovered = new TreeSet<>(consoleMapperPackages);
-      uncovered.removeIf(packageName -> coveredByAnyMapperScan(app, packageName));
-      assertThat(uncovered)
-          .as(
-              "E2E 应用 %s 的 @MapperScan 未覆盖以下 console mapper 包(会 NoSuchBean 启动失败,见"
-                  + " 2026-11-08 main-red):%s → 在 @MapperScan basePackages 里补齐 "
-                  + "console.domain.**.mapper",
-              app.getName(), uncovered)
-          .isEmpty();
+        for (Class<?> app : CONSOLE_MAPPER_SCAN_APPS) {
+            Set<String> uncovered = new TreeSet<>(consoleMapperPackages);
+            uncovered.removeIf(packageName -> coveredByAnyMapperScan(app, packageName));
+            assertThat(uncovered)
+                    .as(
+                            "E2E 应用 %s 的 @MapperScan 未覆盖以下 console mapper 包(会 NoSuchBean 启动失败,见"
+                                    + " 2026-11-08 main-red):%s → 在 @MapperScan basePackages 里补齐 "
+                                    + "console.domain.**.mapper",
+                            app.getName(), uncovered)
+                    .isEmpty();
+        }
     }
-  }
 
-  private static boolean coveredByAnyMapperScan(Class<?> app, String packageName) {
-    List<String> basePackages = new ArrayList<>();
-    for (MapperScan mapperScan : app.getAnnotationsByType(MapperScan.class)) {
-      basePackages.addAll(List.of(mapperScan.basePackages()));
+    private static boolean coveredByAnyMapperScan(Class<?> app, String packageName) {
+        List<String> basePackages = new ArrayList<>();
+        for (MapperScan mapperScan : app.getAnnotationsByType(MapperScan.class)) {
+            basePackages.addAll(List.of(mapperScan.basePackages()));
+        }
+        String candidate = packageName.replace('.', '/');
+        return basePackages.stream().anyMatch(basePackage -> {
+            String pattern = basePackage.replace('.', '/');
+            return PACKAGE_MATCHER.match(pattern, candidate) || PACKAGE_MATCHER.match(pattern + "/**", candidate);
+        });
     }
-    String candidate = packageName.replace('.', '/');
-    return basePackages.stream().anyMatch(basePackage -> {
-      String pattern = basePackage.replace('.', '/');
-      return PACKAGE_MATCHER.match(pattern, candidate)
-          || PACKAGE_MATCHER.match(pattern + "/**", candidate);
-    });
-  }
 }

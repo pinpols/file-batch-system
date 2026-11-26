@@ -16,6 +16,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.scheduler.worker-cache")
 public class WorkerSelectorCacheProperties {
 
-  private boolean enabled = true;
-  private long ttlMillis = 5_000L;
+    private boolean enabled = true;
+    private long ttlMillis = 5_000L;
 }

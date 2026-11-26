@@ -68,418 +68,395 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 public class ConsoleApiExceptionHandler {
 
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleResponseFactory responseFactory;
 
-  // docs/agent-baseline.md §Java #3:构造器注入。
-  private final BizMessageResolver bizMessageResolver;
+    // docs/agent-baseline.md §Java #3:构造器注入。
+    private final BizMessageResolver bizMessageResolver;
 
-  // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 docs/agent-baseline.md §Java #3。
-  public ConsoleApiExceptionHandler(
-      ConsoleResponseFactory responseFactory, BizMessageResolver bizMessageResolver) {
-    this.responseFactory = responseFactory;
-    this.bizMessageResolver = bizMessageResolver;
-  }
-
-  /**
-   * standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 时 handleBizException 走 null 短路降级返回 raw
-   * message,功能不变。
-   */
-  public static ConsoleApiExceptionHandler forStandaloneTest(
-      ConsoleResponseFactory responseFactory) {
-    return new ConsoleApiExceptionHandler(responseFactory, null);
-  }
-
-  @ExceptionHandler(BizException.class)
-  public ResponseEntity<CommonResponse<Object>> handleBizException(BizException exception) {
-    if (isExpectedUnavailableTaskClaim(exception)) {
-      log.info(
-          "console task claim not accepted: code={} key={}",
-          exception.getCode(),
-          exception.getMessageKey());
-    } else {
-      log.warn(
-          "console biz exception: code={} message={}",
-          exception.getCode(),
-          SwallowedExceptionLogger.summary(exception));
+    // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 docs/agent-baseline.md §Java #3。
+    public ConsoleApiExceptionHandler(ConsoleResponseFactory responseFactory, BizMessageResolver bizMessageResolver) {
+        this.responseFactory = responseFactory;
+        this.bizMessageResolver = bizMessageResolver;
     }
-    String message = bizExceptionMessage(exception);
-    ResponseEntity.BodyBuilder response =
-        ResponseEntity.status(exception.getCode().httpStatus());
-    ResultCode code = exception.getCode();
-    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
-    return response.body(failureBody);
-  }
 
-  private String bizExceptionMessage(BizException exception) {
-    if (EmptyChecks.isNull(bizMessageResolver)) {
-      if (EmptyChecks.isNull(exception.getMessageKey())) {
-        return exception.getMessage();
-      }
-      return exception.getCode().label();
+    /**
+     * standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 时 handleBizException 走 null 短路降级返回 raw
+     * message,功能不变。
+     */
+    public static ConsoleApiExceptionHandler forStandaloneTest(ConsoleResponseFactory responseFactory) {
+        return new ConsoleApiExceptionHandler(responseFactory, null);
     }
-    return bizMessageResolver.resolve(exception);
-  }
 
-  private static boolean isExpectedUnavailableTaskClaim(BizException exception) {
-    return ResultCode.NOT_FOUND.equals(exception.getCode())
-        && "error.task.claim_not_available".equals(exception.getMessageKey());
-  }
-
-  @ExceptionHandler(SystemException.class)
-  public ResponseEntity<CommonResponse<Object>> handleSystemException(SystemException exception) {
-    log.error("console system exception", exception);
-    ResultCode code = exception.getCode();
-    int status = code.httpStatus();
-    String message = resolveCommonCode(code);
-    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
-    return ResponseEntity.status(status).body(failureBody);
-  }
-
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<CommonResponse<Object>> handleMethodArgumentNotValidException(
-      MethodArgumentNotValidException exception) {
-    log.warn("console validation exception: {}", SwallowedExceptionLogger.summary(exception));
-    String message = exception.getBindingResult().getFieldErrors().stream()
-        .map(FieldError::getDefaultMessage)
-        .collect(Collectors.joining("; "));
-    if (EmptyChecks.isBlank(Objects.requireNonNull(message))) {
-      message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
-    }
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  @ExceptionHandler(ConstraintViolationException.class)
-  public ResponseEntity<CommonResponse<Object>> handleConstraintViolationException(
-      ConstraintViolationException exception) {
-    log.warn(
-        "console constraint violation exception: {}", SwallowedExceptionLogger.summary(exception));
-    String message = exception.getMessage();
-    if (EmptyChecks.isBlank(message)) {
-      message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
-    }
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  @ExceptionHandler(MissingRequestHeaderException.class)
-  public ResponseEntity<CommonResponse<Object>> handleMissingRequestHeaderException(
-      MissingRequestHeaderException exception) {
-    log.warn("console missing request header exception: header={}", exception.getHeaderName());
-    ResultCode code =
-        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
-            ? ResultCode.MISSING_IDEMPOTENCY_KEY
-            : ResultCode.INVALID_ARGUMENT;
-    String message = resolveCommonCode(code);
-    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-  public ResponseEntity<CommonResponse<Object>> handleMethodNotSupported(
-      HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
-    // 405 是客户端调用方法错误，**非 server bug**。打印请求行 + 支持的方法即可，
-    // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
-    String safeRequestMethod = LogSanitizer.value(request.getMethod());
-    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
-    log.warn(
-        "console method not supported: {} {} (supported: {})",
-        safeRequestMethod,
-        safeRequestUri,
-        exception.getSupportedHttpMethods());
-    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.status(405).body(failureBody);
-  }
-
-  @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
-  public ResponseEntity<CommonResponse<Object>> handleAccessDenied(
-      Exception exception, HttpServletRequest request) {
-    // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
-    String safeRequestMethod = LogSanitizer.value(request.getMethod());
-    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
-    String exceptionSummary = SwallowedExceptionLogger.summary(exception);
-    log.warn(
-        "console access denied: {} {} - {}", safeRequestMethod, safeRequestUri, exceptionSummary);
-    int status = ResultCode.FORBIDDEN.httpStatus();
-    String message = resolveCommonCode(ResultCode.FORBIDDEN);
-    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.FORBIDDEN, message);
-    return ResponseEntity.status(status).body(failureBody);
-  }
-
-  /**
-   * Console 作为 BFF 调用下游（orchestrator/trigger）时，RestClient 会直接抛出异常。 这里尽量把下游返回的 {@link
-   * CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
-   */
-  @ExceptionHandler(RestClientResponseException.class)
-  public ResponseEntity<CommonResponse<Object>> handleDownstreamRestError(
-      RestClientResponseException exception) {
-    String body = exception.getResponseBodyAsString();
-    log.warn(
-        "console downstream rest error: status={}, responseBodyLength={}",
-        exception.getStatusCode().value(),
-        EmptyChecks.isNull(body) ? 0 : body.length());
-    try {
-      CommonResponse<Object> downstream =
-          JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
-      if (downstream != null && downstream.code() != null) {
-        // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
-        ResultCode code = downstream.code();
-        String message = downstream.message();
-        if (code.httpStatus() >= 500 || EmptyChecks.isBlank(message)) {
-          message = resolveCommonCode(code);
+    @ExceptionHandler(BizException.class)
+    public ResponseEntity<CommonResponse<Object>> handleBizException(BizException exception) {
+        if (isExpectedUnavailableTaskClaim(exception)) {
+            log.info("console task claim not accepted: code={} key={}", exception.getCode(), exception.getMessageKey());
+        } else {
+            log.warn(
+                    "console biz exception: code={} message={}",
+                    exception.getCode(),
+                    SwallowedExceptionLogger.summary(exception));
         }
-        int responseStatus = downstream.code().httpStatus();
-        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.status(responseStatus);
-        CommonResponse<Object> failureResponse = responseFactory.failure(code, message);
-        return responseBuilder.body(failureResponse);
-      }
-    } catch (RuntimeException ignored) {
-      SwallowedExceptionLogger.warn(
-          ConsoleApiExceptionHandler.class, "catch:RuntimeException", ignored);
-
-      // 继续执行
-    }
-    // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），并按 status 反查对应业务 code，
-    // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
-    ResultCode code = mapStatusToResultCode(exception.getStatusCode());
-    HttpStatusCode downstreamStatus = exception.getStatusCode();
-    String message = resolveCommonCode(code);
-    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
-    return ResponseEntity.status(downstreamStatus).body(failureBody);
-  }
-
-  /**
-   * 把下游真实 HTTP status 反查到对应业务 {@link ResultCode}：4xx 映射到语义最贴近的客户端错误码， 5xx / 未识别一律 {@code
-   * SYSTEM_ERROR}。仅在无法解析下游 {@code CommonResponse} body 时作为回退使用。
-   */
-  private static ResultCode mapStatusToResultCode(HttpStatusCode status) {
-    return switch (status.value()) {
-      case 400 -> ResultCode.VALIDATION_ERROR;
-      case 401 -> ResultCode.UNAUTHORIZED;
-      case 403 -> ResultCode.FORBIDDEN;
-      case 404 -> ResultCode.NOT_FOUND;
-      case 409 -> ResultCode.CONFLICT;
-      case 422 -> ResultCode.BUSINESS_ERROR;
-      case 429 -> ResultCode.RATE_LIMITED;
-      default -> ResultCode.SYSTEM_ERROR;
-    };
-  }
-
-  @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
-  public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(Exception exception) {
-    log.warn("console resource not found: {}", SwallowedExceptionLogger.summary(exception));
-    String message = resolveCommonCode(ResultCode.NOT_FOUND);
-    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.NOT_FOUND, message);
-    return ResponseEntity.status(404).body(failureBody);
-  }
-
-  @ExceptionHandler(MissingServletRequestParameterException.class)
-  public ResponseEntity<CommonResponse<Object>> handleMissingParam(
-      MissingServletRequestParameterException exception, HttpServletRequest request) {
-    // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
-    String safeRequestMethod = LogSanitizer.value(request.getMethod());
-    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
-    String exceptionSummary = SwallowedExceptionLogger.summary(exception);
-    log.warn(
-        "console missing request param: {} {} — {}",
-        safeRequestMethod,
-        safeRequestUri,
-        exceptionSummary);
-    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-  public ResponseEntity<CommonResponse<Object>> handleTypeMismatch(
-      MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
-    String safeRequestMethod = LogSanitizer.value(request.getMethod());
-    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
-    String safeParameterName = LogSanitizer.value(exception.getName());
-    String safeParameterValue = LogSanitizer.value(exception.getValue());
-    log.warn(
-        "console request param type mismatch: {} {} param={} value={} requiredType={}",
-        safeRequestMethod,
-        safeRequestUri,
-        safeParameterName,
-        safeParameterValue,
-        exception.getRequiredType() == null
-            ? "<unknown>"
-            : exception.getRequiredType().getSimpleName());
-    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  @ExceptionHandler(HttpMessageNotReadableException.class)
-  public ResponseEntity<CommonResponse<Object>> handleMessageNotReadable(
-      HttpMessageNotReadableException exception) {
-    log.warn("console message not readable: {}", SwallowedExceptionLogger.summary(exception));
-    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  // Multipart upload 缺 part / 错 content-type 应 400 而非 500。
-  // 触发场景:
-  //   - MissingServletRequestPartException:Content-Type 是 multipart 但没带 file part
-  //   - MultipartException:multipart 解析失败
-  //   - HttpMediaTypeNotSupportedException:Content-Type 完全不匹配
-  //     (例:application/json 调 multipart/form-data 接口)
-  @ExceptionHandler({
-    MissingServletRequestPartException.class,
-    MultipartException.class,
-    HttpMediaTypeNotSupportedException.class,
-  })
-  public ResponseEntity<CommonResponse<Object>> handleMultipart(Exception exception) {
-    log.warn("console multipart/media-type error: {}", SwallowedExceptionLogger.summary(exception));
-    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    CommonResponse<Object> failureBody =
-        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
-
-  /**
-   * SSE / 异步响应在客户端断开后再次写入会抛 {@link AsyncRequestNotUsableException}。 此时 response Content-Type 已锁为
-   * {@code text/event-stream}，再回写 {@code CommonResponse} 反而触发 {@code
-   * HttpMessageNotWritableException}。
-   *
-   * <p>返回 {@code void} —— 这是 Spring MVC 公开契约里"handler 已自行处理完毕"的语义， 不依赖 "@ExceptionHandler 返回 null
-   * 跳过写入" 这种内部行为（在 Spring 升级时可能变化）。 Spring 看到 void return 不会再调 MessageConverter 写 body，也不会再触发后续
-   * resolver。
-   */
-  @ExceptionHandler(AsyncRequestNotUsableException.class)
-  public void handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
-    log.debug(
-        "console async response unusable (client disconnected): {}",
-        SwallowedExceptionLogger.summary(exception));
-    // 不写任何 response 内容：客户端早已断开，response 也被锁住，任何写入都会再次失败。
-  }
-
-  /**
-   * DB 约束违反按约束类型分流 HTTP status,避免暴露成 500 SYSTEM_ERROR：
-   *
-   * <ul>
-   *   <li><b>UNIQUE</b>（并发撞键）/ <b>FOREIGN_KEY</b>（删被引用行)→ <b>409 CONFLICT</b>，与基类 {@code
-   *       AbstractApiExceptionHandler} 对 {@code DuplicateKeyException} 的 409 处理语义一致。
-   *   <li><b>CHECK</b> / <b>NOT_NULL</b>（入参本身不合法）→ <b>400 VALIDATION_ERROR</b>。
-   * </ul>
-   *
-   * 每类都附人话中文提示。
-   */
-  @ExceptionHandler(DataIntegrityViolationException.class)
-  public ResponseEntity<CommonResponse<Object>> handleDataIntegrityViolation(
-      DataIntegrityViolationException exception) {
-    Throwable rootForLog = exception.getMostSpecificCause();
-    String rootSummary = SwallowedExceptionLogger.summary(rootForLog);
-    log.warn("console data integrity violation: {}", rootSummary);
-    Throwable root = exception.getMostSpecificCause();
-    String rawMsg = root == null ? null : root.getMessage();
-    PostgresConstraintViolation violation =
-        PostgresConstraintViolation.from(root).orElse(null);
-    PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg, violation);
-    String message;
-    if (kind == PgConstraintViolation.JOB_DEPENDENCY_CYCLE) {
-      message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
-    } else if (kind == PgConstraintViolation.WORKFLOW_CALENDAR_EXPECTATION) {
-      BizException conflict =
-          BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.calendar_has_expectations");
-      message = EmptyChecks.isNull(bizMessageResolver)
-          ? conflict.getCode().label()
-          : bizMessageResolver.resolve(conflict);
-    } else {
-      message = resolveCommonCode(kind.resultCode());
-    }
-    int responseStatus = kind.resultCode().httpStatus();
-    CommonResponse<Object> failureBody = responseFactory.failure(kind.resultCode(), message);
-    return ResponseEntity.status(responseStatus).body(failureBody);
-  }
-
-  private String resolveCommonCode(ResultCode code) {
-    return EmptyChecks.isNull(bizMessageResolver) ? code.label() : bizMessageResolver.resolve(code);
-  }
-
-  /**
-   * 优先使用 PostgreSQL 的 SQLSTATE 分类；依赖环还必须匹配 Schema、表及约束身份。
-   * 无驱动结构化字段时保留普通约束的文本兜底，但不得仅凭错误文案识别业务依赖环。
-   */
-  private enum PgConstraintViolation {
-    JOB_DEPENDENCY_CYCLE("ck_job_dependency_acyclic", ResultCode.INVALID_ARGUMENT),
-    WORKFLOW_CALENDAR_EXPECTATION("expectation_workflow_calendar", ResultCode.STATE_CONFLICT),
-    CHECK("violates check constraint", ResultCode.VALIDATION_ERROR),
-    UNIQUE("violates unique constraint", ResultCode.CONFLICT),
-    FOREIGN_KEY("violates foreign key constraint", ResultCode.CONFLICT),
-    NOT_NULL("violates not-null constraint", ResultCode.VALIDATION_ERROR),
-    // 未识别约束类型回退：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
-    UNKNOWN("", ResultCode.VALIDATION_ERROR);
-
-    private final String marker;
-    private final ResultCode resultCode;
-
-    PgConstraintViolation(String marker, ResultCode resultCode) {
-      this.marker = marker;
-      this.resultCode = resultCode;
+        String message = bizExceptionMessage(exception);
+        ResponseEntity.BodyBuilder response =
+                ResponseEntity.status(exception.getCode().httpStatus());
+        ResultCode code = exception.getCode();
+        CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+        return response.body(failureBody);
     }
 
-    ResultCode resultCode() {
-      return resultCode;
-    }
-
-    static PgConstraintViolation classify(String rawMsg, PostgresConstraintViolation violation) {
-      if (EmptyChecks.isNotNull(violation)) {
-        if (violation.matches("23514", "batch", "job_dependency", "ck_job_dependency_acyclic")) {
-          return JOB_DEPENDENCY_CYCLE;
+    private String bizExceptionMessage(BizException exception) {
+        if (EmptyChecks.isNull(bizMessageResolver)) {
+            if (EmptyChecks.isNull(exception.getMessageKey())) {
+                return exception.getMessage();
+            }
+            return exception.getCode().label();
         }
-        if (violation.matches(
-                "23503",
-                "batch",
-                "external_event_expectation_definition",
-                "fk_external_event_expectation_workflow_calendar")
-            || violation.matches(
-                "23503",
-                "batch",
-                "file_group_expectation_definition",
-                "fk_file_group_expectation_workflow_calendar")) {
-          return WORKFLOW_CALENDAR_EXPECTATION;
-        }
-        PgConstraintViolation structuredKind =
-            switch (violation.sqlState()) {
-              case "23514" -> CHECK;
-              case "23505" -> UNIQUE;
-              case "23503" -> FOREIGN_KEY;
-              case "23502" -> NOT_NULL;
-              default -> UNKNOWN;
-            };
-        if (structuredKind != UNKNOWN) {
-          return structuredKind;
-        }
-      }
-      if (rawMsg == null) {
-        return UNKNOWN;
-      }
-      for (PgConstraintViolation kind : values()) {
-        boolean messageMatchesKnownConflictKind =
-            kind != UNKNOWN && kind != JOB_DEPENDENCY_CYCLE && rawMsg.contains(kind.marker);
-        if (messageMatchesKnownConflictKind) {
-          return kind;
-        }
-      }
-      return UNKNOWN;
+        return bizMessageResolver.resolve(exception);
     }
-  }
 
-  @ExceptionHandler(Exception.class)
-  public ResponseEntity<CommonResponse<Object>> handleException(Exception exception) {
-    log.error("console unexpected exception", exception);
-    String message = resolveCommonCode(ResultCode.SYSTEM_ERROR);
-    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.SYSTEM_ERROR, message);
-    return ResponseEntity.internalServerError().body(failureBody);
-  }
+    private static boolean isExpectedUnavailableTaskClaim(BizException exception) {
+        return ResultCode.NOT_FOUND.equals(exception.getCode())
+                && "error.task.claim_not_available".equals(exception.getMessageKey());
+    }
+
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<CommonResponse<Object>> handleSystemException(SystemException exception) {
+        log.error("console system exception", exception);
+        ResultCode code = exception.getCode();
+        int status = code.httpStatus();
+        String message = resolveCommonCode(code);
+        CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+        return ResponseEntity.status(status).body(failureBody);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<CommonResponse<Object>> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception) {
+        log.warn("console validation exception: {}", SwallowedExceptionLogger.summary(exception));
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+        if (EmptyChecks.isBlank(Objects.requireNonNull(message))) {
+            message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
+        }
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<CommonResponse<Object>> handleConstraintViolationException(
+            ConstraintViolationException exception) {
+        log.warn("console constraint violation exception: {}", SwallowedExceptionLogger.summary(exception));
+        String message = exception.getMessage();
+        if (EmptyChecks.isBlank(message)) {
+            message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
+        }
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<CommonResponse<Object>> handleMissingRequestHeaderException(
+            MissingRequestHeaderException exception) {
+        log.warn("console missing request header exception: header={}", exception.getHeaderName());
+        ResultCode code = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
+                ? ResultCode.MISSING_IDEMPOTENCY_KEY
+                : ResultCode.INVALID_ARGUMENT;
+        String message = resolveCommonCode(code);
+        CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<CommonResponse<Object>> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
+        // 405 是客户端调用方法错误，**非 server bug**。打印请求行 + 支持的方法即可，
+        // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
+        String safeRequestMethod = LogSanitizer.value(request.getMethod());
+        String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+        log.warn(
+                "console method not supported: {} {} (supported: {})",
+                safeRequestMethod,
+                safeRequestUri,
+                exception.getSupportedHttpMethods());
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.status(405).body(failureBody);
+    }
+
+    @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
+    public ResponseEntity<CommonResponse<Object>> handleAccessDenied(Exception exception, HttpServletRequest request) {
+        // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
+        String safeRequestMethod = LogSanitizer.value(request.getMethod());
+        String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+        String exceptionSummary = SwallowedExceptionLogger.summary(exception);
+        log.warn("console access denied: {} {} - {}", safeRequestMethod, safeRequestUri, exceptionSummary);
+        int status = ResultCode.FORBIDDEN.httpStatus();
+        String message = resolveCommonCode(ResultCode.FORBIDDEN);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.FORBIDDEN, message);
+        return ResponseEntity.status(status).body(failureBody);
+    }
+
+    /**
+     * Console 作为 BFF 调用下游（orchestrator/trigger）时，RestClient 会直接抛出异常。 这里尽量把下游返回的 {@link
+     * CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
+     */
+    @ExceptionHandler(RestClientResponseException.class)
+    public ResponseEntity<CommonResponse<Object>> handleDownstreamRestError(RestClientResponseException exception) {
+        String body = exception.getResponseBodyAsString();
+        log.warn(
+                "console downstream rest error: status={}, responseBodyLength={}",
+                exception.getStatusCode().value(),
+                EmptyChecks.isNull(body) ? 0 : body.length());
+        try {
+            CommonResponse<Object> downstream =
+                    JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
+            if (downstream != null && downstream.code() != null) {
+                // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
+                ResultCode code = downstream.code();
+                String message = downstream.message();
+                if (code.httpStatus() >= 500 || EmptyChecks.isBlank(message)) {
+                    message = resolveCommonCode(code);
+                }
+                int responseStatus = downstream.code().httpStatus();
+                ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.status(responseStatus);
+                CommonResponse<Object> failureResponse = responseFactory.failure(code, message);
+                return responseBuilder.body(failureResponse);
+            }
+        } catch (RuntimeException ignored) {
+            SwallowedExceptionLogger.warn(ConsoleApiExceptionHandler.class, "catch:RuntimeException", ignored);
+
+            // 继续执行
+        }
+        // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），并按 status 反查对应业务 code，
+        // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
+        ResultCode code = mapStatusToResultCode(exception.getStatusCode());
+        HttpStatusCode downstreamStatus = exception.getStatusCode();
+        String message = resolveCommonCode(code);
+        CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+        return ResponseEntity.status(downstreamStatus).body(failureBody);
+    }
+
+    /**
+     * 把下游真实 HTTP status 反查到对应业务 {@link ResultCode}：4xx 映射到语义最贴近的客户端错误码， 5xx / 未识别一律 {@code
+     * SYSTEM_ERROR}。仅在无法解析下游 {@code CommonResponse} body 时作为回退使用。
+     */
+    private static ResultCode mapStatusToResultCode(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> ResultCode.VALIDATION_ERROR;
+            case 401 -> ResultCode.UNAUTHORIZED;
+            case 403 -> ResultCode.FORBIDDEN;
+            case 404 -> ResultCode.NOT_FOUND;
+            case 409 -> ResultCode.CONFLICT;
+            case 422 -> ResultCode.BUSINESS_ERROR;
+            case 429 -> ResultCode.RATE_LIMITED;
+            default -> ResultCode.SYSTEM_ERROR;
+        };
+    }
+
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(Exception exception) {
+        log.warn("console resource not found: {}", SwallowedExceptionLogger.summary(exception));
+        String message = resolveCommonCode(ResultCode.NOT_FOUND);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.NOT_FOUND, message);
+        return ResponseEntity.status(404).body(failureBody);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<CommonResponse<Object>> handleMissingParam(
+            MissingServletRequestParameterException exception, HttpServletRequest request) {
+        // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
+        String safeRequestMethod = LogSanitizer.value(request.getMethod());
+        String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+        String exceptionSummary = SwallowedExceptionLogger.summary(exception);
+        log.warn("console missing request param: {} {} — {}", safeRequestMethod, safeRequestUri, exceptionSummary);
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<CommonResponse<Object>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+        String safeRequestMethod = LogSanitizer.value(request.getMethod());
+        String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+        String safeParameterName = LogSanitizer.value(exception.getName());
+        String safeParameterValue = LogSanitizer.value(exception.getValue());
+        log.warn(
+                "console request param type mismatch: {} {} param={} value={} requiredType={}",
+                safeRequestMethod,
+                safeRequestUri,
+                safeParameterName,
+                safeParameterValue,
+                exception.getRequiredType() == null
+                        ? "<unknown>"
+                        : exception.getRequiredType().getSimpleName());
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<CommonResponse<Object>> handleMessageNotReadable(HttpMessageNotReadableException exception) {
+        log.warn("console message not readable: {}", SwallowedExceptionLogger.summary(exception));
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    // Multipart upload 缺 part / 错 content-type 应 400 而非 500。
+    // 触发场景:
+    //   - MissingServletRequestPartException:Content-Type 是 multipart 但没带 file part
+    //   - MultipartException:multipart 解析失败
+    //   - HttpMediaTypeNotSupportedException:Content-Type 完全不匹配
+    //     (例:application/json 调 multipart/form-data 接口)
+    @ExceptionHandler({
+        MissingServletRequestPartException.class,
+        MultipartException.class,
+        HttpMediaTypeNotSupportedException.class,
+    })
+    public ResponseEntity<CommonResponse<Object>> handleMultipart(Exception exception) {
+        log.warn("console multipart/media-type error: {}", SwallowedExceptionLogger.summary(exception));
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    /**
+     * SSE / 异步响应在客户端断开后再次写入会抛 {@link AsyncRequestNotUsableException}。 此时 response Content-Type 已锁为
+     * {@code text/event-stream}，再回写 {@code CommonResponse} 反而触发 {@code
+     * HttpMessageNotWritableException}。
+     *
+     * <p>返回 {@code void} —— 这是 Spring MVC 公开契约里"handler 已自行处理完毕"的语义， 不依赖 "@ExceptionHandler 返回 null
+     * 跳过写入" 这种内部行为（在 Spring 升级时可能变化）。 Spring 看到 void return 不会再调 MessageConverter 写 body，也不会再触发后续
+     * resolver。
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
+        log.debug(
+                "console async response unusable (client disconnected): {}",
+                SwallowedExceptionLogger.summary(exception));
+        // 不写任何 response 内容：客户端早已断开，response 也被锁住，任何写入都会再次失败。
+    }
+
+    /**
+     * DB 约束违反按约束类型分流 HTTP status,避免暴露成 500 SYSTEM_ERROR：
+     *
+     * <ul>
+     *   <li><b>UNIQUE</b>（并发撞键）/ <b>FOREIGN_KEY</b>（删被引用行)→ <b>409 CONFLICT</b>，与基类 {@code
+     *       AbstractApiExceptionHandler} 对 {@code DuplicateKeyException} 的 409 处理语义一致。
+     *   <li><b>CHECK</b> / <b>NOT_NULL</b>（入参本身不合法）→ <b>400 VALIDATION_ERROR</b>。
+     * </ul>
+     *
+     * 每类都附人话中文提示。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<CommonResponse<Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception) {
+        Throwable rootForLog = exception.getMostSpecificCause();
+        String rootSummary = SwallowedExceptionLogger.summary(rootForLog);
+        log.warn("console data integrity violation: {}", rootSummary);
+        Throwable root = exception.getMostSpecificCause();
+        String rawMsg = root == null ? null : root.getMessage();
+        PostgresConstraintViolation violation =
+                PostgresConstraintViolation.from(root).orElse(null);
+        PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg, violation);
+        String message;
+        if (kind == PgConstraintViolation.JOB_DEPENDENCY_CYCLE) {
+            message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+        } else if (kind == PgConstraintViolation.WORKFLOW_CALENDAR_EXPECTATION) {
+            BizException conflict =
+                    BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.calendar_has_expectations");
+            message = EmptyChecks.isNull(bizMessageResolver)
+                    ? conflict.getCode().label()
+                    : bizMessageResolver.resolve(conflict);
+        } else {
+            message = resolveCommonCode(kind.resultCode());
+        }
+        int responseStatus = kind.resultCode().httpStatus();
+        CommonResponse<Object> failureBody = responseFactory.failure(kind.resultCode(), message);
+        return ResponseEntity.status(responseStatus).body(failureBody);
+    }
+
+    private String resolveCommonCode(ResultCode code) {
+        return EmptyChecks.isNull(bizMessageResolver) ? code.label() : bizMessageResolver.resolve(code);
+    }
+
+    /**
+     * 优先使用 PostgreSQL 的 SQLSTATE 分类；依赖环还必须匹配 Schema、表及约束身份。
+     * 无驱动结构化字段时保留普通约束的文本兜底，但不得仅凭错误文案识别业务依赖环。
+     */
+    private enum PgConstraintViolation {
+        JOB_DEPENDENCY_CYCLE("ck_job_dependency_acyclic", ResultCode.INVALID_ARGUMENT),
+        WORKFLOW_CALENDAR_EXPECTATION("expectation_workflow_calendar", ResultCode.STATE_CONFLICT),
+        CHECK("violates check constraint", ResultCode.VALIDATION_ERROR),
+        UNIQUE("violates unique constraint", ResultCode.CONFLICT),
+        FOREIGN_KEY("violates foreign key constraint", ResultCode.CONFLICT),
+        NOT_NULL("violates not-null constraint", ResultCode.VALIDATION_ERROR),
+        // 未识别约束类型回退：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
+        UNKNOWN("", ResultCode.VALIDATION_ERROR);
+
+        private final String marker;
+        private final ResultCode resultCode;
+
+        PgConstraintViolation(String marker, ResultCode resultCode) {
+            this.marker = marker;
+            this.resultCode = resultCode;
+        }
+
+        ResultCode resultCode() {
+            return resultCode;
+        }
+
+        static PgConstraintViolation classify(String rawMsg, PostgresConstraintViolation violation) {
+            if (EmptyChecks.isNotNull(violation)) {
+                if (violation.matches("23514", "batch", "job_dependency", "ck_job_dependency_acyclic")) {
+                    return JOB_DEPENDENCY_CYCLE;
+                }
+                if (violation.matches(
+                                "23503",
+                                "batch",
+                                "external_event_expectation_definition",
+                                "fk_external_event_expectation_workflow_calendar")
+                        || violation.matches(
+                                "23503",
+                                "batch",
+                                "file_group_expectation_definition",
+                                "fk_file_group_expectation_workflow_calendar")) {
+                    return WORKFLOW_CALENDAR_EXPECTATION;
+                }
+                PgConstraintViolation structuredKind =
+                        switch (violation.sqlState()) {
+                            case "23514" -> CHECK;
+                            case "23505" -> UNIQUE;
+                            case "23503" -> FOREIGN_KEY;
+                            case "23502" -> NOT_NULL;
+                            default -> UNKNOWN;
+                        };
+                if (structuredKind != UNKNOWN) {
+                    return structuredKind;
+                }
+            }
+            if (rawMsg == null) {
+                return UNKNOWN;
+            }
+            for (PgConstraintViolation kind : values()) {
+                boolean messageMatchesKnownConflictKind =
+                        kind != UNKNOWN && kind != JOB_DEPENDENCY_CYCLE && rawMsg.contains(kind.marker);
+                if (messageMatchesKnownConflictKind) {
+                    return kind;
+                }
+            }
+            return UNKNOWN;
+        }
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<CommonResponse<Object>> handleException(Exception exception) {
+        log.error("console unexpected exception", exception);
+        String message = resolveCommonCode(ResultCode.SYSTEM_ERROR);
+        CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.SYSTEM_ERROR, message);
+        return ResponseEntity.internalServerError().body(failureBody);
+    }
 }

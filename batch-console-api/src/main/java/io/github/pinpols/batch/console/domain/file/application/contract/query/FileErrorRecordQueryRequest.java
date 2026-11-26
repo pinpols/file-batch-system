@@ -10,19 +10,19 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FileErrorRecordQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 128, message = "keyword too long (max 128)")
-  private String keyword;
+    @Size(max = 128, message = "keyword too long (max 128)")
+    private String keyword;
 
-  private Long fileId;
+    private Long fileId;
 
-  @Size(max = 64, message = "errorStage too long (max 64)")
-  private String errorStage;
+    @Size(max = 64, message = "errorStage too long (max 64)")
+    private String errorStage;
 
-  @Size(max = 128, message = "errorCode too long (max 128)")
-  private String errorCode;
+    @Size(max = 128, message = "errorCode too long (max 128)")
+    private String errorCode;
 
-  private Boolean skipped;
+    private Boolean skipped;
 }

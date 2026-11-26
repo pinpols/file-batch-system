@@ -24,133 +24,123 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class CalendarDependencyWaitGovernanceService {
 
-  private static final int MAX_PAGE_SIZE = 200;
+    private static final int MAX_PAGE_SIZE = 200;
 
-  /** 人工处置操作人长度上限，对应 calendar_dependency_wait.manual_operator_id VARCHAR(128)。 */
-  private static final int MANUAL_OPERATOR_ID_MAX_LENGTH = 128;
+    /** 人工处置操作人长度上限，对应 calendar_dependency_wait.manual_operator_id VARCHAR(128)。 */
+    private static final int MANUAL_OPERATOR_ID_MAX_LENGTH = 128;
 
-  /** 人工处置原因长度上限，对应 calendar_dependency_wait.manual_reason VARCHAR(1024)。 */
-  private static final int MANUAL_REASON_MAX_LENGTH = 1024;
+    /** 人工处置原因长度上限，对应 calendar_dependency_wait.manual_reason VARCHAR(1024)。 */
+    private static final int MANUAL_REASON_MAX_LENGTH = 1024;
 
-  private final CalendarDependencyWaitMapper waitMapper;
-  private final PlatformTransactionManager transactionManager;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final CalendarDependencyWaitMapper waitMapper;
+    private final PlatformTransactionManager transactionManager;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  public List<CalendarDependencyWaitEntity> list(
-      String tenantId, String calendarCode, String waitStatus, int limit) {
-    requireText(tenantId, "tenantId");
-    String normalizedStatus = normalizeStatus(waitStatus);
-    if (EmptyChecks.isNotNull(normalizedStatus)
-        && !List.of(
-                CalendarDependencyWaitEntity.STATUS_WAITING,
-                CalendarDependencyWaitEntity.STATUS_OPENED,
-                CalendarDependencyWaitEntity.STATUS_SKIPPED)
-            .contains(normalizedStatus)) {
-      throw new IllegalArgumentException("Unsupported calendar dependency wait status");
+    public List<CalendarDependencyWaitEntity> list(String tenantId, String calendarCode, String waitStatus, int limit) {
+        requireText(tenantId, "tenantId");
+        String normalizedStatus = normalizeStatus(waitStatus);
+        if (EmptyChecks.isNotNull(normalizedStatus)
+                && !List.of(
+                                CalendarDependencyWaitEntity.STATUS_WAITING,
+                                CalendarDependencyWaitEntity.STATUS_OPENED,
+                                CalendarDependencyWaitEntity.STATUS_SKIPPED)
+                        .contains(normalizedStatus)) {
+            throw new IllegalArgumentException("Unsupported calendar dependency wait status");
+        }
+        int pageSize = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
+        return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            return transactionTemplate.execute(status -> {
+                waitMapper.setTenantContext(tenantId);
+                String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(calendarCode);
+                return waitMapper.selectRecent(tenantId, normalizedCalendarCode, normalizedStatus, pageSize);
+            });
+        });
     }
-    int pageSize = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
-    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-      TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-      return transactionTemplate.execute(status -> {
-        waitMapper.setTenantContext(tenantId);
-        String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(calendarCode);
-        return waitMapper.selectRecent(
-            tenantId, normalizedCalendarCode, normalizedStatus, pageSize);
-      });
-    });
-  }
 
-  public CalendarDependencyWaitEntity requestManualAction(ManualActionCommand command) {
-    validate(command);
-    String trimmedAction = command.action().trim();
-    String action = trimmedAction.toUpperCase(Locale.ROOT);
-    String operatorId = command.operatorId().trim();
-    String reason = command.reason().trim();
-    Instant now = dateTimeSupport.nowInstant();
-    return RlsTenantContextHolder.runWithTenant(command.tenantId(), () -> {
-      TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-      return transactionTemplate.execute(
-          status -> requestManualActionInTransaction(command, action, operatorId, reason, now));
-    });
-  }
+    public CalendarDependencyWaitEntity requestManualAction(ManualActionCommand command) {
+        validate(command);
+        String trimmedAction = command.action().trim();
+        String action = trimmedAction.toUpperCase(Locale.ROOT);
+        String operatorId = command.operatorId().trim();
+        String reason = command.reason().trim();
+        Instant now = dateTimeSupport.nowInstant();
+        return RlsTenantContextHolder.runWithTenant(command.tenantId(), () -> {
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            return transactionTemplate.execute(
+                    status -> requestManualActionInTransaction(command, action, operatorId, reason, now));
+        });
+    }
 
-  private CalendarDependencyWaitEntity requestManualActionInTransaction(
-      ManualActionCommand command, String action, String operatorId, String reason, Instant now) {
-    waitMapper.setTenantContext(command.tenantId());
-    String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(command.calendarCode());
-    CalendarDependencyWaitEntity wait = waitMapper.selectByTenantCalendarBizDate(
-        command.tenantId(), normalizedCalendarCode, command.bizDate());
-    if (EmptyChecks.isNull(wait)
-        || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
-      throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait is no longer actionable");
+    private CalendarDependencyWaitEntity requestManualActionInTransaction(
+            ManualActionCommand command, String action, String operatorId, String reason, Instant now) {
+        waitMapper.setTenantContext(command.tenantId());
+        String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(command.calendarCode());
+        CalendarDependencyWaitEntity wait =
+                waitMapper.selectByTenantCalendarBizDate(command.tenantId(), normalizedCalendarCode, command.bizDate());
+        if (EmptyChecks.isNull(wait) || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
+            throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait is no longer actionable");
+        }
+        if (EmptyChecks.isNotNull(wait.manualAction())) {
+            boolean manualWaitResolutionIsUnchanged = wait.manualAction().equals(action)
+                    && wait.manualOperatorId().equals(operatorId)
+                    && wait.manualReason().equals(reason);
+            if (manualWaitResolutionIsUnchanged) {
+                return wait;
+            }
+            throw new OperationFailure(Kind.CONFLICT, "A manual action is already pending for this wait");
+        }
+        CalendarDependencyManualActionParam calendarDependencyManualActionParam =
+                CalendarDependencyManualActionParam.builder()
+                        .tenantId(command.tenantId())
+                        .id(wait.id())
+                        .manualAction(action)
+                        .operatorId(operatorId)
+                        .reason(reason)
+                        .requestedAt(now)
+                        .build();
+        int updated = waitMapper.requestManualAction(calendarDependencyManualActionParam);
+        if (updated != 1) {
+            throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait changed concurrently");
+        }
+        return waitMapper.selectByTenantCalendarBizDate(command.tenantId(), normalizedCalendarCode, command.bizDate());
     }
-    if (EmptyChecks.isNotNull(wait.manualAction())) {
-      boolean manualWaitResolutionIsUnchanged = wait.manualAction().equals(action)
-          && wait.manualOperatorId().equals(operatorId)
-          && wait.manualReason().equals(reason);
-      if (manualWaitResolutionIsUnchanged) {
-        return wait;
-      }
-      throw new OperationFailure(Kind.CONFLICT, "A manual action is already pending for this wait");
-    }
-    CalendarDependencyManualActionParam calendarDependencyManualActionParam =
-        CalendarDependencyManualActionParam.builder()
-            .tenantId(command.tenantId())
-            .id(wait.id())
-            .manualAction(action)
-            .operatorId(operatorId)
-            .reason(reason)
-            .requestedAt(now)
-            .build();
-    int updated = waitMapper.requestManualAction(calendarDependencyManualActionParam);
-    if (updated != 1) {
-      throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait changed concurrently");
-    }
-    return waitMapper.selectByTenantCalendarBizDate(
-        command.tenantId(), normalizedCalendarCode, command.bizDate());
-  }
 
-  private static void validate(ManualActionCommand command) {
-    boolean manualActionCommandIsInvalid = EmptyChecks.isNull(command)
-        || !Texts.hasText(command.tenantId())
-        || !Texts.hasText(command.calendarCode())
-        || EmptyChecks.isNull(command.bizDate())
-        || !Texts.hasText(command.operatorId())
-        || !Texts.hasText(command.reason())
-        || command.operatorId().trim().length() > MANUAL_OPERATOR_ID_MAX_LENGTH
-        || command.reason().trim().length() > MANUAL_REASON_MAX_LENGTH;
-    if (manualActionCommandIsInvalid) {
-      throw new IllegalArgumentException(
-          "tenant, calendar, bizDate, operator and reason are required");
+    private static void validate(ManualActionCommand command) {
+        boolean manualActionCommandIsInvalid = EmptyChecks.isNull(command)
+                || !Texts.hasText(command.tenantId())
+                || !Texts.hasText(command.calendarCode())
+                || EmptyChecks.isNull(command.bizDate())
+                || !Texts.hasText(command.operatorId())
+                || !Texts.hasText(command.reason())
+                || command.operatorId().trim().length() > MANUAL_OPERATOR_ID_MAX_LENGTH
+                || command.reason().trim().length() > MANUAL_REASON_MAX_LENGTH;
+        if (manualActionCommandIsInvalid) {
+            throw new IllegalArgumentException("tenant, calendar, bizDate, operator and reason are required");
+        }
+        String action = "";
+        if (EmptyChecks.isNotNull(command.action())) {
+            String trimmedAction = command.action().trim();
+            action = trimmedAction.toUpperCase(Locale.ROOT);
+        }
+        if (!CalendarDependencyWaitEntity.MANUAL_ACTION_RELEASE.equals(action)
+                && !CalendarDependencyWaitEntity.MANUAL_ACTION_SKIP.equals(action)) {
+            throw new IllegalArgumentException("action must be RELEASE or SKIP");
+        }
     }
-    String action = "";
-    if (EmptyChecks.isNotNull(command.action())) {
-      String trimmedAction = command.action().trim();
-      action = trimmedAction.toUpperCase(Locale.ROOT);
-    }
-    if (!CalendarDependencyWaitEntity.MANUAL_ACTION_RELEASE.equals(action)
-        && !CalendarDependencyWaitEntity.MANUAL_ACTION_SKIP.equals(action)) {
-      throw new IllegalArgumentException("action must be RELEASE or SKIP");
-    }
-  }
 
-  private static String normalizeStatus(String value) {
-    if (!Texts.hasText(value)) {
-      return null;
+    private static String normalizeStatus(String value) {
+        if (!Texts.hasText(value)) {
+            return null;
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.toUpperCase(Locale.ROOT);
     }
-    String trimmedValue = value.trim();
-    return trimmedValue.toUpperCase(Locale.ROOT);
-  }
 
-  private static void requireText(String value, String field) {
-    if (!Texts.hasText(value)) throw new IllegalArgumentException(field + " is required");
-  }
+    private static void requireText(String value, String field) {
+        if (!Texts.hasText(value)) throw new IllegalArgumentException(field + " is required");
+    }
 
-  public record ManualActionCommand(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String action,
-      String operatorId,
-      String reason) {}
+    public record ManualActionCommand(
+            String tenantId, String calendarCode, LocalDate bizDate, String action, String operatorId, String reason) {}
 }

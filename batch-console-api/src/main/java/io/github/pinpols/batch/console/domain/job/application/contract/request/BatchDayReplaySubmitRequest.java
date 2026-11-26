@@ -15,53 +15,53 @@ import lombok.Data;
 @Data
 public class BatchDayReplaySubmitRequest {
 
-  @Size(max = 64, message = "tenantId too long (max 64)")
-  private String tenantId;
+    @Size(max = 64, message = "tenantId too long (max 64)")
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128, message = "calendarCode too long (max 128)")
-  private String calendarCode;
+    @NotBlank
+    @Size(max = 128, message = "calendarCode too long (max 128)")
+    private String calendarCode;
 
-  @NotBlank
-  @ValidBizDate
-  private String bizDate;
+    @NotBlank
+    @ValidBizDate
+    private String bizDate;
 
-  /** ALL / ALL_FAILED / SUBSET_JOB_CODES / OUTPUTS_ONLY。 */
-  @NotBlank
-  @Size(max = 64, message = "scope too long (max 64)")
-  private String scope;
+    /** ALL / ALL_FAILED / SUBSET_JOB_CODES / OUTPUTS_ONLY。 */
+    @NotBlank
+    @Size(max = 64, message = "scope too long (max 64)")
+    private String scope;
 
-  /** SUBSET_JOB_CODES 时填；其他 scope 忽略。 */
-  private List<@Size(max = 128, message = "jobCode too long (max 128)") String> jobCodes;
+    /** SUBSET_JOB_CODES 时填；其他 scope 忽略。 */
+    private List<@Size(max = 128, message = "jobCode too long (max 128)") String> jobCodes;
 
-  /** OUTPUTS_ONLY 时填具体要 promote 的 result_version id；其他 scope 忽略。 */
-  private List<Long> versionIds;
+    /** OUTPUTS_ONLY 时填具体要 promote 的 result_version id；其他 scope 忽略。 */
+    private List<Long> versionIds;
 
-  private String resultPolicy;
+    private String resultPolicy;
 
-  private String configVersionPolicy;
+    private String configVersionPolicy;
 
-  private Integer configVersion;
+    private Integer configVersion;
 
-  @NotBlank
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @NotBlank
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 
-  @NotBlank
-  @Size(max = 128, message = "requestedBy too long (max 128)")
-  private String requestedBy;
+    @NotBlank
+    @Size(max = 128, message = "requestedBy too long (max 128)")
+    private String requestedBy;
 
-  /** true → 跳过审批直接 RUNNING；false → PENDING_APPROVAL 等审批（默认）。 */
-  private Boolean autoApprove = Boolean.FALSE;
+    /** true → 跳过审批直接 RUNNING；false → PENDING_APPROVAL 等审批（默认）。 */
+    private Boolean autoApprove = Boolean.FALSE;
 
-  private String traceId;
+    private String traceId;
 
-  /** REPLAY（默认）或 DRY_RUN。 */
-  private String executionMode = "REPLAY";
+    /** REPLAY（默认）或 DRY_RUN。 */
+    private String executionMode = "REPLAY";
 
-  /** EXISTING_INSTANCES（默认）或 SCHEDULE_PLAN。 */
-  private String candidateSource = "EXISTING_INSTANCES";
+    /** EXISTING_INSTANCES（默认）或 SCHEDULE_PLAN。 */
+    private String candidateSource = "EXISTING_INSTANCES";
 
-  /** 预览接口签发的一次性凭证；提交时必填。 */
-  private String previewToken;
+    /** 预览接口签发的一次性凭证；提交时必填。 */
+    private String previewToken;
 }

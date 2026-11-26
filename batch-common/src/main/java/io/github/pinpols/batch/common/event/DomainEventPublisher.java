@@ -13,6 +13,6 @@ package io.github.pinpols.batch.common.event;
  */
 public interface DomainEventPublisher {
 
-  /** 把 {@link DomainEvent} 落到对应 outbox 表,返回插入的 outbox 行 id(可为 null,若实现不需要)。 */
-  Long publish(DomainEvent event);
+    /** 把 {@link DomainEvent} 落到对应 outbox 表,返回插入的 outbox 行 id(可为 null,若实现不需要)。 */
+    Long publish(DomainEvent event);
 }

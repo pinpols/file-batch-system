@@ -17,27 +17,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ExpectedWorkRegistrationController {
 
-  private final ExpectedWorkRegistrationService registrationService;
+    private final ExpectedWorkRegistrationService registrationService;
 
-  @PostMapping("/file-groups")
-  public RegistrationResult registerFileGroup(@RequestBody RegisterFileGroupRequest request) {
-    FileGroupExpectation expectation = new FileGroupExpectation(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.fileGroupCode(),
-        request.bizDate(),
-        request.expectedAt(),
-        request.dueAt());
-    return registrationService.register(expectation);
-  }
+    @PostMapping("/file-groups")
+    public RegistrationResult registerFileGroup(@RequestBody RegisterFileGroupRequest request) {
+        FileGroupExpectation expectation = new FileGroupExpectation(
+                request.tenantId(),
+                request.calendarCode(),
+                request.workflowDefinitionId(),
+                request.fileGroupCode(),
+                request.bizDate(),
+                request.expectedAt(),
+                request.dueAt());
+        return registrationService.register(expectation);
+    }
 
-  public record RegisterFileGroupRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String fileGroupCode,
-      LocalDate bizDate,
-      Instant expectedAt,
-      Instant dueAt) {}
+    public record RegisterFileGroupRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String fileGroupCode,
+            LocalDate bizDate,
+            Instant expectedAt,
+            Instant dueAt) {}
 }

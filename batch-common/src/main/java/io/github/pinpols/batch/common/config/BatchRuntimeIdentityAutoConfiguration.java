@@ -22,16 +22,16 @@ import org.springframework.core.env.Environment;
 @AutoConfiguration
 public class BatchRuntimeIdentityAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public ApplicationNameProvider applicationNameProvider(Environment environment) {
-    return new ApplicationNameProvider(environment);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public ApplicationNameProvider applicationNameProvider(Environment environment) {
+        return new ApplicationNameProvider(environment);
+    }
 
-  @Bean
-  @ConditionalOnMissingBean
-  public RuntimeInfrastructureInspector runtimeInfrastructureInspector(
-      Environment environment, ObjectProvider<DataRedisConnectionDetails> redisConnectionDetails) {
-    return new RuntimeInfrastructureInspector(environment, redisConnectionDetails);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public RuntimeInfrastructureInspector runtimeInfrastructureInspector(
+            Environment environment, ObjectProvider<DataRedisConnectionDetails> redisConnectionDetails) {
+        return new RuntimeInfrastructureInspector(environment, redisConnectionDetails);
+    }
 }

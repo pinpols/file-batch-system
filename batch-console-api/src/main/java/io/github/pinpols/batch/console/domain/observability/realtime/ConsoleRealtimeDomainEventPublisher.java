@@ -16,35 +16,33 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleRealtimeDomainEventPublisher implements ConsoleRealtimeEventPort {
 
-  private final ApplicationEventPublisher applicationEventPublisher;
-  private final ConsoleRealtimeCursorFactory cursorFactory;
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final ConsoleRealtimeCursorFactory cursorFactory;
 
-  @Override
-  public void publishChanged(String tenantId, String stream, String eventType) {
-    publish(tenantId, stream, eventType, null, false);
-  }
+    @Override
+    public void publishChanged(String tenantId, String stream, String eventType) {
+        publish(tenantId, stream, eventType, null, false);
+    }
 
-  @Override
-  public void publishChanged(String tenantId, String stream, String eventType, Object data) {
-    publish(tenantId, stream, eventType, data, false);
-  }
+    @Override
+    public void publishChanged(String tenantId, String stream, String eventType, Object data) {
+        publish(tenantId, stream, eventType, data, false);
+    }
 
-  @Override
-  public void publishSummaryRefresh(String tenantId) {
-    publish(tenantId, "ops-summary", "ops-summary-refresh-requested", null, true);
-  }
+    @Override
+    public void publishSummaryRefresh(String tenantId) {
+        publish(tenantId, "ops-summary", "ops-summary-refresh-requested", null, true);
+    }
 
-  private void publish(
-      String tenantId, String stream, String eventType, Object data, boolean summaryRefresh) {
-    // 这里只发布应用内事件，真正的 SSE 分发由 bridge 在事务提交后统一处理。
-    ConsoleRealtimeDomainEvent event =
-        ConsoleRealtimeDomainEvent.builder().tenantId(tenantId).stream(stream)
-            .eventType(eventType)
-            .cursor(cursorFactory.nextCursor())
-            .data(data)
-            .summaryRefresh(summaryRefresh)
-            .emittedAt(BatchDateTimeSupport.utcNow())
-            .build();
-    applicationEventPublisher.publishEvent(event);
-  }
+    private void publish(String tenantId, String stream, String eventType, Object data, boolean summaryRefresh) {
+        // 这里只发布应用内事件，真正的 SSE 分发由 bridge 在事务提交后统一处理。
+        ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId(tenantId).stream(stream)
+                .eventType(eventType)
+                .cursor(cursorFactory.nextCursor())
+                .data(data)
+                .summaryRefresh(summaryRefresh)
+                .emittedAt(BatchDateTimeSupport.utcNow())
+                .build();
+        applicationEventPublisher.publishEvent(event);
+    }
 }

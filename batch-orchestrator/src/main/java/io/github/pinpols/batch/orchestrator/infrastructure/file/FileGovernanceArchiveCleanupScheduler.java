@@ -19,25 +19,22 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FileGovernanceArchiveCleanupScheduler {
 
-  private final FileGovernanceScheduler fileGovernanceScheduler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
 
-  @PostConstruct
-  void registerHealthMetric() {
-    schedulerHealthMetrics.register("file_governance");
-  }
-
-  @Scheduled(fixedDelayString = "${batch.file-governance.archive.cleanup-interval-millis:60000}")
-  @SchedulerLock(
-      name = "file_governance_archive_cleanup",
-      lockAtMostFor = "PT3M",
-      lockAtLeastFor = "PT30S")
-  public void cleanupArchivedFiles() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void registerHealthMetric() {
+        schedulerHealthMetrics.register("file_governance");
     }
-    fileGovernanceScheduler.cleanupArchivedFiles();
-    schedulerHealthMetrics.markSuccess("file_governance");
-  }
+
+    @Scheduled(fixedDelayString = "${batch.file-governance.archive.cleanup-interval-millis:60000}")
+    @SchedulerLock(name = "file_governance_archive_cleanup", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
+    public void cleanupArchivedFiles() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        fileGovernanceScheduler.cleanupArchivedFiles();
+        schedulerHealthMetrics.markSuccess("file_governance");
+    }
 }

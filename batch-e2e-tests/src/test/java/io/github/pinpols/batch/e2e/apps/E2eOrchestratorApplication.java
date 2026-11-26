@@ -51,86 +51,75 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  */
 @Configuration
 @EnableAutoConfiguration(
-    exclude = {
-      HttpRequestMdcAutoConfiguration.class,
-      AnthropicChatAutoConfiguration.class,
-      OpenAiChatAutoConfiguration.class,
-      OpenAiDecisionAutoConfiguration.class,
-      OpenAiAudioSpeechAutoConfiguration.class,
-      OpenAiAudioTranscriptionAutoConfiguration.class,
-      OpenAiEmbeddingAutoConfiguration.class,
-      OpenAiImageAutoConfiguration.class,
-      OpenAiModerationAutoConfiguration.class,
-      SecurityAutoConfiguration.class,
-      UserDetailsServiceAutoConfiguration.class,
-      SecurityFilterAutoConfiguration.class,
-      ServletWebSecurityAutoConfiguration.class,
-      ManagementWebSecurityAutoConfiguration.class,
-    })
+        exclude = {
+            HttpRequestMdcAutoConfiguration.class,
+            AnthropicChatAutoConfiguration.class,
+            OpenAiChatAutoConfiguration.class,
+            OpenAiDecisionAutoConfiguration.class,
+            OpenAiAudioSpeechAutoConfiguration.class,
+            OpenAiAudioTranscriptionAutoConfiguration.class,
+            OpenAiEmbeddingAutoConfiguration.class,
+            OpenAiImageAutoConfiguration.class,
+            OpenAiModerationAutoConfiguration.class,
+            SecurityAutoConfiguration.class,
+            UserDetailsServiceAutoConfiguration.class,
+            SecurityFilterAutoConfiguration.class,
+            ServletWebSecurityAutoConfiguration.class,
+            ManagementWebSecurityAutoConfiguration.class,
+        })
 @EnableKafka
 @Import({
-  BatchClockConfig.class,
-  E2ePlatformDataSourceConfiguration.class,
-  E2ePlatformMybatisConfiguration.class,
-  E2eShedLockConfiguration.class,
-  E2eKafkaProducerConfiguration.class
+    BatchClockConfig.class,
+    E2ePlatformDataSourceConfiguration.class,
+    E2ePlatformMybatisConfiguration.class,
+    E2eShedLockConfiguration.class,
+    E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
-    basePackages = {
-      "io.github.pinpols.batch.e2e.support",
-      "io.github.pinpols.batch.common.spi.task",
-      "io.github.pinpols.batch.common.storage.ingress",
-      "io.github.pinpols.batch.orchestrator"
-    },
-    excludeFilters = {
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = E2eOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = OrchestratorDataSourceConfiguration.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = DbRowExistsSensorPolicy.class)
-    })
+        basePackages = {
+            "io.github.pinpols.batch.e2e.support",
+            "io.github.pinpols.batch.common.spi.task",
+            "io.github.pinpols.batch.common.storage.ingress",
+            "io.github.pinpols.batch.orchestrator"
+        },
+        excludeFilters = {
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchOrchestratorApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eOrchestratorApplication.class),
+            @ComponentScan.Filter(
+                    type = FilterType.ASSIGNABLE_TYPE,
+                    classes = OrchestratorDataSourceConfiguration.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = DbRowExistsSensorPolicy.class)
+        })
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.common.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.orchestrator.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.common.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.orchestrator.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eOrchestratorApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(E2eOrchestratorApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(E2eOrchestratorApplication.class, args);
+    }
 
-  // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
-  // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
-  @Bean(name = "applicationTaskExecutor")
-  public Executor applicationTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setThreadNamePrefix("e2e-app-task-");
-    executor.initialize();
-    return executor;
-  }
+    // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
+    // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
+    @Bean(name = "applicationTaskExecutor")
+    public Executor applicationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setThreadNamePrefix("e2e-app-task-");
+        executor.initialize();
+        return executor;
+    }
 
-  @Bean(name = "transactionManager")
-  @ConditionalOnMissingBean(name = "transactionManager")
-  public DataSourceTransactionManager transactionManager(
-      @Qualifier("dataSource") DataSource dataSource) {
-    return new DataSourceTransactionManager(dataSource);
-  }
+    @Bean(name = "transactionManager")
+    @ConditionalOnMissingBean(name = "transactionManager")
+    public DataSourceTransactionManager transactionManager(@Qualifier("dataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
 }

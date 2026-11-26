@@ -30,49 +30,49 @@ import org.springframework.web.client.RestClient;
 @Component
 public class TriggerInternalRestClient {
 
-  /** batch-trigger {@code InternalSecretFilter} 期望的鉴权 header 名,保持单一字面量来源。 */
-  public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
+    /** batch-trigger {@code InternalSecretFilter} 期望的鉴权 header 名,保持单一字面量来源。 */
+    public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  // RANDOM_PORT 测试在容器初始化完成后才提供 local.server.port；首次请求时构建并在后续复用。
-  private final Supplier<RestClient> clientSupplier;
+    // RANDOM_PORT 测试在容器初始化完成后才提供 local.server.port；首次请求时构建并在后续复用。
+    private final Supplier<RestClient> clientSupplier;
 
-  public TriggerInternalRestClient(
-      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
-      ConsoleTriggerClientProperties triggerClientProperties,
-      BatchSecurityProperties batchSecurityProperties,
-      Environment environment) {
-    this.clientSupplier = SingletonSupplier.of(() -> buildClient(
-        restClientBuilderProvider, triggerClientProperties, batchSecurityProperties, environment));
-  }
-
-  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
-  public RestClient client() {
-    return clientSupplier.get();
-  }
-
-  private static RestClient buildClient(
-      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
-      ConsoleTriggerClientProperties triggerClientProperties,
-      BatchSecurityProperties batchSecurityProperties,
-      Environment environment) {
-    String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
-        environment, triggerClientProperties.getBaseUrl(), "batch.console.trigger.base-url");
-    String secret = batchSecurityProperties.getInternalSecret();
-    HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
-    Duration connectTimeout = Duration.ofMillis(triggerClientProperties.getConnectTimeoutMillis());
-    httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
-    Duration readTimeout = Duration.ofMillis(triggerClientProperties.getReadTimeoutMillis());
-    httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
-    ClientHttpRequestFactory requestFactory =
-        ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
-    RestClient.Builder builder = restClientBuilderProvider
-        .getObject()
-        .baseUrl(baseUrl)
-        .requestInterceptor(new AcceptLanguageRequestInterceptor())
-        .requestFactory(requestFactory);
-    if (Texts.hasText(secret)) {
-      builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
+    public TriggerInternalRestClient(
+            ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+            ConsoleTriggerClientProperties triggerClientProperties,
+            BatchSecurityProperties batchSecurityProperties,
+            Environment environment) {
+        this.clientSupplier = SingletonSupplier.of(() ->
+                buildClient(restClientBuilderProvider, triggerClientProperties, batchSecurityProperties, environment));
     }
-    return builder.build();
-  }
+
+    /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
+    public RestClient client() {
+        return clientSupplier.get();
+    }
+
+    private static RestClient buildClient(
+            ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+            ConsoleTriggerClientProperties triggerClientProperties,
+            BatchSecurityProperties batchSecurityProperties,
+            Environment environment) {
+        String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
+                environment, triggerClientProperties.getBaseUrl(), "batch.console.trigger.base-url");
+        String secret = batchSecurityProperties.getInternalSecret();
+        HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
+        Duration connectTimeout = Duration.ofMillis(triggerClientProperties.getConnectTimeoutMillis());
+        httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
+        Duration readTimeout = Duration.ofMillis(triggerClientProperties.getReadTimeoutMillis());
+        httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
+        ClientHttpRequestFactory requestFactory =
+                ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
+        RestClient.Builder builder = restClientBuilderProvider
+                .getObject()
+                .baseUrl(baseUrl)
+                .requestInterceptor(new AcceptLanguageRequestInterceptor())
+                .requestFactory(requestFactory);
+        if (Texts.hasText(secret)) {
+            builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
+        }
+        return builder.build();
+    }
 }

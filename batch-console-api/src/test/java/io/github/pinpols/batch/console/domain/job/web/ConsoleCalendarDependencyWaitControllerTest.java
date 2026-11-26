@@ -31,73 +31,70 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleCalendarDependencyWaitControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestrator;
+    @Mock
+    private ConsoleOrchestratorPort orchestrator;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(metadataResolver);
-    when(metadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleCalendarDependencyWaitController(
-            orchestrator, responseFactory, metadataResolver))
-        .setControllerAdvice(ConsoleApiExceptionHandler.forStandaloneTest(responseFactory))
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(metadataResolver);
+        when(metadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleCalendarDependencyWaitController(orchestrator, responseFactory, metadataResolver))
+                .setControllerAdvice(ConsoleApiExceptionHandler.forStandaloneTest(responseFactory))
+                .build();
+    }
 
-  @DisplayName("按租户查询日历依赖等待")
-  @Test
-  void shouldListTenantScopedWaits() throws Exception {
-    when(orchestrator.listCalendarDependencyWaits("tenant-a", "CAL_A", "WAITING", 50))
-        .thenReturn(List.of());
-    mockMvc
-        .perform(get("/api/console/calendar-dependency-waits")
-            .param("tenantId", "tenant-a")
-            .param("calendarCode", "CAL_A")
-            .param("waitStatus", "WAITING")
-            .param("limit", "50"))
-        .andExpect(status().isOk());
-    verify(orchestrator).listCalendarDependencyWaits("tenant-a", "CAL_A", "WAITING", 50);
-  }
+    @DisplayName("按租户查询日历依赖等待")
+    @Test
+    void shouldListTenantScopedWaits() throws Exception {
+        when(orchestrator.listCalendarDependencyWaits("tenant-a", "CAL_A", "WAITING", 50))
+                .thenReturn(List.of());
+        mockMvc.perform(get("/api/console/calendar-dependency-waits")
+                        .param("tenantId", "tenant-a")
+                        .param("calendarCode", "CAL_A")
+                        .param("waitStatus", "WAITING")
+                        .param("limit", "50"))
+                .andExpect(status().isOk());
+        verify(orchestrator).listCalendarDependencyWaits("tenant-a", "CAL_A", "WAITING", 50);
+    }
 
-  @DisplayName("处置使用已认证操作者身份")
-  @Test
-  void shouldUseAuthenticatedOperatorInsteadOfClientSuppliedActor() throws Exception {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("r", "t", "tenant-a", "admin-user", null, null));
-    mockMvc
-        .perform(post("/api/console/calendar-dependency-waits/manual-action")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @DisplayName("处置使用已认证操作者身份")
+    @Test
+    void shouldUseAuthenticatedOperatorInsteadOfClientSuppliedActor() throws Exception {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("r", "t", "tenant-a", "admin-user", null, null));
+        mockMvc.perform(post("/api/console/calendar-dependency-waits/manual-action")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"tenant-a","calendarCode":"CAL_A","bizDate":"2026-10-13",
                  "action":"SKIP","reason":"source cancelled"}
                 """))
-        .andExpect(status().isOk());
-    verify(orchestrator)
-        .requestCalendarDependencyWaitAction(ArgumentMatchers.argThat(command -> command != null
-            && Objects.equals(command.tenantId(), "tenant-a")
-            && Objects.equals(command.calendarCode(), "CAL_A")
-            && Objects.equals(command.bizDate(), LocalDate.parse("2026-10-13"))
-            && Objects.equals(command.action(), "SKIP")
-            && Objects.equals(command.operatorId(), "admin-user")
-            && Objects.equals(command.reason(), "source cancelled")));
-  }
+                .andExpect(status().isOk());
+        verify(orchestrator)
+                .requestCalendarDependencyWaitAction(ArgumentMatchers.argThat(command -> command != null
+                        && Objects.equals(command.tenantId(), "tenant-a")
+                        && Objects.equals(command.calendarCode(), "CAL_A")
+                        && Objects.equals(command.bizDate(), LocalDate.parse("2026-10-13"))
+                        && Objects.equals(command.action(), "SKIP")
+                        && Objects.equals(command.operatorId(), "admin-user")
+                        && Objects.equals(command.reason(), "source cancelled")));
+    }
 
-  @DisplayName("拒绝不支持的人工处置动作")
-  @Test
-  void shouldRejectUnsupportedManualAction() throws Exception {
-    mockMvc
-        .perform(post("/api/console/calendar-dependency-waits/manual-action")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @DisplayName("拒绝不支持的人工处置动作")
+    @Test
+    void shouldRejectUnsupportedManualAction() throws Exception {
+        mockMvc.perform(post("/api/console/calendar-dependency-waits/manual-action")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"tenant-a","calendarCode":"CAL_A","bizDate":"2026-10-13",
                  "action":"OPEN","reason":"bad action"}
                 """))
-        .andExpect(status().isBadRequest());
-  }
+                .andExpect(status().isBadRequest());
+    }
 }

@@ -16,103 +16,102 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导出数据插件注册中心单测:标识解析,大小写归一与重复注册的失败语义")
 class ExportDataPluginRegistryTest {
 
-  @Test
-  @DisplayName("按标识精确解析到已注册的插件实例")
-  void shouldResolvePluginById() {
-    ExportDataPlugin plugin = stubPlugin("settlement");
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
+    @Test
+    @DisplayName("按标识精确解析到已注册的插件实例")
+    void shouldResolvePluginById() {
+        ExportDataPlugin plugin = stubPlugin("settlement");
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
 
-    assertThat(registry.require("settlement")).isSameAs(plugin);
-  }
+        assertThat(registry.require("settlement")).isSameAs(plugin);
+    }
 
-  @Test
-  @DisplayName("标识大小写不敏感,大写输入同样命中同一插件")
-  void shouldNormalizeIdToLowerCase() {
-    ExportDataPlugin plugin = stubPlugin("settlement");
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
+    @Test
+    @DisplayName("标识大小写不敏感,大写输入同样命中同一插件")
+    void shouldNormalizeIdToLowerCase() {
+        ExportDataPlugin plugin = stubPlugin("settlement");
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
 
-    assertThat(registry.require("SETTLEMENT")).isSameAs(plugin);
-  }
+        assertThat(registry.require("SETTLEMENT")).isSameAs(plugin);
+    }
 
-  @Test
-  @DisplayName("未提供导出数据引用时快速失败,并提示该引用为必填")
-  void shouldThrowWhenIdIsNull() {
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
+    @Test
+    @DisplayName("未提供导出数据引用时快速失败,并提示该引用为必填")
+    void shouldThrowWhenIdIsNull() {
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
-    assertThatThrownBy(() -> registry.require(null))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("export_data_ref is required");
-  }
+        assertThatThrownBy(() -> registry.require(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("export_data_ref is required");
+    }
 
-  @Test
-  @DisplayName("导出数据引用为空白字符串时快速失败,并提示必填")
-  void shouldThrowWhenIdIsBlank() {
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
+    @Test
+    @DisplayName("导出数据引用为空白字符串时快速失败,并提示必填")
+    void shouldThrowWhenIdIsBlank() {
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
-    assertThatThrownBy(() -> registry.require("  "))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("export_data_ref is required");
-  }
+        assertThatThrownBy(() -> registry.require("  "))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("export_data_ref is required");
+    }
 
-  @Test
-  @DisplayName("引用未注册时快速失败,并在消息中回显该标识")
-  void shouldThrowWhenPluginNotFound() {
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
+    @Test
+    @DisplayName("引用未注册时快速失败,并在消息中回显该标识")
+    void shouldThrowWhenPluginNotFound() {
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
-    assertThatThrownBy(() -> registry.require("no_such_plugin"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("no_such_plugin");
-  }
+        assertThatThrownBy(() -> registry.require("no_such_plugin"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("no_such_plugin");
+    }
 
-  @Test
-  @DisplayName("同一标识注册两个插件时,注册阶段即失败并提示重复")
-  void shouldThrowOnDuplicatePluginId() {
-    ExportDataPlugin p1 = stubPlugin("settlement");
-    ExportDataPlugin p2 = stubPlugin("settlement");
+    @Test
+    @DisplayName("同一标识注册两个插件时,注册阶段即失败并提示重复")
+    void shouldThrowOnDuplicatePluginId() {
+        ExportDataPlugin p1 = stubPlugin("settlement");
+        ExportDataPlugin p2 = stubPlugin("settlement");
 
-    assertThatThrownBy(() -> new ExportDataPluginRegistry(List.of(p1, p2)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("duplicate");
-  }
+        assertThatThrownBy(() -> new ExportDataPluginRegistry(List.of(p1, p2)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("duplicate");
+    }
 
-  @Test
-  @DisplayName("多个不同标识的插件可同时注册,并各自解析到对应实例")
-  void shouldSupportMultipleDistinctPlugins() {
-    ExportDataPlugin p1 = stubPlugin("settlement");
-    ExportDataPlugin p2 = stubPlugin("jdbc_mapped_export");
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(p1, p2));
+    @Test
+    @DisplayName("多个不同标识的插件可同时注册,并各自解析到对应实例")
+    void shouldSupportMultipleDistinctPlugins() {
+        ExportDataPlugin p1 = stubPlugin("settlement");
+        ExportDataPlugin p2 = stubPlugin("jdbc_mapped_export");
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(p1, p2));
 
-    assertThat(registry.require("settlement")).isSameAs(p1);
-    assertThat(registry.require("jdbc_mapped_export")).isSameAs(p2);
-  }
+        assertThat(registry.require("settlement")).isSameAs(p1);
+        assertThat(registry.require("jdbc_mapped_export")).isSameAs(p2);
+    }
 
-  @Test
-  @DisplayName("重放能力按实际解析的插件和冻结导出配置计算")
-  void shouldResolveReplayCapabilityFromSelectedPluginAndFrozenConfig() {
-    Map<String, Object> frozenConfig = Map.of("export_data_ref", "settlement");
-    ExportDataPlugin plugin = stubPlugin("settlement");
-    ReplayCapabilityDeclaration declaredCapability = new ReplayCapabilityDeclaration(
-        "settlement",
-        "1.2.3",
-        List.of("DATABASE_READ", "OBJECT_STORAGE_WRITE"),
-        IdempotencyCapability.NONE,
-        "NONE",
-        "operator-reconciliation",
-        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
-    when(plugin.replayCapability(frozenConfig)).thenReturn(declaredCapability);
-    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
+    @Test
+    @DisplayName("重放能力按实际解析的插件和冻结导出配置计算")
+    void shouldResolveReplayCapabilityFromSelectedPluginAndFrozenConfig() {
+        Map<String, Object> frozenConfig = Map.of("export_data_ref", "settlement");
+        ExportDataPlugin plugin = stubPlugin("settlement");
+        ReplayCapabilityDeclaration declaredCapability = new ReplayCapabilityDeclaration(
+                "settlement",
+                "1.2.3",
+                List.of("DATABASE_READ", "OBJECT_STORAGE_WRITE"),
+                IdempotencyCapability.NONE,
+                "NONE",
+                "operator-reconciliation",
+                ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
+        when(plugin.replayCapability(frozenConfig)).thenReturn(declaredCapability);
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
 
-    ReplayCapabilityDeclaration actualCapability =
-        registry.replayCapability("SETTLEMENT", frozenConfig);
+        ReplayCapabilityDeclaration actualCapability = registry.replayCapability("SETTLEMENT", frozenConfig);
 
-    assertThat(actualCapability).isEqualTo(declaredCapability);
-  }
+        assertThat(actualCapability).isEqualTo(declaredCapability);
+    }
 
-  // --- helpers ---
+    // --- helpers ---
 
-  private static ExportDataPlugin stubPlugin(String id) {
-    ExportDataPlugin plugin = mock(ExportDataPlugin.class);
-    when(plugin.id()).thenReturn(id);
-    return plugin;
-  }
+    private static ExportDataPlugin stubPlugin(String id) {
+        ExportDataPlugin plugin = mock(ExportDataPlugin.class);
+        when(plugin.id()).thenReturn(id);
+        return plugin;
+    }
 }

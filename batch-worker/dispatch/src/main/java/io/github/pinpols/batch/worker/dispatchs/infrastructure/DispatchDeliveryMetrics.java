@@ -11,40 +11,39 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchDeliveryMetrics {
 
-  private final MeterRegistry registry;
-  private final DispatchChannelCircuitBreaker circuitBreaker;
+    private final MeterRegistry registry;
+    private final DispatchChannelCircuitBreaker circuitBreaker;
 
-  public DispatchDeliveryMetrics(
-      MeterRegistry registry, DispatchChannelCircuitBreaker circuitBreaker) {
-    this.registry = registry;
-    this.circuitBreaker = circuitBreaker;
-  }
-
-  @PostConstruct
-  void registerOpenCircuitGauge() {
-    Gauge.builder(
-            "batch.dispatch.circuits.open",
-            circuitBreaker,
-            DispatchChannelCircuitBreaker::currentOpenCircuits)
-        .description("当前处于熔断冷却期的分发渠道数量")
-        .register(registry);
-  }
-
-  public void recordDelivery(String channelType, boolean success, boolean circuitRejected) {
-    Counter.builder("batch.dispatch.deliveries")
-        .tag("channel_type", channelType == null ? "unknown" : channelType)
-        .tag("result", deliveryResult(circuitRejected, success))
-        .register(registry)
-        .increment();
-  }
-
-  private static String deliveryResult(boolean circuitRejected, boolean success) {
-    if (circuitRejected) {
-      return "circuit_open";
+    public DispatchDeliveryMetrics(MeterRegistry registry, DispatchChannelCircuitBreaker circuitBreaker) {
+        this.registry = registry;
+        this.circuitBreaker = circuitBreaker;
     }
-    if (success) {
-      return "success";
+
+    @PostConstruct
+    void registerOpenCircuitGauge() {
+        Gauge.builder(
+                        "batch.dispatch.circuits.open",
+                        circuitBreaker,
+                        DispatchChannelCircuitBreaker::currentOpenCircuits)
+                .description("当前处于熔断冷却期的分发渠道数量")
+                .register(registry);
     }
-    return "failure";
-  }
+
+    public void recordDelivery(String channelType, boolean success, boolean circuitRejected) {
+        Counter.builder("batch.dispatch.deliveries")
+                .tag("channel_type", channelType == null ? "unknown" : channelType)
+                .tag("result", deliveryResult(circuitRejected, success))
+                .register(registry)
+                .increment();
+    }
+
+    private static String deliveryResult(boolean circuitRejected, boolean success) {
+        if (circuitRejected) {
+            return "circuit_open";
+        }
+        if (success) {
+            return "success";
+        }
+        return "failure";
+    }
 }

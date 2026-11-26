@@ -6,5 +6,5 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 /** 启动明确的顶层 Workflow 目标，不创建虚构的 Job Instance。 */
 public interface WorkflowRunLaunchService {
 
-  LaunchResponse launch(LaunchRequest request);
+    LaunchResponse launch(LaunchRequest request);
 }

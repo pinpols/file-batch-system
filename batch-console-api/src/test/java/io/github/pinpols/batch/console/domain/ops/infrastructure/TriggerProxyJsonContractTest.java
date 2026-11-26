@@ -30,122 +30,116 @@ import org.springframework.web.client.RestClient;
 @DisplayName("Trigger 代理真实 JSON 转换验证：固定列表、运维动作与租户失败关闭")
 class TriggerProxyJsonContractTest {
 
-  @Test
-  @DisplayName("内部响应反序列化为固定 DTO，跨租户与缺租户记录均不透传")
-  void shouldDeserializeAndFilterWireRows_whenDownstreamReturnsMultipleTenants() {
-    RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(requestTo("http://trigger.test/api/triggers/management/list?tenantId=ta"))
-        .andRespond(withSuccess("""
+    @Test
+    @DisplayName("内部响应反序列化为固定 DTO，跨租户与缺租户记录均不透传")
+    void shouldDeserializeAndFilterWireRows_whenDownstreamReturnsMultipleTenants() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://trigger.test/api/triggers/management/list?tenantId=ta"))
+                .andRespond(withSuccess("""
             {"code":"SUCCESS","data":[
               {"tenantId":"ta","workflowCode":"WF_A","status":"NORMAL","nextFireTime":"2026-10-07T00:00:00Z"},
               {"tenantId":"tb","workflowCode":"WF_B","status":"NORMAL"},
               {"workflowCode":"UNKNOWN","status":"NORMAL"}
             ]}
             """, MediaType.APPLICATION_JSON));
-    TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
-    when(factory.client()).thenReturn(builder.build());
-    ConsoleTenantGuard guard = mock(ConsoleTenantGuard.class);
-    when(guard.currentTenantScopeOrNull()).thenReturn("ta");
-    DownstreamFallback fallback = mock(DownstreamFallback.class);
-    when(fallback.callOrFallback(eq("trigger"), eq("list"), any(), any()))
-        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
-    List<ConsoleTriggerStatusResponse> rows =
-        new DefaultConsoleTriggerProxyService(factory, guard, fallback).triggerList();
-    assertThat(rows).hasSize(1);
-    assertThat(rows.get(0).workflowCode()).isEqualTo("WF_A");
-    assertThat(rows.get(0).nextFireTime()).isEqualTo(Instant.parse("2026-10-07T00:00:00Z"));
-    server.verify();
-  }
+        TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
+        when(factory.client()).thenReturn(builder.build());
+        ConsoleTenantGuard guard = mock(ConsoleTenantGuard.class);
+        when(guard.currentTenantScopeOrNull()).thenReturn("ta");
+        DownstreamFallback fallback = mock(DownstreamFallback.class);
+        when(fallback.callOrFallback(eq("trigger"), eq("list"), any(), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
+        List<ConsoleTriggerStatusResponse> rows =
+                new DefaultConsoleTriggerProxyService(factory, guard, fallback).triggerList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).workflowCode()).isEqualTo("WF_A");
+        assertThat(rows.get(0).nextFireTime()).isEqualTo(Instant.parse("2026-10-07T00:00:00Z"));
+        server.verify();
+    }
 
-  @Test
-  @DisplayName("Workflow 运维动作代理到 Workflow 管理路由并返回 Workflow 编码")
-  void shouldProxyWorkflowAction_whenWorkflowCodeProvided() {
-    RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(
-            requestTo(
-                "http://trigger.test/api/triggers/management/workflow/pause?tenantId=ta&workflowCode=WF_A"))
-        .andRespond(withSuccess(
-            "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"workflowCode\":\"WF_A\",\"status\":\"PAUSED\"}}",
-            MediaType.APPLICATION_JSON));
-    ConsoleTenantGuard guard = mock(ConsoleTenantGuard.class);
-    when(guard.resolveTenant("ta")).thenReturn("ta");
+    @Test
+    @DisplayName("Workflow 运维动作代理到 Workflow 管理路由并返回 Workflow 编码")
+    void shouldProxyWorkflowAction_whenWorkflowCodeProvided() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(
+                        "http://trigger.test/api/triggers/management/workflow/pause?tenantId=ta&workflowCode=WF_A"))
+                .andRespond(withSuccess(
+                        "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"workflowCode\":\"WF_A\",\"status\":\"PAUSED\"}}",
+                        MediaType.APPLICATION_JSON));
+        ConsoleTenantGuard guard = mock(ConsoleTenantGuard.class);
+        when(guard.resolveTenant("ta")).thenReturn("ta");
 
-    ConsoleTriggerActionResponse response =
-        writeService(builder, guard).triggerAction("ta", "WF_A", "pause");
+        ConsoleTriggerActionResponse response = writeService(builder, guard).triggerAction("ta", "WF_A", "pause");
 
-    assertThat(response).isEqualTo(new ConsoleTriggerActionResponse("ta", "WF_A", "PAUSED"));
-    server.verify();
-  }
+        assertThat(response).isEqualTo(new ConsoleTriggerActionResponse("ta", "WF_A", "PAUSED"));
+        server.verify();
+    }
 
-  @Test
-  @DisplayName("空的内部列表不会返回 null，也不会产生错误的租户记录")
-  void shouldReturnEmptyList_whenDownstreamRowsAreNull() {
-    assertThat(DefaultConsoleTriggerProxyService.filterByTenant(null, "ta")).isEqualTo(List.of());
-  }
+    @Test
+    @DisplayName("空的内部列表不会返回 null，也不会产生错误的租户记录")
+    void shouldReturnEmptyList_whenDownstreamRowsAreNull() {
+        assertThat(DefaultConsoleTriggerProxyService.filterByTenant(null, "ta")).isEqualTo(List.of());
+    }
 
-  @ParameterizedTest
-  @MethodSource("schedulerCommandCases")
-  @DisplayName("调度器动作区分缺失信封、空 data 与正常状态")
-  void shouldPreserveSchedulerResult_whenDownstreamResponseVaries(
-      String responseBody, ConsoleSchedulerCommandResponse expected) {
-    RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(requestTo("http://trigger.test/api/triggers/management/pause-all"))
-        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+    @ParameterizedTest
+    @MethodSource("schedulerCommandCases")
+    @DisplayName("调度器动作区分缺失信封、空 data 与正常状态")
+    void shouldPreserveSchedulerResult_whenDownstreamResponseVaries(
+            String responseBody, ConsoleSchedulerCommandResponse expected) {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://trigger.test/api/triggers/management/pause-all"))
+                .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
-    assertThat(writeService(builder).schedulerPauseAll()).isEqualTo(expected);
-    server.verify();
-  }
+        assertThat(writeService(builder).schedulerPauseAll()).isEqualTo(expected);
+        server.verify();
+    }
 
-  private static Stream<Arguments> schedulerCommandCases() {
-    return Stream.of(
-        Arguments.of("", new ConsoleSchedulerCommandResponse(null)),
-        Arguments.of("{\"code\":\"SUCCESS\",\"data\":null}", null),
-        Arguments.of(
-            "{\"code\":\"SUCCESS\",\"data\":{\"status\":\"ALL_PAUSED\"}}",
-            new ConsoleSchedulerCommandResponse("ALL_PAUSED")));
-  }
+    private static Stream<Arguments> schedulerCommandCases() {
+        return Stream.of(
+                Arguments.of("", new ConsoleSchedulerCommandResponse(null)),
+                Arguments.of("{\"code\":\"SUCCESS\",\"data\":null}", null),
+                Arguments.of(
+                        "{\"code\":\"SUCCESS\",\"data\":{\"status\":\"ALL_PAUSED\"}}",
+                        new ConsoleSchedulerCommandResponse("ALL_PAUSED")));
+    }
 
-  @ParameterizedTest
-  @MethodSource("tenantCommandCases")
-  @DisplayName("租户动作区分缺失信封、空 data 与正常租户结果")
-  void shouldPreserveTenantResult_whenDownstreamResponseVaries(
-      String responseBody, ConsoleTriggerActionResponse expected) {
-    RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(requestTo("http://trigger.test/api/triggers/management/pause-tenant?tenantId=ta"))
-        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+    @ParameterizedTest
+    @MethodSource("tenantCommandCases")
+    @DisplayName("租户动作区分缺失信封、空 data 与正常租户结果")
+    void shouldPreserveTenantResult_whenDownstreamResponseVaries(
+            String responseBody, ConsoleTriggerActionResponse expected) {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://trigger.test/api/triggers/management/pause-tenant?tenantId=ta"))
+                .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
-    assertThat(writeService(builder).pauseByTenant("ta")).isEqualTo(expected);
-    server.verify();
-  }
+        assertThat(writeService(builder).pauseByTenant("ta")).isEqualTo(expected);
+        server.verify();
+    }
 
-  private static Stream<Arguments> tenantCommandCases() {
-    return Stream.of(
-        Arguments.of("", ConsoleTriggerActionResponse.empty()),
-        Arguments.of("{\"code\":\"SUCCESS\",\"data\":null}", null),
-        Arguments.of(
-            "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"status\":\"PAUSED\"}}",
-            new ConsoleTriggerActionResponse("ta", null, "PAUSED")));
-  }
+    private static Stream<Arguments> tenantCommandCases() {
+        return Stream.of(
+                Arguments.of("", ConsoleTriggerActionResponse.empty()),
+                Arguments.of("{\"code\":\"SUCCESS\",\"data\":null}", null),
+                Arguments.of(
+                        "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"status\":\"PAUSED\"}}",
+                        new ConsoleTriggerActionResponse("ta", null, "PAUSED")));
+    }
 
-  private static DefaultConsoleTriggerProxyService writeService(RestClient.Builder builder) {
-    return writeService(builder, mock(ConsoleTenantGuard.class));
-  }
+    private static DefaultConsoleTriggerProxyService writeService(RestClient.Builder builder) {
+        return writeService(builder, mock(ConsoleTenantGuard.class));
+    }
 
-  private static DefaultConsoleTriggerProxyService writeService(
-      RestClient.Builder builder, ConsoleTenantGuard guard) {
-    TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
-    when(factory.client()).thenReturn(builder.build());
-    DownstreamFallback fallback = mock(DownstreamFallback.class);
-    when(fallback.callOrThrow(eq("trigger"), any(String.class), any()))
-        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
-    return new DefaultConsoleTriggerProxyService(factory, guard, fallback);
-  }
+    private static DefaultConsoleTriggerProxyService writeService(
+            RestClient.Builder builder, ConsoleTenantGuard guard) {
+        TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
+        when(factory.client()).thenReturn(builder.build());
+        DownstreamFallback fallback = mock(DownstreamFallback.class);
+        when(fallback.callOrThrow(eq("trigger"), any(String.class), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
+        return new DefaultConsoleTriggerProxyService(factory, guard, fallback);
+    }
 }

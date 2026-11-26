@@ -11,13 +11,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerLaunchAdmissionService {
 
-  private final TriggerApiAdmissionGuard admissionGuard;
-  private final TriggerDrainService drainService;
+    private final TriggerApiAdmissionGuard admissionGuard;
+    private final TriggerDrainService drainService;
 
-  public <T> T execute(Supplier<T> launch) {
-    return admissionGuard.execute(() -> {
-      drainService.ensureAcceptingLaunches();
-      return launch.get();
-    });
-  }
+    public <T> T execute(Supplier<T> launch) {
+        return admissionGuard.execute(() -> {
+            drainService.ensureAcceptingLaunches();
+            return launch.get();
+        });
+    }
 }

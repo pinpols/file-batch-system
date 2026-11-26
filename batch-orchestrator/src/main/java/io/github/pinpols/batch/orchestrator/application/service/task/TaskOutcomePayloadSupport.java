@@ -23,104 +23,97 @@ import java.util.Map;
  */
 final class TaskOutcomePayloadSupport {
 
-  private TaskOutcomePayloadSupport() {}
+    private TaskOutcomePayloadSupport() {}
 
-  static String payloadStringValue(String payloadJson, String fieldName) {
-    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
-      return null;
-    }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        @SuppressWarnings("unchecked")
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
+    static String payloadStringValue(String payloadJson, String fieldName) {
+        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                @SuppressWarnings("unchecked")
+                Object value = ((Map<String, Object>) payloadMap).get(fieldName);
+                return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+            }
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
 
-      return null;
+            return null;
+        }
+        return null;
     }
-    return null;
-  }
 
-  static Long payloadLongValue(String payloadJson, String fieldName) {
-    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
-      return null;
-    }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        @SuppressWarnings("unchecked")
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return toPositiveLong(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
+    static Long payloadLongValue(String payloadJson, String fieldName) {
+        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                @SuppressWarnings("unchecked")
+                Object value = ((Map<String, Object>) payloadMap).get(fieldName);
+                return toPositiveLong(value);
+            }
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
 
-      return null;
+            return null;
+        }
+        return null;
     }
-    return null;
-  }
 
-  static Long toPositiveLong(Object candidate) {
-    if (EmptyChecks.isNull(candidate)) {
-      return null;
-    }
-    String rawText = String.valueOf(candidate);
-    String text = rawText.trim();
-    if (EmptyChecks.isEmpty(text)) {
-      return null;
-    }
-    try {
-      long value = Long.parseLong(text);
-      return value > 0 ? value : null;
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          TaskOutcomePayloadSupport.class, "catch:NumberFormatException", ignored);
+    static Long toPositiveLong(Object candidate) {
+        if (EmptyChecks.isNull(candidate)) {
+            return null;
+        }
+        String rawText = String.valueOf(candidate);
+        String text = rawText.trim();
+        if (EmptyChecks.isEmpty(text)) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(TaskOutcomePayloadSupport.class, "catch:NumberFormatException", ignored);
 
-      return null;
+            return null;
+        }
     }
-  }
 
-  static Long firstPositiveLong(Long... candidates) {
-    for (Long candidate : candidates) {
-      if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
-        return candidate;
-      }
+    static Long firstPositiveLong(Long... candidates) {
+        for (Long candidate : candidates) {
+            if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
+                return candidate;
+            }
+        }
+        return null;
     }
-    return null;
-  }
 
-  /** task.payload + command.resultSummary 三源 fallback 找文件 id;给 success outcome 用。 */
-  static Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
-    Long taskFileId = resolveRelatedFileId(task);
-    Long resultRelatedFileId = payloadLongValue(
-        EmptyChecks.isNull(command) ? null : command.resultSummary(), "relatedFileId");
-    Long resultFileId =
-        payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "fileId");
-    return firstPositiveLong(taskFileId, resultRelatedFileId, resultFileId);
-  }
-
-  /** 按任务类型解析 payload 中的文件关联，供 partition/job 推进使用。 */
-  static Long resolveRelatedFileId(JobTaskEntity task) {
-    if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
-      String payload = task.getTaskPayload();
-      if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
-        return payloadLongValue(payload, "bundleSourceFileId");
-      }
-      if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
-        return payloadLongValue(payload, "fileId");
-      }
+    /** task.payload + command.resultSummary 三源 fallback 找文件 id;给 success outcome 用。 */
+    static Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
+        Long taskFileId = resolveRelatedFileId(task);
+        Long resultRelatedFileId =
+                payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "relatedFileId");
+        Long resultFileId = payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "fileId");
+        return firstPositiveLong(taskFileId, resultRelatedFileId, resultFileId);
     }
-    Long relatedFileId =
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId");
-    Long fileId =
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId");
-    Long sourceFileId =
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId");
-    return firstPositiveLong(relatedFileId, fileId, sourceFileId);
-  }
+
+    /** 按任务类型解析 payload 中的文件关联，供 partition/job 推进使用。 */
+    static Long resolveRelatedFileId(JobTaskEntity task) {
+        if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+            String payload = task.getTaskPayload();
+            if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+                return payloadLongValue(payload, "bundleSourceFileId");
+            }
+            if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+                return payloadLongValue(payload, "fileId");
+            }
+        }
+        Long relatedFileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId");
+        Long fileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId");
+        Long sourceFileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId");
+        return firstPositiveLong(relatedFileId, fileId, sourceFileId);
+    }
 }

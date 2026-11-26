@@ -18,27 +18,30 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
  */
 public class S3HealthIndicator implements HealthIndicator {
 
-  private final S3Client s3Client;
-  private final String bucket;
+    private final S3Client s3Client;
+    private final String bucket;
 
-  public S3HealthIndicator(S3Client s3Client, S3StorageProperties properties) {
-    this.s3Client = s3Client;
-    this.bucket = properties.getBucket();
-  }
-
-  @Override
-  public Health health() {
-    try {
-      s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-      return Health.up().withDetail("bucket", bucket).withDetail("exists", true).build();
-    } catch (NoSuchBucketException ex) {
-      return Health.up()
-          .withDetail("bucket", bucket)
-          .withDetail("exists", false)
-          .build();
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(S3HealthIndicator.class, "catch:Exception", ex);
-      return Health.down(ex).withDetail("bucket", bucket).build();
+    public S3HealthIndicator(S3Client s3Client, S3StorageProperties properties) {
+        this.s3Client = s3Client;
+        this.bucket = properties.getBucket();
     }
-  }
+
+    @Override
+    public Health health() {
+        try {
+            s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            return Health.up()
+                    .withDetail("bucket", bucket)
+                    .withDetail("exists", true)
+                    .build();
+        } catch (NoSuchBucketException ex) {
+            return Health.up()
+                    .withDetail("bucket", bucket)
+                    .withDetail("exists", false)
+                    .build();
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(S3HealthIndicator.class, "catch:Exception", ex);
+            return Health.down(ex).withDetail("bucket", bucket).build();
+        }
+    }
 }

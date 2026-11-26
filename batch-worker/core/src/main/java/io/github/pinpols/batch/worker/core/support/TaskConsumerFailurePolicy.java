@@ -15,19 +15,19 @@ import org.springframework.web.client.ResourceAccessException;
  */
 final class TaskConsumerFailurePolicy {
 
-  private TaskConsumerFailurePolicy() {}
+    private TaskConsumerFailurePolicy() {}
 
-  static boolean isTransientOrchestratorFailure(Throwable throwable) {
-    for (Throwable current = throwable; current != null; current = current.getCause()) {
-      boolean isTransientDispatchFailure = current instanceof HttpServerErrorException
-          || current instanceof ResourceAccessException
-          || current instanceof ConnectException
-          || current instanceof SocketTimeoutException
-          || current instanceof UnknownHostException;
-      if (isTransientDispatchFailure) {
-        return true;
-      }
+    static boolean isTransientOrchestratorFailure(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            boolean isTransientDispatchFailure = current instanceof HttpServerErrorException
+                    || current instanceof ResourceAccessException
+                    || current instanceof ConnectException
+                    || current instanceof SocketTimeoutException
+                    || current instanceof UnknownHostException;
+            if (isTransientDispatchFailure) {
+                return true;
+            }
+        }
+        return false;
     }
-    return false;
-  }
 }

@@ -25,104 +25,98 @@ import java.util.Map;
  */
 public final class PipelineStepFlowSupport {
 
-  private PipelineStepFlowSupport() {}
+    private PipelineStepFlowSupport() {}
 
-  public static PipelineStepDefinition firstStep(List<PipelineStepDefinition> steps) {
-    return steps == null || steps.isEmpty() ? null : steps.get(0);
-  }
+    public static PipelineStepDefinition firstStep(List<PipelineStepDefinition> steps) {
+        return steps == null || steps.isEmpty() ? null : steps.get(0);
+    }
 
-  public static int maxTransitionGuard(List<PipelineStepDefinition> steps) {
-    return Math.max((steps == null ? 0 : steps.size()) * 4, 16);
-  }
+    public static int maxTransitionGuard(List<PipelineStepDefinition> steps) {
+        return Math.max((steps == null ? 0 : steps.size()) * 4, 16);
+    }
 
-  public static PipelineStepDefinition resolveNextStep(
-      PipelineStepDefinition current,
-      boolean success,
-      List<PipelineStepDefinition> steps,
-      Map<String, Object> attributes) {
-    boolean terminalOnSuccess = EmptyChecks.isNotNull(current)
-        && success
-        && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
-    if (terminalOnSuccess) {
-      return null;
+    public static PipelineStepDefinition resolveNextStep(
+            PipelineStepDefinition current,
+            boolean success,
+            List<PipelineStepDefinition> steps,
+            Map<String, Object> attributes) {
+        boolean terminalOnSuccess =
+                EmptyChecks.isNotNull(current) && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
+        if (terminalOnSuccess) {
+            return null;
+        }
+        boolean terminalOnFailure = EmptyChecks.isNotNull(current)
+                && !success
+                && current.booleanParam("terminalOnFailure", "stopOnFailure");
+        if (terminalOnFailure) {
+            return null;
+        }
+        String selector = popSelector(attributes);
+        if (!Texts.hasText(selector) && current != null) {
+            selector = success
+                    ? current.textParam(
+                            "onSuccessNextStepCode", "onSuccessNextStageCode", "nextStepCode", "nextStageCode")
+                    : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
+        }
+        if (Texts.hasText(selector)) {
+            PipelineStepDefinition explicitNext = findByStepCodeOrStageCode(steps, selector);
+            if (explicitNext != null) {
+                return explicitNext;
+            }
+        }
+        boolean stepFlowCannotAdvance = !success || EmptyChecks.isNull(current) || EmptyChecks.isEmpty(steps);
+        if (stepFlowCannotAdvance) {
+            return null;
+        }
+        for (int index = 0; index < steps.size(); index++) {
+            PipelineStepDefinition step = steps.get(index);
+            if (step != null && stepCodeMatches(step, current)) {
+                return index + 1 < steps.size() ? steps.get(index + 1) : null;
+            }
+        }
+        return null;
     }
-    boolean terminalOnFailure = EmptyChecks.isNotNull(current)
-        && !success
-        && current.booleanParam("terminalOnFailure", "stopOnFailure");
-    if (terminalOnFailure) {
-      return null;
-    }
-    String selector = popSelector(attributes);
-    if (!Texts.hasText(selector) && current != null) {
-      selector = success
-          ? current.textParam(
-              "onSuccessNextStepCode", "onSuccessNextStageCode", "nextStepCode", "nextStageCode")
-          : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
-    }
-    if (Texts.hasText(selector)) {
-      PipelineStepDefinition explicitNext = findByStepCodeOrStageCode(steps, selector);
-      if (explicitNext != null) {
-        return explicitNext;
-      }
-    }
-    boolean stepFlowCannotAdvance =
-        !success || EmptyChecks.isNull(current) || EmptyChecks.isEmpty(steps);
-    if (stepFlowCannotAdvance) {
-      return null;
-    }
-    for (int index = 0; index < steps.size(); index++) {
-      PipelineStepDefinition step = steps.get(index);
-      if (step != null && stepCodeMatches(step, current)) {
-        return index + 1 < steps.size() ? steps.get(index + 1) : null;
-      }
-    }
-    return null;
-  }
 
-  private static String popSelector(Map<String, Object> attributes) {
-    String stepCode = popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
-    return Texts.hasText(stepCode)
-        ? stepCode
-        : popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-  }
+    private static String popSelector(Map<String, Object> attributes) {
+        String stepCode = popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
+        return Texts.hasText(stepCode) ? stepCode : popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+    }
 
-  private static String popText(Map<String, Object> attributes, String key) {
-    if (attributes == null || !attributes.containsKey(key)) {
-      return null;
+    private static String popText(Map<String, Object> attributes, String key) {
+        if (attributes == null || !attributes.containsKey(key)) {
+            return null;
+        }
+        Object value = attributes.remove(key);
+        if (value instanceof String text && Texts.hasText(text)) {
+            return text;
+        }
+        if (value != null) {
+            String text = String.valueOf(value);
+            if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
+                return text;
+            }
+        }
+        return null;
     }
-    Object value = attributes.remove(key);
-    if (value instanceof String text && Texts.hasText(text)) {
-      return text;
-    }
-    if (value != null) {
-      String text = String.valueOf(value);
-      if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
-        return text;
-      }
-    }
-    return null;
-  }
 
-  private static PipelineStepDefinition findByStepCodeOrStageCode(
-      List<PipelineStepDefinition> steps, String selector) {
-    if (steps == null || !Texts.hasText(selector)) {
-      return null;
+    private static PipelineStepDefinition findByStepCodeOrStageCode(
+            List<PipelineStepDefinition> steps, String selector) {
+        if (steps == null || !Texts.hasText(selector)) {
+            return null;
+        }
+        for (PipelineStepDefinition step : steps) {
+            boolean selectorMatchesStepOrStage = EmptyChecks.isNotNull(step)
+                    && (selector.equalsIgnoreCase(step.stepCode()) || selector.equalsIgnoreCase(step.stageCode()));
+            if (selectorMatchesStepOrStage) {
+                return step;
+            }
+        }
+        return null;
     }
-    for (PipelineStepDefinition step : steps) {
-      boolean selectorMatchesStepOrStage = EmptyChecks.isNotNull(step)
-          && (selector.equalsIgnoreCase(step.stepCode())
-              || selector.equalsIgnoreCase(step.stageCode()));
-      if (selectorMatchesStepOrStage) {
-        return step;
-      }
-    }
-    return null;
-  }
 
-  private static boolean stepCodeMatches(
-      PipelineStepDefinition step, PipelineStepDefinition current) {
-    return current != null
-        && Texts.hasText(current.stepCode())
-        && current.stepCode().equals(step.stepCode());
-  }
+    private static boolean stepCodeMatches(PipelineStepDefinition step, PipelineStepDefinition current) {
+        return current != null
+                && Texts.hasText(current.stepCode())
+                && current.stepCode().equals(step.stepCode());
+    }
 }

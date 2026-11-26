@@ -29,52 +29,52 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.partition-lease")
 public class PartitionLeaseProperties {
 
-  /**
-   * Lease TTL（秒）。默认 120s —— 覆盖 report 重试窗口 + 最近一次续期间隔 + 业务余量， 见类级 javadoc 推算。<b>调整下限</b>：&lt; 60s
-   * 风险很大（与 reclaim 间隔差几乎等于 0）。
-   */
-  private long expireSeconds = 120L;
+    /**
+     * Lease TTL（秒）。默认 120s —— 覆盖 report 重试窗口 + 最近一次续期间隔 + 业务余量， 见类级 javadoc 推算。<b>调整下限</b>：&lt; 60s
+     * 风险很大（与 reclaim 间隔差几乎等于 0）。
+     */
+    private long expireSeconds = 120L;
 
-  /** orchestrator 侧 reclaim 扫描过期 lease 的节奏（毫秒）。 */
-  private long reclaimIntervalMillis = 15000L;
+    /** orchestrator 侧 reclaim 扫描过期 lease 的节奏（毫秒）。 */
+    private long reclaimIntervalMillis = 15000L;
 
-  /**
-   * 是否装载 {@link
-   * io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler}
-   * 定时任务。集成测试建议关闭，避免首轮扫描与 claim/launch 主路径并发相互干扰。
-   */
-  private boolean reclaimSchedulerEnabled = true;
+    /**
+     * 是否装载 {@link
+     * io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler}
+     * 定时任务。集成测试建议关闭，避免首轮扫描与 claim/launch 主路径并发相互干扰。
+     */
+    private boolean reclaimSchedulerEnabled = true;
 
-  /**
-   * 单次 reclaim 扫描的最大处理数量。0 表示不限制（保留旧行为）。 默认 500：在 ShedLock 2 分钟上限内可舒适处理（每次 reclaim 约 2~3 次 SQL，500
-   * 行 ~= 30s）。 命中上限会触发 warn，提示业务方 lease 阈值或 worker 容量异常。
-   */
-  private int reclaimBatchSize = 500;
+    /**
+     * 单次 reclaim 扫描的最大处理数量。0 表示不限制（保留旧行为）。 默认 500：在 ShedLock 2 分钟上限内可舒适处理（每次 reclaim 约 2~3 次 SQL，500
+     * 行 ~= 30s）。 命中上限会触发 warn，提示业务方 lease 阈值或 worker 容量异常。
+     */
+    private int reclaimBatchSize = 500;
 
-  /**
-   * 补充 sweeper：扫描"partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态分区，强制将关联
-   * task 复位。新代码在 REQUIRES_NEW + 第二步 CAS 失败抛异常时已不再产生此态，仅清理升级前残留。 默认开启，每 5 分钟扫一次。
-   */
-  private boolean orphanSweepEnabled = true;
+    /**
+     * 补充 sweeper：扫描"partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态分区，强制将关联
+     * task 复位。新代码在 REQUIRES_NEW + 第二步 CAS 失败抛异常时已不再产生此态，仅清理升级前残留。 默认开启，每 5 分钟扫一次。
+     */
+    private boolean orphanSweepEnabled = true;
 
-  /** 补充 sweeper 扫描间隔（毫秒）。 */
-  private long orphanSweepIntervalMillis = 300000L;
+    /** 补充 sweeper 扫描间隔（毫秒）。 */
+    private long orphanSweepIntervalMillis = 300000L;
 
-  /** 死态分区的 grace 期（秒）：updated_at 早于 now-graceSeconds 才视为真死态，避免误伤 reset 后即将派发的瞬时窗口。 */
-  private long orphanSweepGraceSeconds = 120L;
+    /** 死态分区的 grace 期（秒）：updated_at 早于 now-graceSeconds 才视为真死态，避免误伤 reset 后即将派发的瞬时窗口。 */
+    private long orphanSweepGraceSeconds = 120L;
 
-  /** 单次回退扫描处理上限。 */
-  private int orphanSweepBatchSize = 200;
+    /** 单次回退扫描处理上限。 */
+    private int orphanSweepBatchSize = 200;
 
-  /**
-   * 已发布但从未被 worker 认领的 READY 任务，超过宽限后重新写入 outbox。默认 120 秒，高于正常 claim 重试预算，
-   * 与租约过期和孤儿扫描宽限一致。
-   */
-  private boolean unclaimedDispatchEnabled = true;
+    /**
+     * 已发布但从未被 worker 认领的 READY 任务，超过宽限后重新写入 outbox。默认 120 秒，高于正常 claim 重试预算，
+     * 与租约过期和孤儿扫描宽限一致。
+     */
+    private boolean unclaimedDispatchEnabled = true;
 
-  private long unclaimedDispatchGraceSeconds = 120L;
+    private long unclaimedDispatchGraceSeconds = 120L;
 
-  private long unclaimedDispatchIntervalMillis = 15000L;
+    private long unclaimedDispatchIntervalMillis = 15000L;
 
-  private int unclaimedDispatchBatchSize = 200;
+    private int unclaimedDispatchBatchSize = 200;
 }

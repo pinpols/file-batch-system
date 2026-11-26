@@ -19,30 +19,30 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class ApiKeyAsyncMaintenance {
 
-  private final ApiKeyAuthMapper mapper;
+    private final ApiKeyAuthMapper mapper;
 
-  @Async
-  void touch(Long id) {
-    try {
-      mapper.touchLastUsedAt(id);
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.debug("touch last_used_at failed for keyId={}: {}", id, causeSummary);
+    @Async
+    void touch(Long id) {
+        try {
+            mapper.touchLastUsedAt(id);
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.debug("touch last_used_at failed for keyId={}: {}", id, causeSummary);
+        }
     }
-  }
 
-  /** 使用 CAS 条件升级旧哈希；并发轮转、吊销或其他节点先完成升级时，无副作用退出。 */
-  @Async
-  void upgradeLegacyHash(Long id, String oldHash, String rawKey) {
-    try {
-      ApiKeyHasher.SaltedHash upgraded = ApiKeyHasher.hashWithSaltKdf(rawKey);
-      int rows = mapper.upgradeHashIfLegacy(id, oldHash, upgraded.hash(), upgraded.salt());
-      if (rows > 0) {
-        log.info("api_key keyId={} upgraded sha256 → pbkdf2", id);
-      }
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.debug("api_key keyId={} kdf upgrade swallowed: {}", id, causeSummary);
+    /** 使用 CAS 条件升级旧哈希；并发轮转、吊销或其他节点先完成升级时，无副作用退出。 */
+    @Async
+    void upgradeLegacyHash(Long id, String oldHash, String rawKey) {
+        try {
+            ApiKeyHasher.SaltedHash upgraded = ApiKeyHasher.hashWithSaltKdf(rawKey);
+            int rows = mapper.upgradeHashIfLegacy(id, oldHash, upgraded.hash(), upgraded.salt());
+            if (rows > 0) {
+                log.info("api_key keyId={} upgraded sha256 → pbkdf2", id);
+            }
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.debug("api_key keyId={} kdf upgrade swallowed: {}", id, causeSummary);
+        }
     }
-  }
 }

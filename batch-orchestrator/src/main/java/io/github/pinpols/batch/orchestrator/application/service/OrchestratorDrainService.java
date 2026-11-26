@@ -12,35 +12,35 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class OrchestratorDrainService {
 
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  public DrainStatus status() {
-    return toDrainStatus(gracefulShutdown.status());
-  }
-
-  public DrainStatus enable() {
-    gracefulShutdown.startDraining("manual-enable");
-    return status();
-  }
-
-  public DrainStatus disable() {
-    gracefulShutdown.stopDraining("manual-disable");
-    return status();
-  }
-
-  public boolean isDraining() {
-    return gracefulShutdown.isDraining();
-  }
-
-  public void ensureAcceptingLaunches() {
-    if (isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.orchestrator.draining");
+    public DrainStatus status() {
+        return toDrainStatus(gracefulShutdown.status());
     }
-  }
 
-  private static DrainStatus toDrainStatus(OrchestratorGracefulShutdown.DrainStatus status) {
-    return new DrainStatus(status.draining(), status.drainingSince(), status.reason());
-  }
+    public DrainStatus enable() {
+        gracefulShutdown.startDraining("manual-enable");
+        return status();
+    }
 
-  public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
+    public DrainStatus disable() {
+        gracefulShutdown.stopDraining("manual-disable");
+        return status();
+    }
+
+    public boolean isDraining() {
+        return gracefulShutdown.isDraining();
+    }
+
+    public void ensureAcceptingLaunches() {
+        if (isDraining()) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.orchestrator.draining");
+        }
+    }
+
+    private static DrainStatus toDrainStatus(OrchestratorGracefulShutdown.DrainStatus status) {
+        return new DrainStatus(status.draining(), status.drainingSince(), status.reason());
+    }
+
+    public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
 }

@@ -13,13 +13,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleDurableIdempotencyStore {
 
-  private final ConsoleIdempotencyMapper mapper;
+    private final ConsoleIdempotencyMapper mapper;
 
-  public boolean isCompleted(String tenantId, String keyDigest) {
-    return mapper.countCompleted(tenantId, keyDigest) > 0;
-  }
+    public boolean isCompleted(String tenantId, String keyDigest) {
+        return mapper.countCompleted(tenantId, keyDigest) > 0;
+    }
 
-  public void markCompleted(String tenantId, String keyDigest) {
-    mapper.insertCompleted(tenantId, keyDigest);
-  }
+    public void markCompleted(String tenantId, String keyDigest) {
+        mapper.insertCompleted(tenantId, keyDigest);
+    }
 }

@@ -17,93 +17,87 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkflowReplayJobDefinitionResolver {
 
-  private final WorkflowRunMapper workflowRunMapper;
+    private final WorkflowRunMapper workflowRunMapper;
 
-  public JobDefinitionView resolve(WorkflowReplayJobDefinitionRequest request) {
-    validateRequest(request);
-    JobDefinitionView sourceDefinition =
-        request.sourceSnapshot().jobDefinitions().get(request.nodeCode());
-    validateDefinition(sourceDefinition, request.tenantId(), request.jobCode());
-    return switch (request.policy()) {
-      case USE_ORIGINAL_CONFIG -> sourceDefinition;
-      case USE_LATEST_CONFIG ->
-        validateAndReturn(
-            request.latestDefinition(),
-            request.tenantId(),
-            request.jobCode(),
-            sourceDefinition.id());
-      case USE_SPECIFIED_VERSION ->
-        resolveSpecified(
-            request.tenantId(), request.jobCode(), sourceDefinition, request.specifiedVersion());
-    };
-  }
-
-  private JobDefinitionView resolveSpecified(
-      String tenantId, String jobCode, JobDefinitionView sourceDefinition, Integer version) {
-    if (EmptyChecks.isNull(version) || version <= 0) {
-      throw invalidPolicy();
+    public JobDefinitionView resolve(WorkflowReplayJobDefinitionRequest request) {
+        validateRequest(request);
+        JobDefinitionView sourceDefinition =
+                request.sourceSnapshot().jobDefinitions().get(request.nodeCode());
+        validateDefinition(sourceDefinition, request.tenantId(), request.jobCode());
+        return switch (request.policy()) {
+            case USE_ORIGINAL_CONFIG -> sourceDefinition;
+            case USE_LATEST_CONFIG ->
+                validateAndReturn(
+                        request.latestDefinition(), request.tenantId(), request.jobCode(), sourceDefinition.id());
+            case USE_SPECIFIED_VERSION ->
+                resolveSpecified(request.tenantId(), request.jobCode(), sourceDefinition, request.specifiedVersion());
+        };
     }
-    WorkflowRunEntity historicalRun = workflowRunMapper.selectLatestJobDefinitionSnapshot(
-        tenantId, sourceDefinition.id(), jobCode, version);
-    WorkflowRunExecutionSnapshot historicalSnapshot =
-        WorkflowRunExecutionSnapshot.from(historicalRun);
-    if (EmptyChecks.isNull(historicalSnapshot) || !tenantId.equals(historicalRun.getTenantId())) {
-      throw unavailableVersion();
-    }
-    List<JobDefinitionView> matches = historicalSnapshot.jobDefinitions().values().stream()
-        .filter(definition -> sourceDefinition.id().equals(definition.id()))
-        .filter(definition -> jobCode.equals(definition.jobCode()))
-        .filter(definition -> version.equals(definition.version()))
-        .distinct()
-        .toList();
-    if (matches.size() != 1) {
-      throw unavailableVersion();
-    }
-    return matches.getFirst();
-  }
 
-  private void validateRequest(WorkflowReplayJobDefinitionRequest request) {
-    boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
-        && EmptyChecks.isNotBlank(request.tenantId())
-        && EmptyChecks.isNotBlank(request.nodeCode())
-        && EmptyChecks.isNotBlank(request.jobCode())
-        && EmptyChecks.isNotNull(request.sourceSnapshot())
-        && EmptyChecks.isNotNull(request.policy());
-    boolean requestPolicyIsValid = requestHasRequiredFields
-        && (request.policy() == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-            ? EmptyChecks.isNotNull(request.specifiedVersion()) && request.specifiedVersion() > 0
-            : EmptyChecks.isNull(request.specifiedVersion()));
-    if (!requestPolicyIsValid) {
-      throw invalidPolicy();
+    private JobDefinitionView resolveSpecified(
+            String tenantId, String jobCode, JobDefinitionView sourceDefinition, Integer version) {
+        if (EmptyChecks.isNull(version) || version <= 0) {
+            throw invalidPolicy();
+        }
+        WorkflowRunEntity historicalRun =
+                workflowRunMapper.selectLatestJobDefinitionSnapshot(tenantId, sourceDefinition.id(), jobCode, version);
+        WorkflowRunExecutionSnapshot historicalSnapshot = WorkflowRunExecutionSnapshot.from(historicalRun);
+        if (EmptyChecks.isNull(historicalSnapshot) || !tenantId.equals(historicalRun.getTenantId())) {
+            throw unavailableVersion();
+        }
+        List<JobDefinitionView> matches = historicalSnapshot.jobDefinitions().values().stream()
+                .filter(definition -> sourceDefinition.id().equals(definition.id()))
+                .filter(definition -> jobCode.equals(definition.jobCode()))
+                .filter(definition -> version.equals(definition.version()))
+                .distinct()
+                .toList();
+        if (matches.size() != 1) {
+            throw unavailableVersion();
+        }
+        return matches.getFirst();
     }
-  }
 
-  private JobDefinitionView validateAndReturn(
-      JobDefinitionView definition, String tenantId, String jobCode, Long sourceDefinitionId) {
-    validateDefinition(definition, tenantId, jobCode);
-    if (!sourceDefinitionId.equals(definition.id())) {
-      throw unavailableVersion();
+    private void validateRequest(WorkflowReplayJobDefinitionRequest request) {
+        boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+                && EmptyChecks.isNotBlank(request.tenantId())
+                && EmptyChecks.isNotBlank(request.nodeCode())
+                && EmptyChecks.isNotBlank(request.jobCode())
+                && EmptyChecks.isNotNull(request.sourceSnapshot())
+                && EmptyChecks.isNotNull(request.policy());
+        boolean requestPolicyIsValid = requestHasRequiredFields
+                && (request.policy() == ConfigVersionPolicy.USE_SPECIFIED_VERSION
+                        ? EmptyChecks.isNotNull(request.specifiedVersion()) && request.specifiedVersion() > 0
+                        : EmptyChecks.isNull(request.specifiedVersion()));
+        if (!requestPolicyIsValid) {
+            throw invalidPolicy();
+        }
     }
-    return definition;
-  }
 
-  private void validateDefinition(JobDefinitionView definition, String tenantId, String jobCode) {
-    boolean definitionMatchesReplayRequest = EmptyChecks.isNotNull(definition)
-        && tenantId.equals(definition.tenantId())
-        && jobCode.equals(definition.jobCode())
-        && EmptyChecks.isNotNull(definition.id())
-        && EmptyChecks.isNotNull(definition.version());
-    if (!definitionMatchesReplayRequest) {
-      throw unavailableVersion();
+    private JobDefinitionView validateAndReturn(
+            JobDefinitionView definition, String tenantId, String jobCode, Long sourceDefinitionId) {
+        validateDefinition(definition, tenantId, jobCode);
+        if (!sourceDefinitionId.equals(definition.id())) {
+            throw unavailableVersion();
+        }
+        return definition;
     }
-  }
 
-  private BizException invalidPolicy() {
-    return BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_invalid_policy");
-  }
+    private void validateDefinition(JobDefinitionView definition, String tenantId, String jobCode) {
+        boolean definitionMatchesReplayRequest = EmptyChecks.isNotNull(definition)
+                && tenantId.equals(definition.tenantId())
+                && jobCode.equals(definition.jobCode())
+                && EmptyChecks.isNotNull(definition.id())
+                && EmptyChecks.isNotNull(definition.version());
+        if (!definitionMatchesReplayRequest) {
+            throw unavailableVersion();
+        }
+    }
 
-  private BizException unavailableVersion() {
-    return BizException.of(
-        ResultCode.STATE_CONFLICT, "error.workflow.replay_config_version_unavailable");
-  }
+    private BizException invalidPolicy() {
+        return BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_invalid_policy");
+    }
+
+    private BizException unavailableVersion() {
+        return BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_config_version_unavailable");
+    }
 }

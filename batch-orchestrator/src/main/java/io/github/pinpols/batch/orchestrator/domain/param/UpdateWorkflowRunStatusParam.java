@@ -15,10 +15,10 @@ import lombok.Getter;
 @Getter
 @Builder
 public class UpdateWorkflowRunStatusParam {
-  private final String tenantId;
-  private final Long id;
-  private final String runStatus;
-  private final String currentNodeCode;
-  private final Instant finishedAt;
-  private final Collection<String> expectedStatuses;
+    private final String tenantId;
+    private final Long id;
+    private final String runStatus;
+    private final String currentNodeCode;
+    private final Instant finishedAt;
+    private final Collection<String> expectedStatuses;
 }

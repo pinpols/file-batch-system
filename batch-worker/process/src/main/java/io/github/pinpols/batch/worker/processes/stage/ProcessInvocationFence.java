@@ -9,6 +9,6 @@ import java.util.function.Supplier;
 @FunctionalInterface
 public interface ProcessInvocationFence {
 
-  ProcessStageResult execute(
-      ProcessJobContext context, ProcessStage stage, Supplier<ProcessStageResult> stageExecution);
+    ProcessStageResult execute(
+            ProcessJobContext context, ProcessStage stage, Supplier<ProcessStageResult> stageExecution);
 }

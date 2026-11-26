@@ -29,262 +29,267 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @DisplayName("只读副本路由数据源: 路由决策,强制主库旁路与失败隔离恢复")
 class ReadReplicaRoutingDataSourceTest {
 
-  private DataSource primary;
-  private DataSource replica;
-  private Connection primaryConn;
-  private Connection replicaConn;
-  private SimpleMeterRegistry meterRegistry;
-  private ObjectProvider<MeterRegistry> meterProvider;
+    private DataSource primary;
+    private DataSource replica;
+    private Connection primaryConn;
+    private Connection replicaConn;
+    private SimpleMeterRegistry meterRegistry;
+    private ObjectProvider<MeterRegistry> meterProvider;
 
-  @BeforeEach
-  void setUp() throws SQLException {
-    primary = mock(DataSource.class);
-    replica = mock(DataSource.class);
-    primaryConn = mock(Connection.class);
-    replicaConn = mock(Connection.class);
-    lenient().when(primary.getConnection()).thenReturn(primaryConn);
-    lenient().when(replica.getConnection()).thenReturn(replicaConn);
-    meterRegistry = new SimpleMeterRegistry();
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> mockedProvider = mock(ObjectProvider.class);
-    meterProvider = mockedProvider;
-    lenient().when(meterProvider.getIfAvailable()).thenReturn(meterRegistry);
-  }
-
-  @AfterEach
-  void tearDown() {
-    TransactionSynchronizationManager.clear();
-    // RoutingHints ThreadLocal cleanup
-    RoutingHints.restore(null);
-  }
-
-  private ReadReplicaRoutingDataSource buildDs(int threshold, long quarantineMs) {
-    ReadReplicaRoutingDataSource ds =
-        new ReadReplicaRoutingDataSource(primary, threshold, quarantineMs, meterProvider);
-    ds.setTargetDataSources(Map.of(Route.PRIMARY, primary, Route.REPLICA, replica));
-    ds.setDefaultTargetDataSource(primary);
-    ds.afterPropertiesSet();
-    return ds;
-  }
-
-  // ── 路由决策 ───────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("只读事务下获取连接走副本,主库连接不被调用")
-  void shouldRouteToReplica_whenTransactionIsReadOnly() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-
-    Connection actual = ds.getConnection();
-
-    assertThat(actual).isNotSameAs(replicaConn);
-    verify(replica).getConnection();
-    verify(primary, never()).getConnection();
-  }
-
-  @Test
-  @DisplayName("可写事务下获取连接走主库,副本连接不被调用")
-  void shouldRouteToPrimary_whenTransactionIsWritable() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
-
-    Connection actual = ds.getConnection();
-
-    assertThat(actual).isSameAs(primaryConn);
-    verify(primary).getConnection();
-    verify(replica, never()).getConnection();
-  }
-
-  @Test
-  @DisplayName("没有活跃事务时,一律使用主库连接")
-  void shouldRouteToPrimary_whenNoTransactionIsActive() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    // no transaction synchronization
-
-    Connection actual = ds.getConnection();
-
-    assertThat(actual).isSameAs(primaryConn);
-  }
-
-  // ── force-primary 旁路 ─────────────────────────────────────────────
-
-  @Test
-  @DisplayName("强制走主库提示生效时,即使只读事务也旁路到主库")
-  void shouldRouteToPrimary_whenForcePrimaryHintIsSet() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    Boolean prev = RoutingHints.enterForcePrimary();
-    try {
-      Connection actual = ds.getConnection();
-      assertThat(actual).isSameAs(primaryConn);
-    } finally {
-      RoutingHints.restore(prev);
-    }
-    verify(replica, never()).getConnection();
-  }
-
-  // ── fail-open 单次降级 ─────────────────────────────────────────────
-
-  @Test
-  @DisplayName("副本建连抛出异常时,当次请求降级到主库并累计失败次数")
-  void shouldFailOverToPrimary_whenReplicaConnectThrows() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    when(replica.getConnection()).thenThrow(new SQLException("connect refused", "08001"));
-
-    Connection actual = ds.getConnection();
-
-    assertThat(actual).isSameAs(primaryConn);
-    verify(replica).getConnection();
-    verify(primary).getConnection();
-    assertThat(meterRegistry.find("batch.console.replica.connection.failure").counter())
-        .isNotNull();
-    assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
-    assertThat(ds.isReplicaQuarantined()).isFalse();
-  }
-
-  // ── quarantine 进入 ─────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("副本连续失败达到阈值后,进入隔离状态")
-  void shouldEnterQuarantine_whenReplicaFailuresReachThreshold() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
-
-    // 触发 3 次失败
-    for (int i = 0; i < 3; i++) {
-      ds.getConnection();
+    @BeforeEach
+    void setUp() throws SQLException {
+        primary = mock(DataSource.class);
+        replica = mock(DataSource.class);
+        primaryConn = mock(Connection.class);
+        replicaConn = mock(Connection.class);
+        lenient().when(primary.getConnection()).thenReturn(primaryConn);
+        lenient().when(replica.getConnection()).thenReturn(replicaConn);
+        meterRegistry = new SimpleMeterRegistry();
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> mockedProvider = mock(ObjectProvider.class);
+        meterProvider = mockedProvider;
+        lenient().when(meterProvider.getIfAvailable()).thenReturn(meterRegistry);
     }
 
-    assertThat(ds.currentConsecutiveFailures()).isEqualTo(3);
-    assertThat(ds.isReplicaQuarantined()).isTrue();
-  }
+    @AfterEach
+    void tearDown() {
+        TransactionSynchronizationManager.clear();
+        // RoutingHints ThreadLocal cleanup
+        RoutingHints.restore(null);
+    }
 
-  @Test
-  @DisplayName("隔离期内不再尝试副本,所有读取直接走主库")
-  void shouldSkipReplica_whenQuarantineIsActive() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(2, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
+    private ReadReplicaRoutingDataSource buildDs(int threshold, long quarantineMs) {
+        ReadReplicaRoutingDataSource ds =
+                new ReadReplicaRoutingDataSource(primary, threshold, quarantineMs, meterProvider);
+        ds.setTargetDataSources(Map.of(Route.PRIMARY, primary, Route.REPLICA, replica));
+        ds.setDefaultTargetDataSource(primary);
+        ds.afterPropertiesSet();
+        return ds;
+    }
 
-    // 进入 quarantine
-    ds.getConnection();
-    ds.getConnection();
-    assertThat(ds.isReplicaQuarantined()).isTrue();
+    // ── 路由决策 ───────────────────────────────────────────────────────
 
-    // quarantine 期内的请求不应再调 replica.getConnection
-    int callsBefore = mockingDetails(replica).getInvocations().size();
-    Connection actual = ds.getConnection();
-    int callsAfter = mockingDetails(replica).getInvocations().size();
+    @Test
+    @DisplayName("只读事务下获取连接走副本,主库连接不被调用")
+    void shouldRouteToReplica_whenTransactionIsReadOnly() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
 
-    assertThat(actual).isSameAs(primaryConn);
-    assertThat(callsAfter).isEqualTo(callsBefore); // 没新调用
-  }
+        Connection actual = ds.getConnection();
 
-  // ── 成功后失败计数重置 ──────────────────────────────────────────────
+        assertThat(actual).isNotSameAs(replicaConn);
+        verify(replica).getConnection();
+        verify(primary, never()).getConnection();
+    }
 
-  @Test
-  @DisplayName("副本建连恢复成功后,连续失败次数归零")
-  void shouldResetFailureCount_whenReplicaConnectionSucceeds() throws SQLException {
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+    @Test
+    @DisplayName("可写事务下获取连接走主库,副本连接不被调用")
+    void shouldRouteToPrimary_whenTransactionIsWritable() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
 
-    // 1 次失败
-    when(replica.getConnection())
-        .thenThrow(new SQLException("transient", "08001"))
-        .thenReturn(replicaConn);
-    ds.getConnection();
-    assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
+        Connection actual = ds.getConnection();
 
-    // 第 2 次成功 → 重置
-    Connection actual = ds.getConnection();
-    assertThat(actual).isNotSameAs(replicaConn);
-    assertThat(ds.currentConsecutiveFailures()).isZero();
-  }
+        assertThat(actual).isSameAs(primaryConn);
+        verify(primary).getConnection();
+        verify(replica, never()).getConnection();
+    }
 
-  @Test
-  @DisplayName("副本连接上的查询失败时,后续请求进入隔离并改用主库")
-  void shouldQuarantineReplica_whenQueryOnReplicaConnectionFails() throws Exception {
-    final String select1Sql = """
+    @Test
+    @DisplayName("没有活跃事务时,一律使用主库连接")
+    void shouldRouteToPrimary_whenNoTransactionIsActive() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        // no transaction synchronization
+
+        Connection actual = ds.getConnection();
+
+        assertThat(actual).isSameAs(primaryConn);
+    }
+
+    // ── force-primary 旁路 ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("强制走主库提示生效时,即使只读事务也旁路到主库")
+    void shouldRouteToPrimary_whenForcePrimaryHintIsSet() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        Boolean prev = RoutingHints.enterForcePrimary();
+        try {
+            Connection actual = ds.getConnection();
+            assertThat(actual).isSameAs(primaryConn);
+        } finally {
+            RoutingHints.restore(prev);
+        }
+        verify(replica, never()).getConnection();
+    }
+
+    // ── fail-open 单次降级 ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("副本建连抛出异常时,当次请求降级到主库并累计失败次数")
+    void shouldFailOverToPrimary_whenReplicaConnectThrows() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        when(replica.getConnection()).thenThrow(new SQLException("connect refused", "08001"));
+
+        Connection actual = ds.getConnection();
+
+        assertThat(actual).isSameAs(primaryConn);
+        verify(replica).getConnection();
+        verify(primary).getConnection();
+        assertThat(meterRegistry
+                        .find("batch.console.replica.connection.failure")
+                        .counter())
+                .isNotNull();
+        assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
+        assertThat(ds.isReplicaQuarantined()).isFalse();
+    }
+
+    // ── quarantine 进入 ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("副本连续失败达到阈值后,进入隔离状态")
+    void shouldEnterQuarantine_whenReplicaFailuresReachThreshold() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
+
+        // 触发 3 次失败
+        for (int i = 0; i < 3; i++) {
+            ds.getConnection();
+        }
+
+        assertThat(ds.currentConsecutiveFailures()).isEqualTo(3);
+        assertThat(ds.isReplicaQuarantined()).isTrue();
+    }
+
+    @Test
+    @DisplayName("隔离期内不再尝试副本,所有读取直接走主库")
+    void shouldSkipReplica_whenQuarantineIsActive() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(2, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
+
+        // 进入 quarantine
+        ds.getConnection();
+        ds.getConnection();
+        assertThat(ds.isReplicaQuarantined()).isTrue();
+
+        // quarantine 期内的请求不应再调 replica.getConnection
+        int callsBefore = mockingDetails(replica).getInvocations().size();
+        Connection actual = ds.getConnection();
+        int callsAfter = mockingDetails(replica).getInvocations().size();
+
+        assertThat(actual).isSameAs(primaryConn);
+        assertThat(callsAfter).isEqualTo(callsBefore); // 没新调用
+    }
+
+    // ── 成功后失败计数重置 ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("副本建连恢复成功后,连续失败次数归零")
+    void shouldResetFailureCount_whenReplicaConnectionSucceeds() throws SQLException {
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+
+        // 1 次失败
+        when(replica.getConnection())
+                .thenThrow(new SQLException("transient", "08001"))
+                .thenReturn(replicaConn);
+        ds.getConnection();
+        assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
+
+        // 第 2 次成功 → 重置
+        Connection actual = ds.getConnection();
+        assertThat(actual).isNotSameAs(replicaConn);
+        assertThat(ds.currentConsecutiveFailures()).isZero();
+    }
+
+    @Test
+    @DisplayName("副本连接上的查询失败时,后续请求进入隔离并改用主库")
+    void shouldQuarantineReplica_whenQueryOnReplicaConnectionFails() throws Exception {
+        final String select1Sql = """
         select 1
     """;
 
-    ReadReplicaRoutingDataSource ds = buildDs(1, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    Statement statement = mock(Statement.class);
-    when(replicaConn.createStatement()).thenReturn(statement);
-    when(statement.executeQuery(select1Sql))
-        .thenThrow(new SQLException("connection reset", "08006"));
+        ReadReplicaRoutingDataSource ds = buildDs(1, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        Statement statement = mock(Statement.class);
+        when(replicaConn.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(select1Sql)).thenThrow(new SQLException("connection reset", "08006"));
 
-    Connection actual = ds.getConnection();
-    Statement actualStatement = actual.createStatement();
-    assertThat(actualStatement).isNotSameAs(statement);
-    Assertions.assertThatThrownBy(() -> actualStatement.executeQuery(select1Sql))
-        .isInstanceOf(SQLException.class);
+        Connection actual = ds.getConnection();
+        Statement actualStatement = actual.createStatement();
+        assertThat(actualStatement).isNotSameAs(statement);
+        Assertions.assertThatThrownBy(() -> actualStatement.executeQuery(select1Sql))
+                .isInstanceOf(SQLException.class);
 
-    assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
-    assertThat(ds.isReplicaQuarantined()).isTrue();
-    ds.getConnection();
-    verify(primary).getConnection();
-  }
+        assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
+        assertThat(ds.isReplicaQuarantined()).isTrue();
+        ds.getConnection();
+        verify(primary).getConnection();
+    }
 
-  // ── quarantine 期满自动恢复 ─────────────────────────────────────────
+    // ── quarantine 期满自动恢复 ─────────────────────────────────────────
 
-  @Test
-  @DisplayName("隔离期满后自动恢复,重新尝试副本并只上报一次恢复计数")
-  void shouldExitQuarantine_whenTimeoutElapses() throws Exception {
-    // 注意：构造器对 quarantineMillis 有 Math.max(1_000L, ...) 下限，本测试用 1100ms 才能跨过这个 floor
-    ReadReplicaRoutingDataSource ds = buildDs(1, 1100);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    when(replica.getConnection())
-        .thenThrow(new SQLException("flap", "08006"))
-        .thenReturn(replicaConn);
+    @Test
+    @DisplayName("隔离期满后自动恢复,重新尝试副本并只上报一次恢复计数")
+    void shouldExitQuarantine_whenTimeoutElapses() throws Exception {
+        // 注意：构造器对 quarantineMillis 有 Math.max(1_000L, ...) 下限，本测试用 1100ms 才能跨过这个 floor
+        ReadReplicaRoutingDataSource ds = buildDs(1, 1100);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        when(replica.getConnection())
+                .thenThrow(new SQLException("flap", "08006"))
+                .thenReturn(replicaConn);
 
-    // 进入 quarantine
-    ds.getConnection();
-    assertThat(ds.isReplicaQuarantined()).isTrue();
+        // 进入 quarantine
+        ds.getConnection();
+        assertThat(ds.isReplicaQuarantined()).isTrue();
 
-    // 等 quarantine 过期
-    Thread.sleep(1300);
-    assertThat(ds.isReplicaQuarantined()).isFalse();
+        // 等 quarantine 过期
+        Thread.sleep(1300);
+        assertThat(ds.isReplicaQuarantined()).isFalse();
 
-    // 下一次请求重新尝试 replica，成功 → 触发 recovery 信号
-    Connection actual = ds.getConnection();
-    assertThat(actual).isNotSameAs(replicaConn);
+        // 下一次请求重新尝试 replica，成功 → 触发 recovery 信号
+        Connection actual = ds.getConnection();
+        assertThat(actual).isNotSameAs(replicaConn);
 
-    // v6 hardening：曾 quarantine 过的恢复必须发 recovery counter，否则运维静默无感
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
-        .isNotNull();
-    assertThat(
-            meterRegistry.find("batch.console.replica.recovery.count").counter().count())
-        .isEqualTo(1.0);
-    // 第二次成功不应再 +1（已不再 quarantineEverEntered）
-    when(replica.getConnection()).thenReturn(replicaConn);
-    ds.getConnection();
-    assertThat(
-            meterRegistry.find("batch.console.replica.recovery.count").counter().count())
-        .isEqualTo(1.0);
-  }
+        // v6 hardening：曾 quarantine 过的恢复必须发 recovery counter，否则运维静默无感
+        assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
+                .isNotNull();
+        assertThat(meterRegistry
+                        .find("batch.console.replica.recovery.count")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        // 第二次成功不应再 +1（已不再 quarantineEverEntered）
+        when(replica.getConnection()).thenReturn(replicaConn);
+        ds.getConnection();
+        assertThat(meterRegistry
+                        .find("batch.console.replica.recovery.count")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("单次失败未达到隔离阈值时,恢复成功也不上报恢复信号")
-  void shouldNotEmitRecoverySignal_whenFailureNeverReachedQuarantine() throws SQLException {
-    // 单次失败未达阈值，不进 quarantine → 后续成功不应发 recovery（避免与"短抖动"混淆）
-    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
-    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
-    when(replica.getConnection())
-        .thenThrow(new SQLException("blip", "08001"))
-        .thenReturn(replicaConn);
+    @Test
+    @DisplayName("单次失败未达到隔离阈值时,恢复成功也不上报恢复信号")
+    void shouldNotEmitRecoverySignal_whenFailureNeverReachedQuarantine() throws SQLException {
+        // 单次失败未达阈值，不进 quarantine → 后续成功不应发 recovery（避免与"短抖动"混淆）
+        ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        when(replica.getConnection())
+                .thenThrow(new SQLException("blip", "08001"))
+                .thenReturn(replicaConn);
 
-    ds.getConnection(); // 失败 1 次
-    ds.getConnection(); // 成功 → 重置计数但不发 recovery
+        ds.getConnection(); // 失败 1 次
+        ds.getConnection(); // 成功 → 重置计数但不发 recovery
 
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
-        .isNull();
-  }
+        assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
+                .isNull();
+    }
 
-  private static MockingDetails mockingDetails(Object target) {
-    return Mockito.mockingDetails(target);
-  }
+    private static MockingDetails mockingDetails(Object target) {
+        return Mockito.mockingDetails(target);
+    }
 }

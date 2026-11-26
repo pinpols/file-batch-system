@@ -19,70 +19,70 @@ import org.jetbrains.annotations.Contract;
  */
 public final class EmptyChecks {
 
-  private EmptyChecks() {}
+    private EmptyChecks() {}
 
-  @Contract("null -> true; !null -> false")
-  public static boolean isNull(@Nullable Object value) {
-    return value == null;
-  }
+    @Contract("null -> true; !null -> false")
+    public static boolean isNull(@Nullable Object value) {
+        return value == null;
+    }
 
-  @Contract("null -> false; !null -> true")
-  public static boolean isNotNull(@Nullable Object value) {
-    return value != null;
-  }
+    @Contract("null -> false; !null -> true")
+    public static boolean isNotNull(@Nullable Object value) {
+        return value != null;
+    }
 
-  @Contract("null -> true")
-  public static boolean isEmpty(@Nullable CharSequence value) {
-    return value == null || value.isEmpty();
-  }
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable CharSequence value) {
+        return value == null || value.isEmpty();
+    }
 
-  public static boolean isNotEmpty(CharSequence value) {
-    return !isEmpty(value);
-  }
+    public static boolean isNotEmpty(CharSequence value) {
+        return !isEmpty(value);
+    }
 
-  @Contract("null -> true")
-  public static boolean isBlank(@Nullable CharSequence value) {
-    return !Texts.hasText(value);
-  }
+    @Contract("null -> true")
+    public static boolean isBlank(@Nullable CharSequence value) {
+        return !Texts.hasText(value);
+    }
 
-  @Contract("null -> false")
-  public static boolean isNotBlank(@Nullable CharSequence value) {
-    return !isBlank(value);
-  }
+    @Contract("null -> false")
+    public static boolean isNotBlank(@Nullable CharSequence value) {
+        return !isBlank(value);
+    }
 
-  @Contract("null -> true")
-  public static boolean isEmpty(@Nullable Collection<?> value) {
-    return value == null || value.isEmpty();
-  }
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable Collection<?> value) {
+        return value == null || value.isEmpty();
+    }
 
-  public static boolean isNotEmpty(Collection<?> value) {
-    return !isEmpty(value);
-  }
+    public static boolean isNotEmpty(Collection<?> value) {
+        return !isEmpty(value);
+    }
 
-  @Contract("null -> true")
-  public static boolean isEmpty(@Nullable Map<?, ?> value) {
-    return value == null || value.isEmpty();
-  }
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable Map<?, ?> value) {
+        return value == null || value.isEmpty();
+    }
 
-  public static boolean isNotEmpty(Map<?, ?> value) {
-    return !isEmpty(value);
-  }
+    public static boolean isNotEmpty(Map<?, ?> value) {
+        return !isEmpty(value);
+    }
 
-  @Contract("null -> true")
-  public static boolean isEmpty(@Nullable Object[] value) {
-    return value == null || value.length == 0;
-  }
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable Object[] value) {
+        return value == null || value.length == 0;
+    }
 
-  @Contract("null -> true")
-  public static boolean isEmpty(@Nullable byte[] value) {
-    return value == null || value.length == 0;
-  }
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable byte[] value) {
+        return value == null || value.length == 0;
+    }
 
-  public static boolean isNotEmpty(byte[] value) {
-    return !isEmpty(value);
-  }
+    public static boolean isNotEmpty(byte[] value) {
+        return !isEmpty(value);
+    }
 
-  public static boolean isNotEmpty(Object[] value) {
-    return !isEmpty(value);
-  }
+    public static boolean isNotEmpty(Object[] value) {
+        return !isEmpty(value);
+    }
 }

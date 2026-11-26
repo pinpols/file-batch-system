@@ -19,15 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/trigger/catch-up")
 @RequiredArgsConstructor
 public class InternalCatchUpVerificationController {
-  private final TriggerService triggerService;
+    private final TriggerService triggerService;
 
-  @PostMapping("/verify")
-  public CommonResponse<LaunchResponse> verify(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String key,
-      @Valid @RequestBody TriggerLaunchRequest request) {
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, null, null);
-    LaunchResponse response = triggerService.verifyCatchUpSubmission(command);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/verify")
+    public CommonResponse<LaunchResponse> verify(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String key,
+            @Valid @RequestBody TriggerLaunchRequest request) {
+        TriggerLaunchCommand command =
+                new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, null, null);
+        LaunchResponse response = triggerService.verifyCatchUpSubmission(command);
+        return CommonResponse.success(response);
+    }
 }

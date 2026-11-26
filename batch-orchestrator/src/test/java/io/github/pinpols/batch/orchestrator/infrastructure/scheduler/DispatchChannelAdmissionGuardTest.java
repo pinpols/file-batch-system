@@ -18,56 +18,57 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DispatchChannelAdmissionGuardTest {
 
-  @Mock
-  private DownstreamAdmissionMapper mapper;
+    @Mock
+    private DownstreamAdmissionMapper mapper;
 
-  private DispatchChannelAdmissionGuard guard;
+    private DispatchChannelAdmissionGuard guard;
 
-  @Test
-  @DisplayName("投递任务命中的下游通道被阻断时判定不予放行并给出通道不可用原因")
-  void shouldDeferAdmission_whenDispatchChannelIsBlocked() {
-    ResourceSchedulingRequest request = dispatchRequest("SFTP_SETTLEMENT");
-    when(mapper.isAnyDispatchChannelBlocked("t1", List.of("SFTP_SETTLEMENT"))).thenReturn(true);
+    @Test
+    @DisplayName("投递任务命中的下游通道被阻断时判定不予放行并给出通道不可用原因")
+    void shouldDeferAdmission_whenDispatchChannelIsBlocked() {
+        ResourceSchedulingRequest request = dispatchRequest("SFTP_SETTLEMENT");
+        when(mapper.isAnyDispatchChannelBlocked("t1", List.of("SFTP_SETTLEMENT")))
+                .thenReturn(true);
 
-    ResourceCheck result = guard.check(request);
+        ResourceCheck result = guard.check(request);
 
-    assertThat(result.allowed()).isFalse();
-    assertThat(result.reasonCode()).isEqualTo("DOWNSTREAM_CHANNEL_UNAVAILABLE");
-  }
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reasonCode()).isEqualTo("DOWNSTREAM_CHANNEL_UNAVAILABLE");
+    }
 
-  @Test
-  @DisplayName("组合投递通道中任一通道被阻断时整体判定不予放行")
-  void shouldDeferWholeAdmission_whenAnyBundleChannelIsBlocked() {
-    ResourceSchedulingRequest request = dispatchRequest(null);
-    request.setDownstreamChannelCodes(List.of("SFTP_SETTLEMENT", "OSS_ARCHIVE"));
-    when(mapper.isAnyDispatchChannelBlocked("t1", List.of("SFTP_SETTLEMENT", "OSS_ARCHIVE")))
-        .thenReturn(true);
+    @Test
+    @DisplayName("组合投递通道中任一通道被阻断时整体判定不予放行")
+    void shouldDeferWholeAdmission_whenAnyBundleChannelIsBlocked() {
+        ResourceSchedulingRequest request = dispatchRequest(null);
+        request.setDownstreamChannelCodes(List.of("SFTP_SETTLEMENT", "OSS_ARCHIVE"));
+        when(mapper.isAnyDispatchChannelBlocked("t1", List.of("SFTP_SETTLEMENT", "OSS_ARCHIVE")))
+                .thenReturn(true);
 
-    ResourceCheck result = guard.check(request);
+        ResourceCheck result = guard.check(request);
 
-    assertThat(result.allowed()).isFalse();
-    assertThat(result.reasonCode()).isEqualTo("DOWNSTREAM_CHANNEL_UNAVAILABLE");
-  }
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reasonCode()).isEqualTo("DOWNSTREAM_CHANNEL_UNAVAILABLE");
+    }
 
-  @Test
-  @DisplayName("非投递类任务不读取通道健康状态而直接判定放行")
-  void shouldAllowAdmission_whenTaskIsNotDispatch() {
-    ResourceSchedulingRequest request = dispatchRequest("SFTP_SETTLEMENT");
-    request.setWorkerType("PROCESS");
+    @Test
+    @DisplayName("非投递类任务不读取通道健康状态而直接判定放行")
+    void shouldAllowAdmission_whenTaskIsNotDispatch() {
+        ResourceSchedulingRequest request = dispatchRequest("SFTP_SETTLEMENT");
+        request.setWorkerType("PROCESS");
 
-    assertThat(guard.check(request).allowed()).isTrue();
-  }
+        assertThat(guard.check(request).allowed()).isTrue();
+    }
 
-  private static ResourceSchedulingRequest dispatchRequest(String channelCode) {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId("t1");
-    request.setWorkerType("DISPATCH");
-    request.setDownstreamChannelCode(channelCode);
-    return request;
-  }
+    private static ResourceSchedulingRequest dispatchRequest(String channelCode) {
+        ResourceSchedulingRequest request = new ResourceSchedulingRequest();
+        request.setTenantId("t1");
+        request.setWorkerType("DISPATCH");
+        request.setDownstreamChannelCode(channelCode);
+        return request;
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    guard = new DispatchChannelAdmissionGuard(mapper);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        guard = new DispatchChannelAdmissionGuard(mapper);
+    }
 }

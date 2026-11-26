@@ -25,61 +25,59 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ReadinessRecoveryService {
 
-  private final TriggerDefinitionLoader triggerDefinitionLoader;
-  private final TriggerService triggerService;
+    private final TriggerDefinitionLoader triggerDefinitionLoader;
+    private final TriggerService triggerService;
 
-  /**
-   * 按原 fire 身份恢复启动。
-   *
-   * @return LAUNCHED 已启动；ALREADY_TERMINATED occurrence 已是终态（如被扫尾器超时终结），幂等 skip，
-   *     必须如实上报，否则调用方会把等待误标 RELEASED 而该 fire 实际已放弃；NOT_READY 就绪闸未过，可下轮重试；
-   *     NOT_FOUND 定义不存在；INVALID_REQUEST 身份不完整；FAILED 其他启动异常。
-   */
-  public RecoveryLaunchOutcome recover(
-      String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-    if (EmptyChecks.isBlank(tenantId)
-        || EmptyChecks.isNull(workflowDefinitionId)
-        || workflowDefinitionId <= 0
-        || EmptyChecks.isNull(scheduledFireTime)) {
-      return RecoveryLaunchOutcome.INVALID_REQUEST;
+    /**
+     * 按原 fire 身份恢复启动。
+     *
+     * @return LAUNCHED 已启动；ALREADY_TERMINATED occurrence 已是终态（如被扫尾器超时终结），幂等 skip，
+     *     必须如实上报，否则调用方会把等待误标 RELEASED 而该 fire 实际已放弃；NOT_READY 就绪闸未过，可下轮重试；
+     *     NOT_FOUND 定义不存在；INVALID_REQUEST 身份不完整；FAILED 其他启动异常。
+     */
+    public RecoveryLaunchOutcome recover(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
+        if (EmptyChecks.isBlank(tenantId)
+                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId <= 0
+                || EmptyChecks.isNull(scheduledFireTime)) {
+            return RecoveryLaunchOutcome.INVALID_REQUEST;
+        }
+        TriggerDescriptor descriptor =
+                triggerDefinitionLoader.loadByWorkflowDefinitionId(tenantId, workflowDefinitionId);
+        if (EmptyChecks.isNull(descriptor)) {
+            return RecoveryLaunchOutcome.NOT_FOUND;
+        }
+        try {
+            LaunchResponse launchResponse = triggerService.launchScheduled(new ScheduledTriggerCommand(
+                    descriptor,
+                    scheduledFireTime,
+                    TriggerType.SCHEDULED,
+                    IdGenerator.newBusinessNo("readiness"),
+                    IdGenerator.newTraceId()));
+            if (EmptyChecks.isNull(launchResponse) || EmptyChecks.isNull(launchResponse.instanceNo())) {
+                return RecoveryLaunchOutcome.ALREADY_TERMINATED;
+            }
+            return RecoveryLaunchOutcome.LAUNCHED;
+        } catch (UpstreamNotReadyException upstreamNotReady) {
+            return RecoveryLaunchOutcome.NOT_READY;
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "readiness recovery launch failed: tenantId={}, workflowDefinitionId={}," + " scheduledFireTime={}",
+                    tenantId,
+                    workflowDefinitionId,
+                    scheduledFireTime,
+                    ex);
+            return RecoveryLaunchOutcome.FAILED;
+        }
     }
-    TriggerDescriptor descriptor =
-        triggerDefinitionLoader.loadByWorkflowDefinitionId(tenantId, workflowDefinitionId);
-    if (EmptyChecks.isNull(descriptor)) {
-      return RecoveryLaunchOutcome.NOT_FOUND;
-    }
-    try {
-      LaunchResponse launchResponse = triggerService.launchScheduled(new ScheduledTriggerCommand(
-          descriptor,
-          scheduledFireTime,
-          TriggerType.SCHEDULED,
-          IdGenerator.newBusinessNo("readiness"),
-          IdGenerator.newTraceId()));
-      if (EmptyChecks.isNull(launchResponse) || EmptyChecks.isNull(launchResponse.instanceNo())) {
-        return RecoveryLaunchOutcome.ALREADY_TERMINATED;
-      }
-      return RecoveryLaunchOutcome.LAUNCHED;
-    } catch (UpstreamNotReadyException upstreamNotReady) {
-      return RecoveryLaunchOutcome.NOT_READY;
-    } catch (RuntimeException ex) {
-      log.warn(
-          "readiness recovery launch failed: tenantId={}, workflowDefinitionId={},"
-              + " scheduledFireTime={}",
-          tenantId,
-          workflowDefinitionId,
-          scheduledFireTime,
-          ex);
-      return RecoveryLaunchOutcome.FAILED;
-    }
-  }
 
-  /** 恢复启动结果。 */
-  public enum RecoveryLaunchOutcome {
-    LAUNCHED,
-    ALREADY_TERMINATED,
-    NOT_READY,
-    NOT_FOUND,
-    INVALID_REQUEST,
-    FAILED
-  }
+    /** 恢复启动结果。 */
+    public enum RecoveryLaunchOutcome {
+        LAUNCHED,
+        ALREADY_TERMINATED,
+        NOT_READY,
+        NOT_FOUND,
+        INVALID_REQUEST,
+        FAILED
+    }
 }

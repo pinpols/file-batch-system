@@ -55,316 +55,305 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "batch.console.sms.provider", havingValue = "tencent")
 public class TencentSmsProvider implements SmsProvider {
 
-  private static final String ACTION = "SendSms";
-  private static final String VERSION = "2021-01-11";
-  private static final String SERVICE = "sms";
-  private static final String ALGORITHM = "TC3-HMAC-SHA256";
-  private static final String HTTP_METHOD = "POST";
-  private static final String CANONICAL_URI = "/";
-  private static final String CONTENT_TYPE = "application/json; charset=utf-8";
+    private static final String ACTION = "SendSms";
+    private static final String VERSION = "2021-01-11";
+    private static final String SERVICE = "sms";
+    private static final String ALGORITHM = "TC3-HMAC-SHA256";
+    private static final String HTTP_METHOD = "POST";
+    private static final String CANONICAL_URI = "/";
+    private static final String CONTENT_TYPE = "application/json; charset=utf-8";
 
-  /** 腾讯短信模板参数值的最大字符数，超出截断。 */
-  private static final int MAX_TEMPLATE_PARAM_CHARS = 200;
+    /** 腾讯短信模板参数值的最大字符数，超出截断。 */
+    private static final int MAX_TEMPLATE_PARAM_CHARS = 200;
 
-  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
-  private static final DateTimeFormatter UTC_DATE_FORMAT =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT).withZone(ZoneOffset.UTC);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final DateTimeFormatter UTC_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT).withZone(ZoneOffset.UTC);
 
-  private final SmsProperties properties;
-  private final ObjectMapper objectMapper;
-  private final OutboundHttpTransport httpTransport;
+    private final SmsProperties properties;
+    private final ObjectMapper objectMapper;
+    private final OutboundHttpTransport httpTransport;
 
-  public TencentSmsProvider(
-      SmsProperties properties,
-      ObjectMapper objectMapper,
-      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
-    this.properties = properties;
-    this.objectMapper = objectMapper;
-    this.httpTransport = httpTransport;
-  }
-
-  @Override
-  public String providerCode() {
-    return "tencent";
-  }
-
-  @Override
-  public WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message) {
-    if (phoneNumbers == null || phoneNumbers.isEmpty()) {
-      return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
+    public TencentSmsProvider(
+            SmsProperties properties,
+            ObjectMapper objectMapper,
+            @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.httpTransport = httpTransport;
     }
 
-    String sdkAppId;
-    String signName;
-    String templateId;
-    try {
-      JsonNode config = objectMapper.readTree(message.configJson());
-      sdkAppId = ConsoleNotificationCryptoSupport.textOrNull(config, "sdkAppId");
-      signName = ConsoleNotificationCryptoSupport.textOrNull(config, "signName");
-      templateId = ConsoleNotificationCryptoSupport.textOrNull(config, "templateId");
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "tencent sms config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, "invalid sms config");
+    @Override
+    public String providerCode() {
+        return "tencent";
     }
 
-    if (sdkAppId == null || sdkAppId.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "missing sms sdkAppId");
-    }
-    if (signName == null || signName.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "missing sms signName");
-    }
-    if (templateId == null || templateId.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "missing sms templateId");
-    }
-
-    String endpoint = properties.getTencentEndpoint();
-    if (endpoint == null || endpoint.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "missing sms endpoint");
-    }
-
-    String payload = buildRequestBody(phoneNumbers, sdkAppId, signName, templateId, message);
-
-    String authorization;
-    long timestamp = epochSeconds();
-    try {
-      authorization = buildAuthorization(payload, timestamp, endpoint);
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn("tencent sms sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, "sms sign failed");
-    }
-
-    String url = "https://" + endpoint + CANONICAL_URI;
-    Map<String, String> headers = Map.of(
-        "Host", endpoint,
-        "Content-Type", CONTENT_TYPE,
-        "X-TC-Action", ACTION,
-        "X-TC-Version", VERSION,
-        "X-TC-Timestamp", Long.toString(timestamp),
-        "X-TC-Region", properties.getTencentRegion(),
-        "Authorization", authorization);
-
-    return deliverSignedRequest(phoneNumbers, message, url, headers, payload);
-  }
-
-  /** 签名完成后统一处理发送结果，保留中断标记及原有脱敏错误分类。 */
-  private WebhookDeliveryResult deliverSignedRequest(
-      List<String> phoneNumbers,
-      NotificationMessage message,
-      String url,
-      Map<String, String> headers,
-      String payload) {
-    try {
-      String response = postJson(url, headers, payload);
-      JsonNode root = objectMapper.readTree(response);
-      JsonNode resp = root.path("Response");
-
-      // 平台级错误(签名/参数/限流等)走 Response.Error。
-      JsonNode error = resp.path("Error");
-      if (error.has("Code")) {
-        String errCode = error.path("Code").asText("");
-        String channelCodeForLog = LogSanitizer.value(message.channelCode());
-        int recipientCountForLog = phoneNumbers.size();
-        log.warn(
-            "tencent sms api error channel={} recipients={} code={}",
-            channelCodeForLog,
-            recipientCountForLog,
-            errCode);
-        return WebhookDeliveryResult.failure(200, "sms error=" + errCode);
-      }
-
-      JsonNode statusSet = resp.path("SendStatusSet");
-      if (!statusSet.isArray() || statusSet.isEmpty()) {
-        String channelCodeForLog = LogSanitizer.value(message.channelCode());
-        int recipientCountForLog = phoneNumbers.size();
-        log.warn(
-            "tencent sms empty status channel={} recipients={}",
-            channelCodeForLog,
-            recipientCountForLog);
-        return WebhookDeliveryResult.failure(200, "sms empty status");
-      }
-      for (JsonNode status : statusSet) {
-        String code = status.path("Code").asText("");
-        if (!"Ok".equals(code)) {
-          // 不打 Message(可能含被风控的内容),只打首个非 Ok code。
-          String channelCodeForLog = LogSanitizer.value(message.channelCode());
-          int recipientCountForLog = phoneNumbers.size();
-          log.warn(
-              "tencent sms rejected channel={} recipients={} code={}",
-              channelCodeForLog,
-              recipientCountForLog,
-              code);
-          return WebhookDeliveryResult.failure(200, "sms code=" + code);
+    @Override
+    public WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message) {
+        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+            return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
-      }
-      return WebhookDeliveryResult.ok();
-    } catch (HttpStatusException ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      int recipientCountForLog = phoneNumbers.size();
-      int statusForLog = ex.status();
-      log.warn(
-          "tencent sms http failed channel={} recipients={} status={}",
-          channelCodeForLog,
-          recipientCountForLog,
-          statusForLog);
-      return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
-    } catch (Exception ex) {
-      if (ex instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      int recipientCountForLog = phoneNumbers.size();
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "tencent sms delivery failed channel={} recipients={} reason={}",
-          channelCodeForLog,
-          recipientCountForLog,
-          reasonForLog);
-      return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
-    }
-  }
 
-  /**
-   * 构造 SendSms 请求体 JSON：{@code PhoneNumberSet}（E.164 手机号）、{@code SmsSdkAppId}、{@code
-   * SignName}、{@code TemplateId}、{@code TemplateParamSet}（事件类型一项，超长截断）。
-   */
-  private String buildRequestBody(
-      List<String> phoneNumbers,
-      String sdkAppId,
-      String signName,
-      String templateId,
-      NotificationMessage message) {
-    ObjectNode root = objectMapper.createObjectNode();
-    ArrayNode phones = root.putArray("PhoneNumberSet");
-    for (String phone : phoneNumbers) {
-      phones.add(phone);
-    }
-    root.put("SmsSdkAppId", sdkAppId);
-    root.put("SignName", signName);
-    root.put("TemplateId", templateId);
-    ArrayNode params = root.putArray("TemplateParamSet");
-    String templateParameter = templateParam(message);
-    params.add(templateParameter);
-    return root.toString();
-  }
+        String sdkAppId;
+        String signName;
+        String templateId;
+        try {
+            JsonNode config = objectMapper.readTree(message.configJson());
+            sdkAppId = ConsoleNotificationCryptoSupport.textOrNull(config, "sdkAppId");
+            signName = ConsoleNotificationCryptoSupport.textOrNull(config, "signName");
+            templateId = ConsoleNotificationCryptoSupport.textOrNull(config, "templateId");
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("tencent sms config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, "invalid sms config");
+        }
 
-  /** 模板参数值取事件类型，超长截断，保持简单。 */
-  private String templateParam(NotificationMessage message) {
-    String eventType = (message.payload() != null && message.payload().eventType() != null)
-        ? message.payload().eventType()
-        : "UNKNOWN";
-    if (eventType.length() > MAX_TEMPLATE_PARAM_CHARS) {
-      eventType = eventType.substring(0, MAX_TEMPLATE_PARAM_CHARS);
-    }
-    return eventType;
-  }
+        if (sdkAppId == null || sdkAppId.isBlank()) {
+            return WebhookDeliveryResult.failure(null, "missing sms sdkAppId");
+        }
+        if (signName == null || signName.isBlank()) {
+            return WebhookDeliveryResult.failure(null, "missing sms signName");
+        }
+        if (templateId == null || templateId.isBlank()) {
+            return WebhookDeliveryResult.failure(null, "missing sms templateId");
+        }
 
-  /**
-   * 按 TC3-HMAC-SHA256 构造 Authorization 头：canonicalRequest → hashedCanonicalRequest → stringToSign →
-   * SecretDate = HMAC("TC3"+key, date) → SecretService = HMAC(SecretDate, service) → SecretSigning
-   * = HMAC(SecretService, "tc3_request") → signature = hex(HMAC(SecretSigning, stringToSign))。
-   */
-  private String buildAuthorization(String payload, long timestamp, String endpoint)
-      throws GeneralSecurityException {
-    String canonicalHeaders = "content-type:" + CONTENT_TYPE + '\n' + "host:" + endpoint + '\n';
-    String signedHeaders = "content-type;host";
-    String hashedPayload = sha256Hex(payload);
+        String endpoint = properties.getTencentEndpoint();
+        if (endpoint == null || endpoint.isBlank()) {
+            return WebhookDeliveryResult.failure(null, "missing sms endpoint");
+        }
 
-    String canonicalRequest = HTTP_METHOD
-        + '\n'
-        + CANONICAL_URI
-        + '\n'
-        // canonical query string 为空(参数全在 body)。
-        + ""
-        + '\n'
-        + canonicalHeaders
-        + '\n'
-        + signedHeaders
-        + '\n'
-        + hashedPayload;
+        String payload = buildRequestBody(phoneNumbers, sdkAppId, signName, templateId, message);
 
-    Instant requestTime = Instant.ofEpochSecond(timestamp);
-    String date = UTC_DATE_FORMAT.format(requestTime);
-    String credentialScope = date + "/" + SERVICE + "/tc3_request";
-    String stringToSign =
-        ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + sha256Hex(canonicalRequest);
+        String authorization;
+        long timestamp = epochSeconds();
+        try {
+            authorization = buildAuthorization(payload, timestamp, endpoint);
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("tencent sms sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, "sms sign failed");
+        }
 
-    String secretSeed = "TC3" + properties.getTencentSecretKey();
-    byte[] secretSeedBytes = secretSeed.getBytes(StandardCharsets.UTF_8);
-    byte[] secretDate = hmacSha256(secretSeedBytes, date);
-    byte[] secretService = hmacSha256(secretDate, SERVICE);
-    byte[] secretSigning = hmacSha256(secretService, "tc3_request");
-    String signature =
-        ConsoleNotificationCryptoSupport.toHex(hmacSha256(secretSigning, stringToSign));
+        String url = "https://" + endpoint + CANONICAL_URI;
+        Map<String, String> headers = Map.of(
+                "Host", endpoint,
+                "Content-Type", CONTENT_TYPE,
+                "X-TC-Action", ACTION,
+                "X-TC-Version", VERSION,
+                "X-TC-Timestamp", Long.toString(timestamp),
+                "X-TC-Region", properties.getTencentRegion(),
+                "Authorization", authorization);
 
-    return ALGORITHM
-        + " Credential="
-        + properties.getTencentSecretId()
-        + "/"
-        + credentialScope
-        + ", SignedHeaders="
-        + signedHeaders
-        + ", Signature="
-        + signature;
-  }
-
-  private static String sha256Hex(String input) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
-      byte[] hash = digest.digest(encodedInput);
-      return ConsoleNotificationCryptoSupport.toHex(hash);
-    } catch (Exception ex) {
-      throw new IllegalStateException("sha256 unavailable", ex);
-    }
-  }
-
-  private static byte[] hmacSha256(byte[] key, String data) throws GeneralSecurityException {
-    Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-    SecretKeySpec signingKey = new SecretKeySpec(key, CryptoAlgorithms.HMAC_SHA256);
-    mac.init(signingKey);
-    byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
-    return mac.doFinal(signingData);
-  }
-
-  /** 当前 epoch 秒（UTC），抽出便于单测固定签名输入。 */
-  protected long epochSeconds() {
-    return Instant.now().getEpochSecond();
-  }
-
-  /** 同步 POST（JSON body，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
-  protected String postJson(String url, Map<String, String> headers, String body)
-      throws IOException, InterruptedException, HttpStatusException {
-    OutboundHttpContent httpContent = new OutboundHttpContent(body, CONTENT_TYPE);
-    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
-        url,
-        headers,
-        httpContent,
-        Duration.ofSeconds(5),
-        REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED);
-    OutboundHttpResponse response = httpTransport.execute(httpRequest);
-    if (!response.isSuccessful()) {
-      throw new HttpStatusException(response.statusCode());
-    }
-    return response.body();
-  }
-
-  /** HTTP 非 2xx 的内部信号，承载状态码供上层折叠为 failure。 */
-  protected static final class HttpStatusException extends Exception {
-    private final int status;
-
-    HttpStatusException(int status) {
-      super("http status " + status);
-      this.status = status;
+        return deliverSignedRequest(phoneNumbers, message, url, headers, payload);
     }
 
-    int status() {
-      return status;
+    /** 签名完成后统一处理发送结果，保留中断标记及原有脱敏错误分类。 */
+    private WebhookDeliveryResult deliverSignedRequest(
+            List<String> phoneNumbers,
+            NotificationMessage message,
+            String url,
+            Map<String, String> headers,
+            String payload) {
+        try {
+            String response = postJson(url, headers, payload);
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode resp = root.path("Response");
+
+            // 平台级错误(签名/参数/限流等)走 Response.Error。
+            JsonNode error = resp.path("Error");
+            if (error.has("Code")) {
+                String errCode = error.path("Code").asText("");
+                String channelCodeForLog = LogSanitizer.value(message.channelCode());
+                int recipientCountForLog = phoneNumbers.size();
+                log.warn(
+                        "tencent sms api error channel={} recipients={} code={}",
+                        channelCodeForLog,
+                        recipientCountForLog,
+                        errCode);
+                return WebhookDeliveryResult.failure(200, "sms error=" + errCode);
+            }
+
+            JsonNode statusSet = resp.path("SendStatusSet");
+            if (!statusSet.isArray() || statusSet.isEmpty()) {
+                String channelCodeForLog = LogSanitizer.value(message.channelCode());
+                int recipientCountForLog = phoneNumbers.size();
+                log.warn("tencent sms empty status channel={} recipients={}", channelCodeForLog, recipientCountForLog);
+                return WebhookDeliveryResult.failure(200, "sms empty status");
+            }
+            for (JsonNode status : statusSet) {
+                String code = status.path("Code").asText("");
+                if (!"Ok".equals(code)) {
+                    // 不打 Message(可能含被风控的内容),只打首个非 Ok code。
+                    String channelCodeForLog = LogSanitizer.value(message.channelCode());
+                    int recipientCountForLog = phoneNumbers.size();
+                    log.warn(
+                            "tencent sms rejected channel={} recipients={} code={}",
+                            channelCodeForLog,
+                            recipientCountForLog,
+                            code);
+                    return WebhookDeliveryResult.failure(200, "sms code=" + code);
+                }
+            }
+            return WebhookDeliveryResult.ok();
+        } catch (HttpStatusException ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            int recipientCountForLog = phoneNumbers.size();
+            int statusForLog = ex.status();
+            log.warn(
+                    "tencent sms http failed channel={} recipients={} status={}",
+                    channelCodeForLog,
+                    recipientCountForLog,
+                    statusForLog);
+            return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
+        } catch (Exception ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            int recipientCountForLog = phoneNumbers.size();
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn(
+                    "tencent sms delivery failed channel={} recipients={} reason={}",
+                    channelCodeForLog,
+                    recipientCountForLog,
+                    reasonForLog);
+            return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
+        }
     }
-  }
+
+    /**
+     * 构造 SendSms 请求体 JSON：{@code PhoneNumberSet}（E.164 手机号）、{@code SmsSdkAppId}、{@code
+     * SignName}、{@code TemplateId}、{@code TemplateParamSet}（事件类型一项，超长截断）。
+     */
+    private String buildRequestBody(
+            List<String> phoneNumbers,
+            String sdkAppId,
+            String signName,
+            String templateId,
+            NotificationMessage message) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode phones = root.putArray("PhoneNumberSet");
+        for (String phone : phoneNumbers) {
+            phones.add(phone);
+        }
+        root.put("SmsSdkAppId", sdkAppId);
+        root.put("SignName", signName);
+        root.put("TemplateId", templateId);
+        ArrayNode params = root.putArray("TemplateParamSet");
+        String templateParameter = templateParam(message);
+        params.add(templateParameter);
+        return root.toString();
+    }
+
+    /** 模板参数值取事件类型，超长截断，保持简单。 */
+    private String templateParam(NotificationMessage message) {
+        String eventType = (message.payload() != null && message.payload().eventType() != null)
+                ? message.payload().eventType()
+                : "UNKNOWN";
+        if (eventType.length() > MAX_TEMPLATE_PARAM_CHARS) {
+            eventType = eventType.substring(0, MAX_TEMPLATE_PARAM_CHARS);
+        }
+        return eventType;
+    }
+
+    /**
+     * 按 TC3-HMAC-SHA256 构造 Authorization 头：canonicalRequest → hashedCanonicalRequest → stringToSign →
+     * SecretDate = HMAC("TC3"+key, date) → SecretService = HMAC(SecretDate, service) → SecretSigning
+     * = HMAC(SecretService, "tc3_request") → signature = hex(HMAC(SecretSigning, stringToSign))。
+     */
+    private String buildAuthorization(String payload, long timestamp, String endpoint) throws GeneralSecurityException {
+        String canonicalHeaders = "content-type:" + CONTENT_TYPE + '\n' + "host:" + endpoint + '\n';
+        String signedHeaders = "content-type;host";
+        String hashedPayload = sha256Hex(payload);
+
+        String canonicalRequest = HTTP_METHOD
+                + '\n'
+                + CANONICAL_URI
+                + '\n'
+                // canonical query string 为空(参数全在 body)。
+                + ""
+                + '\n'
+                + canonicalHeaders
+                + '\n'
+                + signedHeaders
+                + '\n'
+                + hashedPayload;
+
+        Instant requestTime = Instant.ofEpochSecond(timestamp);
+        String date = UTC_DATE_FORMAT.format(requestTime);
+        String credentialScope = date + "/" + SERVICE + "/tc3_request";
+        String stringToSign =
+                ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + sha256Hex(canonicalRequest);
+
+        String secretSeed = "TC3" + properties.getTencentSecretKey();
+        byte[] secretSeedBytes = secretSeed.getBytes(StandardCharsets.UTF_8);
+        byte[] secretDate = hmacSha256(secretSeedBytes, date);
+        byte[] secretService = hmacSha256(secretDate, SERVICE);
+        byte[] secretSigning = hmacSha256(secretService, "tc3_request");
+        String signature = ConsoleNotificationCryptoSupport.toHex(hmacSha256(secretSigning, stringToSign));
+
+        return ALGORITHM
+                + " Credential="
+                + properties.getTencentSecretId()
+                + "/"
+                + credentialScope
+                + ", SignedHeaders="
+                + signedHeaders
+                + ", Signature="
+                + signature;
+    }
+
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
+            byte[] hash = digest.digest(encodedInput);
+            return ConsoleNotificationCryptoSupport.toHex(hash);
+        } catch (Exception ex) {
+            throw new IllegalStateException("sha256 unavailable", ex);
+        }
+    }
+
+    private static byte[] hmacSha256(byte[] key, String data) throws GeneralSecurityException {
+        Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+        SecretKeySpec signingKey = new SecretKeySpec(key, CryptoAlgorithms.HMAC_SHA256);
+        mac.init(signingKey);
+        byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
+        return mac.doFinal(signingData);
+    }
+
+    /** 当前 epoch 秒（UTC），抽出便于单测固定签名输入。 */
+    protected long epochSeconds() {
+        return Instant.now().getEpochSecond();
+    }
+
+    /** 同步 POST（JSON body，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
+    protected String postJson(String url, Map<String, String> headers, String body)
+            throws IOException, InterruptedException, HttpStatusException {
+        OutboundHttpContent httpContent = new OutboundHttpContent(body, CONTENT_TYPE);
+        OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
+                url, headers, httpContent, Duration.ofSeconds(5), REQUEST_TIMEOUT, OutboundAddressPolicy.GUARDED);
+        OutboundHttpResponse response = httpTransport.execute(httpRequest);
+        if (!response.isSuccessful()) {
+            throw new HttpStatusException(response.statusCode());
+        }
+        return response.body();
+    }
+
+    /** HTTP 非 2xx 的内部信号，承载状态码供上层折叠为 failure。 */
+    protected static final class HttpStatusException extends Exception {
+        private final int status;
+
+        HttpStatusException(int status) {
+            super("http status " + status);
+            this.status = status;
+        }
+
+        int status() {
+            return status;
+        }
+    }
 }

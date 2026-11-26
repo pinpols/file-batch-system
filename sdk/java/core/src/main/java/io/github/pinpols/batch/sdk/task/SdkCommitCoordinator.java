@@ -26,82 +26,80 @@ import java.util.Map;
  */
 public final class SdkCommitCoordinator {
 
-  private final String taskId;
-  private final SdkCheckpoint checkpoint;
-  private final ProgressReporter progress;
-  private final CancellationSignal cancellation;
-  private final boolean selfReport;
-  private final int reportIntervalBatches;
+    private final String taskId;
+    private final SdkCheckpoint checkpoint;
+    private final ProgressReporter progress;
+    private final CancellationSignal cancellation;
+    private final boolean selfReport;
+    private final int reportIntervalBatches;
 
-  private long succeedCount;
-  private long failCount;
-  private long commitCounter;
+    private long succeedCount;
+    private long failCount;
+    private long commitCounter;
 
-  public SdkCommitCoordinator(
-      String taskId,
-      SdkCheckpoint checkpoint,
-      ProgressReporter progress,
-      CancellationSignal cancellation,
-      boolean selfReport,
-      int reportIntervalBatches) {
-    this.taskId = taskId;
-    this.checkpoint = checkpoint == null ? new InMemorySdkCheckpoint() : checkpoint;
-    this.progress = progress == null ? new ProgressReporter() : progress;
-    this.cancellation = cancellation == null ? new CancellationSignal() : cancellation;
-    this.selfReport = selfReport;
-    this.reportIntervalBatches = Math.max(1, reportIntervalBatches);
-  }
-
-  /** 断点存储入口(暴露给 {@link SdkTaskContext#checkpoint()})。 */
-  public SdkCheckpoint checkpoint() {
-    return checkpoint;
-  }
-
-  /** 续跑恢复:把上次断点的累计计数填回,使进度不归零。 */
-  public void restoreCounts(long succeed, long fail) {
-    this.succeedCount = succeed;
-    this.failCount = fail;
-  }
-
-  /** 模板在每批 {@code commit} 前推进本批的成功 / 失败增量。 */
-  public void recordBatch(long succeedDelta, long failDelta) {
-    this.succeedCount += succeedDelta;
-    this.failCount += failDelta;
-  }
-
-  public long succeedCount() {
-    return succeedCount;
-  }
-
-  public long failCount() {
-    return failCount;
-  }
-
-  /**
-   * 三合一提交:保存断点(同事务)→ 限流上报 → 取消检查。
-   *
-   * @param breakPosition 本批已处理到的断点坐标
-   * @throws SdkTaskStoppedException 提交成功后命中取消标志时,在安全点抛出
-   */
-  public void commit(Map<String, Object> breakPosition) {
-    SdkCheckpointState state =
-        new SdkCheckpointState(breakPosition, succeedCount, failCount, false);
-    checkpoint.save(taskId, state);
-    commitCounter++;
-    if (selfReport && commitCounter % reportIntervalBatches == 0) {
-      progress.report(Map.of(
-          "succeed", succeedCount,
-          "fail", failCount,
-          "breakPosition", state.breakPosition()));
+    public SdkCommitCoordinator(
+            String taskId,
+            SdkCheckpoint checkpoint,
+            ProgressReporter progress,
+            CancellationSignal cancellation,
+            boolean selfReport,
+            int reportIntervalBatches) {
+        this.taskId = taskId;
+        this.checkpoint = checkpoint == null ? new InMemorySdkCheckpoint() : checkpoint;
+        this.progress = progress == null ? new ProgressReporter() : progress;
+        this.cancellation = cancellation == null ? new CancellationSignal() : cancellation;
+        this.selfReport = selfReport;
+        this.reportIntervalBatches = Math.max(1, reportIntervalBatches);
     }
-    if (cancellation.isCancelled()) {
-      throw new SdkTaskStoppedException(state.breakPosition());
-    }
-  }
 
-  /** task 全部跑完后,把终态(completed=true)落进断点,实现重派幂等跳过。 */
-  public void markCompleted(Map<String, Object> finalBreakPosition) {
-    checkpoint.save(
-        taskId, new SdkCheckpointState(finalBreakPosition, succeedCount, failCount, true));
-  }
+    /** 断点存储入口(暴露给 {@link SdkTaskContext#checkpoint()})。 */
+    public SdkCheckpoint checkpoint() {
+        return checkpoint;
+    }
+
+    /** 续跑恢复:把上次断点的累计计数填回,使进度不归零。 */
+    public void restoreCounts(long succeed, long fail) {
+        this.succeedCount = succeed;
+        this.failCount = fail;
+    }
+
+    /** 模板在每批 {@code commit} 前推进本批的成功 / 失败增量。 */
+    public void recordBatch(long succeedDelta, long failDelta) {
+        this.succeedCount += succeedDelta;
+        this.failCount += failDelta;
+    }
+
+    public long succeedCount() {
+        return succeedCount;
+    }
+
+    public long failCount() {
+        return failCount;
+    }
+
+    /**
+     * 三合一提交:保存断点(同事务)→ 限流上报 → 取消检查。
+     *
+     * @param breakPosition 本批已处理到的断点坐标
+     * @throws SdkTaskStoppedException 提交成功后命中取消标志时,在安全点抛出
+     */
+    public void commit(Map<String, Object> breakPosition) {
+        SdkCheckpointState state = new SdkCheckpointState(breakPosition, succeedCount, failCount, false);
+        checkpoint.save(taskId, state);
+        commitCounter++;
+        if (selfReport && commitCounter % reportIntervalBatches == 0) {
+            progress.report(Map.of(
+                    "succeed", succeedCount,
+                    "fail", failCount,
+                    "breakPosition", state.breakPosition()));
+        }
+        if (cancellation.isCancelled()) {
+            throw new SdkTaskStoppedException(state.breakPosition());
+        }
+    }
+
+    /** task 全部跑完后,把终态(completed=true)落进断点,实现重派幂等跳过。 */
+    public void markCompleted(Map<String, Object> finalBreakPosition) {
+        checkpoint.save(taskId, new SdkCheckpointState(finalBreakPosition, succeedCount, failCount, true));
+    }
 }

@@ -33,46 +33,45 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleSystemParameterController {
 
-  private final ConsoleSystemParameterService parameterService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleSystemParameterService parameterService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @GetMapping
-  public CommonResponse<List<SystemParameterResponse>> list(
-      @RequestParam("tenantId") String tenantId) {
-    List<SystemParameterEntity> parameters = parameterService.list(tenantId);
-    List<SystemParameterResponse> responses =
-        parameters.stream().map(SystemParameterResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping
+    public CommonResponse<List<SystemParameterResponse>> list(@RequestParam("tenantId") String tenantId) {
+        List<SystemParameterEntity> parameters = parameterService.list(tenantId);
+        List<SystemParameterResponse> responses =
+                parameters.stream().map(SystemParameterResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  @GetMapping("/value")
-  public CommonResponse<ConsoleSystemParameterValueResponse> getValue(
-      @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
-    Optional<String> parameterValue = parameterService.getValue(tenantId, key);
-    ConsoleSystemParameterValueResponse responseValue = parameterValue
-        .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
-        .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null));
-    return responseFactory.success(responseValue);
-  }
+    @GetMapping("/value")
+    public CommonResponse<ConsoleSystemParameterValueResponse> getValue(
+            @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
+        Optional<String> parameterValue = parameterService.getValue(tenantId, key);
+        ConsoleSystemParameterValueResponse responseValue = parameterValue
+                .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
+                .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null));
+        return responseFactory.success(responseValue);
+    }
 
-  @PutMapping
-  public CommonResponse<Void> upsert(
-      @RequestParam("tenantId") String tenantId, @RequestBody @Validated UpsertParam param) {
-    String operator = requestMetadataResolver.current().operatorId();
-    parameterService.upsert(tenantId, param.key(), param.value(), param.description(), operator);
-    return responseFactory.success(null);
-  }
+    @PutMapping
+    public CommonResponse<Void> upsert(
+            @RequestParam("tenantId") String tenantId, @RequestBody @Validated UpsertParam param) {
+        String operator = requestMetadataResolver.current().operatorId();
+        parameterService.upsert(tenantId, param.key(), param.value(), param.description(), operator);
+        return responseFactory.success(null);
+    }
 
-  @DeleteMapping
-  public CommonResponse<Void> delete(
-      @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
-    parameterService.delete(tenantId, key);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping
+    public CommonResponse<Void> delete(
+            @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
+        parameterService.delete(tenantId, key);
+        return responseFactory.success(null);
+    }
 
-  record UpsertParam(
-      @NotBlank @Size(max = 128) String key,
-      @NotBlank @Size(max = 2048) String value,
-      @Size(max = 512) String description) {}
+    record UpsertParam(
+            @NotBlank @Size(max = 128) String key,
+            @NotBlank @Size(max = 2048) String value,
+            @Size(max = 512) String description) {}
 }

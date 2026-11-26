@@ -22,90 +22,88 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleOidcIdentityService {
 
-  /**
-   * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql），
-   * 与 ConsoleOidcIdentityRequest.subject 的 @Size(max = 255) 一致。
-   */
-  private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
+    /**
+     * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql），
+     * 与 ConsoleOidcIdentityRequest.subject 的 @Size(max = 255) 一致。
+     */
+    private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
 
-  private final ConsoleOidcIdentityMapper identityMapper;
-  private final ConsoleUserAccountMapper userAccountMapper;
-  private final ConsoleOidcProperties properties;
+    private final ConsoleOidcIdentityMapper identityMapper;
+    private final ConsoleUserAccountMapper userAccountMapper;
+    private final ConsoleOidcProperties properties;
 
-  public List<ConsoleOidcIdentityResponse> list(String tenantId) {
-    requireConfiguredTenant(tenantId);
-    return identityMapper.findByTenant(tenantId).stream().map(this::toResponse).toList();
-  }
-
-  @Transactional
-  public ConsoleOidcIdentityResponse bind(
-      String tenantId, ConsoleOidcIdentityRequest request, String linkedBy) {
-    requireConfiguredTenant(tenantId);
-    if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(linkedBy)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
+    public List<ConsoleOidcIdentityResponse> list(String tenantId) {
+        requireConfiguredTenant(tenantId);
+        return identityMapper.findByTenant(tenantId).stream()
+                .map(this::toResponse)
+                .toList();
     }
-    String subject = request.subject();
-    boolean oidcSubjectIsInvalid = EmptyChecks.isBlank(subject)
-        || subject.length() > OIDC_SUBJECT_MAX_LENGTH
-        || !isAscii(subject);
-    if (oidcSubjectIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
-    }
-    ConsoleUserAccountEntity account = userAccountMapper
-        .findByUsernameIgnoreCase(request.username())
-        .filter(user -> user.isEnabled() && tenantId.equals(user.getTenantId()))
-        .orElseThrow(() ->
-            BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", request.username()));
-    try {
-      ConsoleOidcIdentityInsertParam consoleOidcIdentityInsertParam =
-          ConsoleOidcIdentityInsertParam.builder()
-              .tenantId(tenantId)
-              .accountId(account.getId())
-              .issuer(properties.getIssuerUri())
-              .subject(subject)
-              .linkedBy(linkedBy)
-              .build();
-      identityMapper.insert(consoleOidcIdentityInsertParam);
-    } catch (DuplicateKeyException exception) {
-      throw BizException.of(ResultCode.CONFLICT, "error.console.oidc.identity_conflict");
-    }
-    return identityMapper
-        .findByAccountAndTenant(account.getId(), tenantId)
-        .map(this::toResponse)
-        .orElseThrow(() ->
-            BizException.of(ResultCode.SYSTEM_ERROR, "error.console.oidc.identity_write_failed"));
-  }
 
-  @Transactional
-  public void unbind(String tenantId, long identityId) {
-    requireConfiguredTenant(tenantId);
-    if (identityMapper.deleteByIdAndTenant(identityId, tenantId) != 1) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.identity_not_found");
+    @Transactional
+    public ConsoleOidcIdentityResponse bind(String tenantId, ConsoleOidcIdentityRequest request, String linkedBy) {
+        requireConfiguredTenant(tenantId);
+        if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(linkedBy)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
+        }
+        String subject = request.subject();
+        boolean oidcSubjectIsInvalid =
+                EmptyChecks.isBlank(subject) || subject.length() > OIDC_SUBJECT_MAX_LENGTH || !isAscii(subject);
+        if (oidcSubjectIsInvalid) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
+        }
+        ConsoleUserAccountEntity account = userAccountMapper
+                .findByUsernameIgnoreCase(request.username())
+                .filter(user -> user.isEnabled() && tenantId.equals(user.getTenantId()))
+                .orElseThrow(
+                        () -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", request.username()));
+        try {
+            ConsoleOidcIdentityInsertParam consoleOidcIdentityInsertParam = ConsoleOidcIdentityInsertParam.builder()
+                    .tenantId(tenantId)
+                    .accountId(account.getId())
+                    .issuer(properties.getIssuerUri())
+                    .subject(subject)
+                    .linkedBy(linkedBy)
+                    .build();
+            identityMapper.insert(consoleOidcIdentityInsertParam);
+        } catch (DuplicateKeyException exception) {
+            throw BizException.of(ResultCode.CONFLICT, "error.console.oidc.identity_conflict");
+        }
+        return identityMapper
+                .findByAccountAndTenant(account.getId(), tenantId)
+                .map(this::toResponse)
+                .orElseThrow(
+                        () -> BizException.of(ResultCode.SYSTEM_ERROR, "error.console.oidc.identity_write_failed"));
     }
-  }
 
-  private void requireConfiguredTenant(String tenantId) {
-    boolean oidcTenantIsNotEnabled = !properties.isEnabled()
-        || EmptyChecks.isNull(tenantId)
-        || !tenantId.equals(properties.getTenantId());
-    if (oidcTenantIsNotEnabled) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.provider_unavailable");
+    @Transactional
+    public void unbind(String tenantId, long identityId) {
+        requireConfiguredTenant(tenantId);
+        if (identityMapper.deleteByIdAndTenant(identityId, tenantId) != 1) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.identity_not_found");
+        }
     }
-  }
 
-  private ConsoleOidcIdentityResponse toResponse(ConsoleOidcIdentityView entity) {
-    return new ConsoleOidcIdentityResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getAccountId(),
-        entity.getUsername(),
-        entity.getIssuer(),
-        entity.getSubject(),
-        entity.getLinkedBy(),
-        entity.getLinkedAt());
-  }
+    private void requireConfiguredTenant(String tenantId) {
+        boolean oidcTenantIsNotEnabled =
+                !properties.isEnabled() || EmptyChecks.isNull(tenantId) || !tenantId.equals(properties.getTenantId());
+        if (oidcTenantIsNotEnabled) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.provider_unavailable");
+        }
+    }
 
-  private static boolean isAscii(String value) {
-    return value.chars().allMatch(character -> character <= 0x7f);
-  }
+    private ConsoleOidcIdentityResponse toResponse(ConsoleOidcIdentityView entity) {
+        return new ConsoleOidcIdentityResponse(
+                entity.getId(),
+                entity.getTenantId(),
+                entity.getAccountId(),
+                entity.getUsername(),
+                entity.getIssuer(),
+                entity.getSubject(),
+                entity.getLinkedBy(),
+                entity.getLinkedAt());
+    }
+
+    private static boolean isAscii(String value) {
+        return value.chars().allMatch(character -> character <= 0x7f);
+    }
 }

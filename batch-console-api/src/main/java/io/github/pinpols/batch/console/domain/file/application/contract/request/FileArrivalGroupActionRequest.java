@@ -8,19 +8,19 @@ import lombok.Data;
 @Data
 public class FileArrivalGroupActionRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128, message = "fileGroupCode too long (max 128)")
-  private String fileGroupCode;
+    @NotBlank
+    @Size(max = 128, message = "fileGroupCode too long (max 128)")
+    private String fileGroupCode;
 
-  @NotBlank
-  @Size(max = 32, message = "action too long (max 32)")
-  private String action;
+    @NotBlank
+    @Size(max = 32, message = "action too long (max 32)")
+    private String action;
 
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 
-  private Long extendWaitSeconds;
+    private Long extendWaitSeconds;
 }

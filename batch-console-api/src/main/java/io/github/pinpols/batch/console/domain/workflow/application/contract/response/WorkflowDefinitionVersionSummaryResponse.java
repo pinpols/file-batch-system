@@ -19,4 +19,4 @@ import java.time.Instant;
  * @param current 是否当前生效版本
  */
 public record WorkflowDefinitionVersionSummaryResponse(
-    Integer version, String savedBy, Instant savedAt, String summary, Boolean current) {}
+        Integer version, String savedBy, Instant savedAt, String summary, Boolean current) {}

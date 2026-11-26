@@ -17,111 +17,111 @@ import java.util.Map;
  * <p>构造用 {@link #builder(String)} 起步,链式赋值后 build。
  */
 public record DomainEvent(
-    String tenantId,
-    String aggregateType,
-    Long aggregateId,
-    String eventType,
-    String eventKey,
-    Map<String, Object> payload,
-    String traceId,
-    String schemaVersion,
-    Integer priority) {
+        String tenantId,
+        String aggregateType,
+        Long aggregateId,
+        String eventType,
+        String eventKey,
+        Map<String, Object> payload,
+        String traceId,
+        String schemaVersion,
+        Integer priority) {
 
-  public DomainEvent {
-    if (tenantId == null || tenantId.isBlank()) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.tenant_id_blank");
-    }
-    if (aggregateType == null || aggregateType.isBlank()) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.aggregate_type_blank");
-    }
-    if (eventType == null || eventType.isBlank()) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_type_blank");
-    }
-    if (eventKey == null || eventKey.isBlank()) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
-    }
-    // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
-    if (EmptyChecks.isNull(payload)) {
-      payload = Map.of();
-    } else {
-      Map<String, Object> payloadSnapshot = new LinkedHashMap<>(payload);
-      payload = Collections.unmodifiableMap(payloadSnapshot);
-    }
-    schemaVersion = schemaVersion == null ? "v1" : schemaVersion;
-  }
-
-  public static Builder builder(String tenantId) {
-    return new Builder(tenantId);
-  }
-
-  public static final class Builder {
-    private final String tenantId;
-    private String aggregateType;
-    private Long aggregateId;
-    private String eventType;
-    private String eventKey;
-    private Map<String, Object> payload = new LinkedHashMap<>();
-    private String traceId;
-    private String schemaVersion = "v1";
-    private Integer priority;
-
-    private Builder(String tenantId) {
-      this.tenantId = tenantId;
+    public DomainEvent {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.tenant_id_blank");
+        }
+        if (aggregateType == null || aggregateType.isBlank()) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.aggregate_type_blank");
+        }
+        if (eventType == null || eventType.isBlank()) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_type_blank");
+        }
+        if (eventKey == null || eventKey.isBlank()) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
+        }
+        // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
+        if (EmptyChecks.isNull(payload)) {
+            payload = Map.of();
+        } else {
+            Map<String, Object> payloadSnapshot = new LinkedHashMap<>(payload);
+            payload = Collections.unmodifiableMap(payloadSnapshot);
+        }
+        schemaVersion = schemaVersion == null ? "v1" : schemaVersion;
     }
 
-    public Builder aggregate(String type, Long id) {
-      this.aggregateType = type;
-      this.aggregateId = id;
-      return this;
+    public static Builder builder(String tenantId) {
+        return new Builder(tenantId);
     }
 
-    public Builder type(String eventType) {
-      this.eventType = eventType;
-      return this;
-    }
+    public static final class Builder {
+        private final String tenantId;
+        private String aggregateType;
+        private Long aggregateId;
+        private String eventType;
+        private String eventKey;
+        private Map<String, Object> payload = new LinkedHashMap<>();
+        private String traceId;
+        private String schemaVersion = "v1";
+        private Integer priority;
 
-    public Builder key(String eventKey) {
-      this.eventKey = eventKey;
-      return this;
-    }
+        private Builder(String tenantId) {
+            this.tenantId = tenantId;
+        }
 
-    public Builder payload(Map<String, Object> payload) {
-      this.payload = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
-      return this;
-    }
+        public Builder aggregate(String type, Long id) {
+            this.aggregateType = type;
+            this.aggregateId = id;
+            return this;
+        }
 
-    public Builder payloadEntry(String key, Object value) {
-      this.payload.put(key, value);
-      return this;
-    }
+        public Builder type(String eventType) {
+            this.eventType = eventType;
+            return this;
+        }
 
-    public Builder traceId(String traceId) {
-      this.traceId = traceId;
-      return this;
-    }
+        public Builder key(String eventKey) {
+            this.eventKey = eventKey;
+            return this;
+        }
 
-    public Builder schemaVersion(String version) {
-      this.schemaVersion = version;
-      return this;
-    }
+        public Builder payload(Map<String, Object> payload) {
+            this.payload = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
+            return this;
+        }
 
-    /** outbox 派发优先级(可选);只 orchestrator outbox_event 表用,默认走 DB DEFAULT 5。 */
-    public Builder priority(Integer priority) {
-      this.priority = priority;
-      return this;
-    }
+        public Builder payloadEntry(String key, Object value) {
+            this.payload.put(key, value);
+            return this;
+        }
 
-    public DomainEvent build() {
-      return new DomainEvent(
-          tenantId,
-          aggregateType,
-          aggregateId,
-          eventType,
-          eventKey,
-          payload,
-          traceId,
-          schemaVersion,
-          priority);
+        public Builder traceId(String traceId) {
+            this.traceId = traceId;
+            return this;
+        }
+
+        public Builder schemaVersion(String version) {
+            this.schemaVersion = version;
+            return this;
+        }
+
+        /** outbox 派发优先级(可选);只 orchestrator outbox_event 表用,默认走 DB DEFAULT 5。 */
+        public Builder priority(Integer priority) {
+            this.priority = priority;
+            return this;
+        }
+
+        public DomainEvent build() {
+            return new DomainEvent(
+                    tenantId,
+                    aggregateType,
+                    aggregateId,
+                    eventType,
+                    eventKey,
+                    payload,
+                    traceId,
+                    schemaVersion,
+                    priority);
+        }
     }
-  }
 }

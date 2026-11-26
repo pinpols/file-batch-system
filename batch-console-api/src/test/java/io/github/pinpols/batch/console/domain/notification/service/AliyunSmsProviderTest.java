@@ -28,177 +28,172 @@ import org.slf4j.LoggerFactory;
 @DisplayName("阿里云短信通道: 配置校验, 响应码判定与日志脱敏")
 class AliyunSmsProviderTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  private static final String PLAIN_PHONE = "+8613800138000";
-  private static final List<String> PHONE_NUMBERS = List.of(PLAIN_PHONE);
+    private static final String PLAIN_PHONE = "+8613800138000";
+    private static final List<String> PHONE_NUMBERS = List.of(PLAIN_PHONE);
 
-  private SmsProperties properties() {
-    SmsProperties props = new SmsProperties();
-    props.setAliyunAccessKeyId("ak-test");
-    props.setAliyunAccessKeySecret("sk-test");
-    props.setAliyunEndpoint("dysmsapi.aliyuncs.com");
-    return props;
-  }
+    private SmsProperties properties() {
+        SmsProperties props = new SmsProperties();
+        props.setAliyunAccessKeyId("ak-test");
+        props.setAliyunAccessKeySecret("sk-test");
+        props.setAliyunEndpoint("dysmsapi.aliyuncs.com");
+        return props;
+    }
 
-  private NotificationMessage message(String configJson) {
-    WebhookEventPayload payload =
-        new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
-    return new NotificationMessage(
-        "tenant-a", "ch-sms", "SMS", configJson, payload, "{\"jobId\":\"J1\"}");
-  }
+    private NotificationMessage message(String configJson) {
+        WebhookEventPayload payload =
+                new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
+        return new NotificationMessage("tenant-a", "ch-sms", "SMS", configJson, payload, "{\"jobId\":\"J1\"}");
+    }
 
-  private String fullConfig() {
-    return "{\"signName\":\"阿里云\",\"templateCode\":\"SMS_123\"}";
-  }
+    private String fullConfig() {
+        return "{\"signName\":\"阿里云\",\"templateCode\":\"SMS_123\"}";
+    }
 
-  @Test
-  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
-  void shouldSupportAliyunCaseInsensitively() {
-    AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest());
-    assertThat(provider.supports("aliyun")).isTrue();
-    assertThat(provider.supports("ALIYUN")).isTrue();
-    assertThat(provider.supports("Aliyun")).isTrue();
-    assertThat(provider.supports("tencent")).isFalse();
-    assertThat(provider.supports(null)).isFalse();
-  }
+    @Test
+    @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+    void shouldSupportAliyunCaseInsensitively() {
+        AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest());
+        assertThat(provider.supports("aliyun")).isTrue();
+        assertThat(provider.supports("ALIYUN")).isTrue();
+        assertThat(provider.supports("Aliyun")).isTrue();
+        assertThat(provider.supports("tencent")).isFalse();
+        assertThat(provider.supports(null)).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少短信签名时直接失败, 不发起任何网络请求")
-  void shouldFailWithoutNetworkCall_whenSignNameMissing() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
+    @Test
+    @DisplayName("缺少短信签名时直接失败, 不发起任何网络请求")
+    void shouldFailWithoutNetworkCall_whenSignNameMissing() {
+        AtomicBoolean called = new AtomicBoolean(false);
+        AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
 
-    WebhookDeliveryResult result =
-        provider.send(PHONE_NUMBERS, message("{\"templateCode\":\"SMS_123\"}"));
+        WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message("{\"templateCode\":\"SMS_123\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).isEqualTo("missing sms signName");
-    assertThat(called.get()).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).isEqualTo("missing sms signName");
+        assertThat(called.get()).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少模板编号时直接失败, 不发起任何网络请求")
-  void shouldFailWithoutNetworkCall_whenTemplateCodeMissing() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
+    @Test
+    @DisplayName("缺少模板编号时直接失败, 不发起任何网络请求")
+    void shouldFailWithoutNetworkCall_whenTemplateCodeMissing() {
+        AtomicBoolean called = new AtomicBoolean(false);
+        AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
 
-    WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message("{\"signName\":\"阿里云\"}"));
+        WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message("{\"signName\":\"阿里云\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).isEqualTo("missing sms templateCode");
-    assertThat(called.get()).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).isEqualTo("missing sms templateCode");
+        assertThat(called.get()).isFalse();
+    }
 
-  @Test
-  @DisplayName("响应码为成功时判定投递成功, 请求参数与鉴权头按规范构造且签名稳定")
-  void shouldSucceed_whenResponseCodeOk() {
-    AtomicReference<String> sentUrl = new AtomicReference<>();
-    AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
-    AliyunSmsProvider provider =
-        new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
-          @Override
-          protected String acsDate() {
-            return "2026-06-24T00:00:00Z";
-          }
+    @Test
+    @DisplayName("响应码为成功时判定投递成功, 请求参数与鉴权头按规范构造且签名稳定")
+    void shouldSucceed_whenResponseCodeOk() {
+        AtomicReference<String> sentUrl = new AtomicReference<>();
+        AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
+        AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected String acsDate() {
+                return "2026-06-24T00:00:00Z";
+            }
 
-          @Override
-          protected String nonce() {
-            return "fixednonce";
-          }
+            @Override
+            protected String nonce() {
+                return "fixednonce";
+            }
 
-          @Override
-          protected String postJson(String url, Map<String, String> headers) {
-            sentUrl.set(url);
-            sentHeaders.set(headers);
-            return "{\"Code\":\"OK\",\"Message\":\"OK\",\"BizId\":\"x\"}";
-          }
-        };
-
-    WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
-
-    assertThat(result.success()).isTrue();
-    // 结构 / 确定性断言:Action / 模板参数进 query,Authorization 头按 ACS3 构造。
-    assertThat(sentUrl.get()).contains("TemplateCode=SMS_123");
-    assertThat(sentUrl.get()).contains("TemplateParam=");
-    assertThat(sentHeaders.get()).containsEntry("x-acs-action", "SendSms");
-    assertThat(sentHeaders.get()).containsEntry("x-acs-version", "2017-05-25");
-    assertThat(sentHeaders.get().get("Authorization"))
-        .startsWith("ACS3-HMAC-SHA256 Credential=ak-test")
-        .contains("SignedHeaders=")
-        .contains("Signature=");
-    // 签名确定:固定 date/nonce/secret → 相同 signature(防漂移)。
-    String auth1 = sentHeaders.get().get("Authorization");
-    provider.send(PHONE_NUMBERS, message(fullConfig()));
-    assertThat(sentHeaders.get()).containsEntry("Authorization", auth1);
-  }
-
-  @Test
-  @DisplayName("响应码非成功时判定失败, 保留原始业务码作为错误摘要")
-  void shouldFail_whenResponseCodeNotOk() {
-    AliyunSmsProvider provider =
-        new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
-          @Override
-          protected String postJson(String url, Map<String, String> headers) {
-            return "{\"Code\":\"isv.MOBILE_NUMBER_ILLEGAL\",\"Message\":\"bad\"}";
-          }
-        };
-
-    WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isEqualTo(200);
-    assertThat(result.errorSummary()).isEqualTo("sms code=isv.MOBILE_NUMBER_ILLEGAL");
-  }
-
-  @Test
-  @DisplayName("任何一条日志都不出现手机号明文, 只留脱敏信息")
-  void shouldMaskPhoneNumberInLogs() {
-    // 通过自定义 appender 捕获本类日志,断言任何一条都不含手机号明文。
-    Logger logger = (Logger) LoggerFactory.getLogger(AliyunSmsProvider.class);
-    ListAppender appender = new ListAppender();
-    appender.start();
-    logger.addAppender(appender);
-    try {
-      AliyunSmsProvider provider =
-          new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
             @Override
             protected String postJson(String url, Map<String, String> headers) {
-              return "{\"Code\":\"isv.BUSINESS_LIMIT_CONTROL\"}";
+                sentUrl.set(url);
+                sentHeaders.set(headers);
+                return "{\"Code\":\"OK\",\"Message\":\"OK\",\"BizId\":\"x\"}";
             }
-          };
-      WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
-      assertThat(result.success()).isFalse();
-      assertThat(appender.messages).isNotEmpty();
-      for (String msg : appender.messages) {
-        assertThat(msg).doesNotContain(PLAIN_PHONE);
-      }
-    } finally {
-      logger.detachAppender(appender);
-    }
-  }
+        };
 
-  private AliyunSmsProvider providerRecording(
-      AtomicBoolean called, AtomicReference<String> urlSink, String response) {
-    return new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
-      @Override
-      protected String postJson(String url, Map<String, String> headers) {
-        called.set(true);
-        if (urlSink != null) {
-          urlSink.set(url);
+        WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
+
+        assertThat(result.success()).isTrue();
+        // 结构 / 确定性断言:Action / 模板参数进 query,Authorization 头按 ACS3 构造。
+        assertThat(sentUrl.get()).contains("TemplateCode=SMS_123");
+        assertThat(sentUrl.get()).contains("TemplateParam=");
+        assertThat(sentHeaders.get()).containsEntry("x-acs-action", "SendSms");
+        assertThat(sentHeaders.get()).containsEntry("x-acs-version", "2017-05-25");
+        assertThat(sentHeaders.get().get("Authorization"))
+                .startsWith("ACS3-HMAC-SHA256 Credential=ak-test")
+                .contains("SignedHeaders=")
+                .contains("Signature=");
+        // 签名确定:固定 date/nonce/secret → 相同 signature(防漂移)。
+        String auth1 = sentHeaders.get().get("Authorization");
+        provider.send(PHONE_NUMBERS, message(fullConfig()));
+        assertThat(sentHeaders.get()).containsEntry("Authorization", auth1);
+    }
+
+    @Test
+    @DisplayName("响应码非成功时判定失败, 保留原始业务码作为错误摘要")
+    void shouldFail_whenResponseCodeNotOk() {
+        AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected String postJson(String url, Map<String, String> headers) {
+                return "{\"Code\":\"isv.MOBILE_NUMBER_ILLEGAL\",\"Message\":\"bad\"}";
+            }
+        };
+
+        WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isEqualTo(200);
+        assertThat(result.errorSummary()).isEqualTo("sms code=isv.MOBILE_NUMBER_ILLEGAL");
+    }
+
+    @Test
+    @DisplayName("任何一条日志都不出现手机号明文, 只留脱敏信息")
+    void shouldMaskPhoneNumberInLogs() {
+        // 通过自定义 appender 捕获本类日志,断言任何一条都不含手机号明文。
+        Logger logger = (Logger) LoggerFactory.getLogger(AliyunSmsProvider.class);
+        ListAppender appender = new ListAppender();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
+                @Override
+                protected String postJson(String url, Map<String, String> headers) {
+                    return "{\"Code\":\"isv.BUSINESS_LIMIT_CONTROL\"}";
+                }
+            };
+            WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
+            assertThat(result.success()).isFalse();
+            assertThat(appender.messages).isNotEmpty();
+            for (String msg : appender.messages) {
+                assertThat(msg).doesNotContain(PLAIN_PHONE);
+            }
+        } finally {
+            logger.detachAppender(appender);
         }
-        return response;
-      }
-    };
-  }
-
-  /** 捕获 logback 渲染后消息(含 arguments),供净化断言。 */
-  private static final class ListAppender extends AppenderBase<ILoggingEvent> {
-    private final List<String> messages = new ArrayList<>();
-
-    @Override
-    protected void append(ILoggingEvent event) {
-      messages.add(event.getFormattedMessage());
     }
-  }
+
+    private AliyunSmsProvider providerRecording(
+            AtomicBoolean called, AtomicReference<String> urlSink, String response) {
+        return new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected String postJson(String url, Map<String, String> headers) {
+                called.set(true);
+                if (urlSink != null) {
+                    urlSink.set(url);
+                }
+                return response;
+            }
+        };
+    }
+
+    /** 捕获 logback 渲染后消息(含 arguments),供净化断言。 */
+    private static final class ListAppender extends AppenderBase<ILoggingEvent> {
+        private final List<String> messages = new ArrayList<>();
+
+        @Override
+        protected void append(ILoggingEvent event) {
+            messages.add(event.getFormattedMessage());
+        }
+    }
 }

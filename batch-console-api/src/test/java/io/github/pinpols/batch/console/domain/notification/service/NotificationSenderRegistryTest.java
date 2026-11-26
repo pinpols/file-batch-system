@@ -14,44 +14,43 @@ import org.junit.jupiter.api.Test;
 @DisplayName("NotificationSender 注册表按 channelType 解析")
 class NotificationSenderRegistryTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  @Test
-  @DisplayName("WECOM 渠道解析到 WeComNotificationSender（规范渠道值,大小写不敏感）")
-  void shouldResolveWecomChannelToWeComSender() {
-    // arrange
-    WeComNotificationSender weComSender =
-        new WeComNotificationSender(objectMapper, failOnRequest());
-    NotificationSenderRegistry registry = new NotificationSenderRegistry(List.of(weComSender));
+    @Test
+    @DisplayName("WECOM 渠道解析到 WeComNotificationSender（规范渠道值,大小写不敏感）")
+    void shouldResolveWecomChannelToWeComSender() {
+        // arrange
+        WeComNotificationSender weComSender = new WeComNotificationSender(objectMapper, failOnRequest());
+        NotificationSenderRegistry registry = new NotificationSenderRegistry(List.of(weComSender));
 
-    // act / assert：WECOM 是 DDL CHECK/白名单/DictEnum 的规范值，必须能解析到企微 sender。
-    assertThat(registry.resolve("WECOM")).isSameAs(weComSender);
-    assertThat(registry.resolve("wecom")).isSameAs(weComSender);
-  }
+        // act / assert：WECOM 是 DDL CHECK/白名单/DictEnum 的规范值，必须能解析到企微 sender。
+        assertThat(registry.resolve("WECOM")).isSameAs(weComSender);
+        assertThat(registry.resolve("wecom")).isSameAs(weComSender);
+    }
 
-  @Test
-  @DisplayName("历史误值 WECHAT 不再解析到任何 sender")
-  void shouldNotResolveLegacyWechatValue() {
-    // arrange
-    NotificationSenderRegistry registry = new NotificationSenderRegistry(
-        List.of(new WeComNotificationSender(objectMapper, failOnRequest())));
+    @Test
+    @DisplayName("历史误值 WECHAT 不再解析到任何 sender")
+    void shouldNotResolveLegacyWechatValue() {
+        // arrange
+        NotificationSenderRegistry registry =
+                new NotificationSenderRegistry(List.of(new WeComNotificationSender(objectMapper, failOnRequest())));
 
-    // act / assert
-    assertThat(registry.resolve("WECHAT")).isNull();
-    assertThat(registry.resolve(null)).isNull();
-    assertThat(registry.resolve(" ")).isNull();
-  }
+        // act / assert
+        assertThat(registry.resolve("WECHAT")).isNull();
+        assertThat(registry.resolve(null)).isNull();
+        assertThat(registry.resolve(" ")).isNull();
+    }
 
-  @Test
-  @DisplayName("重复渠道键在启动期快速失败")
-  void shouldRejectDuplicateChannelType() {
-    NotificationSender first = mock(NotificationSender.class);
-    NotificationSender second = mock(NotificationSender.class);
-    when(first.channelType()).thenReturn("WECOM");
-    when(second.channelType()).thenReturn("wecom");
+    @Test
+    @DisplayName("重复渠道键在启动期快速失败")
+    void shouldRejectDuplicateChannelType() {
+        NotificationSender first = mock(NotificationSender.class);
+        NotificationSender second = mock(NotificationSender.class);
+        when(first.channelType()).thenReturn("WECOM");
+        when(second.channelType()).thenReturn("wecom");
 
-    assertThatThrownBy(() -> new NotificationSenderRegistry(List.of(first, second)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("duplicate NotificationSender channelType: WECOM");
-  }
+        assertThatThrownBy(() -> new NotificationSenderRegistry(List.of(first, second)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("duplicate NotificationSender channelType: WECOM");
+    }
 }

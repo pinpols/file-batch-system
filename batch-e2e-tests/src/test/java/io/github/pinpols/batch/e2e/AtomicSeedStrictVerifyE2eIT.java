@@ -35,105 +35,102 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>与 {@link AtomicTaskPipelineE2eIT}(参数走 LaunchRequest)互补:这里覆盖"管理员在 job 定义里配好协议、调度只给 jobCode"
  * 的真实使用方式,是严格(真实数据,非合成入参)验证。
  */
-@E2eSpringBootTest(
-    classes = E2eAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@E2eSpringBootTest(classes = E2eAtomicApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @E2eBusinessSchema
 @DisplayName("真实种子作业的原子任务端到端: 执行器协议预置在作业定义默认参数中, 空参触发后经参数合成, 事件投递与专属派发交由对应子执行器执行, 任务终态落库为成功")
 class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Test
-  @DisplayName("sql 类型种子作业: 定义内预置查询协议, 空参触发后经事件投递与专属派发执行, 任务终态落库为成功")
-  void shouldRunSqlSeedTask_whenLaunchCarriesNoParams() {
-    runSeedJob("{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}");
-  }
+    @Test
+    @DisplayName("sql 类型种子作业: 定义内预置查询协议, 空参触发后经事件投递与专属派发执行, 任务终态落库为成功")
+    void shouldRunSqlSeedTask_whenLaunchCarriesNoParams() {
+        runSeedJob("{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}");
+    }
 
-  @Test
-  @DisplayName("shell 类型种子作业: 定义内预置命令与入参, 空参触发后经专属派发执行, 任务终态落库为成功")
-  void shouldRunShellSeedTask_whenLaunchCarriesNoParams() {
-    runSeedJob("{\"taskType\":\"shell\",\"command\":\"/bin/echo\",\"args\":[\"hello-from-spi\"]}");
-  }
+    @Test
+    @DisplayName("shell 类型种子作业: 定义内预置命令与入参, 空参触发后经专属派发执行, 任务终态落库为成功")
+    void shouldRunShellSeedTask_whenLaunchCarriesNoParams() {
+        runSeedJob("{\"taskType\":\"shell\",\"command\":\"/bin/echo\",\"args\":[\"hello-from-spi\"]}");
+    }
 
-  @Test
-  @DisplayName("存储过程类型种子作业: 先建真实过程再以定义内协议空参触发, 经专属派发调用后任务终态落库为成功")
-  void shouldRunStoredProcSeedTask_whenLaunchCarriesNoParams() {
-    final String createProcedureSql = """
+    @Test
+    @DisplayName("存储过程类型种子作业: 先建真实过程再以定义内协议空参触发, 经专属派发调用后任务终态落库为成功")
+    void shouldRunStoredProcSeedTask_whenLaunchCarriesNoParams() {
+        final String createProcedureSql = """
         CREATE OR REPLACE PROCEDURE batch.e2e_seed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$
     """;
 
-    jdbcTemplate.execute(createProcedureSql);
-    runSeedJob("{\"taskType\":\"stored_proc\",\"procedureName\":\"batch.e2e_seed_proc\"}");
-  }
-
-  @Test
-  @DisplayName("http 类型种子作业: 定义内预置请求地址与方法, 空参触发后经专属派发请求本地服务, 任务终态落库为成功")
-  void shouldRunHttpSeedTask_whenLaunchCarriesNoParams() throws IOException {
-    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/ok", exchange -> {
-      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
-      exchange.sendResponseHeaders(200, body.length);
-      try (OutputStream os = exchange.getResponseBody()) {
-        os.write(body);
-      }
-    });
-    server.start();
-    try {
-      String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/ok";
-      runSeedJob("{\"taskType\":\"http\",\"url\":\"" + url + "\",\"method\":\"GET\"}");
-    } finally {
-      server.stop(0);
+        jdbcTemplate.execute(createProcedureSql);
+        runSeedJob("{\"taskType\":\"stored_proc\",\"procedureName\":\"batch.e2e_seed_proc\"}");
     }
-  }
 
-  // ─── helpers ─────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("http 类型种子作业: 定义内预置请求地址与方法, 空参触发后经专属派发请求本地服务, 任务终态落库为成功")
+    void shouldRunHttpSeedTask_whenLaunchCarriesNoParams() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/ok", exchange -> {
+            byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        server.start();
+        try {
+            String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/ok";
+            runSeedJob("{\"taskType\":\"http\",\"url\":\"" + url + "\",\"method\":\"GET\"}");
+        } finally {
+            server.stop(0);
+        }
+    }
 
-  /** 建 SPI job(default_params 携带执行器协议)→ launch(空参)→ 等终态 SUCCESS。 */
-  private void runSeedJob(String defaultParamsJson) {
-    final String updateJobDefinitionSql = """
+    // ─── helpers ─────────────────────────────────────────────────────────────────
+
+    /** 建 SPI job(default_params 携带执行器协议)→ launch(空参)→ 等终态 SUCCESS。 */
+    private void runSeedJob(String defaultParamsJson) {
+        final String updateJobDefinitionSql = """
         update batch.job_definition set default_params = ?::jsonb where tenant_id = ? and job_code = ?\
         """;
-    final String selectTaskStatusSql = """
+        final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
 
-    // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
-    jdbcTemplate.update(updateJobDefinitionSql, defaultParamsJson, TENANT, seed.jobCode());
+        // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
+        jdbcTemplate.update(updateJobDefinitionSql, defaultParamsJson, TENANT, seed.jobCode());
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-atomic-seed",
-        Map.of())); // 不传任何 launch 参数 —— 协议全来自 default_params
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-atomic-seed",
+                Map.of())); // 不传任何 launch 参数 —— 协议全来自 default_params
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("SUCCESS");
-        });
-  }
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("SUCCESS");
+                });
+    }
 }

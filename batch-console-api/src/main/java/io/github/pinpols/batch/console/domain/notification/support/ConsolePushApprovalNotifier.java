@@ -34,161 +34,156 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsolePushApprovalNotifier {
 
-  /** 推送通知正文中审批原因的截断长度，控制移动端通知篇幅；不对应数据库列。 */
-  private static final int PUSH_REASON_MAX_LENGTH = 80;
+    /** 推送通知正文中审批原因的截断长度，控制移动端通知篇幅；不对应数据库列。 */
+    private static final int PUSH_REASON_MAX_LENGTH = 80;
 
-  private final ConsolePushProperties properties;
-  private final ConsolePushApprovalNotificationMapper notificationMapper;
-  private final ConsolePushSender pushSender;
+    private final ConsolePushProperties properties;
+    private final ConsolePushApprovalNotificationMapper notificationMapper;
+    private final ConsolePushSender pushSender;
 
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private ScheduledExecutorService scheduler;
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private ScheduledExecutorService scheduler;
 
-  @PostConstruct
-  void start() {
-    if (!properties.isEnabled() || !properties.getApprovalNotify().isEnabled()) {
-      log.info(
-          "[push] ConsolePushApprovalNotifier disabled (push.enabled or approval-notify.enabled ="
-              + " false)");
-      return;
+    @PostConstruct
+    void start() {
+        if (!properties.isEnabled() || !properties.getApprovalNotify().isEnabled()) {
+            log.info("[push] ConsolePushApprovalNotifier disabled (push.enabled or approval-notify.enabled ="
+                    + " false)");
+            return;
+        }
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "push-approval-notifier");
+            t.setDaemon(true);
+            return t;
+        });
+        long intervalMillis = properties.getApprovalNotify().getPollIntervalMillis();
+        scheduler.scheduleWithFixedDelay(this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        log.info(
+                "[push] ConsolePushApprovalNotifier started, intervalMillis={} lookbackMinutes={}" + " batchSize={}",
+                intervalMillis,
+                properties.getApprovalNotify().getLookbackMinutes(),
+                properties.getApprovalNotify().getBatchSize());
     }
-    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "push-approval-notifier");
-      t.setDaemon(true);
-      return t;
-    });
-    long intervalMillis = properties.getApprovalNotify().getPollIntervalMillis();
-    scheduler.scheduleWithFixedDelay(
-        this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
-    log.info(
-        "[push] ConsolePushApprovalNotifier started, intervalMillis={} lookbackMinutes={}"
-            + " batchSize={}",
-        intervalMillis,
-        properties.getApprovalNotify().getLookbackMinutes(),
-        properties.getApprovalNotify().getBatchSize());
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopScheduler("context-closed");
-  }
-
-  @PreDestroy
-  void stop() {
-    stopScheduler("pre-destroy");
-  }
-
-  private void stopScheduler(String source) {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopScheduler("context-closed");
     }
-    if (scheduler != null) {
-      log.info("[push] ConsolePushApprovalNotifier stopping: source={}", source);
-      scheduler.shutdownNow();
-    }
-  }
 
-  void pollSafely() {
-    if (stopping.get()) {
-      return;
+    @PreDestroy
+    void stop() {
+        stopScheduler("pre-destroy");
     }
-    try {
-      pollOnce();
-    } catch (RuntimeException e) {
-      if (stopping.get() && isShutdownNoise(e)) {
-        String causeSummary = SwallowedExceptionLogger.summary(e);
-        log.info("[push] approval-notify poll skipped during shutdown: {}", causeSummary);
-        return;
-      }
-      log.error("[push] approval-notify poll failed", e);
+
+    private void stopScheduler(String source) {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        if (scheduler != null) {
+            log.info("[push] ConsolePushApprovalNotifier stopping: source={}", source);
+            scheduler.shutdownNow();
+        }
     }
-  }
 
-  void pollOnce() {
-    if (stopping.get()) {
-      return;
+    void pollSafely() {
+        if (stopping.get()) {
+            return;
+        }
+        try {
+            pollOnce();
+        } catch (RuntimeException e) {
+            if (stopping.get() && isShutdownNoise(e)) {
+                String causeSummary = SwallowedExceptionLogger.summary(e);
+                log.info("[push] approval-notify poll skipped during shutdown: {}", causeSummary);
+                return;
+            }
+            log.error("[push] approval-notify poll failed", e);
+        }
     }
-    List<PendingApprovalNotification> pending = notificationMapper.findPending(
-        properties.getApprovalNotify().getLookbackMinutes(),
-        properties.getApprovalNotify().getBatchSize());
-    if (pending.isEmpty()) {
-      return;
+
+    void pollOnce() {
+        if (stopping.get()) {
+            return;
+        }
+        List<PendingApprovalNotification> pending = notificationMapper.findPending(
+                properties.getApprovalNotify().getLookbackMinutes(),
+                properties.getApprovalNotify().getBatchSize());
+        if (pending.isEmpty()) {
+            return;
+        }
+        for (PendingApprovalNotification p : pending) {
+            if (stopping.get()) {
+                return;
+            }
+            ConsolePushApprovalNotificationEntity notification = new ConsolePushApprovalNotificationEntity();
+            notification.setTenantId(p.getTenantId());
+            notification.setApprovalNo(p.getApprovalNo());
+            int inserted = notificationMapper.insertIgnore(notification);
+            if (inserted == 0) {
+                continue;
+            }
+            PushPayload payload = buildPayload(p);
+            pushSender.sendToUser(p.getTenantId(), p.getRequesterId(), payload);
+        }
     }
-    for (PendingApprovalNotification p : pending) {
-      if (stopping.get()) {
-        return;
-      }
-      ConsolePushApprovalNotificationEntity notification =
-          new ConsolePushApprovalNotificationEntity();
-      notification.setTenantId(p.getTenantId());
-      notification.setApprovalNo(p.getApprovalNo());
-      int inserted = notificationMapper.insertIgnore(notification);
-      if (inserted == 0) {
-        continue;
-      }
-      PushPayload payload = buildPayload(p);
-      pushSender.sendToUser(p.getTenantId(), p.getRequesterId(), payload);
+
+    private static PushPayload buildPayload(PendingApprovalNotification p) {
+        String statusLabel = statusLabel(p.getApprovalStatus());
+        String typeLabel = typeLabel(p.getApprovalType());
+        String title = String.format("%s 申请%s", typeLabel, statusLabel);
+        String reason = "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
+        boolean reasonMissing = EmptyChecks.isBlank(reason);
+        String approverId = nullToDash(p.getApproverId());
+        String body = reasonMissing
+                ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
+                : String.format("approver=%s · %s", approverId, truncate(reason, PUSH_REASON_MAX_LENGTH));
+        String tag = "approval-" + p.getApprovalNo();
+        // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
+        // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。
+        String url = "/m/approvals?id=" + p.getApprovalNo();
+        return new PushPayload(title, body, tag, url);
     }
-  }
 
-  private static PushPayload buildPayload(PendingApprovalNotification p) {
-    String statusLabel = statusLabel(p.getApprovalStatus());
-    String typeLabel = typeLabel(p.getApprovalType());
-    String title = String.format("%s 申请%s", typeLabel, statusLabel);
-    String reason =
-        "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-    boolean reasonMissing = EmptyChecks.isBlank(reason);
-    String approverId = nullToDash(p.getApproverId());
-    String body = reasonMissing
-        ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
-        : String.format("approver=%s · %s", approverId, truncate(reason, PUSH_REASON_MAX_LENGTH));
-    String tag = "approval-" + p.getApprovalNo();
-    // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
-    // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。
-    String url = "/m/approvals?id=" + p.getApprovalNo();
-    return new PushPayload(title, body, tag, url);
-  }
-
-  private static String typeLabel(String type) {
-    ApprovalType approvalType = DictEnum.fromCode(ApprovalType.class, type);
-    return EmptyChecks.isNull(approvalType) ? type : approvalType.label();
-  }
-
-  /** 推送标题使用面向结果的措辞（已批准/已驳回），与审批台账字典标签分开维护。 */
-  private static String statusLabel(String status) {
-    ApprovalCommandStatus approvalStatus = DictEnum.fromCode(ApprovalCommandStatus.class, status);
-    if (EmptyChecks.isNull(approvalStatus)) {
-      return status;
+    private static String typeLabel(String type) {
+        ApprovalType approvalType = DictEnum.fromCode(ApprovalType.class, type);
+        return EmptyChecks.isNull(approvalType) ? type : approvalType.label();
     }
-    return switch (approvalStatus) {
-      case APPROVED -> "已批准";
-      case REJECTED -> "已驳回";
-      case EXECUTED -> "已执行";
-      case PENDING -> status;
-    };
-  }
 
-  private static String nullToDash(String s) {
-    return s == null || s.isBlank() ? "-" : s;
-  }
-
-  private static String truncate(String s, int max) {
-    return s.length() <= max ? s : s.substring(0, max) + "…";
-  }
-
-  private static boolean isShutdownNoise(Throwable throwable) {
-    Throwable current = throwable;
-    while (current != null) {
-      String message = current.getMessage();
-      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
-          && (message.contains("has been closed")
-              || message.contains("Connection pool shut down")
-              || message.contains("Interrupted"));
-      if (isConnectionShutdownMessage) {
-        return true;
-      }
-      current = current.getCause();
+    /** 推送标题使用面向结果的措辞（已批准/已驳回），与审批台账字典标签分开维护。 */
+    private static String statusLabel(String status) {
+        ApprovalCommandStatus approvalStatus = DictEnum.fromCode(ApprovalCommandStatus.class, status);
+        if (EmptyChecks.isNull(approvalStatus)) {
+            return status;
+        }
+        return switch (approvalStatus) {
+            case APPROVED -> "已批准";
+            case REJECTED -> "已驳回";
+            case EXECUTED -> "已执行";
+            case PENDING -> status;
+        };
     }
-    return false;
-  }
+
+    private static String nullToDash(String s) {
+        return s == null || s.isBlank() ? "-" : s;
+    }
+
+    private static String truncate(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max) + "…";
+    }
+
+    private static boolean isShutdownNoise(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+                    && (message.contains("has been closed")
+                            || message.contains("Connection pool shut down")
+                            || message.contains("Interrupted"));
+            if (isConnectionShutdownMessage) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 }

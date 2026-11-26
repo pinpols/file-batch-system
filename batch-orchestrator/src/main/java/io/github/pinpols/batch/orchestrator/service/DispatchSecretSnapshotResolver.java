@@ -21,96 +21,87 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchSecretSnapshotResolver {
 
-  private static final Set<String> CHANNEL_KEYS = Set.of(
-      "channelCode",
-      "channel_code",
-      "targetRef",
-      "targetChannelCode",
-      "bundleTargetRef",
-      "dispatchChannelCode");
+    private static final Set<String> CHANNEL_KEYS = Set.of(
+            "channelCode", "channel_code", "targetRef", "targetChannelCode", "bundleTargetRef", "dispatchChannelCode");
 
-  private final DispatchSecretBindingMapper bindingMapper;
+    private final DispatchSecretBindingMapper bindingMapper;
 
-  public Map<String, Object> pin(
-      String tenantId, String jobType, Map<String, Object> effectiveParams) {
-    Map<String, Object> trustedParams = withoutCallerBindings(effectiveParams);
-    if (!JobType.DISPATCH.code().equals(jobType)
-        && !JobType.BUNDLE_DISPATCH.code().equals(jobType)) {
-      return trustedParams;
-    }
-    boolean bundleDispatch = JobType.BUNDLE_DISPATCH.code().equals(jobType);
-    String selectedChannel =
-        bundleDispatch ? null : DispatchChannelSelection.explicitChannel(trustedParams);
-    Set<String> channelCodes;
-    if (bundleDispatch) {
-      channelCodes = BundlePlanParams.dispatchChannelCodes(trustedParams);
-    } else {
-      channelCodes = new LinkedHashSet<>();
-      collectChannels(trustedParams, channelCodes);
-    }
-    if (EmptyChecks.isEmpty(channelCodes)) {
-      return trustedParams;
-    }
-
-    Map<String, Object> pinned = new LinkedHashMap<>(trustedParams);
-    Map<String, Object> bindings = new LinkedHashMap<>();
-    for (DispatchSecretBindingView binding :
-        bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
-      if (EmptyChecks.isNull(binding.secretVersionId())
-          || EmptyChecks.isNull(binding.versionNo())) {
-        // 递归候选可能仅存在于业务元数据；仅明确目标或无明确目标时沿原语义阻断。
-        if (!bundleDispatch
-            && EmptyChecks.isNotNull(selectedChannel)
-            && !selectedChannel.equals(binding.channelCode())) {
-          continue;
+    public Map<String, Object> pin(String tenantId, String jobType, Map<String, Object> effectiveParams) {
+        Map<String, Object> trustedParams = withoutCallerBindings(effectiveParams);
+        if (!JobType.DISPATCH.code().equals(jobType)
+                && !JobType.BUNDLE_DISPATCH.code().equals(jobType)) {
+            return trustedParams;
         }
-        throw BizException.of(
-            ResultCode.CREDENTIAL_REF_UNRESOLVED,
-            ResultCode.CREDENTIAL_REF_UNRESOLVED.detailKey(),
-            binding.channelCode());
-      }
-      Map<String, Object> reference = new LinkedHashMap<>();
-      reference.put("secretRef", binding.secretRef());
-      reference.put("secretVersionId", binding.secretVersionId());
-      reference.put("versionNo", binding.versionNo());
-      bindings.put(binding.channelCode(), reference);
-    }
-    if (EmptyChecks.isNotEmpty(bindings)) {
-      pinned.put(DispatchTaskKeys.SECRET_BINDINGS, bindings);
-    }
-    return pinned;
-  }
-
-  private Map<String, Object> withoutCallerBindings(Map<String, Object> effectiveParams) {
-    if (EmptyChecks.isNull(effectiveParams)
-        || !effectiveParams.containsKey(DispatchTaskKeys.SECRET_BINDINGS)) {
-      return EmptyChecks.isNull(effectiveParams) ? Map.of() : effectiveParams;
-    }
-    Map<String, Object> sanitized = new LinkedHashMap<>(effectiveParams);
-    sanitized.remove(DispatchTaskKeys.SECRET_BINDINGS);
-    return sanitized;
-  }
-
-  private void collectChannels(Object value, Set<String> channels) {
-    if (value instanceof Map<?, ?> map) {
-      for (Map.Entry<?, ?> entry : map.entrySet()) {
-        String key = String.valueOf(entry.getKey());
-        Object nested = entry.getValue();
-        if (CHANNEL_KEYS.contains(key) && EmptyChecks.isNotNull(nested)) {
-          String checkedChannel = String.valueOf(nested);
-          if (EmptyChecks.isNotBlank(checkedChannel)) {
-            String channel = String.valueOf(nested);
-            channels.add(channel.trim());
-          }
+        boolean bundleDispatch = JobType.BUNDLE_DISPATCH.code().equals(jobType);
+        String selectedChannel = bundleDispatch ? null : DispatchChannelSelection.explicitChannel(trustedParams);
+        Set<String> channelCodes;
+        if (bundleDispatch) {
+            channelCodes = BundlePlanParams.dispatchChannelCodes(trustedParams);
+        } else {
+            channelCodes = new LinkedHashSet<>();
+            collectChannels(trustedParams, channelCodes);
         }
-        collectChannels(nested, channels);
-      }
-      return;
+        if (EmptyChecks.isEmpty(channelCodes)) {
+            return trustedParams;
+        }
+
+        Map<String, Object> pinned = new LinkedHashMap<>(trustedParams);
+        Map<String, Object> bindings = new LinkedHashMap<>();
+        for (DispatchSecretBindingView binding :
+                bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
+            if (EmptyChecks.isNull(binding.secretVersionId()) || EmptyChecks.isNull(binding.versionNo())) {
+                // 递归候选可能仅存在于业务元数据；仅明确目标或无明确目标时沿原语义阻断。
+                if (!bundleDispatch
+                        && EmptyChecks.isNotNull(selectedChannel)
+                        && !selectedChannel.equals(binding.channelCode())) {
+                    continue;
+                }
+                throw BizException.of(
+                        ResultCode.CREDENTIAL_REF_UNRESOLVED,
+                        ResultCode.CREDENTIAL_REF_UNRESOLVED.detailKey(),
+                        binding.channelCode());
+            }
+            Map<String, Object> reference = new LinkedHashMap<>();
+            reference.put("secretRef", binding.secretRef());
+            reference.put("secretVersionId", binding.secretVersionId());
+            reference.put("versionNo", binding.versionNo());
+            bindings.put(binding.channelCode(), reference);
+        }
+        if (EmptyChecks.isNotEmpty(bindings)) {
+            pinned.put(DispatchTaskKeys.SECRET_BINDINGS, bindings);
+        }
+        return pinned;
     }
-    if (value instanceof Iterable<?> values) {
-      for (Object item : values) {
-        collectChannels(item, channels);
-      }
+
+    private Map<String, Object> withoutCallerBindings(Map<String, Object> effectiveParams) {
+        if (EmptyChecks.isNull(effectiveParams) || !effectiveParams.containsKey(DispatchTaskKeys.SECRET_BINDINGS)) {
+            return EmptyChecks.isNull(effectiveParams) ? Map.of() : effectiveParams;
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>(effectiveParams);
+        sanitized.remove(DispatchTaskKeys.SECRET_BINDINGS);
+        return sanitized;
     }
-  }
+
+    private void collectChannels(Object value, Set<String> channels) {
+        if (value instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                Object nested = entry.getValue();
+                if (CHANNEL_KEYS.contains(key) && EmptyChecks.isNotNull(nested)) {
+                    String checkedChannel = String.valueOf(nested);
+                    if (EmptyChecks.isNotBlank(checkedChannel)) {
+                        String channel = String.valueOf(nested);
+                        channels.add(channel.trim());
+                    }
+                }
+                collectChannels(nested, channels);
+            }
+            return;
+        }
+        if (value instanceof Iterable<?> values) {
+            for (Object item : values) {
+                collectChannels(item, channels);
+            }
+        }
+    }
 }

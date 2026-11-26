@@ -14,21 +14,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AlertNotificationReceiptService {
-  private final AlertNotificationReceiptMapper mapper;
+    private final AlertNotificationReceiptMapper mapper;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void recordDelivered(
-      String tenantId, String receiver, AlertmanagerWebhookPayload payload) {
-    mapper.bindTenant(tenantId);
-    for (AlertmanagerAlert alert : payload.safeAlerts()) {
-      String fingerprint = alert.label("fingerprint");
-      String alertTenant = alert.label("tenant");
-      if (!tenantId.equals(alertTenant) || EmptyChecks.isBlank(fingerprint)) {
-        continue;
-      }
-      AlertNotificationReceiptCommand command = new AlertNotificationReceiptCommand(
-          tenantId, fingerprint, alert.label("alertname"), receiver, alert.status());
-      mapper.recordDelivered(command);
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordDelivered(String tenantId, String receiver, AlertmanagerWebhookPayload payload) {
+        mapper.bindTenant(tenantId);
+        for (AlertmanagerAlert alert : payload.safeAlerts()) {
+            String fingerprint = alert.label("fingerprint");
+            String alertTenant = alert.label("tenant");
+            if (!tenantId.equals(alertTenant) || EmptyChecks.isBlank(fingerprint)) {
+                continue;
+            }
+            AlertNotificationReceiptCommand command = new AlertNotificationReceiptCommand(
+                    tenantId, fingerprint, alert.label("alertname"), receiver, alert.status());
+            mapper.recordDelivered(command);
+        }
     }
-  }
 }

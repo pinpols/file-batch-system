@@ -11,26 +11,26 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleGovernanceParameterService {
 
-  private final ConsoleSystemParameterService parameterService;
-  private final ConsoleGovernanceParameterPolicy governancePolicy;
+    private final ConsoleSystemParameterService parameterService;
+    private final ConsoleGovernanceParameterPolicy governancePolicy;
 
-  public Map<String, String> list(String tenantId) {
-    Map<String, String> effectiveValues = new LinkedHashMap<>();
-    governancePolicy.defaultValues().forEach((key, defaultValue) -> {
-      String value = parameterService.getValue(tenantId, key).orElse(defaultValue);
-      effectiveValues.put(key, value);
-    });
-    return effectiveValues;
-  }
-
-  public void update(String tenantId, String key, String value, String operator) {
-    if (!governancePolicy.isGovernanceKey(key)) {
-      return;
+    public Map<String, String> list(String tenantId) {
+        Map<String, String> effectiveValues = new LinkedHashMap<>();
+        governancePolicy.defaultValues().forEach((key, defaultValue) -> {
+            String value = parameterService.getValue(tenantId, key).orElse(defaultValue);
+            effectiveValues.put(key, value);
+        });
+        return effectiveValues;
     }
-    parameterService.upsert(tenantId, key, value, governancePolicy.description(key), operator);
-  }
 
-  public void reset(String tenantId, String key) {
-    parameterService.delete(tenantId, key);
-  }
+    public void update(String tenantId, String key, String value, String operator) {
+        if (!governancePolicy.isGovernanceKey(key)) {
+            return;
+        }
+        parameterService.upsert(tenantId, key, value, governancePolicy.description(key), operator);
+    }
+
+    public void reset(String tenantId, String key) {
+        parameterService.delete(tenantId, key);
+    }
 }

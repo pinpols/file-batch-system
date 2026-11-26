@@ -37,93 +37,93 @@ import org.springframework.test.context.TestPropertySource;
 @DisplayName("分发熔断上下文冒烟:熔断自动配置可无害装配,共享与自持注册表的状态指标都真实埋入")
 class DispatchChannelCircuitBreakerContextSmokeTest {
 
-  @Autowired
-  private DispatchChannelCircuitBreaker circuitBreaker;
+    @Autowired
+    private DispatchChannelCircuitBreaker circuitBreaker;
 
-  @Autowired
-  private CircuitBreakerRegistry circuitBreakerRegistry;
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
 
-  @Autowired
-  private MeterRegistry meterRegistry;
+    @Autowired
+    private MeterRegistry meterRegistry;
 
-  @Test
-  @DisplayName("上下文启动后熔断注册表与熔断器均已装配,首次请求放行且开路数为零")
-  void shouldWireCircuitBreakerBeans_whenContextStarts() {
-    assertThat(circuitBreakerRegistry)
-        .as("R4J autoconfig must provide CircuitBreakerRegistry")
-        .isNotNull();
-    assertThat(circuitBreaker).isNotNull();
-    assertThat(circuitBreaker.allow("t1|API|ch-1")).isTrue();
-    assertThat(circuitBreaker.currentOpenCircuits()).isZero();
-  }
-
-  /**
-   * B3:验证本模块上下文里 R4J metrics 绑定链真活着(SB4/JDK25 下 CircuitBreakerMetricsAutoConfiguration
-   * 未被静默剔除)。用<b>共享 autoconfig registry</b> 建一个探针熔断器,断言 {@code resilience4j.circuitbreaker.state}
-   * 确被埋入——绑定链一旦断裂会「零 CB 指标而测试仍绿」,这条守住它。
-   *
-   * <p><b>覆盖边界(如实说明)</b>:这里断言的只是<b>共享 autoconfig registry</b> 的绑定链,与 {@link
-   * DispatchChannelCircuitBreaker} 自持的 per-key registry 相互独立(见类注释)。自持 registry 的绑定见下方 {@link
-   * #circuitBreakerMetricsBindsStateMeter_selfHeldRegistry()}。
-   */
-  @Test
-  @DisplayName("共享注册表建出熔断器后,状态指标出现在注入的指标注册表里")
-  void circuitBreakerMetricsAutoconfigBindsStateMeter_sharedRegistryOnly() {
-    circuitBreakerRegistry.circuitBreaker("dispatch-smoke-probe");
-
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
-        .as("metrics autoconfig must bind circuitbreaker.state gauge in worker-dispatch context")
-        .isNotEmpty();
-  }
-
-  /**
-   * #783 B3 覆盖缺口补齐:{@link DispatchChannelCircuitBreaker} 自持 per-key registry 不接共享 autoconfig
-   * registry,之前只有 {@code batch.dispatch.circuits.open} 聚合 gauge、没有 R4J 明细指标覆盖。这里让某个 key 熔断
-   * OPEN,断言注入的 {@link MeterRegistry} 里真出现该 breaker 的 {@code resilience4j.circuitbreaker.state}
-   * meter(带 {@code name} tag 定位到具体 key),验证 {@code TaggedCircuitBreakerMetrics} 绑定链在 Spring 上下文里真活着。
-   *
-   * <p><b>为何要在本用例之后 dirty 上下文</b>:它会把自己持有的 registry 里某个 key 打成 OPEN 且<b>不复位</b>,而
-   * {@link #shouldWireCircuitBreakerBeans_whenContextStarts()} 断言的是同一 registry 的全局
-   * {@code currentOpenCircuits()} 为 0。JUnit 5 默认方法执行顺序由方法名派生,重命名会改变顺序——不做隔离时
-   * "开局无开路"的断言就会随执行顺序时红时绿。{@code AFTER_METHOD} 保证本用例之后各用例拿到干净上下文,与顺序无关。
-   */
-  @Test
-  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
-  @DisplayName("自持注册表的渠道熔断后,注入的指标注册表里出现该渠道自己的状态指标")
-  void circuitBreakerMetricsBindsStateMeter_selfHeldRegistry() {
-    String key = "t-smoke|API|ch-smoke";
-    // 默认 failureThreshold=5(见 DispatchCircuitBreakerProperties 默认值)
-    for (int i = 0; i < 5; i++) {
-      circuitBreaker.allow(key);
-      circuitBreaker.recordFailure(key);
-    }
-    assertThat(circuitBreaker.allow(key)).as("breaker for key must be OPEN").isFalse();
-
-    assertThat(meterRegistry
-            .find("resilience4j.circuitbreaker.state")
-            .tag("name", key)
-            .meters())
-        .as("self-held registry breaker state must be bound to the injected MeterRegistry")
-        .isNotEmpty();
-  }
-
-  @SpringBootConfiguration
-  @EnableConfigurationProperties(DispatchCircuitBreakerProperties.class)
-  @ImportAutoConfiguration({
-    CircuitBreakerAutoConfiguration.class,
-    CircuitBreakerMetricsAutoConfiguration.class,
-  })
-  static class SmokeApp {
-
-    @Bean
-    MeterRegistry meterRegistry() {
-      return new SimpleMeterRegistry();
+    @Test
+    @DisplayName("上下文启动后熔断注册表与熔断器均已装配,首次请求放行且开路数为零")
+    void shouldWireCircuitBreakerBeans_whenContextStarts() {
+        assertThat(circuitBreakerRegistry)
+                .as("R4J autoconfig must provide CircuitBreakerRegistry")
+                .isNotNull();
+        assertThat(circuitBreaker).isNotNull();
+        assertThat(circuitBreaker.allow("t1|API|ch-1")).isTrue();
+        assertThat(circuitBreaker.currentOpenCircuits()).isZero();
     }
 
-    @Bean
-    DispatchChannelCircuitBreaker dispatchChannelCircuitBreaker(
-        DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
-      return new DispatchChannelCircuitBreaker(properties, meterRegistry);
+    /**
+     * B3:验证本模块上下文里 R4J metrics 绑定链真活着(SB4/JDK25 下 CircuitBreakerMetricsAutoConfiguration
+     * 未被静默剔除)。用<b>共享 autoconfig registry</b> 建一个探针熔断器,断言 {@code resilience4j.circuitbreaker.state}
+     * 确被埋入——绑定链一旦断裂会「零 CB 指标而测试仍绿」,这条守住它。
+     *
+     * <p><b>覆盖边界(如实说明)</b>:这里断言的只是<b>共享 autoconfig registry</b> 的绑定链,与 {@link
+     * DispatchChannelCircuitBreaker} 自持的 per-key registry 相互独立(见类注释)。自持 registry 的绑定见下方 {@link
+     * #circuitBreakerMetricsBindsStateMeter_selfHeldRegistry()}。
+     */
+    @Test
+    @DisplayName("共享注册表建出熔断器后,状态指标出现在注入的指标注册表里")
+    void circuitBreakerMetricsAutoconfigBindsStateMeter_sharedRegistryOnly() {
+        circuitBreakerRegistry.circuitBreaker("dispatch-smoke-probe");
+
+        assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
+                .as("metrics autoconfig must bind circuitbreaker.state gauge in worker-dispatch context")
+                .isNotEmpty();
     }
-  }
+
+    /**
+     * #783 B3 覆盖缺口补齐:{@link DispatchChannelCircuitBreaker} 自持 per-key registry 不接共享 autoconfig
+     * registry,之前只有 {@code batch.dispatch.circuits.open} 聚合 gauge、没有 R4J 明细指标覆盖。这里让某个 key 熔断
+     * OPEN,断言注入的 {@link MeterRegistry} 里真出现该 breaker 的 {@code resilience4j.circuitbreaker.state}
+     * meter(带 {@code name} tag 定位到具体 key),验证 {@code TaggedCircuitBreakerMetrics} 绑定链在 Spring 上下文里真活着。
+     *
+     * <p><b>为何要在本用例之后 dirty 上下文</b>:它会把自己持有的 registry 里某个 key 打成 OPEN 且<b>不复位</b>,而
+     * {@link #shouldWireCircuitBreakerBeans_whenContextStarts()} 断言的是同一 registry 的全局
+     * {@code currentOpenCircuits()} 为 0。JUnit 5 默认方法执行顺序由方法名派生,重命名会改变顺序——不做隔离时
+     * "开局无开路"的断言就会随执行顺序时红时绿。{@code AFTER_METHOD} 保证本用例之后各用例拿到干净上下文,与顺序无关。
+     */
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    @DisplayName("自持注册表的渠道熔断后,注入的指标注册表里出现该渠道自己的状态指标")
+    void circuitBreakerMetricsBindsStateMeter_selfHeldRegistry() {
+        String key = "t-smoke|API|ch-smoke";
+        // 默认 failureThreshold=5(见 DispatchCircuitBreakerProperties 默认值)
+        for (int i = 0; i < 5; i++) {
+            circuitBreaker.allow(key);
+            circuitBreaker.recordFailure(key);
+        }
+        assertThat(circuitBreaker.allow(key)).as("breaker for key must be OPEN").isFalse();
+
+        assertThat(meterRegistry
+                        .find("resilience4j.circuitbreaker.state")
+                        .tag("name", key)
+                        .meters())
+                .as("self-held registry breaker state must be bound to the injected MeterRegistry")
+                .isNotEmpty();
+    }
+
+    @SpringBootConfiguration
+    @EnableConfigurationProperties(DispatchCircuitBreakerProperties.class)
+    @ImportAutoConfiguration({
+        CircuitBreakerAutoConfiguration.class,
+        CircuitBreakerMetricsAutoConfiguration.class,
+    })
+    static class SmokeApp {
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+
+        @Bean
+        DispatchChannelCircuitBreaker dispatchChannelCircuitBreaker(
+                DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
+            return new DispatchChannelCircuitBreaker(properties, meterRegistry);
+        }
+    }
 }

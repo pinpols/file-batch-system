@@ -26,59 +26,59 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Worker 指纹接口:列表与汇总两端点透传查询服务结果, 并包装为统一响应")
 class ConsoleWorkerFingerprintControllerTest {
 
-  @Mock
-  private ConsoleWorkerFingerprintQueryService queryService;
+    @Mock
+    private ConsoleWorkerFingerprintQueryService queryService;
 
-  @Mock
-  private ConsoleResponseFactory responseFactory;
+    @Mock
+    private ConsoleResponseFactory responseFactory;
 
-  @InjectMocks
-  private ConsoleWorkerFingerprintController controller;
+    @InjectMocks
+    private ConsoleWorkerFingerprintController controller;
 
-  @Test
-  @DisplayName("指纹列表:查询结果逐字段回填, 版本与状态与构造一致")
-  void shouldReturnQueryServiceRows_whenListingFingerprints() {
-    WorkerFingerprintResponse row = new WorkerFingerprintResponse(
-        1L,
-        "tx",
-        "w-1",
-        "build-2026.06.02-a",
-        "pid-42",
-        "1.4.0",
-        "ONLINE",
-        Instant.parse("2026-06-02T10:00:00Z"),
-        new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, "1.4.0", "v1"));
-    when(queryService.list("tx")).thenReturn(List.of(row));
-    when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintResponse>>any()))
-        .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
+    @Test
+    @DisplayName("指纹列表:查询结果逐字段回填, 版本与状态与构造一致")
+    void shouldReturnQueryServiceRows_whenListingFingerprints() {
+        WorkerFingerprintResponse row = new WorkerFingerprintResponse(
+                1L,
+                "tx",
+                "w-1",
+                "build-2026.06.02-a",
+                "pid-42",
+                "1.4.0",
+                "ONLINE",
+                Instant.parse("2026-06-02T10:00:00Z"),
+                new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, "1.4.0", "v1"));
+        when(queryService.list("tx")).thenReturn(List.of(row));
+        when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintResponse>>any()))
+                .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
 
-    CommonResponse<List<WorkerFingerprintResponse>> resp = controller.list("tx");
+        CommonResponse<List<WorkerFingerprintResponse>> resp = controller.list("tx");
 
-    assertThat(resp.data()).singleElement().satisfies(r -> {
-      assertThat(r.workerCode()).isEqualTo("w-1");
-      assertThat(r.buildId()).isEqualTo("build-2026.06.02-a");
-      assertThat(r.sdkVersion()).isEqualTo("1.4.0");
-      assertThat(r.processId()).isEqualTo("pid-42");
-      assertThat(r.status()).isEqualTo("ONLINE");
-      assertThat(r.heartbeatAt()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
-      assertThat(r.compatibility().status()).isEqualTo(Status.OK);
-      assertThat(r.compatibility().reasonCode()).isEqualTo(ReasonCode.COMPATIBLE);
-    });
-  }
+        assertThat(resp.data()).singleElement().satisfies(r -> {
+            assertThat(r.workerCode()).isEqualTo("w-1");
+            assertThat(r.buildId()).isEqualTo("build-2026.06.02-a");
+            assertThat(r.sdkVersion()).isEqualTo("1.4.0");
+            assertThat(r.processId()).isEqualTo("pid-42");
+            assertThat(r.status()).isEqualTo("ONLINE");
+            assertThat(r.heartbeatAt()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
+            assertThat(r.compatibility().status()).isEqualTo(Status.OK);
+            assertThat(r.compatibility().reasonCode()).isEqualTo(ReasonCode.COMPATIBLE);
+        });
+    }
 
-  @Test
-  @DisplayName("指纹汇总:按构建分组返回, 数量与构造一致")
-  void shouldReturnQueryServiceSummary_whenSummarizingFingerprints() {
-    when(queryService.summary("tx"))
-        .thenReturn(List.of(new WorkerFingerprintSummaryResponse("build-A", "1.4.0", 5L)));
-    when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintSummaryResponse>>any()))
-        .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
+    @Test
+    @DisplayName("指纹汇总:按构建分组返回, 数量与构造一致")
+    void shouldReturnQueryServiceSummary_whenSummarizingFingerprints() {
+        when(queryService.summary("tx"))
+                .thenReturn(List.of(new WorkerFingerprintSummaryResponse("build-A", "1.4.0", 5L)));
+        when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintSummaryResponse>>any()))
+                .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
 
-    List<WorkerFingerprintSummaryResponse> data = controller.summary("tx").data();
+        List<WorkerFingerprintSummaryResponse> data = controller.summary("tx").data();
 
-    assertThat(data)
-        .singleElement()
-        .extracting(WorkerFingerprintSummaryResponse::count)
-        .isEqualTo(5L);
-  }
+        assertThat(data)
+                .singleElement()
+                .extracting(WorkerFingerprintSummaryResponse::count)
+                .isEqualTo(5L);
+    }
 }

@@ -32,155 +32,155 @@ import org.springframework.stereotype.Component;
 @Component
 public class GenerateCursorCodec {
 
-  /** 位点 marker:文件已 fsync 到的字节偏移 + 下一页起始 cursor 的编码。 */
-  public record Marker(long byteOffset, String encodedCursor) {}
+    /** 位点 marker:文件已 fsync 到的字节偏移 + 下一页起始 cursor 的编码。 */
+    public record Marker(long byteOffset, String encodedCursor) {}
 
-  /**
-   * 把 cursor 编码为 {@code "<TYPE>|<value>"};复合游标为 {@code "K|<len>:<part>..."}。不支持的类型(含 null)返回 empty。
-   *
-   * @param cursor keyset 分页 cursor(下一页的起点值,单值或排序键列表)
-   */
-  public Optional<String> encodeCursor(Object cursor) {
-    if (cursor == null) {
-      return Optional.empty();
-    }
-    if (cursor instanceof List<?> values) {
-      return encodeTuple(values);
-    }
-    if (cursor instanceof Long v) {
-      return Optional.of("L|" + v);
-    }
-    if (cursor instanceof Integer || cursor instanceof Short || cursor instanceof Byte) {
-      int integerValue = ((Number) cursor).intValue();
-      return Optional.of("I|" + integerValue);
-    }
-    if (cursor instanceof BigInteger v) {
-      return Optional.of("BI|" + v);
-    }
-    if (cursor instanceof BigDecimal v) {
-      return Optional.of("D|" + v.toPlainString());
-    }
-    if (cursor instanceof Double || cursor instanceof Float) {
-      double numericValue = ((Number) cursor).doubleValue();
-      BigDecimal decimalValue = BigDecimal.valueOf(numericValue);
-      String encodedValue = decimalValue.toPlainString();
-      return Optional.of("D|" + encodedValue);
-    }
-    if (cursor instanceof Boolean v) {
-      return Optional.of("B|" + v);
-    }
-    if (cursor instanceof Timestamp v) {
-      // 纳秒精度经 Instant 往返保真;还原为 java.sql.Timestamp 以匹配 timestamp(tz) 列绑定。
-      Instant instant = v.toInstant();
-      String encodedInstant = instant.toString();
-      return Optional.of("TS|" + encodedInstant);
-    }
-    if (cursor instanceof Instant v) {
-      return Optional.of("TS|" + v);
-    }
-    if (cursor instanceof LocalDateTime v) {
-      return Optional.of("LDT|" + v);
-    }
-    if (cursor instanceof Date v) {
-      return Optional.of("DT|" + v); // yyyy-MM-dd
-    }
-    if (cursor instanceof LocalDate v) {
-      return Optional.of("DT|" + v);
-    }
-    if (cursor instanceof String v) {
-      return Optional.of("S|" + v);
-    }
-    // UUID / 其他:无法安全绑回(uuid > text 无操作符)→ 不支持,调用方降级全量重跑。
-    return Optional.empty();
-  }
-
-  private Optional<String> encodeTuple(List<?> values) {
-    if (EmptyChecks.isEmpty(values)) {
-      return Optional.empty();
-    }
-    StringBuilder encoded = new StringBuilder("K|");
-    for (Object value : values) {
-      Optional<String> part = encodeCursor(value);
-      if (part.isEmpty()) { // empty-check: allow - Optional 没有共享空判断工具
+    /**
+     * 把 cursor 编码为 {@code "<TYPE>|<value>"};复合游标为 {@code "K|<len>:<part>..."}。不支持的类型(含 null)返回 empty。
+     *
+     * @param cursor keyset 分页 cursor(下一页的起点值,单值或排序键列表)
+     */
+    public Optional<String> encodeCursor(Object cursor) {
+        if (cursor == null) {
+            return Optional.empty();
+        }
+        if (cursor instanceof List<?> values) {
+            return encodeTuple(values);
+        }
+        if (cursor instanceof Long v) {
+            return Optional.of("L|" + v);
+        }
+        if (cursor instanceof Integer || cursor instanceof Short || cursor instanceof Byte) {
+            int integerValue = ((Number) cursor).intValue();
+            return Optional.of("I|" + integerValue);
+        }
+        if (cursor instanceof BigInteger v) {
+            return Optional.of("BI|" + v);
+        }
+        if (cursor instanceof BigDecimal v) {
+            return Optional.of("D|" + v.toPlainString());
+        }
+        if (cursor instanceof Double || cursor instanceof Float) {
+            double numericValue = ((Number) cursor).doubleValue();
+            BigDecimal decimalValue = BigDecimal.valueOf(numericValue);
+            String encodedValue = decimalValue.toPlainString();
+            return Optional.of("D|" + encodedValue);
+        }
+        if (cursor instanceof Boolean v) {
+            return Optional.of("B|" + v);
+        }
+        if (cursor instanceof Timestamp v) {
+            // 纳秒精度经 Instant 往返保真;还原为 java.sql.Timestamp 以匹配 timestamp(tz) 列绑定。
+            Instant instant = v.toInstant();
+            String encodedInstant = instant.toString();
+            return Optional.of("TS|" + encodedInstant);
+        }
+        if (cursor instanceof Instant v) {
+            return Optional.of("TS|" + v);
+        }
+        if (cursor instanceof LocalDateTime v) {
+            return Optional.of("LDT|" + v);
+        }
+        if (cursor instanceof Date v) {
+            return Optional.of("DT|" + v); // yyyy-MM-dd
+        }
+        if (cursor instanceof LocalDate v) {
+            return Optional.of("DT|" + v);
+        }
+        if (cursor instanceof String v) {
+            return Optional.of("S|" + v);
+        }
+        // UUID / 其他:无法安全绑回(uuid > text 无操作符)→ 不支持,调用方降级全量重跑。
         return Optional.empty();
-      }
-      String text = part.get();
-      encoded.append(text.length()).append(':').append(text);
     }
-    return Optional.of(encoded.toString());
-  }
 
-  /**
-   * 把 {@link #encodeCursor} 的输出还原为精确 Java 类型。marker 损坏 / 标签未知时抛 {@link
-   * IllegalArgumentException},调用方按「位点损坏 → 从头跑」回退。
-   */
-  public Object decodeCursor(String encoded) {
-    if (encoded == null) {
-      throw new IllegalArgumentException("null cursor marker");
+    private Optional<String> encodeTuple(List<?> values) {
+        if (EmptyChecks.isEmpty(values)) {
+            return Optional.empty();
+        }
+        StringBuilder encoded = new StringBuilder("K|");
+        for (Object value : values) {
+            Optional<String> part = encodeCursor(value);
+            if (part.isEmpty()) { // empty-check: allow - Optional 没有共享空判断工具
+                return Optional.empty();
+            }
+            String text = part.get();
+            encoded.append(text.length()).append(':').append(text);
+        }
+        return Optional.of(encoded.toString());
     }
-    int sep = encoded.indexOf('|');
-    if (sep < 0) {
-      throw new IllegalArgumentException("malformed cursor marker: " + encoded);
-    }
-    String type = encoded.substring(0, sep);
-    String value = encoded.substring(sep + 1);
-    return switch (type) {
-      case "L" -> Long.valueOf(value);
-      case "I" -> Integer.valueOf(value);
-      case "BI" -> new BigInteger(value);
-      case "D" -> new BigDecimal(value);
-      case "B" -> Boolean.valueOf(value);
-      case "TS" -> {
-        Instant parsedInstant = Instant.parse(value);
-        yield Timestamp.from(parsedInstant);
-      }
-      case "LDT" -> LocalDateTime.parse(value);
-      case "DT" -> Date.valueOf(value);
-      case "S" -> value;
-      case "K" -> decodeTuple(value);
-      default -> throw new IllegalArgumentException("unknown cursor type tag: " + type);
-    };
-  }
 
-  private List<Object> decodeTuple(String encoded) {
-    List<Object> values = new ArrayList<>();
-    int index = 0;
-    while (index < encoded.length()) {
-      int colon = encoded.indexOf(':', index);
-      if (colon <= index) {
-        throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
-      }
-      int length = Integer.parseInt(encoded.substring(index, colon));
-      int start = colon + 1;
-      int end = start + length;
-      if (length < 0 || end > encoded.length()) {
-        throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
-      }
-      values.add(decodeCursor(encoded.substring(start, end)));
-      index = end;
+    /**
+     * 把 {@link #encodeCursor} 的输出还原为精确 Java 类型。marker 损坏 / 标签未知时抛 {@link
+     * IllegalArgumentException},调用方按「位点损坏 → 从头跑」回退。
+     */
+    public Object decodeCursor(String encoded) {
+        if (encoded == null) {
+            throw new IllegalArgumentException("null cursor marker");
+        }
+        int sep = encoded.indexOf('|');
+        if (sep < 0) {
+            throw new IllegalArgumentException("malformed cursor marker: " + encoded);
+        }
+        String type = encoded.substring(0, sep);
+        String value = encoded.substring(sep + 1);
+        return switch (type) {
+            case "L" -> Long.valueOf(value);
+            case "I" -> Integer.valueOf(value);
+            case "BI" -> new BigInteger(value);
+            case "D" -> new BigDecimal(value);
+            case "B" -> Boolean.valueOf(value);
+            case "TS" -> {
+                Instant parsedInstant = Instant.parse(value);
+                yield Timestamp.from(parsedInstant);
+            }
+            case "LDT" -> LocalDateTime.parse(value);
+            case "DT" -> Date.valueOf(value);
+            case "S" -> value;
+            case "K" -> decodeTuple(value);
+            default -> throw new IllegalArgumentException("unknown cursor type tag: " + type);
+        };
     }
-    if (EmptyChecks.isEmpty(values)) {
-      throw new IllegalArgumentException("empty tuple cursor");
-    }
-    return List.copyOf(values);
-  }
 
-  /** marker = {@code "<byteOffset>@<encodedCursor>"}。 */
-  public String encodeMarker(long byteOffset, String encodedCursor) {
-    return byteOffset + "@" + encodedCursor;
-  }
+    private List<Object> decodeTuple(String encoded) {
+        List<Object> values = new ArrayList<>();
+        int index = 0;
+        while (index < encoded.length()) {
+            int colon = encoded.indexOf(':', index);
+            if (colon <= index) {
+                throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
+            }
+            int length = Integer.parseInt(encoded.substring(index, colon));
+            int start = colon + 1;
+            int end = start + length;
+            if (length < 0 || end > encoded.length()) {
+                throw new IllegalArgumentException("malformed tuple cursor: " + encoded);
+            }
+            values.add(decodeCursor(encoded.substring(start, end)));
+            index = end;
+        }
+        if (EmptyChecks.isEmpty(values)) {
+            throw new IllegalArgumentException("empty tuple cursor");
+        }
+        return List.copyOf(values);
+    }
 
-  /** 解析 marker;首个 {@code '@'} 之前是 byteOffset,之后(可含 {@code '@'})是 encodedCursor。 */
-  public Marker decodeMarker(String marker) {
-    if (marker == null) {
-      throw new IllegalArgumentException("null marker");
+    /** marker = {@code "<byteOffset>@<encodedCursor>"}。 */
+    public String encodeMarker(long byteOffset, String encodedCursor) {
+        return byteOffset + "@" + encodedCursor;
     }
-    int at = marker.indexOf('@');
-    if (at <= 0) {
-      throw new IllegalArgumentException("malformed marker: " + marker);
+
+    /** 解析 marker;首个 {@code '@'} 之前是 byteOffset,之后(可含 {@code '@'})是 encodedCursor。 */
+    public Marker decodeMarker(String marker) {
+        if (marker == null) {
+            throw new IllegalArgumentException("null marker");
+        }
+        int at = marker.indexOf('@');
+        if (at <= 0) {
+            throw new IllegalArgumentException("malformed marker: " + marker);
+        }
+        long offset = Long.parseLong(marker.substring(0, at));
+        String encodedCursor = marker.substring(at + 1);
+        return new Marker(offset, encodedCursor);
     }
-    long offset = Long.parseLong(marker.substring(0, at));
-    String encodedCursor = marker.substring(at + 1);
-    return new Marker(offset, encodedCursor);
-  }
 }

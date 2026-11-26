@@ -6,20 +6,20 @@ import java.util.Map;
 /** Console 应用服务共用的轻量 Map 转换逻辑。 */
 public final class ConsoleMapSupport {
 
-  private ConsoleMapSupport() {}
+    private ConsoleMapSupport() {}
 
-  public static Long longValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    public static Long longValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return value == null ? null : Long.valueOf(String.valueOf(value));
     }
-    return value == null ? null : Long.valueOf(String.valueOf(value));
-  }
 
-  public static Map<String, Object> mapOf(Object... pairs) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (int i = 0; i < pairs.length; i += 2) {
-      result.put(String.valueOf(pairs[i]), pairs[i + 1]);
+    public static Map<String, Object> mapOf(Object... pairs) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            result.put(String.valueOf(pairs[i]), pairs[i + 1]);
+        }
+        return result;
     }
-    return result;
-  }
 }

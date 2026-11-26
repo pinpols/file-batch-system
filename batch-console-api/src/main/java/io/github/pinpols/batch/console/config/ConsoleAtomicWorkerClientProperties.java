@@ -17,15 +17,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.atomic-worker")
 public class ConsoleAtomicWorkerClientProperties {
 
-  /** 是否启用 Console 反向 HTTP 拉取 atomic worker 运行时快照。默认 true。 */
-  private boolean enabled = true;
+    /** 是否启用 Console 反向 HTTP 拉取 atomic worker 运行时快照。默认 true。 */
+    private boolean enabled = true;
 
-  /** atomic worker 的 base URL(含 scheme + host + port),用于拼接 {@code /actuator/atomicruntime}。 */
-  private String baseUrl;
+    /** atomic worker 的 base URL(含 scheme + host + port),用于拼接 {@code /actuator/atomicruntime}。 */
+    private String baseUrl;
 
-  /** 建立连接超时，单位毫秒。 */
-  private long connectTimeoutMillis = 5000L;
+    /** 建立连接超时，单位毫秒。 */
+    private long connectTimeoutMillis = 5000L;
 
-  /** 读取响应超时，单位毫秒。 */
-  private long readTimeoutMillis = 10000L;
+    /** 读取响应超时，单位毫秒。 */
+    private long readTimeoutMillis = 10000L;
 }

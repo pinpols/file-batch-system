@@ -6,9 +6,9 @@ import java.util.List;
 
 public interface EventDeliveryLogMapper {
 
-  int insert(EventDeliveryLogEntity entity);
+    int insert(EventDeliveryLogEntity entity);
 
-  int insertIntoArchive(EventDeliveryLogEntity entity);
+    int insertIntoArchive(EventDeliveryLogEntity entity);
 
-  List<EventDeliveryLogEntity> selectByQuery(EventDeliveryLogQuery query);
+    List<EventDeliveryLogEntity> selectByQuery(EventDeliveryLogQuery query);
 }

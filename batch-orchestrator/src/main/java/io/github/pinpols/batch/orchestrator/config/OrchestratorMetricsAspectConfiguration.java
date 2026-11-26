@@ -12,9 +12,9 @@ import org.springframework.context.annotation.Configuration;
 /** 装配 Orchestrator 服务方法的指标切面。 */
 public class OrchestratorMetricsAspectConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public TimedAspect timedAspect(MeterRegistry meterRegistry) {
-    return new TimedAspect(meterRegistry);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public TimedAspect timedAspect(MeterRegistry meterRegistry) {
+        return new TimedAspect(meterRegistry);
+    }
 }

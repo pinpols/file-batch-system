@@ -16,30 +16,29 @@ import org.springframework.scheduling.TaskScheduler;
 @Configuration(proxyBeanMethods = false)
 public class QuartzMisfireRecoveryConfiguration {
 
-  @Bean
-  QuartzMisfireRecoveryListener quartzMisfireRecoveryListener(
-      ObjectProvider<Scheduler> schedulerProvider,
-      @Qualifier("taskScheduler") TaskScheduler taskScheduler,
-      ScheduledOccurrenceRecorder occurrenceRecorder,
-      TriggerRuntimeProperties triggerRuntimeProperties) {
-    return new QuartzMisfireRecoveryListener(
-        schedulerProvider::getObject, taskScheduler, occurrenceRecorder, triggerRuntimeProperties);
-  }
-
-  @Bean
-  SchedulerFactoryBeanCustomizer quartzMisfireRecoveryCustomizer(
-      QuartzMisfireRecoveryListener misfireRecoveryListener,
-      KafkaNamespaceProperties deploymentNamespace) {
-    return factory -> {
-      factory.setGlobalTriggerListeners(misfireRecoveryListener);
-      factory.setSchedulerName(schedulerName(deploymentNamespace.getNamespace()));
-    };
-  }
-
-  static String schedulerName(String deploymentNamespace) {
-    if (EmptyChecks.isBlank(deploymentNamespace)) {
-      return "BatchTriggerScheduler";
+    @Bean
+    QuartzMisfireRecoveryListener quartzMisfireRecoveryListener(
+            ObjectProvider<Scheduler> schedulerProvider,
+            @Qualifier("taskScheduler") TaskScheduler taskScheduler,
+            ScheduledOccurrenceRecorder occurrenceRecorder,
+            TriggerRuntimeProperties triggerRuntimeProperties) {
+        return new QuartzMisfireRecoveryListener(
+                schedulerProvider::getObject, taskScheduler, occurrenceRecorder, triggerRuntimeProperties);
     }
-    return "BatchTriggerScheduler-" + deploymentNamespace.trim();
-  }
+
+    @Bean
+    SchedulerFactoryBeanCustomizer quartzMisfireRecoveryCustomizer(
+            QuartzMisfireRecoveryListener misfireRecoveryListener, KafkaNamespaceProperties deploymentNamespace) {
+        return factory -> {
+            factory.setGlobalTriggerListeners(misfireRecoveryListener);
+            factory.setSchedulerName(schedulerName(deploymentNamespace.getNamespace()));
+        };
+    }
+
+    static String schedulerName(String deploymentNamespace) {
+        if (EmptyChecks.isBlank(deploymentNamespace)) {
+            return "BatchTriggerScheduler";
+        }
+        return "BatchTriggerScheduler-" + deploymentNamespace.trim();
+    }
 }

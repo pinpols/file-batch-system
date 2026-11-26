@@ -6,9 +6,9 @@ import lombok.Data;
 @Data
 public class TriggerRequestQuery {
 
-  private String tenantId;
-  private String jobCode;
-  private String triggerType;
-  private String requestStatus;
-  private PageRequest pageRequest;
+    private String tenantId;
+    private String jobCode;
+    private String triggerType;
+    private String requestStatus;
+    private PageRequest pageRequest;
 }

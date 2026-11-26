@@ -49,83 +49,80 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class VerifierFailureOutboxService {
 
-  private static final String EVENT_TYPE = "verifier.failure.v1";
-  private static final String AGGREGATE_TYPE = "JOB_TASK";
+    private static final String EVENT_TYPE = "verifier.failure.v1";
+    private static final String AGGREGATE_TYPE = "JOB_TASK";
 
-  private final DomainEventPublisher domainEventPublisher;
+    private final DomainEventPublisher domainEventPublisher;
 
-  /** typed 结果在同一事务内发布，保留原有事件顺序和幂等键。 */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public int writeVerifierFailures(
-      TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
-    return publishFailures(command, task, failures);
-  }
-
-  // 事务由唯一的公开入口通过代理强制要求；这里仅承载事件发布逻辑。
-  private int publishFailures(
-      TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
-    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
-      return 0;
+    /** typed 结果在同一事务内发布，保留原有事件顺序和幂等键。 */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int writeVerifierFailures(TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
+        return publishFailures(command, task, failures);
     }
-    if (EmptyChecks.isEmpty(failures)) {
-      return 0;
-    }
-    int written = 0;
-    int index = 0;
-    for (VerifierFailure failure : failures) {
-      if (EmptyChecks.isNull(failure)) {
-        index++;
-        continue;
-      }
-      DomainEvent failureEvent = buildEvent(command, task, failure, index);
-      domainEventPublisher.publish(failureEvent);
-      written++;
-      index++;
-    }
-    if (log.isInfoEnabled()) {
-      String tenantIdForLog = LogSanitizer.value(command.tenantId());
-      log.info(
-          "ContentVerifier failures persisted as outbox events: tenantId={}, taskId={}, count={}",
-          tenantIdForLog,
-          command.taskId(),
-          written);
-    }
-    return written;
-  }
 
-  private DomainEvent buildEvent(
-      TaskOutcomeCommand command, JobTaskEntity task, VerifierFailure failure, int index) {
-    String reason = failure.code();
-    String message = failure.message();
-    Object evidence = failure.evidence();
+    // 事务由唯一的公开入口通过代理强制要求；这里仅承载事件发布逻辑。
+    private int publishFailures(TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
+        if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
+            return 0;
+        }
+        if (EmptyChecks.isEmpty(failures)) {
+            return 0;
+        }
+        int written = 0;
+        int index = 0;
+        for (VerifierFailure failure : failures) {
+            if (EmptyChecks.isNull(failure)) {
+                index++;
+                continue;
+            }
+            DomainEvent failureEvent = buildEvent(command, task, failure, index);
+            domainEventPublisher.publish(failureEvent);
+            written++;
+            index++;
+        }
+        if (log.isInfoEnabled()) {
+            String tenantIdForLog = LogSanitizer.value(command.tenantId());
+            log.info(
+                    "ContentVerifier failures persisted as outbox events: tenantId={}, taskId={}, count={}",
+                    tenantIdForLog,
+                    command.taskId(),
+                    written);
+        }
+        return written;
+    }
 
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("schemaVersion", "v1");
-    payload.put("tenantId", command.tenantId());
-    payload.put("taskId", command.taskId());
-    payload.put("jobInstanceId", task.getJobInstanceId());
-    payload.put("workerId", command.workerId());
-    // verifier 业务码（如 EXPORT_FILE_NON_EMPTY）目前未单独传过来,复用 reason 作 code,
-    // 避免引入额外字段;告警面板可同时按 reason 过滤
-    payload.put("code", reason);
-    payload.put("reason", reason);
-    payload.put("message", message);
-    payload.put("evidence", evidence);
+    private DomainEvent buildEvent(TaskOutcomeCommand command, JobTaskEntity task, VerifierFailure failure, int index) {
+        String reason = failure.code();
+        String message = failure.message();
+        Object evidence = failure.evidence();
 
-    // event_key 加 index 后缀:若同一 task 出多个失败且 reason 相同(同 verifier 重跑 /
-    // 不同 verifier 撞 code),不会触发 outbox_event 唯一约束冲突导致整事务回滚
-    String eventKey = command.tenantId()
-        + ":verifier:"
-        + command.taskId()
-        + ":"
-        + (EmptyChecks.isNull(reason) ? "UNKNOWN" : reason)
-        + ":"
-        + index;
-    return DomainEvent.builder(command.tenantId())
-        .aggregate(AGGREGATE_TYPE, task.getJobInstanceId())
-        .type(EVENT_TYPE)
-        .key(eventKey)
-        .payload(payload)
-        .build();
-  }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("schemaVersion", "v1");
+        payload.put("tenantId", command.tenantId());
+        payload.put("taskId", command.taskId());
+        payload.put("jobInstanceId", task.getJobInstanceId());
+        payload.put("workerId", command.workerId());
+        // verifier 业务码（如 EXPORT_FILE_NON_EMPTY）目前未单独传过来,复用 reason 作 code,
+        // 避免引入额外字段;告警面板可同时按 reason 过滤
+        payload.put("code", reason);
+        payload.put("reason", reason);
+        payload.put("message", message);
+        payload.put("evidence", evidence);
+
+        // event_key 加 index 后缀:若同一 task 出多个失败且 reason 相同(同 verifier 重跑 /
+        // 不同 verifier 撞 code),不会触发 outbox_event 唯一约束冲突导致整事务回滚
+        String eventKey = command.tenantId()
+                + ":verifier:"
+                + command.taskId()
+                + ":"
+                + (EmptyChecks.isNull(reason) ? "UNKNOWN" : reason)
+                + ":"
+                + index;
+        return DomainEvent.builder(command.tenantId())
+                .aggregate(AGGREGATE_TYPE, task.getJobInstanceId())
+                .type(EVENT_TYPE)
+                .key(eventKey)
+                .payload(payload)
+                .build();
+    }
 }

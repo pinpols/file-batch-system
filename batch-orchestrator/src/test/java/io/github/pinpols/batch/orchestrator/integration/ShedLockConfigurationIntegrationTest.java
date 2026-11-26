@@ -34,132 +34,130 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * BatchShedLockAutoConfiguration} 的官方 {@code RedisLockProvider}(默认 redis)。
  */
 @SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = "batch.kafka.namespace=shedlock-isolation-test")
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "batch.kafka.namespace=shedlock-isolation-test")
 @DisplayName("分布式锁配置:锁表迁移结果,锁提供者装配类型,以及互斥获取与到期重入行为")
 class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  JdbcTemplate jdbcTemplate;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  LockProvider lockProvider;
+    @Autowired
+    LockProvider lockProvider;
 
-  @Autowired
-  DataSource dataSource;
+    @Autowired
+    DataSource dataSource;
 
-  final StringRedisTemplate redisTemplate;
+    final StringRedisTemplate redisTemplate;
 
-  @Autowired
-  ShedLockConfigurationIntegrationTest(StringRedisTemplate redisTemplate) {
-    this.redisTemplate = redisTemplate;
-  }
+    @Autowired
+    ShedLockConfigurationIntegrationTest(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
 
-  @Test
-  @DisplayName("数据库迁移后锁表存在,且装配的锁提供者为 Redis 实现并注入数据源")
-  void shouldCreateShedLockTableFromFlywayAndConfigureRedisLockProvider() {
-    String shedLockTableCountSql = """
+    @Test
+    @DisplayName("数据库迁移后锁表存在,且装配的锁提供者为 Redis 实现并注入数据源")
+    void shouldCreateShedLockTableFromFlywayAndConfigureRedisLockProvider() {
+        String shedLockTableCountSql = """
             select count(*)
             from information_schema.tables
             where table_schema = 'batch'
               and table_name = 'shedlock'
             """;
-    Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
+        Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
 
-    assertThat(tableCount).isEqualTo(1);
-    assertThat(lockProvider)
-        .isInstanceOfSatisfying(
-            MeteredLockProvider.class,
-            provider -> assertThat(provider.providerType()).isEqualTo("redis"));
-    assertThat(dataSource).isNotNull();
-  }
-
-  @Test
-  @DisplayName("部署命名空间隔离 Redis ShedLock key,同时保留应用级前缀")
-  void shouldNamespaceRedisLockKeyByDeployment() {
-    String lockName = "it-lock-namespace-" + System.nanoTime();
-    Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
-        BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(20), Duration.ZERO));
-    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
-    rawTemplate.afterPropertiesSet();
-
-    assertThat(lock).isPresent();
-    Set<String> lockKeys = rawTemplate.keys("*" + lockName);
-    assertThat(lockKeys)
-        .isNotEmpty()
-        .allMatch(
-            key -> key.startsWith("job-lock:shedlock:shedlock-isolation-test:batch-orchestrator:"));
-    lock.ifPresent(SimpleLock::unlock);
-  }
-
-  @Test
-  @DisplayName("StringRedisTemplate 的所有业务 key 自动按部署隔离且跨 namespace 不可见")
-  void shouldNamespaceTemplateKeysAndHideThemFromOtherDeployments() {
-    String logicalKey = "it-template-namespace-" + System.nanoTime();
-    String physicalKey = "shedlock-isolation-test:" + logicalKey;
-    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
-    rawTemplate.afterPropertiesSet();
-    StringRedisTemplate otherNamespaceTemplate =
-        new StringRedisTemplate(redisTemplate.getConnectionFactory());
-    otherNamespaceTemplate.setKeySerializer(
-        new BatchRedisNamespaceSerializer(new BatchRedisNamespace("other-deployment")));
-    otherNamespaceTemplate.afterPropertiesSet();
-
-    try {
-      redisTemplate.opsForValue().set(logicalKey, "namespaced-value", Duration.ofSeconds(30));
-
-      assertThat(redisTemplate.opsForValue().get(logicalKey)).isEqualTo("namespaced-value");
-      assertThat(otherNamespaceTemplate.opsForValue().get(logicalKey)).isNull();
-      assertThat(rawTemplate.opsForValue().get(physicalKey)).isEqualTo("namespaced-value");
-      assertThat(rawTemplate.opsForValue().get(logicalKey)).isNull();
-    } finally {
-      redisTemplate.delete(logicalKey);
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(lockProvider)
+                .isInstanceOfSatisfying(
+                        MeteredLockProvider.class,
+                        provider -> assertThat(provider.providerType()).isEqualTo("redis"));
+        assertThat(dataSource).isNotNull();
     }
-  }
 
-  @Test
-  @DisplayName("同一锁名称被两个线程同时争抢时只有一个获取成功")
-  void shouldEnforceMutualExclusion() throws Exception {
-    String lockName = "it-lock-mutual-exclusion-" + System.nanoTime();
-    ExecutorService pool = Executors.newFixedThreadPool(2);
-    try {
-      AtomicInteger successCount = new AtomicInteger(0);
-      CountDownLatch latch = new CountDownLatch(2);
-      Runnable tryLock = () -> {
+    @Test
+    @DisplayName("部署命名空间隔离 Redis ShedLock key,同时保留应用级前缀")
+    void shouldNamespaceRedisLockKeyByDeployment() {
+        String lockName = "it-lock-namespace-" + System.nanoTime();
+        Optional<SimpleLock> lock = lockProvider.lock(
+                new LockConfiguration(BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(20), Duration.ZERO));
+        StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
+        rawTemplate.afterPropertiesSet();
+
+        assertThat(lock).isPresent();
+        Set<String> lockKeys = rawTemplate.keys("*" + lockName);
+        assertThat(lockKeys)
+                .isNotEmpty()
+                .allMatch(key -> key.startsWith("job-lock:shedlock:shedlock-isolation-test:batch-orchestrator:"));
+        lock.ifPresent(SimpleLock::unlock);
+    }
+
+    @Test
+    @DisplayName("StringRedisTemplate 的所有业务 key 自动按部署隔离且跨 namespace 不可见")
+    void shouldNamespaceTemplateKeysAndHideThemFromOtherDeployments() {
+        String logicalKey = "it-template-namespace-" + System.nanoTime();
+        String physicalKey = "shedlock-isolation-test:" + logicalKey;
+        StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
+        rawTemplate.afterPropertiesSet();
+        StringRedisTemplate otherNamespaceTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
+        otherNamespaceTemplate.setKeySerializer(
+                new BatchRedisNamespaceSerializer(new BatchRedisNamespace("other-deployment")));
+        otherNamespaceTemplate.afterPropertiesSet();
+
         try {
-          Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
-              BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(5), Duration.ZERO));
-          if (lock.isPresent()) {
-            successCount.incrementAndGet();
-          }
+            redisTemplate.opsForValue().set(logicalKey, "namespaced-value", Duration.ofSeconds(30));
+
+            assertThat(redisTemplate.opsForValue().get(logicalKey)).isEqualTo("namespaced-value");
+            assertThat(otherNamespaceTemplate.opsForValue().get(logicalKey)).isNull();
+            assertThat(rawTemplate.opsForValue().get(physicalKey)).isEqualTo("namespaced-value");
+            assertThat(rawTemplate.opsForValue().get(logicalKey)).isNull();
         } finally {
-          latch.countDown();
+            redisTemplate.delete(logicalKey);
         }
-      };
-      pool.submit(tryLock);
-      pool.submit(tryLock);
-      assertThat(latch.await(3, TimeUnit.SECONDS)).isTrue();
-      assertThat(successCount.get()).isEqualTo(1);
-    } finally {
-      pool.shutdownNow();
     }
-  }
 
-  @Test
-  @DisplayName("锁未主动释放时最大持有时长到期后可再次获取")
-  void shouldAllowReacquireAfterExpiry() throws Exception {
-    String lockName = "it-lock-reacquire-after-expiry";
-    Optional<SimpleLock> first = lockProvider.lock(new LockConfiguration(
-        BatchDateTimeSupport.utcNow(), lockName, Duration.ofMillis(800), Duration.ZERO));
-    assertThat(first).isPresent();
+    @Test
+    @DisplayName("同一锁名称被两个线程同时争抢时只有一个获取成功")
+    void shouldEnforceMutualExclusion() throws Exception {
+        String lockName = "it-lock-mutual-exclusion-" + System.nanoTime();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            AtomicInteger successCount = new AtomicInteger(0);
+            CountDownLatch latch = new CountDownLatch(2);
+            Runnable tryLock = () -> {
+                try {
+                    Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
+                            BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(5), Duration.ZERO));
+                    if (lock.isPresent()) {
+                        successCount.incrementAndGet();
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            };
+            pool.submit(tryLock);
+            pool.submit(tryLock);
+            assertThat(latch.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(successCount.get()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 
-    // 不主动解锁；依赖 lockAtMostFor 到期自动释放。
-    Thread.sleep(1_200);
+    @Test
+    @DisplayName("锁未主动释放时最大持有时长到期后可再次获取")
+    void shouldAllowReacquireAfterExpiry() throws Exception {
+        String lockName = "it-lock-reacquire-after-expiry";
+        Optional<SimpleLock> first = lockProvider.lock(
+                new LockConfiguration(BatchDateTimeSupport.utcNow(), lockName, Duration.ofMillis(800), Duration.ZERO));
+        assertThat(first).isPresent();
 
-    Optional<SimpleLock> second = lockProvider.lock(new LockConfiguration(
-        BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(2), Duration.ZERO));
-    assertThat(second).isPresent();
-    second.ifPresent(SimpleLock::unlock);
-  }
+        // 不主动解锁；依赖 lockAtMostFor 到期自动释放。
+        Thread.sleep(1_200);
+
+        Optional<SimpleLock> second = lockProvider.lock(
+                new LockConfiguration(BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(2), Duration.ZERO));
+        assertThat(second).isPresent();
+        second.ifPresent(SimpleLock::unlock);
+    }
 }

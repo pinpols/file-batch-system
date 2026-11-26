@@ -35,147 +35,144 @@ import org.springframework.scheduling.annotation.Scheduled;
 @Slf4j
 public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
 
-  private final StringRedisTemplate redis;
-  private final String memberId;
-  private final String membersKey;
-  private final Duration memberTtl;
+    private final StringRedisTemplate redis;
+    private final String memberId;
+    private final String membersKey;
+    private final Duration memberTtl;
 
-  /** 缓存上次成功读到的 assignment，Redis 异常时回退用。 */
-  private final AtomicReference<ShardAssignment> lastKnown =
-      new AtomicReference<>(ShardAssignment.single());
+    /** 缓存上次成功读到的 assignment，Redis 异常时回退用。 */
+    private final AtomicReference<ShardAssignment> lastKnown = new AtomicReference<>(ShardAssignment.single());
 
-  /** Redis 协调不可用时禁止继续 poll，避免缓存分片与新成员分片重叠。 */
-  private final AtomicBoolean coordinationHealthy = new AtomicBoolean(false);
+    /** Redis 协调不可用时禁止继续 poll，避免缓存分片与新成员分片重叠。 */
+    private final AtomicBoolean coordinationHealthy = new AtomicBoolean(false);
 
-  /**
-   * @param redis Spring Data Redis StringRedisTemplate（和 ShedLock / 其它业务共用连接）
-   * @param memberId 当前 Pod 的稳定标识（推荐 K8s POD_NAME；单副本也可用主机名）
-   * @param membersKey 当前部署独占的 Redis 成员集合键
-   * @param memberTtl 心跳超期时长，超过该时长未心跳的成员视为死亡并清出列表（推荐 30s）
-   */
-  public RedisShardAssignmentProvider(
-      StringRedisTemplate redis, String memberId, String membersKey, Duration memberTtl) {
-    if (memberId == null || memberId.isBlank()) {
-      throw new IllegalArgumentException("memberId must not be blank");
-    }
-    if (EmptyChecks.isBlank(membersKey)) {
-      throw new IllegalArgumentException("membersKey must not be blank");
-    }
-    this.redis = redis;
-    this.memberId = memberId;
-    this.membersKey = membersKey;
-    this.memberTtl = memberTtl;
-  }
-
-  /**
-   * 启动期自检：立即发出第一次 heartbeat,失败则 WARN 暴露 (避免 @Scheduled 注册失败 / Redis 启动早期不可达时,DYNAMIC
-   * 模式静默退化为单实例无任何告警)。
-   */
-  @PostConstruct
-  void selfCheckOnStartup() {
-    try {
-      redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
-      coordinationHealthy.set(true);
-      log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
-    } catch (RuntimeException ex) {
-      coordinationHealthy.set(false);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
-              + "- DYNAMIC sharding will remain degraded to a single instance until Redis recovers",
-          memberId,
-          causeSummary);
-    }
-  }
-
-  /**
-   * 心跳：把自己的 memberId 写入 sorted set，score = 当前毫秒时间戳。
-   *
-   * <p>由 {@code @Scheduled} 每 5s 调一次（见 {@code fixedDelayString}）。
-   */
-  @Scheduled(fixedDelayString = "${batch.outbox.sharding.heartbeat-interval-ms:5000}")
-  public void heartbeat() {
-    try {
-      redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
-      coordinationHealthy.set(true);
-    } catch (RuntimeException ex) {
-      coordinationHealthy.set(false);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, causeSummary);
-    }
-  }
-
-  /** 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。 */
-  @PreDestroy
-  public void leave() {
-    coordinationHealthy.set(false);
-    try {
-      redis.opsForZSet().remove(membersKey, memberId);
-    } catch (RuntimeException ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("Shard coordinator leave failed: member={}, err={}", memberId, causeSummary);
-    }
-  }
-
-  @Override
-  public ShardAssignment current() {
-    try {
-      long cutoff = BatchDateTimeSupport.utcEpochMillis() - memberTtl.toMillis();
-      // 清死成员
-      redis.opsForZSet().removeRangeByScore(membersKey, 0, cutoff);
-      // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）
-      Set<ZSetOperations.TypedTuple<String>> tuples =
-          redis.opsForZSet().rangeWithScores(membersKey, 0, -1);
-      if (tuples == null || tuples.isEmpty()) {
-        // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
-        coordinationHealthy.set(false);
-        return lastKnown.get();
-      }
-      String[] members = tuples.stream()
-          .map(ZSetOperations.TypedTuple::getValue)
-          .filter(v -> v != null && !v.isBlank())
-          .sorted()
-          .toArray(String[]::new);
-
-      int total = members.length;
-      int index = -1;
-      for (int i = 0; i < total; i++) {
-        if (memberId.equals(members[i])) {
-          index = i;
-          break;
+    /**
+     * @param redis Spring Data Redis StringRedisTemplate（和 ShedLock / 其它业务共用连接）
+     * @param memberId 当前 Pod 的稳定标识（推荐 K8s POD_NAME；单副本也可用主机名）
+     * @param membersKey 当前部署独占的 Redis 成员集合键
+     * @param memberTtl 心跳超期时长，超过该时长未心跳的成员视为死亡并清出列表（推荐 30s）
+     */
+    public RedisShardAssignmentProvider(
+            StringRedisTemplate redis, String memberId, String membersKey, Duration memberTtl) {
+        if (memberId == null || memberId.isBlank()) {
+            throw new IllegalArgumentException("memberId must not be blank");
         }
-      }
-      if (index < 0) {
-        // 自己不在集合里：可能刚启动还没心跳，或被误清；降级为单实例
-        coordinationHealthy.set(false);
-        return lastKnown.get();
-      }
-      ShardAssignment assignment =
-          total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index);
-      coordinationHealthy.set(true);
-      return cacheAndReturn(assignment);
-    } catch (RuntimeException ex) {
-      coordinationHealthy.set(false);
-      ShardAssignment fallback = lastKnown.get();
-      int fallbackShardTotal = fallback.shardTotal();
-      int fallbackShardIndex = fallback.shardIndex();
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Redis shard coordinator query failed; falling back to the previous assignment total={} index={}: {}",
-          fallbackShardTotal,
-          fallbackShardIndex,
-          causeSummary);
-      return fallback;
+        if (EmptyChecks.isBlank(membersKey)) {
+            throw new IllegalArgumentException("membersKey must not be blank");
+        }
+        this.redis = redis;
+        this.memberId = memberId;
+        this.membersKey = membersKey;
+        this.memberTtl = memberTtl;
     }
-  }
 
-  @Override
-  public boolean canPoll() {
-    return coordinationHealthy.get();
-  }
+    /**
+     * 启动期自检：立即发出第一次 heartbeat,失败则 WARN 暴露 (避免 @Scheduled 注册失败 / Redis 启动早期不可达时,DYNAMIC
+     * 模式静默退化为单实例无任何告警)。
+     */
+    @PostConstruct
+    void selfCheckOnStartup() {
+        try {
+            redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
+            coordinationHealthy.set(true);
+            log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
+        } catch (RuntimeException ex) {
+            coordinationHealthy.set(false);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
+                            + "- DYNAMIC sharding will remain degraded to a single instance until Redis recovers",
+                    memberId,
+                    causeSummary);
+        }
+    }
 
-  private ShardAssignment cacheAndReturn(ShardAssignment assignment) {
-    lastKnown.set(assignment);
-    return assignment;
-  }
+    /**
+     * 心跳：把自己的 memberId 写入 sorted set，score = 当前毫秒时间戳。
+     *
+     * <p>由 {@code @Scheduled} 每 5s 调一次（见 {@code fixedDelayString}）。
+     */
+    @Scheduled(fixedDelayString = "${batch.outbox.sharding.heartbeat-interval-ms:5000}")
+    public void heartbeat() {
+        try {
+            redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
+            coordinationHealthy.set(true);
+        } catch (RuntimeException ex) {
+            coordinationHealthy.set(false);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, causeSummary);
+        }
+    }
+
+    /** 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。 */
+    @PreDestroy
+    public void leave() {
+        coordinationHealthy.set(false);
+        try {
+            redis.opsForZSet().remove(membersKey, memberId);
+        } catch (RuntimeException ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Shard coordinator leave failed: member={}, err={}", memberId, causeSummary);
+        }
+    }
+
+    @Override
+    public ShardAssignment current() {
+        try {
+            long cutoff = BatchDateTimeSupport.utcEpochMillis() - memberTtl.toMillis();
+            // 清死成员
+            redis.opsForZSet().removeRangeByScore(membersKey, 0, cutoff);
+            // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）
+            Set<ZSetOperations.TypedTuple<String>> tuples = redis.opsForZSet().rangeWithScores(membersKey, 0, -1);
+            if (tuples == null || tuples.isEmpty()) {
+                // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
+                coordinationHealthy.set(false);
+                return lastKnown.get();
+            }
+            String[] members = tuples.stream()
+                    .map(ZSetOperations.TypedTuple::getValue)
+                    .filter(v -> v != null && !v.isBlank())
+                    .sorted()
+                    .toArray(String[]::new);
+
+            int total = members.length;
+            int index = -1;
+            for (int i = 0; i < total; i++) {
+                if (memberId.equals(members[i])) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index < 0) {
+                // 自己不在集合里：可能刚启动还没心跳，或被误清；降级为单实例
+                coordinationHealthy.set(false);
+                return lastKnown.get();
+            }
+            ShardAssignment assignment = total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index);
+            coordinationHealthy.set(true);
+            return cacheAndReturn(assignment);
+        } catch (RuntimeException ex) {
+            coordinationHealthy.set(false);
+            ShardAssignment fallback = lastKnown.get();
+            int fallbackShardTotal = fallback.shardTotal();
+            int fallbackShardIndex = fallback.shardIndex();
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "Redis shard coordinator query failed; falling back to the previous assignment total={} index={}: {}",
+                    fallbackShardTotal,
+                    fallbackShardIndex,
+                    causeSummary);
+            return fallback;
+        }
+    }
+
+    @Override
+    public boolean canPoll() {
+        return coordinationHealthy.get();
+    }
+
+    private ShardAssignment cacheAndReturn(ShardAssignment assignment) {
+        lastKnown.set(assignment);
+        return assignment;
+    }
 }

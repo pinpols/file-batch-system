@@ -7,5 +7,5 @@ import org.apache.ibatis.annotations.Param;
 /** JOB asset freshness policy 查询映射。 */
 public interface AssetFreshnessPolicyMapper {
 
-  List<AssetFreshnessPolicyEntity> selectEnabledPolicies(@Param("limit") int limit);
+    List<AssetFreshnessPolicyEntity> selectEnabledPolicies(@Param("limit") int limit);
 }

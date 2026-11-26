@@ -18,90 +18,87 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 集成测试：控制台 DeadLetterTaskMapper 对真实数据库的查询验证。 */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("死信任务查询映射: 按重放状态,来源类型与链路标识过滤,无过滤返回全量")
 class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private DeadLetterTaskMapper deadLetterTaskMapper;
+    @Autowired
+    private DeadLetterTaskMapper deadLetterTaskMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("无数据租户: 查询返回空列表")
-  void shouldReturnEmptyWhenNoDeadLettersExist() {
-    List<DeadLetterTaskEntity> results =
-        deadLetterTaskMapper.selectByQuery(DeadLetterTaskQuery.ofTenant(
-            "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
+    @Test
+    @DisplayName("无数据租户: 查询返回空列表")
+    void shouldReturnEmptyWhenNoDeadLettersExist() {
+        List<DeadLetterTaskEntity> results = deadLetterTaskMapper.selectByQuery(DeadLetterTaskQuery.ofTenant(
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
-    assertThat(results).isEmpty();
-  }
+        assertThat(results).isEmpty();
+    }
 
-  @Test
-  @DisplayName("按重放状态过滤: 只返回该状态的一条记录,来源主键正确")
-  void shouldQueryDeadLettersByTenantAndReplayStatus() {
-    String tenantId = "t-dlq-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 100L, DeadLetter.NEW, "trace-dlq-001");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 101L, DeadLetter.FAILED, "trace-dlq-002");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 102L, DeadLetter.SUCCESS, "trace-dlq-003");
+    @Test
+    @DisplayName("按重放状态过滤: 只返回该状态的一条记录,来源主键正确")
+    void shouldQueryDeadLettersByTenantAndReplayStatus() {
+        String tenantId = "t-dlq-" + BatchDateTimeSupport.utcEpochMillis();
+        insertDeadLetter(tenantId, "JOB_PARTITION", 100L, DeadLetter.NEW, "trace-dlq-001");
+        insertDeadLetter(tenantId, "JOB_PARTITION", 101L, DeadLetter.FAILED, "trace-dlq-002");
+        insertDeadLetter(tenantId, "JOB_PARTITION", 102L, DeadLetter.SUCCESS, "trace-dlq-003");
 
-    List<DeadLetterTaskEntity> newDlq = deadLetterTaskMapper.selectByQuery(
-        DeadLetterTaskQuery.ofReplayStatus(tenantId, DeadLetter.NEW, new PageRequest(1, 10)));
+        List<DeadLetterTaskEntity> newDlq = deadLetterTaskMapper.selectByQuery(
+                DeadLetterTaskQuery.ofReplayStatus(tenantId, DeadLetter.NEW, new PageRequest(1, 10)));
 
-    assertThat(newDlq).hasSize(1);
-    assertThat(newDlq.get(0).getReplayStatus()).isEqualTo(DeadLetter.NEW);
-    assertThat(newDlq.get(0).getSourceId()).isEqualTo(100L);
-  }
+        assertThat(newDlq).hasSize(1);
+        assertThat(newDlq.get(0).getReplayStatus()).isEqualTo(DeadLetter.NEW);
+        assertThat(newDlq.get(0).getSourceId()).isEqualTo(100L);
+    }
 
-  @Test
-  @DisplayName("按来源类型过滤: 返回该类型的两条记录")
-  void shouldQueryDeadLettersBySourceType() {
-    String tenantId = "t-dlq-type-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 200L, DeadLetter.NEW, "trace-type-001");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 201L, DeadLetter.NEW, "trace-type-002");
+    @Test
+    @DisplayName("按来源类型过滤: 返回该类型的两条记录")
+    void shouldQueryDeadLettersBySourceType() {
+        String tenantId = "t-dlq-type-" + BatchDateTimeSupport.utcEpochMillis();
+        insertDeadLetter(tenantId, "JOB_PARTITION", 200L, DeadLetter.NEW, "trace-type-001");
+        insertDeadLetter(tenantId, "JOB_PARTITION", 201L, DeadLetter.NEW, "trace-type-002");
 
-    List<DeadLetterTaskEntity> partitionDlq = deadLetterTaskMapper.selectByQuery(
-        DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
+        List<DeadLetterTaskEntity> partitionDlq = deadLetterTaskMapper.selectByQuery(
+                DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
-    assertThat(partitionDlq).hasSize(2).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
-  }
+        assertThat(partitionDlq).hasSize(2).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
+    }
 
-  @Test
-  @DisplayName("按链路标识过滤: 只命中唯一标识对应的一条记录")
-  void shouldQueryDeadLettersByTraceId() {
-    String tenantId = "t-dlq-trace-" + BatchDateTimeSupport.utcEpochMillis();
-    String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 300L, DeadLetter.NEW, uniqueTrace);
+    @Test
+    @DisplayName("按链路标识过滤: 只命中唯一标识对应的一条记录")
+    void shouldQueryDeadLettersByTraceId() {
+        String tenantId = "t-dlq-trace-" + BatchDateTimeSupport.utcEpochMillis();
+        String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
+        insertDeadLetter(tenantId, "JOB_PARTITION", 300L, DeadLetter.NEW, uniqueTrace);
 
-    List<DeadLetterTaskEntity> results = deadLetterTaskMapper.selectByQuery(
-        DeadLetterTaskQuery.ofTraceId(tenantId, uniqueTrace, new PageRequest(1, 10)));
+        List<DeadLetterTaskEntity> results = deadLetterTaskMapper.selectByQuery(
+                DeadLetterTaskQuery.ofTraceId(tenantId, uniqueTrace, new PageRequest(1, 10)));
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).getTraceId()).isEqualTo(uniqueTrace);
-  }
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getTraceId()).isEqualTo(uniqueTrace);
+    }
 
-  @Test
-  @DisplayName("不带过滤条件: 返回该租户的全部三条死信")
-  void shouldReturnAllDeadLettersForTenantWithNoFilter() {
-    String tenantId = "t-dlq-all-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 400L, DeadLetter.NEW, "trace-all-1");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 401L, DeadLetter.FAILED, "trace-all-2");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 402L, DeadLetter.SUCCESS, "trace-all-3");
+    @Test
+    @DisplayName("不带过滤条件: 返回该租户的全部三条死信")
+    void shouldReturnAllDeadLettersForTenantWithNoFilter() {
+        String tenantId = "t-dlq-all-" + BatchDateTimeSupport.utcEpochMillis();
+        insertDeadLetter(tenantId, "JOB_PARTITION", 400L, DeadLetter.NEW, "trace-all-1");
+        insertDeadLetter(tenantId, "JOB_PARTITION", 401L, DeadLetter.FAILED, "trace-all-2");
+        insertDeadLetter(tenantId, "JOB_PARTITION", 402L, DeadLetter.SUCCESS, "trace-all-3");
 
-    List<DeadLetterTaskEntity> all = deadLetterTaskMapper.selectByQuery(
-        DeadLetterTaskQuery.ofTenant(tenantId, new PageRequest(1, 10)));
+        List<DeadLetterTaskEntity> all =
+                deadLetterTaskMapper.selectByQuery(DeadLetterTaskQuery.ofTenant(tenantId, new PageRequest(1, 10)));
 
-    assertThat(all).hasSize(3);
-  }
+        assertThat(all).hasSize(3);
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private void insertDeadLetter(
-      String tenantId, String sourceType, Long sourceId, String replayStatus, String traceId) {
-    final String insertDeadLetterSql = """
+    private void insertDeadLetter(
+            String tenantId, String sourceType, Long sourceId, String replayStatus, String traceId) {
+        final String insertDeadLetterSql = """
     INSERT INTO batch.dead_letter_task
     (tenant_id, source_type, source_id, dead_letter_reason,
     payload_ref, replay_status, replay_count, trace_id,
@@ -110,13 +107,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     ?, ?, 0, ?,
     now(), now())
     """;
-    jdbcTemplate.update(
-        insertDeadLetterSql,
-        tenantId,
-        sourceType,
-        sourceId,
-        tenantId + ":" + sourceId,
-        replayStatus,
-        traceId);
-  }
+        jdbcTemplate.update(
+                insertDeadLetterSql, tenantId, sourceType, sourceId, tenantId + ":" + sourceId, replayStatus, traceId);
+    }
 }

@@ -27,44 +27,43 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * <p>负责启用任务调度、扫描编排侧 Mapper，并提供 outbox 发布路径使用的统一 Kafka ProducerFactory。
  */
 @SpringBootApplication(
-    scanBasePackages = "io.github.pinpols.batch",
-    exclude = {DataRedisRepositoriesAutoConfiguration.class})
+        scanBasePackages = "io.github.pinpols.batch",
+        exclude = {DataRedisRepositoriesAutoConfiguration.class})
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  BatchStartupSelfCheckAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    BatchStartupSelfCheckAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @MapperScan({
-  "io.github.pinpols.batch.orchestrator.mapper",
-  "io.github.pinpols.batch.orchestrator.auth",
-  "io.github.pinpols.batch.common.mapper"
+    "io.github.pinpols.batch.orchestrator.mapper",
+    "io.github.pinpols.batch.orchestrator.auth",
+    "io.github.pinpols.batch.common.mapper"
 })
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
 @EnableScheduling
 public class BatchOrchestratorApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(BatchOrchestratorApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(BatchOrchestratorApplication.class, args);
+    }
 
-  // outbox 发布路径 producer:统一走全局 spring.kafka.producer.* 调优(acks=all / 幂等 / delivery
-  // & request 超时 / buffer.memory / max.block 背压),不再只设 bootstrap+serializer 而丢掉这些保护。
-  @Bean
-  public ProducerFactory<String, String> producerFactory(
-      BatchKafkaProducerProperties kafkaProducerProperties,
-      KafkaConnectionProperties kafkaConnectionProperties) {
-    Map<String, Object> producerConfig = BatchKafkaProducerSupport.stringProducerConfig(
-        kafkaConnectionProperties.getBootstrapServers(), kafkaProducerProperties);
-    return new DefaultKafkaProducerFactory<>(producerConfig);
-  }
+    // outbox 发布路径 producer:统一走全局 spring.kafka.producer.* 调优(acks=all / 幂等 / delivery
+    // & request 超时 / buffer.memory / max.block 背压),不再只设 bootstrap+serializer 而丢掉这些保护。
+    @Bean
+    public ProducerFactory<String, String> producerFactory(
+            BatchKafkaProducerProperties kafkaProducerProperties, KafkaConnectionProperties kafkaConnectionProperties) {
+        Map<String, Object> producerConfig = BatchKafkaProducerSupport.stringProducerConfig(
+                kafkaConnectionProperties.getBootstrapServers(), kafkaProducerProperties);
+        return new DefaultKafkaProducerFactory<>(producerConfig);
+    }
 
-  @Bean
-  public KafkaTemplate<String, String> kafkaTemplate(
-      ProducerFactory<String, String> producerFactory, ObservationRegistry observationRegistry) {
-    KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
-    template.setObservationEnabled(true);
-    template.setObservationRegistry(observationRegistry);
-    return template;
-  }
+    @Bean
+    public KafkaTemplate<String, String> kafkaTemplate(
+            ProducerFactory<String, String> producerFactory, ObservationRegistry observationRegistry) {
+        KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
+        template.setObservationEnabled(true);
+        template.setObservationRegistry(observationRegistry);
+        return template;
+    }
 }

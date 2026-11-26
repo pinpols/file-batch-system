@@ -16,25 +16,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleCustomTaskTypeQueryService {
 
-  private final CustomTaskTypeMapper mapper;
-  private final TenantIdResolver tenantGuard;
+    private final CustomTaskTypeMapper mapper;
+    private final TenantIdResolver tenantGuard;
 
-  public List<CustomTaskTypeView> listActive(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return mapper.selectActiveByTenant(resolved);
-  }
-
-  public long countActive(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return mapper.countActiveByTenant(resolved);
-  }
-
-  public CustomTaskTypeView detail(String tenantId, String taskTypeCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CustomTaskTypeView entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
-    if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskTypeCode);
+    public List<CustomTaskTypeView> listActive(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return mapper.selectActiveByTenant(resolved);
     }
-    return entity;
-  }
+
+    public long countActive(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return mapper.countActiveByTenant(resolved);
+    }
+
+    public CustomTaskTypeView detail(String tenantId, String taskTypeCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        CustomTaskTypeView entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
+        if (entity == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskTypeCode);
+        }
+        return entity;
+    }
 }

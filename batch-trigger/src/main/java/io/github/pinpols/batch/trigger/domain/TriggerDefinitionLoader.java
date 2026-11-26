@@ -20,32 +20,32 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TriggerDefinitionLoader {
 
-  private final TriggerDefinitionMapper triggerDefinitionMapper;
+    private final TriggerDefinitionMapper triggerDefinitionMapper;
 
-  public List<TriggerDescriptor> loadAll() {
-    return triggerDefinitionMapper.selectAllScheduledDefinitions();
-  }
+    public List<TriggerDescriptor> loadAll() {
+        return triggerDefinitionMapper.selectAllScheduledDefinitions();
+    }
 
-  public List<TriggerDescriptor> loadPendingMisfireDefinitions() {
-    return triggerDefinitionMapper.selectDefinitionsWithPendingMisfires();
-  }
+    public List<TriggerDescriptor> loadPendingMisfireDefinitions() {
+        return triggerDefinitionMapper.selectDefinitionsWithPendingMisfires();
+    }
 
-  /** tenantId 为空时与 Quartz 全局列表一致，返回全部租户。 */
-  public List<TriggerDescriptor> loadUnscheduledDefinitions(String tenantId) {
-    return EmptyChecks.isNull(tenantId)
-        ? triggerDefinitionMapper.selectAllUnscheduledDefinitions()
-        : triggerDefinitionMapper.selectUnscheduledDefinitionsByTenant(tenantId);
-  }
+    /** tenantId 为空时与 Quartz 全局列表一致，返回全部租户。 */
+    public List<TriggerDescriptor> loadUnscheduledDefinitions(String tenantId) {
+        return EmptyChecks.isNull(tenantId)
+                ? triggerDefinitionMapper.selectAllUnscheduledDefinitions()
+                : triggerDefinitionMapper.selectUnscheduledDefinitionsByTenant(tenantId);
+    }
 
-  public TriggerDescriptor loadByWorkflowCode(String tenantId, String workflowCode) {
-    return triggerDefinitionMapper.selectByWorkflowCode(tenantId, workflowCode);
-  }
+    public TriggerDescriptor loadByWorkflowCode(String tenantId, String workflowCode) {
+        return triggerDefinitionMapper.selectByWorkflowCode(tenantId, workflowCode);
+    }
 
-  public TriggerDescriptor loadByWorkflowDefinitionId(String tenantId, Long workflowDefinitionId) {
-    return triggerDefinitionMapper.selectByWorkflowDefinitionId(tenantId, workflowDefinitionId);
-  }
+    public TriggerDescriptor loadByWorkflowDefinitionId(String tenantId, Long workflowDefinitionId) {
+        return triggerDefinitionMapper.selectByWorkflowDefinitionId(tenantId, workflowDefinitionId);
+    }
 
-  public int setWorkflowScheduleEnabled(String tenantId, String workflowCode, boolean enabled) {
-    return triggerDefinitionMapper.updateWorkflowScheduleEnabled(tenantId, workflowCode, enabled);
-  }
+    public int setWorkflowScheduleEnabled(String tenantId, String workflowCode, boolean enabled) {
+        return triggerDefinitionMapper.updateWorkflowScheduleEnabled(tenantId, workflowCode, enabled);
+    }
 }

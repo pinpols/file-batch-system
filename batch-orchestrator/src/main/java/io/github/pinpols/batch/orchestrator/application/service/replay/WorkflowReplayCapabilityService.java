@@ -16,71 +16,68 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class WorkflowReplayCapabilityService {
 
-  private final WorkerRegistryMapper workerRegistryMapper;
+    private final WorkerRegistryMapper workerRegistryMapper;
 
-  public Assessment assess(String tenantId, String workerGroup, String pluginId) {
-    if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(workerGroup)) {
-      return new Assessment(Status.WORKER_GROUP_NOT_FROZEN, null, 0);
+    public Assessment assess(String tenantId, String workerGroup, String pluginId) {
+        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(workerGroup)) {
+            return new Assessment(Status.WORKER_GROUP_NOT_FROZEN, null, 0);
+        }
+        if (EmptyChecks.isBlank(pluginId)) {
+            return new Assessment(Status.PLUGIN_SELECTION_NOT_FROZEN, null, 0);
+        }
+        List<String> catalogues = workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
+                tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
+        if (EmptyChecks.isEmpty(catalogues)) {
+            return new Assessment(Status.NO_ONLINE_WORKERS, null, 0);
+        }
+        ReplayCapabilityDeclaration agreed = null;
+        for (String catalogue : catalogues) {
+            List<ReplayCapabilityDeclaration> matches = selectedDeclarations(catalogue, pluginId);
+            if (matches.size() != 1) {
+                return new Assessment(Status.MISSING_OR_AMBIGUOUS_DECLARATION, null, catalogues.size());
+            }
+            ReplayCapabilityDeclaration declaration = matches.getFirst();
+            if (!declaration.isFullyDeclared() || declaration.idempotencyCapability() == IdempotencyCapability.NONE) {
+                return new Assessment(Status.REPLAY_SAFETY_UNPROVEN, declaration, catalogues.size());
+            }
+            if (EmptyChecks.isNotNull(agreed) && !agreed.equals(declaration)) {
+                return new Assessment(Status.WORKER_DECLARATIONS_DIFFER, null, catalogues.size());
+            }
+            agreed = declaration;
+        }
+        return new Assessment(Status.DECLARED_CONSISTENT, agreed, catalogues.size());
     }
-    if (EmptyChecks.isBlank(pluginId)) {
-      return new Assessment(Status.PLUGIN_SELECTION_NOT_FROZEN, null, 0);
-    }
-    List<String> catalogues = workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
-        tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
-    if (EmptyChecks.isEmpty(catalogues)) {
-      return new Assessment(Status.NO_ONLINE_WORKERS, null, 0);
-    }
-    ReplayCapabilityDeclaration agreed = null;
-    for (String catalogue : catalogues) {
-      List<ReplayCapabilityDeclaration> matches = selectedDeclarations(catalogue, pluginId);
-      if (matches.size() != 1) {
-        return new Assessment(Status.MISSING_OR_AMBIGUOUS_DECLARATION, null, catalogues.size());
-      }
-      ReplayCapabilityDeclaration declaration = matches.getFirst();
-      if (!declaration.isFullyDeclared()
-          || declaration.idempotencyCapability() == IdempotencyCapability.NONE) {
-        return new Assessment(Status.REPLAY_SAFETY_UNPROVEN, declaration, catalogues.size());
-      }
-      if (EmptyChecks.isNotNull(agreed) && !agreed.equals(declaration)) {
-        return new Assessment(Status.WORKER_DECLARATIONS_DIFFER, null, catalogues.size());
-      }
-      agreed = declaration;
-    }
-    return new Assessment(Status.DECLARED_CONSISTENT, agreed, catalogues.size());
-  }
 
-  private List<ReplayCapabilityDeclaration> selectedDeclarations(
-      String catalogue, String pluginId) {
-    if (EmptyChecks.isBlank(catalogue)) {
-      return List.of();
+    private List<ReplayCapabilityDeclaration> selectedDeclarations(String catalogue, String pluginId) {
+        if (EmptyChecks.isBlank(catalogue)) {
+            return List.of();
+        }
+        try {
+            List<ReplayCapabilityDeclaration> declarations =
+                    JsonUtils.fromJson(catalogue, new TypeReference<List<ReplayCapabilityDeclaration>>() {});
+            if (EmptyChecks.isNull(declarations)) {
+                return List.of();
+            }
+            return declarations.stream()
+                    .filter(EmptyChecks::isNotNull)
+                    .filter(declaration -> pluginId.equals(declaration.pluginId()))
+                    .toList();
+        } catch (IllegalArgumentException invalidCatalogue) {
+            // 无效的持久化注册元数据不能使自动重放获准执行。
+            return List.of();
+        }
     }
-    try {
-      List<ReplayCapabilityDeclaration> declarations =
-          JsonUtils.fromJson(catalogue, new TypeReference<List<ReplayCapabilityDeclaration>>() {});
-      if (EmptyChecks.isNull(declarations)) {
-        return List.of();
-      }
-      return declarations.stream()
-          .filter(EmptyChecks::isNotNull)
-          .filter(declaration -> pluginId.equals(declaration.pluginId()))
-          .toList();
-    } catch (IllegalArgumentException invalidCatalogue) {
-      // 无效的持久化注册元数据不能使自动重放获准执行。
-      return List.of();
+
+    public enum Status {
+        DECLARED_CONSISTENT,
+        WORKER_GROUP_NOT_FROZEN,
+        PLUGIN_SELECTION_NOT_FROZEN,
+        NO_ONLINE_WORKERS,
+        MISSING_OR_AMBIGUOUS_DECLARATION,
+        REPLAY_SAFETY_UNPROVEN,
+        WORKER_DECLARATIONS_DIFFER
     }
-  }
 
-  public enum Status {
-    DECLARED_CONSISTENT,
-    WORKER_GROUP_NOT_FROZEN,
-    PLUGIN_SELECTION_NOT_FROZEN,
-    NO_ONLINE_WORKERS,
-    MISSING_OR_AMBIGUOUS_DECLARATION,
-    REPLAY_SAFETY_UNPROVEN,
-    WORKER_DECLARATIONS_DIFFER
-  }
-
-  /** 一致声明只是预览输入，不能单独作为执行准入。 */
-  public record Assessment(
-      Status status, ReplayCapabilityDeclaration declaration, int workerCount) {}
+    /** 一致声明只是预览输入，不能单独作为执行准入。 */
+    public record Assessment(Status status, ReplayCapabilityDeclaration declaration, int workerCount) {}
 }

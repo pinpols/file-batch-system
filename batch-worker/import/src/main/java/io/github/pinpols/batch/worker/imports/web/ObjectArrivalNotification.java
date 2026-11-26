@@ -15,12 +15,12 @@ import lombok.Data;
 @Data
 public class ObjectArrivalNotification {
 
-  /** 租户 id(可选,仅日志定位用)。 */
-  private String tenantId;
+    /** 租户 id(可选,仅日志定位用)。 */
+    private String tenantId;
 
-  /** 对象存储 bucket(可选,仅日志定位用)。 */
-  private String bucket;
+    /** 对象存储 bucket(可选,仅日志定位用)。 */
+    private String bucket;
 
-  /** 到达对象 key(可选,仅日志定位用)。 */
-  private String objectKey;
+    /** 到达对象 key(可选,仅日志定位用)。 */
+    private String objectKey;
 }

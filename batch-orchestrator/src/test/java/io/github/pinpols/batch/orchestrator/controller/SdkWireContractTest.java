@@ -40,356 +40,340 @@ import org.junit.jupiter.api.Test;
 @DisplayName("端侧协议报文与平台侧载荷的字段映射契约:防字段改名或删除导致两端语义漂移")
 class SdkWireContractTest {
 
-  private static final ObjectMapper MAPPER =
-      new ObjectMapper().registerModule(new JavaTimeModule());
+    private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
-  // ─── /internal/workers/register ─────────────────────────────────────────
+    // ─── /internal/workers/register ─────────────────────────────────────────
 
-  @Test
-  @DisplayName("注册请求填齐全部字段时,平台侧心跳载荷逐字段取值一致,且不携带任务类型定义")
-  void shouldMapRegisterFields_whenRegisterRequestIsComplete() throws Exception {
-    RegisterRequest sdkSide = new RegisterRequest(
-        "tenant-acme",
-        "worker-1",
-        "sdk-self-hosted",
-        "RUNNING",
-        "host-a",
-        "10.0.0.1",
-        "12345",
-        "build-9",
-        "sdk-2.1.0",
-        Instant.parse("2026-05-31T10:00:00Z"),
-        List.of("echo", "sleep"),
-        3,
-        4,
-        null,
-        "v2");
+    @Test
+    @DisplayName("注册请求填齐全部字段时,平台侧心跳载荷逐字段取值一致,且不携带任务类型定义")
+    void shouldMapRegisterFields_whenRegisterRequestIsComplete() throws Exception {
+        RegisterRequest sdkSide = new RegisterRequest(
+                "tenant-acme",
+                "worker-1",
+                "sdk-self-hosted",
+                "RUNNING",
+                "host-a",
+                "10.0.0.1",
+                "12345",
+                "build-9",
+                "sdk-2.1.0",
+                Instant.parse("2026-05-31T10:00:00Z"),
+                List.of("echo", "sleep"),
+                3,
+                4,
+                null,
+                "v2");
 
-    WorkerHeartbeatDto platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
+        WorkerHeartbeatDto platformSide = MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
 
-    assertThat(platformSide.protocolVersion()).isEqualTo("v2");
-    assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
-    assertThat(platformSide.workerCode()).isEqualTo("worker-1");
-    assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
-    assertThat(platformSide.status()).isEqualTo("RUNNING");
-    assertThat(platformSide.hostName()).isEqualTo("host-a");
-    assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
-    assertThat(platformSide.processId()).isEqualTo("12345");
-    assertThat(platformSide.buildId()).isEqualTo("build-9");
-    assertThat(platformSide.sdkVersion()).isEqualTo("sdk-2.1.0");
-    assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:00:00Z"));
-    assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
-    assertThat(platformSide.currentLoad()).isEqualTo(3);
-    assertThat(platformSide.maxConcurrent()).isEqualTo(4);
-    assertThat(platformSide.taskTypes()).isNull();
-  }
+        assertThat(platformSide.protocolVersion()).isEqualTo("v2");
+        assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
+        assertThat(platformSide.workerCode()).isEqualTo("worker-1");
+        assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
+        assertThat(platformSide.status()).isEqualTo("RUNNING");
+        assertThat(platformSide.hostName()).isEqualTo("host-a");
+        assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
+        assertThat(platformSide.processId()).isEqualTo("12345");
+        assertThat(platformSide.buildId()).isEqualTo("build-9");
+        assertThat(platformSide.sdkVersion()).isEqualTo("sdk-2.1.0");
+        assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:00:00Z"));
+        assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
+        assertThat(platformSide.currentLoad()).isEqualTo(3);
+        assertThat(platformSide.maxConcurrent()).isEqualTo(4);
+        assertThat(platformSide.taskTypes()).isNull();
+    }
 
-  @Test
-  @DisplayName("注册请求携带任务类型描述时,平台侧还原编码,展示名,版本,默认参数,输入约束与模板变量")
-  void shouldMapTaskTypeDescriptor_whenRegisterCarriesDescriptor() throws Exception {
-    // Phase 3 M3.1:SDK SdkTaskTypeDescriptor → 平台 WorkerTaskTypeDescriptorDto 字段名 1:1。
-    SdkTaskTypeDescriptor descriptor = new SdkTaskTypeDescriptor(
-        "tenant_acme_import",
-        "每日对账导入",
-        "v1",
-        Map.of("batchSize", 1000),
-        Map.of("type", "object", "required", List.of("sourcePath")),
-        List.of("bizDate"));
-    RegisterRequest sdkSide = RegisterRequest.builder()
-        .tenantId("tenant-acme")
-        .workerCode("worker-1")
-        .workerGroup("sdk-self-hosted")
-        .status("RUNNING")
-        .heartbeatAt(Instant.parse("2026-05-31T10:00:00Z"))
-        .capabilityTags(List.of("tenant_acme_import"))
-        .currentLoad(0)
-        .taskTypes(List.of(descriptor))
-        .protocolVersion("v1")
-        .build();
+    @Test
+    @DisplayName("注册请求携带任务类型描述时,平台侧还原编码,展示名,版本,默认参数,输入约束与模板变量")
+    void shouldMapTaskTypeDescriptor_whenRegisterCarriesDescriptor() throws Exception {
+        // Phase 3 M3.1:SDK SdkTaskTypeDescriptor → 平台 WorkerTaskTypeDescriptorDto 字段名 1:1。
+        SdkTaskTypeDescriptor descriptor = new SdkTaskTypeDescriptor(
+                "tenant_acme_import",
+                "每日对账导入",
+                "v1",
+                Map.of("batchSize", 1000),
+                Map.of("type", "object", "required", List.of("sourcePath")),
+                List.of("bizDate"));
+        RegisterRequest sdkSide = RegisterRequest.builder()
+                .tenantId("tenant-acme")
+                .workerCode("worker-1")
+                .workerGroup("sdk-self-hosted")
+                .status("RUNNING")
+                .heartbeatAt(Instant.parse("2026-05-31T10:00:00Z"))
+                .capabilityTags(List.of("tenant_acme_import"))
+                .currentLoad(0)
+                .taskTypes(List.of(descriptor))
+                .protocolVersion("v1")
+                .build();
 
-    WorkerHeartbeatDto platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
+        WorkerHeartbeatDto platformSide = MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
 
-    assertThat(platformSide.taskTypes()).hasSize(1);
-    WorkerTaskTypeDescriptorDto dto = platformSide.taskTypes().get(0);
-    assertThat(dto.code()).isEqualTo("tenant_acme_import");
-    assertThat(dto.displayName()).isEqualTo("每日对账导入");
-    assertThat(dto.version()).isEqualTo("v1");
-    assertThat(dto.defaults()).containsEntry("batchSize", 1000);
-    assertThat(dto.inputSchema()).containsEntry("type", "object");
-    assertThat(dto.templateVariables()).containsExactly("bizDate");
-  }
+        assertThat(platformSide.taskTypes()).hasSize(1);
+        WorkerTaskTypeDescriptorDto dto = platformSide.taskTypes().get(0);
+        assertThat(dto.code()).isEqualTo("tenant_acme_import");
+        assertThat(dto.displayName()).isEqualTo("每日对账导入");
+        assertThat(dto.version()).isEqualTo("v1");
+        assertThat(dto.defaults()).containsEntry("batchSize", 1000);
+        assertThat(dto.inputSchema()).containsEntry("type", "object");
+        assertThat(dto.templateVariables()).containsExactly("bizDate");
+    }
 
-  // ─── /internal/workers/{workerCode}/heartbeat ───────────────────────────
+    // ─── /internal/workers/{workerCode}/heartbeat ───────────────────────────
 
-  @Test
-  @DisplayName("心跳请求携带工作节点身份信息时,平台侧保留分组,主机名,主机地址,进程号,构建号与能力标签")
-  void shouldMapHeartbeatWorkerIdentity_whenHeartbeatRequestArrives() throws Exception {
-    // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
-    // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
-    // 这 6 字段(register 时已上报,但平台回退降级 register 路径时需要它们消除字段丢失窗口)。
-    HeartbeatRequest sdkSide = new HeartbeatRequest(
-        "tenant-acme",
-        "worker-1",
-        "sdk-self-hosted",
-        "RUNNING",
-        "host-a",
-        "10.0.0.1",
-        "12345",
-        "build-9",
-        Instant.parse("2026-05-31T10:05:00Z"),
-        List.of("echo", "sleep"),
-        5);
+    @Test
+    @DisplayName("心跳请求携带工作节点身份信息时,平台侧保留分组,主机名,主机地址,进程号,构建号与能力标签")
+    void shouldMapHeartbeatWorkerIdentity_whenHeartbeatRequestArrives() throws Exception {
+        // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
+        // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
+        // 这 6 字段(register 时已上报,但平台回退降级 register 路径时需要它们消除字段丢失窗口)。
+        HeartbeatRequest sdkSide = new HeartbeatRequest(
+                "tenant-acme",
+                "worker-1",
+                "sdk-self-hosted",
+                "RUNNING",
+                "host-a",
+                "10.0.0.1",
+                "12345",
+                "build-9",
+                Instant.parse("2026-05-31T10:05:00Z"),
+                List.of("echo", "sleep"),
+                5);
 
-    WorkerHeartbeatDto platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
+        WorkerHeartbeatDto platformSide = MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
 
-    assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
-    assertThat(platformSide.workerCode()).isEqualTo("worker-1");
-    assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
-    assertThat(platformSide.status()).isEqualTo("RUNNING");
-    assertThat(platformSide.hostName()).isEqualTo("host-a");
-    assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
-    assertThat(platformSide.processId()).isEqualTo("12345");
-    assertThat(platformSide.buildId()).isEqualTo("build-9");
-    assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
-    assertThat(platformSide.currentLoad()).isEqualTo(5);
-    assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:05:00Z"));
-    assertThat(platformSide.pipelineProgress()).isNull();
-  }
+        assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
+        assertThat(platformSide.workerCode()).isEqualTo("worker-1");
+        assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
+        assertThat(platformSide.status()).isEqualTo("RUNNING");
+        assertThat(platformSide.hostName()).isEqualTo("host-a");
+        assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
+        assertThat(platformSide.processId()).isEqualTo("12345");
+        assertThat(platformSide.buildId()).isEqualTo("build-9");
+        assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
+        assertThat(platformSide.currentLoad()).isEqualTo(5);
+        assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:05:00Z"));
+        assertThat(platformSide.pipelineProgress()).isNull();
+    }
 
-  @Test
-  @DisplayName("已下线的标量进度字段不再出现在心跳报文中,平台侧读取的流水线进度为空")
-  void shouldOmitRemovedScalarProgress_whenHeartbeatIsSerialized() throws Exception {
-    // BYO SDK 不伪造 pipeline 身份，也不再发布无任务身份的进程级进度。
-    HeartbeatRequest sdkSide = new HeartbeatRequest(
-        "tenant-acme",
-        "worker-1",
-        null,
-        "IDLE",
-        null,
-        null,
-        null,
-        null,
-        Instant.parse("2026-05-31T10:05:00Z"),
-        null,
-        0);
-    String json = MAPPER.writeValueAsString(sdkSide);
-    // NON_NULL 序列化策略下 null 字段不应出现
-    assertThat(json).doesNotContain("rowsProcessed").doesNotContain("totalRowsHint");
-    WorkerHeartbeatDto platformSide = MAPPER.readValue(json, WorkerHeartbeatDto.class);
-    assertThat(platformSide.pipelineProgress()).isNull();
-  }
+    @Test
+    @DisplayName("已下线的标量进度字段不再出现在心跳报文中,平台侧读取的流水线进度为空")
+    void shouldOmitRemovedScalarProgress_whenHeartbeatIsSerialized() throws Exception {
+        // BYO SDK 不伪造 pipeline 身份，也不再发布无任务身份的进程级进度。
+        HeartbeatRequest sdkSide = new HeartbeatRequest(
+                "tenant-acme",
+                "worker-1",
+                null,
+                "IDLE",
+                null,
+                null,
+                null,
+                null,
+                Instant.parse("2026-05-31T10:05:00Z"),
+                null,
+                0);
+        String json = MAPPER.writeValueAsString(sdkSide);
+        // NON_NULL 序列化策略下 null 字段不应出现
+        assertThat(json).doesNotContain("rowsProcessed").doesNotContain("totalRowsHint");
+        WorkerHeartbeatDto platformSide = MAPPER.readValue(json, WorkerHeartbeatDto.class);
+        assertThat(platformSide.pipelineProgress()).isNull();
+    }
 
-  // ─── /internal/tasks/{taskId}/claim ─────────────────────────────────────
+    // ─── /internal/tasks/{taskId}/claim ─────────────────────────────────────
 
-  @Test
-  @DisplayName("任务认领请求到达时,平台侧还原租户,工作节点与分区调用标识")
-  void shouldMapClaimIdentity_whenClaimRequestArrives() throws Exception {
-    ClaimRequest sdkSide = new ClaimRequest("tenant-acme", "worker-1", "inv-789");
+    @Test
+    @DisplayName("任务认领请求到达时,平台侧还原租户,工作节点与分区调用标识")
+    void shouldMapClaimIdentity_whenClaimRequestArrives() throws Exception {
+        ClaimRequest sdkSide = new ClaimRequest("tenant-acme", "worker-1", "inv-789");
 
-    TaskClaimRequest platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskClaimRequest.class);
+        TaskClaimRequest platformSide = MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskClaimRequest.class);
 
-    assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
-    assertThat(platformSide.workerId()).isEqualTo("worker-1");
-    assertThat(platformSide.partitionInvocationId()).isEqualTo("inv-789");
-  }
+        assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
+        assertThat(platformSide.workerId()).isEqualTo("worker-1");
+        assertThat(platformSide.partitionInvocationId()).isEqualTo("inv-789");
+    }
 
-  // ─── /internal/tasks/{taskId}/renew ─────────────────────────────────────
+    // ─── /internal/tasks/{taskId}/renew ─────────────────────────────────────
 
-  @Test
-  @DisplayName("旧版端侧仅上报三个字段时续期请求仍可解析,缺失的分区调用标识与明细为空")
-  void shouldParseRenewRequest_whenLegacySdkOmitsDetails() throws Exception {
-    // ORCH-P4-1:renew 绑定 TaskHeartbeatRequest;旧 SDK 仅发 3 字段,details=null 向前兼容。
-    RenewRequest sdkSide = new RenewRequest("tenant-acme", "worker-1", null);
+    @Test
+    @DisplayName("旧版端侧仅上报三个字段时续期请求仍可解析,缺失的分区调用标识与明细为空")
+    void shouldParseRenewRequest_whenLegacySdkOmitsDetails() throws Exception {
+        // ORCH-P4-1:renew 绑定 TaskHeartbeatRequest;旧 SDK 仅发 3 字段,details=null 向前兼容。
+        RenewRequest sdkSide = new RenewRequest("tenant-acme", "worker-1", null);
 
-    TaskHeartbeatRequest platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskHeartbeatRequest.class);
+        TaskHeartbeatRequest platformSide =
+                MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskHeartbeatRequest.class);
 
-    assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
-    assertThat(platformSide.workerId()).isEqualTo("worker-1");
-    assertThat(platformSide.partitionInvocationId()).isNull();
-    assertThat(platformSide.details()).isNull();
-  }
+        assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
+        assertThat(platformSide.workerId()).isEqualTo("worker-1");
+        assertThat(platformSide.partitionInvocationId()).isNull();
+        assertThat(platformSide.details()).isNull();
+    }
 
-  // ─── /internal/tasks/{taskId}/report ────────────────────────────────────
+    // ─── /internal/tasks/{taskId}/report ────────────────────────────────────
 
-  @Test
-  @DisplayName("成功上报到达时,平台侧还原任务身份,链路标识,结果码,结果摘要,外部水位与输出明细")
-  void shouldMapReportFields_whenSuccessReportArrives() throws Exception {
-    ReportRequest sdkSide = new ReportRequest(
-        42L,
-        "tenant-acme",
-        "worker-1",
-        "trace-abc",
-        true,
-        "OK",
-        "done",
-        "rows=5",
-        null,
-        "2026-05-31",
-        Map.of("rows", 5),
-        "inv-789",
-        null,
-        null);
+    @Test
+    @DisplayName("成功上报到达时,平台侧还原任务身份,链路标识,结果码,结果摘要,外部水位与输出明细")
+    void shouldMapReportFields_whenSuccessReportArrives() throws Exception {
+        ReportRequest sdkSide = new ReportRequest(
+                42L,
+                "tenant-acme",
+                "worker-1",
+                "trace-abc",
+                true,
+                "OK",
+                "done",
+                "rows=5",
+                null,
+                "2026-05-31",
+                Map.of("rows", 5),
+                "inv-789",
+                null,
+                null);
 
-    TaskExecutionReportDto platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
+        TaskExecutionReportDto platformSide =
+                MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
 
-    assertThat(platformSide.getTaskId()).isEqualTo(42L);
-    assertThat(platformSide.getTenantId()).isEqualTo("tenant-acme");
-    assertThat(platformSide.getWorkerId()).isEqualTo("worker-1");
-    assertThat(platformSide.getTraceId()).isEqualTo("trace-abc");
-    assertThat(platformSide.isSuccess()).isTrue();
-    assertThat(platformSide.getCode()).isEqualTo("OK");
-    assertThat(platformSide.getMessage()).isEqualTo("done");
-    assertThat(platformSide.getResultSummary()).isEqualTo("rows=5");
-    assertThat(platformSide.getHighWaterMarkOut()).isEqualTo("2026-05-31");
-    assertThat(platformSide.getOutputs()).containsEntry("rows", 5);
-    assertThat(platformSide.getPartitionInvocationId()).isEqualTo("inv-789");
-  }
+        assertThat(platformSide.getTaskId()).isEqualTo(42L);
+        assertThat(platformSide.getTenantId()).isEqualTo("tenant-acme");
+        assertThat(platformSide.getWorkerId()).isEqualTo("worker-1");
+        assertThat(platformSide.getTraceId()).isEqualTo("trace-abc");
+        assertThat(platformSide.isSuccess()).isTrue();
+        assertThat(platformSide.getCode()).isEqualTo("OK");
+        assertThat(platformSide.getMessage()).isEqualTo("done");
+        assertThat(platformSide.getResultSummary()).isEqualTo("rows=5");
+        assertThat(platformSide.getHighWaterMarkOut()).isEqualTo("2026-05-31");
+        assertThat(platformSide.getOutputs()).containsEntry("rows", 5);
+        assertThat(platformSide.getPartitionInvocationId()).isEqualTo("inv-789");
+    }
 
-  @Test
-  @DisplayName("失败上报到达时,平台侧保留成功标记为假,消息,异常类名,结果摘要,失败分类与校验失败明细")
-  void shouldCarryFailureDetails_whenReportFails() throws Exception {
-    ReportRequest sdkSide = new ReportRequest(
-        42L,
-        "tenant-acme",
-        "worker-1",
-        null,
-        false,
-        null,
-        "handler failed",
-        "boom",
-        "IllegalStateException",
-        null,
-        null,
-        null,
-        "BIZ_ERROR",
-        List.of(Map.of("code", "VERIFY_FAIL", "message", "row 3 invalid")));
+    @Test
+    @DisplayName("失败上报到达时,平台侧保留成功标记为假,消息,异常类名,结果摘要,失败分类与校验失败明细")
+    void shouldCarryFailureDetails_whenReportFails() throws Exception {
+        ReportRequest sdkSide = new ReportRequest(
+                42L,
+                "tenant-acme",
+                "worker-1",
+                null,
+                false,
+                null,
+                "handler failed",
+                "boom",
+                "IllegalStateException",
+                null,
+                null,
+                null,
+                "BIZ_ERROR",
+                List.of(Map.of("code", "VERIFY_FAIL", "message", "row 3 invalid")));
 
-    TaskExecutionReportDto platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
+        TaskExecutionReportDto platformSide =
+                MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
 
-    assertThat(platformSide.isSuccess()).isFalse();
-    assertThat(platformSide.getMessage()).isEqualTo("handler failed");
-    assertThat(platformSide.getErrorCode()).isEqualTo("IllegalStateException");
-    assertThat(platformSide.getResultSummary()).isEqualTo("boom");
-    assertThat(platformSide.getFailureClass()).isEqualTo("BIZ_ERROR");
-    assertThat(platformSide.getVerifierFailures()).hasSize(1);
-  }
+        assertThat(platformSide.isSuccess()).isFalse();
+        assertThat(platformSide.getMessage()).isEqualTo("handler failed");
+        assertThat(platformSide.getErrorCode()).isEqualTo("IllegalStateException");
+        assertThat(platformSide.getResultSummary()).isEqualTo("boom");
+        assertThat(platformSide.getFailureClass()).isEqualTo("BIZ_ERROR");
+        assertThat(platformSide.getVerifierFailures()).hasSize(1);
+    }
 
-  // ─── 字段命名陷阱回归 ───────────────────────────────────────────────────
+    // ─── 字段命名陷阱回归 ───────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("上报序列化后只出现复数形式的输出字段,单数写法不得产生,否则平台永远读不到输出")
-  void shouldSerializePluralOutputField_whenReportIsSerialized() throws Exception {
-    ReportRequest sdkSide = new ReportRequest(
-        1L, "t", "w", null, true, null, null, null, null, null, Map.of("k", "v"), null, null, null);
-    JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
-    // 平台 TaskExecutionReportDto 字段名是 outputs(复数);若 SDK 写 output(单数)
-    // 平台读不到 → 节点 output 永远空。本断言守门。
-    assertThat(tree.has("outputs")).as("must serialize as 'outputs' (plural)").isTrue();
-    assertThat(tree.has("output"))
-        .as("must NOT serialize as 'output' (singular)")
-        .isFalse();
-  }
+    @Test
+    @DisplayName("上报序列化后只出现复数形式的输出字段,单数写法不得产生,否则平台永远读不到输出")
+    void shouldSerializePluralOutputField_whenReportIsSerialized() throws Exception {
+        ReportRequest sdkSide = new ReportRequest(
+                1L, "t", "w", null, true, null, null, null, null, null, Map.of("k", "v"), null, null, null);
+        JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
+        // 平台 TaskExecutionReportDto 字段名是 outputs(复数);若 SDK 写 output(单数)
+        // 平台读不到 → 节点 output 永远空。本断言守门。
+        assertThat(tree.has("outputs"))
+                .as("must serialize as 'outputs' (plural)")
+                .isTrue();
+        assertThat(tree.has("output"))
+                .as("must NOT serialize as 'output' (singular)")
+                .isFalse();
+    }
 
-  @Test
-  @DisplayName("上报序列化后使用错误码字段承载异常信息,废弃的异常类字段不再出现")
-  void shouldSerializeErrorCodeField_whenReportIsSerialized() throws Exception {
-    ReportRequest sdkSide = new ReportRequest(
-        1L,
-        "t",
-        "w",
-        null,
-        false,
-        null,
-        null,
-        null,
-        "RuntimeException",
-        null,
-        null,
-        null,
-        null,
-        null);
-    JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
-    assertThat(tree.has("errorCode")).isTrue();
-    assertThat(tree.has("errorClass")).as("废字段 errorClass 不应出现").isFalse();
-  }
+    @Test
+    @DisplayName("上报序列化后使用错误码字段承载异常信息,废弃的异常类字段不再出现")
+    void shouldSerializeErrorCodeField_whenReportIsSerialized() throws Exception {
+        ReportRequest sdkSide = new ReportRequest(
+                1L, "t", "w", null, false, null, null, null, "RuntimeException", null, null, null, null, null);
+        JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
+        assertThat(tree.has("errorCode")).isTrue();
+        assertThat(tree.has("errorClass")).as("废字段 errorClass 不应出现").isFalse();
+    }
 
-  // ─── Kafka payload 契约 ────────────────────────────────────────────────
+    // ─── Kafka payload 契约 ────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("平台派单报文跨进程传输时携带受支持的协议版本号,端侧可识别并判定兼容")
-  void shouldCarrySupportedSchemaVersion_whenDispatchCrossesWire() throws Exception {
-    // 平台侧 TaskDispatchMessage 必须含 schemaVersion 字段(Phase 0 §2.1)。
-    TaskDispatchMessage platform = new TaskDispatchMessage(
-        "v2",
-        "tenant-acme",
-        10L,
-        null,
-        42L,
-        "ji-01",
-        "daily-report",
-        "echo",
-        null,
-        "MEDIUM",
-        "trace-abc",
-        "idem-1",
-        Instant.parse("2026-05-31T10:00:00Z"),
-        null);
-    JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
-    assertThat(tree.get("schemaVersion").asText()).isEqualTo("v2");
+    @Test
+    @DisplayName("平台派单报文跨进程传输时携带受支持的协议版本号,端侧可识别并判定兼容")
+    void shouldCarrySupportedSchemaVersion_whenDispatchCrossesWire() throws Exception {
+        // 平台侧 TaskDispatchMessage 必须含 schemaVersion 字段(Phase 0 §2.1)。
+        TaskDispatchMessage platform = new TaskDispatchMessage(
+                "v2",
+                "tenant-acme",
+                10L,
+                null,
+                42L,
+                "ji-01",
+                "daily-report",
+                "echo",
+                null,
+                "MEDIUM",
+                "trace-abc",
+                "idem-1",
+                Instant.parse("2026-05-31T10:00:00Z"),
+                null);
+        JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
+        assertThat(tree.get("schemaVersion").asText()).isEqualTo("v2");
 
-    // SDK 端反序列化能识别 schemaVersion 且认可 v2。
-    var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
-    assertThat(sdk.schemaVersion()).isEqualTo("v2");
-    assertThat(sdk.isSchemaSupported()).isTrue();
-  }
+        // SDK 端反序列化能识别 schemaVersion 且认可 v2。
+        var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
+        assertThat(sdk.schemaVersion()).isEqualTo("v2");
+        assertThat(sdk.isSchemaSupported()).isTrue();
+    }
 
-  @Test
-  @DisplayName("平台派单报文的派单路由字段被端侧绑定到处理器路由键,旧版字段名仍解析为同一路由键")
-  void shouldBindWorkerTypeToHandlerKey_whenDispatchCrossesWire() throws Exception {
-    // 回归守护(workerType P0):平台派单消息以 JSON 字段名 `workerType` 承载路由键,SDK 必须把它绑定到
-    // 自己的 handler 路由键 taskType()(@JsonProperty("workerType") @JsonAlias("taskType"))。
-    // 任一端改名 / "瘦身"漏掉这个字段 → register 仍过,但 worker 收到派单后 handlers.get(taskType()) 拿到 null,
-    // execute 静默失败(no handler for taskType=null)。SDK 全部 conformance / SampleTenantWorkerIT 都走
-    // FakeBatchPlatform / TaskDispatchMessageBuilder,在进程内直接构造 SDK record、从不序列化平台的 `workerType`
-    // JSON,所以测不到这条跨进程契约;sim 06 dispatch-execute 腿(真过 Kafka)是它的运行期对照。
-    TaskDispatchMessage platform = new TaskDispatchMessage(
-        "v2",
-        "tenant-acme",
-        10L,
-        null,
-        42L,
-        "ji-01",
-        "daily-report",
-        "echo", // workerType:派单路由键,worker 据此选 handler
-        null,
-        "MEDIUM",
-        "trace-abc",
-        "idem-1",
-        Instant.parse("2026-05-31T10:00:00Z"),
-        null);
+    @Test
+    @DisplayName("平台派单报文的派单路由字段被端侧绑定到处理器路由键,旧版字段名仍解析为同一路由键")
+    void shouldBindWorkerTypeToHandlerKey_whenDispatchCrossesWire() throws Exception {
+        // 回归守护(workerType P0):平台派单消息以 JSON 字段名 `workerType` 承载路由键,SDK 必须把它绑定到
+        // 自己的 handler 路由键 taskType()(@JsonProperty("workerType") @JsonAlias("taskType"))。
+        // 任一端改名 / "瘦身"漏掉这个字段 → register 仍过,但 worker 收到派单后 handlers.get(taskType()) 拿到 null,
+        // execute 静默失败(no handler for taskType=null)。SDK 全部 conformance / SampleTenantWorkerIT 都走
+        // FakeBatchPlatform / TaskDispatchMessageBuilder,在进程内直接构造 SDK record、从不序列化平台的 `workerType`
+        // JSON,所以测不到这条跨进程契约;sim 06 dispatch-execute 腿(真过 Kafka)是它的运行期对照。
+        TaskDispatchMessage platform = new TaskDispatchMessage(
+                "v2",
+                "tenant-acme",
+                10L,
+                null,
+                42L,
+                "ji-01",
+                "daily-report",
+                "echo", // workerType:派单路由键,worker 据此选 handler
+                null,
+                "MEDIUM",
+                "trace-abc",
+                "idem-1",
+                Instant.parse("2026-05-31T10:00:00Z"),
+                null);
 
-    // 平台序列化后的 JSON 字段名必须是 `workerType`(不是 `taskType`),这是契约方向锚点。
-    JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
-    assertThat(tree.hasNonNull("workerType")).isTrue();
-    assertThat(tree.get("workerType").asText()).isEqualTo("echo");
+        // 平台序列化后的 JSON 字段名必须是 `workerType`(不是 `taskType`),这是契约方向锚点。
+        JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
+        assertThat(tree.hasNonNull("workerType")).isTrue();
+        assertThat(tree.get("workerType").asText()).isEqualTo("echo");
 
-    // SDK 反序列化后,handler 路由键 taskType() 必须等于平台的 workerType —— 否则 handlers.get() 必拿 null。
-    var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
-    assertThat(sdk.taskType())
-        .as("平台 workerType 必须绑定到 SDK handler 路由键 taskType()")
-        .isEqualTo("echo");
-    assertThat(sdk.taskId()).isEqualTo(42L);
+        // SDK 反序列化后,handler 路由键 taskType() 必须等于平台的 workerType —— 否则 handlers.get() 必拿 null。
+        var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
+        assertThat(sdk.taskType())
+                .as("平台 workerType 必须绑定到 SDK handler 路由键 taskType()")
+                .isEqualTo("echo");
+        assertThat(sdk.taskId()).isEqualTo(42L);
 
-    // 向后兼容:v1 旧字段名 `taskType` 经 @JsonAlias 仍能被 SDK 解析为同一路由键。
-    var legacy = SdkTaskDispatchMessageReader.read(
-        MAPPER, "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}");
-    assertThat(legacy.taskType()).isEqualTo("echo");
-  }
+        // 向后兼容:v1 旧字段名 `taskType` 经 @JsonAlias 仍能被 SDK 解析为同一路由键。
+        var legacy = SdkTaskDispatchMessageReader.read(
+                MAPPER, "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}");
+        assertThat(legacy.taskType()).isEqualTo("echo");
+    }
 }

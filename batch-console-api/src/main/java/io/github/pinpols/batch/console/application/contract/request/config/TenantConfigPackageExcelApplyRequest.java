@@ -6,8 +6,8 @@ import lombok.Data;
 @Data
 public class TenantConfigPackageExcelApplyRequest {
 
-  private String previewToken;
+    private String previewToken;
 
-  @Size(max = 512)
-  private String reason;
+    @Size(max = 512)
+    private String reason;
 }

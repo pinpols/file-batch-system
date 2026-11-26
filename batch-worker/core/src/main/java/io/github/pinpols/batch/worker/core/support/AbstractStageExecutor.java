@@ -25,302 +25,296 @@ import lombok.extern.slf4j.Slf4j;
  * @param <R> 阶段结果类型（须实现 {@link StageExecutionResult}）
  */
 @Slf4j
-public abstract class AbstractStageExecutor<
-    C extends ExecutionContext, R extends StageExecutionResult> {
+public abstract class AbstractStageExecutor<C extends ExecutionContext, R extends StageExecutionResult> {
 
-  /**
-   * 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。
-   *
-   * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用， 避免每个 step 重复声明 {@code
-   * private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
-   */
-  public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+    /**
+     * 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。
+     *
+     * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用， 避免每个 step 重复声明 {@code
+     * private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
+     */
+    public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  protected final PlatformPipelineRunRepository pipelineRuns;
+    protected final PlatformPipelineRunRepository pipelineRuns;
 
-  protected AbstractStageExecutor(PlatformPipelineRunRepository pipelineRuns) {
-    this.pipelineRuns = pipelineRuns;
-  }
-
-  /** 执行阶段循环并返回累积结果；未配置步骤时直接返回 {@link #stepMissingFailure()}。 */
-  protected final List<R> runStageLoop(C context) {
-    List<PipelineStepDefinition> configuredSteps = loadConfiguredSteps(context);
-    List<R> results = new ArrayList<>();
-    if (configuredSteps.isEmpty()) {
-      results.add(stepMissingFailure());
-      return results;
+    protected AbstractStageExecutor(PlatformPipelineRunRepository pipelineRuns) {
+        this.pipelineRuns = pipelineRuns;
     }
-    Long pipelineInstanceId = PlatformRuntimeValues.toLong(
-        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
-    // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
-    // 数值 guard 是回退 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
-    Set<String> visitedStepCodes = new HashSet<>();
-    // P1 阶段级续跑(ADR-038 §决策四):开关开 + 本 pipeline 声明了跳过安全 stage 时,
-    // 一次性读上一 attempt 已成功的 stepCode 集(pipeline_step_run 成功记录跨重派持久,
-    // pipeline_instance 复用 → 同 pipelineInstanceId → 读得到)。命中即幂等跳过,不重算。
-    // 集合在进循环前读一次,只含**历史** attempt 的成功记录;本次 attempt 尚未写 SUCCESS,不会自跳。
-    // 多分区守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):partitionCount>1 时
-    // 整体降级为不跳,防兄弟 partition 的 SUCCESS 记录误判(共享 pipeline_instance,粒度不一致)。
-    boolean stageSkipEnabled = stageSkipEnabled()
-        && pipelineInstanceId != null
-        && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
-    Set<String> skipSafeStages = stageSkipEnabled ? skipSafeStages() : Set.of();
-    Set<String> priorSucceededStepCodes = (stageSkipEnabled && !skipSafeStages.isEmpty())
-        ? pipelineRuns.loadSucceededStepCodes(pipelineInstanceId)
-        : Set.of();
-    PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
-    while (currentStep != null) {
-      if (!visitedStepCodes.add(currentStep.stepCode())) {
-        throw BizException.of(
-            ResultCode.STATE_CONFLICT,
-            "error.workflow.cycle_detected",
-            cycleDetectedMessage() + " (revisit stepCode=" + currentStep.stepCode() + ")");
-      }
-      if (guard-- <= 0) {
-        throw BizException.of(
-            ResultCode.STATE_CONFLICT, "error.workflow.cycle_detected", cycleDetectedMessage());
-      }
-      boolean canSkipSucceededStage = stageSkipEnabled
-          && skipSafeStages.contains(currentStep.stageCode())
-          && priorSucceededStepCodes.contains(currentStep.stepCode());
-      if (canSkipSucceededStage) {
-        // 上一 attempt 该 stage 已成功且副作用已持久化到可由稳定键重建的位置(见
-        // skipSafeStages() 契约)。幂等跳过:不执行 step、不重写 step_run、只推进 last_success_stage
-        // 与下一步指针。不改 orchestrator 状态机、不写 outbox。
-        context
-            .getAttributes()
-            .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
-        // P1-1:跳过时从上次 SUCCESS step_run 的 output_summary 回灌关键产出(如 highWaterMarkOut /
-        // processedCount)。否则跳过 COMPUTE 后 report 水位为 null → 保留旧值 → 下周期 INCREMENTAL 重读重发。
-        carryForwardSkippedStageOutputs(context, currentStep, pipelineInstanceId);
-        log.info(
-            "stage-skip: idempotently skipping already-succeeded stage stepCode={} stageCode={} "
-                + "pipelineInstanceId={}",
-            currentStep.stepCode(),
-            currentStep.stageCode(),
-            pipelineInstanceId);
-        currentStep = PipelineStepFlowSupport.resolveNextStep(
-            currentStep, true, configuredSteps, context.getAttributes());
-        continue;
-      }
-      String lastSuccessStage =
-          (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);
-      pipelineRuns.updatePipelineStage(
-          PipelineRunFence.fromAttributes(context.getAttributes()),
-          currentStep.stageCode(),
-          lastSuccessStage);
-      injectCurrentStepAttributes(context, currentStep);
-      Map<String, Object> inputSummary = buildInputSummary(context, currentStep);
-      Long stepRunId = pipelineRuns.startStepRun(
-          pipelineInstanceId, currentStep.stepCode(), currentStep.stageCode(), inputSummary);
-      context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
 
-      R result = executeOneStep(context, currentStep);
-      results.add(result);
-
-      if (result.success()) {
-        context
-            .getAttributes()
-            .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
-        Map<String, Object> outputSummary = buildOutputSummary(context, result);
-        pipelineRuns.finishStepRunSuccess(stepRunId, outputSummary);
-      } else {
-        Map<String, Object> outputSummary = buildOutputSummary(context, result);
-        pipelineRuns.finishStepRunFailure(
-            stepRunId,
-            result.code(),
-            result.message(),
-            result.errorKey(),
-            result.errorArgs(),
-            outputSummary);
-      }
-      if (!result.success() && isTerminalFailure(result)) {
-        break;
-      }
-      currentStep = PipelineStepFlowSupport.resolveNextStep(
-          currentStep, result.success(), configuredSteps, context.getAttributes());
-      if (!result.success() && currentStep == null) {
-        break;
-      }
-    }
-    return results;
-  }
-
-  /** 对不能继续执行任何后续步骤的领域失败，子类可以显式终止流程。 */
-  protected boolean isTerminalFailure(R result) {
-    return false;
-  }
-
-  /**
-   * P1 阶段级续跑多分区降级守卫(与 ADR-038 P0 {@code LoadStep.checkpointDegradedByMultiPartition} 对称)。
-   *
-   * <p>{@code partitionCount > 1}(mod 切片分区 / ADR-046 bundle 展开)时,K 个 partition task 共享同一 {@code
-   * pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),而 skip-safe stage 的副作用是 **task
-   * 级**(如 PROCESS staging 键 {@code process-<taskId>}):partition A 的 COMPUTE SUCCESS step_run 会让
-   * partition B 误判"已成功"而跳过 → B 的 staging 从未生成 → COMMIT 读 0 行**静默少发布**。
-   * 粒度不一致,保守整体降级为不跳(行为同开关关);多分区崩溃恢复本就由 {@code job_partition} 分区级重跑覆盖(设计文档 §1.8)。
-   */
-  private boolean stageSkipDegradedByMultiPartition(C context, Long pipelineInstanceId) {
-    Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
-    // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
-    if (!CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
-      return false;
-    }
-    log.debug(
-        "stage-skip degraded (multi-partition or illegal partition count; side effects are"
-            + " task-scoped): pipelineInstanceId={}, partitionCount={}",
-        pipelineInstanceId,
-        rawPartitionCount);
-    return true;
-  }
-
-  /**
-   * P1-1 阶段级续跑跳过时回灌产出:从上一 attempt 该 stepCode 的 SUCCESS {@code output_summary} 读回 {@link
-   * #skippedStageCarryForwardKeys()} 声明的键,{@code putIfAbsent} 进 attributes(不覆盖本次已运行 stage 写入的 live
-   * 值)。默认键集空 → no-op;子类(如 PROCESS)override 声明 highWaterMarkOut / processedCount 等需要传递给 report / 下游
-   * NODE_OUTPUTS 的产出键。
-   */
-  private void carryForwardSkippedStageOutputs(
-      C context, PipelineStepDefinition currentStep, Long pipelineInstanceId) {
-    Set<String> keys = skippedStageCarryForwardKeys();
-    if (keys.isEmpty() || pipelineInstanceId == null) {
-      return;
-    }
-    Map<String, Object> summary = pipelineRuns.loadLatestSucceededStepOutputSummary(
-        pipelineInstanceId, currentStep.stepCode());
-    if (summary.isEmpty()) {
-      return;
-    }
-    Map<String, Object> attributes = context.getAttributes();
-    for (String key : keys) {
-      Object value = summary.get(key);
-      if (value != null) {
-        attributes.putIfAbsent(key, value);
-      }
-    }
-  }
-
-  /**
-   * 阶段级续跑跳过时,需从上次 SUCCESS 记录回灌进 attributes 的 {@code output_summary} 键集。默认**空集**——即使 stage
-   * 被跳过也不回灌任何产出。
-   *
-   * <p>只有把关键产出(水位 / 计数)传给 report 或下游 workflow 节点的 pipeline 才 override(键名须与 {@link
-   * #buildOutputSummary} 写入的键一致,回灌到同名 attribute)。避免在基类硬编码 process 专属键。
-   */
-  protected Set<String> skippedStageCarryForwardKeys() {
-    return Set.of();
-  }
-
-  private void injectCurrentStepAttributes(C context, PipelineStepDefinition currentStep) {
-    Map<String, Object> attributes = context.getAttributes();
-    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE, currentStep.stepCode());
-    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STAGE_CODE, currentStep.stageCode());
-    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_IMPL_CODE, currentStep.implCode());
-    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS, currentStep.stepParams());
-  }
-
-  /**
-   * 加载本次 pipeline 运行的有序步骤定义列表。
-   *
-   * <p>只使用系统目录内联到attributes的步骤定义；缺失时返回步骤缺失失败，不回查租户配置。
-   *
-   * <p>特殊场景需要其它解析逻辑（例如基于 stage code 反查）时子类可覆盖。
-   */
-  protected List<PipelineStepDefinition> loadConfiguredSteps(C context) {
-    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
-    if (definitions instanceof List<?> list) {
-      List<PipelineStepDefinition> resolved = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof PipelineStepDefinition definition) {
-          resolved.add(definition);
+    /** 执行阶段循环并返回累积结果；未配置步骤时直接返回 {@link #stepMissingFailure()}。 */
+    protected final List<R> runStageLoop(C context) {
+        List<PipelineStepDefinition> configuredSteps = loadConfiguredSteps(context);
+        List<R> results = new ArrayList<>();
+        if (configuredSteps.isEmpty()) {
+            results.add(stepMissingFailure());
+            return results;
         }
-      }
-      if (!resolved.isEmpty()) {
-        return List.copyOf(resolved);
-      }
+        Long pipelineInstanceId =
+                PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
+        // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
+        // 数值 guard 是回退 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
+        Set<String> visitedStepCodes = new HashSet<>();
+        // P1 阶段级续跑(ADR-038 §决策四):开关开 + 本 pipeline 声明了跳过安全 stage 时,
+        // 一次性读上一 attempt 已成功的 stepCode 集(pipeline_step_run 成功记录跨重派持久,
+        // pipeline_instance 复用 → 同 pipelineInstanceId → 读得到)。命中即幂等跳过,不重算。
+        // 集合在进循环前读一次,只含**历史** attempt 的成功记录;本次 attempt 尚未写 SUCCESS,不会自跳。
+        // 多分区守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):partitionCount>1 时
+        // 整体降级为不跳,防兄弟 partition 的 SUCCESS 记录误判(共享 pipeline_instance,粒度不一致)。
+        boolean stageSkipEnabled = stageSkipEnabled()
+                && pipelineInstanceId != null
+                && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
+        Set<String> skipSafeStages = stageSkipEnabled ? skipSafeStages() : Set.of();
+        Set<String> priorSucceededStepCodes = (stageSkipEnabled && !skipSafeStages.isEmpty())
+                ? pipelineRuns.loadSucceededStepCodes(pipelineInstanceId)
+                : Set.of();
+        PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
+        while (currentStep != null) {
+            if (!visitedStepCodes.add(currentStep.stepCode())) {
+                throw BizException.of(
+                        ResultCode.STATE_CONFLICT,
+                        "error.workflow.cycle_detected",
+                        cycleDetectedMessage() + " (revisit stepCode=" + currentStep.stepCode() + ")");
+            }
+            if (guard-- <= 0) {
+                throw BizException.of(
+                        ResultCode.STATE_CONFLICT, "error.workflow.cycle_detected", cycleDetectedMessage());
+            }
+            boolean canSkipSucceededStage = stageSkipEnabled
+                    && skipSafeStages.contains(currentStep.stageCode())
+                    && priorSucceededStepCodes.contains(currentStep.stepCode());
+            if (canSkipSucceededStage) {
+                // 上一 attempt 该 stage 已成功且副作用已持久化到可由稳定键重建的位置(见
+                // skipSafeStages() 契约)。幂等跳过:不执行 step、不重写 step_run、只推进 last_success_stage
+                // 与下一步指针。不改 orchestrator 状态机、不写 outbox。
+                context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
+                // P1-1:跳过时从上次 SUCCESS step_run 的 output_summary 回灌关键产出(如 highWaterMarkOut /
+                // processedCount)。否则跳过 COMPUTE 后 report 水位为 null → 保留旧值 → 下周期 INCREMENTAL 重读重发。
+                carryForwardSkippedStageOutputs(context, currentStep, pipelineInstanceId);
+                log.info(
+                        "stage-skip: idempotently skipping already-succeeded stage stepCode={} stageCode={} "
+                                + "pipelineInstanceId={}",
+                        currentStep.stepCode(),
+                        currentStep.stageCode(),
+                        pipelineInstanceId);
+                currentStep = PipelineStepFlowSupport.resolveNextStep(
+                        currentStep, true, configuredSteps, context.getAttributes());
+                continue;
+            }
+            String lastSuccessStage =
+                    (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);
+            pipelineRuns.updatePipelineStage(
+                    PipelineRunFence.fromAttributes(context.getAttributes()),
+                    currentStep.stageCode(),
+                    lastSuccessStage);
+            injectCurrentStepAttributes(context, currentStep);
+            Map<String, Object> inputSummary = buildInputSummary(context, currentStep);
+            Long stepRunId = pipelineRuns.startStepRun(
+                    pipelineInstanceId, currentStep.stepCode(), currentStep.stageCode(), inputSummary);
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
+
+            R result = executeOneStep(context, currentStep);
+            results.add(result);
+
+            if (result.success()) {
+                context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
+                Map<String, Object> outputSummary = buildOutputSummary(context, result);
+                pipelineRuns.finishStepRunSuccess(stepRunId, outputSummary);
+            } else {
+                Map<String, Object> outputSummary = buildOutputSummary(context, result);
+                pipelineRuns.finishStepRunFailure(
+                        stepRunId,
+                        result.code(),
+                        result.message(),
+                        result.errorKey(),
+                        result.errorArgs(),
+                        outputSummary);
+            }
+            if (!result.success() && isTerminalFailure(result)) {
+                break;
+            }
+            currentStep = PipelineStepFlowSupport.resolveNextStep(
+                    currentStep, result.success(), configuredSteps, context.getAttributes());
+            if (!result.success() && currentStep == null) {
+                break;
+            }
+        }
+        return results;
     }
-    return List.of();
-  }
 
-  /**
-   * P1 阶段级续跑总开关。默认 {@code false} —— 任何 pipeline 都退回「从首 stage 全量重跑」。
-   *
-   * <p>只有副作用可从持久状态重建的 pipeline(如 PROCESS:staging 按稳定 {@code process-<taskId>} 键)才覆盖为读配置开关; 靠内存
-   * attribute 传中间产物的 pipeline 不得开启(跳过会丢下游输入)。
-   */
-  protected boolean stageSkipEnabled() {
-    return false;
-  }
-
-  /**
-   * 可安全幂等跳过的 stageCode 集合。默认**空集** —— 即使 {@link #stageSkipEnabled()} 为 true 也不跳任何 stage。
-   *
-   * <p>子类只应把满足以下两条的 stage 加入本集合:(1) stage 成功时其副作用已持久化;(2) 下游 stage 能从 **稳定、可确定定位**的持久状态(而非本次跳过的内存
-   * attribute)重建输入。 import/export/dispatch 通过内存 attribute 传 file path/渠道配置,**不满足**(2),故默认空集。
-   */
-  protected Set<String> skipSafeStages() {
-    return Set.of();
-  }
-
-  /** 返回无步骤定义时的失败结果。 */
-  protected abstract R stepMissingFailure();
-
-  /** 执行单个步骤；必须捕获所有异常并转换为失败结果，不得向外抛出。 */
-  protected abstract R executeOneStep(C context, PipelineStepDefinition step);
-
-  /** 构建步骤运行开始时记录的输入摘要。 */
-  protected abstract Map<String, Object> buildInputSummary(C context, PipelineStepDefinition step);
-
-  /** 构建步骤运行完成时记录的输出摘要。 */
-  protected abstract Map<String, Object> buildOutputSummary(C context, R result);
-
-  /** 检测到 pipeline 步骤流存在环路时使用的错误消息。 */
-  protected abstract String cycleDetectedMessage();
-
-  /**
-   * 根据有序的步骤元数据构建默认 {@link PipelineStepTemplate} 列表。
-   *
-   * <p>四类文件 Worker 共享模板装配方法；各模块先按自己的阶段契约排序并校验实现，再传入步骤元数据，避免重复装配代码。
-   *
-   * <p>调用方负责确保列表已按业务期望顺序排列；本方法只做 stepOrder 自增（1-based）与不可变包装。
-   *
-   * @param orderedSteps 已按 stage 顺序排好的步骤元数据列表（每条对应一个 stage 的实现 step）
-   * @return 不可变的 {@link PipelineStepTemplate} 列表，stepOrder 从 1 递增
-   */
-  protected final List<PipelineStepTemplate> buildStepTemplates(
-      List<? extends StageStepDescriptor> orderedSteps) {
-    List<PipelineStepTemplate> templates = new ArrayList<>();
-    int order = 1;
-    for (StageStepDescriptor descriptor : orderedSteps) {
-      PipelineStepTemplate template = PipelineStepTemplate.builder()
-          .stepCode(descriptor.stepCode())
-          .stepName(descriptor.stepName())
-          .stageCode(descriptor.stageCode())
-          .stepOrder(order++)
-          .implCode(descriptor.implCode())
-          .stepParams(Map.of())
-          .timeoutSeconds(0)
-          .retryPolicy("NONE")
-          .retryMaxCount(0)
-          .enabled(true)
-          .build();
-      templates.add(template);
+    /** 对不能继续执行任何后续步骤的领域失败，子类可以显式终止流程。 */
+    protected boolean isTerminalFailure(R result) {
+        return false;
     }
-    return List.copyOf(templates);
-  }
 
-  /**
-   * 描述单个 stage step 的元数据契约：stepCode / stepName / implCode / stageCode。 各模块的 StageStep 接口可实现本接口以参与默认
-   * template 构建；或子类内部用一次性 record 包装现有 step + stage 后传入。
-   */
-  public interface StageStepDescriptor {
-    String stepCode();
+    /**
+     * P1 阶段级续跑多分区降级守卫(与 ADR-038 P0 {@code LoadStep.checkpointDegradedByMultiPartition} 对称)。
+     *
+     * <p>{@code partitionCount > 1}(mod 切片分区 / ADR-046 bundle 展开)时,K 个 partition task 共享同一 {@code
+     * pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),而 skip-safe stage 的副作用是 **task
+     * 级**(如 PROCESS staging 键 {@code process-<taskId>}):partition A 的 COMPUTE SUCCESS step_run 会让
+     * partition B 误判"已成功"而跳过 → B 的 staging 从未生成 → COMMIT 读 0 行**静默少发布**。
+     * 粒度不一致,保守整体降级为不跳(行为同开关关);多分区崩溃恢复本就由 {@code job_partition} 分区级重跑覆盖(设计文档 §1.8)。
+     */
+    private boolean stageSkipDegradedByMultiPartition(C context, Long pipelineInstanceId) {
+        Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
+        // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
+        if (!CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
+            return false;
+        }
+        log.debug(
+                "stage-skip degraded (multi-partition or illegal partition count; side effects are"
+                        + " task-scoped): pipelineInstanceId={}, partitionCount={}",
+                pipelineInstanceId,
+                rawPartitionCount);
+        return true;
+    }
 
-    String stepName();
+    /**
+     * P1-1 阶段级续跑跳过时回灌产出:从上一 attempt 该 stepCode 的 SUCCESS {@code output_summary} 读回 {@link
+     * #skippedStageCarryForwardKeys()} 声明的键,{@code putIfAbsent} 进 attributes(不覆盖本次已运行 stage 写入的 live
+     * 值)。默认键集空 → no-op;子类(如 PROCESS)override 声明 highWaterMarkOut / processedCount 等需要传递给 report / 下游
+     * NODE_OUTPUTS 的产出键。
+     */
+    private void carryForwardSkippedStageOutputs(
+            C context, PipelineStepDefinition currentStep, Long pipelineInstanceId) {
+        Set<String> keys = skippedStageCarryForwardKeys();
+        if (keys.isEmpty() || pipelineInstanceId == null) {
+            return;
+        }
+        Map<String, Object> summary =
+                pipelineRuns.loadLatestSucceededStepOutputSummary(pipelineInstanceId, currentStep.stepCode());
+        if (summary.isEmpty()) {
+            return;
+        }
+        Map<String, Object> attributes = context.getAttributes();
+        for (String key : keys) {
+            Object value = summary.get(key);
+            if (value != null) {
+                attributes.putIfAbsent(key, value);
+            }
+        }
+    }
 
-    String implCode();
+    /**
+     * 阶段级续跑跳过时,需从上次 SUCCESS 记录回灌进 attributes 的 {@code output_summary} 键集。默认**空集**——即使 stage
+     * 被跳过也不回灌任何产出。
+     *
+     * <p>只有把关键产出(水位 / 计数)传给 report 或下游 workflow 节点的 pipeline 才 override(键名须与 {@link
+     * #buildOutputSummary} 写入的键一致,回灌到同名 attribute)。避免在基类硬编码 process 专属键。
+     */
+    protected Set<String> skippedStageCarryForwardKeys() {
+        return Set.of();
+    }
 
-    String stageCode();
-  }
+    private void injectCurrentStepAttributes(C context, PipelineStepDefinition currentStep) {
+        Map<String, Object> attributes = context.getAttributes();
+        attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE, currentStep.stepCode());
+        attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STAGE_CODE, currentStep.stageCode());
+        attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_IMPL_CODE, currentStep.implCode());
+        attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS, currentStep.stepParams());
+    }
+
+    /**
+     * 加载本次 pipeline 运行的有序步骤定义列表。
+     *
+     * <p>只使用系统目录内联到attributes的步骤定义；缺失时返回步骤缺失失败，不回查租户配置。
+     *
+     * <p>特殊场景需要其它解析逻辑（例如基于 stage code 反查）时子类可覆盖。
+     */
+    protected List<PipelineStepDefinition> loadConfiguredSteps(C context) {
+        Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
+        if (definitions instanceof List<?> list) {
+            List<PipelineStepDefinition> resolved = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof PipelineStepDefinition definition) {
+                    resolved.add(definition);
+                }
+            }
+            if (!resolved.isEmpty()) {
+                return List.copyOf(resolved);
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * P1 阶段级续跑总开关。默认 {@code false} —— 任何 pipeline 都退回「从首 stage 全量重跑」。
+     *
+     * <p>只有副作用可从持久状态重建的 pipeline(如 PROCESS:staging 按稳定 {@code process-<taskId>} 键)才覆盖为读配置开关; 靠内存
+     * attribute 传中间产物的 pipeline 不得开启(跳过会丢下游输入)。
+     */
+    protected boolean stageSkipEnabled() {
+        return false;
+    }
+
+    /**
+     * 可安全幂等跳过的 stageCode 集合。默认**空集** —— 即使 {@link #stageSkipEnabled()} 为 true 也不跳任何 stage。
+     *
+     * <p>子类只应把满足以下两条的 stage 加入本集合:(1) stage 成功时其副作用已持久化;(2) 下游 stage 能从 **稳定、可确定定位**的持久状态(而非本次跳过的内存
+     * attribute)重建输入。 import/export/dispatch 通过内存 attribute 传 file path/渠道配置,**不满足**(2),故默认空集。
+     */
+    protected Set<String> skipSafeStages() {
+        return Set.of();
+    }
+
+    /** 返回无步骤定义时的失败结果。 */
+    protected abstract R stepMissingFailure();
+
+    /** 执行单个步骤；必须捕获所有异常并转换为失败结果，不得向外抛出。 */
+    protected abstract R executeOneStep(C context, PipelineStepDefinition step);
+
+    /** 构建步骤运行开始时记录的输入摘要。 */
+    protected abstract Map<String, Object> buildInputSummary(C context, PipelineStepDefinition step);
+
+    /** 构建步骤运行完成时记录的输出摘要。 */
+    protected abstract Map<String, Object> buildOutputSummary(C context, R result);
+
+    /** 检测到 pipeline 步骤流存在环路时使用的错误消息。 */
+    protected abstract String cycleDetectedMessage();
+
+    /**
+     * 根据有序的步骤元数据构建默认 {@link PipelineStepTemplate} 列表。
+     *
+     * <p>四类文件 Worker 共享模板装配方法；各模块先按自己的阶段契约排序并校验实现，再传入步骤元数据，避免重复装配代码。
+     *
+     * <p>调用方负责确保列表已按业务期望顺序排列；本方法只做 stepOrder 自增（1-based）与不可变包装。
+     *
+     * @param orderedSteps 已按 stage 顺序排好的步骤元数据列表（每条对应一个 stage 的实现 step）
+     * @return 不可变的 {@link PipelineStepTemplate} 列表，stepOrder 从 1 递增
+     */
+    protected final List<PipelineStepTemplate> buildStepTemplates(List<? extends StageStepDescriptor> orderedSteps) {
+        List<PipelineStepTemplate> templates = new ArrayList<>();
+        int order = 1;
+        for (StageStepDescriptor descriptor : orderedSteps) {
+            PipelineStepTemplate template = PipelineStepTemplate.builder()
+                    .stepCode(descriptor.stepCode())
+                    .stepName(descriptor.stepName())
+                    .stageCode(descriptor.stageCode())
+                    .stepOrder(order++)
+                    .implCode(descriptor.implCode())
+                    .stepParams(Map.of())
+                    .timeoutSeconds(0)
+                    .retryPolicy("NONE")
+                    .retryMaxCount(0)
+                    .enabled(true)
+                    .build();
+            templates.add(template);
+        }
+        return List.copyOf(templates);
+    }
+
+    /**
+     * 描述单个 stage step 的元数据契约：stepCode / stepName / implCode / stageCode。 各模块的 StageStep 接口可实现本接口以参与默认
+     * template 构建；或子类内部用一次性 record 包装现有 step + stage 后传入。
+     */
+    public interface StageStepDescriptor {
+        String stepCode();
+
+        String stepName();
+
+        String implCode();
+
+        String stageCode();
+    }
 }

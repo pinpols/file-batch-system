@@ -35,54 +35,52 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @DisplayName("Redis 全断注入场景:outbox 熔断器放行判定与推进结果写入均不抛异常,投递不因 Redis 停摆")
 class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrationTest {
 
-  @Test
-  @DisplayName("Redis 断开时放行判定不抛异常并放行,推进结果写入静默跳过,真实客户端异常类型同样被兜住")
-  void shouldFailOpen_whenRedisIsDown() throws Exception {
-    LettuceConnectionFactory factory = newLettuceFactory();
-    try {
-      OutboxProperties props = new OutboxProperties();
-      props.setCircuitBreakerEnabled(true);
-      props.setCircuitBreakerFailureThresholdConsecutivePolls(3);
-      props.setCircuitBreakerCooldownMillis(5000L);
-      // pollIntervalMillis=0：关闭态本地缓存立即过期,强制每次 allowNow 都走慢速路径打 Redis,
-      // 否则预热后的缓存会让 withDown 内首次 allowNow 命中快速路径、绕过 Redis-down 分支。
-      props.setPollIntervalMillis(0L);
-      BatchOrchestratorGovernanceProperties governance =
-          mock(BatchOrchestratorGovernanceProperties.class);
-      when(governance.outbox()).thenReturn(props);
+    @Test
+    @DisplayName("Redis 断开时放行判定不抛异常并放行,推进结果写入静默跳过,真实客户端异常类型同样被兜住")
+    void shouldFailOpen_whenRedisIsDown() throws Exception {
+        LettuceConnectionFactory factory = newLettuceFactory();
+        try {
+            OutboxProperties props = new OutboxProperties();
+            props.setCircuitBreakerEnabled(true);
+            props.setCircuitBreakerFailureThresholdConsecutivePolls(3);
+            props.setCircuitBreakerCooldownMillis(5000L);
+            // pollIntervalMillis=0：关闭态本地缓存立即过期,强制每次 allowNow 都走慢速路径打 Redis,
+            // 否则预热后的缓存会让 withDown 内首次 allowNow 命中快速路径、绕过 Redis-down 分支。
+            props.setPollIntervalMillis(0L);
+            BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
+            when(governance.outbox()).thenReturn(props);
 
-      StringRedisTemplate template = new StringRedisTemplate(factory);
-      OrchestratorRedisSupport redis = new OrchestratorRedisSupport(template, new ObjectMapper());
-      OutboxPublishCircuitBreaker breaker =
-          new OutboxPublishCircuitBreaker(governance, redis, new SimpleMeterRegistry());
+            StringRedisTemplate template = new StringRedisTemplate(factory);
+            OrchestratorRedisSupport redis = new OrchestratorRedisSupport(template, new ObjectMapper());
+            OutboxPublishCircuitBreaker breaker =
+                    new OutboxPublishCircuitBreaker(governance, redis, new SimpleMeterRegistry());
 
-      // 预热:Redis 正常时 allowNow 走通(闭合 → 放行)
-      assertThat(breaker.allowNow()).isTrue();
+            // 预热:Redis 正常时 allowNow 走通(闭合 → 放行)
+            assertThat(breaker.allowNow()).isTrue();
 
-      withDown(ProxyTarget.REDIS, () -> {
-        // Redis 断:allowNow 不得抛,且 fail-open 放行(outbox 投递继续)
-        assertThatCode(breaker::allowNow).doesNotThrowAnyException();
-        assertThat(breaker.allowNow()).isTrue();
-        // onAdvanceResult 不得把 Redis 异常抛回 OutboxPollScheduler
-        assertThatCode(() -> breaker.onAdvanceResult(1)).doesNotThrowAnyException();
-      });
+            withDown(ProxyTarget.REDIS, () -> {
+                // Redis 断:allowNow 不得抛,且 fail-open 放行(outbox 投递继续)
+                assertThatCode(breaker::allowNow).doesNotThrowAnyException();
+                assertThat(breaker.allowNow()).isTrue();
+                // onAdvanceResult 不得把 Redis 异常抛回 OutboxPollScheduler
+                assertThatCode(() -> breaker.onAdvanceResult(1)).doesNotThrowAnyException();
+            });
 
-      // 恢复后仍可正常查询(不残留坏状态)
-      assertThat(breaker.allowNow()).isTrue();
-    } finally {
-      factory.destroy();
+            // 恢复后仍可正常查询(不残留坏状态)
+            assertThat(breaker.allowNow()).isTrue();
+        } finally {
+            factory.destroy();
+        }
     }
-  }
 
-  private LettuceConnectionFactory newLettuceFactory() {
-    RedisStandaloneConfiguration cfg =
-        new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
-    LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
-        .commandTimeout(Duration.ofSeconds(2))
-        .shutdownTimeout(Duration.ZERO)
-        .build();
-    LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
-    factory.afterPropertiesSet();
-    return factory;
-  }
+    private LettuceConnectionFactory newLettuceFactory() {
+        RedisStandaloneConfiguration cfg = new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
+        LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofSeconds(2))
+                .shutdownTimeout(Duration.ZERO)
+                .build();
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
+        factory.afterPropertiesSet();
+        return factory;
+    }
 }

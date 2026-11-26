@@ -16,47 +16,46 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 public class AlertmanagerReemitService {
-  private final AlertEventMapper mapper;
-  private final AlertmanagerEmitPublisher publisher;
-  private final AlertmanagerEmitProperties properties;
+    private final AlertEventMapper mapper;
+    private final AlertmanagerEmitPublisher publisher;
+    private final AlertmanagerEmitProperties properties;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void reemitTenant(String tenantId) {
-    mapper.bindReemitTenant(tenantId);
-    int limit = Math.max(1, properties.getReemitBatchSize());
-    for (AlertEventEntity alert : mapper.selectActiveForReemit(tenantId, limit)) {
-      AlertEventEntity closed =
-          mapper.closeEligibleMonitoringAlert(alert, AlertStatus.CLOSED.code());
-      if (EmptyChecks.isNull(closed)) {
-        schedule(alert, false);
-      }
-    }
-    for (AlertEventEntity alert : mapper.selectClosedPendingNotify(tenantId, limit)) {
-      schedule(alert, true);
-    }
-  }
-
-  private void schedule(AlertEventEntity alert, boolean resolved) {
-    if (mapper.markReemitAttempt(alert) == 0) {
-      return;
-    }
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          publish(alert, resolved);
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reemitTenant(String tenantId) {
+        mapper.bindReemitTenant(tenantId);
+        int limit = Math.max(1, properties.getReemitBatchSize());
+        for (AlertEventEntity alert : mapper.selectActiveForReemit(tenantId, limit)) {
+            AlertEventEntity closed = mapper.closeEligibleMonitoringAlert(alert, AlertStatus.CLOSED.code());
+            if (EmptyChecks.isNull(closed)) {
+                schedule(alert, false);
+            }
         }
-      });
-    } else {
-      publish(alert, resolved);
+        for (AlertEventEntity alert : mapper.selectClosedPendingNotify(tenantId, limit)) {
+            schedule(alert, true);
+        }
     }
-  }
 
-  private void publish(AlertEventEntity alert, boolean resolved) {
-    if (resolved) {
-      publisher.publishResolved(alert);
-    } else {
-      publisher.publishFiring(alert);
+    private void schedule(AlertEventEntity alert, boolean resolved) {
+        if (mapper.markReemitAttempt(alert) == 0) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publish(alert, resolved);
+                }
+            });
+        } else {
+            publish(alert, resolved);
+        }
     }
-  }
+
+    private void publish(AlertEventEntity alert, boolean resolved) {
+        if (resolved) {
+            publisher.publishResolved(alert);
+        } else {
+            publisher.publishFiring(alert);
+        }
+    }
 }

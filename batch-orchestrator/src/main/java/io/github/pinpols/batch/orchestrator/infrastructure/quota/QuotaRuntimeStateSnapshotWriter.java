@@ -17,66 +17,64 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class QuotaRuntimeStateSnapshotWriter {
 
-  /** 配额运行态快照统计借用峰值的滑动窗口小时数。 */
-  private static final int SNAPSHOT_SLIDING_WINDOW_HOURS = 24;
+    /** 配额运行态快照统计借用峰值的滑动窗口小时数。 */
+    private static final int SNAPSHOT_SLIDING_WINDOW_HOURS = 24;
 
-  private final QuotaRuntimeStateService quotaRuntimeStateService;
-  private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+    private final QuotaRuntimeStateService quotaRuntimeStateService;
+    private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
-  /** 窗口活跃且 peak 大于零时 upsert；空窗口不落库，避免周期任务持续制造无价值行。 */
-  @Transactional
-  int writeIfActive(
-      String tenantId, String scope, String ownerCode, String policy, int burstLimit) {
-    if (burstLimit <= 0) {
-      return 0;
+    /** 窗口活跃且 peak 大于零时 upsert；空窗口不落库，避免周期任务持续制造无价值行。 */
+    @Transactional
+    int writeIfActive(String tenantId, String scope, String ownerCode, String policy, int burstLimit) {
+        if (burstLimit <= 0) {
+            return 0;
+        }
+        QuotaRuntimeStateService.QuotaReservationOwner owner =
+                new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode);
+        QuotaRuntimeStateService.QuotaDescribeRequest request = new QuotaRuntimeStateService.QuotaDescribeRequest(
+                owner, policy, burstLimit, SNAPSHOT_SLIDING_WINDOW_HOURS);
+        QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(request);
+        boolean hasNoActiveBorrowedQuota = EmptyChecks.isNull(snap)
+                || snap.peakBorrowedCount() == null
+                || snap.peakBorrowedCount() == 0
+                || EmptyChecks.isNull(snap.windowExpiresAt());
+        if (hasNoActiveBorrowedQuota) {
+            return 0;
+        }
+        Instant now = BatchDateTimeSupport.utcNow();
+        QuotaRuntimeStateEntity existing =
+                quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
+        if (existing == null) {
+            QuotaRuntimeStateEntity toInsert = QuotaRuntimeStateEntity.builder()
+                    .tenantId(tenantId)
+                    .quotaScope(scope)
+                    .ownerCode(ownerCode)
+                    .quotaResetPolicy(snap.quotaResetPolicy())
+                    .windowStartedAt(snap.windowStartedAt())
+                    .windowExpiresAt(snap.windowExpiresAt())
+                    .peakBorrowedCount(snap.peakBorrowedCount())
+                    .lastResetAt(snap.lastResetAt())
+                    .createdAt(now)
+                    .updatedAt(now)
+                    .build();
+            quotaRuntimeStateMapper.insert(toInsert);
+            return 1;
+        }
+        QuotaRuntimeStateEntity toUpdate = existing.withRefresh(
+                snap.quotaResetPolicy(),
+                snap.windowStartedAt(),
+                snap.windowExpiresAt(),
+                snap.peakBorrowedCount(),
+                snap.lastResetAt());
+        int rows = quotaRuntimeStateMapper.updateWithCas(toUpdate);
+        if (rows == 0) {
+            log.debug(
+                    "quota snapshot CAS conflict, skipping: tenantId={}, scope={}, owner={}",
+                    tenantId,
+                    scope,
+                    ownerCode);
+            return 0;
+        }
+        return 1;
     }
-    QuotaRuntimeStateService.QuotaReservationOwner owner =
-        new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode);
-    QuotaRuntimeStateService.QuotaDescribeRequest request =
-        new QuotaRuntimeStateService.QuotaDescribeRequest(
-            owner, policy, burstLimit, SNAPSHOT_SLIDING_WINDOW_HOURS);
-    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(request);
-    boolean hasNoActiveBorrowedQuota = EmptyChecks.isNull(snap)
-        || snap.peakBorrowedCount() == null
-        || snap.peakBorrowedCount() == 0
-        || EmptyChecks.isNull(snap.windowExpiresAt());
-    if (hasNoActiveBorrowedQuota) {
-      return 0;
-    }
-    Instant now = BatchDateTimeSupport.utcNow();
-    QuotaRuntimeStateEntity existing =
-        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
-    if (existing == null) {
-      QuotaRuntimeStateEntity toInsert = QuotaRuntimeStateEntity.builder()
-          .tenantId(tenantId)
-          .quotaScope(scope)
-          .ownerCode(ownerCode)
-          .quotaResetPolicy(snap.quotaResetPolicy())
-          .windowStartedAt(snap.windowStartedAt())
-          .windowExpiresAt(snap.windowExpiresAt())
-          .peakBorrowedCount(snap.peakBorrowedCount())
-          .lastResetAt(snap.lastResetAt())
-          .createdAt(now)
-          .updatedAt(now)
-          .build();
-      quotaRuntimeStateMapper.insert(toInsert);
-      return 1;
-    }
-    QuotaRuntimeStateEntity toUpdate = existing.withRefresh(
-        snap.quotaResetPolicy(),
-        snap.windowStartedAt(),
-        snap.windowExpiresAt(),
-        snap.peakBorrowedCount(),
-        snap.lastResetAt());
-    int rows = quotaRuntimeStateMapper.updateWithCas(toUpdate);
-    if (rows == 0) {
-      log.debug(
-          "quota snapshot CAS conflict, skipping: tenantId={}, scope={}, owner={}",
-          tenantId,
-          scope,
-          ownerCode);
-      return 0;
-    }
-    return 1;
-  }
 }

@@ -24,33 +24,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InternalReadinessRecoveryController {
 
-  private final ReadinessRecoveryService readinessRecoveryService;
+    private final ReadinessRecoveryService readinessRecoveryService;
 
-  @PostMapping("/recover")
-  public ResponseEntity<RecoverResponse> recover(@RequestBody RecoverRequest request) {
-    if (EmptyChecks.isNull(request)) {
-      RecoverResponse invalidRequest =
-          new RecoverResponse(RecoveryLaunchOutcome.INVALID_REQUEST.name());
-      return ResponseEntity.badRequest().body(invalidRequest);
+    @PostMapping("/recover")
+    public ResponseEntity<RecoverResponse> recover(@RequestBody RecoverRequest request) {
+        if (EmptyChecks.isNull(request)) {
+            RecoverResponse invalidRequest = new RecoverResponse(RecoveryLaunchOutcome.INVALID_REQUEST.name());
+            return ResponseEntity.badRequest().body(invalidRequest);
+        }
+        RecoveryLaunchOutcome outcome = readinessRecoveryService.recover(
+                request.tenantId(), request.workflowDefinitionId(), request.scheduledFireTime());
+        HttpStatus status =
+                switch (outcome) {
+                    case LAUNCHED -> HttpStatus.OK;
+                    case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
+                    case NOT_FOUND -> HttpStatus.NOT_FOUND;
+                    case ALREADY_TERMINATED, NOT_READY -> HttpStatus.CONFLICT;
+                    case FAILED -> HttpStatus.INTERNAL_SERVER_ERROR;
+                };
+        RecoverResponse body = new RecoverResponse(outcome.name());
+        return ResponseEntity.status(status).body(body);
     }
-    RecoveryLaunchOutcome outcome = readinessRecoveryService.recover(
-        request.tenantId(), request.workflowDefinitionId(), request.scheduledFireTime());
-    HttpStatus status =
-        switch (outcome) {
-          case LAUNCHED -> HttpStatus.OK;
-          case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
-          case NOT_FOUND -> HttpStatus.NOT_FOUND;
-          case ALREADY_TERMINATED, NOT_READY -> HttpStatus.CONFLICT;
-          case FAILED -> HttpStatus.INTERNAL_SERVER_ERROR;
-        };
-    RecoverResponse body = new RecoverResponse(outcome.name());
-    return ResponseEntity.status(status).body(body);
-  }
 
-  /** Orchestrator 传入的原 fire 身份。 */
-  public record RecoverRequest(
-      String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {}
+    /** Orchestrator 传入的原 fire 身份。 */
+    public record RecoverRequest(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {}
 
-  /** 恢复结果：LAUNCHED / ALREADY_TERMINATED / NOT_READY / NOT_FOUND / INVALID_REQUEST / FAILED。 */
-  public record RecoverResponse(String outcome) {}
+    /** 恢复结果：LAUNCHED / ALREADY_TERMINATED / NOT_READY / NOT_FOUND / INVALID_REQUEST / FAILED。 */
+    public record RecoverResponse(String outcome) {}
 }

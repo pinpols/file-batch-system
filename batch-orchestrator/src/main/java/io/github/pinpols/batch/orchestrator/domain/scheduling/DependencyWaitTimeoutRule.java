@@ -9,16 +9,14 @@ import java.time.Instant;
  */
 public final class DependencyWaitTimeoutRule {
 
-  private DependencyWaitTimeoutRule() {}
+    private DependencyWaitTimeoutRule() {}
 
-  public static boolean isAlertDue(
-      Instant firstWaitingAt, Instant timeoutAlertedAt, long timeoutSeconds, Instant now) {
-    if (EmptyChecks.isNull(firstWaitingAt)
-        || EmptyChecks.isNotNull(timeoutAlertedAt)
-        || timeoutSeconds <= 0) {
-      return false;
+    public static boolean isAlertDue(
+            Instant firstWaitingAt, Instant timeoutAlertedAt, long timeoutSeconds, Instant now) {
+        if (EmptyChecks.isNull(firstWaitingAt) || EmptyChecks.isNotNull(timeoutAlertedAt) || timeoutSeconds <= 0) {
+            return false;
+        }
+        Instant timeoutAt = firstWaitingAt.plusSeconds(timeoutSeconds);
+        return !now.isBefore(timeoutAt);
     }
-    Instant timeoutAt = firstWaitingAt.plusSeconds(timeoutSeconds);
-    return !now.isBefore(timeoutAt);
-  }
 }

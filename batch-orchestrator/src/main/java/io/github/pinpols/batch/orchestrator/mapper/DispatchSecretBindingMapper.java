@@ -6,6 +6,6 @@ import org.apache.ibatis.annotations.Param;
 
 public interface DispatchSecretBindingMapper {
 
-  List<DispatchSecretBindingView> selectCurrentByChannels(
-      @Param("tenantId") String tenantId, @Param("channelCodes") List<String> channelCodes);
+    List<DispatchSecretBindingView> selectCurrentByChannels(
+            @Param("tenantId") String tenantId, @Param("channelCodes") List<String> channelCodes);
 }

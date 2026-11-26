@@ -54,722 +54,691 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("worker 注册表服务的状态维护规则:下线流程不可被心跳回滚,未注册心跳降级为注册,重复注册幂等,并校验协议版本,最低版本,租户配额与敏感字段")
 class DefaultWorkerRegistryServiceTest {
 
-  /**
-   * 固定心跳时间：夹具不依赖 wall clock。服务端一律用 orchestrator JVM 时钟（忽略 request.heartbeatAt），
-   * 因此固定值不影响任何断言，只消除时间相关抖动。
-   */
-  private static final Instant FIXED_HEARTBEAT_AT = Instant.parse("2026-01-01T00:00:00Z");
-
-  @Mock
-  private WorkerRegistryMapper mapper;
-
-  @Mock
-  private TenantActionRateLimiter tenantActionRateLimiter;
-
-  @Mock
-  private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
-
-  @Mock
-  private SystemParameterMapper systemParameterMapper;
-
-  private final PipelineStageProgressCache progressCache = new PipelineStageProgressCache();
-
-  private final WorkerRegistryProperties workerRegistryProperties = new WorkerRegistryProperties();
-
-  private DefaultWorkerRegistryService service;
-
-  @BeforeEach
-  void setUp() {
-    lenient()
-        .when(tenantActionRateLimiter.tryConsume(anyString(), eq(RateLimitAction.WORKER_REGISTER)))
-        .thenReturn(true);
-    service = new DefaultWorkerRegistryService(
-        mapper,
-        customTaskTypeRegistryMapper,
-        progressCache,
-        systemParameterMapper,
-        workerRegistryProperties,
-        tenantActionRateLimiter);
-  }
-
-  private WorkerHeartbeatDto dto(String status) {
-    return dto(status, null);
-  }
-
-  private WorkerHeartbeatDto dto(String status, String protocolVersion) {
-    return WorkerHeartbeatDto.builder()
-        .tenantId("ta")
-        .workerCode("w1")
-        .workerGroup("default")
-        .status(status)
-        .hostName("host")
-        .hostIp("1.2.3.4")
-        .processId("pid")
-        .buildId("build-1")
-        .sdkVersion("sdk-1")
-        .heartbeatAt(FIXED_HEARTBEAT_AT)
-        .capabilityTags(List.of())
-        .currentLoad(1)
-        .protocolVersion(protocolVersion)
-        .build();
-  }
-
-  private WorkerHeartbeatDto dtoWithSdkVersion(String sdkVersion) {
-    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
-        .sdkVersion(sdkVersion)
-        .build();
-  }
-
-  private WorkerHeartbeatDto dtoWithMaxConcurrent(int maxConcurrent) {
-    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
-        .maxConcurrent(maxConcurrent)
-        .build();
-  }
-
-  private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
-    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
-        .workerGroup("sdk-self-hosted")
-        .taskTypes(taskTypes)
-        .build();
-  }
-
-  private WorkerRegistryEntity entityWithStatus(String status) {
-    return new WorkerRegistryEntity(
-        100L, "ta", "w1", "default", null, null, status, Instant.now(), 1, 10, null, null);
-  }
-
-  private WorkerRegistryEntity entityWithStatusAndDrain(String status, Instant drainStartedAt) {
-    return new WorkerRegistryEntity(
-        100L,
-        "ta",
-        "w1",
-        "default",
-        null,
-        null,
-        status,
-        Instant.now(),
-        1,
-        10,
-        drainStartedAt,
-        null);
-  }
-
-  // ===== heartbeat: drain 不可逆 =====
-
-  @Test
-  @DisplayName("heartbeat: DRAINING 状态收到 ONLINE 心跳 → 保持 DRAINING")
-  void shouldPreserveDrainingStatus_whenHeartbeatReportsOnline() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.DRAINING.code()),
-            entityWithStatus(WorkerRegistryStatus.DRAINING.code()));
-
-    service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
-            WorkerRegistryStatus.DRAINING.code().equals(p.getNextStatus())));
-  }
-
-  @Test
-  @DisplayName("heartbeat: DECOMMISSIONED 状态收到 ONLINE 心跳 → 保持 DECOMMISSIONED")
-  void shouldPreserveDecommissionedStatus_whenHeartbeatReportsOnline() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.DECOMMISSIONED.code()),
-            entityWithStatus(WorkerRegistryStatus.DECOMMISSIONED.code()));
-
-    service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
-            WorkerRegistryStatus.DECOMMISSIONED.code().equals(p.getNextStatus())));
-  }
-
-  @Test
-  @DisplayName("heartbeat: ONLINE 状态收到自报 DRAINING → 保持 ONLINE，避免 resume 被心跳覆盖")
-  void shouldKeepOnlineStatus_whenHeartbeatSelfReportsDraining() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.heartbeat("w1", dto(WorkerRegistryStatus.DRAINING.code()));
-
-    verify(mapper)
-        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
-            WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
-  }
-
-  @Test
-  @DisplayName("heartbeat: ONLINE 状态收到 ONLINE 心跳 → 保持 ONLINE(正常路径)")
-  void shouldPreserveOnlineStatus_whenHeartbeatReportsOnline() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
-            WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
-  }
-
-  @Test
-  @DisplayName("heartbeat: null DTO → 直接返 null,不读 DB")
-  void shouldReturnNull_whenHeartbeatPayloadAbsent() {
-    assertThat(service.heartbeat("w1", null)).isNull();
-    verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
-  }
-
-  // ===== heartbeat 降级 register =====
-
-  @Test
-  @DisplayName("heartbeat: 未注册 → 自动降级走 register(回退首次 register 丢失)")
-  void shouldFallBackToRegistration_whenHeartbeatFindsNoWorker() {
-    // heartbeat 读 null → 走 register;register 内部也读 null → 走 insert 路径
-    // 最后 persist 后重读返回 ONLINE entity
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.heartbeat("w1", dto(null));
-
-    // 走 register 路径会执行 insert,不应走 touchHeartbeat
-    verify(mapper).insert(any());
-    verify(mapper, never()).touchHeartbeat(any());
-  }
-
-  // ===== register 幂等 upsert =====
-
-  @Test
-  @DisplayName("register:租户限流拒绝时在读取或写入注册表前返回 429")
-  void shouldRejectRegistrationBeforePersistence_whenTenantRateLimitDenied() {
-    when(tenantActionRateLimiter.tryConsume("ta", RateLimitAction.WORKER_REGISTER))
-        .thenReturn(false);
-
-    assertThatThrownBy(() -> service.register(dto(null)))
-        .isInstanceOf(OperationFailure.class)
-        .satisfies(error -> assertThat(((OperationFailure) error).kind())
-            .isEqualTo(OperationFailure.Kind.RATE_LIMITED));
-
-    verify(mapper, never()).selectByTenantAndWorkerCode("ta", "w1");
-  }
-
-  @Test
-  @DisplayName("register: 新 worker → insert + 重读")
-  void shouldInsertWorker_whenRegisteringUnknownWorker() {
-    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
-
-    WorkerRegistryEntity result = service.register(dto(null));
-
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-    verify(mapper).insert(captor.capture());
-    verify(mapper, never()).updateRegistrationIfCurrent(any(), anyString());
-    assertThat(captor.getValue().maxConcurrent())
-        .isEqualTo(WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT);
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("注册 Worker 时持久化执行器能力供运维展示")
-  void shouldPersistTaskCapabilities_whenRegisteringWorker() {
-    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
-    WorkerTaskCapabilityDto capability =
-        new WorkerTaskCapabilityDto("file_sha256", List.of("DISK"), true, false, 300_000L);
-    WorkerHeartbeatDto request =
-        dto(null).toBuilder().taskCapabilities(List.of(capability)).build();
-
-    service.register(request);
-
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-    verify(mapper).insert(captor.capture());
-    assertThat(captor.getValue().taskCapabilities().getValue())
-        .contains("file_sha256")
-        .contains("300000");
-  }
-
-  @Test
-  @DisplayName("注册 Worker 时保存 Replay 能力目录")
-  void shouldPersistReplayCapabilitiesOnlyWhenProvided() {
-    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
-    ReplayCapabilityDeclaration declaration = ReplayCapabilityDeclaration.unknown("plugin-a");
-    WorkerHeartbeatDto request =
-        dto(null).toBuilder().replayCapabilities(List.of(declaration)).build();
-    when(mapper.updateReplayCapabilities(eq("ta"), eq("w1"), anyString())).thenReturn(1);
-
-    service.register(request);
-
-    ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
-    verify(mapper).updateReplayCapabilities(eq("ta"), eq("w1"), jsonCaptor.capture());
-    assertThat(jsonCaptor.getValue()).contains("plugin-a").contains("UNKNOWN");
-  }
-
-  @Test
-  @DisplayName("旧 Worker 注册未携带 Replay 能力目录时保留已有声明")
-  void shouldPreserveReplayCapabilities_whenRegistrationOmitsCatalogue() {
-    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(saved, saved);
-
-    service.register(dto(null));
-
-    verify(mapper, never()).updateReplayCapabilities(anyString(), anyString(), anyString());
-  }
-
-  @Test
-  @DisplayName("register: worker 上报实际并发上限 → 持久化到 selector 反压字段")
-  void shouldPersistReportedConcurrencyCap_whenWorkerRegisters() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dtoWithMaxConcurrent(16));
-
-    verify(mapper).insert(captor.capture());
-    assertThat(captor.getValue().maxConcurrent()).isEqualTo(16);
-  }
-
-  @Test
-  @DisplayName("register: 旧 worker 未上报并发上限 → 保留已有平台值")
-  void shouldKeepStoredConcurrencyCap_whenWorkerOmitsReportedValue() {
-    WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.ONLINE.code()));
-    assertThat(captor.getValue().maxConcurrent()).isEqualTo(10);
-  }
-
-  @Test
-  @DisplayName("register: 注册写入被并发状态推进挡下时保留平台状态且不抛错")
-  void shouldKeepPlatformState_whenRegistrationCasLosesRace() {
-    WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
-    WorkerRegistryEntity drained = entityWithStatus(WorkerRegistryStatus.DRAINING.code());
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, drained);
-    when(mapper.updateRegistrationIfCurrent(any(), anyString())).thenReturn(0);
-
-    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    // 并发 drain 胜出：返回最新行，不把 ONLINE 写回。
-    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: 上一代进程自报的 DRAINING(无 drain 起始时间)按新进程复活为 ONLINE")
-  void shouldReviveSelfReportedDrainingOnRegister() {
-    WorkerRegistryEntity existing =
-        entityWithStatusAndDrain(WorkerRegistryStatus.DRAINING.code(), null);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
-    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-  }
-
-  @Test
-  @DisplayName("register: 上一代进程自报的 DECOMMISSIONED(无 drain 起始时间)按新进程复活为 ONLINE")
-  void shouldReviveSelfReportedDecommissionedOnRegister() {
-    WorkerRegistryEntity existing =
-        entityWithStatusAndDrain(WorkerRegistryStatus.DECOMMISSIONED.code(), null);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .updateRegistrationIfCurrent(
-            captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
-    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-  }
-
-  @Test
-  @DisplayName("register: 平台发起的 DRAINING(drain 有起始时间)不因进程重启被清除")
-  void shouldPreserveOperatorDrainingOnRegister() {
-    WorkerRegistryEntity existing = entityWithStatusAndDrain(
-        WorkerRegistryStatus.DRAINING.code(), Instant.parse("2026-01-01T00:00:00Z"));
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
-    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
-  }
-
-  @Test
-  @DisplayName("register: 平台发起的 DECOMMISSIONED(drain 有起始时间)保持终止态")
-  void shouldPreserveOperatorDecommissionedOnRegister() {
-    WorkerRegistryEntity existing = entityWithStatusAndDrain(
-        WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.parse("2026-01-01T00:00:00Z"));
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
-
-    verify(mapper)
-        .updateRegistrationIfCurrent(
-            captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
-    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
-  }
-
-  @Test
-  @DisplayName("register: 缺 workerGroup → 400 校验拒(不落库,杜绝 NOT NULL 撞 500 刷日志)")
-  void shouldRejectRegistration_whenWorkerGroupMissing() {
-    WorkerHeartbeatDto noGroup =
-        dto(WorkerRegistryStatus.ONLINE.code()).toBuilder().workerGroup(null).build();
-    WorkerHeartbeatDto blankGroup =
-        dto(WorkerRegistryStatus.ONLINE.code()).toBuilder().workerGroup("  ").build();
-
-    assertThatThrownBy(() -> service.register(noGroup))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("missing_worker_group");
-    assertThatThrownBy(() -> service.register(blankGroup))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("missing_worker_group");
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: 支持的 protocolVersion(v2)→ 正常注册")
-  void shouldAcceptRegistration_whenProtocolVersionSupported() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v2"));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 缺 protocolVersion(老 SDK / 非 SDK worker)→ legacy 放行")
-  void shouldAcceptRegistration_whenProtocolVersionAbsent() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), null));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 不支持的 protocolVersion(v3)→ 拒绝(VALIDATION_ERROR),不写入数据库")
-  void shouldRejectRegistration_whenProtocolVersionUnsupported() {
-    assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v3")))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("unsupported_protocol_version");
-
-    verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: 无法解析的 protocolVersion(garbage)→ 拒绝,不写入数据库")
-  void shouldRejectRegistration_whenProtocolVersionUnparseable() {
-    assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "abc")))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("unsupported_protocol_version");
-
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName(
-      "register: 上报非枚举状态(自托管 SDK 恒发 RUNNING)→ 写入数据库归一为 ONLINE,不违反 ck_worker_registry_status")
-  void shouldNormalizeUnknownStatus_whenSelfHostedWorkerRegisters() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    ArgumentCaptor<WorkerRegistryEntity> captor =
-        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
-
-    service.register(dto("RUNNING"));
-
-    verify(mapper).insert(captor.capture());
-    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-  }
-
-  @Test
-  @DisplayName("register: 已存在 worker(同 workerCode) → 状态 CAS 更新,不抛错(重启重连场景)")
-  void shouldUpdateRegistration_whenWorkerAlreadyRegistered() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.OFFLINE.code()),
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.register(dto(null));
-
-    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.OFFLINE.code()));
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: 同 workerCode 重连应能从 DRAINING 改回 ONLINE(register 不受心跳保护规则限制)")
-  void shouldRestoreOnlineStatus_whenDrainingWorkerRegistersAgain() {
-    // 注意:register 走 resolveIncomingStatus(defaultStatus=ONLINE),不走 resolveHeartbeatStatus
-    // 所以 DRAINING 在 register 路径下会被覆盖为 ONLINE
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.DRAINING.code()),
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.register(dto(null));
-
-    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.DRAINING.code()));
-  }
-
-  // ===== register: 租户级最低 SDK 版本门禁 (opt-in) =====
-
-  @Test
-  @DisplayName("register: 配置最低=1,worker 报 1.x → 过(主版本不低于)")
-  void shouldAcceptRegistration_whenSdkVersionReachesConfiguredMinimum() {
-    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
-        .thenReturn("1.0.0");
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.5.2"));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 配置最低=2,worker 报 1.x → 拒(VALIDATION_ERROR),不写入数据库")
-  void shouldRejectRegistration_whenSdkVersionBelowConfiguredMinimum() {
-    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
-        .thenReturn("2.0.0");
-
-    assertThatThrownBy(() -> service.register(dtoWithSdkVersion("1.9.9")))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("sdk_version_too_old");
-
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: worker sdkVersion 空 → 过(legacy / 非 SDK worker 放行,不读配置)")
-  void shouldAcceptRegistration_whenSdkVersionBlank() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dtoWithSdkVersion(" "));
-
-    verify(systemParameterMapper, never()).selectParamValue(anyString(), anyString());
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 该租户未配 worker.min_sdk_version → 过(opt-in 放行)")
-  void shouldAcceptRegistration_whenMinimumVersionNotConfigured() {
-    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version")).thenReturn(null);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 配置值脏(abc)解析不出主版本 → 过(不因脏配置误杀,不抛)")
-  void shouldAcceptRegistration_whenMinimumVersionConfigUnparseable() {
-    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version")).thenReturn("abc");
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  // ===== register: 自定义 taskType descriptor upsert (SDK Phase 3 M3.1) =====
-
-  @Test
-  @DisplayName(
-      "register: 上报 taskTypes[] → 每个 descriptor upsert 到 custom_task_type_registry(code 权威)")
-  void shouldUpsertDeclaredTaskTypes_whenWorkerReportsTaskTypes() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto descriptor = new WorkerTaskTypeDescriptorDto(
-        "tenant_ta_import", "导入", "v1", Map.of("batchSize", 500), null, null);
-
-    service.register(dtoWithTaskTypes(List.of(descriptor)));
-
-    verify(customTaskTypeRegistryMapper)
-        .upsertDeclared(ArgumentMatchers.argThat(
-            (CustomTaskTypeUpsertParam p) -> "tenant_ta_import".equals(p.getTaskTypeCode())
-                && "导入".equals(p.getDisplayName())
-                && "v1".equals(p.getDescriptorVersion())
-                && "w1".equals(p.getDeclaredByWorkerCode())
-                && p.getDescriptor() != null
-                && p.getDescriptor().contains("batchSize")));
-  }
-
-  @Test
-  @DisplayName("register: taskTypes 为 null(file-pipeline worker) → 不触发 upsert")
-  void shouldSkipTaskTypeUpsert_whenWorkerReportsNoTaskTypes() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.register(dto(null));
-
-    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
-  }
-
-  @Test
-  @DisplayName("register: descriptor.code 空白 → 跳过该条 upsert(不落脏 code)")
-  void shouldSkipTaskTypeUpsert_whenDescriptorCodeBlank() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto blank =
-        new WorkerTaskTypeDescriptorDto(" ", "x", "v1", null, null, null);
-
-    service.register(dtoWithTaskTypes(List.of(blank)));
-
-    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
-  }
-
-  @Test
-  @DisplayName("register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛"
-      + " BizException,不写入数据库")
-  void registerRejectsDescriptorWithCredential_LaneC() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
-        "tenant_ta_leak", "leak", "v1", Map.of("apiKey", "leaked-AKIA-token"), null, null);
-
-    assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.security.sensitive_in_payload");
-
-    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
-  }
-
-  @Test
-  @DisplayName("register: descriptor code 含凭据时，拒绝信息不回显 code")
-  void shouldNotExposeDescriptorCodeInSensitiveFieldError() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
-        "tenant_ta_token=probe-secret", "leak", "v1", Map.of("apiKey", "value"), null, null);
-
-    assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
-        .isInstanceOf(BizException.class)
-        .satisfies(error -> assertThat(((BizException) error).getMessageArgs())
-            .containsExactly("sdk.taskType.descriptor", "sensitiveField"))
-        .hasMessageNotContaining("probe-secret");
-    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
-  }
-
-  // ===== 缺口②: per-tenant worker 数量配额 (opt-in) =====
-
-  @Test
-  @DisplayName("register: max-per-tenant=2 且已有 2 个活跃 worker + 新 worker → 拒(VALIDATION_ERROR),不写入")
-  void shouldRejectNewWorker_whenTenantQuotaExhausted() {
-    workerRegistryProperties.setMaxPerTenant(2);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null);
-    when(mapper.countByTenant("ta")).thenReturn(2);
-
-    assertThatThrownBy(() -> service.register(dto(null)))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("too_many_workers");
-
-    verify(mapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("register: max-per-tenant=2 且当前 1 个活跃 + 新 worker → 过(未达上限)")
-  void shouldAllowNewWorker_whenTenantQuotaHasRoom() {
-    workerRegistryProperties.setMaxPerTenant(2);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    when(mapper.countByTenant("ta")).thenReturn(1);
-
-    WorkerRegistryEntity result = service.register(dto(null));
-
-    verify(mapper).insert(any());
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("register: 幂等重注册已存在 worker → 不查配额,不被拦(已达上限也放行)")
-  void shouldBypassQuotaCheck_whenWorkerAlreadyRegistered() {
-    workerRegistryProperties.setMaxPerTenant(1);
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.register(dto(null));
-
-    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.ONLINE.code()));
-    verify(mapper, never()).countByTenant(anyString());
-  }
-
-  @Test
-  @DisplayName("register: max-per-tenant=0(默认)→ 不查配额,不限")
-  void shouldAllowRegistration_whenTenantQuotaNotConfigured() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-
-    service.register(dto(null));
-
-    verify(mapper).insert(any());
-    verify(mapper, never()).countByTenant(anyString());
-  }
-
-  // ===== updateStatus / deactivate =====
-
-  @Test
-  @DisplayName("updateStatus: worker 不存在 → 返 null,不写表")
-  void updateStatus_missing_returns_null() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "missing")).thenReturn(null);
-
-    assertThat(service.updateStatus("ta", "missing", WorkerRegistryStatus.OFFLINE.code()))
-        .isNull();
-    verify(mapper, never()).insert(any());
-    verify(mapper, never())
-        .updateStatusIfCurrent(anyString(), anyString(), anyString(), anyString());
-  }
-
-  @Test
-  @DisplayName("deactivate: 触发 updateStatus(OFFLINE)")
-  void shouldMarkWorkerOffline_whenDeactivated() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(
-            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
-            entityWithStatus(WorkerRegistryStatus.OFFLINE.code()));
-    when(mapper.updateStatusIfCurrent(
-            "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code()))
-        .thenReturn(1);
-
-    service.deactivate("ta", "w1");
-
-    verify(mapper, times(1))
-        .updateStatusIfCurrent(
-            "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code());
-  }
+    /**
+     * 固定心跳时间：夹具不依赖 wall clock。服务端一律用 orchestrator JVM 时钟（忽略 request.heartbeatAt），
+     * 因此固定值不影响任何断言，只消除时间相关抖动。
+     */
+    private static final Instant FIXED_HEARTBEAT_AT = Instant.parse("2026-01-01T00:00:00Z");
+
+    @Mock
+    private WorkerRegistryMapper mapper;
+
+    @Mock
+    private TenantActionRateLimiter tenantActionRateLimiter;
+
+    @Mock
+    private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+
+    @Mock
+    private SystemParameterMapper systemParameterMapper;
+
+    private final PipelineStageProgressCache progressCache = new PipelineStageProgressCache();
+
+    private final WorkerRegistryProperties workerRegistryProperties = new WorkerRegistryProperties();
+
+    private DefaultWorkerRegistryService service;
+
+    @BeforeEach
+    void setUp() {
+        lenient()
+                .when(tenantActionRateLimiter.tryConsume(anyString(), eq(RateLimitAction.WORKER_REGISTER)))
+                .thenReturn(true);
+        service = new DefaultWorkerRegistryService(
+                mapper,
+                customTaskTypeRegistryMapper,
+                progressCache,
+                systemParameterMapper,
+                workerRegistryProperties,
+                tenantActionRateLimiter);
+    }
+
+    private WorkerHeartbeatDto dto(String status) {
+        return dto(status, null);
+    }
+
+    private WorkerHeartbeatDto dto(String status, String protocolVersion) {
+        return WorkerHeartbeatDto.builder()
+                .tenantId("ta")
+                .workerCode("w1")
+                .workerGroup("default")
+                .status(status)
+                .hostName("host")
+                .hostIp("1.2.3.4")
+                .processId("pid")
+                .buildId("build-1")
+                .sdkVersion("sdk-1")
+                .heartbeatAt(FIXED_HEARTBEAT_AT)
+                .capabilityTags(List.of())
+                .currentLoad(1)
+                .protocolVersion(protocolVersion)
+                .build();
+    }
+
+    private WorkerHeartbeatDto dtoWithSdkVersion(String sdkVersion) {
+        return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+                .sdkVersion(sdkVersion)
+                .build();
+    }
+
+    private WorkerHeartbeatDto dtoWithMaxConcurrent(int maxConcurrent) {
+        return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+                .maxConcurrent(maxConcurrent)
+                .build();
+    }
+
+    private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
+        return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+                .workerGroup("sdk-self-hosted")
+                .taskTypes(taskTypes)
+                .build();
+    }
+
+    private WorkerRegistryEntity entityWithStatus(String status) {
+        return new WorkerRegistryEntity(
+                100L, "ta", "w1", "default", null, null, status, Instant.now(), 1, 10, null, null);
+    }
+
+    private WorkerRegistryEntity entityWithStatusAndDrain(String status, Instant drainStartedAt) {
+        return new WorkerRegistryEntity(
+                100L, "ta", "w1", "default", null, null, status, Instant.now(), 1, 10, drainStartedAt, null);
+    }
+
+    // ===== heartbeat: drain 不可逆 =====
+
+    @Test
+    @DisplayName("heartbeat: DRAINING 状态收到 ONLINE 心跳 → 保持 DRAINING")
+    void shouldPreserveDrainingStatus_whenHeartbeatReportsOnline() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.DRAINING.code()),
+                        entityWithStatus(WorkerRegistryStatus.DRAINING.code()));
+
+        service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper)
+                .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+                        WorkerRegistryStatus.DRAINING.code().equals(p.getNextStatus())));
+    }
+
+    @Test
+    @DisplayName("heartbeat: DECOMMISSIONED 状态收到 ONLINE 心跳 → 保持 DECOMMISSIONED")
+    void shouldPreserveDecommissionedStatus_whenHeartbeatReportsOnline() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.DECOMMISSIONED.code()),
+                        entityWithStatus(WorkerRegistryStatus.DECOMMISSIONED.code()));
+
+        service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper)
+                .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+                        WorkerRegistryStatus.DECOMMISSIONED.code().equals(p.getNextStatus())));
+    }
+
+    @Test
+    @DisplayName("heartbeat: ONLINE 状态收到自报 DRAINING → 保持 ONLINE，避免 resume 被心跳覆盖")
+    void shouldKeepOnlineStatus_whenHeartbeatSelfReportsDraining() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.heartbeat("w1", dto(WorkerRegistryStatus.DRAINING.code()));
+
+        verify(mapper)
+                .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+                        WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
+    }
+
+    @Test
+    @DisplayName("heartbeat: ONLINE 状态收到 ONLINE 心跳 → 保持 ONLINE(正常路径)")
+    void shouldPreserveOnlineStatus_whenHeartbeatReportsOnline() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper)
+                .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+                        WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
+    }
+
+    @Test
+    @DisplayName("heartbeat: null DTO → 直接返 null,不读 DB")
+    void shouldReturnNull_whenHeartbeatPayloadAbsent() {
+        assertThat(service.heartbeat("w1", null)).isNull();
+        verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
+    }
+
+    // ===== heartbeat 降级 register =====
+
+    @Test
+    @DisplayName("heartbeat: 未注册 → 自动降级走 register(回退首次 register 丢失)")
+    void shouldFallBackToRegistration_whenHeartbeatFindsNoWorker() {
+        // heartbeat 读 null → 走 register;register 内部也读 null → 走 insert 路径
+        // 最后 persist 后重读返回 ONLINE entity
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.heartbeat("w1", dto(null));
+
+        // 走 register 路径会执行 insert,不应走 touchHeartbeat
+        verify(mapper).insert(any());
+        verify(mapper, never()).touchHeartbeat(any());
+    }
+
+    // ===== register 幂等 upsert =====
+
+    @Test
+    @DisplayName("register:租户限流拒绝时在读取或写入注册表前返回 429")
+    void shouldRejectRegistrationBeforePersistence_whenTenantRateLimitDenied() {
+        when(tenantActionRateLimiter.tryConsume("ta", RateLimitAction.WORKER_REGISTER))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> service.register(dto(null)))
+                .isInstanceOf(OperationFailure.class)
+                .satisfies(error ->
+                        assertThat(((OperationFailure) error).kind()).isEqualTo(OperationFailure.Kind.RATE_LIMITED));
+
+        verify(mapper, never()).selectByTenantAndWorkerCode("ta", "w1");
+    }
+
+    @Test
+    @DisplayName("register: 新 worker → insert + 重读")
+    void shouldInsertWorker_whenRegisteringUnknownWorker() {
+        WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
+
+        WorkerRegistryEntity result = service.register(dto(null));
+
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+        verify(mapper).insert(captor.capture());
+        verify(mapper, never()).updateRegistrationIfCurrent(any(), anyString());
+        assertThat(captor.getValue().maxConcurrent()).isEqualTo(WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT);
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("注册 Worker 时持久化执行器能力供运维展示")
+    void shouldPersistTaskCapabilities_whenRegisteringWorker() {
+        WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
+        WorkerTaskCapabilityDto capability =
+                new WorkerTaskCapabilityDto("file_sha256", List.of("DISK"), true, false, 300_000L);
+        WorkerHeartbeatDto request =
+                dto(null).toBuilder().taskCapabilities(List.of(capability)).build();
+
+        service.register(request);
+
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().taskCapabilities().getValue())
+                .contains("file_sha256")
+                .contains("300000");
+    }
+
+    @Test
+    @DisplayName("注册 Worker 时保存 Replay 能力目录")
+    void shouldPersistReplayCapabilitiesOnlyWhenProvided() {
+        WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
+        ReplayCapabilityDeclaration declaration = ReplayCapabilityDeclaration.unknown("plugin-a");
+        WorkerHeartbeatDto request =
+                dto(null).toBuilder().replayCapabilities(List.of(declaration)).build();
+        when(mapper.updateReplayCapabilities(eq("ta"), eq("w1"), anyString())).thenReturn(1);
+
+        service.register(request);
+
+        ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mapper).updateReplayCapabilities(eq("ta"), eq("w1"), jsonCaptor.capture());
+        assertThat(jsonCaptor.getValue()).contains("plugin-a").contains("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("旧 Worker 注册未携带 Replay 能力目录时保留已有声明")
+    void shouldPreserveReplayCapabilities_whenRegistrationOmitsCatalogue() {
+        WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(saved, saved);
+
+        service.register(dto(null));
+
+        verify(mapper, never()).updateReplayCapabilities(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("register: worker 上报实际并发上限 → 持久化到 selector 反压字段")
+    void shouldPersistReportedConcurrencyCap_whenWorkerRegisters() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dtoWithMaxConcurrent(16));
+
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().maxConcurrent()).isEqualTo(16);
+    }
+
+    @Test
+    @DisplayName("register: 旧 worker 未上报并发上限 → 保留已有平台值")
+    void shouldKeepStoredConcurrencyCap_whenWorkerOmitsReportedValue() {
+        WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper).updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.ONLINE.code()));
+        assertThat(captor.getValue().maxConcurrent()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("register: 注册写入被并发状态推进挡下时保留平台状态且不抛错")
+    void shouldKeepPlatformState_whenRegistrationCasLosesRace() {
+        WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+        WorkerRegistryEntity drained = entityWithStatus(WorkerRegistryStatus.DRAINING.code());
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, drained);
+        when(mapper.updateRegistrationIfCurrent(any(), anyString())).thenReturn(0);
+
+        WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        // 并发 drain 胜出：返回最新行，不把 ONLINE 写回。
+        assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: 上一代进程自报的 DRAINING(无 drain 起始时间)按新进程复活为 ONLINE")
+    void shouldReviveSelfReportedDrainingOnRegister() {
+        WorkerRegistryEntity existing = entityWithStatusAndDrain(WorkerRegistryStatus.DRAINING.code(), null);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper).updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
+        assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    }
+
+    @Test
+    @DisplayName("register: 上一代进程自报的 DECOMMISSIONED(无 drain 起始时间)按新进程复活为 ONLINE")
+    void shouldReviveSelfReportedDecommissionedOnRegister() {
+        WorkerRegistryEntity existing = entityWithStatusAndDrain(WorkerRegistryStatus.DECOMMISSIONED.code(), null);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper).updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
+        assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    }
+
+    @Test
+    @DisplayName("register: 平台发起的 DRAINING(drain 有起始时间)不因进程重启被清除")
+    void shouldPreserveOperatorDrainingOnRegister() {
+        WorkerRegistryEntity existing =
+                entityWithStatusAndDrain(WorkerRegistryStatus.DRAINING.code(), Instant.parse("2026-01-01T00:00:00Z"));
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper).updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
+        assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+    }
+
+    @Test
+    @DisplayName("register: 平台发起的 DECOMMISSIONED(drain 有起始时间)保持终止态")
+    void shouldPreserveOperatorDecommissionedOnRegister() {
+        WorkerRegistryEntity existing = entityWithStatusAndDrain(
+                WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.parse("2026-01-01T00:00:00Z"));
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+        verify(mapper).updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
+        assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+    }
+
+    @Test
+    @DisplayName("register: 缺 workerGroup → 400 校验拒(不落库,杜绝 NOT NULL 撞 500 刷日志)")
+    void shouldRejectRegistration_whenWorkerGroupMissing() {
+        WorkerHeartbeatDto noGroup = dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+                .workerGroup(null)
+                .build();
+        WorkerHeartbeatDto blankGroup = dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+                .workerGroup("  ")
+                .build();
+
+        assertThatThrownBy(() -> service.register(noGroup))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("missing_worker_group");
+        assertThatThrownBy(() -> service.register(blankGroup))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("missing_worker_group");
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: 支持的 protocolVersion(v2)→ 正常注册")
+    void shouldAcceptRegistration_whenProtocolVersionSupported() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v2"));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 缺 protocolVersion(老 SDK / 非 SDK worker)→ legacy 放行")
+    void shouldAcceptRegistration_whenProtocolVersionAbsent() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), null));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 不支持的 protocolVersion(v3)→ 拒绝(VALIDATION_ERROR),不写入数据库")
+    void shouldRejectRegistration_whenProtocolVersionUnsupported() {
+        assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v3")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("unsupported_protocol_version");
+
+        verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: 无法解析的 protocolVersion(garbage)→ 拒绝,不写入数据库")
+    void shouldRejectRegistration_whenProtocolVersionUnparseable() {
+        assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "abc")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("unsupported_protocol_version");
+
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: 上报非枚举状态(自托管 SDK 恒发 RUNNING)→ 写入数据库归一为 ONLINE,不违反 ck_worker_registry_status")
+    void shouldNormalizeUnknownStatus_whenSelfHostedWorkerRegisters() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        ArgumentCaptor<WorkerRegistryEntity> captor = ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+        service.register(dto("RUNNING"));
+
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    }
+
+    @Test
+    @DisplayName("register: 已存在 worker(同 workerCode) → 状态 CAS 更新,不抛错(重启重连场景)")
+    void shouldUpdateRegistration_whenWorkerAlreadyRegistered() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.OFFLINE.code()),
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.register(dto(null));
+
+        verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.OFFLINE.code()));
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: 同 workerCode 重连应能从 DRAINING 改回 ONLINE(register 不受心跳保护规则限制)")
+    void shouldRestoreOnlineStatus_whenDrainingWorkerRegistersAgain() {
+        // 注意:register 走 resolveIncomingStatus(defaultStatus=ONLINE),不走 resolveHeartbeatStatus
+        // 所以 DRAINING 在 register 路径下会被覆盖为 ONLINE
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.DRAINING.code()),
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.register(dto(null));
+
+        verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.DRAINING.code()));
+    }
+
+    // ===== register: 租户级最低 SDK 版本门禁 (opt-in) =====
+
+    @Test
+    @DisplayName("register: 配置最低=1,worker 报 1.x → 过(主版本不低于)")
+    void shouldAcceptRegistration_whenSdkVersionReachesConfiguredMinimum() {
+        when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+                .thenReturn("1.0.0");
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.5.2"));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 配置最低=2,worker 报 1.x → 拒(VALIDATION_ERROR),不写入数据库")
+    void shouldRejectRegistration_whenSdkVersionBelowConfiguredMinimum() {
+        when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+                .thenReturn("2.0.0");
+
+        assertThatThrownBy(() -> service.register(dtoWithSdkVersion("1.9.9")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("sdk_version_too_old");
+
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: worker sdkVersion 空 → 过(legacy / 非 SDK worker 放行,不读配置)")
+    void shouldAcceptRegistration_whenSdkVersionBlank() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dtoWithSdkVersion(" "));
+
+        verify(systemParameterMapper, never()).selectParamValue(anyString(), anyString());
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 该租户未配 worker.min_sdk_version → 过(opt-in 放行)")
+    void shouldAcceptRegistration_whenMinimumVersionNotConfigured() {
+        when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+                .thenReturn(null);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 配置值脏(abc)解析不出主版本 → 过(不因脏配置误杀,不抛)")
+    void shouldAcceptRegistration_whenMinimumVersionConfigUnparseable() {
+        when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+                .thenReturn("abc");
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    // ===== register: 自定义 taskType descriptor upsert (SDK Phase 3 M3.1) =====
+
+    @Test
+    @DisplayName("register: 上报 taskTypes[] → 每个 descriptor upsert 到 custom_task_type_registry(code 权威)")
+    void shouldUpsertDeclaredTaskTypes_whenWorkerReportsTaskTypes() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        WorkerTaskTypeDescriptorDto descriptor =
+                new WorkerTaskTypeDescriptorDto("tenant_ta_import", "导入", "v1", Map.of("batchSize", 500), null, null);
+
+        service.register(dtoWithTaskTypes(List.of(descriptor)));
+
+        verify(customTaskTypeRegistryMapper)
+                .upsertDeclared(ArgumentMatchers.argThat(
+                        (CustomTaskTypeUpsertParam p) -> "tenant_ta_import".equals(p.getTaskTypeCode())
+                                && "导入".equals(p.getDisplayName())
+                                && "v1".equals(p.getDescriptorVersion())
+                                && "w1".equals(p.getDeclaredByWorkerCode())
+                                && p.getDescriptor() != null
+                                && p.getDescriptor().contains("batchSize")));
+    }
+
+    @Test
+    @DisplayName("register: taskTypes 为 null(file-pipeline worker) → 不触发 upsert")
+    void shouldSkipTaskTypeUpsert_whenWorkerReportsNoTaskTypes() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.register(dto(null));
+
+        verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+    }
+
+    @Test
+    @DisplayName("register: descriptor.code 空白 → 跳过该条 upsert(不落脏 code)")
+    void shouldSkipTaskTypeUpsert_whenDescriptorCodeBlank() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        WorkerTaskTypeDescriptorDto blank = new WorkerTaskTypeDescriptorDto(" ", "x", "v1", null, null, null);
+
+        service.register(dtoWithTaskTypes(List.of(blank)));
+
+        verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+    }
+
+    @Test
+    @DisplayName("register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛" + " BizException,不写入数据库")
+    void registerRejectsDescriptorWithCredential_LaneC() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
+                "tenant_ta_leak", "leak", "v1", Map.of("apiKey", "leaked-AKIA-token"), null, null);
+
+        assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.security.sensitive_in_payload");
+
+        verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+    }
+
+    @Test
+    @DisplayName("register: descriptor code 含凭据时，拒绝信息不回显 code")
+    void shouldNotExposeDescriptorCodeInSensitiveFieldError() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
+                "tenant_ta_token=probe-secret", "leak", "v1", Map.of("apiKey", "value"), null, null);
+
+        assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
+                .isInstanceOf(BizException.class)
+                .satisfies(error -> assertThat(((BizException) error).getMessageArgs())
+                        .containsExactly("sdk.taskType.descriptor", "sensitiveField"))
+                .hasMessageNotContaining("probe-secret");
+        verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+    }
+
+    // ===== 缺口②: per-tenant worker 数量配额 (opt-in) =====
+
+    @Test
+    @DisplayName("register: max-per-tenant=2 且已有 2 个活跃 worker + 新 worker → 拒(VALIDATION_ERROR),不写入")
+    void shouldRejectNewWorker_whenTenantQuotaExhausted() {
+        workerRegistryProperties.setMaxPerTenant(2);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null);
+        when(mapper.countByTenant("ta")).thenReturn(2);
+
+        assertThatThrownBy(() -> service.register(dto(null)))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("too_many_workers");
+
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("register: max-per-tenant=2 且当前 1 个活跃 + 新 worker → 过(未达上限)")
+    void shouldAllowNewWorker_whenTenantQuotaHasRoom() {
+        workerRegistryProperties.setMaxPerTenant(2);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+        when(mapper.countByTenant("ta")).thenReturn(1);
+
+        WorkerRegistryEntity result = service.register(dto(null));
+
+        verify(mapper).insert(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("register: 幂等重注册已存在 worker → 不查配额,不被拦(已达上限也放行)")
+    void shouldBypassQuotaCheck_whenWorkerAlreadyRegistered() {
+        workerRegistryProperties.setMaxPerTenant(1);
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.register(dto(null));
+
+        verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.ONLINE.code()));
+        verify(mapper, never()).countByTenant(anyString());
+    }
+
+    @Test
+    @DisplayName("register: max-per-tenant=0(默认)→ 不查配额,不限")
+    void shouldAllowRegistration_whenTenantQuotaNotConfigured() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+        service.register(dto(null));
+
+        verify(mapper).insert(any());
+        verify(mapper, never()).countByTenant(anyString());
+    }
+
+    // ===== updateStatus / deactivate =====
+
+    @Test
+    @DisplayName("updateStatus: worker 不存在 → 返 null,不写表")
+    void updateStatus_missing_returns_null() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "missing")).thenReturn(null);
+
+        assertThat(service.updateStatus("ta", "missing", WorkerRegistryStatus.OFFLINE.code()))
+                .isNull();
+        verify(mapper, never()).insert(any());
+        verify(mapper, never()).updateStatusIfCurrent(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("deactivate: 触发 updateStatus(OFFLINE)")
+    void shouldMarkWorkerOffline_whenDeactivated() {
+        when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(
+                        entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+                        entityWithStatus(WorkerRegistryStatus.OFFLINE.code()));
+        when(mapper.updateStatusIfCurrent(
+                        "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code()))
+                .thenReturn(1);
+
+        service.deactivate("ta", "w1");
+
+        verify(mapper, times(1))
+                .updateStatusIfCurrent(
+                        "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code());
+    }
 }

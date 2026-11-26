@@ -6,19 +6,19 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 
 public interface ProcessStageStep {
 
-  ProcessStage stage();
+    ProcessStage stage();
 
-  default String stepCode() {
-    return "PROCESS_" + stage().name();
-  }
+    default String stepCode() {
+        return "PROCESS_" + stage().name();
+    }
 
-  default String stepName() {
-    return stepCode();
-  }
+    default String stepName() {
+        return stepCode();
+    }
 
-  default String implCode() {
-    return stepCode();
-  }
+    default String implCode() {
+        return stepCode();
+    }
 
-  ProcessStageResult execute(ProcessJobContext context);
+    ProcessStageResult execute(ProcessJobContext context);
 }

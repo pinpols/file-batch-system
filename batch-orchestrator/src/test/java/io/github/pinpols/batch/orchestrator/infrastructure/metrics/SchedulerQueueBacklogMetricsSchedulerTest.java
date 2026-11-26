@@ -19,49 +19,47 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SchedulerQueueBacklogMetricsSchedulerTest {
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private SimpleMeterRegistry meterRegistry;
-  private SchedulerQueueBacklogMetricsScheduler scheduler;
+    private SimpleMeterRegistry meterRegistry;
+    private SchedulerQueueBacklogMetricsScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-    scheduler = new SchedulerQueueBacklogMetricsScheduler(
-        jobPartitionMapper, meterRegistry, gracefulShutdown);
-    scheduler.initializeMeters();
-  }
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        scheduler = new SchedulerQueueBacklogMetricsScheduler(jobPartitionMapper, meterRegistry, gracefulShutdown);
+        scheduler.initializeMeters();
+    }
 
-  @Test
-  @DisplayName("采样时聚合各状态分区数与排队总数并刷新全局指标,含最老等待时长")
-  void shouldRefreshGlobalBacklogGauges_whenSampling() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(jobPartitionMapper.summarizeGlobalQueueBacklog(
-            JobPartitionGlobalQueueBacklogSummaryQuery.builder()
-                .createdStatus("CREATED")
-                .waitingStatus("WAITING")
-                .readyStatus("READY")
-                .runningStatus("RUNNING")
-                .retryingStatus("RETRYING")
-                .build()))
-        .thenReturn(new QueuePartitionBacklogStats("ALL", 1, 2, 3, 4, 5, 120));
+    @Test
+    @DisplayName("采样时聚合各状态分区数与排队总数并刷新全局指标,含最老等待时长")
+    void shouldRefreshGlobalBacklogGauges_whenSampling() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(jobPartitionMapper.summarizeGlobalQueueBacklog(JobPartitionGlobalQueueBacklogSummaryQuery.builder()
+                        .createdStatus("CREATED")
+                        .waitingStatus("WAITING")
+                        .readyStatus("READY")
+                        .runningStatus("RUNNING")
+                        .retryingStatus("RETRYING")
+                        .build()))
+                .thenReturn(new QueuePartitionBacklogStats("ALL", 1, 2, 3, 4, 5, 120));
 
-    scheduler.sample();
+        scheduler.sample();
 
-    assertGauge("batch.orchestrator.scheduler.queue.created.partitions", 1);
-    assertGauge("batch.orchestrator.scheduler.queue.waiting.partitions", 2);
-    assertGauge("batch.orchestrator.scheduler.queue.ready.partitions", 3);
-    assertGauge("batch.orchestrator.scheduler.queue.running.partitions", 4);
-    assertGauge("batch.orchestrator.scheduler.queue.retrying.partitions", 5);
-    assertGauge("batch.orchestrator.scheduler.queue.queued.partitions", 11);
-    assertGauge("batch.orchestrator.scheduler.queue.oldest_wait.seconds", 120);
-  }
+        assertGauge("batch.orchestrator.scheduler.queue.created.partitions", 1);
+        assertGauge("batch.orchestrator.scheduler.queue.waiting.partitions", 2);
+        assertGauge("batch.orchestrator.scheduler.queue.ready.partitions", 3);
+        assertGauge("batch.orchestrator.scheduler.queue.running.partitions", 4);
+        assertGauge("batch.orchestrator.scheduler.queue.retrying.partitions", 5);
+        assertGauge("batch.orchestrator.scheduler.queue.queued.partitions", 11);
+        assertGauge("batch.orchestrator.scheduler.queue.oldest_wait.seconds", 120);
+    }
 
-  private void assertGauge(String name, double expected) {
-    assertThat(meterRegistry.get(name).gauge().value()).isEqualTo(expected);
-  }
+    private void assertGauge(String name, double expected) {
+        assertThat(meterRegistry.get(name).gauge().value()).isEqualTo(expected);
+    }
 }

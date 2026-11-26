@@ -18,46 +18,42 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @TestPropertySource(
-    properties = {
-      "batch.worker.report-outbox.enabled=true",
-      "batch.worker.report-outbox.storage=SQLITE"
-    })
+        properties = {"batch.worker.report-outbox.enabled=true", "batch.worker.report-outbox.storage=SQLITE"})
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("SQLite 回报发件箱与导入扫描事务隔离")
-class ImportIngressSqliteTransactionIntegrationTest
-    extends ImportIngressSpringTransactionIntegrationTest {
-  @TempDir
-  static Path temporaryDirectory;
+class ImportIngressSqliteTransactionIntegrationTest extends ImportIngressSpringTransactionIntegrationTest {
+    @TempDir
+    static Path temporaryDirectory;
 
-  private final DataSource sqliteDataSource;
-  private final PlatformTransactionManager sqliteManager;
+    private final DataSource sqliteDataSource;
+    private final PlatformTransactionManager sqliteManager;
 
-  ImportIngressSqliteTransactionIntegrationTest(
-      @Qualifier("importPlatformDataSource") DataSource platform,
-      @Qualifier("importBusinessDataSource") DataSource business,
-      @Qualifier("transactionManager") PlatformTransactionManager manager,
-      ImportIngressScanRepository scans,
-      PlatformFileRecordRepository files,
-      PlatformFileAuditRepository audits,
-      @Qualifier("workerReportOutboxDataSource") DataSource sqliteDataSource,
-      @Qualifier("workerReportOutboxTransactionManager") PlatformTransactionManager sqliteManager) {
-    super(platform, business, manager, scans, files, audits);
-    this.sqliteDataSource = sqliteDataSource;
-    this.sqliteManager = sqliteManager;
-  }
+    ImportIngressSqliteTransactionIntegrationTest(
+            @Qualifier("importPlatformDataSource") DataSource platform,
+            @Qualifier("importBusinessDataSource") DataSource business,
+            @Qualifier("transactionManager") PlatformTransactionManager manager,
+            ImportIngressScanRepository scans,
+            PlatformFileRecordRepository files,
+            PlatformFileAuditRepository audits,
+            @Qualifier("workerReportOutboxDataSource") DataSource sqliteDataSource,
+            @Qualifier("workerReportOutboxTransactionManager") PlatformTransactionManager sqliteManager) {
+        super(platform, business, manager, scans, files, audits);
+        this.sqliteDataSource = sqliteDataSource;
+        this.sqliteManager = sqliteManager;
+    }
 
-  @DynamicPropertySource
-  static void sqlitePath(DynamicPropertyRegistry registry) {
-    registry.add(
-        "batch.worker.report-outbox.sqlite-path",
-        () -> temporaryDirectory.resolve("report-outbox.db").toString());
-  }
+    @DynamicPropertySource
+    static void sqlitePath(DynamicPropertyRegistry registry) {
+        registry.add(
+                "batch.worker.report-outbox.sqlite-path",
+                () -> temporaryDirectory.resolve("report-outbox.db").toString());
+    }
 
-  @Test
-  @DisplayName("SQLite 发件箱事务仍使用其专属数据源")
-  void reportOutbox_shouldKeepItsSqliteTransaction() {
-    assertThat(sqliteManager).isInstanceOf(DataSourceTransactionManager.class);
-    assertThat(((DataSourceTransactionManager) sqliteManager).getDataSource())
-        .isSameAs(sqliteDataSource);
-  }
+    @Test
+    @DisplayName("SQLite 发件箱事务仍使用其专属数据源")
+    void reportOutbox_shouldKeepItsSqliteTransaction() {
+        assertThat(sqliteManager).isInstanceOf(DataSourceTransactionManager.class);
+        assertThat(((DataSourceTransactionManager) sqliteManager).getDataSource())
+                .isSameAs(sqliteDataSource);
+    }
 }

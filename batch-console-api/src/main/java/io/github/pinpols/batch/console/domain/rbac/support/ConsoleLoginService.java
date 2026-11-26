@@ -28,66 +28,66 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleLoginService {
 
-  private final ConsoleJwtService jwtService;
-  private final ConsoleSessionRegistry sessionRegistry;
-  private final ConsoleUserAccountServiceSupport userAccountService;
-  private final ConsolePasswordHasher passwordHasher;
-  private final LoginProtectionService loginProtectionService;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleJwtService jwtService;
+    private final ConsoleSessionRegistry sessionRegistry;
+    private final ConsoleUserAccountServiceSupport userAccountService;
+    private final ConsolePasswordHasher passwordHasher;
+    private final LoginProtectionService loginProtectionService;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  public ConsoleLoginService(
-      ConsoleJwtService jwtService,
-      ConsoleSessionRegistry sessionRegistry,
-      ConsoleUserAccountServiceSupport userAccountService,
-      ConsolePasswordHasher passwordHasher,
-      LoginProtectionService loginProtectionService,
-      ConsoleRequestMetadataResolver requestMetadataResolver) {
-    this.jwtService = jwtService;
-    this.sessionRegistry = sessionRegistry;
-    this.userAccountService = userAccountService;
-    this.passwordHasher = passwordHasher;
-    this.loginProtectionService = loginProtectionService;
-    this.requestMetadataResolver = requestMetadataResolver;
-  }
-
-  public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
-    Guard.require(request != null, "login request is required");
-    Guard.requireText(request.getUsername(), "username is required");
-    Guard.requireText(request.getPassword(), "password is required");
-    String username = request.getUsername();
-    String clientIp = resolveClientIp();
-    // 风控第一关:失败计数达阈值则要求验证码(不通过抛 CAPTCHA_REQUIRED);总开关关时静默放行。
-    loginProtectionService.assertCaptchaSatisfied(username, clientIp, request.getCaptchaToken());
-    // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
-    Optional<ConsoleUserAccount> found = userAccountService.findByUsername(username);
-    boolean credentialsValid = found.isPresent()
-        && found.get().enabled()
-        && passwordHasher.matches(request.getPassword(), found.get().passwordHash());
-    if (!credentialsValid) {
-      // 记失败 + 渐进退避(总开关关时 no-op),再抛统一的 invalid credentials(防用户枚举)。
-      loginProtectionService.onLoginFailure(username, clientIp);
-      throw invalidCredentials();
+    public ConsoleLoginService(
+            ConsoleJwtService jwtService,
+            ConsoleSessionRegistry sessionRegistry,
+            ConsoleUserAccountServiceSupport userAccountService,
+            ConsolePasswordHasher passwordHasher,
+            LoginProtectionService loginProtectionService,
+            ConsoleRequestMetadataResolver requestMetadataResolver) {
+        this.jwtService = jwtService;
+        this.sessionRegistry = sessionRegistry;
+        this.userAccountService = userAccountService;
+        this.passwordHasher = passwordHasher;
+        this.loginProtectionService = loginProtectionService;
+        this.requestMetadataResolver = requestMetadataResolver;
     }
-    ConsoleUserAccount account = found.get();
-    loginProtectionService.onLoginSuccess(username);
-    String tenantId = account.tenantId();
-    long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
-    // 登录响应带 mustChangePassword 提示标记；该标记不限制控制台访问或业务写操作。
-    LinkedHashSet<String> authoritiesSnapshot = new LinkedHashSet<>(account.authorities());
-    ConsoleAuthTokenResponse authToken =
-        jwtService.issueToken(account.username(), tenantId, authoritiesSnapshot, sessionVersion);
-    boolean mustChangePassword = account.mustChangePassword();
-    return authToken.withMustChangePassword(mustChangePassword);
-  }
 
-  /** 从 request metadata 取客户端 IP(已按 trust-forwarded-headers 解析);非 Servlet 上下文回退空串。 */
-  private String resolveClientIp() {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String ip = metadata == null ? null : metadata.clientIp();
-    return ip == null ? "" : ip;
-  }
+    public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
+        Guard.require(request != null, "login request is required");
+        Guard.requireText(request.getUsername(), "username is required");
+        Guard.requireText(request.getPassword(), "password is required");
+        String username = request.getUsername();
+        String clientIp = resolveClientIp();
+        // 风控第一关:失败计数达阈值则要求验证码(不通过抛 CAPTCHA_REQUIRED);总开关关时静默放行。
+        loginProtectionService.assertCaptchaSatisfied(username, clientIp, request.getCaptchaToken());
+        // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
+        Optional<ConsoleUserAccount> found = userAccountService.findByUsername(username);
+        boolean credentialsValid = found.isPresent()
+                && found.get().enabled()
+                && passwordHasher.matches(request.getPassword(), found.get().passwordHash());
+        if (!credentialsValid) {
+            // 记失败 + 渐进退避(总开关关时 no-op),再抛统一的 invalid credentials(防用户枚举)。
+            loginProtectionService.onLoginFailure(username, clientIp);
+            throw invalidCredentials();
+        }
+        ConsoleUserAccount account = found.get();
+        loginProtectionService.onLoginSuccess(username);
+        String tenantId = account.tenantId();
+        long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
+        // 登录响应带 mustChangePassword 提示标记；该标记不限制控制台访问或业务写操作。
+        LinkedHashSet<String> authoritiesSnapshot = new LinkedHashSet<>(account.authorities());
+        ConsoleAuthTokenResponse authToken =
+                jwtService.issueToken(account.username(), tenantId, authoritiesSnapshot, sessionVersion);
+        boolean mustChangePassword = account.mustChangePassword();
+        return authToken.withMustChangePassword(mustChangePassword);
+    }
 
-  private BizException invalidCredentials() {
-    return BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
-  }
+    /** 从 request metadata 取客户端 IP(已按 trust-forwarded-headers 解析);非 Servlet 上下文回退空串。 */
+    private String resolveClientIp() {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        String ip = metadata == null ? null : metadata.clientIp();
+        return ip == null ? "" : ip;
+    }
+
+    private BizException invalidCredentials() {
+        return BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
+    }
 }

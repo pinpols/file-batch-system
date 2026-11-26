@@ -6,14 +6,14 @@ import lombok.Builder;
 
 @Builder
 public record FileUploadSessionCommand(
-    String tenantId,
-    String channelCode,
-    String fileName,
-    String operatorId,
-    String traceId,
-    String calendarCode,
-    Long workflowDefinitionId,
-    String fileGroupCode,
-    LocalDate bizDate,
-    List<String> requiredFileNames,
-    String bundleTemplateCode) {}
+        String tenantId,
+        String channelCode,
+        String fileName,
+        String operatorId,
+        String traceId,
+        String calendarCode,
+        Long workflowDefinitionId,
+        String fileGroupCode,
+        LocalDate bizDate,
+        List<String> requiredFileNames,
+        String bundleTemplateCode) {}

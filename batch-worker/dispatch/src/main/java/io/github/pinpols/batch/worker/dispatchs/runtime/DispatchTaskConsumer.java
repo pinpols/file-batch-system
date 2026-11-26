@@ -14,52 +14,51 @@ import org.springframework.stereotype.Service;
 
 /** 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。 */
 @Service
-@SuppressWarnings(
-    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class DispatchTaskConsumer extends AbstractTaskConsumer {
 
-  private final DispatchWorkerLoop workerLoop;
-  private final DispatchWorkerConfiguration configuration;
-  private final TaskDispatchExecutor taskDispatchExecutor;
-  private final DeadLetterPublisher deadLetterPublisher;
+    private final DispatchWorkerLoop workerLoop;
+    private final DispatchWorkerConfiguration configuration;
+    private final TaskDispatchExecutor taskDispatchExecutor;
+    private final DeadLetterPublisher deadLetterPublisher;
 
-  public DispatchTaskConsumer(
-      DispatchWorkerLoop workerLoop,
-      DispatchWorkerConfiguration configuration,
-      TaskDispatchExecutor taskDispatchExecutor,
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      DeadLetterPublisher deadLetterPublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      WorkerConcurrencyProperties concurrencyProperties) {
-    super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
-    this.workerLoop = workerLoop;
-    this.configuration = configuration;
-    this.taskDispatchExecutor = taskDispatchExecutor;
-    this.deadLetterPublisher = deadLetterPublisher;
-  }
+    public DispatchTaskConsumer(
+            DispatchWorkerLoop workerLoop,
+            DispatchWorkerConfiguration configuration,
+            TaskDispatchExecutor taskDispatchExecutor,
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+            DeadLetterPublisher deadLetterPublisher,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            WorkerConcurrencyProperties concurrencyProperties) {
+        super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
+        this.workerLoop = workerLoop;
+        this.configuration = configuration;
+        this.taskDispatchExecutor = taskDispatchExecutor;
+        this.deadLetterPublisher = deadLetterPublisher;
+    }
 
-  @Override
-  protected AbstractWorkerLoop workerLoop() {
-    return workerLoop;
-  }
+    @Override
+    protected AbstractWorkerLoop workerLoop() {
+        return workerLoop;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected TaskDispatchExecutor taskDispatchExecutor() {
-    return taskDispatchExecutor;
-  }
+    @Override
+    protected TaskDispatchExecutor taskDispatchExecutor() {
+        return taskDispatchExecutor;
+    }
 
-  @Override
-  protected DeadLetterPublisher deadLetterPublisher() {
-    return deadLetterPublisher;
-  }
+    @Override
+    protected DeadLetterPublisher deadLetterPublisher() {
+        return deadLetterPublisher;
+    }
 
-  @Override
-  public String listenerId() {
-    return "dispatch-task-consumer";
-  }
+    @Override
+    public String listenerId() {
+        return "dispatch-task-consumer";
+    }
 }

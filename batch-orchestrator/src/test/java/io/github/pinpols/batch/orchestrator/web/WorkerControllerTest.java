@@ -33,149 +33,143 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("工作节点注册与心跳接口的控制器行为,覆盖租户归一,进度保留与下线指令下发")
 class WorkerControllerTest {
 
-  @Mock
-  private WorkerRegistryServerService workerRegistryService;
+    @Mock
+    private WorkerRegistryServerService workerRegistryService;
 
-  @Mock
-  private WorkerDrainGovernanceService workerDrainGovernanceService;
+    @Mock
+    private WorkerDrainGovernanceService workerDrainGovernanceService;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new WorkerController(workerRegistryService, workerDrainGovernanceService))
-        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new WorkerController(workerRegistryService, workerDrainGovernanceService))
+                .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+                .build();
+    }
 
-  @Test
-  @DisplayName("下线请求体中的超时秒数被正确绑定并透传给治理服务")
-  void shouldBindDrainRequestTimeoutSeconds() throws Exception {
-    when(workerDrainGovernanceService.startDrain("t1", "worker-1", 1))
-        .thenReturn(new WorkerRegistryEntity(
-            1L,
-            "t1",
-            "worker-1",
-            "import",
-            null,
-            null,
-            "DRAINING",
-            BatchDateTimeSupport.utcNow(),
-            0,
-            10,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow()));
+    @Test
+    @DisplayName("下线请求体中的超时秒数被正确绑定并透传给治理服务")
+    void shouldBindDrainRequestTimeoutSeconds() throws Exception {
+        when(workerDrainGovernanceService.startDrain("t1", "worker-1", 1))
+                .thenReturn(new WorkerRegistryEntity(
+                        1L,
+                        "t1",
+                        "worker-1",
+                        "import",
+                        null,
+                        null,
+                        "DRAINING",
+                        BatchDateTimeSupport.utcNow(),
+                        0,
+                        10,
+                        BatchDateTimeSupport.utcNow(),
+                        BatchDateTimeSupport.utcNow()));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/drain")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/internal/workers/worker-1/drain")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "timeoutSeconds": 1
                     }
                     """))
-        .andExpect(status().isOk());
+                .andExpect(status().isOk());
 
-    verify(workerDrainGovernanceService).startDrain("t1", "worker-1", 1);
-  }
+        verify(workerDrainGovernanceService).startDrain("t1", "worker-1", 1);
+    }
 
-  @Test
-  @DisplayName("预热请求路由到治理服务并返回成功状态")
-  void shouldRouteWarmupToGovernanceService() throws Exception {
-    when(workerDrainGovernanceService.warmup("t1", "worker-1"))
-        .thenReturn(new WorkerRegistryEntity(
-            1L,
-            "t1",
-            "worker-1",
-            "import",
-            null,
-            null,
-            "ONLINE",
-            BatchDateTimeSupport.utcNow(),
-            0,
-            10,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow()));
+    @Test
+    @DisplayName("预热请求路由到治理服务并返回成功状态")
+    void shouldRouteWarmupToGovernanceService() throws Exception {
+        when(workerDrainGovernanceService.warmup("t1", "worker-1"))
+                .thenReturn(new WorkerRegistryEntity(
+                        1L,
+                        "t1",
+                        "worker-1",
+                        "import",
+                        null,
+                        null,
+                        "ONLINE",
+                        BatchDateTimeSupport.utcNow(),
+                        0,
+                        10,
+                        BatchDateTimeSupport.utcNow(),
+                        BatchDateTimeSupport.utcNow()));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/warmup")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\"}"))
-        .andExpect(status().isOk());
+        mockMvc.perform(post("/internal/workers/worker-1/warmup")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\"}"))
+                .andExpect(status().isOk());
 
-    verify(workerDrainGovernanceService).warmup("t1", "worker-1");
-  }
+        verify(workerDrainGovernanceService).warmup("t1", "worker-1");
+    }
 
-  @Test
-  @DisplayName("恢复请求路由到治理服务并返回在线状态")
-  void shouldRouteResumeToGovernanceService() throws Exception {
-    when(workerDrainGovernanceService.resume("t1", "worker-1"))
-        .thenReturn(new WorkerRegistryEntity(
-            1L,
-            "t1",
-            "worker-1",
-            "import",
-            null,
-            null,
-            "ONLINE",
-            BatchDateTimeSupport.utcNow(),
-            0,
-            10,
-            null,
-            null));
+    @Test
+    @DisplayName("恢复请求路由到治理服务并返回在线状态")
+    void shouldRouteResumeToGovernanceService() throws Exception {
+        when(workerDrainGovernanceService.resume("t1", "worker-1"))
+                .thenReturn(new WorkerRegistryEntity(
+                        1L,
+                        "t1",
+                        "worker-1",
+                        "import",
+                        null,
+                        null,
+                        "ONLINE",
+                        BatchDateTimeSupport.utcNow(),
+                        0,
+                        10,
+                        null,
+                        null));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/resume")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("ONLINE"));
+        mockMvc.perform(post("/internal/workers/worker-1/resume")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ONLINE"));
 
-    verify(workerDrainGovernanceService).resume("t1", "worker-1");
-  }
+        verify(workerDrainGovernanceService).resume("t1", "worker-1");
+    }
 
-  @Test
-  @DisplayName("鉴权上下文租户与请求体租户不一致时拒绝治理请求并返回禁止访问")
-  void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
-    mockMvc
-        .perform(post("/internal/workers/worker-1/drain")
-            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"tenant-b\",\"timeoutSeconds\":1}"))
-        .andExpect(status().isForbidden());
-  }
+    @Test
+    @DisplayName("鉴权上下文租户与请求体租户不一致时拒绝治理请求并返回禁止访问")
+    void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
+        mockMvc.perform(post("/internal/workers/worker-1/drain")
+                        .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"tenant-b\",\"timeoutSeconds\":1}"))
+                .andExpect(status().isForbidden());
+    }
 
-  // SDK Phase 2 §2.3:心跳回包下发 platform directive
+    // SDK Phase 2 §2.3:心跳回包下发 platform directive
 
-  @Test
-  @DisplayName("在线工作节点心跳返回常规调度指令,包含期望并发上限且不下发下线动作")
-  void shouldReturnNormalDirective_whenHeartbeatFromOnlineWorker() throws Exception {
-    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("ONLINE", 8));
+    @Test
+    @DisplayName("在线工作节点心跳返回常规调度指令,包含期望并发上限且不下发下线动作")
+    void shouldReturnNormalDirective_whenHeartbeatFromOnlineWorker() throws Exception {
+        when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+                .thenReturn(onlineWorker("ONLINE", 8));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/heartbeat")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.platformStatus").value("NORMAL"))
-        .andExpect(jsonPath("$.shouldDrain").value(false))
-        .andExpect(jsonPath("$.desiredMaxConcurrent").value(8))
-        .andExpect(jsonPath("$.pausedTaskTypes").isEmpty());
-  }
+        mockMvc.perform(post("/internal/workers/worker-1/heartbeat")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.platformStatus").value("NORMAL"))
+                .andExpect(jsonPath("$.shouldDrain").value(false))
+                .andExpect(jsonPath("$.desiredMaxConcurrent").value(8))
+                .andExpect(jsonPath("$.pausedTaskTypes").isEmpty());
+    }
 
-  @Test
-  @DisplayName("心跳携带的租户标识经鉴权上下文归一后,管道任务进度明细仍完整保留")
-  void shouldPreserveTaskProgress_whenHeartbeatTenantIsNormalized() throws Exception {
-    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("ONLINE", 8));
-    mockMvc
-        .perform(post("/internal/workers/worker-1/heartbeat")
-            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("心跳携带的租户标识经鉴权上下文归一后,管道任务进度明细仍完整保留")
+    void shouldPreserveTaskProgress_whenHeartbeatTenantIsNormalized() throws Exception {
+        when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+                .thenReturn(onlineWorker("ONLINE", 8));
+        mockMvc.perform(post("/internal/workers/worker-1/heartbeat")
+                        .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {
                   "tenantId": "t1", "workerCode": "worker-1", "status": "RUNNING",
                   "pipelineProgress": [
@@ -185,69 +179,63 @@ class WorkerControllerTest {
                   ]
                 }
                 """))
-        .andExpect(status().isOk());
-    ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
-    verify(workerRegistryService).heartbeat(eq("worker-1"), captor.capture());
-    assertThat(captor.getValue().tenantId()).isEqualTo("t1");
-    assertThat(captor.getValue().pipelineProgress())
-        .containsExactly(
-            new WorkerPipelineProgressDto(10L, 20L, "LOAD", 100L, 200L, "claim-1", 30L));
-  }
+                .andExpect(status().isOk());
+        ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
+        verify(workerRegistryService).heartbeat(eq("worker-1"), captor.capture());
+        assertThat(captor.getValue().tenantId()).isEqualTo("t1");
+        assertThat(captor.getValue().pipelineProgress())
+                .containsExactly(new WorkerPipelineProgressDto(10L, 20L, "LOAD", 100L, 200L, "claim-1", 30L));
+    }
 
-  @Test
-  @DisplayName("处于下线中的工作节点心跳返回下线指令,并要求停止接收新任务")
-  void shouldReturnDrainDirective_whenWorkerIsDraining() throws Exception {
-    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("DRAINING", 8));
+    @Test
+    @DisplayName("处于下线中的工作节点心跳返回下线指令,并要求停止接收新任务")
+    void shouldReturnDrainDirective_whenWorkerIsDraining() throws Exception {
+        when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+                .thenReturn(onlineWorker("DRAINING", 8));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/heartbeat")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
-        .andExpect(jsonPath("$.shouldDrain").value(true));
-  }
+        mockMvc.perform(post("/internal/workers/worker-1/heartbeat")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
+                .andExpect(jsonPath("$.shouldDrain").value(true));
+    }
 
-  @Test
-  @DisplayName("已终止的注册下发 DECOMMISSIONED 指令,与 DRAINING 区分")
-  void shouldReturnDecommissionedDirective_whenWorkerIsDecommissioned() throws Exception {
-    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("DECOMMISSIONED", 8));
+    @Test
+    @DisplayName("已终止的注册下发 DECOMMISSIONED 指令,与 DRAINING 区分")
+    void shouldReturnDecommissionedDirective_whenWorkerIsDecommissioned() throws Exception {
+        when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+                .thenReturn(onlineWorker("DECOMMISSIONED", 8));
 
-    mockMvc
-        .perform(post("/internal/workers/worker-1/heartbeat")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.platformStatus").value("DECOMMISSIONED"))
-        .andExpect(jsonPath("$.shouldDrain").value(true));
-  }
+        mockMvc.perform(post("/internal/workers/worker-1/heartbeat")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.platformStatus").value("DECOMMISSIONED"))
+                .andExpect(jsonPath("$.shouldDrain").value(true));
+    }
 
-  @Test
-  @DisplayName("工作节点注册入口转发规范化请求")
-  void shouldRegisterWorker() throws Exception {
-    when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("ONLINE", 10));
+    @Test
+    @DisplayName("工作节点注册入口转发规范化请求")
+    void shouldRegisterWorker() throws Exception {
+        when(workerRegistryService.register(any(WorkerHeartbeatDto.class))).thenReturn(onlineWorker("ONLINE", 10));
 
-    mockMvc
-        .perform(post("/internal/workers/register")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
-        .andExpect(status().isOk());
+        mockMvc.perform(post("/internal/workers/register")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
+                .andExpect(status().isOk());
 
-    verify(workerRegistryService).register(any(WorkerHeartbeatDto.class));
-  }
+        verify(workerRegistryService).register(any(WorkerHeartbeatDto.class));
+    }
 
-  @Test
-  @DisplayName("注册请求携带的稳定工作节点池编码在租户归一后保持不变,不回退为节点编码")
-  void shouldPreserveWorkerPoolCode_whenRegisterTenantIsNormalized() throws Exception {
-    when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
-        .thenReturn(onlineWorker("ONLINE", 10));
+    @Test
+    @DisplayName("注册请求携带的稳定工作节点池编码在租户归一后保持不变,不回退为节点编码")
+    void shouldPreserveWorkerPoolCode_whenRegisterTenantIsNormalized() throws Exception {
+        when(workerRegistryService.register(any(WorkerHeartbeatDto.class))).thenReturn(onlineWorker("ONLINE", 10));
 
-    mockMvc
-        .perform(
-            post("/internal/workers/register").contentType(APPLICATION_JSON).content("""
+        mockMvc.perform(post("/internal/workers/register")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workerCode": "export-heavy-pod-01",
@@ -255,27 +243,27 @@ class WorkerControllerTest {
                       "workerPoolCode": "export-heavy"
                     }
                     """))
-        .andExpect(status().isOk());
+                .andExpect(status().isOk());
 
-    ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
-    verify(workerRegistryService).register(captor.capture());
-    assertThat(captor.getValue().workerCode()).isEqualTo("export-heavy-pod-01");
-    assertThat(captor.getValue().workerPoolCode()).isEqualTo("export-heavy");
-  }
+        ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
+        verify(workerRegistryService).register(captor.capture());
+        assertThat(captor.getValue().workerCode()).isEqualTo("export-heavy-pod-01");
+        assertThat(captor.getValue().workerPoolCode()).isEqualTo("export-heavy");
+    }
 
-  private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {
-    return new WorkerRegistryEntity(
-        1L,
-        "t1",
-        "worker-1",
-        "import",
-        null,
-        null,
-        status,
-        BatchDateTimeSupport.utcNow(),
-        2,
-        maxConcurrent,
-        null,
-        null);
-  }
+    private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {
+        return new WorkerRegistryEntity(
+                1L,
+                "t1",
+                "worker-1",
+                "import",
+                null,
+                null,
+                status,
+                BatchDateTimeSupport.utcNow(),
+                2,
+                maxConcurrent,
+                null,
+                null);
+    }
 }

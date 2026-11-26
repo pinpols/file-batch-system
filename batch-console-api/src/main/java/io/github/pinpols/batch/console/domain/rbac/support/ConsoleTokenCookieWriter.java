@@ -14,31 +14,31 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleTokenCookieWriter {
 
-  public static final String COOKIE_NAME = "batch_console_token";
-  private static final long DEFAULT_MAX_AGE_SECONDS = 8 * 3600L;
+    public static final String COOKIE_NAME = "batch_console_token";
+    private static final long DEFAULT_MAX_AGE_SECONDS = 8 * 3600L;
 
-  private final ConsoleSecurityProperties securityProperties;
+    private final ConsoleSecurityProperties securityProperties;
 
-  public void write(ConsoleAuthTokenResponse body, HttpServletResponse response) {
-    response.addHeader(HttpHeaders.SET_COOKIE, build(body));
-  }
-
-  private String build(ConsoleAuthTokenResponse body) {
-    long maxAge = DEFAULT_MAX_AGE_SECONDS;
-    if (EmptyChecks.isNotNull(body.expiresAt()) && EmptyChecks.isNotNull(body.issuedAt())) {
-      long remainingSeconds =
-          body.expiresAt().getEpochSecond() - body.issuedAt().getEpochSecond();
-      if (remainingSeconds > 0) {
-        maxAge = remainingSeconds;
-      }
+    public void write(ConsoleAuthTokenResponse body, HttpServletResponse response) {
+        response.addHeader(HttpHeaders.SET_COOKIE, build(body));
     }
-    return ResponseCookie.from(COOKIE_NAME, body.accessToken())
-        .httpOnly(true)
-        .secure(securityProperties.isCookieSecure())
-        .sameSite("Lax")
-        .path("/")
-        .maxAge(maxAge)
-        .build()
-        .toString();
-  }
+
+    private String build(ConsoleAuthTokenResponse body) {
+        long maxAge = DEFAULT_MAX_AGE_SECONDS;
+        if (EmptyChecks.isNotNull(body.expiresAt()) && EmptyChecks.isNotNull(body.issuedAt())) {
+            long remainingSeconds =
+                    body.expiresAt().getEpochSecond() - body.issuedAt().getEpochSecond();
+            if (remainingSeconds > 0) {
+                maxAge = remainingSeconds;
+            }
+        }
+        return ResponseCookie.from(COOKIE_NAME, body.accessToken())
+                .httpOnly(true)
+                .secure(securityProperties.isCookieSecure())
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(maxAge)
+                .build()
+                .toString();
+    }
 }

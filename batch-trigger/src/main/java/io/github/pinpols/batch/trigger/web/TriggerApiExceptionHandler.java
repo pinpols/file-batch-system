@@ -25,71 +25,66 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
 
-  public TriggerApiExceptionHandler(BizMessageResolver bizMessageResolver) {
-    super(bizMessageResolver);
-  }
-
-  /** standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 走父类降级路径返回 raw message。 */
-  public static TriggerApiExceptionHandler forStandaloneTest() {
-    return new TriggerApiExceptionHandler(null);
-  }
-
-  @Override
-  protected String modulePrefix() {
-    return "trigger";
-  }
-
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<CommonResponse<Void>> handleMethodArgumentNotValidException(
-      MethodArgumentNotValidException exception) {
-    String message = exception.getBindingResult().getFieldErrors().stream()
-        .map(FieldError::getDefaultMessage)
-        .collect(Collectors.joining("; "));
-    if (EmptyChecks.isBlank(message)) {
-      message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+    public TriggerApiExceptionHandler(BizMessageResolver bizMessageResolver) {
+        super(bizMessageResolver);
     }
-    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
 
-  @ExceptionHandler(ConstraintViolationException.class)
-  public ResponseEntity<CommonResponse<Void>> handleConstraintViolationException(
-      ConstraintViolationException exception) {
-    String message = exception.getMessage();
-    if (EmptyChecks.isBlank(message)) {
-      message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+    /** standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 走父类降级路径返回 raw message。 */
+    public static TriggerApiExceptionHandler forStandaloneTest() {
+        return new TriggerApiExceptionHandler(null);
     }
-    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
 
-  @ExceptionHandler(MissingRequestHeaderException.class)
-  public ResponseEntity<CommonResponse<Void>> handleMissingHeader(
-      MissingRequestHeaderException exception) {
-    ResultCode code =
-        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
-            ? ResultCode.MISSING_IDEMPOTENCY_KEY
-            : ResultCode.INVALID_ARGUMENT;
-    // 不再透出 Spring 默认英文 "Required request header 'X' for method parameter type ..."
-    String message = resolveCommonCode(code, code.label());
-    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
-    return ResponseEntity.badRequest().body(failureBody);
-  }
+    @Override
+    protected String modulePrefix() {
+        return "trigger";
+    }
 
-  @ExceptionHandler(HttpMessageNotReadableException.class)
-  public ResponseEntity<CommonResponse<Void>> handleUnreadableRequestBody(
-      HttpMessageNotReadableException exception) {
-    String message =
-        resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label());
-    CommonResponse<Void> body = CommonResponse.failure(ResultCode.INVALID_ARGUMENT, message);
-    return ResponseEntity.badRequest().body(body);
-  }
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<CommonResponse<Void>> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception) {
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+        if (EmptyChecks.isBlank(message)) {
+            message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+        }
+        CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
 
-  @ExceptionHandler(TriggerSchedulerBusyException.class)
-  public ResponseEntity<CommonResponse<Void>> handleTriggerSchedulerBusy(
-      TriggerSchedulerBusyException exception) {
-    String message = resolveCommonCode(ResultCode.RATE_LIMITED, ResultCode.RATE_LIMITED.label());
-    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.RATE_LIMITED, message);
-    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(failureBody);
-  }
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<CommonResponse<Void>> handleConstraintViolationException(
+            ConstraintViolationException exception) {
+        String message = exception.getMessage();
+        if (EmptyChecks.isBlank(message)) {
+            message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+        }
+        CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<CommonResponse<Void>> handleMissingHeader(MissingRequestHeaderException exception) {
+        ResultCode code = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
+                ? ResultCode.MISSING_IDEMPOTENCY_KEY
+                : ResultCode.INVALID_ARGUMENT;
+        // 不再透出 Spring 默认英文 "Required request header 'X' for method parameter type ..."
+        String message = resolveCommonCode(code, code.label());
+        CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+        return ResponseEntity.badRequest().body(failureBody);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<CommonResponse<Void>> handleUnreadableRequestBody(HttpMessageNotReadableException exception) {
+        String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label());
+        CommonResponse<Void> body = CommonResponse.failure(ResultCode.INVALID_ARGUMENT, message);
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(TriggerSchedulerBusyException.class)
+    public ResponseEntity<CommonResponse<Void>> handleTriggerSchedulerBusy(TriggerSchedulerBusyException exception) {
+        String message = resolveCommonCode(ResultCode.RATE_LIMITED, ResultCode.RATE_LIMITED.label());
+        CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.RATE_LIMITED, message);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(failureBody);
+    }
 }

@@ -8,6 +8,6 @@ import lombok.Data;
 @Data
 public class TriggerLaunchPersistenceContext {
 
-  private TriggerRequestEntity triggerRequest;
-  private JobInstanceEntity existingInstance;
+    private TriggerRequestEntity triggerRequest;
+    private JobInstanceEntity existingInstance;
 }

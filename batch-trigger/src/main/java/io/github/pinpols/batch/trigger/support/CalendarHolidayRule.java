@@ -10,6 +10,6 @@ import lombok.Data;
 @Data
 public class CalendarHolidayRule {
 
-  private LocalDate bizDate;
-  private String dayType;
+    private LocalDate bizDate;
+    private String dayType;
 }

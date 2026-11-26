@@ -7,12 +7,12 @@ import lombok.Data;
 @Data
 public class AiPageContextRequest {
 
-  @Size(max = 64)
-  private String pageType;
+    @Size(max = 64)
+    private String pageType;
 
-  @Size(max = 64)
-  private String objectType;
+    @Size(max = 64)
+    private String objectType;
 
-  @Size(max = 128)
-  private String objectId;
+    @Size(max = 128)
+    private String objectId;
 }

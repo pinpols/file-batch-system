@@ -21,11 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DryRunController {
 
-  private final DryRunPlanService dryRunPlanService;
+    private final DryRunPlanService dryRunPlanService;
 
-  @PostMapping("/plan")
-  public CommonResponse<DryRunPlanResult> plan(@RequestBody DryRunPlanRequest request) {
-    DryRunPlanResult plan = dryRunPlanService.plan(request);
-    return CommonResponse.success(plan);
-  }
+    @PostMapping("/plan")
+    public CommonResponse<DryRunPlanResult> plan(@RequestBody DryRunPlanRequest request) {
+        DryRunPlanResult plan = dryRunPlanService.plan(request);
+        return CommonResponse.success(plan);
+    }
 }

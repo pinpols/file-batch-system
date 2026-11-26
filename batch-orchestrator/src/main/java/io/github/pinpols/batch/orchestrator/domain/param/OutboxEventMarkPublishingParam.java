@@ -5,8 +5,4 @@ import lombok.Builder;
 /** 绑定一次markPublishing操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
 @Builder
 public record OutboxEventMarkPublishingParam(
-    String tenantId,
-    Long id,
-    String publishingStatus,
-    String pendingStatus1,
-    String pendingStatus2) {}
+        String tenantId, Long id, String publishingStatus, String pendingStatus1, String pendingStatus2) {}

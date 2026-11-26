@@ -13,22 +13,22 @@ import lombok.Data;
 @Data
 public class TenantConfigPreviewRequest {
 
-  @NotBlank(message = "sourceTenantId must not be blank")
-  @Size(max = 64)
-  private String sourceTenantId;
+    @NotBlank(message = "sourceTenantId must not be blank")
+    @Size(max = 64)
+    private String sourceTenantId;
 
-  @NotEmpty(message = "targetTenantIds must not be empty")
-  @Size(max = 50, message = "targetTenantIds must not exceed 50")
-  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
+    @NotEmpty(message = "targetTenantIds must not be empty")
+    @Size(max = 50, message = "targetTenantIds must not exceed 50")
+    private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
-  /** 为空时表示包含所有配置类型。 */
-  private Set<@NotNull ConfigType> configTypes;
+    /** 为空时表示包含所有配置类型。 */
+    private Set<@NotNull ConfigType> configTypes;
 
-  /** 非空时表示仅预览所列作业所需的最小依赖集合。 */
-  @Size(max = 100, message = "jobCodes must not exceed 100")
-  private List<@NotBlank @Size(min = 1, max = 128) String> jobCodes;
+    /** 非空时表示仅预览所列作业所需的最小依赖集合。 */
+    @Size(max = 100, message = "jobCodes must not exceed 100")
+    private List<@NotBlank @Size(min = 1, max = 128) String> jobCodes;
 
-  private boolean includeUnchanged;
+    private boolean includeUnchanged;
 
-  private boolean includeDeleteCandidates;
+    private boolean includeDeleteCandidates;
 }

@@ -13,24 +13,24 @@ import lombok.Data;
 @Data
 public class ScheduledOccurrenceCatchUpRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  @Positive
-  private Long workflowDefinitionId;
+    @NotNull
+    @Positive
+    private Long workflowDefinitionId;
 
-  @NotNull
-  private Instant scheduledFireTime;
+    @NotNull
+    private Instant scheduledFireTime;
 
-  @NotNull
-  private LocalDate bizDate;
+    @NotNull
+    private LocalDate bizDate;
 
-  @NotBlank
-  @Size(max = 128)
-  private String requestedBy;
+    @NotBlank
+    @Size(max = 128)
+    private String requestedBy;
 
-  @NotBlank
-  @Size(max = 1024)
-  private String reason;
+    @NotBlank
+    @Size(max = 1024)
+    private String reason;
 }

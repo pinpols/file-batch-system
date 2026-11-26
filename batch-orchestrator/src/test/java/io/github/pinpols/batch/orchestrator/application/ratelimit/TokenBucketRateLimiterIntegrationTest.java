@@ -37,210 +37,210 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * refill 随时间恢复令牌、maxPerMinute<=0 放行。
  */
 @SpringBootTest(
-    classes = TokenBucketRateLimiterIntegrationTest.TestApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {
-      "batch.startup-self-check.enabled=false",
-      "batch.kafka.namespace=rate-limit-isolation-test",
-      // 显式固定旧副本版本；发布默认值递增时仍需验证 v1 -> v2 升级，而不是让夹具随默认值漂移。
-      "batch.rate-limit.bucket-configuration-version=1"
-    })
+        classes = TokenBucketRateLimiterIntegrationTest.TestApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "batch.startup-self-check.enabled=false",
+            "batch.kafka.namespace=rate-limit-isolation-test",
+            // 显式固定旧副本版本；发布默认值递增时仍需验证 v1 -> v2 升级，而不是让夹具随默认值漂移。
+            "batch.rate-limit.bucket-configuration-version=1"
+        })
 @DisplayName("令牌桶限流集成: 配额消耗, 多副本共享与热配置切换口径")
 class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String REDIS_NAMESPACE = "rate-limit-isolation-test";
+    private static final String REDIS_NAMESPACE = "rate-limit-isolation-test";
 
-  @SpringBootConfiguration
-  @EnableAutoConfiguration
-  @EnableConfigurationProperties(RateLimitProperties.class)
-  @Import({
-    BatchClockConfig.class,
-    Bucket4jRateLimitConfig.class,
-    TokenBucketRateLimiter.class,
-    RedisRateLimitCircuitBreaker.class
-  })
-  static class TestApplication {}
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
+    @EnableConfigurationProperties(RateLimitProperties.class)
+    @Import({
+        BatchClockConfig.class,
+        Bucket4jRateLimitConfig.class,
+        TokenBucketRateLimiter.class,
+        RedisRateLimitCircuitBreaker.class
+    })
+    static class TestApplication {}
 
-  @Autowired
-  private TokenBucketRateLimiter limiter;
+    @Autowired
+    private TokenBucketRateLimiter limiter;
 
-  private final RedisConnectionFactory redisConnectionFactory;
+    private final RedisConnectionFactory redisConnectionFactory;
 
-  @Autowired
-  TokenBucketRateLimiterIntegrationTest(RedisConnectionFactory redisConnectionFactory) {
-    this.redisConnectionFactory = redisConnectionFactory;
-  }
-
-  private static String uniqueTenant() {
-    return "t-tb-" + System.nanoTime();
-  }
-
-  @Test
-  @DisplayName("配额内的请求全部放行, 超出容量后请求被拒绝")
-  void shouldReject_whenCapacityExhausted() {
-    String tenant = uniqueTenant();
-    long capacity = 5;
-
-    for (int i = 0; i < capacity; i++) {
-      assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity))
-          .as("token %d within capacity should be allowed", i + 1)
-          .isTrue();
+    @Autowired
+    TokenBucketRateLimiterIntegrationTest(RedisConnectionFactory redisConnectionFactory) {
+        this.redisConnectionFactory = redisConnectionFactory;
     }
-    // 桶已空，且 refill 速率为 5/min（12s 补 1 个），测试瞬间内不会补回 → 拒绝。
-    assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
-  }
 
-  @Test
-  @DisplayName("Bucket4j 原生 Lettuce key 带部署 namespace")
-  void shouldNamespaceBucketKey_whenDeploymentNamespaceIsConfigured() {
-    String tenant = uniqueTenant();
-    assertThat(limiter.tryConsume(tenant, "LAUNCH", 5)).isTrue();
-
-    String logicalKey = BatchRedisKeys.rateLimitBucket(tenant, "LAUNCH");
-    String physicalKey = "rate-limit-isolation-test:" + logicalKey;
-    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisConnectionFactory);
-    rawTemplate.afterPropertiesSet();
-
-    assertThat(rawTemplate.hasKey(physicalKey)).isTrue();
-    assertThat(rawTemplate.hasKey(logicalKey)).isFalse();
-    rawTemplate.delete(physicalKey);
-  }
-
-  @Test
-  @DisplayName("不同租户与不同动作使用各自独立的配额桶")
-  void shouldIsolateBuckets_whenTenantOrActionDiffers() {
-    String tenantA = uniqueTenant();
-    String tenantB = uniqueTenant();
-    long capacity = 2;
-
-    // 耗尽 tenantA / LAUNCH
-    assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isTrue();
-    assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isTrue();
-    assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isFalse();
-
-    // 同租户不同 action 独立
-    assertThat(limiter.tryConsume(tenantA, "TASK_CLAIM", capacity)).isTrue();
-    // 不同租户同 action 独立
-    assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isTrue();
-    assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isTrue();
-    assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isFalse();
-  }
-
-  @Test
-  @DisplayName("多个副本共享同一份配额, 合计超出容量后都被拒绝")
-  void shouldShareQuota_whenMultipleReplicasConsume() {
-    String tenant = uniqueTenant();
-    long capacity = 4;
-
-    // 第二个“副本”：独立的 RedisClient/proxy manager 指向同一 Redis 同一 key。
-    RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
-    try (StatefulRedisConnection<String, byte[]> conn =
-        secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
-      LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
-          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-              Duration.ofMinutes(1)))
-          .build();
-      SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
-      TokenBucketRateLimiter replicaTwo = new TokenBucketRateLimiter(
-          secondProxyManager,
-          replicaMeterRegistry,
-          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
-          new RateLimitProperties(),
-          new BatchRedisNamespace(REDIS_NAMESPACE));
-
-      // 副本1 消费 2 个
-      assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
-      assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
-      // 副本2 看到共享余额，只剩 2 个
-      assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
-      assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
-      // 两副本合计已达 capacity=4 → 任一副本再取都被拒
-      assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
-      assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
-    } finally {
-      secondClient.shutdown();
+    private static String uniqueTenant() {
+        return "t-tb-" + System.nanoTime();
     }
-  }
 
-  @Test
-  @DisplayName("每秒阈值调整后立即按新桶判定, 无需重启或版本升级")
-  void shouldUseNewBucket_whenPerSecondLimitChanged() {
-    String tenant = uniqueTenant();
-    String action = "SCHEDULER_DISPATCH_TENANT";
+    @Test
+    @DisplayName("配额内的请求全部放行, 超出容量后请求被拒绝")
+    void shouldReject_whenCapacityExhausted() {
+        String tenant = uniqueTenant();
+        long capacity = 5;
 
-    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
-    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
-    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isFalse();
-
-    // maxQps 是数据库热配置。阈值从 2 调到 3 后必须立即使用新桶，不能等待应用级版本升级或重启。
-    assertThat(limiter.tryConsumePerSecond(tenant, action, 3)).isTrue();
-  }
-
-  @Test
-  @DisplayName("配置版本更新后替换已存桶并按比例继承余额, 旧版本副本回写被拒绝")
-  void shouldReplaceBucketAndKeepUtilization_whenConfigVersionNewer() {
-    String tenant = uniqueTenant();
-    String action = "TASK_REPORT";
-    long oldCapacity = 4;
-
-    assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
-    assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
-
-    RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
-    try (StatefulRedisConnection<String, byte[]> conn =
-        secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
-      LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
-          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-              Duration.ofMinutes(1)))
-          .build();
-      SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
-      RateLimitProperties newerProperties = new RateLimitProperties();
-      newerProperties.setBucketConfigurationVersion(2L);
-      TokenBucketRateLimiter newerReplica = new TokenBucketRateLimiter(
-          secondProxyManager,
-          replicaMeterRegistry,
-          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
-          newerProperties,
-          new BatchRedisNamespace(REDIS_NAMESPACE));
-
-      // 旧桶还剩约 50%；容量从 4 降到 2 后按比例继承为 1，而不是重置为满桶或继续沿用旧容量。
-      assertThat(newerReplica.tryConsume(tenant, action, 2L)).isTrue();
-      assertThat(newerReplica.tryConsume(tenant, action, 2L)).isFalse();
-      // 旧版本副本不能把 Redis 中的 v2 配置覆盖回 v1。
-      assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isFalse();
-    } finally {
-      secondClient.shutdown();
+        for (int i = 0; i < capacity; i++) {
+            assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity))
+                    .as("token %d within capacity should be allowed", i + 1)
+                    .isTrue();
+        }
+        // 桶已空，且 refill 速率为 5/min（12s 补 1 个），测试瞬间内不会补回 → 拒绝。
+        assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
     }
-  }
 
-  @Test
-  @DisplayName("桶被抽干后请求被拒绝, 等待补充间隔后重新放行")
-  void shouldReplenishTokens_whenRefillElapses() throws InterruptedException {
-    String tenant = uniqueTenant();
-    // capacity=60/min → greedy 补充 1 token/s。先把桶抽干(容忍抽取期间的少量 greedy 回填),
-    // 再等待 ~1.5s 让 refill 至少补回 1 个令牌。
-    long capacity = 60;
-    boolean rejectedWhenDrained = false;
-    for (int i = 0; i < capacity + 5; i++) {
-      if (!limiter.tryConsume(tenant, "TASK_REPORT", capacity)) {
-        rejectedWhenDrained = true;
-        break;
-      }
+    @Test
+    @DisplayName("Bucket4j 原生 Lettuce key 带部署 namespace")
+    void shouldNamespaceBucketKey_whenDeploymentNamespaceIsConfigured() {
+        String tenant = uniqueTenant();
+        assertThat(limiter.tryConsume(tenant, "LAUNCH", 5)).isTrue();
+
+        String logicalKey = BatchRedisKeys.rateLimitBucket(tenant, "LAUNCH");
+        String physicalKey = "rate-limit-isolation-test:" + logicalKey;
+        StringRedisTemplate rawTemplate = new StringRedisTemplate(redisConnectionFactory);
+        rawTemplate.afterPropertiesSet();
+
+        assertThat(rawTemplate.hasKey(physicalKey)).isTrue();
+        assertThat(rawTemplate.hasKey(logicalKey)).isFalse();
+        rawTemplate.delete(physicalKey);
     }
-    assertThat(rejectedWhenDrained).as("bucket should reject once drained").isTrue();
 
-    Thread.sleep(1_500L);
+    @Test
+    @DisplayName("不同租户与不同动作使用各自独立的配额桶")
+    void shouldIsolateBuckets_whenTenantOrActionDiffers() {
+        String tenantA = uniqueTenant();
+        String tenantB = uniqueTenant();
+        long capacity = 2;
 
-    assertThat(limiter.tryConsume(tenant, "TASK_REPORT", capacity))
-        .as("greedy refill should replenish at least one token after ~1.5s")
-        .isTrue();
-  }
+        // 耗尽 tenantA / LAUNCH
+        assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isTrue();
+        assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isTrue();
+        assertThat(limiter.tryConsume(tenantA, "LAUNCH", capacity)).isFalse();
 
-  @Test
-  @DisplayName("配置上限非正时请求一律放行")
-  void shouldAlwaysAllow_whenConfiguredMaxNotPositive() {
-    String tenant = uniqueTenant();
-    assertThat(limiter.tryConsume(tenant, "LAUNCH", 0)).isTrue();
-    assertThat(limiter.tryConsume(tenant, "LAUNCH", -1)).isTrue();
-  }
+        // 同租户不同 action 独立
+        assertThat(limiter.tryConsume(tenantA, "TASK_CLAIM", capacity)).isTrue();
+        // 不同租户同 action 独立
+        assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isTrue();
+        assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isTrue();
+        assertThat(limiter.tryConsume(tenantB, "LAUNCH", capacity)).isFalse();
+    }
+
+    @Test
+    @DisplayName("多个副本共享同一份配额, 合计超出容量后都被拒绝")
+    void shouldShareQuota_whenMultipleReplicasConsume() {
+        String tenant = uniqueTenant();
+        long capacity = 4;
+
+        // 第二个“副本”：独立的 RedisClient/proxy manager 指向同一 Redis 同一 key。
+        RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
+        try (StatefulRedisConnection<String, byte[]> conn =
+                secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
+            LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
+                    .expirationAfterWrite(
+                            ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(1)))
+                    .build();
+            SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
+            TokenBucketRateLimiter replicaTwo = new TokenBucketRateLimiter(
+                    secondProxyManager,
+                    replicaMeterRegistry,
+                    RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
+                    new RateLimitProperties(),
+                    new BatchRedisNamespace(REDIS_NAMESPACE));
+
+            // 副本1 消费 2 个
+            assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
+            assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
+            // 副本2 看到共享余额，只剩 2 个
+            assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
+            assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
+            // 两副本合计已达 capacity=4 → 任一副本再取都被拒
+            assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
+            assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
+        } finally {
+            secondClient.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("每秒阈值调整后立即按新桶判定, 无需重启或版本升级")
+    void shouldUseNewBucket_whenPerSecondLimitChanged() {
+        String tenant = uniqueTenant();
+        String action = "SCHEDULER_DISPATCH_TENANT";
+
+        assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
+        assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
+        assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isFalse();
+
+        // maxQps 是数据库热配置。阈值从 2 调到 3 后必须立即使用新桶，不能等待应用级版本升级或重启。
+        assertThat(limiter.tryConsumePerSecond(tenant, action, 3)).isTrue();
+    }
+
+    @Test
+    @DisplayName("配置版本更新后替换已存桶并按比例继承余额, 旧版本副本回写被拒绝")
+    void shouldReplaceBucketAndKeepUtilization_whenConfigVersionNewer() {
+        String tenant = uniqueTenant();
+        String action = "TASK_REPORT";
+        long oldCapacity = 4;
+
+        assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
+        assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
+
+        RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
+        try (StatefulRedisConnection<String, byte[]> conn =
+                secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
+            LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
+                    .expirationAfterWrite(
+                            ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(1)))
+                    .build();
+            SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
+            RateLimitProperties newerProperties = new RateLimitProperties();
+            newerProperties.setBucketConfigurationVersion(2L);
+            TokenBucketRateLimiter newerReplica = new TokenBucketRateLimiter(
+                    secondProxyManager,
+                    replicaMeterRegistry,
+                    RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
+                    newerProperties,
+                    new BatchRedisNamespace(REDIS_NAMESPACE));
+
+            // 旧桶还剩约 50%；容量从 4 降到 2 后按比例继承为 1，而不是重置为满桶或继续沿用旧容量。
+            assertThat(newerReplica.tryConsume(tenant, action, 2L)).isTrue();
+            assertThat(newerReplica.tryConsume(tenant, action, 2L)).isFalse();
+            // 旧版本副本不能把 Redis 中的 v2 配置覆盖回 v1。
+            assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isFalse();
+        } finally {
+            secondClient.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("桶被抽干后请求被拒绝, 等待补充间隔后重新放行")
+    void shouldReplenishTokens_whenRefillElapses() throws InterruptedException {
+        String tenant = uniqueTenant();
+        // capacity=60/min → greedy 补充 1 token/s。先把桶抽干(容忍抽取期间的少量 greedy 回填),
+        // 再等待 ~1.5s 让 refill 至少补回 1 个令牌。
+        long capacity = 60;
+        boolean rejectedWhenDrained = false;
+        for (int i = 0; i < capacity + 5; i++) {
+            if (!limiter.tryConsume(tenant, "TASK_REPORT", capacity)) {
+                rejectedWhenDrained = true;
+                break;
+            }
+        }
+        assertThat(rejectedWhenDrained).as("bucket should reject once drained").isTrue();
+
+        Thread.sleep(1_500L);
+
+        assertThat(limiter.tryConsume(tenant, "TASK_REPORT", capacity))
+                .as("greedy refill should replenish at least one token after ~1.5s")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("配置上限非正时请求一律放行")
+    void shouldAlwaysAllow_whenConfiguredMaxNotPositive() {
+        String tenant = uniqueTenant();
+        assertThat(limiter.tryConsume(tenant, "LAUNCH", 0)).isTrue();
+        assertThat(limiter.tryConsume(tenant, "LAUNCH", -1)).isTrue();
+    }
 }

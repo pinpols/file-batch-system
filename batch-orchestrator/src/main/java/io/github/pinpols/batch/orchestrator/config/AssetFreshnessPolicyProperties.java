@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.asset-freshness")
 public class AssetFreshnessPolicyProperties {
 
-  private boolean enabled = true;
-  private int batchLimit = 500;
+    private boolean enabled = true;
+    private int batchLimit = 500;
 }

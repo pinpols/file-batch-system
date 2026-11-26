@@ -22,14 +22,14 @@ import lombok.Data;
 @Data
 public class WorkflowDefinitionFullUpdateRequest {
 
-  @NotNull
-  @Valid
-  private WorkflowDefinitionSaveRequest definition;
+    @NotNull
+    @Valid
+    private WorkflowDefinitionSaveRequest definition;
 
-  /** 客户端最近一次 GET 拿到的版本，必须参与版本比较，缺失时拒绝写入。 */
-  @NotNull
-  private Integer expectedVersion;
+    /** 客户端最近一次 GET 拿到的版本，必须参与版本比较，缺失时拒绝写入。 */
+    @NotNull
+    private Integer expectedVersion;
 
-  /** 预留 lockToken;Spike 阶段以 SecurityContext.username 为权威。 */
-  private String lockToken;
+    /** 预留 lockToken;Spike 阶段以 SecurityContext.username 为权威。 */
+    private String lockToken;
 }

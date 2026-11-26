@@ -27,52 +27,52 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class BatchDayOpenScheduler {
 
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final BatchDayCatchupMetrics catchupMetrics;
-  private final BatchDayOpenService batchDayOpenService;
-  // 事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义），
-  // 每个 calendar 通过 TransactionTemplate 使用 short tx 收敛依赖等待、batch_day_instance 和审计日志。
-  private final PlatformTransactionManager transactionManager;
+    private final BusinessCalendarMapper businessCalendarMapper;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final BatchDayCatchupMetrics catchupMetrics;
+    private final BatchDayOpenService batchDayOpenService;
+    // 事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义），
+    // 每个 calendar 通过 TransactionTemplate 使用 short tx 收敛依赖等待、batch_day_instance 和审计日志。
+    private final PlatformTransactionManager transactionManager;
 
-  @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
-  @SchedulerLock(name = "batch_day_open", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
-  public void scheduledOpen() {
-    openDueBatchDays(dateTimeSupport.nowInstant());
-  }
+    @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
+    @SchedulerLock(name = "batch_day_open", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
+    public void scheduledOpen() {
+        openDueBatchDays(dateTimeSupport.nowInstant());
+    }
 
-  public void openDueBatchDays(Instant now) {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    catchupMetrics.beginScan();
-    List<BusinessCalendarEntity> calendars = businessCalendarMapper.selectByEnabled(true);
-    if (EmptyChecks.isEmpty(calendars)) {
-      catchupMetrics.completeScan();
-      return;
-    }
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    try {
-      for (BusinessCalendarEntity calendar : calendars) {
-        if (EmptyChecks.isNull(calendar) || !Texts.hasText(calendar.tenantId())) {
-          // openOne 内部也校验,这里先过滤一道,避免空 tenant 触发 holder NPE 路径。
-          continue;
+    public void openDueBatchDays(Instant now) {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-        // RLS Phase B：openOne 的所有 mapper（batch_day_instance / calendar_dependency /
-        // disaster_day_override / job_execution_log）都依赖租户上下文；绑定要包住整个 tx，让 short tx
-        // 的所有写入都看到 app.tenant_id。
-        long calendarLagDays = RlsTenantContextHolder.runWithTenant(
-            calendar.tenantId(),
-            () ->
-                // 每个 calendar 一笔 short tx：依赖等待、批次日实例和审计日志在同事务收敛。
-                tx.execute(status -> batchDayOpenService.openCalendar(calendar, now)));
-        catchupMetrics.recordCalendarLag(calendarLagDays);
-      }
-      catchupMetrics.completeScan();
-    } catch (RuntimeException failure) {
-      catchupMetrics.failScan();
-      throw failure;
+        catchupMetrics.beginScan();
+        List<BusinessCalendarEntity> calendars = businessCalendarMapper.selectByEnabled(true);
+        if (EmptyChecks.isEmpty(calendars)) {
+            catchupMetrics.completeScan();
+            return;
+        }
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        try {
+            for (BusinessCalendarEntity calendar : calendars) {
+                if (EmptyChecks.isNull(calendar) || !Texts.hasText(calendar.tenantId())) {
+                    // openOne 内部也校验,这里先过滤一道,避免空 tenant 触发 holder NPE 路径。
+                    continue;
+                }
+                // RLS Phase B：openOne 的所有 mapper（batch_day_instance / calendar_dependency /
+                // disaster_day_override / job_execution_log）都依赖租户上下文；绑定要包住整个 tx，让 short tx
+                // 的所有写入都看到 app.tenant_id。
+                long calendarLagDays = RlsTenantContextHolder.runWithTenant(
+                        calendar.tenantId(),
+                        () ->
+                                // 每个 calendar 一笔 short tx：依赖等待、批次日实例和审计日志在同事务收敛。
+                                tx.execute(status -> batchDayOpenService.openCalendar(calendar, now)));
+                catchupMetrics.recordCalendarLag(calendarLagDays);
+            }
+            catchupMetrics.completeScan();
+        } catch (RuntimeException failure) {
+            catchupMetrics.failScan();
+            throw failure;
+        }
     }
-  }
 }

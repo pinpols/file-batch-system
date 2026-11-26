@@ -26,13 +26,13 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = {})
 @Size(max = 63, message = "identifier too long (PG max 63)")
 @Pattern(
-    regexp = "^$|^[a-z][a-z0-9_]{0,62}$",
-    message = "identifier must start with lowercase letter and contain only [a-z0-9_], length ≤ 63")
+        regexp = "^$|^[a-z][a-z0-9_]{0,62}$",
+        message = "identifier must start with lowercase letter and contain only [a-z0-9_], length ≤ 63")
 public @interface ValidTableName {
 
-  String message() default "table / column identifier invalid";
+    String message() default "table / column identifier invalid";
 
-  Class<?>[] groups() default {};
+    Class<?>[] groups() default {};
 
-  Class<? extends Payload>[] payload() default {};
+    Class<? extends Payload>[] payload() default {};
 }

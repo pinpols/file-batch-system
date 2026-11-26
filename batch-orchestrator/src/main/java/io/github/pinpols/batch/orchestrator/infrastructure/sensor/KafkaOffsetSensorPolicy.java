@@ -50,113 +50,110 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "batch.sensor.kafka-offset", name = "enabled", havingValue = "true")
 @ConditionalOnBean(KafkaAdmin.class)
-@SuppressWarnings(
-    "SpringJavaInjectionPointsAutowiringInspection") // 条件成立后才创建，KafkaAdmin 由 Kafka 自动配置提供。
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // 条件成立后才创建，KafkaAdmin 由 Kafka 自动配置提供。
 public class KafkaOffsetSensorPolicy implements SensorPolicy {
 
-  private final KafkaAdmin kafkaAdmin;
-  private final SensorProperties props;
-  private final Object adminClientMonitor = new Object();
-  private final AtomicBoolean stopping = new AtomicBoolean();
-  private AdminClient adminClient;
+    private final KafkaAdmin kafkaAdmin;
+    private final SensorProperties props;
+    private final Object adminClientMonitor = new Object();
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private AdminClient adminClient;
 
-  public KafkaOffsetSensorPolicy(KafkaAdmin kafkaAdmin, SensorProperties props) {
-    this.kafkaAdmin = kafkaAdmin;
-    this.props = props;
-  }
-
-  @Override
-  public SensorType type() {
-    return SensorType.KAFKA_OFFSET;
-  }
-
-  @Override
-  public SensorProbeResult probe(SensorContext ctx) {
-    Map<String, Object> spec = ctx.sensorSpec();
-    String topic = SensorSpecs.string(spec, "topic");
-    Integer partition = SensorSpecs.intValue(spec, "partition");
-    Long minOffset = SensorSpecs.longValue(spec, "minOffset");
-    boolean kafkaOffsetTargetIsIncomplete = !Texts.hasText(topic)
-        || EmptyChecks.isNull(partition)
-        || partition < 0
-        || EmptyChecks.isNull(minOffset)
-        || minOffset < 0;
-    if (kafkaOffsetTargetIsIncomplete) {
-      return SensorProbeResult.error(
-          "error.workflow.sensor_spec_invalid",
-          List.of("KAFKA_OFFSET", "topic and non-negative integer partition/minOffset required"));
+    public KafkaOffsetSensorPolicy(KafkaAdmin kafkaAdmin, SensorProperties props) {
+        this.kafkaAdmin = kafkaAdmin;
+        this.props = props;
     }
 
-    TopicPartition tp = new TopicPartition(topic, partition);
-    long timeoutMs = props.getKafkaAdminTimeout().toMillis();
-
-    try {
-      AdminClient client = adminClient();
-      ListOffsetsResult result = client.listOffsets(Map.of(tp, OffsetSpec.latest()));
-      long endOffset =
-          result.partitionResult(tp).get(timeoutMs, TimeUnit.MILLISECONDS).offset();
-      if (endOffset >= minOffset) {
-        Map<String, Object> output = new LinkedHashMap<>();
-        output.put("currentOffset", endOffset);
-        output.put("topicPartition", topic + "-" + partition);
-        return SensorProbeResult.matched(output);
-      }
-      return SensorProbeResult.notYet();
-    } catch (TimeoutException ex) {
-      log.warn("KAFKA_OFFSET admin timeout topic={} partition={}", topic, partition);
-      return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", "admin timeout"));
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      log.warn(
-          "KAFKA_OFFSET probe error topic={} partition={} err={}",
-          topic,
-          partition,
-          SwallowedExceptionLogger.summary(e));
-      return sensorFailure(e);
-    } catch (ExecutionException e) {
-      log.warn(
-          "KAFKA_OFFSET probe error topic={} partition={} err={}",
-          topic,
-          partition,
-          SwallowedExceptionLogger.summary(e));
-      return sensorFailure(e);
-    } catch (Exception e) {
-      log.warn(
-          "KAFKA_OFFSET unexpected error topic={} err={}",
-          topic,
-          SwallowedExceptionLogger.summary(e));
-      return sensorFailure(e);
+    @Override
+    public SensorType type() {
+        return SensorType.KAFKA_OFFSET;
     }
-  }
 
-  private static SensorProbeResult sensorFailure(Exception error) {
-    String errorDetail =
-        Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
-    List<String> messageArguments = List.of("KAFKA_OFFSET", errorDetail);
-    return SensorProbeResult.error("error.workflow.sensor_probe_failed", messageArguments);
-  }
+    @Override
+    public SensorProbeResult probe(SensorContext ctx) {
+        Map<String, Object> spec = ctx.sensorSpec();
+        String topic = SensorSpecs.string(spec, "topic");
+        Integer partition = SensorSpecs.intValue(spec, "partition");
+        Long minOffset = SensorSpecs.longValue(spec, "minOffset");
+        boolean kafkaOffsetTargetIsIncomplete = !Texts.hasText(topic)
+                || EmptyChecks.isNull(partition)
+                || partition < 0
+                || EmptyChecks.isNull(minOffset)
+                || minOffset < 0;
+        if (kafkaOffsetTargetIsIncomplete) {
+            return SensorProbeResult.error(
+                    "error.workflow.sensor_spec_invalid",
+                    List.of("KAFKA_OFFSET", "topic and non-negative integer partition/minOffset required"));
+        }
 
-  private AdminClient adminClient() {
-    synchronized (adminClientMonitor) {
-      if (stopping.get()) {
-        throw new IllegalStateException("Kafka offset sensor is stopping");
-      }
-      if (EmptyChecks.isNull(adminClient)) {
-        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
-      }
-      return adminClient;
+        TopicPartition tp = new TopicPartition(topic, partition);
+        long timeoutMs = props.getKafkaAdminTimeout().toMillis();
+
+        try {
+            AdminClient client = adminClient();
+            ListOffsetsResult result = client.listOffsets(Map.of(tp, OffsetSpec.latest()));
+            long endOffset = result.partitionResult(tp)
+                    .get(timeoutMs, TimeUnit.MILLISECONDS)
+                    .offset();
+            if (endOffset >= minOffset) {
+                Map<String, Object> output = new LinkedHashMap<>();
+                output.put("currentOffset", endOffset);
+                output.put("topicPartition", topic + "-" + partition);
+                return SensorProbeResult.matched(output);
+            }
+            return SensorProbeResult.notYet();
+        } catch (TimeoutException ex) {
+            log.warn("KAFKA_OFFSET admin timeout topic={} partition={}", topic, partition);
+            return SensorProbeResult.error(
+                    "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", "admin timeout"));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn(
+                    "KAFKA_OFFSET probe error topic={} partition={} err={}",
+                    topic,
+                    partition,
+                    SwallowedExceptionLogger.summary(e));
+            return sensorFailure(e);
+        } catch (ExecutionException e) {
+            log.warn(
+                    "KAFKA_OFFSET probe error topic={} partition={} err={}",
+                    topic,
+                    partition,
+                    SwallowedExceptionLogger.summary(e));
+            return sensorFailure(e);
+        } catch (Exception e) {
+            log.warn("KAFKA_OFFSET unexpected error topic={} err={}", topic, SwallowedExceptionLogger.summary(e));
+            return sensorFailure(e);
+        }
     }
-  }
 
-  @PreDestroy
-  void closeAdminClient() {
-    stopping.set(true);
-    synchronized (adminClientMonitor) {
-      if (EmptyChecks.isNotNull(adminClient)) {
-        adminClient.close(Duration.ZERO);
-        adminClient = null;
-      }
+    private static SensorProbeResult sensorFailure(Exception error) {
+        String errorDetail =
+                Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
+        List<String> messageArguments = List.of("KAFKA_OFFSET", errorDetail);
+        return SensorProbeResult.error("error.workflow.sensor_probe_failed", messageArguments);
     }
-  }
+
+    private AdminClient adminClient() {
+        synchronized (adminClientMonitor) {
+            if (stopping.get()) {
+                throw new IllegalStateException("Kafka offset sensor is stopping");
+            }
+            if (EmptyChecks.isNull(adminClient)) {
+                adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            }
+            return adminClient;
+        }
+    }
+
+    @PreDestroy
+    void closeAdminClient() {
+        stopping.set(true);
+        synchronized (adminClientMonitor) {
+            if (EmptyChecks.isNotNull(adminClient)) {
+                adminClient.close(Duration.ZERO);
+                adminClient = null;
+            }
+        }
+    }
 }

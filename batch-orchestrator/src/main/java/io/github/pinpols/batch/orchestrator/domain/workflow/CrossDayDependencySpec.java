@@ -23,56 +23,56 @@ import lombok.Builder;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CrossDayDependencySpec(
-    String alias,
-    String jobCode,
-    Integer bizDateOffset,
-    String bizDateRange,
-    String scope,
-    String consumeVersionStrategy,
-    Integer specificVersionNo) {
+        String alias,
+        String jobCode,
+        Integer bizDateOffset,
+        String bizDateRange,
+        String scope,
+        String consumeVersionStrategy,
+        Integer specificVersionNo) {
 
-  /** REQUIRED 是默认 scope。 */
-  public static final String SCOPE_REQUIRED = "REQUIRED";
+    /** REQUIRED 是默认 scope。 */
+    public static final String SCOPE_REQUIRED = "REQUIRED";
 
-  public static final String SCOPE_OPTIONAL = "OPTIONAL";
+    public static final String SCOPE_OPTIONAL = "OPTIONAL";
 
-  public static final String STRATEGY_EFFECTIVE_ONLY = "EFFECTIVE_ONLY";
-  public static final String STRATEGY_LATEST_INCLUDING_PENDING = "LATEST_INCLUDING_PENDING";
-  public static final String STRATEGY_SPECIFIC_VERSION = "SPECIFIC_VERSION";
+    public static final String STRATEGY_EFFECTIVE_ONLY = "EFFECTIVE_ONLY";
+    public static final String STRATEGY_LATEST_INCLUDING_PENDING = "LATEST_INCLUDING_PENDING";
+    public static final String STRATEGY_SPECIFIC_VERSION = "SPECIFIC_VERSION";
 
-  /** REQUIRED 是默认 scope（未声明等价 REQUIRED，强一致性）。 */
-  public boolean isRequired() {
-    return scope == null || SCOPE_REQUIRED.equalsIgnoreCase(scope);
-  }
-
-  /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
-  public String resolvedStrategy() {
-    if (EmptyChecks.isNull(consumeVersionStrategy)
-        || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
-      return STRATEGY_EFFECTIVE_ONLY;
+    /** REQUIRED 是默认 scope（未声明等价 REQUIRED，强一致性）。 */
+    public boolean isRequired() {
+        return scope == null || SCOPE_REQUIRED.equalsIgnoreCase(scope);
     }
-    String trimmedStrategy = consumeVersionStrategy.trim();
-    return trimmedStrategy.toUpperCase(Locale.ROOT);
-  }
 
-  public boolean hasSupportedStrategy() {
-    String strategy = resolvedStrategy();
-    return STRATEGY_EFFECTIVE_ONLY.equals(strategy)
-        || STRATEGY_LATEST_INCLUDING_PENDING.equals(strategy)
-        || STRATEGY_SPECIFIC_VERSION.equals(strategy);
-  }
+    /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
+    public String resolvedStrategy() {
+        if (EmptyChecks.isNull(consumeVersionStrategy)
+                || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
+            return STRATEGY_EFFECTIVE_ONLY;
+        }
+        String trimmedStrategy = consumeVersionStrategy.trim();
+        return trimmedStrategy.toUpperCase(Locale.ROOT);
+    }
 
-  public boolean hasValidVersionSelector() {
-    String strategy = resolvedStrategy();
-    return !STRATEGY_SPECIFIC_VERSION.equals(strategy)
-        || (EmptyChecks.isNotNull(specificVersionNo) && specificVersionNo > 0);
-  }
+    public boolean hasSupportedStrategy() {
+        String strategy = resolvedStrategy();
+        return STRATEGY_EFFECTIVE_ONLY.equals(strategy)
+                || STRATEGY_LATEST_INCLUDING_PENDING.equals(strategy)
+                || STRATEGY_SPECIFIC_VERSION.equals(strategy);
+    }
 
-  public boolean isOffsetMode() {
-    return bizDateOffset != null;
-  }
+    public boolean hasValidVersionSelector() {
+        String strategy = resolvedStrategy();
+        return !STRATEGY_SPECIFIC_VERSION.equals(strategy)
+                || (EmptyChecks.isNotNull(specificVersionNo) && specificVersionNo > 0);
+    }
 
-  public boolean isRangeMode() {
-    return bizDateRange != null && !bizDateRange.isBlank();
-  }
+    public boolean isOffsetMode() {
+        return bizDateOffset != null;
+    }
+
+    public boolean isRangeMode() {
+        return bizDateRange != null && !bizDateRange.isBlank();
+    }
 }

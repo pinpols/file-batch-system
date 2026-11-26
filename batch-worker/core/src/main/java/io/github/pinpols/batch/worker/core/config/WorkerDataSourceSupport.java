@@ -36,101 +36,98 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
  */
 public final class WorkerDataSourceSupport {
 
-  private WorkerDataSourceSupport() {}
+    private WorkerDataSourceSupport() {}
 
-  /** 平台库 DataSource：把 {@link DataSourceProperties} 灌进 Hikari 配置 + 应用 pg-session 应用名回退。 */
-  public static DataSource buildPlatformDataSource(
-      DataSourceProperties properties,
-      HikariConfig hikariConfig,
-      BatchPgSessionProperties pgSessionProperties,
-      Environment environment,
-      String defaultAppName) {
-    hikariConfig.setJdbcUrl(properties.determineUrl());
-    hikariConfig.setUsername(properties.determineUsername());
-    hikariConfig.setPassword(properties.determinePassword());
-    String driverClassName = properties.determineDriverClassName();
-    if (hikariConfig.getDriverClassName() == null
-        || hikariConfig.getDriverClassName().isBlank()) {
-      hikariConfig.setDriverClassName(driverClassName);
+    /** 平台库 DataSource：把 {@link DataSourceProperties} 灌进 Hikari 配置 + 应用 pg-session 应用名回退。 */
+    public static DataSource buildPlatformDataSource(
+            DataSourceProperties properties,
+            HikariConfig hikariConfig,
+            BatchPgSessionProperties pgSessionProperties,
+            Environment environment,
+            String defaultAppName) {
+        hikariConfig.setJdbcUrl(properties.determineUrl());
+        hikariConfig.setUsername(properties.determineUsername());
+        hikariConfig.setPassword(properties.determinePassword());
+        String driverClassName = properties.determineDriverClassName();
+        if (hikariConfig.getDriverClassName() == null
+                || hikariConfig.getDriverClassName().isBlank()) {
+            hikariConfig.setDriverClassName(driverClassName);
+        }
+        String appName = ApplicationNameProvider.resolve(environment, defaultAppName);
+        HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
+        return new HikariDataSource(hikariConfig);
     }
-    String appName = ApplicationNameProvider.resolve(environment, defaultAppName);
-    HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
-    return new HikariDataSource(hikariConfig);
-  }
 
-  /** 平台库 SqlSessionFactory：mapper 位置固定为 {@code classpath*:mapper/*.xml}。 */
-  public static SqlSessionFactory buildPlatformSqlSessionFactory(DataSource dataSource)
-      throws Exception {
-    return buildSqlSessionFactory(dataSource, "classpath*:mapper/*.xml");
-  }
-
-  /** 业务库 SqlSessionFactory：mapper 位置固定为 {@code classpath*:mapper/business/*.xml}。 */
-  public static SqlSessionFactory buildBusinessSqlSessionFactory(DataSource dataSource)
-      throws Exception {
-    return buildSqlSessionFactory(dataSource, "classpath*:mapper/business/*.xml");
-  }
-
-  private static SqlSessionFactory buildSqlSessionFactory(
-      DataSource dataSource, String mapperLocationPattern) throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(dataSource);
-    Resource[] mappers =
-        new PathMatchingResourcePatternResolver().getResources(mapperLocationPattern);
-    if (mappers.length > 0) {
-      factoryBean.setMapperLocations(mappers);
+    /** 平台库 SqlSessionFactory：mapper 位置固定为 {@code classpath*:mapper/*.xml}。 */
+    public static SqlSessionFactory buildPlatformSqlSessionFactory(DataSource dataSource) throws Exception {
+        return buildSqlSessionFactory(dataSource, "classpath*:mapper/*.xml");
     }
-    Configuration configuration = new Configuration();
-    configuration.setMapUnderscoreToCamelCase(true);
-    factoryBean.setConfiguration(configuration);
-    return factoryBean.getObject();
-  }
 
-  /**
-   * 业务库 DataSource：构造 + pg-session 回退 + 路由包裹统一收敛到 {@link BusinessDataSourceBuilder}；routing
-   * 默认关=单片无损，开=多片。placement mapper 供 TABLE 模式 resolver 读 placement 表（单片/CONFIG 模式忽略）。
-   */
-  public static DataSource buildBusinessDataSource(
-      HikariConfig hikariConfig,
-      BusinessDataSourceProperties properties,
-      BatchPgSessionProperties pgSessionProperties,
-      BusinessRoutingProperties routingProperties,
-      BusinessTenantPlacementMapper placementMapper,
-      String appName) {
-    return BusinessDataSourceBuilder.build(
-        hikariConfig,
-        properties,
-        pgSessionProperties,
-        routingProperties,
-        new MyBatisTenantPlacementRepository(placementMapper),
-        appName);
-  }
+    /** 业务库 SqlSessionFactory：mapper 位置固定为 {@code classpath*:mapper/business/*.xml}。 */
+    public static SqlSessionFactory buildBusinessSqlSessionFactory(DataSource dataSource) throws Exception {
+        return buildSqlSessionFactory(dataSource, "classpath*:mapper/business/*.xml");
+    }
 
-  /** RLS 闭世界健康探针构造，供 actuator/health 注册。 */
-  public static RlsPolicyHealthIndicator buildRlsPolicyHealthIndicator(
-      DataSource businessDataSource, RlsProperties rlsProperties) {
-    return new RlsPolicyHealthIndicator(businessDataSource, rlsProperties.getExemptTables());
-  }
+    private static SqlSessionFactory buildSqlSessionFactory(DataSource dataSource, String mapperLocationPattern)
+            throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        Resource[] mappers = new PathMatchingResourcePatternResolver().getResources(mapperLocationPattern);
+        if (mappers.length > 0) {
+            factoryBean.setMapperLocations(mappers);
+        }
+        Configuration configuration = new Configuration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        factoryBean.setConfiguration(configuration);
+        return factoryBean.getObject();
+    }
 
-  /** 启动期 RLS 闭世界 fail-fast 守门构造，复用 health indicator 同一套闭世界检查逻辑。 */
-  public static RlsStartupFailFastCheck buildRlsStartupFailFastCheck(
-      DataSource businessDataSource, RlsProperties rlsProperties) {
-    return new RlsStartupFailFastCheck(businessDataSource, rlsProperties.getExemptTables());
-  }
+    /**
+     * 业务库 DataSource：构造 + pg-session 回退 + 路由包裹统一收敛到 {@link BusinessDataSourceBuilder}；routing
+     * 默认关=单片无损，开=多片。placement mapper 供 TABLE 模式 resolver 读 placement 表（单片/CONFIG 模式忽略）。
+     */
+    public static DataSource buildBusinessDataSource(
+            HikariConfig hikariConfig,
+            BusinessDataSourceProperties properties,
+            BatchPgSessionProperties pgSessionProperties,
+            BusinessRoutingProperties routingProperties,
+            BusinessTenantPlacementMapper placementMapper,
+            String appName) {
+        return BusinessDataSourceBuilder.build(
+                hikariConfig,
+                properties,
+                pgSessionProperties,
+                routingProperties,
+                new MyBatisTenantPlacementRepository(placementMapper),
+                appName);
+    }
 
-  /** 业务库账号权限健康探针：SUPERUSER/BYPASSRLS 会使行级隔离失效。 */
-  public static BusinessDataSourceRoleHealthIndicator buildBusinessDataSourceRoleHealthIndicator(
-      DataSource businessDataSource) {
-    return new BusinessDataSourceRoleHealthIndicator(businessDataSource);
-  }
+    /** RLS 闭世界健康探针构造，供 actuator/health 注册。 */
+    public static RlsPolicyHealthIndicator buildRlsPolicyHealthIndicator(
+            DataSource businessDataSource, RlsProperties rlsProperties) {
+        return new RlsPolicyHealthIndicator(businessDataSource, rlsProperties.getExemptTables());
+    }
 
-  /** 启动期拒绝能绕过 RLS 的业务库账号。 */
-  public static BusinessDataSourceRoleStartupCheck buildBusinessDataSourceRoleStartupCheck(
-      DataSource businessDataSource) {
-    return new BusinessDataSourceRoleStartupCheck(businessDataSource);
-  }
+    /** 启动期 RLS 闭世界 fail-fast 守门构造，复用 health indicator 同一套闭世界检查逻辑。 */
+    public static RlsStartupFailFastCheck buildRlsStartupFailFastCheck(
+            DataSource businessDataSource, RlsProperties rlsProperties) {
+        return new RlsStartupFailFastCheck(businessDataSource, rlsProperties.getExemptTables());
+    }
 
-  /** {@link DataSourceTransactionManager} 构造——process 模块平台/业务两侧各有一个同构 TransactionManager bean。 */
-  public static DataSourceTransactionManager buildTransactionManager(DataSource dataSource) {
-    return new DataSourceTransactionManager(dataSource);
-  }
+    /** 业务库账号权限健康探针：SUPERUSER/BYPASSRLS 会使行级隔离失效。 */
+    public static BusinessDataSourceRoleHealthIndicator buildBusinessDataSourceRoleHealthIndicator(
+            DataSource businessDataSource) {
+        return new BusinessDataSourceRoleHealthIndicator(businessDataSource);
+    }
+
+    /** 启动期拒绝能绕过 RLS 的业务库账号。 */
+    public static BusinessDataSourceRoleStartupCheck buildBusinessDataSourceRoleStartupCheck(
+            DataSource businessDataSource) {
+        return new BusinessDataSourceRoleStartupCheck(businessDataSource);
+    }
+
+    /** {@link DataSourceTransactionManager} 构造——process 模块平台/业务两侧各有一个同构 TransactionManager bean。 */
+    public static DataSourceTransactionManager buildTransactionManager(DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
 }

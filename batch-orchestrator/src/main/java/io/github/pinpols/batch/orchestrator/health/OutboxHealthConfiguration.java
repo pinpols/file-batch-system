@@ -11,13 +11,13 @@ import org.springframework.context.annotation.Configuration;
 /** 装配 Outbox 可用性健康检查。 */
 public class OutboxHealthConfiguration {
 
-  @Bean
-  @ConditionalOnProperty(
-      name = "batch.orchestrator.health.outbox.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public OutboxLagHealthIndicator outboxLagHealthIndicator(
-      OutboxEventMapper mapper, OutboxLagHealthProperties properties) {
-    return new OutboxLagHealthIndicator(mapper, properties);
-  }
+    @Bean
+    @ConditionalOnProperty(
+            name = "batch.orchestrator.health.outbox.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public OutboxLagHealthIndicator outboxLagHealthIndicator(
+            OutboxEventMapper mapper, OutboxLagHealthProperties properties) {
+        return new OutboxLagHealthIndicator(mapper, properties);
+    }
 }

@@ -23,44 +23,44 @@ import org.springframework.stereotype.Component;
 @Component
 public class TriggerDrainState {
 
-  private final AtomicBoolean draining = new AtomicBoolean(false);
+    private final AtomicBoolean draining = new AtomicBoolean(false);
 
-  @Getter
-  private volatile Instant drainingSince;
+    @Getter
+    private volatile Instant drainingSince;
 
-  @Getter
-  private volatile String reason;
+    @Getter
+    private volatile String reason;
 
-  /**
-   * CAS 启动排水。返回 {@code true} 表示本调用是首次置位 (调用方应做 scheduler-specific 停机动作), 返回 {@code false}
-   * 表示已在排水中,幂等无副作用。
-   */
-  public boolean startDraining(String source) {
-    if (draining.compareAndSet(false, true)) {
-      drainingSince = BatchDateTimeSupport.utcNow();
-      reason = source;
-      log.info("Trigger drain state: STARTED source={}", source);
-      return true;
+    /**
+     * CAS 启动排水。返回 {@code true} 表示本调用是首次置位 (调用方应做 scheduler-specific 停机动作), 返回 {@code false}
+     * 表示已在排水中,幂等无副作用。
+     */
+    public boolean startDraining(String source) {
+        if (draining.compareAndSet(false, true)) {
+            drainingSince = BatchDateTimeSupport.utcNow();
+            reason = source;
+            log.info("Trigger drain state: STARTED source={}", source);
+            return true;
+        }
+        return false;
     }
-    return false;
-  }
 
-  /**
-   * CAS 停止排水。返回 {@code true} 表示本调用是首次清位 (调用方应做 scheduler-specific 恢复动作), 返回 {@code false} 表示已不在排水中。
-   */
-  public boolean stopDraining(String source) {
-    if (draining.compareAndSet(true, false)) {
-      log.info("Trigger drain state: STOPPED source={}", source);
-      drainingSince = null;
-      reason = source;
-      return true;
+    /**
+     * CAS 停止排水。返回 {@code true} 表示本调用是首次清位 (调用方应做 scheduler-specific 恢复动作), 返回 {@code false} 表示已不在排水中。
+     */
+    public boolean stopDraining(String source) {
+        if (draining.compareAndSet(true, false)) {
+            log.info("Trigger drain state: STOPPED source={}", source);
+            drainingSince = null;
+            reason = source;
+            return true;
+        }
+        drainingSince = null;
+        reason = source;
+        return false;
     }
-    drainingSince = null;
-    reason = source;
-    return false;
-  }
 
-  public boolean isDraining() {
-    return draining.get();
-  }
+    public boolean isDraining() {
+        return draining.get();
+    }
 }

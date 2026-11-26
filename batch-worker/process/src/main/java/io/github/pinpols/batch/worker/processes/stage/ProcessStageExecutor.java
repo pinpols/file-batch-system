@@ -14,11 +14,11 @@ import java.util.Map;
  */
 public interface ProcessStageExecutor {
 
-  List<ProcessStageResult> execute(ProcessJobContext context);
+    List<ProcessStageResult> execute(ProcessJobContext context);
 
-  /** 按选定的 COMPUTE 定义及冻结参数解析重放安全性。 */
-  default ReplayCapabilityDeclaration replayCapability(
-      List<PipelineStepDefinition> steps, Map<String, Object> attributes) {
-    return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
-  }
+    /** 按选定的 COMPUTE 定义及冻结参数解析重放安全性。 */
+    default ReplayCapabilityDeclaration replayCapability(
+            List<PipelineStepDefinition> steps, Map<String, Object> attributes) {
+        return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
+    }
 }

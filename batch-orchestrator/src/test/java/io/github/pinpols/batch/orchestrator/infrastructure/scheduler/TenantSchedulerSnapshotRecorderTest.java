@@ -28,78 +28,77 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("租户调度快照记录器")
 class TenantSchedulerSnapshotRecorderTest {
 
-  @Mock
-  private TenantQuotaPolicyMapper quotaMapper;
+    @Mock
+    private TenantQuotaPolicyMapper quotaMapper;
 
-  @Mock
-  private TenantSchedulerSnapshotService snapshotService;
+    @Mock
+    private TenantSchedulerSnapshotService snapshotService;
 
-  @Mock
-  private TenantSchedulerSnapshotMapper snapshotMapper;
+    @Mock
+    private TenantSchedulerSnapshotMapper snapshotMapper;
 
-  @Mock
-  private WorkerRegistryMapper workerMapper;
+    @Mock
+    private WorkerRegistryMapper workerMapper;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Captor
-  private ArgumentCaptor<List<TenantSchedulerSnapshotEntity>> rowsCaptor;
+    @Captor
+    private ArgumentCaptor<List<TenantSchedulerSnapshotEntity>> rowsCaptor;
 
-  @Test
-  @DisplayName("保存的快照保留租户、策略、容量计数及原始详情")
-  void shouldPersistSnapshotFields_whenTenantHasPolicy() {
-    Instant timestamp = Instant.parse("2026-10-30T10:00:00Z");
-    SchedulerSnapshotResponse.PolicySnapshot policy =
-        SchedulerSnapshotResponse.PolicySnapshot.builder()
-            .policyCode("policy-a")
-            .fairShareGroup("group-a")
-            .maxRunningJobsPerTenant(11)
-            .burstLimit(12)
-            .effectiveTenantJobCap(13)
-            .groupSharedMaxRunningJobs(14)
-            .quotaResetPolicy("DAILY")
-            .activeJobs(21)
-            .activePartitions(22)
-            .groupActiveJobs(23)
-            .build();
-    SchedulerSnapshotResponse response =
-        new SchedulerSnapshotResponse(timestamp, "tenant-a", List.of(policy), List.of(), List.of());
-    when(quotaMapper.selectDistinctEnabledTenantIds()).thenReturn(List.of("tenant-a"));
-    when(workerMapper.countByTenantsAndStatus(List.of("tenant-a"), "ONLINE"))
-        .thenReturn(List.of(new TenantWorkerCountView("tenant-a", 24L)));
-    when(snapshotService.buildLive("tenant-a")).thenAnswer(invocation -> {
-      assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
-      return response;
-    });
-    TenantSchedulerSnapshotRecorder recorder = new TenantSchedulerSnapshotRecorder(
-        quotaMapper,
-        snapshotService,
-        snapshotMapper,
-        workerMapper,
-        gracefulShutdown,
-        new SchedulerSnapshotProperties());
+    @Test
+    @DisplayName("保存的快照保留租户、策略、容量计数及原始详情")
+    void shouldPersistSnapshotFields_whenTenantHasPolicy() {
+        Instant timestamp = Instant.parse("2026-10-30T10:00:00Z");
+        SchedulerSnapshotResponse.PolicySnapshot policy = SchedulerSnapshotResponse.PolicySnapshot.builder()
+                .policyCode("policy-a")
+                .fairShareGroup("group-a")
+                .maxRunningJobsPerTenant(11)
+                .burstLimit(12)
+                .effectiveTenantJobCap(13)
+                .groupSharedMaxRunningJobs(14)
+                .quotaResetPolicy("DAILY")
+                .activeJobs(21)
+                .activePartitions(22)
+                .groupActiveJobs(23)
+                .build();
+        SchedulerSnapshotResponse response =
+                new SchedulerSnapshotResponse(timestamp, "tenant-a", List.of(policy), List.of(), List.of());
+        when(quotaMapper.selectDistinctEnabledTenantIds()).thenReturn(List.of("tenant-a"));
+        when(workerMapper.countByTenantsAndStatus(List.of("tenant-a"), "ONLINE"))
+                .thenReturn(List.of(new TenantWorkerCountView("tenant-a", 24L)));
+        when(snapshotService.buildLive("tenant-a")).thenAnswer(invocation -> {
+            assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
+            return response;
+        });
+        TenantSchedulerSnapshotRecorder recorder = new TenantSchedulerSnapshotRecorder(
+                quotaMapper,
+                snapshotService,
+                snapshotMapper,
+                workerMapper,
+                gracefulShutdown,
+                new SchedulerSnapshotProperties());
 
-    recorder.persist();
+        recorder.persist();
 
-    verify(snapshotMapper).insertBatch(rowsCaptor.capture());
-    assertThat(rowsCaptor.getValue()).singleElement().satisfies(row -> {
-      assertThat(row.id()).isNull();
-      assertThat(row.tenantId()).isEqualTo("tenant-a");
-      assertThat(row.snapshotAt()).isEqualTo(timestamp);
-      assertThat(row.policyCode()).isEqualTo("policy-a");
-      assertThat(row.fairShareGroup()).isEqualTo("group-a");
-      assertThat(row.maxJobsBase()).isEqualTo(11);
-      assertThat(row.burstLimit()).isEqualTo(12);
-      assertThat(row.effectiveJobCap()).isEqualTo(13);
-      assertThat(row.groupMaxJobs()).isEqualTo(14);
-      assertThat(row.activeJobs()).isEqualTo(21);
-      assertThat(row.activePartitions()).isEqualTo(22);
-      assertThat(row.groupActiveJobs()).isEqualTo(23);
-      assertThat(row.onlineWorkers()).isEqualTo(24);
-      assertThat(row.quotaResetPolicy()).isEqualTo("DAILY");
-      assertThat(row.detailJson().getValue()).contains("policy-a", "tenant-a");
-    });
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        verify(snapshotMapper).insertBatch(rowsCaptor.capture());
+        assertThat(rowsCaptor.getValue()).singleElement().satisfies(row -> {
+            assertThat(row.id()).isNull();
+            assertThat(row.tenantId()).isEqualTo("tenant-a");
+            assertThat(row.snapshotAt()).isEqualTo(timestamp);
+            assertThat(row.policyCode()).isEqualTo("policy-a");
+            assertThat(row.fairShareGroup()).isEqualTo("group-a");
+            assertThat(row.maxJobsBase()).isEqualTo(11);
+            assertThat(row.burstLimit()).isEqualTo(12);
+            assertThat(row.effectiveJobCap()).isEqualTo(13);
+            assertThat(row.groupMaxJobs()).isEqualTo(14);
+            assertThat(row.activeJobs()).isEqualTo(21);
+            assertThat(row.activePartitions()).isEqualTo(22);
+            assertThat(row.groupActiveJobs()).isEqualTo(23);
+            assertThat(row.onlineWorkers()).isEqualTo(24);
+            assertThat(row.quotaResetPolicy()).isEqualTo("DAILY");
+            assertThat(row.detailJson().getValue()).contains("policy-a", "tenant-a");
+        });
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 }

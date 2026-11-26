@@ -18,37 +18,36 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerSelfRegistrationService {
 
-  private final WorkerRegistryClient workerRegistryClient;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final WorkerRegistryClient workerRegistryClient;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  @Override
-  public WorkerRegistration register(WorkerRegistration registration) {
-    WorkerRegistration registeredWorker = workerRegistryClient.register(registration);
-    if (registeredWorker.getRegisteredAt() == null) {
-      registeredWorker.setRegisteredAt(dateTimeSupport.nowOffsetUtc());
+    @Override
+    public WorkerRegistration register(WorkerRegistration registration) {
+        WorkerRegistration registeredWorker = workerRegistryClient.register(registration);
+        if (registeredWorker.getRegisteredAt() == null) {
+            registeredWorker.setRegisteredAt(dateTimeSupport.nowOffsetUtc());
+        }
+        if (registeredWorker.getLastHeartbeatAt() == null) {
+            registeredWorker.setLastHeartbeatAt(registeredWorker.getRegisteredAt());
+        }
+        return registeredWorker;
     }
-    if (registeredWorker.getLastHeartbeatAt() == null) {
-      registeredWorker.setLastHeartbeatAt(registeredWorker.getRegisteredAt());
+
+    @Override
+    public WorkerRegistration renew(WorkerRegistration registration) {
+        WorkerRegistration heartbeatWorker = workerRegistryClient.heartbeat(registration);
+        heartbeatWorker.setLastHeartbeatAt(dateTimeSupport.nowOffsetUtc());
+        return heartbeatWorker;
     }
-    return registeredWorker;
-  }
 
-  @Override
-  public WorkerRegistration renew(WorkerRegistration registration) {
-    WorkerRegistration heartbeatWorker = workerRegistryClient.heartbeat(registration);
-    heartbeatWorker.setLastHeartbeatAt(dateTimeSupport.nowOffsetUtc());
-    return heartbeatWorker;
-  }
+    @Override
+    public void deactivate(WorkerRegistration registration) {
+        workerRegistryClient.deactivate(registration);
+    }
 
-  @Override
-  public void deactivate(WorkerRegistration registration) {
-    workerRegistryClient.deactivate(registration);
-  }
-
-  @Override
-  public WorkerRegistration updateStatus(WorkerRegistration registration, String status) {
-    registration.setStatus(
-        status == null || status.isBlank() ? WorkerRegistryStatus.ONLINE.code() : status);
-    return workerRegistryClient.updateStatus(registration);
-  }
+    @Override
+    public WorkerRegistration updateStatus(WorkerRegistration registration, String status) {
+        registration.setStatus(status == null || status.isBlank() ? WorkerRegistryStatus.ONLINE.code() : status);
+        return workerRegistryClient.updateStatus(registration);
+    }
 }

@@ -32,96 +32,95 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
  */
 public final class OutboxEventKeyGenerator {
 
-  /** event_key 列宽上限(VARCHAR(256)),超长 trim 末尾。 */
-  private static final int MAX_LENGTH = 256;
+    /** event_key 列宽上限(VARCHAR(256)),超长 trim 末尾。 */
+    private static final int MAX_LENGTH = 256;
 
-  private OutboxEventKeyGenerator() {}
+    private OutboxEventKeyGenerator() {}
 
-  /** 首次 dispatch:{@code <tenant>:dispatch:<taskId>} — 同一 task 重复 dispatch 由 outbox 唯一约束去重。 */
-  public static String forDispatch(String tenantId, Long taskId) {
-    return build(tenantId, "dispatch", String.valueOf(taskId));
-  }
-
-  /**
-   * Workflow DAG 节点 dispatch:{@code <tenant>:wf:<workflowRunId>:<nodeCode>:<taskId>}。Workflow 维度的
-   * task 与首次 dispatch 区分,允许同 task 在不同 workflow run 中独立去重。
-   */
-  public static String forWorkflowNodeDispatch(
-      String tenantId, Long workflowRunId, String nodeCode, Long taskId) {
-    return build(tenantId, "wf", String.valueOf(workflowRunId), nodeCode, String.valueOf(taskId));
-  }
-
-  /** 文件治理重派使用复位前任务版本区分不同的失败尝试。 */
-  public static String forFileRedispatch(String tenantId, Long taskId, Long taskVersion) {
-    return build(tenantId, "file-redispatch", String.valueOf(taskId), String.valueOf(taskVersion));
-  }
-
-  /**
-   * Task 重试:{@code <tenant>:retry:<taskId>:<attempt>}。<b>必须带 attempt</b>,否则同 task 多次重试因相同 key 被
-   * dedup 丢失重试事件。
-   */
-  public static String forRetry(String tenantId, Long taskId, int attempt) {
-    return build(tenantId, "retry", String.valueOf(taskId), String.valueOf(attempt));
-  }
-
-  /**
-   * 运维 manual replay(RecoveryController):{@code <tenant>:replay-<kind>:<id>}。{@code kind} 形如 {@code
-   * task} / {@code partition},语义是"运维手动重播";同一 id 多次 POST 应当 dedup(operator intent 是幂等触发)。需要"强制重新触发"由
-   * operator 用 IdGenerator.newBusinessNo("rpl") 加入 key 显式打破。
-   */
-  public static String forManualReplay(String tenantId, String kind, Long id) {
-    return build(tenantId, "replay-" + kind, String.valueOf(id));
-  }
-
-  /**
-   * Worker drain reclaim:{@code <tenant>:reclaim:<taskId>:<drainEventId>}。drainEventId 区分多次 drain
-   * 周期(同 task 在不同 drain 周期被 reclaim 是合法重复)。
-   */
-  public static String forReclaim(String tenantId, Long taskId, String drainEventId) {
-    return build(tenantId, "reclaim", String.valueOf(taskId), drainEventId);
-  }
-
-  /**
-   * 已发布但从未认领的 READY 任务重发：{@code <tenant>:unclaimed-redispatch:<taskId>:v<version>}。
-   * 版本来自本次 CAS 之后的值，避免与首次 {@code dispatch} 键冲突，也避免重复插入被唯一约束吞掉。
-   */
-  public static String forUnclaimedRedispatch(String tenantId, Long taskId, long taskVersion) {
-    return build(tenantId, "unclaimed-redispatch", String.valueOf(taskId), "v" + taskVersion);
-  }
-
-  /**
-   * 补偿命令再派发:{@code <tenant>:cmp:<commandNo>:<taskId>}。commandNo 是
-   * compensation_command.command_no,确保同 task 在不同补偿命令下独立去重。
-   */
-  public static String forCompensation(String tenantId, String commandNo, Long taskId) {
-    return build(tenantId, "cmp", commandNo, String.valueOf(taskId));
-  }
-
-  /**
-   * Workflow 终态事件:{@code <tenant>:workflow:<workflowRunId>:terminal}。同 workflow_run
-   * 进入终态多次(理论上由前态守护拦掉)被 dedup 回退。
-   */
-  public static String forWorkflowTerminal(String tenantId, Long workflowRunId) {
-    return build(tenantId, "workflow", String.valueOf(workflowRunId), "terminal");
-  }
-
-  /** Job 终态事实:同状态重投唯一,失败修正为成功是另一事实。 */
-  public static String forJobTerminal(String tenantId, Long jobInstanceId, String status) {
-    return build(tenantId, "job", String.valueOf(jobInstanceId), "terminal", status);
-  }
-
-  // ── helpers ──────────────────────────────────────────────────────────
-
-  private static String build(String tenantId, String scope, String... parts) {
-    StringBuilder sb = new StringBuilder(EmptyChecks.isNull(tenantId) ? "" : tenantId);
-    sb.append(':').append(scope);
-    for (String p : parts) {
-      sb.append(':').append(EmptyChecks.isNull(p) ? "" : p);
+    /** 首次 dispatch:{@code <tenant>:dispatch:<taskId>} — 同一 task 重复 dispatch 由 outbox 唯一约束去重。 */
+    public static String forDispatch(String tenantId, Long taskId) {
+        return build(tenantId, "dispatch", String.valueOf(taskId));
     }
-    return truncate(sb.toString());
-  }
 
-  private static String truncate(String key) {
-    return key.length() <= MAX_LENGTH ? key : key.substring(0, MAX_LENGTH);
-  }
+    /**
+     * Workflow DAG 节点 dispatch:{@code <tenant>:wf:<workflowRunId>:<nodeCode>:<taskId>}。Workflow 维度的
+     * task 与首次 dispatch 区分,允许同 task 在不同 workflow run 中独立去重。
+     */
+    public static String forWorkflowNodeDispatch(String tenantId, Long workflowRunId, String nodeCode, Long taskId) {
+        return build(tenantId, "wf", String.valueOf(workflowRunId), nodeCode, String.valueOf(taskId));
+    }
+
+    /** 文件治理重派使用复位前任务版本区分不同的失败尝试。 */
+    public static String forFileRedispatch(String tenantId, Long taskId, Long taskVersion) {
+        return build(tenantId, "file-redispatch", String.valueOf(taskId), String.valueOf(taskVersion));
+    }
+
+    /**
+     * Task 重试:{@code <tenant>:retry:<taskId>:<attempt>}。<b>必须带 attempt</b>,否则同 task 多次重试因相同 key 被
+     * dedup 丢失重试事件。
+     */
+    public static String forRetry(String tenantId, Long taskId, int attempt) {
+        return build(tenantId, "retry", String.valueOf(taskId), String.valueOf(attempt));
+    }
+
+    /**
+     * 运维 manual replay(RecoveryController):{@code <tenant>:replay-<kind>:<id>}。{@code kind} 形如 {@code
+     * task} / {@code partition},语义是"运维手动重播";同一 id 多次 POST 应当 dedup(operator intent 是幂等触发)。需要"强制重新触发"由
+     * operator 用 IdGenerator.newBusinessNo("rpl") 加入 key 显式打破。
+     */
+    public static String forManualReplay(String tenantId, String kind, Long id) {
+        return build(tenantId, "replay-" + kind, String.valueOf(id));
+    }
+
+    /**
+     * Worker drain reclaim:{@code <tenant>:reclaim:<taskId>:<drainEventId>}。drainEventId 区分多次 drain
+     * 周期(同 task 在不同 drain 周期被 reclaim 是合法重复)。
+     */
+    public static String forReclaim(String tenantId, Long taskId, String drainEventId) {
+        return build(tenantId, "reclaim", String.valueOf(taskId), drainEventId);
+    }
+
+    /**
+     * 已发布但从未认领的 READY 任务重发：{@code <tenant>:unclaimed-redispatch:<taskId>:v<version>}。
+     * 版本来自本次 CAS 之后的值，避免与首次 {@code dispatch} 键冲突，也避免重复插入被唯一约束吞掉。
+     */
+    public static String forUnclaimedRedispatch(String tenantId, Long taskId, long taskVersion) {
+        return build(tenantId, "unclaimed-redispatch", String.valueOf(taskId), "v" + taskVersion);
+    }
+
+    /**
+     * 补偿命令再派发:{@code <tenant>:cmp:<commandNo>:<taskId>}。commandNo 是
+     * compensation_command.command_no,确保同 task 在不同补偿命令下独立去重。
+     */
+    public static String forCompensation(String tenantId, String commandNo, Long taskId) {
+        return build(tenantId, "cmp", commandNo, String.valueOf(taskId));
+    }
+
+    /**
+     * Workflow 终态事件:{@code <tenant>:workflow:<workflowRunId>:terminal}。同 workflow_run
+     * 进入终态多次(理论上由前态守护拦掉)被 dedup 回退。
+     */
+    public static String forWorkflowTerminal(String tenantId, Long workflowRunId) {
+        return build(tenantId, "workflow", String.valueOf(workflowRunId), "terminal");
+    }
+
+    /** Job 终态事实:同状态重投唯一,失败修正为成功是另一事实。 */
+    public static String forJobTerminal(String tenantId, Long jobInstanceId, String status) {
+        return build(tenantId, "job", String.valueOf(jobInstanceId), "terminal", status);
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────
+
+    private static String build(String tenantId, String scope, String... parts) {
+        StringBuilder sb = new StringBuilder(EmptyChecks.isNull(tenantId) ? "" : tenantId);
+        sb.append(':').append(scope);
+        for (String p : parts) {
+            sb.append(':').append(EmptyChecks.isNull(p) ? "" : p);
+        }
+        return truncate(sb.toString());
+    }
+
+    private static String truncate(String key) {
+        return key.length() <= MAX_LENGTH ? key : key.substring(0, MAX_LENGTH);
+    }
 }

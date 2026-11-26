@@ -45,58 +45,57 @@ import org.springframework.test.context.jdbc.Sql;
  * <p>存储读取失败或找不到本次作业的产物时，内容校验必须失败。
  */
 @E2eSpringBootTest(
-    classes = E2eExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.export.worker-type=EXPORT")
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.export.worker-type=EXPORT")
 @E2eBusinessSchema
 @Sql(
-    scripts = {
-      E2eTestSql.EXPORT_TEMPLATE_SEED,
-    })
+        scripts = {
+            E2eTestSql.EXPORT_TEMPLATE_SEED,
+        })
 @DisplayName("导出成功链路内容级验收端到端:在任务终态成功之上校验导出产物非空且含关键业务字段,并确认结算批次主数据与汇总金额仍可查询")
 class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-  private static final String ACCOUNTING_PERIOD =
-      BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
-  private static final String BATCH_NO = "E2E-CONTENT-VERIFY-1";
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String ACCOUNTING_PERIOD = BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
+    private static final String BATCH_NO = "E2E-CONTENT-VERIFY-1";
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  @Qualifier("exportBusinessDataSource")
-  private DataSource businessDataSource;
+    @Autowired
+    @Qualifier("exportBusinessDataSource")
+    private DataSource businessDataSource;
 
-  /**
-   * Content-level export verification:
-   *
-   * <ol>
-   *   <li>Seed a settlement batch + 2 detail records
-   *   <li>Run export pipeline to SUCCESS
-   *   <li>Assert the settlement batch row remains queryable after export
-   *   <li>Assert file_record has a storage_path set (file was produced)
-   *   <li>Read the output and assert it is non-empty with lines > 0
-   * </ol>
-   */
-  @Test
-  @DisplayName("导出任务终态成功后做内容级复核:文件记录有存储路径,产物达到最小非空行数且包含两条结算明细编号,结算批次汇总金额非空且主数据仍可查询")
-  void shouldProduceNonEmptyExportFileAndKeepSettlementData_whenExportSucceeds() throws Exception {
-    final String insertSettlementBatchSql = """
+    /**
+     * Content-level export verification:
+     *
+     * <ol>
+     *   <li>Seed a settlement batch + 2 detail records
+     *   <li>Run export pipeline to SUCCESS
+     *   <li>Assert the settlement batch row remains queryable after export
+     *   <li>Assert file_record has a storage_path set (file was produced)
+     *   <li>Read the output and assert it is non-empty with lines > 0
+     * </ol>
+     */
+    @Test
+    @DisplayName("导出任务终态成功后做内容级复核:文件记录有存储路径,产物达到最小非空行数且包含两条结算明细编号,结算批次汇总金额非空且主数据仍可查询")
+    void shouldProduceNonEmptyExportFileAndKeepSettlementData_whenExportSucceeds() throws Exception {
+        final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, ?, ?, 'READY', 2, 0, 'CNY')
             returning id
             """;
-    final String insertSettlementDetailSql = """
+        final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
@@ -105,71 +104,70 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
             (?, ?, 'E2E-CV-002', 'C-CV-2', ?, ?, 200.00, 10.00, 190.00, 'CNY', 'READY')
         """;
 
-    final String selectTaskStatusSql = """
+        final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
 
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
 
-    Long batchId = businessJdbc.queryForObject(
-        insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
-    assertThat(batchId).isNotNull();
+        Long batchId = businessJdbc.queryForObject(
+                insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
+        assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        insertSettlementDetailSql,
-        TENANT,
-        batchId,
-        BIZ_DATE,
-        ACCOUNTING_PERIOD,
-        TENANT,
-        batchId,
-        BIZ_DATE,
-        ACCOUNTING_PERIOD);
+        businessJdbc.update(
+                insertSettlementDetailSql,
+                TENANT,
+                batchId,
+                BIZ_DATE,
+                ACCOUNTING_PERIOD,
+                TENANT,
+                batchId,
+                BIZ_DATE,
+                ACCOUNTING_PERIOD);
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchNo", BATCH_NO);
-    params.put("templateCode", "EXP-SETTLEMENT-JSON");
-    params.put("bizDate", BIZ_DATE.toString());
-    params.put("bizType", "SETTLEMENT");
-    params.put("fileCode", "e2e-cv-export-file");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", BATCH_NO);
+        params.put("templateCode", "EXP-SETTLEMENT-JSON");
+        params.put("bizDate", BIZ_DATE.toString());
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-cv-export-file");
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-cv-export",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-cv-export",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    // 等待任务进入 SUCCESS 状态。
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("SUCCESS");
-        });
+        // 等待任务进入 SUCCESS 状态。
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("SUCCESS");
+                });
 
-    // Content-level triple-check (状态 + 产物 + 审计) via ExportFileVerifier
-    ExportFileVerifier.forTenant(TENANT)
-        .dedupKey(seed.dedupKey())
-        .platformJdbc(jdbcTemplate)
-        .businessJdbc(businessJdbc)
-        .batchNo(BATCH_NO)
-        .expectedMinFileRows(1)
-        .expectedContentSnippets("E2E-CV-001", "E2E-CV-002")
-        .s3Endpoint(s3Endpoint())
-        .s3Bucket(s3Bucket())
-        .build()
-        .verify();
-  }
+        // Content-level triple-check (状态 + 产物 + 审计) via ExportFileVerifier
+        ExportFileVerifier.forTenant(TENANT)
+                .dedupKey(seed.dedupKey())
+                .platformJdbc(jdbcTemplate)
+                .businessJdbc(businessJdbc)
+                .batchNo(BATCH_NO)
+                .expectedMinFileRows(1)
+                .expectedContentSnippets("E2E-CV-001", "E2E-CV-002")
+                .s3Endpoint(s3Endpoint())
+                .s3Bucket(s3Bucket())
+                .build()
+                .verify();
+    }
 }

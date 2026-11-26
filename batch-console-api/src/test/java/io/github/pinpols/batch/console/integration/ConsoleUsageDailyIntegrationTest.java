@@ -28,40 +28,38 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("控制台用量日汇总: 并发累加计数,保留最新时间戳与数据库行级安全隔离")
 class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String RLS_ROLE = "console_usage_rls_test";
+    private static final String RLS_ROLE = "console_usage_rls_test";
 
-  private final ConsoleUsageDailyRecorder recorder;
-  private final ConsoleUsageSummaryService summaryService;
-  private final ConsoleUsageDailyMapper mapper;
-  private final BatchTimezoneProvider timezoneProvider;
-  private final JdbcTemplate jdbcTemplate;
-  private final TransactionTemplate transactionTemplate;
+    private final ConsoleUsageDailyRecorder recorder;
+    private final ConsoleUsageSummaryService summaryService;
+    private final ConsoleUsageDailyMapper mapper;
+    private final BatchTimezoneProvider timezoneProvider;
+    private final JdbcTemplate jdbcTemplate;
+    private final TransactionTemplate transactionTemplate;
 
-  @Autowired
-  ConsoleUsageDailyIntegrationTest(
-      ConsoleUsageDailyRecorder recorder,
-      ConsoleUsageSummaryService summaryService,
-      ConsoleUsageDailyMapper mapper,
-      BatchTimezoneProvider timezoneProvider,
-      JdbcTemplate jdbcTemplate,
-      PlatformTransactionManager transactionManager) {
-    this.recorder = recorder;
-    this.summaryService = summaryService;
-    this.mapper = mapper;
-    this.timezoneProvider = timezoneProvider;
-    this.jdbcTemplate = jdbcTemplate;
-    this.transactionTemplate = new TransactionTemplate(transactionManager);
-  }
+    @Autowired
+    ConsoleUsageDailyIntegrationTest(
+            ConsoleUsageDailyRecorder recorder,
+            ConsoleUsageSummaryService summaryService,
+            ConsoleUsageDailyMapper mapper,
+            BatchTimezoneProvider timezoneProvider,
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager) {
+        this.recorder = recorder;
+        this.summaryService = summaryService;
+        this.mapper = mapper;
+        this.timezoneProvider = timezoneProvider;
+        this.jdbcTemplate = jdbcTemplate;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
-  @BeforeAll
-  static void grantRlsTestRole(@Autowired JdbcTemplate jdbcTemplate) {
-    String createRlsTestRoleSql = """
+    @BeforeAll
+    static void grantRlsTestRole(@Autowired JdbcTemplate jdbcTemplate) {
+        String createRlsTestRoleSql = """
         DO $$
         BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'console_usage_rls_test') THEN
@@ -70,108 +68,107 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
         END
         $$
         """;
-    jdbcTemplate.execute(createRlsTestRoleSql);
-    String grantBatchSchemaUsageSql = """
+        jdbcTemplate.execute(createRlsTestRoleSql);
+        String grantBatchSchemaUsageSql = """
         GRANT USAGE ON SCHEMA batch TO %s
     """.formatted(RLS_ROLE);
-    jdbcTemplate.execute(grantBatchSchemaUsageSql);
-    String grantConsoleUsageSelectSql = """
+        jdbcTemplate.execute(grantBatchSchemaUsageSql);
+        String grantConsoleUsageSelectSql = """
         GRANT SELECT ON batch.console_usage_daily TO %s
     """.formatted(RLS_ROLE);
-    jdbcTemplate.execute(grantConsoleUsageSelectSql);
-  }
-
-  @Test
-  @DisplayName("并发写入: 记录累加为事件总数,成功与失败分别计数,时间戳取最新一条")
-  void shouldAccumulateCounts_whenRecordingConcurrently() throws Exception {
-    String tenantId = unique("usage-concurrent");
-    Instant baseTime = LocalDate.now(timezoneProvider.defaultZone())
-        .atTime(12, 0)
-        .atZone(timezoneProvider.defaultZone())
-        .toInstant();
-    int workers = 8;
-    int recordsPerWorker = 12;
-
-    try (ExecutorService executor = Executors.newFixedThreadPool(workers)) {
-      List<? extends Future<?>> futures = IntStream.range(0, workers)
-          .mapToObj(worker -> executor.submit(() -> {
-            for (int record = 0; record < recordsPerWorker; record++) {
-              int sequence = worker * recordsPerWorker + record;
-              recorder.record(
-                  tenantId, "job.run", sequence % 3 != 0, baseTime.plusSeconds(sequence));
-            }
-          }))
-          .toList();
-      for (Future<?> future : futures) {
-        future.get();
-      }
+        jdbcTemplate.execute(grantConsoleUsageSelectSql);
     }
 
-    LocalDate statDate = baseTime.atZone(timezoneProvider.defaultZone()).toLocalDate();
-    List<ConsoleUsageSummaryResponse> rows =
-        summaryService.query(tenantId, statDate, statDate, "operation.job.run", null);
+    @Test
+    @DisplayName("并发写入: 记录累加为事件总数,成功与失败分别计数,时间戳取最新一条")
+    void shouldAccumulateCounts_whenRecordingConcurrently() throws Exception {
+        String tenantId = unique("usage-concurrent");
+        Instant baseTime = LocalDate.now(timezoneProvider.defaultZone())
+                .atTime(12, 0)
+                .atZone(timezoneProvider.defaultZone())
+                .toInstant();
+        int workers = 8;
+        int recordsPerWorker = 12;
 
-    assertThat(rows).singleElement().satisfies(row -> {
-      assertThat(row.eventCount()).isEqualTo((long) workers * recordsPerWorker);
-      assertThat(row.successCount()).isEqualTo(64L);
-      assertThat(row.failureCount()).isEqualTo(32L);
-      assertThat(OffsetDateTime.parse(row.lastSeenAt()).toInstant())
-          .isEqualTo(baseTime.plusSeconds((long) workers * recordsPerWorker - 1));
-    });
-  }
+        try (ExecutorService executor = Executors.newFixedThreadPool(workers)) {
+            List<? extends Future<?>> futures = IntStream.range(0, workers)
+                    .mapToObj(worker -> executor.submit(() -> {
+                        for (int record = 0; record < recordsPerWorker; record++) {
+                            int sequence = worker * recordsPerWorker + record;
+                            recorder.record(tenantId, "job.run", sequence % 3 != 0, baseTime.plusSeconds(sequence));
+                        }
+                    }))
+                    .toList();
+            for (Future<?> future : futures) {
+                future.get();
+            }
+        }
 
-  @Test
-  @DisplayName("数据库行级安全: 汇总查询只看到本租户数据,未设置租户上下文时返回空")
-  void shouldKeepTenantIsolated_whenQueryingSummaryUnderRls() {
-    String tenantA = unique("usage-tenant-a");
-    String tenantB = unique("usage-tenant-b");
-    Instant eventTime = Instant.now();
-    LocalDate statDate = eventTime.atZone(timezoneProvider.defaultZone()).toLocalDate();
-    recorder.record(tenantA, "job.run", true, eventTime);
-    recorder.record(tenantB, "job.run", true, eventTime);
+        LocalDate statDate = baseTime.atZone(timezoneProvider.defaultZone()).toLocalDate();
+        List<ConsoleUsageSummaryResponse> rows =
+                summaryService.query(tenantId, statDate, statDate, "operation.job.run", null);
 
-    transactionTemplate.executeWithoutResult(status -> {
-      String setRlsTestRoleSql = """
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.eventCount()).isEqualTo((long) workers * recordsPerWorker);
+            assertThat(row.successCount()).isEqualTo(64L);
+            assertThat(row.failureCount()).isEqualTo(32L);
+            assertThat(OffsetDateTime.parse(row.lastSeenAt()).toInstant())
+                    .isEqualTo(baseTime.plusSeconds((long) workers * recordsPerWorker - 1));
+        });
+    }
+
+    @Test
+    @DisplayName("数据库行级安全: 汇总查询只看到本租户数据,未设置租户上下文时返回空")
+    void shouldKeepTenantIsolated_whenQueryingSummaryUnderRls() {
+        String tenantA = unique("usage-tenant-a");
+        String tenantB = unique("usage-tenant-b");
+        Instant eventTime = Instant.now();
+        LocalDate statDate = eventTime.atZone(timezoneProvider.defaultZone()).toLocalDate();
+        recorder.record(tenantA, "job.run", true, eventTime);
+        recorder.record(tenantB, "job.run", true, eventTime);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            String setRlsTestRoleSql = """
           SET LOCAL ROLE %s
       """.formatted(RLS_ROLE);
-      jdbcTemplate.execute(setRlsTestRoleSql);
-      mapper.setTenantContext(tenantA);
+            jdbcTemplate.execute(setRlsTestRoleSql);
+            mapper.setTenantContext(tenantA);
 
-      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-              .tenantId(tenantB)
-              .from(statDate)
-              .to(statDate)
-              .metricCode("operation.job.run")
-              .pageCode(null)
-              .build()))
-          .isEmpty();
-      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-              .tenantId(tenantA)
-              .from(statDate)
-              .to(statDate)
-              .metricCode("operation.job.run")
-              .pageCode(null)
-              .build()))
-          .hasSize(1);
-    });
+            assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+                            .tenantId(tenantB)
+                            .from(statDate)
+                            .to(statDate)
+                            .metricCode("operation.job.run")
+                            .pageCode(null)
+                            .build()))
+                    .isEmpty();
+            assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+                            .tenantId(tenantA)
+                            .from(statDate)
+                            .to(statDate)
+                            .metricCode("operation.job.run")
+                            .pageCode(null)
+                            .build()))
+                    .hasSize(1);
+        });
 
-    transactionTemplate.executeWithoutResult(status -> {
-      String setRlsTestRoleSql = """
+        transactionTemplate.executeWithoutResult(status -> {
+            String setRlsTestRoleSql = """
           SET LOCAL ROLE %s
       """.formatted(RLS_ROLE);
-      jdbcTemplate.execute(setRlsTestRoleSql);
-      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-              .tenantId(tenantA)
-              .from(statDate)
-              .to(statDate)
-              .metricCode("operation.job.run")
-              .pageCode(null)
-              .build()))
-          .isEmpty();
-    });
-  }
+            jdbcTemplate.execute(setRlsTestRoleSql);
+            assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+                            .tenantId(tenantA)
+                            .from(statDate)
+                            .to(statDate)
+                            .metricCode("operation.job.run")
+                            .pageCode(null)
+                            .build()))
+                    .isEmpty();
+        });
+    }
 
-  private static String unique(String prefix) {
-    return prefix + "-" + UUID.randomUUID();
-  }
+    private static String unique(String prefix) {
+        return prefix + "-" + UUID.randomUUID();
+    }
 }

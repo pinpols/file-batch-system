@@ -6,8 +6,8 @@ package io.github.pinpols.batch.orchestrator.mapper.view;
  * <p>该类型将固定 SQL 列约束在 Mapper 边界，避免重放预览在应用层依赖字符串键读取数据库结果。
  */
 public record BatchDayReplayAssetPartitionImpactView(
-    String businessKey,
-    String assetCode,
-    String partitionKey,
-    Long currentResultVersionId,
-    String freshnessStatus) {}
+        String businessKey,
+        String assetCode,
+        String partitionKey,
+        Long currentResultVersionId,
+        String freshnessStatus) {}

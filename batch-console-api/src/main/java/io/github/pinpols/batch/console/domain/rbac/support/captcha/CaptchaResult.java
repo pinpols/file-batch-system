@@ -8,11 +8,11 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
  */
 public record CaptchaResult(boolean success, String reason) {
 
-  public static CaptchaResult ok() {
-    return new CaptchaResult(true, "");
-  }
+    public static CaptchaResult ok() {
+        return new CaptchaResult(true, "");
+    }
 
-  public static CaptchaResult fail(String reason) {
-    return new CaptchaResult(false, reason);
-  }
+    public static CaptchaResult fail(String reason) {
+        return new CaptchaResult(false, reason);
+    }
 }

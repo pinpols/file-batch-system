@@ -8,7 +8,7 @@ import lombok.Data;
  */
 @Data
 public class RenewLeaseBatchRow {
-  private String tenantId;
-  private Long taskId;
-  private Boolean cancelRequested;
+    private String tenantId;
+    private Long taskId;
+    private Boolean cancelRequested;
 }

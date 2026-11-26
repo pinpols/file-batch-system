@@ -11,6 +11,6 @@ import java.util.List;
  */
 public interface PipelineStepTemplateProvider {
 
-  /** 返回本 pipeline 模块的默认 step 模板列表（按 stage 顺序，stepOrder 从 1 递增），供适配器校验系统阶段并合并冻结参数。 */
-  List<PipelineStepTemplate> defaultStepDefinitions();
+    /** 返回本 pipeline 模块的默认 step 模板列表（按 stage 顺序，stepOrder 从 1 递增），供适配器校验系统阶段并合并冻结参数。 */
+    List<PipelineStepTemplate> defaultStepDefinitions();
 }

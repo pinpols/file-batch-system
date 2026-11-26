@@ -5,11 +5,11 @@ import lombok.Builder;
 
 @Builder
 public record OutboxDeliveryLogQuery(
-    String tenantId,
-    String deliveryStatus,
-    String eventType,
-    String eventKey,
-    String targetTopic,
-    String traceId,
-    PageRequest pageRequest,
-    Long cursorId) {}
+        String tenantId,
+        String deliveryStatus,
+        String eventType,
+        String eventKey,
+        String targetTopic,
+        String traceId,
+        PageRequest pageRequest,
+        Long cursorId) {}

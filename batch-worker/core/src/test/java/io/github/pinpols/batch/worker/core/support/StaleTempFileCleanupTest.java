@@ -18,81 +18,79 @@ import org.junit.jupiter.api.io.TempDir;
 @DisplayName("过期临时文件清理: 清理范围与可续传文件的保留判定")
 class StaleTempFileCleanupTest {
 
-  @TempDir
-  Path tempDir;
+    @TempDir
+    Path tempDir;
 
-  private String originalTmpDir;
+    private String originalTmpDir;
 
-  @AfterEach
-  void restoreTmpDir() {
-    if (originalTmpDir != null) {
-      System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, originalTmpDir);
+    @AfterEach
+    void restoreTmpDir() {
+        if (originalTmpDir != null) {
+            System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, originalTmpDir);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("清理过期文件时, 仍被占用与可续传的文件必须保留, 孤立文件被删除")
-  void shouldPreserveActiveAndResumableFiles_whenCleaningStaleFiles() throws Exception {
-    originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
-    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
-    var old = FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(8)));
-    String prefix = BatchFileConstants.ENCRYPTED_EXPORT_PREFIX;
-    Path abandoned = PrivateTempFiles.createTempFile(prefix, ".bin");
-    Path resumable = PrivateTempFiles.createTempFile("batch-export-resumable-", ".part");
-    Files.setLastModifiedTime(abandoned, old);
-    Files.setLastModifiedTime(resumable, old);
-    try (var active = PrivateTempFiles.createLockedTempFile(prefix, ".bin")) {
-      Files.setLastModifiedTime(active.path(), old);
-      StaleTempFileCleanup cleanup = new StaleTempFileCleanup(workerTempFileProperties(6L));
-      cleanup.cleanStaleTempFiles();
-      assertThat(abandoned).doesNotExist();
-      assertThat(resumable).exists();
-      assertThat(active.path()).exists();
+    @Test
+    @DisplayName("清理过期文件时, 仍被占用与可续传的文件必须保留, 孤立文件被删除")
+    void shouldPreserveActiveAndResumableFiles_whenCleaningStaleFiles() throws Exception {
+        originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
+        var old = FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(8)));
+        String prefix = BatchFileConstants.ENCRYPTED_EXPORT_PREFIX;
+        Path abandoned = PrivateTempFiles.createTempFile(prefix, ".bin");
+        Path resumable = PrivateTempFiles.createTempFile("batch-export-resumable-", ".part");
+        Files.setLastModifiedTime(abandoned, old);
+        Files.setLastModifiedTime(resumable, old);
+        try (var active = PrivateTempFiles.createLockedTempFile(prefix, ".bin")) {
+            Files.setLastModifiedTime(active.path(), old);
+            StaleTempFileCleanup cleanup = new StaleTempFileCleanup(workerTempFileProperties(6L));
+            cleanup.cleanStaleTempFiles();
+            assertThat(abandoned).doesNotExist();
+            assertThat(resumable).exists();
+            assertThat(active.path()).exists();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("只删除超过保留时长且带批处理前缀的临时文件, 未过期文件与无关文件不受影响")
-  void shouldDeleteOnlyBatchPrefixedFilesOlderThanCutoff() throws Exception {
-    originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
-    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
+    @Test
+    @DisplayName("只删除超过保留时长且带批处理前缀的临时文件, 未过期文件与无关文件不受影响")
+    void shouldDeleteOnlyBatchPrefixedFilesOlderThanCutoff() throws Exception {
+        originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
 
-    Path oldBatch = tempDir.resolve("batch-import-old.tmp");
-    Files.writeString(oldBatch, "x");
-    Files.setLastModifiedTime(
-        oldBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
+        Path oldBatch = tempDir.resolve("batch-import-old.tmp");
+        Files.writeString(oldBatch, "x");
+        Files.setLastModifiedTime(
+                oldBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
 
-    Path oldPrivateImport =
-        PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
-    Files.setLastModifiedTime(
-        oldPrivateImport, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
+        Path oldPrivateImport = PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
+        Files.setLastModifiedTime(
+                oldPrivateImport, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
 
-    Path newPrivateImport =
-        PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
+        Path newPrivateImport = PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
 
-    Path newBatch = tempDir.resolve("batch-export-new.tmp");
-    Files.writeString(newBatch, "y");
-    Files.setLastModifiedTime(
-        newBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(1))));
+        Path newBatch = tempDir.resolve("batch-export-new.tmp");
+        Files.writeString(newBatch, "y");
+        Files.setLastModifiedTime(
+                newBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(1))));
 
-    Path oldOther = tempDir.resolve("not-batch-old.tmp");
-    Files.writeString(oldOther, "z");
-    Files.setLastModifiedTime(
-        oldOther, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(10))));
+        Path oldOther = tempDir.resolve("not-batch-old.tmp");
+        Files.writeString(oldOther, "z");
+        Files.setLastModifiedTime(
+                oldOther, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(10))));
 
-    StaleTempFileCleanup cleanup = new StaleTempFileCleanup(workerTempFileProperties(6L));
-    cleanup.cleanStaleTempFiles();
+        StaleTempFileCleanup cleanup = new StaleTempFileCleanup(workerTempFileProperties(6L));
+        cleanup.cleanStaleTempFiles();
 
-    assertThat(Files.exists(oldBatch)).isFalse();
-    assertThat(oldPrivateImport).doesNotExist();
-    assertThat(newPrivateImport).exists();
-    assertThat(Files.exists(newBatch)).isTrue();
-    assertThat(Files.exists(oldOther)).isTrue();
-  }
+        assertThat(Files.exists(oldBatch)).isFalse();
+        assertThat(oldPrivateImport).doesNotExist();
+        assertThat(newPrivateImport).exists();
+        assertThat(Files.exists(newBatch)).isTrue();
+        assertThat(Files.exists(oldOther)).isTrue();
+    }
 
-  private static WorkerTempFileProperties workerTempFileProperties(long staleTempFileHours) {
-    WorkerTempFileProperties properties = new WorkerTempFileProperties();
-    properties.setStaleTempFileHours(staleTempFileHours);
-    return properties;
-  }
+    private static WorkerTempFileProperties workerTempFileProperties(long staleTempFileHours) {
+        WorkerTempFileProperties properties = new WorkerTempFileProperties();
+        properties.setStaleTempFileHours(staleTempFileHours);
+        return properties;
+    }
 }

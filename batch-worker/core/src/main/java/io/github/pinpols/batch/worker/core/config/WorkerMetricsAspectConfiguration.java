@@ -11,9 +11,9 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnClass({TimedAspect.class, MeterRegistry.class})
 public class WorkerMetricsAspectConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public TimedAspect timedAspect(MeterRegistry meterRegistry) {
-    return new TimedAspect(meterRegistry);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public TimedAspect timedAspect(MeterRegistry meterRegistry) {
+        return new TimedAspect(meterRegistry);
+    }
 }

@@ -39,108 +39,107 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {
 
-  private static final TempFileCreationStrategy PRIVATE_TEMP_FILES =
-      new TempFileCreationStrategy() {
+    private static final TempFileCreationStrategy PRIVATE_TEMP_FILES = new TempFileCreationStrategy() {
         @Override
         public File createTempFile(String prefix, String suffix) throws IOException {
-          return PrivateTempFiles.createTempFile(prefix, suffix).toFile();
+            return PrivateTempFiles.createTempFile(prefix, suffix).toFile();
         }
 
         @Override
         public File createTempDirectory(String prefix) throws IOException {
-          return PrivateTempFiles.createTempDirectory(prefix).toFile();
+            return PrivateTempFiles.createTempDirectory(prefix).toFile();
         }
-      };
+    };
 
-  public ExcelExportFormat(ObjectMapper objectMapper) {
-    super(objectMapper);
-  }
-
-  @Override
-  public String formatType() {
-    return FileTemplateFormat.EXCEL.code();
-  }
-
-  @Override
-  public long generate(ExportFormatContext ctx) throws Exception {
-    // POI 的 sheet XML 与模板 ZIP 同样包含业务数据；线程局部作用域覆盖生成和关闭，随后恢复原策略。
-    GenerationResult result = TempFile.withStrategy(PRIVATE_TEMP_FILES, () -> {
-      try {
-        long recordCount = generateWorkbook(ctx);
-        return new GenerationResult(recordCount, null);
-      } catch (Exception failure) {
-        return new GenerationResult(0, failure);
-      }
-    });
-    if (EmptyChecks.isNotNull(result.failure())) {
-      throw result.failure();
-    }
-    return result.recordCount();
-  }
-
-  // Supplier 不声明受检异常，通过结果传回原异常，避免改变上层失败分类。
-  private record GenerationResult(long recordCount, Exception failure) {}
-
-  private long generateWorkbook(ExportFormatContext ctx) throws Exception {
-    Long batchIdLong;
-    if (EmptyChecks.isNull(ctx.batchId())) {
-      batchIdLong = null;
-    } else {
-      Object rawBatchId = ctx.batchId();
-      String batchIdText = String.valueOf(rawBatchId);
-      batchIdLong = Long.valueOf(batchIdText);
-    }
-    ExportDataPlugin.DetailPage firstPage =
-        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
-    List<ColumnLayout> columns =
-        resolveExcelColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
-    DelimitedFormatConfig formatConfig =
-        resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
-    Map<String, Object> templateConfig = ctx.dataCtx().templateConfig();
-    ExcelStyleOptions styleOptions = ExcelStyleOptions.from(templateConfig, this);
-    int rowsPerSheet = resolveRowsPerSheet(templateConfig);
-    String sheetName = resolveSheetName(templateConfig);
-    int headerRows = Math.max(1, formatConfig.headerRows());
-
-    // 文件创建只经过私有权限边界；写流不得隐式新建文件或跟随符号链接。
-    if (Files.notExists(ctx.generatedFile(), LinkOption.NOFOLLOW_LINKS)) {
-      OwnerOnlyFiles.createFile(ctx.generatedFile());
-    } else {
-      OwnerOnlyFiles.protectExisting(ctx.generatedFile(), false);
+    public ExcelExportFormat(ObjectMapper objectMapper) {
+        super(objectMapper);
     }
 
-    // workbook 必须纳入 try-with-resources:旧写法把 workbook 放外面 + finally close,
-    // 若 Files.newOutputStream 抛异常(磁盘满 / 权限),控制流不进 try/finally → workbook
-    // 已创建的 /tmp sheet-backing temp file 永不清理。Java 9+ try-with-resources 支持
-    // 资源变量复用,把 workbook 与 outputStream 一起放进 try() 即可保证两者都被关闭。
-    try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
-        OutputStream outputStream = Files.newOutputStream(
-            ctx.generatedFile(),
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE,
-            LinkOption.NOFOLLOW_LINKS)) {
-      ExcelSheetWriter writer = new ExcelSheetWriter(
-          workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
-      long recordCount = ExportPageGenerationCoordinator.generatePaged(
-          ctx, firstPage, null, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
-      workbook.write(outputStream);
-      return recordCount;
+    @Override
+    public String formatType() {
+        return FileTemplateFormat.EXCEL.code();
     }
-  }
 
-  /**
-   * 解析每 sheet 数据行数阈值。未配置 / ≤0 = 不拆(单 sheet,历史行为);配置时夹在 {@code [1, 1048575]}(.xlsx 单 sheet 1048576
-   * 行硬限,留一行给表头)。
-   */
-  private int resolveRowsPerSheet(Map<String, Object> templateConfig) {
-    if (templateConfig == null || templateConfig.isEmpty()) {
-      return 0;
+    @Override
+    public long generate(ExportFormatContext ctx) throws Exception {
+        // POI 的 sheet XML 与模板 ZIP 同样包含业务数据；线程局部作用域覆盖生成和关闭，随后恢复原策略。
+        GenerationResult result = TempFile.withStrategy(PRIVATE_TEMP_FILES, () -> {
+            try {
+                long recordCount = generateWorkbook(ctx);
+                return new GenerationResult(recordCount, null);
+            } catch (Exception failure) {
+                return new GenerationResult(0, failure);
+            }
+        });
+        if (EmptyChecks.isNotNull(result.failure())) {
+            throw result.failure();
+        }
+        return result.recordCount();
     }
-    Integer raw = integerValue(
-        firstNonNull(templateConfig.get("rows_per_sheet"), templateConfig.get("rowsPerSheet")));
-    if (raw == null || raw <= 0) {
-      return 0;
+
+    // Supplier 不声明受检异常，通过结果传回原异常，避免改变上层失败分类。
+    private record GenerationResult(long recordCount, Exception failure) {}
+
+    private long generateWorkbook(ExportFormatContext ctx) throws Exception {
+        Long batchIdLong;
+        if (EmptyChecks.isNull(ctx.batchId())) {
+            batchIdLong = null;
+        } else {
+            Object rawBatchId = ctx.batchId();
+            String batchIdText = String.valueOf(rawBatchId);
+            batchIdLong = Long.valueOf(batchIdText);
+        }
+        ExportDataPlugin.DetailPage firstPage =
+                ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+        List<ColumnLayout> columns =
+                resolveExcelColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
+        DelimitedFormatConfig formatConfig =
+                resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
+        Map<String, Object> templateConfig = ctx.dataCtx().templateConfig();
+        ExcelStyleOptions styleOptions = ExcelStyleOptions.from(templateConfig, this);
+        int rowsPerSheet = resolveRowsPerSheet(templateConfig);
+        String sheetName = resolveSheetName(templateConfig);
+        int headerRows = Math.max(1, formatConfig.headerRows());
+
+        // 文件创建只经过私有权限边界；写流不得隐式新建文件或跟随符号链接。
+        if (Files.notExists(ctx.generatedFile(), LinkOption.NOFOLLOW_LINKS)) {
+            OwnerOnlyFiles.createFile(ctx.generatedFile());
+        } else {
+            OwnerOnlyFiles.protectExisting(ctx.generatedFile(), false);
+        }
+
+        // workbook 必须纳入 try-with-resources:旧写法把 workbook 放外面 + finally close,
+        // 若 Files.newOutputStream 抛异常(磁盘满 / 权限),控制流不进 try/finally → workbook
+        // 已创建的 /tmp sheet-backing temp file 永不清理。Java 9+ try-with-resources 支持
+        // 资源变量复用,把 workbook 与 outputStream 一起放进 try() 即可保证两者都被关闭。
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+                OutputStream outputStream = Files.newOutputStream(
+                        ctx.generatedFile(),
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.WRITE,
+                        LinkOption.NOFOLLOW_LINKS)) {
+            ExcelSheetWriter writer =
+                    new ExcelSheetWriter(workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
+            long recordCount = ExportPageGenerationCoordinator.generatePaged(
+                    ctx, firstPage, null, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
+            workbook.write(outputStream);
+            return recordCount;
+        }
     }
-    return Math.min(raw, ExcelSheetWriter.MAX_DATA_ROWS_PER_SHEET);
-  }
+
+    /**
+     * 解析每 sheet 数据行数阈值。未配置 / ≤0 = 不拆(单 sheet,历史行为);配置时夹在 {@code [1, 1048575]}(.xlsx 单 sheet 1048576
+     * 行硬限,留一行给表头)。
+     */
+    private int resolveRowsPerSheet(Map<String, Object> templateConfig) {
+        if (templateConfig == null || templateConfig.isEmpty()) {
+            return 0;
+        }
+        Integer raw =
+                integerValue(firstNonNull(templateConfig.get("rows_per_sheet"), templateConfig.get("rowsPerSheet")));
+        if (raw == null || raw <= 0) {
+            return 0;
+        }
+        return Math.min(raw, ExcelSheetWriter.MAX_DATA_ROWS_PER_SHEET);
+    }
 }

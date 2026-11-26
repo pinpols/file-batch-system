@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/ops/wait-relationships")
 @RequiredArgsConstructor
 public class WaitRelationshipInternalController {
-  private final WaitRelationshipReadService service;
+    private final WaitRelationshipReadService service;
 
-  @GetMapping
-  public WaitRelationshipPage list(@Valid @ModelAttribute WaitRelationshipQuery query) {
-    return service.list(query);
-  }
+    @GetMapping
+    public WaitRelationshipPage list(@Valid @ModelAttribute WaitRelationshipQuery query) {
+        return service.list(query);
+    }
 }

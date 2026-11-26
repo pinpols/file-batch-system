@@ -23,47 +23,49 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @EnableConfigurationProperties({
-  KafkaNamespaceProperties.class,
-  StorageBackendProperties.class,
-  FilesystemStorageProperties.class
+    KafkaNamespaceProperties.class,
+    StorageBackendProperties.class,
+    FilesystemStorageProperties.class
 })
 public final class ImportIngressOwnershipIdentity {
 
-  private final KafkaNamespaceProperties kafka;
-  private final StorageBackendProperties backendProperties;
-  private final FilesystemStorageProperties filesystem;
+    private final KafkaNamespaceProperties kafka;
+    private final StorageBackendProperties backendProperties;
+    private final FilesystemStorageProperties filesystem;
 
-  /** 与既有扫描协调范围使用相同字段、排序和编码，确保升级后身份不变。 */
-  public String storageId(S3StorageProperties properties, ObjectMapper objectMapper) {
-    String namespace = kafka.getNamespace().trim();
-    String backend = backendProperties.getBackend().trim().toLowerCase(Locale.ROOT);
-    String storage = "filesystem".equals(backend)
-        ? Path.of(Objects.requireNonNullElse(filesystem.getRoot(), "."))
-            .toAbsolutePath()
-            .normalize()
-            .toString()
-        : Objects.requireNonNullElse(properties.getEndpoint(), "").trim().replaceAll("/+$", "");
-    Map<String, Object> identity = new TreeMap<>();
-    identity.put("namespace", namespace);
-    identity.put("backend", backend);
-    identity.put("storage", storage);
-    identity.put("bucket", properties.getBucket());
-    return digest(identity, objectMapper);
-  }
-
-  public static String scopeId(String storageId, String prefix, ObjectMapper objectMapper) {
-    Map<String, Object> identity = new TreeMap<>();
-    identity.put("storage", storageId);
-    identity.put("prefix", Objects.requireNonNullElse(prefix, ""));
-    return digest(identity, objectMapper);
-  }
-
-  private static String digest(Map<String, Object> value, ObjectMapper objectMapper) {
-    try {
-      byte[] encoded = objectMapper.writeValueAsString(value).getBytes(StandardCharsets.UTF_8);
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
-    } catch (IOException | NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("无法计算入站扫描范围身份", exception);
+    /** 与既有扫描协调范围使用相同字段、排序和编码，确保升级后身份不变。 */
+    public String storageId(S3StorageProperties properties, ObjectMapper objectMapper) {
+        String namespace = kafka.getNamespace().trim();
+        String backend = backendProperties.getBackend().trim().toLowerCase(Locale.ROOT);
+        String storage = "filesystem".equals(backend)
+                ? Path.of(Objects.requireNonNullElse(filesystem.getRoot(), "."))
+                        .toAbsolutePath()
+                        .normalize()
+                        .toString()
+                : Objects.requireNonNullElse(properties.getEndpoint(), "")
+                        .trim()
+                        .replaceAll("/+$", "");
+        Map<String, Object> identity = new TreeMap<>();
+        identity.put("namespace", namespace);
+        identity.put("backend", backend);
+        identity.put("storage", storage);
+        identity.put("bucket", properties.getBucket());
+        return digest(identity, objectMapper);
     }
-  }
+
+    public static String scopeId(String storageId, String prefix, ObjectMapper objectMapper) {
+        Map<String, Object> identity = new TreeMap<>();
+        identity.put("storage", storageId);
+        identity.put("prefix", Objects.requireNonNullElse(prefix, ""));
+        return digest(identity, objectMapper);
+    }
+
+    private static String digest(Map<String, Object> value, ObjectMapper objectMapper) {
+        try {
+            byte[] encoded = objectMapper.writeValueAsString(value).getBytes(StandardCharsets.UTF_8);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
+        } catch (IOException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("无法计算入站扫描范围身份", exception);
+        }
+    }
 }

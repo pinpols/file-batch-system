@@ -47,303 +47,295 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("处理步骤执行适配器:流水线描述、插件码传递、失败错误本地化与成功信封的计数归一")
 class ProcessStepExecutionAdapterTest {
 
-  private static final PipelineRunFence RUN =
-      new PipelineRunFence(20L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
+    private static final PipelineRunFence RUN = new PipelineRunFence(20L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
 
-  @Mock
-  private ProcessStageExecutor processStageExecutor;
+    @Mock
+    private ProcessStageExecutor processStageExecutor;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private PlatformFileRecordRepository fileRecords;
+    @Mock
+    private PlatformFileRecordRepository fileRecords;
 
-  @Mock
-  private PipelineStepTemplateProvider stepTemplateProvider;
+    @Mock
+    private PipelineStepTemplateProvider stepTemplateProvider;
 
-  @Test
-  @DisplayName("适配器描述处理流水线:类型为处理,起始阶段为准备阶段")
-  @SuppressWarnings("unchecked")
-  void shouldExposeProcessPipelineDescriptor_whenQueried() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    @Test
+    @DisplayName("适配器描述处理流水线:类型为处理,起始阶段为准备阶段")
+    @SuppressWarnings("unchecked")
+    void shouldExposeProcessPipelineDescriptor_whenQueried() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
 
-    assertThat(adapter.pipelineType()).isEqualTo(ProcessWorkerType.PROCESS);
-    assertThat(adapter.initialStage()).isEqualTo(ProcessStage.PREPARE.name());
-  }
+        assertThat(adapter.pipelineType()).isEqualTo(ProcessWorkerType.PROCESS);
+        assertThat(adapter.initialStage()).isEqualTo(ProcessStage.PREPARE.name());
+    }
 
-  @Test
-  @DisplayName("执行时创建流水线实例,把载荷中的插件码放进上下文,并标记流水线准备阶段成功")
-  @SuppressWarnings("unchecked")
-  void execute_createsProcessPipelineAndPassesPluginCodeFromPayload() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
-    when(processStageExecutor.execute(any()))
-        .thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
-    StepExecutionRequest request = new StepExecutionRequest(
-        "tenant-a",
-        "job-process",
-        "PROCESS",
-        "worker-1",
-        Map.of(
-            "payload",
-            "{\"processImplCode\":\"dailySummary\","
-                + "\"systemPipelineStepParams\":{\"COMPUTE\":{\"targetTable\":\"daily_summary\"}}}",
-            "systemPipelineCode",
-            "PROCESS",
-            "systemPipelineVersion",
-            1));
+    @Test
+    @DisplayName("执行时创建流水线实例,把载荷中的插件码放进上下文,并标记流水线准备阶段成功")
+    @SuppressWarnings("unchecked")
+    void execute_createsProcessPipelineAndPassesPluginCodeFromPayload() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
+        when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
+        when(processStageExecutor.execute(any())).thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
+        StepExecutionRequest request = new StepExecutionRequest(
+                "tenant-a",
+                "job-process",
+                "PROCESS",
+                "worker-1",
+                Map.of(
+                        "payload",
+                        "{\"processImplCode\":\"dailySummary\","
+                                + "\"systemPipelineStepParams\":{\"COMPUTE\":{\"targetTable\":\"daily_summary\"}}}",
+                        "systemPipelineCode",
+                        "PROCESS",
+                        "systemPipelineVersion",
+                        1));
 
-    StepExecutionResponse response = adapter.execute(request);
+        StepExecutionResponse response = adapter.execute(request);
 
-    assertThat(response.success()).isTrue();
-    assertThat(response.code()).isEqualTo("SUCCESS");
-    ArgumentCaptor<ProcessJobContext> contextCaptor =
-        ArgumentCaptor.forClass(ProcessJobContext.class);
-    verify(processStageExecutor).execute(contextCaptor.capture());
-    assertThat(contextCaptor.getValue().getAttributes())
-        .containsEntry("processImplCode", "dailySummary")
-        .containsEntry(
-            ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, Map.of("targetTable", "daily_summary"));
-    verify(pipelineRuns).markPipelineSuccess(RUN, "PREPARE", "PREPARE");
-  }
+        assertThat(response.success()).isTrue();
+        assertThat(response.code()).isEqualTo("SUCCESS");
+        ArgumentCaptor<ProcessJobContext> contextCaptor = ArgumentCaptor.forClass(ProcessJobContext.class);
+        verify(processStageExecutor).execute(contextCaptor.capture());
+        assertThat(contextCaptor.getValue().getAttributes())
+                .containsEntry("processImplCode", "dailySummary")
+                .containsEntry(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, Map.of("targetTable", "daily_summary"));
+        verify(pipelineRuns).markPipelineSuccess(RUN, "PREPARE", "PREPARE");
+    }
 
-  @Test
-  @DisplayName("回放预检使用与执行相同的 PROCESS 插件和合并后 COMPUTE 参数")
-  @SuppressWarnings("unchecked")
-  void resolveReplayCapability_usesResolvedComputeDefinitionAndPayloadPlugin() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("dailySummary");
-    when(processStageExecutor.replayCapability(anyList(), anyMap())).thenReturn(expected);
-    StepExecutionRequest request = new StepExecutionRequest(
-        "tenant-a",
-        "job-process",
-        "PROCESS",
-        "worker-1",
-        Map.of(
-            "payload",
-            "{\"processImplCode\":\"dailySummary\","
-                + "\"systemPipelineStepParams\":{\"COMPUTE\":{\"targetTable\":\"daily_summary\"}}}",
-            "systemPipelineCode",
-            "PROCESS",
-            "systemPipelineVersion",
-            1));
+    @Test
+    @DisplayName("回放预检使用与执行相同的 PROCESS 插件和合并后 COMPUTE 参数")
+    @SuppressWarnings("unchecked")
+    void resolveReplayCapability_usesResolvedComputeDefinitionAndPayloadPlugin() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
+        ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("dailySummary");
+        when(processStageExecutor.replayCapability(anyList(), anyMap())).thenReturn(expected);
+        StepExecutionRequest request = new StepExecutionRequest(
+                "tenant-a",
+                "job-process",
+                "PROCESS",
+                "worker-1",
+                Map.of(
+                        "payload",
+                        "{\"processImplCode\":\"dailySummary\","
+                                + "\"systemPipelineStepParams\":{\"COMPUTE\":{\"targetTable\":\"daily_summary\"}}}",
+                        "systemPipelineCode",
+                        "PROCESS",
+                        "systemPipelineVersion",
+                        1));
 
-    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+        ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
 
-    assertThat(actual).isEqualTo(expected);
-    ArgumentCaptor<List<PipelineStepDefinition>> stepsCaptor = ArgumentCaptor.forClass(List.class);
-    ArgumentCaptor<Map<String, Object>> attributesCaptor = ArgumentCaptor.forClass(Map.class);
-    verify(processStageExecutor)
-        .replayCapability(stepsCaptor.capture(), attributesCaptor.capture());
-    assertThat(stepsCaptor.getValue())
-        .filteredOn(step -> "COMPUTE".equals(step.stageCode()))
-        .singleElement()
-        .extracting(PipelineStepDefinition::stepParams)
-        .isEqualTo(Map.of("targetTable", "daily_summary"));
-    assertThat(attributesCaptor.getValue()).containsEntry("processImplCode", "dailySummary");
-  }
+        assertThat(actual).isEqualTo(expected);
+        ArgumentCaptor<List<PipelineStepDefinition>> stepsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<Map<String, Object>> attributesCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(processStageExecutor).replayCapability(stepsCaptor.capture(), attributesCaptor.capture());
+        assertThat(stepsCaptor.getValue())
+                .filteredOn(step -> "COMPUTE".equals(step.stageCode()))
+                .singleElement()
+                .extracting(PipelineStepDefinition::stepParams)
+                .isEqualTo(Map.of("targetTable", "daily_summary"));
+        assertThat(attributesCaptor.getValue()).containsEntry("processImplCode", "dailySummary");
+    }
 
-  @Test
-  @DisplayName("阶段失败结果带本地化业务异常时,响应保留错误码、错误键与参数摘要,且默认不进入补偿")
-  @SuppressWarnings("unchecked")
-  void execute_preservesLocalizedErrorFromFailedStageResult() {
-    ObjectMapper objectMapper = new ObjectMapper();
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        objectMapper,
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
-    when(processStageExecutor.execute(any()))
-        .thenReturn(List.of(ProcessStageResult.failure(
-            ProcessStage.PREPARE,
-            "PROCESS_PREPARE_FAILED",
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"),
-            objectMapper)));
-    StepExecutionRequest request = new StepExecutionRequest(
-        "tenant-a",
-        "job-process",
-        "PROCESS",
-        "worker-1",
-        Map.of("payload", "{}", "systemPipelineCode", "PROCESS", "systemPipelineVersion", 1));
+    @Test
+    @DisplayName("阶段失败结果带本地化业务异常时,响应保留错误码、错误键与参数摘要,且默认不进入补偿")
+    @SuppressWarnings("unchecked")
+    void execute_preservesLocalizedErrorFromFailedStageResult() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                objectMapper,
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
+        when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
+        when(processStageExecutor.execute(any()))
+                .thenReturn(List.of(ProcessStageResult.failure(
+                        ProcessStage.PREPARE,
+                        "PROCESS_PREPARE_FAILED",
+                        BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"),
+                        objectMapper)));
+        StepExecutionRequest request = new StepExecutionRequest(
+                "tenant-a",
+                "job-process",
+                "PROCESS",
+                "worker-1",
+                Map.of("payload", "{}", "systemPipelineCode", "PROCESS", "systemPipelineVersion", 1));
 
-    StepExecutionResponse response = adapter.execute(request);
+        StepExecutionResponse response = adapter.execute(request);
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("PROCESS_PREPARE_FAILED");
-    assertThat(response.message()).isEqualTo("error.common.invalid_argument");
-    assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
-    assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
-    // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
-    verify(pipelineRuns).markPipelineFailed(eq(RUN), any(), any());
-    verify(pipelineRuns, never()).markPipelineCompensating(any());
-  }
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("PROCESS_PREPARE_FAILED");
+        assertThat(response.message()).isEqualTo("error.common.invalid_argument");
+        assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
+        assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
+        // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
+        verify(pipelineRuns).markPipelineFailed(eq(RUN), any(), any());
+        verify(pipelineRuns, never()).markPipelineCompensating(any());
+    }
 
-  @Test
-  @DisplayName("处理流水线多个阶段失败时保持报告首个失败")
-  @SuppressWarnings("unchecked")
-  void execute_preservesFirstFailureForOtherWorker() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
-    when(processStageExecutor.execute(any()))
-        .thenReturn(List.of(
-            ProcessStageResult.failure(ProcessStage.COMPUTE, "FIRST_FAILURE", "first"),
-            ProcessStageResult.failure(ProcessStage.VALIDATE, "SECOND_FAILURE", "second")));
-    StepExecutionRequest executionRequest = new StepExecutionRequest(
-        "tenant-a",
-        "job-process",
-        "PROCESS",
-        "worker-1",
-        Map.of("payload", "{}", "systemPipelineCode", "PROCESS", "systemPipelineVersion", 1));
+    @Test
+    @DisplayName("处理流水线多个阶段失败时保持报告首个失败")
+    @SuppressWarnings("unchecked")
+    void execute_preservesFirstFailureForOtherWorker() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
+        when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
+        when(processStageExecutor.execute(any()))
+                .thenReturn(List.of(
+                        ProcessStageResult.failure(ProcessStage.COMPUTE, "FIRST_FAILURE", "first"),
+                        ProcessStageResult.failure(ProcessStage.VALIDATE, "SECOND_FAILURE", "second")));
+        StepExecutionRequest executionRequest = new StepExecutionRequest(
+                "tenant-a",
+                "job-process",
+                "PROCESS",
+                "worker-1",
+                Map.of("payload", "{}", "systemPipelineCode", "PROCESS", "systemPipelineVersion", 1));
 
-    StepExecutionResponse response = adapter.execute(executionRequest);
+        StepExecutionResponse response = adapter.execute(executionRequest);
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("FIRST_FAILURE");
-  }
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("FIRST_FAILURE");
+    }
 
-  @Test
-  @DisplayName("Worker 收到与实现类型不一致的任务时拒绝执行且不创建 Pipeline 实例")
-  @SuppressWarnings("unchecked")
-  void shouldRejectMismatchedTaskTypeBeforeCreatingPipelineInstance() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    @Test
+    @DisplayName("Worker 收到与实现类型不一致的任务时拒绝执行且不创建 Pipeline 实例")
+    @SuppressWarnings("unchecked")
+    void shouldRejectMismatchedTaskTypeBeforeCreatingPipelineInstance() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
 
-    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
-        "tenant-a", "job-process", "EXPORT", "worker-1", Map.of("payload", "{}")));
+        StepExecutionResponse response = adapter.execute(
+                new StepExecutionRequest("tenant-a", "job-process", "EXPORT", "worker-1", Map.of("payload", "{}")));
 
-    assertThat(response.success()).isFalse();
-    verify(pipelineRuns, never()).createPipelineInstance(any());
-    verify(processStageExecutor, never()).execute(any());
-  }
+        assertThat(response.success()).isFalse();
+        verify(pipelineRuns, never()).createPipelineInstance(any());
+        verify(processStageExecutor, never()).execute(any());
+    }
 
-  @Test
-  @SuppressWarnings("unchecked")
-  @DisplayName("ADR-041 Phase1.3:buildSuccessResponse 输出归一化 count 信封 inputCount/outputCount")
-  void buildSuccessResponse_emitsNormalizedCountEnvelope() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    ProcessJobContext context = new ProcessJobContext();
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put("processedCount", 1000L);
-    attributes.put("publishedCount", 950L);
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("ADR-041 Phase1.3:buildSuccessResponse 输出归一化 count 信封 inputCount/outputCount")
+    void buildSuccessResponse_emitsNormalizedCountEnvelope() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        ProcessJobContext context = new ProcessJobContext();
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("processedCount", 1000L);
+        attributes.put("publishedCount", 950L);
 
-    adapter.buildSuccessResponse(context, List.of(), attributes);
+        adapter.buildSuccessResponse(context, List.of(), attributes);
 
-    Map<String, Object> outputs =
-        (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
-    assertThat(outputs).containsEntry("inputCount", 1000L).containsEntry("outputCount", 950L);
-  }
+        Map<String, Object> outputs = (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+        assertThat(outputs).containsEntry("inputCount", 1000L).containsEntry("outputCount", 950L);
+    }
 
-  @Test
-  @SuppressWarnings("unchecked")
-  @DisplayName("publishedCount 缺省时 outputCount 回落 stagedCount")
-  void buildSuccessResponse_outputCountFallsBackToStaged() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    ProcessJobContext context = new ProcessJobContext();
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put("processedCount", 1000L);
-    attributes.put("stagedCount", 1000L);
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("publishedCount 缺省时 outputCount 回落 stagedCount")
+    void buildSuccessResponse_outputCountFallsBackToStaged() {
+        ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+                processStageExecutor,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                stepTemplateProvider,
+                (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+                (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+        ProcessJobContext context = new ProcessJobContext();
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("processedCount", 1000L);
+        attributes.put("stagedCount", 1000L);
 
-    adapter.buildSuccessResponse(context, List.of(), attributes);
+        adapter.buildSuccessResponse(context, List.of(), attributes);
 
-    Map<String, Object> outputs =
-        (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
-    assertThat(outputs).containsEntry("outputCount", 1000L);
-  }
+        Map<String, Object> outputs = (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+        assertThat(outputs).containsEntry("outputCount", 1000L);
+    }
 
-  private PipelineStepDefinition processStep() {
-    return new PipelineStepDefinition(
-        1L,
-        "PROCESS_PREPARE",
-        "Process Prepare",
-        ProcessStage.PREPARE.name(),
-        1,
-        "PROCESS_PREPARE",
-        Map.of(),
-        0,
-        "NONE",
-        0,
-        true);
-  }
+    private PipelineStepDefinition processStep() {
+        return new PipelineStepDefinition(
+                1L,
+                "PROCESS_PREPARE",
+                "Process Prepare",
+                ProcessStage.PREPARE.name(),
+                1,
+                "PROCESS_PREPARE",
+                Map.of(),
+                0,
+                "NONE",
+                0,
+                true);
+    }
 
-  private List<PipelineStepTemplate> processTemplates() {
-    return List.of(
-        template("PREPARE", 1),
-        template("COMPUTE", 2),
-        template("VALIDATE", 3),
-        template("COMMIT", 4),
-        template("FEEDBACK", 5));
-  }
+    private List<PipelineStepTemplate> processTemplates() {
+        return List.of(
+                template("PREPARE", 1),
+                template("COMPUTE", 2),
+                template("VALIDATE", 3),
+                template("COMMIT", 4),
+                template("FEEDBACK", 5));
+    }
 
-  private PipelineStepTemplate template(String stage, int order) {
-    return PipelineStepTemplate.builder()
-        .stepCode("process-" + stage.toLowerCase())
-        .stepName(stage)
-        .stageCode(stage)
-        .stepOrder(order)
-        .implCode("process-" + stage.toLowerCase())
-        .stepParams(Map.of())
-        .timeoutSeconds(0)
-        .retryPolicy("NONE")
-        .retryMaxCount(0)
-        .enabled(true)
-        .build();
-  }
+    private PipelineStepTemplate template(String stage, int order) {
+        return PipelineStepTemplate.builder()
+                .stepCode("process-" + stage.toLowerCase())
+                .stepName(stage)
+                .stageCode(stage)
+                .stepOrder(order)
+                .implCode("process-" + stage.toLowerCase())
+                .stepParams(Map.of())
+                .timeoutSeconds(0)
+                .retryPolicy("NONE")
+                .retryMaxCount(0)
+                .enabled(true)
+                .build();
+    }
 }

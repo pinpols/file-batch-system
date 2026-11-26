@@ -33,38 +33,37 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("SQL 一致性门禁,在空库上校验迁移脚本完整回放,核心唯一约束存在以及冲突写入幂等")
 class SqlConsistencyIntegrationTest {
 
-  @Container
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      TestPostgresContainers.create("batch_sql_guard");
+    @Container
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create("batch_sql_guard");
 
-  @Test
-  @DisplayName("空库上完整回放迁移后关键唯一约束均存在,且同一冲突写入重复执行不报错")
-  void shouldApplyMigration_whenVerifyingKeyConstraintsAndUpsertIdempotency() throws Exception {
-    Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"))
-        .load()
-        .migrate();
+    @Test
+    @DisplayName("空库上完整回放迁移后关键唯一约束均存在,且同一冲突写入重复执行不报错")
+    void shouldApplyMigration_whenVerifyingKeyConstraintsAndUpsertIdempotency() throws Exception {
+        Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas("batch", "quartz")
+                .defaultSchema("batch")
+                .locations("classpath:db/migration")
+                .configuration(Map.of("flyway.postgresql.transactional.lock", "false"))
+                .load()
+                .migrate();
 
-    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
-      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-      // V62: uk_job_instance_tenant_dedup 替换为 (tenant_id, dedup_key, run_attempt) 三元
-      assertUniquePresent(jdbc, "job_instance", "uk_job_instance_tenant_dedup_attempt");
-      assertUniquePresent(jdbc, "outbox_event", "uk_outbox_event_key");
-      assertUniquePresent(jdbc, "job_definition", "uk_job_definition_tenant_code");
-      assertColumnLength(jdbc, "file_audit_log", "operator_id", 128);
+        try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            // V62: uk_job_instance_tenant_dedup 替换为 (tenant_id, dedup_key, run_attempt) 三元
+            assertUniquePresent(jdbc, "job_instance", "uk_job_instance_tenant_dedup_attempt");
+            assertUniquePresent(jdbc, "outbox_event", "uk_outbox_event_key");
+            assertUniquePresent(jdbc, "job_definition", "uk_job_definition_tenant_code");
+            assertColumnLength(jdbc, "file_audit_log", "operator_id", 128);
 
-      runRuntimeParameterUpsertProbe(dataSource);
+            runRuntimeParameterUpsertProbe(dataSource);
+        }
     }
-  }
 
-  private static void assertUniquePresent(JdbcTemplate jdbc, String table, String constraintName) {
-    final String selectCountSql = """
+    private static void assertUniquePresent(JdbcTemplate jdbc, String table, String constraintName) {
+        final String selectCountSql = """
             select count(*) from information_schema.table_constraints tc
             where tc.table_schema = 'batch'
               and tc.table_name = ?
@@ -72,13 +71,12 @@ class SqlConsistencyIntegrationTest {
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
             """;
 
-    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, table, constraintName);
-    assertThat(cnt).isEqualTo(1L);
-  }
+        Long cnt = jdbc.queryForObject(selectCountSql, Long.class, table, constraintName);
+        assertThat(cnt).isEqualTo(1L);
+    }
 
-  private static void assertColumnLength(
-      JdbcTemplate jdbc, String table, String column, int expectedLength) {
-    final String selectCharacterMaximumLengthSql = """
+    private static void assertColumnLength(JdbcTemplate jdbc, String table, String column, int expectedLength) {
+        final String selectCharacterMaximumLengthSql = """
             select character_maximum_length
             from information_schema.columns
             where table_schema = 'batch'
@@ -86,13 +84,12 @@ class SqlConsistencyIntegrationTest {
               and column_name = ?
             """;
 
-    Integer actualLength =
-        jdbc.queryForObject(selectCharacterMaximumLengthSql, Integer.class, table, column);
-    assertThat(actualLength).isEqualTo(expectedLength);
-  }
+        Integer actualLength = jdbc.queryForObject(selectCharacterMaximumLengthSql, Integer.class, table, column);
+        assertThat(actualLength).isEqualTo(expectedLength);
+    }
 
-  private static void runRuntimeParameterUpsertProbe(DataSource dataSource) throws Exception {
-    final String insertBatchRuntimeDefaultParameterSql = """
+    private static void runRuntimeParameterUpsertProbe(DataSource dataSource) throws Exception {
+        final String insertBatchRuntimeDefaultParameterSql = """
           insert into batch.batch_runtime_default_parameter (
               module, parameter_key, default_value, value_type, yaml_path, description
           ) values (
@@ -102,10 +99,10 @@ class SqlConsistencyIntegrationTest {
           on conflict (module, parameter_key) do nothing
           """;
 
-    try (Connection c = dataSource.getConnection();
-        var st = c.createStatement()) {
-      st.execute(insertBatchRuntimeDefaultParameterSql);
-      st.execute(insertBatchRuntimeDefaultParameterSql);
+        try (Connection c = dataSource.getConnection();
+                var st = c.createStatement()) {
+            st.execute(insertBatchRuntimeDefaultParameterSql);
+            st.execute(insertBatchRuntimeDefaultParameterSql);
+        }
     }
-  }
 }

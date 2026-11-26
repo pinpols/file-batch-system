@@ -29,82 +29,81 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 public class WorkflowLaunchWaitResumeTrigger {
 
-  private final WorkflowLaunchWaitReconciler reconciler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final WorkflowLaunchWaitProperties properties;
-  private final Executor resumeExecutor;
-  private final Set<String> resumingTenants = ConcurrentHashMap.newKeySet();
+    private final WorkflowLaunchWaitReconciler reconciler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final WorkflowLaunchWaitProperties properties;
+    private final Executor resumeExecutor;
+    private final Set<String> resumingTenants = ConcurrentHashMap.newKeySet();
 
-  public WorkflowLaunchWaitResumeTrigger(
-      @Lazy WorkflowLaunchWaitReconciler reconciler,
-      OrchestratorGracefulShutdown gracefulShutdown,
-      WorkflowLaunchWaitProperties properties,
-      @Qualifier(OrchestratorAsyncConfiguration.LAUNCH_WAIT_RESUME_EXECUTOR)
-          Executor resumeExecutor) {
-    this.reconciler = reconciler;
-    this.gracefulShutdown = gracefulShutdown;
-    this.properties = properties;
-    this.resumeExecutor = resumeExecutor;
-  }
+    public WorkflowLaunchWaitResumeTrigger(
+            @Lazy WorkflowLaunchWaitReconciler reconciler,
+            OrchestratorGracefulShutdown gracefulShutdown,
+            WorkflowLaunchWaitProperties properties,
+            @Qualifier(OrchestratorAsyncConfiguration.LAUNCH_WAIT_RESUME_EXECUTOR) Executor resumeExecutor) {
+        this.reconciler = reconciler;
+        this.gracefulShutdown = gracefulShutdown;
+        this.properties = properties;
+        this.resumeExecutor = resumeExecutor;
+    }
 
-  public void resumeAfterCommit(String tenantId) {
-    if (EmptyChecks.isBlank(tenantId)) {
-      return;
+    public void resumeAfterCommit(String tenantId) {
+        if (EmptyChecks.isBlank(tenantId)) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            resumeTenant(tenantId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                resumeTenant(tenantId);
+            }
+        });
     }
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      resumeTenant(tenantId);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        resumeTenant(tenantId);
-      }
-    });
-  }
 
-  private void resumeTenant(String tenantId) {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    private void resumeTenant(String tenantId) {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!resumingTenants.add(tenantId)) {
+            // 该租户已有一轮在排队或执行：本轮结束会清除标记，不叠加新的扫描。
+            return;
+        }
+        try {
+            resumeExecutor.execute(() -> runResume(tenantId));
+        } catch (RejectedExecutionException rejected) {
+            resumingTenants.remove(tenantId);
+            log.warn(
+                    "workflow launch wait resume skipped: tenantId={}, error={}",
+                    tenantId,
+                    SwallowedExceptionLogger.summary(rejected));
+        }
     }
-    if (!resumingTenants.add(tenantId)) {
-      // 该租户已有一轮在排队或执行：本轮结束会清除标记，不叠加新的扫描。
-      return;
-    }
-    try {
-      resumeExecutor.execute(() -> runResume(tenantId));
-    } catch (RejectedExecutionException rejected) {
-      resumingTenants.remove(tenantId);
-      log.warn(
-          "workflow launch wait resume skipped: tenantId={}, error={}",
-          tenantId,
-          SwallowedExceptionLogger.summary(rejected));
-    }
-  }
 
-  /**
-   * 父任务只做认领和提交，不等待同池子任务；本轮全部结束（含空批、异常和拒绝提交）后清除租户去重标记。
-   */
-  private void runResume(String tenantId) {
-    CompletableFuture<Void> round;
-    try {
-      round = reconciler.resumeTenantAsync(tenantId);
-    } catch (RuntimeException failure) {
-      resumingTenants.remove(tenantId);
-      log.warn(
-          "workflow launch wait resume after terminal run failed: tenantId={}, error={}",
-          tenantId,
-          SwallowedExceptionLogger.summary(failure));
-      return;
+    /**
+     * 父任务只做认领和提交，不等待同池子任务；本轮全部结束（含空批、异常和拒绝提交）后清除租户去重标记。
+     */
+    private void runResume(String tenantId) {
+        CompletableFuture<Void> round;
+        try {
+            round = reconciler.resumeTenantAsync(tenantId);
+        } catch (RuntimeException failure) {
+            resumingTenants.remove(tenantId);
+            log.warn(
+                    "workflow launch wait resume after terminal run failed: tenantId={}, error={}",
+                    tenantId,
+                    SwallowedExceptionLogger.summary(failure));
+            return;
+        }
+        round.whenComplete((ignored, failure) -> {
+            resumingTenants.remove(tenantId);
+            if (EmptyChecks.isNotNull(failure)) {
+                log.warn(
+                        "workflow launch wait resume round failed: tenantId={}, error={}",
+                        tenantId,
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        });
     }
-    round.whenComplete((ignored, failure) -> {
-      resumingTenants.remove(tenantId);
-      if (EmptyChecks.isNotNull(failure)) {
-        log.warn(
-            "workflow launch wait resume round failed: tenantId={}, error={}",
-            tenantId,
-            SwallowedExceptionLogger.summary(failure));
-      }
-    });
-  }
 }

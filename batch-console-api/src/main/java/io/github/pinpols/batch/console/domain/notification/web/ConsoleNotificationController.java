@@ -38,103 +38,99 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleNotificationController {
 
-  private final ConsoleNotificationApplicationService service;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleNotificationApplicationService service;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/channels")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
-      @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listChannels(tenantId));
-  }
+    @GetMapping("/channels")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
+            @RequestParam @NotBlank String tenantId) {
+        return responseFactory.success(service.listChannels(tenantId));
+    }
 
-  @GetMapping("/channels/{channelCode}")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<ConsoleNotificationChannelResponse> getChannel(
-      @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(service.getChannel(tenantId, channelCode));
-  }
+    @GetMapping("/channels/{channelCode}")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<ConsoleNotificationChannelResponse> getChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
+        return responseFactory.success(service.getChannel(tenantId, channelCode));
+    }
 
-  @PostMapping("/channels")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> createChannel(
-      @RequestParam @NotBlank String tenantId,
-      @Valid @RequestBody NotificationChannelUpsertRequest request) {
-    service.createChannel(tenantId, request);
-    return responseFactory.success(null);
-  }
+    @PostMapping("/channels")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> createChannel(
+            @RequestParam @NotBlank String tenantId, @Valid @RequestBody NotificationChannelUpsertRequest request) {
+        service.createChannel(tenantId, request);
+        return responseFactory.success(null);
+    }
 
-  @PutMapping("/channels/{channelCode}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> updateChannel(
-      @RequestParam @NotBlank String tenantId,
-      @PathVariable String channelCode,
-      @Valid @RequestBody NotificationChannelUpdateRequest request) {
-    service.updateChannel(tenantId, channelCode, request);
-    return responseFactory.success(null);
-  }
+    @PutMapping("/channels/{channelCode}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> updateChannel(
+            @RequestParam @NotBlank String tenantId,
+            @PathVariable String channelCode,
+            @Valid @RequestBody NotificationChannelUpdateRequest request) {
+        service.updateChannel(tenantId, channelCode, request);
+        return responseFactory.success(null);
+    }
 
-  @DeleteMapping("/channels/{channelCode}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> deleteChannel(
-      @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    service.deleteChannel(tenantId, channelCode);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/channels/{channelCode}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> deleteChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
+        service.deleteChannel(tenantId, channelCode);
+        return responseFactory.success(null);
+    }
 
-  @PostMapping("/channels/{channelCode}/test")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleNotificationTestResultResponse> testChannel(
-      @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(service.testChannel(tenantId, channelCode));
-  }
+    @PostMapping("/channels/{channelCode}/test")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleNotificationTestResultResponse> testChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
+        return responseFactory.success(service.testChannel(tenantId, channelCode));
+    }
 
-  @GetMapping("/rules")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(
-      @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listRules(tenantId));
-  }
+    @GetMapping("/rules")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(@RequestParam @NotBlank String tenantId) {
+        return responseFactory.success(service.listRules(tenantId));
+    }
 
-  @GetMapping("/rules/{ruleId}")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<ConsoleSubscriptionRuleResponse> getRule(
-      @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
-    return responseFactory.success(service.getRule(tenantId, ruleId));
-  }
+    @GetMapping("/rules/{ruleId}")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<ConsoleSubscriptionRuleResponse> getRule(
+            @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
+        return responseFactory.success(service.getRule(tenantId, ruleId));
+    }
 
-  @PostMapping("/rules")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> createRule(
-      @RequestParam @NotBlank String tenantId,
-      @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
-    service.createRule(tenantId, request);
-    return responseFactory.success(null);
-  }
+    @PostMapping("/rules")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> createRule(
+            @RequestParam @NotBlank String tenantId, @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
+        service.createRule(tenantId, request);
+        return responseFactory.success(null);
+    }
 
-  @PutMapping("/rules/{ruleId}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> updateRule(
-      @RequestParam @NotBlank String tenantId,
-      @PathVariable Long ruleId,
-      @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
-    service.updateRule(tenantId, ruleId, request);
-    return responseFactory.success(null);
-  }
+    @PutMapping("/rules/{ruleId}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> updateRule(
+            @RequestParam @NotBlank String tenantId,
+            @PathVariable Long ruleId,
+            @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
+        service.updateRule(tenantId, ruleId, request);
+        return responseFactory.success(null);
+    }
 
-  @DeleteMapping("/rules/{ruleId}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> deleteRule(
-      @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
-    service.deleteRule(tenantId, ruleId);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/rules/{ruleId}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> deleteRule(@RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
+        service.deleteRule(tenantId, ruleId);
+        return responseFactory.success(null);
+    }
 
-  @GetMapping("/delivery-logs")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
-      @RequestParam @NotBlank String tenantId,
-      @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
-    return responseFactory.success(service.deliveryLogs(tenantId, limit));
-  }
+    @GetMapping("/delivery-logs")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
+            @RequestParam @NotBlank String tenantId,
+            @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
+        return responseFactory.success(service.deliveryLogs(tenantId, limit));
+    }
 }

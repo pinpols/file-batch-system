@@ -8,18 +8,18 @@ import org.junit.jupiter.api.Test;
 @DisplayName("ExceptionLogSummary — 异常消息脱敏与长度截断")
 class ExceptionLogSummaryTest {
 
-  @Test
-  @DisplayName("摘要中密码、授权头与令牌被脱敏,换行被清理且超长截断")
-  void shouldSanitizeMaskAndLimitExceptionMessage() {
-    IllegalStateException failure = new IllegalStateException("""
+    @Test
+    @DisplayName("摘要中密码、授权头与令牌被脱敏,换行被清理且超长截断")
+    void shouldSanitizeMaskAndLimitExceptionMessage() {
+        IllegalStateException failure = new IllegalStateException("""
         password=hunter2 apikey=raw-key
         authorization: Bearer abc {"token":"secret"} %s\
         """.formatted("x".repeat(1_024)));
 
-    assertThat(ExceptionLogSummary.of(failure))
-        .doesNotContain("hunter2", "raw-key", "abc", "secret", "\r", "\n")
-        .contains("password=****", "apikey=****", "authorization: ****", "\"token\":****")
-        .hasSize(ExceptionLogSummary.MAX_LENGTH)
-        .endsWith("...");
-  }
+        assertThat(ExceptionLogSummary.of(failure))
+                .doesNotContain("hunter2", "raw-key", "abc", "secret", "\r", "\n")
+                .contains("password=****", "apikey=****", "authorization: ****", "\"token\":****")
+                .hasSize(ExceptionLogSummary.MAX_LENGTH)
+                .endsWith("...");
+    }
 }

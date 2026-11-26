@@ -7,14 +7,14 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkerRegistryMapper {
 
-  List<WorkerRegistryView> selectByQuery(WorkerRegistryQuery query);
+    List<WorkerRegistryView> selectByQuery(WorkerRegistryQuery query);
 
-  long countByQuery(WorkerRegistryQuery query);
+    long countByQuery(WorkerRegistryQuery query);
 
-  long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
+    long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
 
-  /** ADR-035 P4 "我的 Worker" — 按 tenant 列 SDK 自托管 worker(is_self_hosted=true),heartbeat_at desc。 */
-  List<WorkerRegistryView> selectSelfHostedByTenant(@Param("tenantId") String tenantId);
+    /** ADR-035 P4 "我的 Worker" — 按 tenant 列 SDK 自托管 worker(is_self_hosted=true),heartbeat_at desc。 */
+    List<WorkerRegistryView> selectSelfHostedByTenant(@Param("tenantId") String tenantId);
 
-  long countSelfHostedByTenant(@Param("tenantId") String tenantId);
+    long countSelfHostedByTenant(@Param("tenantId") String tenantId);
 }

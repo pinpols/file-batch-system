@@ -28,19 +28,19 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("Worker模板映射：固定投影经插件边界转换为动态配置")
 class PlatformFileTemplateMappingIntegrationTest {
 
-  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
-  private static SqlSessionFactory sessionFactory;
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
+    private static SqlSessionFactory sessionFactory;
 
-  @BeforeAll
-  static void startDatabase() throws Exception {
-    POSTGRES.start();
-    DataSource dataSource = new DriverManagerDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-    JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-    String createSchemaSql = "create schema batch";
-    jdbcTemplate.execute(createSchemaSql);
-    // 只验证读取投影，不模拟生产迁移；字段类型与模板库的读取契约保持独立预期。
-    String createTemplateSql = """
+    @BeforeAll
+    static void startDatabase() throws Exception {
+        POSTGRES.start();
+        DataSource dataSource =
+                new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        String createSchemaSql = "create schema batch";
+        jdbcTemplate.execute(createSchemaSql);
+        // 只验证读取投影，不模拟生产迁移；字段类型与模板库的读取契约保持独立预期。
+        String createTemplateSql = """
         create table batch.file_template_config as select
           11::bigint as id, 'tenant-a'::varchar as tenant_id,
           'TEMPLATE_A'::varchar as template_code, '模板A'::varchar as template_name,
@@ -67,60 +67,54 @@ class PlatformFileTemplateMappingIntegrationTest {
           '{"pluginId":"report"}'::jsonb as export_data_ref,
           null::jsonb as load_target_ref, false as is_deleted
         """;
-    jdbcTemplate.execute(createTemplateSql);
-    Configuration configuration =
-        new Configuration(new Environment("mapping", new JdbcTransactionFactory(), dataSource));
-    try (InputStream xml = Resources.getResourceAsStream("mapper/PlatformFileRuntimeMapper.xml")) {
-      XMLMapperBuilder builder = new XMLMapperBuilder(
-          xml,
-          configuration,
-          "mapper/PlatformFileRuntimeMapper.xml",
-          configuration.getSqlFragments());
-      builder.parse();
+        jdbcTemplate.execute(createTemplateSql);
+        Configuration configuration =
+                new Configuration(new Environment("mapping", new JdbcTransactionFactory(), dataSource));
+        try (InputStream xml = Resources.getResourceAsStream("mapper/PlatformFileRuntimeMapper.xml")) {
+            XMLMapperBuilder builder = new XMLMapperBuilder(
+                    xml, configuration, "mapper/PlatformFileRuntimeMapper.xml", configuration.getSqlFragments());
+            builder.parse();
+        }
+        sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     }
-    sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
-  }
 
-  @AfterAll
-  static void stopDatabase() {
-    POSTGRES.stop();
-  }
-
-  @Test
-  @DisplayName("真实XML映射保留JSONB、时间和可空字段，并由插件边界提供原有键名")
-  void shouldLoadTemplateFromTypedMappingAndExposePluginValues() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
-      PlatformFileTemplateRepository repository = new PlatformFileTemplateRepository(mapper);
-      Map<String, Object> values =
-          repository.loadLatestTemplateConfig("tenant-a", "TEMPLATE_A", "EXPORT");
-      assertThat(values)
-          .containsEntry("id", 11L)
-          .containsEntry("template_name", "模板A")
-          .containsEntry("page_size", 101)
-          .containsEntry("fetch_size", 102)
-          .containsEntry("chunk_size", 103)
-          .containsEntry("preview_masking_enabled", true)
-          .containsEntry("download_requires_approval", true)
-          .containsEntry("target_charset", null)
-          .containsEntry("created_at", Instant.parse("2026-10-01T02:03:04Z"));
-      assertThat(values.get("field_mappings").toString()).contains("amount");
-      assertThat(values.get("export_data_ref").toString()).contains("report");
+    @AfterAll
+    static void stopDatabase() {
+        POSTGRES.stop();
     }
-  }
 
-  @Test
-  @DisplayName("模板查询保留租户与类型隔离，缺失模板返回空配置")
-  void shouldRejectOtherTenantAndTemplateType() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
-      PlatformFileTemplateRepository repository = new PlatformFileTemplateRepository(mapper);
-      Map<String, Object> foreignTenant =
-          repository.loadLatestTemplateConfig("tenant-b", "TEMPLATE_A", "EXPORT");
-      Map<String, Object> wrongType =
-          repository.loadLatestTemplateConfig("tenant-a", "TEMPLATE_A", "IMPORT");
-      assertThat(foreignTenant).isEmpty();
-      assertThat(wrongType).isEmpty();
+    @Test
+    @DisplayName("真实XML映射保留JSONB、时间和可空字段，并由插件边界提供原有键名")
+    void shouldLoadTemplateFromTypedMappingAndExposePluginValues() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
+            PlatformFileTemplateRepository repository = new PlatformFileTemplateRepository(mapper);
+            Map<String, Object> values = repository.loadLatestTemplateConfig("tenant-a", "TEMPLATE_A", "EXPORT");
+            assertThat(values)
+                    .containsEntry("id", 11L)
+                    .containsEntry("template_name", "模板A")
+                    .containsEntry("page_size", 101)
+                    .containsEntry("fetch_size", 102)
+                    .containsEntry("chunk_size", 103)
+                    .containsEntry("preview_masking_enabled", true)
+                    .containsEntry("download_requires_approval", true)
+                    .containsEntry("target_charset", null)
+                    .containsEntry("created_at", Instant.parse("2026-10-01T02:03:04Z"));
+            assertThat(values.get("field_mappings").toString()).contains("amount");
+            assertThat(values.get("export_data_ref").toString()).contains("report");
+        }
     }
-  }
+
+    @Test
+    @DisplayName("模板查询保留租户与类型隔离，缺失模板返回空配置")
+    void shouldRejectOtherTenantAndTemplateType() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
+            PlatformFileTemplateRepository repository = new PlatformFileTemplateRepository(mapper);
+            Map<String, Object> foreignTenant = repository.loadLatestTemplateConfig("tenant-b", "TEMPLATE_A", "EXPORT");
+            Map<String, Object> wrongType = repository.loadLatestTemplateConfig("tenant-a", "TEMPLATE_A", "IMPORT");
+            assertThat(foreignTenant).isEmpty();
+            assertThat(wrongType).isEmpty();
+        }
+    }
 }

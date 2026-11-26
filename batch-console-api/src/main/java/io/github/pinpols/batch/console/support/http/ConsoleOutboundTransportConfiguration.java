@@ -8,9 +8,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ConsoleOutboundTransportConfiguration {
 
-  @Bean
-  @ConsoleOutboundTransport
-  public OkHttpOutboundHttpTransport okHttpConsoleExternalHttpTransport() {
-    return new OkHttpOutboundHttpTransport();
-  }
+    @Bean
+    @ConsoleOutboundTransport
+    public OkHttpOutboundHttpTransport okHttpConsoleExternalHttpTransport() {
+        return new OkHttpOutboundHttpTransport();
+    }
 }

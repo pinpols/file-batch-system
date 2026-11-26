@@ -9,4 +9,4 @@ import java.time.Instant;
  * rawKey} 为明文密钥，仅此一次可见。由 controller 直接从 {@code ConsoleApiKeyService.CreateResult} 的强类型 来源构造。
  */
 public record ConsoleApiKeyCreateResponse(
-    Long id, String keyName, String keyPrefix, String rawKey, Instant createdAt) {}
+        Long id, String keyName, String keyPrefix, String rawKey, Instant createdAt) {}

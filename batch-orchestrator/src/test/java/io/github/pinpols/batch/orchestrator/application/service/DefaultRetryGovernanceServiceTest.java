@@ -54,511 +54,501 @@ import org.springframework.transaction.TransactionStatus;
 @DisplayName("重试治理服务: 重试计划生成, 死信转投与死信重放口径")
 class DefaultRetryGovernanceServiceTest {
 
-  private RetryScheduleMapper retryScheduleMapper;
-  private DeadLetterTaskMapper deadLetterTaskMapper;
-  private JobDefinitionMapper jobDefinitionMapper;
-  private JobTaskMapper jobTaskMapper;
-  private JobPartitionMapper jobPartitionMapper;
-  private JobInstanceMapper jobInstanceMapper;
-  private JobStepInstanceMapper jobStepInstanceMapper;
-  private TaskDispatchOutboxService taskDispatchOutboxService;
-  private UnknownExternalOutcomeCloser unknownExternalOutcomeCloser;
-  private RetryGovernanceProperties properties;
-  private BatchOrchestratorGovernanceProperties governance;
-  private DefaultRetryGovernanceService service;
-
-  @BeforeEach
-  void setUp() {
-    retryScheduleMapper = mock(RetryScheduleMapper.class);
-    deadLetterTaskMapper = mock(DeadLetterTaskMapper.class);
-    jobDefinitionMapper = mock(JobDefinitionMapper.class);
-    jobTaskMapper = mock(JobTaskMapper.class);
-    jobPartitionMapper = mock(JobPartitionMapper.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
-    jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
-    taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
-    unknownExternalOutcomeCloser = mock(UnknownExternalOutcomeCloser.class);
-    properties = new RetryGovernanceProperties();
-    properties.setFixedDelaySeconds(60L);
-    properties.setExponentialMultiplier(2L);
-    properties.setMaxDelaySeconds(3600L);
-    properties.setDefaultMaxRetryCount(3);
-    governance = mock(BatchOrchestratorGovernanceProperties.class);
-    when(governance.retry()).thenReturn(properties);
-    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
-    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
-
-    RetryRequeueCoordinator retryRequeueCoordinator = new RetryRequeueCoordinator(
-        retryScheduleMapper,
-        jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        taskDispatchOutboxService,
-        mock(WorkflowRunMapper.class));
-
-    service = new DefaultRetryGovernanceService(
-        retryScheduleMapper,
-        deadLetterTaskMapper,
-        jobDefinitionMapper,
-        jobTaskMapper,
-        retryRequeueCoordinator,
-        governance,
-        mock(JobExecutionLogMapper.class),
-        transactionManager,
-        unknownExternalOutcomeCloser);
-  }
-
-  // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
-
-  @Test
-  @DisplayName("任务为空时不做重试调度, 返回未排程")
-  void shouldReturnFalseWhenTaskIsNull() {
-    boolean result =
-        service.scheduleRetryIfNecessary(null, partition(1L, 0), jobInstance(1L), "ERR", "err");
-    assertThat(result).isFalse();
-  }
-
-  @Test
-  @DisplayName("分区为空时不做重试调度, 返回未排程")
-  void shouldReturnFalseWhenPartitionIsNull() {
-    boolean result =
-        service.scheduleRetryIfNecessary(task("t1", 1L, 1L), null, jobInstance(1L), "ERR", "err");
-    assertThat(result).isFalse();
-  }
-
-  @Test
-  @DisplayName("作业实例为空时不做重试调度, 返回未排程")
-  void shouldReturnFalseWhenJobInstanceIsNull() {
-    boolean result =
-        service.scheduleRetryIfNecessary(task("t1", 1L, 1L), partition(1L, 0), null, "ERR", "err");
-    assertThat(result).isFalse();
-  }
-
-  // ── scheduleRetryIfNecessary — NONE policy → dead letter ─────────────────
-
-  @Test
-  @DisplayName("重试策略为不重试时直接生成死信, 不写重试计划")
-  void shouldCreateDeadLetterWhenRetryPolicyIsNone() {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "NONE", 3));
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "none policy");
-
-    assertThat(result).isFalse();
-    verify(deadLetterTaskMapper).insert(any());
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("重试使用实例创建时的策略快照,不受后续作业定义修改影响")
-  void shouldUseInstanceRetryPolicySnapshotAfterJobDefinitionChanges() {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
-    JobInstanceEntity instance = jobInstance(1L);
-    instance.setParamsSnapshot(
-        "{\"executionPolicy\":{\"retryPolicy\":\"NONE\",\"retryMaxCount\":0}}");
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), instance, "ERR", "snapshot policy");
-
-    assertThat(result).isFalse();
-    verify(deadLetterTaskMapper).insert(any());
-    verify(retryScheduleMapper, never()).insert(any());
-    verify(jobDefinitionMapper, never()).selectById(1L);
-  }
-
-  @Test
-  @DisplayName("最大重试次数为零时生成死信, 不写重试计划")
-  void shouldCreateDeadLetterWhenMaxRetryCountZero() {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "max zero");
-
-    assertThat(result).isFalse();
-    verify(deadLetterTaskMapper).insert(any());
-  }
-
-  // ── scheduleRetryIfNecessary — retry count exhausted ─────────────────────
-
-  @Test
-  @DisplayName("重试次数已达上限时生成死信, 不写重试计划")
-  void shouldCreateDeadLetterWhenRetryCountExhausted() {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
-
-    // 该分区已重试 2 次，达到最大次数 2，重试耗尽。
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
-
-    assertThat(result).isFalse();
-    verify(deadLetterTaskMapper).insert(any());
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  @ParameterizedTest
-  @CsvSource({"NONE,3,0", "FIXED,0,0", "FIXED,2,2"})
-  @DisplayName("不重试和预算耗尽的系统死信都不能重新取得自动重试预算")
-  void shouldCloseAutomaticRetryBudget_whenFailureIsDeadLettered(
-      String policy, int maximum, int used) {
-    when(jobDefinitionMapper.selectById(1L))
-        .thenReturn(jobDefinitionWithPolicy(1L, policy, maximum));
-
-    assertThat(service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, used), jobInstance(1L), "SYSTEM_FAILURE", "failure"))
-        .isFalse();
-
-    ArgumentCaptor<DeadLetterTaskEntity> captured =
-        ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
-    verify(deadLetterTaskMapper).insert(captured.capture());
-    assertThat(captured.getValue().getErrorClass()).isEqualTo("SYSTEM");
-    assertThat(captured.getValue().getMaxReplayCount()).isZero();
-    assertThat(captured.getValue().getNextReplayAt()).isNull();
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  // ── scheduleRetryIfNecessary — schedule retry ─────────────────────────────
-
-  @Test
-  @DisplayName("生成重试计划时状态为等待, 次数递增并带上错误码与下次重试时间")
-  void shouldInsertRetryScheduleWithCorrectStatusAndDedup() {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "PARSE_ERR", "parse failed");
-
-    assertThat(result).isTrue();
-    ArgumentCaptor<RetryScheduleEntity> captor = ArgumentCaptor.forClass(RetryScheduleEntity.class);
-    verify(retryScheduleMapper).insert(captor.capture());
-    RetryScheduleEntity schedule = captor.getValue();
-    assertThat(schedule.getRetryStatus()).isEqualTo(RetryScheduleStatus.WAITING.code());
-    assertThat(schedule.getRetryCount()).isEqualTo(1);
-    assertThat(schedule.getLastErrorCode()).isEqualTo("PARSE_ERR");
-    assertThat(schedule.getNextRetryAt()).isAfter(BatchDateTimeSupport.utcNow().minusSeconds(5));
-  }
-
-  @Test
-  @DisplayName("外部副作用结果不明时即使策略为 FIXED 也只进入人工核对死信")
-  void shouldBlockRetry_whenExternalOutcomeIsUnknown() {
-    boolean scheduled = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L),
-        partition(1L, 0),
-        jobInstance(1L),
-        "EXTERNAL_OUTCOME_UNKNOWN",
-        "remote side effect may have committed");
-
-    assertThat(scheduled).isFalse();
-    ArgumentCaptor<DeadLetterTaskEntity> captured =
-        ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
-    verify(deadLetterTaskMapper).insert(captured.capture());
-    assertThat(captured.getValue().getErrorClass()).isEqualTo(DeadLetterErrorClass.SYSTEM.code());
-    assertThat(captured.getValue().getMaxReplayCount()).isZero();
-    assertThat(captured.getValue().getNextReplayAt()).isNull();
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  // ── 永久性输入/数据错 → 不重试,直接 BUSINESS 死信(防永久失败无限重试洪水)──────────
-  // 实测:IMPORT_PARSE_FAILED / LOAD_FAILED 漏出 NON_RETRYABLE 白名单 → 被判 SYSTEM →
-  // 3 个畸形夹具任务在 dead_letter 无限循环(653 行 / replay_count 恒 1)。对照上面同 FIXED/3
-  // 策略下可重试码会 insert retry_schedule,这里永久码必须 false + BUSINESS 死信 + 不排重试。
-  @ParameterizedTest
-  @DisplayName("永久数据与导出冲突错误直接生成业务死信, 不排重试")
-  @ValueSource(
-      strings = {
-        "IMPORT_PARSE_FAILED",
-        "IMPORT_PARSE_EMPTY",
-        "IMPORT_LOAD_FAILED",
-        "EXPORT_REGISTER_CHECKSUM_CONFLICT"
-      })
-  void shouldDeadLetterAsBusinessForPermanentDataErrors(String errorCode) {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "permanent input");
-
-    assertThat(result).as(errorCode + " 永久失败,不应排重试").isFalse();
-    ArgumentCaptor<DeadLetterTaskEntity> dl = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
-    verify(deadLetterTaskMapper).insert(dl.capture());
-    assertThat(dl.getValue().getErrorClass())
-        .as(errorCode + " 应归类 BUSINESS(永久,不自动重试)")
-        .isEqualTo(DeadLetterErrorClass.BUSINESS.code());
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  @ParameterizedTest
-  @DisplayName("密钥版本阻断错误直接生成业务死信,不自动切换版本重试")
-  @ValueSource(
-      strings = {
-        "DISPATCH_SECRET_BINDING_MISSING",
-        "DISPATCH_SECRET_VERSION_MISSING",
-        "DISPATCH_SECRET_VERSION_INVALID",
-        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
-        "DISPATCH_SECRET_FIELD_NOT_ALLOWED",
-        "DISPATCH_SECRET_PAYLOAD_EMPTY",
-        "DISPATCH_SECRET_PAYLOAD_INVALID"
-      })
-  void shouldDeadLetterSecretVersionFailuresWithoutRetry(String errorCode) {
-    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
-
-    boolean scheduled = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "secret blocked");
-
-    assertThat(scheduled).isFalse();
-    verify(deadLetterTaskMapper).insert(any());
-    verify(retryScheduleMapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("作业定义不存在时使用默认重试策略并生成重试计划")
-  void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {
-    when(jobDefinitionMapper.selectById(anyLong())).thenReturn(null);
-
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, 999L), partition(1L, 0), jobInstance(999L), "ERR", "msg");
-
-    assertThat(result).isTrue();
-    verify(retryScheduleMapper).insert(any());
-  }
-
-  @Test
-  @DisplayName("作业定义标识为空时使用默认重试策略并生成重试计划")
-  void shouldUseDefaultRetryPolicyWhenJobDefinitionIdIsNull() {
-    JobInstanceEntity jobInst = jobInstance(null);
-    boolean result = service.scheduleRetryIfNecessary(
-        task("t1", 1L, null), partition(1L, 0), jobInst, "ERR", "msg");
-
-    assertThat(result).isTrue();
-  }
-
-  // ── replayDeadLetter — guard conditions ──────────────────────────────────
-
-  @Test
-  @DisplayName("死信不存在时重放抛出业务异常")
-  void shouldThrowWhenDeadLetterNotFound() {
-    when(deadLetterTaskMapper.selectById("t1", 999L)).thenReturn(null);
-
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 999L))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.dead_letter.not_found");
-  }
-
-  @Test
-  @DisplayName("死信状态不允许重放时抛出业务异常")
-  void shouldThrowWhenDeadLetterNotReplayable() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", "REPLAYING");
-    when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
-
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.dead_letter.not_replayable");
-  }
-
-  @Test
-  @DisplayName("死信重放认领未命中时抛出并发冲突异常")
-  void shouldThrowWhenDeadLetterReplayConcurrencyConflict() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
-    when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
-    when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
-        .thenReturn(0);
-
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.dead_letter.replay_conflict");
-  }
-
-  @Test
-  @DisplayName("死信来源类型不是分区时重放抛出业务异常")
-  void shouldThrowWhenDeadLetterSourceTypeIsNotJobPartition() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
-    dl.setSourceType("JOB_TASK");
-    when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
-    when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
-        .thenReturn(1);
-
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L)).isInstanceOf(BizException.class);
-    verify(deadLetterTaskMapper)
-        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.targetStatus() != null
-            && parameters.lastReplayResult() != null));
-  }
-
-  @Test
-  @DisplayName("死信对应分区行缺失时放弃重放并标记为已放弃")
-  void shouldGiveUpWhenDeadLetterPartitionRowMissing() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
-    when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
-    when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
-        .thenReturn(1);
-    when(jobPartitionMapper.selectById("t1", 100L)).thenReturn(null);
-
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(DeadLetterOrphanSourceException.class);
-
-    verify(deadLetterTaskMapper).markGiveUp("t1", 1L);
-    verify(deadLetterTaskMapper, never())
-        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.targetStatus() != null
-            && parameters.lastReplayResult() != null));
-  }
-
-  // ── dispatchDueRetries — no retries ──────────────────────────────────────
-
-  @Test
-  @DisplayName("没有到期的重试计划时不做任何处理")
-  void shouldDoNothingWhenNoRetrySchedulesDue() {
-    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of());
-
-    service.dispatchDueRetries();
-
-    verify(retryScheduleMapper).selectDueNotPaused(any());
-    verify(retryScheduleMapper, never())
-        .markRunning(anyString(), anyLong(), anyString(), anyString());
-  }
-
-  @Test
-  @DisplayName("重试计划认领未命中时跳过该条, 不读取分区")
-  void shouldSkipRetryWhenMarkRunningFails() {
-    RetryScheduleEntity schedule = new RetryScheduleEntity();
-    schedule.setId(1L);
-    schedule.setTenantId("t1");
-    schedule.setRelatedId(100L);
-    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(schedule));
-    when(retryScheduleMapper.markRunning(
-            "t1", 1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
-        .thenReturn(0);
-
-    service.dispatchDueRetries();
-
-    verify(partitionMapper(), never()).selectById(anyString(), anyLong());
-  }
-
-  @Test
-  @DisplayName("全局重试扫描逐条在计划所属租户上下文中认领")
-  void shouldClaimEachDueRetryUnderItsTenantContext() {
-    RetryScheduleEntity t1 = new RetryScheduleEntity();
-    t1.setId(1L);
-    t1.setTenantId("t1");
-    RetryScheduleEntity t2 = new RetryScheduleEntity();
-    t2.setId(2L);
-    t2.setTenantId("t2");
-    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(t1, t2));
-    Mockito.doAnswer(invocation -> {
-          String tenantId = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
-          return 0;
-        })
-        .when(retryScheduleMapper)
-        .markRunning(anyString(), anyLong(), anyString(), anyString());
-
-    service.dispatchDueRetries();
-
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  private JobPartitionMapper partitionMapper() {
-    return jobPartitionMapper;
-  }
-
-  @Test
-  @DisplayName("非幂等外部动作已开始的任务被接管时收口为结果不明, 不重新入队")
-  void shouldCloseUnknownOutcomeInsteadOfRequeue_whenReclaimingStartedNonIdempotentTask() {
-    JobTaskEntity task = task("t1", 10L, 1L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
-    when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
-    when(unknownExternalOutcomeCloser.close(task)).thenReturn(true);
-
-    service.reclaimTask("t1", 10L, "evt-1");
-
-    verify(unknownExternalOutcomeCloser).close(task);
-    verify(jobPartitionMapper, never()).resetForDispatch(anyString(), any(), anyString(), any());
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
-  }
-
-  @Test
-  @DisplayName("非幂等任务收口未落库时接管失败, 不重新入队")
-  void shouldFailTakeover_whenUnknownOutcomeWasNotRecorded() {
-    JobTaskEntity task = task("t1", 10L, 1L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
-    when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
-    when(unknownExternalOutcomeCloser.close(task)).thenReturn(false);
-
-    assertThatThrownBy(() -> service.reclaimTask("t1", 10L, "evt-1"))
-        .isInstanceOf(IllegalStateException.class);
-
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
-  }
-
-  private static JobTaskEntity task(String tenantId, Long taskId, Long jobDefinitionId) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setTenantId(tenantId);
-    t.setId(taskId);
-    t.setJobPartitionId(1L);
-    return t;
-  }
-
-  private static JobPartitionEntity partition(Long partitionId, int retryCount) {
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setId(partitionId);
-    p.setRetryCount(retryCount);
-    p.setJobInstanceId(1L);
-    return p;
-  }
-
-  private static JobInstanceEntity jobInstance(Long jobDefinitionId) {
-    JobInstanceEntity j = new JobInstanceEntity();
-    j.setId(1L);
-    j.setJobDefinitionId(jobDefinitionId);
-    j.setInstanceNo("INST-001");
-    j.setTraceId("trace-001");
-    return j;
-  }
-
-  private static JobDefinitionView jobDefinitionWithPolicy(
-      Long id, String retryPolicy, int maxRetry) {
-    return new JobDefinitionView(
-        id,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        retryPolicy,
-        maxRetry,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
-  }
-
-  private static DeadLetterTaskEntity deadLetter(Long id, String tenantId, String replayStatus) {
-    DeadLetterTaskEntity dl = new DeadLetterTaskEntity();
-    dl.setId(id);
-    dl.setTenantId(tenantId);
-    dl.setReplayStatus(replayStatus);
-    dl.setReplayCount(0);
-    dl.setSourceType("JOB_PARTITION");
-    dl.setSourceId(100L);
-    return dl;
-  }
+    private RetryScheduleMapper retryScheduleMapper;
+    private DeadLetterTaskMapper deadLetterTaskMapper;
+    private JobDefinitionMapper jobDefinitionMapper;
+    private JobTaskMapper jobTaskMapper;
+    private JobPartitionMapper jobPartitionMapper;
+    private JobInstanceMapper jobInstanceMapper;
+    private JobStepInstanceMapper jobStepInstanceMapper;
+    private TaskDispatchOutboxService taskDispatchOutboxService;
+    private UnknownExternalOutcomeCloser unknownExternalOutcomeCloser;
+    private RetryGovernanceProperties properties;
+    private BatchOrchestratorGovernanceProperties governance;
+    private DefaultRetryGovernanceService service;
+
+    @BeforeEach
+    void setUp() {
+        retryScheduleMapper = mock(RetryScheduleMapper.class);
+        deadLetterTaskMapper = mock(DeadLetterTaskMapper.class);
+        jobDefinitionMapper = mock(JobDefinitionMapper.class);
+        jobTaskMapper = mock(JobTaskMapper.class);
+        jobPartitionMapper = mock(JobPartitionMapper.class);
+        jobInstanceMapper = mock(JobInstanceMapper.class);
+        jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
+        taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+        unknownExternalOutcomeCloser = mock(UnknownExternalOutcomeCloser.class);
+        properties = new RetryGovernanceProperties();
+        properties.setFixedDelaySeconds(60L);
+        properties.setExponentialMultiplier(2L);
+        properties.setMaxDelaySeconds(3600L);
+        properties.setDefaultMaxRetryCount(3);
+        governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.retry()).thenReturn(properties);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+
+        RetryRequeueCoordinator retryRequeueCoordinator = new RetryRequeueCoordinator(
+                retryScheduleMapper,
+                jobTaskMapper,
+                jobPartitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                taskDispatchOutboxService,
+                mock(WorkflowRunMapper.class));
+
+        service = new DefaultRetryGovernanceService(
+                retryScheduleMapper,
+                deadLetterTaskMapper,
+                jobDefinitionMapper,
+                jobTaskMapper,
+                retryRequeueCoordinator,
+                governance,
+                mock(JobExecutionLogMapper.class),
+                transactionManager,
+                unknownExternalOutcomeCloser);
+    }
+
+    // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
+
+    @Test
+    @DisplayName("任务为空时不做重试调度, 返回未排程")
+    void shouldReturnFalseWhenTaskIsNull() {
+        boolean result = service.scheduleRetryIfNecessary(null, partition(1L, 0), jobInstance(1L), "ERR", "err");
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("分区为空时不做重试调度, 返回未排程")
+    void shouldReturnFalseWhenPartitionIsNull() {
+        boolean result = service.scheduleRetryIfNecessary(task("t1", 1L, 1L), null, jobInstance(1L), "ERR", "err");
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("作业实例为空时不做重试调度, 返回未排程")
+    void shouldReturnFalseWhenJobInstanceIsNull() {
+        boolean result = service.scheduleRetryIfNecessary(task("t1", 1L, 1L), partition(1L, 0), null, "ERR", "err");
+        assertThat(result).isFalse();
+    }
+
+    // ── scheduleRetryIfNecessary — NONE policy → dead letter ─────────────────
+
+    @Test
+    @DisplayName("重试策略为不重试时直接生成死信, 不写重试计划")
+    void shouldCreateDeadLetterWhenRetryPolicyIsNone() {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "NONE", 3));
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "none policy");
+
+        assertThat(result).isFalse();
+        verify(deadLetterTaskMapper).insert(any());
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("重试使用实例创建时的策略快照,不受后续作业定义修改影响")
+    void shouldUseInstanceRetryPolicySnapshotAfterJobDefinitionChanges() {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+        JobInstanceEntity instance = jobInstance(1L);
+        instance.setParamsSnapshot("{\"executionPolicy\":{\"retryPolicy\":\"NONE\",\"retryMaxCount\":0}}");
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), instance, "ERR", "snapshot policy");
+
+        assertThat(result).isFalse();
+        verify(deadLetterTaskMapper).insert(any());
+        verify(retryScheduleMapper, never()).insert(any());
+        verify(jobDefinitionMapper, never()).selectById(1L);
+    }
+
+    @Test
+    @DisplayName("最大重试次数为零时生成死信, 不写重试计划")
+    void shouldCreateDeadLetterWhenMaxRetryCountZero() {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "max zero");
+
+        assertThat(result).isFalse();
+        verify(deadLetterTaskMapper).insert(any());
+    }
+
+    // ── scheduleRetryIfNecessary — retry count exhausted ─────────────────────
+
+    @Test
+    @DisplayName("重试次数已达上限时生成死信, 不写重试计划")
+    void shouldCreateDeadLetterWhenRetryCountExhausted() {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
+
+        // 该分区已重试 2 次，达到最大次数 2，重试耗尽。
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
+
+        assertThat(result).isFalse();
+        verify(deadLetterTaskMapper).insert(any());
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NONE,3,0", "FIXED,0,0", "FIXED,2,2"})
+    @DisplayName("不重试和预算耗尽的系统死信都不能重新取得自动重试预算")
+    void shouldCloseAutomaticRetryBudget_whenFailureIsDeadLettered(String policy, int maximum, int used) {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, policy, maximum));
+
+        assertThat(service.scheduleRetryIfNecessary(
+                        task("t1", 1L, 1L), partition(1L, used), jobInstance(1L), "SYSTEM_FAILURE", "failure"))
+                .isFalse();
+
+        ArgumentCaptor<DeadLetterTaskEntity> captured = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+        verify(deadLetterTaskMapper).insert(captured.capture());
+        assertThat(captured.getValue().getErrorClass()).isEqualTo("SYSTEM");
+        assertThat(captured.getValue().getMaxReplayCount()).isZero();
+        assertThat(captured.getValue().getNextReplayAt()).isNull();
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    // ── scheduleRetryIfNecessary — schedule retry ─────────────────────────────
+
+    @Test
+    @DisplayName("生成重试计划时状态为等待, 次数递增并带上错误码与下次重试时间")
+    void shouldInsertRetryScheduleWithCorrectStatusAndDedup() {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "PARSE_ERR", "parse failed");
+
+        assertThat(result).isTrue();
+        ArgumentCaptor<RetryScheduleEntity> captor = ArgumentCaptor.forClass(RetryScheduleEntity.class);
+        verify(retryScheduleMapper).insert(captor.capture());
+        RetryScheduleEntity schedule = captor.getValue();
+        assertThat(schedule.getRetryStatus()).isEqualTo(RetryScheduleStatus.WAITING.code());
+        assertThat(schedule.getRetryCount()).isEqualTo(1);
+        assertThat(schedule.getLastErrorCode()).isEqualTo("PARSE_ERR");
+        assertThat(schedule.getNextRetryAt())
+                .isAfter(BatchDateTimeSupport.utcNow().minusSeconds(5));
+    }
+
+    @Test
+    @DisplayName("外部副作用结果不明时即使策略为 FIXED 也只进入人工核对死信")
+    void shouldBlockRetry_whenExternalOutcomeIsUnknown() {
+        boolean scheduled = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L),
+                partition(1L, 0),
+                jobInstance(1L),
+                "EXTERNAL_OUTCOME_UNKNOWN",
+                "remote side effect may have committed");
+
+        assertThat(scheduled).isFalse();
+        ArgumentCaptor<DeadLetterTaskEntity> captured = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+        verify(deadLetterTaskMapper).insert(captured.capture());
+        assertThat(captured.getValue().getErrorClass()).isEqualTo(DeadLetterErrorClass.SYSTEM.code());
+        assertThat(captured.getValue().getMaxReplayCount()).isZero();
+        assertThat(captured.getValue().getNextReplayAt()).isNull();
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    // ── 永久性输入/数据错 → 不重试,直接 BUSINESS 死信(防永久失败无限重试洪水)──────────
+    // 实测:IMPORT_PARSE_FAILED / LOAD_FAILED 漏出 NON_RETRYABLE 白名单 → 被判 SYSTEM →
+    // 3 个畸形夹具任务在 dead_letter 无限循环(653 行 / replay_count 恒 1)。对照上面同 FIXED/3
+    // 策略下可重试码会 insert retry_schedule,这里永久码必须 false + BUSINESS 死信 + 不排重试。
+    @ParameterizedTest
+    @DisplayName("永久数据与导出冲突错误直接生成业务死信, 不排重试")
+    @ValueSource(
+            strings = {
+                "IMPORT_PARSE_FAILED",
+                "IMPORT_PARSE_EMPTY",
+                "IMPORT_LOAD_FAILED",
+                "EXPORT_REGISTER_CHECKSUM_CONFLICT"
+            })
+    void shouldDeadLetterAsBusinessForPermanentDataErrors(String errorCode) {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "permanent input");
+
+        assertThat(result).as(errorCode + " 永久失败,不应排重试").isFalse();
+        ArgumentCaptor<DeadLetterTaskEntity> dl = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+        verify(deadLetterTaskMapper).insert(dl.capture());
+        assertThat(dl.getValue().getErrorClass())
+                .as(errorCode + " 应归类 BUSINESS(永久,不自动重试)")
+                .isEqualTo(DeadLetterErrorClass.BUSINESS.code());
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    @ParameterizedTest
+    @DisplayName("密钥版本阻断错误直接生成业务死信,不自动切换版本重试")
+    @ValueSource(
+            strings = {
+                "DISPATCH_SECRET_BINDING_MISSING",
+                "DISPATCH_SECRET_VERSION_MISSING",
+                "DISPATCH_SECRET_VERSION_INVALID",
+                "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+                "DISPATCH_SECRET_FIELD_NOT_ALLOWED",
+                "DISPATCH_SECRET_PAYLOAD_EMPTY",
+                "DISPATCH_SECRET_PAYLOAD_INVALID"
+            })
+    void shouldDeadLetterSecretVersionFailuresWithoutRetry(String errorCode) {
+        when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+
+        boolean scheduled = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "secret blocked");
+
+        assertThat(scheduled).isFalse();
+        verify(deadLetterTaskMapper).insert(any());
+        verify(retryScheduleMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("作业定义不存在时使用默认重试策略并生成重试计划")
+    void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {
+        when(jobDefinitionMapper.selectById(anyLong())).thenReturn(null);
+
+        boolean result = service.scheduleRetryIfNecessary(
+                task("t1", 1L, 999L), partition(1L, 0), jobInstance(999L), "ERR", "msg");
+
+        assertThat(result).isTrue();
+        verify(retryScheduleMapper).insert(any());
+    }
+
+    @Test
+    @DisplayName("作业定义标识为空时使用默认重试策略并生成重试计划")
+    void shouldUseDefaultRetryPolicyWhenJobDefinitionIdIsNull() {
+        JobInstanceEntity jobInst = jobInstance(null);
+        boolean result =
+                service.scheduleRetryIfNecessary(task("t1", 1L, null), partition(1L, 0), jobInst, "ERR", "msg");
+
+        assertThat(result).isTrue();
+    }
+
+    // ── replayDeadLetter — guard conditions ──────────────────────────────────
+
+    @Test
+    @DisplayName("死信不存在时重放抛出业务异常")
+    void shouldThrowWhenDeadLetterNotFound() {
+        when(deadLetterTaskMapper.selectById("t1", 999L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.replayDeadLetter("t1", 999L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.dead_letter.not_found");
+    }
+
+    @Test
+    @DisplayName("死信状态不允许重放时抛出业务异常")
+    void shouldThrowWhenDeadLetterNotReplayable() {
+        DeadLetterTaskEntity dl = deadLetter(1L, "t1", "REPLAYING");
+        when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
+
+        assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.dead_letter.not_replayable");
+    }
+
+    @Test
+    @DisplayName("死信重放认领未命中时抛出并发冲突异常")
+    void shouldThrowWhenDeadLetterReplayConcurrencyConflict() {
+        DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
+        when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
+        when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.dead_letter.replay_conflict");
+    }
+
+    @Test
+    @DisplayName("死信来源类型不是分区时重放抛出业务异常")
+    void shouldThrowWhenDeadLetterSourceTypeIsNotJobPartition() {
+        DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
+        dl.setSourceType("JOB_TASK");
+        when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
+        when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
+                .thenReturn(1);
+
+        assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L)).isInstanceOf(BizException.class);
+        verify(deadLetterTaskMapper)
+                .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.targetStatus() != null
+                        && parameters.lastReplayResult() != null));
+    }
+
+    @Test
+    @DisplayName("死信对应分区行缺失时放弃重放并标记为已放弃")
+    void shouldGiveUpWhenDeadLetterPartitionRowMissing() {
+        DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
+        when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
+        when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
+                .thenReturn(1);
+        when(jobPartitionMapper.selectById("t1", 100L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
+                .isInstanceOf(DeadLetterOrphanSourceException.class);
+
+        verify(deadLetterTaskMapper).markGiveUp("t1", 1L);
+        verify(deadLetterTaskMapper, never())
+                .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.targetStatus() != null
+                        && parameters.lastReplayResult() != null));
+    }
+
+    // ── dispatchDueRetries — no retries ──────────────────────────────────────
+
+    @Test
+    @DisplayName("没有到期的重试计划时不做任何处理")
+    void shouldDoNothingWhenNoRetrySchedulesDue() {
+        when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of());
+
+        service.dispatchDueRetries();
+
+        verify(retryScheduleMapper).selectDueNotPaused(any());
+        verify(retryScheduleMapper, never()).markRunning(anyString(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("重试计划认领未命中时跳过该条, 不读取分区")
+    void shouldSkipRetryWhenMarkRunningFails() {
+        RetryScheduleEntity schedule = new RetryScheduleEntity();
+        schedule.setId(1L);
+        schedule.setTenantId("t1");
+        schedule.setRelatedId(100L);
+        when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(schedule));
+        when(retryScheduleMapper.markRunning(
+                        "t1", 1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
+                .thenReturn(0);
+
+        service.dispatchDueRetries();
+
+        verify(partitionMapper(), never()).selectById(anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("全局重试扫描逐条在计划所属租户上下文中认领")
+    void shouldClaimEachDueRetryUnderItsTenantContext() {
+        RetryScheduleEntity t1 = new RetryScheduleEntity();
+        t1.setId(1L);
+        t1.setTenantId("t1");
+        RetryScheduleEntity t2 = new RetryScheduleEntity();
+        t2.setId(2L);
+        t2.setTenantId("t2");
+        when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(t1, t2));
+        Mockito.doAnswer(invocation -> {
+                    String tenantId = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+                    return 0;
+                })
+                .when(retryScheduleMapper)
+                .markRunning(anyString(), anyLong(), anyString(), anyString());
+
+        service.dispatchDueRetries();
+
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private JobPartitionMapper partitionMapper() {
+        return jobPartitionMapper;
+    }
+
+    @Test
+    @DisplayName("非幂等外部动作已开始的任务被接管时收口为结果不明, 不重新入队")
+    void shouldCloseUnknownOutcomeInsteadOfRequeue_whenReclaimingStartedNonIdempotentTask() {
+        JobTaskEntity task = task("t1", 10L, 1L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
+        when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
+        when(unknownExternalOutcomeCloser.close(task)).thenReturn(true);
+
+        service.reclaimTask("t1", 10L, "evt-1");
+
+        verify(unknownExternalOutcomeCloser).close(task);
+        verify(jobPartitionMapper, never()).resetForDispatch(anyString(), any(), anyString(), any());
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("非幂等任务收口未落库时接管失败, 不重新入队")
+    void shouldFailTakeover_whenUnknownOutcomeWasNotRecorded() {
+        JobTaskEntity task = task("t1", 10L, 1L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setNonIdempotentStartedAt(Instant.parse("2026-11-23T00:00:00Z"));
+        when(jobTaskMapper.selectById("t1", 10L)).thenReturn(task);
+        when(unknownExternalOutcomeCloser.close(task)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.reclaimTask("t1", 10L, "evt-1")).isInstanceOf(IllegalStateException.class);
+
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
+    }
+
+    private static JobTaskEntity task(String tenantId, Long taskId, Long jobDefinitionId) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setTenantId(tenantId);
+        t.setId(taskId);
+        t.setJobPartitionId(1L);
+        return t;
+    }
+
+    private static JobPartitionEntity partition(Long partitionId, int retryCount) {
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setId(partitionId);
+        p.setRetryCount(retryCount);
+        p.setJobInstanceId(1L);
+        return p;
+    }
+
+    private static JobInstanceEntity jobInstance(Long jobDefinitionId) {
+        JobInstanceEntity j = new JobInstanceEntity();
+        j.setId(1L);
+        j.setJobDefinitionId(jobDefinitionId);
+        j.setInstanceNo("INST-001");
+        j.setTraceId("trace-001");
+        return j;
+    }
+
+    private static JobDefinitionView jobDefinitionWithPolicy(Long id, String retryPolicy, int maxRetry) {
+        return new JobDefinitionView(
+                id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                retryPolicy,
+                maxRetry,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static DeadLetterTaskEntity deadLetter(Long id, String tenantId, String replayStatus) {
+        DeadLetterTaskEntity dl = new DeadLetterTaskEntity();
+        dl.setId(id);
+        dl.setTenantId(tenantId);
+        dl.setReplayStatus(replayStatus);
+        dl.setReplayCount(0);
+        dl.setSourceType("JOB_PARTITION");
+        dl.setSourceId(100L);
+        return dl;
+    }
 }

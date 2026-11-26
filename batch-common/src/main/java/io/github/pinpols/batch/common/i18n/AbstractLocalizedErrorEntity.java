@@ -23,12 +23,12 @@ import lombok.Setter;
 @Setter
 public abstract class AbstractLocalizedErrorEntity implements LocalizedErrorCarrier {
 
-  /** 写入时已渲染好的字符串(老 literal / 第三方异常 / fallback 用)。 */
-  private String errorMessage;
+    /** 写入时已渲染好的字符串(老 literal / 第三方异常 / fallback 用)。 */
+    private String errorMessage;
 
-  /** i18n message key,V77+ 写入;读路径按当前 Locale 渲染时优先于 errorMessage。 */
-  private String errorKey;
+    /** i18n message key,V77+ 写入;读路径按当前 Locale 渲染时优先于 errorMessage。 */
+    private String errorKey;
 
-  /** i18n 占位符参数 JSON 数组,与 messages.properties {0}/{1}/... 顺序对应。 */
-  private String errorArgs;
+    /** i18n 占位符参数 JSON 数组,与 messages.properties {0}/{1}/... 顺序对应。 */
+    private String errorArgs;
 }

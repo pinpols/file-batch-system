@@ -13,54 +13,52 @@ import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.Temp
  */
 final class FileGovernanceViews {
 
-  private FileGovernanceViews() {}
+    private FileGovernanceViews() {}
 
-  static FileRecordView fileRecord(FileRecordRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return FileRecordView.absent();
+    static FileRecordView fileRecord(FileRecordRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return FileRecordView.absent();
+        }
+        return new FileRecordView(true, row.fileStatus(), row.storageBucket(), row.storagePath());
     }
-    return new FileRecordView(true, row.fileStatus(), row.storageBucket(), row.storagePath());
-  }
 
-  static TemplateSecurityView templateSecurity(TemplateSecurityRow row) {
-    boolean previewMaskingEnabled =
-        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.previewMaskingEnabled());
-    boolean contentEncryptionEnabled =
-        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.contentEncryptionEnabled());
-    boolean downloadRequiresApproval =
-        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.downloadRequiresApproval());
-    return new TemplateSecurityView(
-        previewMaskingEnabled,
-        contentEncryptionEnabled,
-        EmptyChecks.isNull(row) ? null : row.encryptionKeyRef(),
-        downloadRequiresApproval,
-        EmptyChecks.isNull(row) ? null : row.maskingRuleSet());
-  }
-
-  static DispatchRecordView dispatchRecord(DispatchRecordRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return DispatchRecordView.absent();
+    static TemplateSecurityView templateSecurity(TemplateSecurityRow row) {
+        boolean previewMaskingEnabled = EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.previewMaskingEnabled());
+        boolean contentEncryptionEnabled =
+                EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.contentEncryptionEnabled());
+        boolean downloadRequiresApproval =
+                EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.downloadRequiresApproval());
+        return new TemplateSecurityView(
+                previewMaskingEnabled,
+                contentEncryptionEnabled,
+                EmptyChecks.isNull(row) ? null : row.encryptionKeyRef(),
+                downloadRequiresApproval,
+                EmptyChecks.isNull(row) ? null : row.maskingRuleSet());
     }
-    return new DispatchRecordView(true, row.id(), row.pipelineInstanceId(), row.channelCode());
-  }
 
-  record FileRecordView(
-      boolean present, String fileStatus, String storageBucket, String storagePath) {
-    static FileRecordView absent() {
-      return new FileRecordView(false, null, null, null);
+    static DispatchRecordView dispatchRecord(DispatchRecordRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return DispatchRecordView.absent();
+        }
+        return new DispatchRecordView(true, row.id(), row.pipelineInstanceId(), row.channelCode());
     }
-  }
 
-  record TemplateSecurityView(
-      boolean previewMaskingEnabled,
-      boolean contentEncryptionEnabled,
-      String encryptionKeyRef,
-      boolean downloadRequiresApproval,
-      String maskingRuleSet) {}
-
-  record DispatchRecordView(boolean present, Long id, Long pipelineInstanceId, String channelCode) {
-    static DispatchRecordView absent() {
-      return new DispatchRecordView(false, null, null, null);
+    record FileRecordView(boolean present, String fileStatus, String storageBucket, String storagePath) {
+        static FileRecordView absent() {
+            return new FileRecordView(false, null, null, null);
+        }
     }
-  }
+
+    record TemplateSecurityView(
+            boolean previewMaskingEnabled,
+            boolean contentEncryptionEnabled,
+            String encryptionKeyRef,
+            boolean downloadRequiresApproval,
+            String maskingRuleSet) {}
+
+    record DispatchRecordView(boolean present, Long id, Long pipelineInstanceId, String channelCode) {
+        static DispatchRecordView absent() {
+            return new DispatchRecordView(false, null, null, null);
+        }
+    }
 }

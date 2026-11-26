@@ -29,36 +29,36 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleAlertController {
 
-  private final ConsoleAlertApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAlertApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 确认告警。 */
-  @PostMapping("/{alertId}/ack")
-  @AuditAction(action = "alert.ack", aggregateType = "alert", aggregateId = "#alertId")
-  public CommonResponse<ConsoleAlertActionResponse> ack(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long alertId,
-      @Valid @RequestBody AlertActionRequest request) {
-    return responseFactory.success(applicationService.ack(alertId, request, idempotencyKey));
-  }
+    /** 确认告警。 */
+    @PostMapping("/{alertId}/ack")
+    @AuditAction(action = "alert.ack", aggregateType = "alert", aggregateId = "#alertId")
+    public CommonResponse<ConsoleAlertActionResponse> ack(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long alertId,
+            @Valid @RequestBody AlertActionRequest request) {
+        return responseFactory.success(applicationService.ack(alertId, request, idempotencyKey));
+    }
 
-  /** 静默告警。 */
-  @PostMapping("/{alertId}/silence")
-  @AuditAction(action = "alert.silence", aggregateType = "alert", aggregateId = "#alertId")
-  public CommonResponse<ConsoleAlertActionResponse> silence(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long alertId,
-      @Valid @RequestBody AlertActionRequest request) {
-    return responseFactory.success(applicationService.silence(alertId, request, idempotencyKey));
-  }
+    /** 静默告警。 */
+    @PostMapping("/{alertId}/silence")
+    @AuditAction(action = "alert.silence", aggregateType = "alert", aggregateId = "#alertId")
+    public CommonResponse<ConsoleAlertActionResponse> silence(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long alertId,
+            @Valid @RequestBody AlertActionRequest request) {
+        return responseFactory.success(applicationService.silence(alertId, request, idempotencyKey));
+    }
 
-  /** 关闭告警。 */
-  @PostMapping("/{alertId}/close")
-  @AuditAction(action = "alert.close", aggregateType = "alert", aggregateId = "#alertId")
-  public CommonResponse<ConsoleAlertActionResponse> close(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long alertId,
-      @Valid @RequestBody AlertActionRequest request) {
-    return responseFactory.success(applicationService.close(alertId, request, idempotencyKey));
-  }
+    /** 关闭告警。 */
+    @PostMapping("/{alertId}/close")
+    @AuditAction(action = "alert.close", aggregateType = "alert", aggregateId = "#alertId")
+    public CommonResponse<ConsoleAlertActionResponse> close(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long alertId,
+            @Valid @RequestBody AlertActionRequest request) {
+        return responseFactory.success(applicationService.close(alertId, request, idempotencyKey));
+    }
 }

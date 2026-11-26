@@ -40,68 +40,63 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleFileTemplateController {
 
-  private final ConsoleFileTemplateApplicationService fileTemplateApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleFileTemplateApplicationService fileTemplateApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 分页查询文件模板列表。 */
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> list(
-      @Valid @ModelAttribute FileTemplateQueryRequest request) {
-    return responseFactory.success(fileTemplateApplicationService.list(request));
-  }
+    /** 分页查询文件模板列表。 */
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> list(
+            @Valid @ModelAttribute FileTemplateQueryRequest request) {
+        return responseFactory.success(fileTemplateApplicationService.list(request));
+    }
 
-  /** 获取文件模板详情。 */
-  @GetMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<ConsoleFileTemplateResponse> get(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(fileTemplateApplicationService.get(id, tenantId));
-  }
+    /** 获取文件模板详情。 */
+    @GetMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<ConsoleFileTemplateResponse> get(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(fileTemplateApplicationService.get(id, tenantId));
+    }
 
-  /** 新建文件模板。 */
-  @PostMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleFileTemplateResponse> create(
-      @Valid @RequestBody FileTemplateCreateRequest request) {
-    return responseFactory.success(fileTemplateApplicationService.create(request));
-  }
+    /** 新建文件模板。 */
+    @PostMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleFileTemplateResponse> create(@Valid @RequestBody FileTemplateCreateRequest request) {
+        return responseFactory.success(fileTemplateApplicationService.create(request));
+    }
 
-  /** 生成字段映射草案，供前端向导带入文件模板创建/更新表单。 */
-  @PostMapping("/mapping-draft")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
-      @Valid @RequestBody FileTemplateMappingDraftRequest request) {
-    FileTemplateMappingDraftCommand command = request.toCommand();
-    FileTemplateMappingDraftResult draftResult =
-        fileTemplateApplicationService.draftMapping(command);
-    FileTemplateMappingDraftResponse response = FileTemplateMappingDraftResponse.from(draftResult);
-    return responseFactory.success(response);
-  }
+    /** 生成字段映射草案，供前端向导带入文件模板创建/更新表单。 */
+    @PostMapping("/mapping-draft")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
+            @Valid @RequestBody FileTemplateMappingDraftRequest request) {
+        FileTemplateMappingDraftCommand command = request.toCommand();
+        FileTemplateMappingDraftResult draftResult = fileTemplateApplicationService.draftMapping(command);
+        FileTemplateMappingDraftResponse response = FileTemplateMappingDraftResponse.from(draftResult);
+        return responseFactory.success(response);
+    }
 
-  /** 使用导出 Worker 的同一规则预览最终文件名，不读取或修改模板配置。 */
-  @PostMapping("/naming-preview")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER')")
-  public CommonResponse<FileNamePreviewResponse> previewFileName(
-      @Valid @RequestBody FileNamePreviewRequest request) {
-    return responseFactory.success(fileTemplateApplicationService.previewFileName(request));
-  }
+    /** 使用导出 Worker 的同一规则预览最终文件名，不读取或修改模板配置。 */
+    @PostMapping("/naming-preview")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER')")
+    public CommonResponse<FileNamePreviewResponse> previewFileName(@Valid @RequestBody FileNamePreviewRequest request) {
+        return responseFactory.success(fileTemplateApplicationService.previewFileName(request));
+    }
 
-  /** 更新文件模板。 */
-  @PutMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleFileTemplateResponse> update(
-      @PathVariable Long id, @Valid @RequestBody FileTemplateUpdateRequest request) {
-    return responseFactory.success(fileTemplateApplicationService.update(id, request));
-  }
+    /** 更新文件模板。 */
+    @PutMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleFileTemplateResponse> update(
+            @PathVariable Long id, @Valid @RequestBody FileTemplateUpdateRequest request) {
+        return responseFactory.success(fileTemplateApplicationService.update(id, request));
+    }
 
-  /** 启用/禁用文件模板。 */
-  @PatchMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> patch(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    fileTemplateApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    /** 启用/禁用文件模板。 */
+    @PatchMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> patch(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        fileTemplateApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 }

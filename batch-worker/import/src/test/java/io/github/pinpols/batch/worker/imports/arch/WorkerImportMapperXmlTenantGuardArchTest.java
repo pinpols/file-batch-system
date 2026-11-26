@@ -9,13 +9,13 @@ import java.util.Set;
  * batch-test-support 的 {@link BaseMapperXmlTenantGuardArchTest}。
  */
 class WorkerImportMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
-  @Override
-  protected Set<String> tenantExemptTables() {
-    Set<String> tables = new HashSet<>(super.tenantExemptTables());
-    // V377 按物理存储和扫描范围协调跨租户对象，不含 tenant_id；仅授权 Import 角色。
-    tables.add("import_ingress_scan_storage_lease");
-    tables.add("import_ingress_scan_state");
-    tables.add("import_ingress_scan_object");
-    return tables;
-  }
+    @Override
+    protected Set<String> tenantExemptTables() {
+        Set<String> tables = new HashSet<>(super.tenantExemptTables());
+        // V377 按物理存储和扫描范围协调跨租户对象，不含 tenant_id；仅授权 Import 角色。
+        tables.add("import_ingress_scan_storage_lease");
+        tables.add("import_ingress_scan_state");
+        tables.add("import_ingress_scan_object");
+        return tables;
+    }
 }

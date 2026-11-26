@@ -10,27 +10,24 @@ import org.apache.ibatis.annotations.Param;
 /** {@code batch.asset_freshness_policy} Console 管理映射。 */
 public interface ConsoleAssetFreshnessPolicyMapper {
 
-  List<AssetFreshnessPolicyEntity> findByTenant(
-      @Param("tenantId") String tenantId,
-      @Param("assetCode") String assetCode,
-      @Param("enabled") Boolean enabled,
-      @Param("page") PageRequest page);
+    List<AssetFreshnessPolicyEntity> findByTenant(
+            @Param("tenantId") String tenantId,
+            @Param("assetCode") String assetCode,
+            @Param("enabled") Boolean enabled,
+            @Param("page") PageRequest page);
 
-  long countByTenant(
-      @Param("tenantId") String tenantId,
-      @Param("assetCode") String assetCode,
-      @Param("enabled") Boolean enabled);
+    long countByTenant(
+            @Param("tenantId") String tenantId,
+            @Param("assetCode") String assetCode,
+            @Param("enabled") Boolean enabled);
 
-  Optional<AssetFreshnessPolicyEntity> findById(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    Optional<AssetFreshnessPolicyEntity> findById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  Long lockJobDefinitionForPolicyWrite(
-      @Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
+    Long lockJobDefinitionForPolicyWrite(@Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
 
-  void upsert(@Param("p") AssetFreshnessPolicyUpsertParam param);
+    void upsert(@Param("p") AssetFreshnessPolicyUpsertParam param);
 
-  int updateById(@Param("p") AssetFreshnessPolicyUpsertParam param);
+    int updateById(@Param("p") AssetFreshnessPolicyUpsertParam param);
 
-  int updateEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") boolean enabled);
+    int updateEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") boolean enabled);
 }

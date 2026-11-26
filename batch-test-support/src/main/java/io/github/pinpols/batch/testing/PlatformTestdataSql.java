@@ -7,8 +7,8 @@ package io.github.pinpols.batch.testing;
  */
 public final class PlatformTestdataSql {
 
-  private PlatformTestdataSql() {}
+    private PlatformTestdataSql() {}
 
-  /** t2/t3 多租户种子（与 Flyway 基线后的 batch.* 表结构对齐）。 */
-  public static final String MULTI_TENANT_SEED = "classpath:db/testdata/multi-tenant-seed.sql";
+    /** t2/t3 多租户种子（与 Flyway 基线后的 batch.* 表结构对齐）。 */
+    public static final String MULTI_TENANT_SEED = "classpath:db/testdata/multi-tenant-seed.sql";
 }

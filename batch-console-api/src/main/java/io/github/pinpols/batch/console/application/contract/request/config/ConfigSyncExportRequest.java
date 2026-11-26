@@ -11,17 +11,17 @@ import lombok.Data;
 @Data
 public class ConfigSyncExportRequest {
 
-  @NotBlank
-  @Size(max = 64)
-  private String sourceTenantId;
+    @NotBlank
+    @Size(max = 64)
+    private String sourceTenantId;
 
-  @NotBlank
-  @Size(max = 64)
-  private String sourceEnv;
+    @NotBlank
+    @Size(max = 64)
+    private String sourceEnv;
 
-  @NotBlank
-  @Size(max = 64)
-  private String targetEnv;
+    @NotBlank
+    @Size(max = 64)
+    private String targetEnv;
 
-  private Set<@NotNull ConfigType> configTypes;
+    private Set<@NotNull ConfigType> configTypes;
 }

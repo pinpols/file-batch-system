@@ -27,59 +27,57 @@ import org.yaml.snakeyaml.Yaml;
 @DisplayName("流水线 worker 配置守护:读取四类流水线 worker 模块源码中的应用配置,校验原子执行隔离检查开关显式开启")
 class PipelineWorkerAtomicIsolationOptInArchTest {
 
-  /** 期望 key 路径:batch.worker.atomic.isolation-check.enabled。 */
-  private static final String[] EXPECTED_KEY_PATH = {
-    "batch", "worker", "atomic", "isolation-check", "enabled"
-  };
+    /** 期望 key 路径:batch.worker.atomic.isolation-check.enabled。 */
+    private static final String[] EXPECTED_KEY_PATH = {"batch", "worker", "atomic", "isolation-check", "enabled"};
 
-  /** 定位 worker 模块根:e2e 模块同级目录(父目录下的 sibling)。 */
-  private static Path workerApplicationYml(String module) {
-    // e2e 测试 cwd = batch-e2e-tests/,父目录是 reactor 根。
-    // #672:6 worker 模块嵌套到 batch-worker/<name>;入参仍用 artifactId 风格名
-    // (batch-worker-import),这里映射成嵌套目录路径(batch-worker/import)。
-    Path projectRoot = Paths.get("").toAbsolutePath().getParent();
-    String relPath = module.replaceFirst("^batch-worker-", "batch-worker/");
-    return projectRoot.resolve(relPath).resolve("src/main/resources/application.yml");
-  }
+    /** 定位 worker 模块根:e2e 模块同级目录(父目录下的 sibling)。 */
+    private static Path workerApplicationYml(String module) {
+        // e2e 测试 cwd = batch-e2e-tests/,父目录是 reactor 根。
+        // #672:6 worker 模块嵌套到 batch-worker/<name>;入参仍用 artifactId 风格名
+        // (batch-worker-import),这里映射成嵌套目录路径(batch-worker/import)。
+        Path projectRoot = Paths.get("").toAbsolutePath().getParent();
+        String relPath = module.replaceFirst("^batch-worker-", "batch-worker/");
+        return projectRoot.resolve(relPath).resolve("src/main/resources/application.yml");
+    }
 
-  @Test
-  @DisplayName("ADR-029 守护:batch-worker-import application.yml 必须显式 opt-in isolation-check")
-  void shouldOptInIsolationCheck_whenImportWorker() {
-    assertOptIn("batch-worker-import");
-  }
+    @Test
+    @DisplayName("ADR-029 守护:batch-worker-import application.yml 必须显式 opt-in isolation-check")
+    void shouldOptInIsolationCheck_whenImportWorker() {
+        assertOptIn("batch-worker-import");
+    }
 
-  @Test
-  @DisplayName("ADR-029 守护:batch-worker-export application.yml 必须显式 opt-in isolation-check")
-  void shouldOptInIsolationCheck_whenExportWorker() {
-    assertOptIn("batch-worker-export");
-  }
+    @Test
+    @DisplayName("ADR-029 守护:batch-worker-export application.yml 必须显式 opt-in isolation-check")
+    void shouldOptInIsolationCheck_whenExportWorker() {
+        assertOptIn("batch-worker-export");
+    }
 
-  @Test
-  @DisplayName("ADR-029 守护:batch-worker-process application.yml 必须显式 opt-in isolation-check")
-  void shouldOptInIsolationCheck_whenProcessWorker() {
-    assertOptIn("batch-worker-process");
-  }
+    @Test
+    @DisplayName("ADR-029 守护:batch-worker-process application.yml 必须显式 opt-in isolation-check")
+    void shouldOptInIsolationCheck_whenProcessWorker() {
+        assertOptIn("batch-worker-process");
+    }
 
-  @Test
-  @DisplayName("ADR-029 守护:batch-worker-dispatch application.yml 必须显式 opt-in isolation-check")
-  void shouldOptInIsolationCheck_whenDispatchWorker() {
-    assertOptIn("batch-worker-dispatch");
-  }
+    @Test
+    @DisplayName("ADR-029 守护:batch-worker-dispatch application.yml 必须显式 opt-in isolation-check")
+    void shouldOptInIsolationCheck_whenDispatchWorker() {
+        assertOptIn("batch-worker-dispatch");
+    }
 
-  /** 单独断言一个 module。 */
-  private void assertOptIn(String module) {
-    Path yml = workerApplicationYml(module);
-    assertThat(yml)
-        .as(
-            "[ADR-029 / PR #252-K4] %s 未找到 application.yml:%s。"
-                + "若 worker 模块改名或挪了 application.yml 位置,请同步更新本守护测试。",
-            module, yml)
-        .exists();
+    /** 单独断言一个 module。 */
+    private void assertOptIn(String module) {
+        Path yml = workerApplicationYml(module);
+        assertThat(yml)
+                .as(
+                        "[ADR-029 / PR #252-K4] %s 未找到 application.yml:%s。"
+                                + "若 worker 模块改名或挪了 application.yml 位置,请同步更新本守护测试。",
+                        module, yml)
+                .exists();
 
-    Map<String, Object> root = loadYaml(yml);
-    Object actual = walk(root, EXPECTED_KEY_PATH);
+        Map<String, Object> root = loadYaml(yml);
+        Object actual = walk(root, EXPECTED_KEY_PATH);
 
-    assertThat(actual).as("""
+        assertThat(actual).as("""
             [ADR-029] %s 必须在 %s 显式声明 batch.worker.atomic.isolation-check.enabled=true,
             否则 PipelineWorkerAtomicClasspathCheck(默认 opt-in)失效，pipeline worker 误引
             batch-worker-atomic 依赖时不会 fail-fast。请在 application.yml 加:
@@ -89,36 +87,36 @@ class PipelineWorkerAtomicIsolationOptInArchTest {
                     isolation-check:
                       enabled: true
             """, module, yml).isEqualTo(Boolean.TRUE);
-  }
-
-  /** 按 key 路径深度优先取值;任一层不存在或非 Map 即返回 {@code null}。 */
-  @SuppressWarnings("unchecked")
-  private static Object walk(Map<String, Object> root, String... path) {
-    Object cursor = root;
-    for (String segment : path) {
-      if (!(cursor instanceof Map<?, ?> map)) {
-        return null;
-      }
-      cursor = ((Map<String, Object>) map).get(segment);
-      if (cursor == null) {
-        return null;
-      }
     }
-    return cursor;
-  }
 
-  private static Map<String, Object> loadYaml(Path file) {
-    try (var in = Files.newInputStream(file)) {
-      Yaml yaml = new Yaml();
-      Object loaded = yaml.load(in);
-      if (loaded instanceof Map<?, ?> map) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> typed = (Map<String, Object>) map;
-        return typed;
-      }
-      throw new IllegalStateException("application.yml 根节点不是 Map(可能为空文件或纯 list):" + file);
-    } catch (IOException e) {
-      throw new IllegalStateException("读取 application.yml 失败:" + file, e);
+    /** 按 key 路径深度优先取值;任一层不存在或非 Map 即返回 {@code null}。 */
+    @SuppressWarnings("unchecked")
+    private static Object walk(Map<String, Object> root, String... path) {
+        Object cursor = root;
+        for (String segment : path) {
+            if (!(cursor instanceof Map<?, ?> map)) {
+                return null;
+            }
+            cursor = ((Map<String, Object>) map).get(segment);
+            if (cursor == null) {
+                return null;
+            }
+        }
+        return cursor;
     }
-  }
+
+    private static Map<String, Object> loadYaml(Path file) {
+        try (var in = Files.newInputStream(file)) {
+            Yaml yaml = new Yaml();
+            Object loaded = yaml.load(in);
+            if (loaded instanceof Map<?, ?> map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> typed = (Map<String, Object>) map;
+                return typed;
+            }
+            throw new IllegalStateException("application.yml 根节点不是 Map(可能为空文件或纯 list):" + file);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取 application.yml 失败:" + file, e);
+        }
+    }
 }

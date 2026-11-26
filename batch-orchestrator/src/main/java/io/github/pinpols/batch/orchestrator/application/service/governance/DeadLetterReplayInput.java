@@ -8,16 +8,16 @@ import lombok.Builder;
  */
 @Builder
 public record DeadLetterReplayInput(
-    String tenantId,
-    Long deadLetterTaskId,
-    String operatorId,
-    String reason,
-    String idempotencyKey,
-    boolean externalActionVerifiedNotExecuted,
-    String externalOutcomeEvidenceReference) {
+        String tenantId,
+        Long deadLetterTaskId,
+        String operatorId,
+        String reason,
+        String idempotencyKey,
+        boolean externalActionVerifiedNotExecuted,
+        String externalOutcomeEvidenceReference) {
 
-  @Override
-  public String toString() {
-    return "DeadLetterReplayInput[redacted]";
-  }
+    @Override
+    public String toString() {
+        return "DeadLetterReplayInput[redacted]";
+    }
 }

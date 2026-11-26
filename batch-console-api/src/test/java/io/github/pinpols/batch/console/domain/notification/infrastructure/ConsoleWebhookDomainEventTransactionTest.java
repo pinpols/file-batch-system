@@ -28,95 +28,91 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("领域事件的事务边界: 仅提交后分发, 回滚事件被丢弃")
 class ConsoleWebhookDomainEventTransactionTest {
 
-  @Test
-  @DisplayName("事务提交后才触发外部通知与订阅规则分发, 回滚的事件不产生任何投递")
-  void shouldDispatchOnlyAfterCommitAndDiscardRolledBackEvent() {
-    try (var context = new AnnotationConfigApplicationContext(TestConfiguration.class)) {
-      WebhookDispatcher webhook = context.getBean(WebhookDispatcher.class);
-      SubscriptionRuleWebhookDispatcher subscription =
-          context.getBean(SubscriptionRuleWebhookDispatcher.class);
-      TransactionTemplate transaction =
-          new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
-      ConsoleRealtimeDomainEvent event = event();
+    @Test
+    @DisplayName("事务提交后才触发外部通知与订阅规则分发, 回滚的事件不产生任何投递")
+    void shouldDispatchOnlyAfterCommitAndDiscardRolledBackEvent() {
+        try (var context = new AnnotationConfigApplicationContext(TestConfiguration.class)) {
+            WebhookDispatcher webhook = context.getBean(WebhookDispatcher.class);
+            SubscriptionRuleWebhookDispatcher subscription = context.getBean(SubscriptionRuleWebhookDispatcher.class);
+            TransactionTemplate transaction =
+                    new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+            ConsoleRealtimeDomainEvent event = event();
 
-      transaction.executeWithoutResult(status -> {
-        context.publishEvent(event);
-        verifyNoInteractions(webhook, subscription);
-      });
+            transaction.executeWithoutResult(status -> {
+                context.publishEvent(event);
+                verifyNoInteractions(webhook, subscription);
+            });
 
-      verify(webhook)
-          .dispatchAsync(
-              "tenant-1", "JOB_COMPLETED", "job-instance", "cursor-1", null, event.emittedAt());
-      verify(subscription)
-          .dispatch(
-              "tenant-1", "JOB_COMPLETED", "job-instance", "cursor-1", null, event.emittedAt());
+            verify(webhook)
+                    .dispatchAsync("tenant-1", "JOB_COMPLETED", "job-instance", "cursor-1", null, event.emittedAt());
+            verify(subscription)
+                    .dispatch("tenant-1", "JOB_COMPLETED", "job-instance", "cursor-1", null, event.emittedAt());
 
-      reset(webhook, subscription);
-      transaction.executeWithoutResult(status -> {
-        context.publishEvent(event);
-        status.setRollbackOnly();
-      });
-      verifyNoInteractions(webhook, subscription);
-    }
-  }
-
-  private static ConsoleRealtimeDomainEvent event() {
-    return ConsoleRealtimeDomainEvent.builder().tenantId("tenant-1").stream("job-instance")
-        .eventType("JOB_COMPLETED")
-        .cursor("cursor-1")
-        .emittedAt(Instant.parse("2026-09-20T00:00:00Z"))
-        .build();
-  }
-
-  @Configuration(proxyBeanMethods = false)
-  @EnableAsync
-  @EnableTransactionManagement
-  static class TestConfiguration {
-
-    @Bean(name = ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
-    Executor pushTaskExecutor() {
-      return new SyncTaskExecutor();
+            reset(webhook, subscription);
+            transaction.executeWithoutResult(status -> {
+                context.publishEvent(event);
+                status.setRollbackOnly();
+            });
+            verifyNoInteractions(webhook, subscription);
+        }
     }
 
-    @Bean
-    PlatformTransactionManager transactionManager() {
-      return new TestTransactionManager();
+    private static ConsoleRealtimeDomainEvent event() {
+        return ConsoleRealtimeDomainEvent.builder().tenantId("tenant-1").stream("job-instance")
+                .eventType("JOB_COMPLETED")
+                .cursor("cursor-1")
+                .emittedAt(Instant.parse("2026-09-20T00:00:00Z"))
+                .build();
     }
 
-    @Bean
-    WebhookDispatcher webhookDispatcher() {
-      return mock(WebhookDispatcher.class);
+    @Configuration(proxyBeanMethods = false)
+    @EnableAsync
+    @EnableTransactionManagement
+    static class TestConfiguration {
+
+        @Bean(name = ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
+        Executor pushTaskExecutor() {
+            return new SyncTaskExecutor();
+        }
+
+        @Bean
+        PlatformTransactionManager transactionManager() {
+            return new TestTransactionManager();
+        }
+
+        @Bean
+        WebhookDispatcher webhookDispatcher() {
+            return mock(WebhookDispatcher.class);
+        }
+
+        @Bean
+        SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher() {
+            return mock(SubscriptionRuleWebhookDispatcher.class);
+        }
+
+        @Bean
+        ConsoleWebhookDomainEventListener consoleWebhookDomainEventListener(
+                WebhookDispatcher webhookDispatcher,
+                SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher) {
+            return new ConsoleWebhookDomainEventListener(webhookDispatcher, subscriptionRuleWebhookDispatcher);
+        }
     }
 
-    @Bean
-    SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher() {
-      return mock(SubscriptionRuleWebhookDispatcher.class);
+    @SuppressWarnings("serial")
+    private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {}
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {}
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {}
     }
-
-    @Bean
-    ConsoleWebhookDomainEventListener consoleWebhookDomainEventListener(
-        WebhookDispatcher webhookDispatcher,
-        SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher) {
-      return new ConsoleWebhookDomainEventListener(
-          webhookDispatcher, subscriptionRuleWebhookDispatcher);
-    }
-  }
-
-  @SuppressWarnings("serial")
-  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
-
-    @Override
-    protected Object doGetTransaction() {
-      return new Object();
-    }
-
-    @Override
-    protected void doBegin(Object transaction, TransactionDefinition definition) {}
-
-    @Override
-    protected void doCommit(DefaultTransactionStatus status) {}
-
-    @Override
-    protected void doRollback(DefaultTransactionStatus status) {}
-  }
 }

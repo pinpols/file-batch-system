@@ -22,98 +22,92 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Kafka 重平衡 — 背压生效时新分配分区补暂停,空闲时保持可消费")
 class KafkaTaskConsumerRebalanceTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("kafka:9092")
-      .kafkaTopicPattern("batch.task.dispatch.tx.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
-  private MockConsumer<String, byte[]> mockConsumer;
+    private TaskDispatcher dispatcher;
+    private MockConsumer<String, byte[]> mockConsumer;
 
-  @AfterEach
-  void tearDown() {
-    if (dispatcher != null) dispatcher.stop();
-    if (mockConsumer != null) mockConsumer.close();
-  }
-
-  private TaskDispatcher newDispatcher() {
-    return new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-  }
-
-  @Test
-  @DisplayName("背压生效期间重平衡新分配的分区立即暂停,不绕过并发上限")
-  void shouldRestorePause_whenBackpressureActive() {
-    dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>("latest");
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
-
-      // 准备 — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
-      setPaused(kafka, true);
-      TopicPartition tp0 = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-      TopicPartition tp1 = new TopicPartition("batch.task.dispatch.tx.t1", 0);
-
-      // 执行 — 模拟 Kafka rebalance 给出新 partition
-      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-          kafka.new PauseAwareRebalanceListener();
-      mockConsumer.assign(List.of(tp0, tp1));
-      listener.onPartitionsAssigned(List.of(tp0, tp1));
-
-      // 断言 — 新 partition 应该被 pause
-      assertThat(mockConsumer.paused()).containsExactlyInAnyOrder(tp0, tp1);
+    @AfterEach
+    void tearDown() {
+        if (dispatcher != null) dispatcher.stop();
+        if (mockConsumer != null) mockConsumer.close();
     }
-  }
 
-  @Test
-  @DisplayName("无背压时新分配分区保持可消费,不额外暂停")
-  void shouldNotPause_whenBackpressureInactive() {
-    dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>("latest");
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
-
-      // 正常路径:paused=false 时不应 pause 新 partition
-      TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-      mockConsumer.assign(List.of(tp));
-
-      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-          kafka.new PauseAwareRebalanceListener();
-      listener.onPartitionsAssigned(List.of(tp));
-
-      assertThat(mockConsumer.paused()).isEmpty();
+    private TaskDispatcher newDispatcher() {
+        return new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     }
-  }
 
-  @Test
-  @DisplayName("重平衡回调收到空分区列表时不暂停也不报错")
-  void shouldBeNoop_whenAssignedPartitionsEmpty() {
-    dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>("latest");
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
+    @Test
+    @DisplayName("背压生效期间重平衡新分配的分区立即暂停,不绕过并发上限")
+    void shouldRestorePause_whenBackpressureActive() {
+        dispatcher = newDispatcher();
+        mockConsumer = new MockConsumer<>("latest");
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
 
-      setPaused(kafka, true);
+            // 准备 — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
+            setPaused(kafka, true);
+            TopicPartition tp0 = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+            TopicPartition tp1 = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
-      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-          kafka.new PauseAwareRebalanceListener();
-      listener.onPartitionsAssigned(List.of());
+            // 执行 — 模拟 Kafka rebalance 给出新 partition
+            KafkaTaskConsumer.PauseAwareRebalanceListener listener = kafka.new PauseAwareRebalanceListener();
+            mockConsumer.assign(List.of(tp0, tp1));
+            listener.onPartitionsAssigned(List.of(tp0, tp1));
 
-      assertThat(mockConsumer.paused()).isEmpty();
+            // 断言 — 新 partition 应该被 pause
+            assertThat(mockConsumer.paused()).containsExactlyInAnyOrder(tp0, tp1);
+        }
     }
-  }
 
-  private static void setPaused(KafkaTaskConsumer kafka, boolean v) {
-    try {
-      var f = KafkaTaskConsumer.class.getDeclaredField("paused");
-      f.setAccessible(true);
-      f.setBoolean(kafka, v);
-    } catch (ReflectiveOperationException e) {
-      throw new AssertionError(e);
+    @Test
+    @DisplayName("无背压时新分配分区保持可消费,不额外暂停")
+    void shouldNotPause_whenBackpressureInactive() {
+        dispatcher = newDispatcher();
+        mockConsumer = new MockConsumer<>("latest");
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
+
+            // 正常路径:paused=false 时不应 pause 新 partition
+            TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+            mockConsumer.assign(List.of(tp));
+
+            KafkaTaskConsumer.PauseAwareRebalanceListener listener = kafka.new PauseAwareRebalanceListener();
+            listener.onPartitionsAssigned(List.of(tp));
+
+            assertThat(mockConsumer.paused()).isEmpty();
+        }
     }
-  }
+
+    @Test
+    @DisplayName("重平衡回调收到空分区列表时不暂停也不报错")
+    void shouldBeNoop_whenAssignedPartitionsEmpty() {
+        dispatcher = newDispatcher();
+        mockConsumer = new MockConsumer<>("latest");
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
+
+            setPaused(kafka, true);
+
+            KafkaTaskConsumer.PauseAwareRebalanceListener listener = kafka.new PauseAwareRebalanceListener();
+            listener.onPartitionsAssigned(List.of());
+
+            assertThat(mockConsumer.paused()).isEmpty();
+        }
+    }
+
+    private static void setPaused(KafkaTaskConsumer kafka, boolean v) {
+        try {
+            var f = KafkaTaskConsumer.class.getDeclaredField("paused");
+            f.setAccessible(true);
+            f.setBoolean(kafka, v);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
 }

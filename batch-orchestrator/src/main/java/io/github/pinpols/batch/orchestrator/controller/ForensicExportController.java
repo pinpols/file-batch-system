@@ -38,45 +38,44 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ForensicExportController {
 
-  private final ForensicExportService forensicExportService;
+    private final ForensicExportService forensicExportService;
 
-  @PostMapping("/export")
-  public ForensicExportResponse export(@RequestBody ExportRequestBody body) {
-    ForensicExportRequest request = ForensicExportRequest.builder()
-        .tenantId(body.tenantId())
-        .bizDateFrom(body.bizDateFrom())
-        .bizDateTo(body.bizDateTo())
-        .jobCodes(body.jobCodes())
-        .exportFormat(body.exportFormat())
-        .requestedBy(body.requestedBy())
-        .traceId(body.traceId())
-        .build();
-    return forensicExportService.export(request);
-  }
+    @PostMapping("/export")
+    public ForensicExportResponse export(@RequestBody ExportRequestBody body) {
+        ForensicExportRequest request = ForensicExportRequest.builder()
+                .tenantId(body.tenantId())
+                .bizDateFrom(body.bizDateFrom())
+                .bizDateTo(body.bizDateTo())
+                .jobCodes(body.jobCodes())
+                .exportFormat(body.exportFormat())
+                .requestedBy(body.requestedBy())
+                .traceId(body.traceId())
+                .build();
+        return forensicExportService.export(request);
+    }
 
-  @GetMapping("/export/{exportId}/download")
-  public ResponseEntity<FileSystemResource> download(
-      @PathVariable String exportId, @RequestParam("tenantId") String tenantId) throws IOException {
-    ForensicExportService.FileDownloadArtifact artifact =
-        forensicExportService.loadDownloadArtifact(tenantId, exportId);
-    Path file = artifact.path();
-    HttpHeaders headers = new HttpHeaders();
-    headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    headers.add(
-        "X-Forensic-Sha256", EmptyChecks.isNull(artifact.sha256()) ? "" : artifact.sha256());
-    ResponseEntity.BodyBuilder responseBuilder =
-        ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_OCTET_STREAM);
-    FileSystemResource resource = new FileSystemResource(file);
-    return responseBuilder.contentLength(artifact.contentLength()).body(resource);
-  }
+    @GetMapping("/export/{exportId}/download")
+    public ResponseEntity<FileSystemResource> download(
+            @PathVariable String exportId, @RequestParam("tenantId") String tenantId) throws IOException {
+        ForensicExportService.FileDownloadArtifact artifact =
+                forensicExportService.loadDownloadArtifact(tenantId, exportId);
+        Path file = artifact.path();
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
+        headers.add("X-Forensic-Sha256", EmptyChecks.isNull(artifact.sha256()) ? "" : artifact.sha256());
+        ResponseEntity.BodyBuilder responseBuilder =
+                ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_OCTET_STREAM);
+        FileSystemResource resource = new FileSystemResource(file);
+        return responseBuilder.contentLength(artifact.contentLength()).body(resource);
+    }
 
-  /** 内部 API request body（不暴露给业务方）。 */
-  public record ExportRequestBody(
-      String tenantId,
-      LocalDate bizDateFrom,
-      LocalDate bizDateTo,
-      List<String> jobCodes,
-      String exportFormat,
-      String requestedBy,
-      String traceId) {}
+    /** 内部 API request body（不暴露给业务方）。 */
+    public record ExportRequestBody(
+            String tenantId,
+            LocalDate bizDateFrom,
+            LocalDate bizDateTo,
+            List<String> jobCodes,
+            String exportFormat,
+            String requestedBy,
+            String traceId) {}
 }

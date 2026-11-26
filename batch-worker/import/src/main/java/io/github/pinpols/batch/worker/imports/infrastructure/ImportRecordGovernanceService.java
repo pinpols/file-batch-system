@@ -55,454 +55,446 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ImportRecordGovernanceService {
 
-  private static final String BAD_RECORDS_KEY = "badRecords";
+    private static final String BAD_RECORDS_KEY = "badRecords";
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String KEY_SKIPPED_COUNT = PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT;
-  // C-2.15：按 stage 细分的 skipped / failed 计数，独立于 KEY_SKIPPED_COUNT 回退语义；
-  // 运维可单独看 parse vs validation 哪一步在丢数据，上层后续可引入双阈值配置
-  private static final String KEY_PARSE_SKIPPED_COUNT = "parseSkippedCount";
-  private static final String KEY_VALIDATE_SKIPPED_COUNT = "validateSkippedCount";
-  private static final String KEY_PARSE_FAILED_COUNT = "parseFailedCount";
-  private static final String KEY_VALIDATE_FAILED_COUNT = "validateFailedCount";
+    // ── duplicate literal constants ─────────────────────────────────────────
+    private static final String KEY_SKIPPED_COUNT = PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT;
+    // C-2.15：按 stage 细分的 skipped / failed 计数，独立于 KEY_SKIPPED_COUNT 回退语义；
+    // 运维可单独看 parse vs validation 哪一步在丢数据，上层后续可引入双阈值配置
+    private static final String KEY_PARSE_SKIPPED_COUNT = "parseSkippedCount";
+    private static final String KEY_VALIDATE_SKIPPED_COUNT = "validateSkippedCount";
+    private static final String KEY_PARSE_FAILED_COUNT = "parseFailedCount";
+    private static final String KEY_VALIDATE_FAILED_COUNT = "validateFailedCount";
 
-  private final ImportSkipProperties skipProperties;
-  private final PlatformFileRecordRepository fileRecords;
-  private final PlatformFileAuditRepository fileAudits;
-  private final ImportErrorOutputStorage errorOutputStorage;
-  private final BatchSecurityProperties batchSecurityProperties;
+    private final ImportSkipProperties skipProperties;
+    private final PlatformFileRecordRepository fileRecords;
+    private final PlatformFileAuditRepository fileAudits;
+    private final ImportErrorOutputStorage errorOutputStorage;
+    private final BatchSecurityProperties batchSecurityProperties;
 
-  public boolean isSkipEnabled() {
-    return skipProperties.enabled();
-  }
-
-  public boolean isSkippable(String errorCode) {
-    if (!isSkipEnabled() || !Texts.hasText(errorCode)) {
-      return false;
-    }
-    Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
-    return allowedErrorCodes.isEmpty() || allowedErrorCodes.contains(errorCode);
-  }
-
-  public boolean shouldFailOnSkip(String errorCode) {
-    SkipAction action = resolveSkipAction();
-    return action == SkipAction.FAIL_BATCH && isSkippable(errorCode);
-  }
-
-  public boolean shouldManualReview() {
-    return resolveSkipAction() == SkipAction.MANUAL_REVIEW;
-  }
-
-  /** 带 Excel 物理定位({@link SourceLocator})的跳过记录;locator 为空时退化为不带定位的行为。 */
-  public void recordSkippedRecord(ImportJobContext context, BadRecordCommand command) {
-    BadRecordContext badRecordContext = toBadRecordContext(context, command, true);
-    recordBadRecord(badRecordContext);
-  }
-
-  /** 带 Excel 物理定位({@link SourceLocator})的失败记录;locator 为空时退化为不带定位的行为。 */
-  public void recordFailedRecord(ImportJobContext context, BadRecordCommand command) {
-    BadRecordContext badRecordContext = toBadRecordContext(context, command, false);
-    recordBadRecord(badRecordContext);
-  }
-
-  private BadRecordContext toBadRecordContext(
-      ImportJobContext context, BadRecordCommand command, boolean skipped) {
-    BadRecordContext badRecordContext = BadRecordContext.builder()
-        .context(context)
-        .stage(command.stage())
-        .recordNo(command.recordNo())
-        .errorCode(command.errorCode())
-        .errorMessage(command.errorMessage())
-        .rawRecord(command.rawRecord())
-        .skipped(skipped)
-        .locator(command.locator())
-        .build();
-    return badRecordContext;
-  }
-
-  /** 单条坏行登记输入；Excel物理定位只由能够提供该信息的格式填写。 */
-  @Builder
-  public record BadRecordCommand(
-      ImportStage stage,
-      Long recordNo,
-      String errorCode,
-      String errorMessage,
-      Object rawRecord,
-      SourceLocator locator) {}
-
-  /**
-   * Excel 物理定位:{@code rowNum} 为 1-based 物理行号(SAX 的 0-based rowNum +1), {@code column}
-   * 为出错列的表头名。两者均可空,缺失时坏行不带定位写入数据库。
-   */
-  public record SourceLocator(Long rowNum, String column) {}
-
-  public void recordThresholdViolation(
-      ImportJobContext context, ImportStage stage, String errorCode, String message) {
-    BadRecordContext brc = BadRecordContext.builder()
-        .context(context)
-        .stage(stage)
-        .errorCode(errorCode)
-        .errorMessage(message)
-        .build();
-    recordBadRecord(brc);
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
-  }
-
-  public boolean withinThreshold(ImportJobContext context) {
-    if (!isSkipEnabled()) {
-      return true;
-    }
-    long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
-    long totalCount =
-        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
-    SkipThresholdMode mode = resolveThresholdMode();
-    if (mode == SkipThresholdMode.PERCENTAGE) {
-      double rate = totalCount <= 0 ? 0D : (double) skippedCount / (double) totalCount;
-      double effectiveMaxSkipRate = Math.max(0D, skipProperties.maxSkipRate());
-      return rate <= effectiveMaxSkipRate;
-    }
-    int effectiveMaxSkipCount = Math.max(0, skipProperties.maxSkipCount());
-    return skippedCount <= effectiveMaxSkipCount;
-  }
-
-  public void markThresholdExceeded(ImportJobContext context) {
-    if (context != null) {
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
-    }
-  }
-
-  public void finalizeErrorOutput(ImportJobContext context) {
-    if (EmptyChecks.isNotNull(context)
-        && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
-      return;
-    }
-    List<ImportBadRecord> badRecords = badRecords(context);
-    if (badRecords.isEmpty()) {
-      return;
-    }
-    Map<String, Object> attrs = context.getAttributes();
-    Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
-    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
-    boolean hasRequiredFileContext =
-        EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
-    if (!hasRequiredFileContext) {
-      return;
-    }
-    String errorOutputPath = null;
-    ErrorSinkType sinkType = resolveErrorSinkType();
-    if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
-      ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
-      List<ImportBadRecord> outputRecords = masking.enabled()
-          ? badRecords.stream()
-              .map(record -> maskBadRecord(record, masking.ruleSet()))
-              .toList()
-          : badRecords;
-      errorOutputPath = errorOutputStorage.writeErrorOutput(
-          context.getTenantId(), String.valueOf(fileId), outputRecords);
-    }
-    Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("badRecordCount", badRecords.size());
-    long successCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
-    metadata.put(ImportRuntimeKeys.SUCCESS_COUNT, successCount);
-    long skippedCount = numberValue(attrs.get(KEY_SKIPPED_COUNT));
-    metadata.put(KEY_SKIPPED_COUNT, skippedCount);
-    long failedCount = numberValue(attrs.get(ImportRuntimeKeys.FAILED_COUNT));
-    metadata.put(ImportRuntimeKeys.FAILED_COUNT, failedCount);
-    long totalCount = numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
-    metadata.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
-    // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
-    long parseSkippedCount = numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT));
-    metadata.put(KEY_PARSE_SKIPPED_COUNT, parseSkippedCount);
-    long validateSkippedCount = numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT));
-    metadata.put(KEY_VALIDATE_SKIPPED_COUNT, validateSkippedCount);
-    long parseFailedCount = numberValue(attrs.get(KEY_PARSE_FAILED_COUNT));
-    metadata.put(KEY_PARSE_FAILED_COUNT, parseFailedCount);
-    long validateFailedCount = numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT));
-    metadata.put(KEY_VALIDATE_FAILED_COUNT, validateFailedCount);
-    metadata.put(
-        PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED,
-        Boolean.TRUE.equals(attrs.get(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED)));
-    boolean manualReviewRequired =
-        Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))
-            || shouldManualReview();
-    metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
-    if (Texts.hasText(errorOutputPath)) {
-      metadata.put("errorOutputPath", errorOutputPath);
-    }
-    fileRecords.updateFileMetadata(fileId, metadata);
-    FileAuditParamBuilder auditBuilder = FileAuditParam.builder()
-        .fileId(fileId)
-        .tenantId(context.getTenantId())
-        .operationType(FileAuditOperationType.BAD_RECORD_GOVERNANCE.code())
-        .operationResult(OperationResult.SUCCESS.code())
-        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId());
-    Object auditTraceValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
-    String auditTraceId = Objects.toString(auditTraceValue, null);
-    FileAuditParam audit = auditBuilder
-        .traceId(auditTraceId)
-        .evidenceRef("import-error-output")
-        .detailSummary(metadata)
-        .build();
-    fileAudits.appendAudit(audit);
-  }
-
-  /**
-   * C-2.15：把 stage → stage-scoped counter key 的映射放这里。 PARSE 对应
-   * parseSkippedCount/parseFailedCount；VALIDATE 对应 validateSkippedCount/
-   * validateFailedCount；其他阶段（LOAD / REPORT 等）暂不细分返回 null（不写 stage-scoped counter， KEY_SKIPPED_COUNT
-   * 仍正常累加保持总阈值语义）。
-   */
-  private String resolveStageScopedKey(ImportStage stage, boolean skipped) {
-    if (stage == null) {
-      return null;
-    }
-    return switch (stage) {
-      case PARSE -> skipped ? KEY_PARSE_SKIPPED_COUNT : KEY_PARSE_FAILED_COUNT;
-      case VALIDATE -> skipped ? KEY_VALIDATE_SKIPPED_COUNT : KEY_VALIDATE_FAILED_COUNT;
-      default -> null;
-    };
-  }
-
-  @Builder
-  private record BadRecordContext(
-      ImportJobContext context,
-      ImportStage stage,
-      Long recordNo,
-      String errorCode,
-      String errorMessage,
-      Object rawRecord,
-      boolean skipped,
-      SourceLocator locator) {}
-
-  private void recordBadRecord(BadRecordContext brc) {
-    ImportJobContext context = brc.context();
-    ImportStage stage = brc.stage();
-    Long recordNo = brc.recordNo();
-    String errorCode = brc.errorCode();
-    String errorMessage = brc.errorMessage();
-    Object rawRecord = brc.rawRecord();
-    boolean skipped = brc.skipped();
-    SourceLocator locator = brc.locator();
-    Long sourceRowNum = locator == null ? null : locator.rowNum();
-    String sourceColumn = locator == null ? null : locator.column();
-    Map<String, Object> attrs = context.getAttributes();
-    String badRecordStage = EmptyChecks.isNull(stage) ? null : stage.name();
-    String badRecordSkipActionCode = resolveSkipAction().code();
-    ImportBadRecord badRecord = new ImportBadRecord(
-        recordNo,
-        badRecordStage,
-        errorCode,
-        errorMessage,
-        rawRecord,
-        skipped,
-        badRecordSkipActionCode,
-        null,
-        sourceRowNum,
-        sourceColumn);
-    List<ImportBadRecord> recordedBadRecords = badRecords(context);
-    recordedBadRecords.add(badRecord);
-
-    if (skipped) {
-      increment(context, KEY_SKIPPED_COUNT);
-      // C-2.15：按 stage 分桶计数，便于 parse 和 validate 的阈值 / 指标分开观察
-      String stageScoped = resolveStageScopedKey(stage, true);
-      if (stageScoped != null) {
-        increment(context, stageScoped);
-      }
-    } else {
-      increment(context, ImportRuntimeKeys.FAILED_COUNT);
-      String stageScoped = resolveStageScopedKey(stage, false);
-      if (stageScoped != null) {
-        increment(context, stageScoped);
-      }
+    public boolean isSkipEnabled() {
+        return skipProperties.enabled();
     }
 
-    if (!DryRunGuard.fromAttributes(attrs).isDryRun()) {
-      persistBadRecordAudit(brc, badRecord);
-    }
-
-    boolean requiresManualReview = skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW;
-    if (requiresManualReview) {
-      attrs.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, true);
-    }
-    if (!skipped) {
-      attrs.put(ImportRuntimeKeys.LAST_BAD_RECORD, badRecord);
-    }
-    attrs.put(ImportRuntimeKeys.LAST_PROCESSED_RECORD_NO, recordNo);
-    attrs.put(ImportRuntimeKeys.LAST_ERROR_CODE, errorCode);
-    attrs.put(ImportRuntimeKeys.LAST_ERROR_MESSAGE, errorMessage);
-  }
-
-  /** 内存计数先保留，持久审计按原安全开关脱敏；写失败仍阻止后续完成元数据。 */
-  private void persistBadRecordAudit(BadRecordContext brc, ImportBadRecord badRecord) {
-    ImportJobContext context = brc.context();
-    ImportStage stage = brc.stage();
-    Long recordNo = brc.recordNo();
-    String errorCode = brc.errorCode();
-    String errorMessage = brc.errorMessage();
-    Object rawRecord = brc.rawRecord();
-    boolean skipped = brc.skipped();
-    SourceLocator locator = brc.locator();
-    Long sourceRowNum = EmptyChecks.isNull(locator) ? null : locator.rowNum();
-    String sourceColumn = EmptyChecks.isNull(locator) ? null : locator.column();
-    Map<String, Object> attrs = context.getAttributes();
-    Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
-    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
-    Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
-    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
-    Object pipelineStepRunIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID);
-    Long pipelineStepRunId = PlatformRuntimeValues.toLong(pipelineStepRunIdValue);
-    ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
-    String maskingRuleSet = masking.ruleSet();
-    boolean errorLineMask = masking.enabled();
-    String safeMessage = errorLineMask
-        ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
-        : errorMessage;
-    Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
-    Object safePayload =
-        errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-    FileErrorRecordParamBuilder errorRecordBuilder = FileErrorRecordParam.builder()
-        .tenantId(context.getTenantId())
-        .fileId(fileId)
-        .pipelineInstanceId(pipelineInstanceId)
-        .pipelineStepRunId(pipelineStepRunId)
-        .recordNo(recordNo)
-        .errorCode(errorCode)
-        .errorMessage(safeMessage)
-        .errorStage(stage == null ? null : stage.name())
-        .skipped(skipped);
-    String errorRecordSkipActionCode = resolveSkipAction().code();
-    FileErrorRecordParam errorRecord = errorRecordBuilder
-        .skipAction(errorRecordSkipActionCode)
-        .rawRecord(safePayload)
-        .sourceRowNum(sourceRowNum)
-        .sourceColumn(sourceColumn)
-        .build();
-    fileAudits.insertFileErrorRecord(errorRecord);
-  }
-
-  private record ErrorMaskingPolicy(boolean enabled, String ruleSet) {}
-
-  private ErrorMaskingPolicy errorMaskingPolicy(Map<String, Object> attrs) {
-    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    boolean errorLineMask = false;
-    String maskingRuleSet = null;
-    if (templateConfig instanceof Map<?, ?> templateMap) {
-      Object flag = templateMap.get("error_line_masking_enabled");
-      boolean booleanFlagEnabled = Boolean.TRUE.equals(flag);
-      boolean textFlagEnabled =
-          !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
-      errorLineMask = booleanFlagEnabled || textFlagEnabled;
-      Object rule = templateMap.get("masking_rule_set");
-      maskingRuleSet = EmptyChecks.isNull(rule) ? null : String.valueOf(rule);
-    }
-    if (batchSecurityProperties.isBypassMode()) {
-      errorLineMask = false;
-    }
-    return new ErrorMaskingPolicy(errorLineMask, maskingRuleSet);
-  }
-
-  private ImportBadRecord maskBadRecord(ImportBadRecord record, String ruleSet) {
-    return ImportBadRecord.builder()
-        .recordNo(record.recordNo())
-        .stageCode(record.stageCode())
-        .errorCode(record.errorCode())
-        .errorMessage(ContentMaskingUtils.maskPlainText(record.errorMessage(), ruleSet))
-        .rawRecord(maskErrorPayload(record.rawRecord(), ruleSet))
-        .skipped(record.skipped())
-        .skipAction(record.skipAction())
-        .createdAt(record.createdAt())
-        .sourceRowNum(record.sourceRowNum())
-        .sourceColumn(record.sourceColumn())
-        .build();
-  }
-
-  @SuppressWarnings("unchecked")
-  private List<ImportBadRecord> badRecords(ImportJobContext context) {
-    Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
-    if (existing instanceof List<?> list) {
-      // 校验所有元素都是 ImportBadRecord;若是则返回原 list 引用(可变),
-      // 以便后续 recordBadRecord 的 add 可见。此处若返回防御性拷贝,会静默丢掉
-      // 第 2 条及之后的坏记录。
-      boolean allMatch = true;
-      for (Object item : list) {
-        if (!(item instanceof ImportBadRecord)) {
-          allMatch = false;
-          break;
+    public boolean isSkippable(String errorCode) {
+        if (!isSkipEnabled() || !Texts.hasText(errorCode)) {
+            return false;
         }
-      }
-      if (allMatch) {
-        return (List<ImportBadRecord>) existing;
-      }
+        Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
+        return allowedErrorCodes.isEmpty() || allowedErrorCodes.contains(errorCode);
     }
-    List<ImportBadRecord> created = new ArrayList<>();
-    context.getAttributes().put(BAD_RECORDS_KEY, created);
-    return created;
-  }
 
-  private Object maskErrorPayload(Object payload, String maskingRuleSet) {
-    if (payload == null) {
-      return null;
+    public boolean shouldFailOnSkip(String errorCode) {
+        SkipAction action = resolveSkipAction();
+        return action == SkipAction.FAIL_BATCH && isSkippable(errorCode);
     }
-    if (payload instanceof String text) {
-      return ContentMaskingUtils.maskPlainText(text, maskingRuleSet);
-    }
-    String serializedPayload = JsonUtils.toJson(payload);
-    String masked = ContentMaskingUtils.maskPlainText(serializedPayload, maskingRuleSet);
-    if (serializedPayload.startsWith("{") || serializedPayload.startsWith("[")) {
-      return JsonUtils.fromJson(masked, Object.class);
-    }
-    return masked;
-  }
 
-  private long increment(ImportJobContext context, String key) {
-    long value = numberValue(context.getAttributes().get(key)) + 1;
-    context.getAttributes().put(key, value);
-    return value;
-  }
-
-  private long numberValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    public boolean shouldManualReview() {
+        return resolveSkipAction() == SkipAction.MANUAL_REVIEW;
     }
-    if (value == null) {
-      return 0L;
-    }
-    String text = String.valueOf(value);
-    if (!Texts.hasText(text)) {
-      return 0L;
-    }
-    return Long.parseLong(text);
-  }
 
-  private Set<String> resolveAllowedErrorCodes() {
-    if (!Texts.hasText(skipProperties.skipErrorCodes())) {
-      return Set.of();
+    /** 带 Excel 物理定位({@link SourceLocator})的跳过记录;locator 为空时退化为不带定位的行为。 */
+    public void recordSkippedRecord(ImportJobContext context, BadRecordCommand command) {
+        BadRecordContext badRecordContext = toBadRecordContext(context, command, true);
+        recordBadRecord(badRecordContext);
     }
-    Set<String> codes = new HashSet<>();
-    for (String item : skipProperties.skipErrorCodes().split(",")) {
-      String code = item.trim();
-      if (Texts.hasText(code)) {
-        codes.add(code);
-      }
+
+    /** 带 Excel 物理定位({@link SourceLocator})的失败记录;locator 为空时退化为不带定位的行为。 */
+    public void recordFailedRecord(ImportJobContext context, BadRecordCommand command) {
+        BadRecordContext badRecordContext = toBadRecordContext(context, command, false);
+        recordBadRecord(badRecordContext);
     }
-    return codes;
-  }
 
-  private SkipThresholdMode resolveThresholdMode() {
-    SkipThresholdMode mode =
-        DictEnum.fromCode(SkipThresholdMode.class, skipProperties.thresholdMode());
-    return mode == null ? SkipThresholdMode.ABSOLUTE : mode;
-  }
+    private BadRecordContext toBadRecordContext(ImportJobContext context, BadRecordCommand command, boolean skipped) {
+        BadRecordContext badRecordContext = BadRecordContext.builder()
+                .context(context)
+                .stage(command.stage())
+                .recordNo(command.recordNo())
+                .errorCode(command.errorCode())
+                .errorMessage(command.errorMessage())
+                .rawRecord(command.rawRecord())
+                .skipped(skipped)
+                .locator(command.locator())
+                .build();
+        return badRecordContext;
+    }
 
-  private SkipAction resolveSkipAction() {
-    SkipAction action = DictEnum.fromCode(SkipAction.class, skipProperties.skipAction());
-    return action == null ? SkipAction.CONTINUE : action;
-  }
+    /** 单条坏行登记输入；Excel物理定位只由能够提供该信息的格式填写。 */
+    @Builder
+    public record BadRecordCommand(
+            ImportStage stage,
+            Long recordNo,
+            String errorCode,
+            String errorMessage,
+            Object rawRecord,
+            SourceLocator locator) {}
 
-  private ErrorSinkType resolveErrorSinkType() {
-    ErrorSinkType sinkType = DictEnum.fromCode(ErrorSinkType.class, skipProperties.errorSinkType());
-    return sinkType == null ? ErrorSinkType.BOTH : sinkType;
-  }
+    /**
+     * Excel 物理定位:{@code rowNum} 为 1-based 物理行号(SAX 的 0-based rowNum +1), {@code column}
+     * 为出错列的表头名。两者均可空,缺失时坏行不带定位写入数据库。
+     */
+    public record SourceLocator(Long rowNum, String column) {}
+
+    public void recordThresholdViolation(
+            ImportJobContext context, ImportStage stage, String errorCode, String message) {
+        BadRecordContext brc = BadRecordContext.builder()
+                .context(context)
+                .stage(stage)
+                .errorCode(errorCode)
+                .errorMessage(message)
+                .build();
+        recordBadRecord(brc);
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
+    }
+
+    public boolean withinThreshold(ImportJobContext context) {
+        if (!isSkipEnabled()) {
+            return true;
+        }
+        long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
+        long totalCount = numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+        SkipThresholdMode mode = resolveThresholdMode();
+        if (mode == SkipThresholdMode.PERCENTAGE) {
+            double rate = totalCount <= 0 ? 0D : (double) skippedCount / (double) totalCount;
+            double effectiveMaxSkipRate = Math.max(0D, skipProperties.maxSkipRate());
+            return rate <= effectiveMaxSkipRate;
+        }
+        int effectiveMaxSkipCount = Math.max(0, skipProperties.maxSkipCount());
+        return skippedCount <= effectiveMaxSkipCount;
+    }
+
+    public void markThresholdExceeded(ImportJobContext context) {
+        if (context != null) {
+            context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
+        }
+    }
+
+    public void finalizeErrorOutput(ImportJobContext context) {
+        if (EmptyChecks.isNotNull(context)
+                && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
+            return;
+        }
+        List<ImportBadRecord> badRecords = badRecords(context);
+        if (badRecords.isEmpty()) {
+            return;
+        }
+        Map<String, Object> attrs = context.getAttributes();
+        Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
+        Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
+        boolean hasRequiredFileContext = EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
+        if (!hasRequiredFileContext) {
+            return;
+        }
+        String errorOutputPath = null;
+        ErrorSinkType sinkType = resolveErrorSinkType();
+        if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
+            ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+            List<ImportBadRecord> outputRecords = masking.enabled()
+                    ? badRecords.stream()
+                            .map(record -> maskBadRecord(record, masking.ruleSet()))
+                            .toList()
+                    : badRecords;
+            errorOutputPath =
+                    errorOutputStorage.writeErrorOutput(context.getTenantId(), String.valueOf(fileId), outputRecords);
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("badRecordCount", badRecords.size());
+        long successCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+        metadata.put(ImportRuntimeKeys.SUCCESS_COUNT, successCount);
+        long skippedCount = numberValue(attrs.get(KEY_SKIPPED_COUNT));
+        metadata.put(KEY_SKIPPED_COUNT, skippedCount);
+        long failedCount = numberValue(attrs.get(ImportRuntimeKeys.FAILED_COUNT));
+        metadata.put(ImportRuntimeKeys.FAILED_COUNT, failedCount);
+        long totalCount = numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+        metadata.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
+        // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
+        long parseSkippedCount = numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT));
+        metadata.put(KEY_PARSE_SKIPPED_COUNT, parseSkippedCount);
+        long validateSkippedCount = numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT));
+        metadata.put(KEY_VALIDATE_SKIPPED_COUNT, validateSkippedCount);
+        long parseFailedCount = numberValue(attrs.get(KEY_PARSE_FAILED_COUNT));
+        metadata.put(KEY_PARSE_FAILED_COUNT, parseFailedCount);
+        long validateFailedCount = numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT));
+        metadata.put(KEY_VALIDATE_FAILED_COUNT, validateFailedCount);
+        metadata.put(
+                PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED,
+                Boolean.TRUE.equals(attrs.get(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED)));
+        boolean manualReviewRequired =
+                Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)) || shouldManualReview();
+        metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
+        if (Texts.hasText(errorOutputPath)) {
+            metadata.put("errorOutputPath", errorOutputPath);
+        }
+        fileRecords.updateFileMetadata(fileId, metadata);
+        FileAuditParamBuilder auditBuilder = FileAuditParam.builder()
+                .fileId(fileId)
+                .tenantId(context.getTenantId())
+                .operationType(FileAuditOperationType.BAD_RECORD_GOVERNANCE.code())
+                .operationResult(OperationResult.SUCCESS.code())
+                .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+                .operatorId(context.getWorkerId());
+        Object auditTraceValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+        String auditTraceId = Objects.toString(auditTraceValue, null);
+        FileAuditParam audit = auditBuilder
+                .traceId(auditTraceId)
+                .evidenceRef("import-error-output")
+                .detailSummary(metadata)
+                .build();
+        fileAudits.appendAudit(audit);
+    }
+
+    /**
+     * C-2.15：把 stage → stage-scoped counter key 的映射放这里。 PARSE 对应
+     * parseSkippedCount/parseFailedCount；VALIDATE 对应 validateSkippedCount/
+     * validateFailedCount；其他阶段（LOAD / REPORT 等）暂不细分返回 null（不写 stage-scoped counter， KEY_SKIPPED_COUNT
+     * 仍正常累加保持总阈值语义）。
+     */
+    private String resolveStageScopedKey(ImportStage stage, boolean skipped) {
+        if (stage == null) {
+            return null;
+        }
+        return switch (stage) {
+            case PARSE -> skipped ? KEY_PARSE_SKIPPED_COUNT : KEY_PARSE_FAILED_COUNT;
+            case VALIDATE -> skipped ? KEY_VALIDATE_SKIPPED_COUNT : KEY_VALIDATE_FAILED_COUNT;
+            default -> null;
+        };
+    }
+
+    @Builder
+    private record BadRecordContext(
+            ImportJobContext context,
+            ImportStage stage,
+            Long recordNo,
+            String errorCode,
+            String errorMessage,
+            Object rawRecord,
+            boolean skipped,
+            SourceLocator locator) {}
+
+    private void recordBadRecord(BadRecordContext brc) {
+        ImportJobContext context = brc.context();
+        ImportStage stage = brc.stage();
+        Long recordNo = brc.recordNo();
+        String errorCode = brc.errorCode();
+        String errorMessage = brc.errorMessage();
+        Object rawRecord = brc.rawRecord();
+        boolean skipped = brc.skipped();
+        SourceLocator locator = brc.locator();
+        Long sourceRowNum = locator == null ? null : locator.rowNum();
+        String sourceColumn = locator == null ? null : locator.column();
+        Map<String, Object> attrs = context.getAttributes();
+        String badRecordStage = EmptyChecks.isNull(stage) ? null : stage.name();
+        String badRecordSkipActionCode = resolveSkipAction().code();
+        ImportBadRecord badRecord = new ImportBadRecord(
+                recordNo,
+                badRecordStage,
+                errorCode,
+                errorMessage,
+                rawRecord,
+                skipped,
+                badRecordSkipActionCode,
+                null,
+                sourceRowNum,
+                sourceColumn);
+        List<ImportBadRecord> recordedBadRecords = badRecords(context);
+        recordedBadRecords.add(badRecord);
+
+        if (skipped) {
+            increment(context, KEY_SKIPPED_COUNT);
+            // C-2.15：按 stage 分桶计数，便于 parse 和 validate 的阈值 / 指标分开观察
+            String stageScoped = resolveStageScopedKey(stage, true);
+            if (stageScoped != null) {
+                increment(context, stageScoped);
+            }
+        } else {
+            increment(context, ImportRuntimeKeys.FAILED_COUNT);
+            String stageScoped = resolveStageScopedKey(stage, false);
+            if (stageScoped != null) {
+                increment(context, stageScoped);
+            }
+        }
+
+        if (!DryRunGuard.fromAttributes(attrs).isDryRun()) {
+            persistBadRecordAudit(brc, badRecord);
+        }
+
+        boolean requiresManualReview = skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW;
+        if (requiresManualReview) {
+            attrs.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, true);
+        }
+        if (!skipped) {
+            attrs.put(ImportRuntimeKeys.LAST_BAD_RECORD, badRecord);
+        }
+        attrs.put(ImportRuntimeKeys.LAST_PROCESSED_RECORD_NO, recordNo);
+        attrs.put(ImportRuntimeKeys.LAST_ERROR_CODE, errorCode);
+        attrs.put(ImportRuntimeKeys.LAST_ERROR_MESSAGE, errorMessage);
+    }
+
+    /** 内存计数先保留，持久审计按原安全开关脱敏；写失败仍阻止后续完成元数据。 */
+    private void persistBadRecordAudit(BadRecordContext brc, ImportBadRecord badRecord) {
+        ImportJobContext context = brc.context();
+        ImportStage stage = brc.stage();
+        Long recordNo = brc.recordNo();
+        String errorCode = brc.errorCode();
+        String errorMessage = brc.errorMessage();
+        Object rawRecord = brc.rawRecord();
+        boolean skipped = brc.skipped();
+        SourceLocator locator = brc.locator();
+        Long sourceRowNum = EmptyChecks.isNull(locator) ? null : locator.rowNum();
+        String sourceColumn = EmptyChecks.isNull(locator) ? null : locator.column();
+        Map<String, Object> attrs = context.getAttributes();
+        Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
+        Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
+        Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+        Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
+        Object pipelineStepRunIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID);
+        Long pipelineStepRunId = PlatformRuntimeValues.toLong(pipelineStepRunIdValue);
+        ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+        String maskingRuleSet = masking.ruleSet();
+        boolean errorLineMask = masking.enabled();
+        String safeMessage =
+                errorLineMask ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet) : errorMessage;
+        Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
+        Object safePayload = errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
+        FileErrorRecordParamBuilder errorRecordBuilder = FileErrorRecordParam.builder()
+                .tenantId(context.getTenantId())
+                .fileId(fileId)
+                .pipelineInstanceId(pipelineInstanceId)
+                .pipelineStepRunId(pipelineStepRunId)
+                .recordNo(recordNo)
+                .errorCode(errorCode)
+                .errorMessage(safeMessage)
+                .errorStage(stage == null ? null : stage.name())
+                .skipped(skipped);
+        String errorRecordSkipActionCode = resolveSkipAction().code();
+        FileErrorRecordParam errorRecord = errorRecordBuilder
+                .skipAction(errorRecordSkipActionCode)
+                .rawRecord(safePayload)
+                .sourceRowNum(sourceRowNum)
+                .sourceColumn(sourceColumn)
+                .build();
+        fileAudits.insertFileErrorRecord(errorRecord);
+    }
+
+    private record ErrorMaskingPolicy(boolean enabled, String ruleSet) {}
+
+    private ErrorMaskingPolicy errorMaskingPolicy(Map<String, Object> attrs) {
+        Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        boolean errorLineMask = false;
+        String maskingRuleSet = null;
+        if (templateConfig instanceof Map<?, ?> templateMap) {
+            Object flag = templateMap.get("error_line_masking_enabled");
+            boolean booleanFlagEnabled = Boolean.TRUE.equals(flag);
+            boolean textFlagEnabled = !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
+            errorLineMask = booleanFlagEnabled || textFlagEnabled;
+            Object rule = templateMap.get("masking_rule_set");
+            maskingRuleSet = EmptyChecks.isNull(rule) ? null : String.valueOf(rule);
+        }
+        if (batchSecurityProperties.isBypassMode()) {
+            errorLineMask = false;
+        }
+        return new ErrorMaskingPolicy(errorLineMask, maskingRuleSet);
+    }
+
+    private ImportBadRecord maskBadRecord(ImportBadRecord record, String ruleSet) {
+        return ImportBadRecord.builder()
+                .recordNo(record.recordNo())
+                .stageCode(record.stageCode())
+                .errorCode(record.errorCode())
+                .errorMessage(ContentMaskingUtils.maskPlainText(record.errorMessage(), ruleSet))
+                .rawRecord(maskErrorPayload(record.rawRecord(), ruleSet))
+                .skipped(record.skipped())
+                .skipAction(record.skipAction())
+                .createdAt(record.createdAt())
+                .sourceRowNum(record.sourceRowNum())
+                .sourceColumn(record.sourceColumn())
+                .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ImportBadRecord> badRecords(ImportJobContext context) {
+        Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
+        if (existing instanceof List<?> list) {
+            // 校验所有元素都是 ImportBadRecord;若是则返回原 list 引用(可变),
+            // 以便后续 recordBadRecord 的 add 可见。此处若返回防御性拷贝,会静默丢掉
+            // 第 2 条及之后的坏记录。
+            boolean allMatch = true;
+            for (Object item : list) {
+                if (!(item instanceof ImportBadRecord)) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) {
+                return (List<ImportBadRecord>) existing;
+            }
+        }
+        List<ImportBadRecord> created = new ArrayList<>();
+        context.getAttributes().put(BAD_RECORDS_KEY, created);
+        return created;
+    }
+
+    private Object maskErrorPayload(Object payload, String maskingRuleSet) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload instanceof String text) {
+            return ContentMaskingUtils.maskPlainText(text, maskingRuleSet);
+        }
+        String serializedPayload = JsonUtils.toJson(payload);
+        String masked = ContentMaskingUtils.maskPlainText(serializedPayload, maskingRuleSet);
+        if (serializedPayload.startsWith("{") || serializedPayload.startsWith("[")) {
+            return JsonUtils.fromJson(masked, Object.class);
+        }
+        return masked;
+    }
+
+    private long increment(ImportJobContext context, String key) {
+        long value = numberValue(context.getAttributes().get(key)) + 1;
+        context.getAttributes().put(key, value);
+        return value;
+    }
+
+    private long numberValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        String text = String.valueOf(value);
+        if (!Texts.hasText(text)) {
+            return 0L;
+        }
+        return Long.parseLong(text);
+    }
+
+    private Set<String> resolveAllowedErrorCodes() {
+        if (!Texts.hasText(skipProperties.skipErrorCodes())) {
+            return Set.of();
+        }
+        Set<String> codes = new HashSet<>();
+        for (String item : skipProperties.skipErrorCodes().split(",")) {
+            String code = item.trim();
+            if (Texts.hasText(code)) {
+                codes.add(code);
+            }
+        }
+        return codes;
+    }
+
+    private SkipThresholdMode resolveThresholdMode() {
+        SkipThresholdMode mode = DictEnum.fromCode(SkipThresholdMode.class, skipProperties.thresholdMode());
+        return mode == null ? SkipThresholdMode.ABSOLUTE : mode;
+    }
+
+    private SkipAction resolveSkipAction() {
+        SkipAction action = DictEnum.fromCode(SkipAction.class, skipProperties.skipAction());
+        return action == null ? SkipAction.CONTINUE : action;
+    }
+
+    private ErrorSinkType resolveErrorSinkType() {
+        ErrorSinkType sinkType = DictEnum.fromCode(ErrorSinkType.class, skipProperties.errorSinkType());
+        return sinkType == null ? ErrorSinkType.BOTH : sinkType;
+    }
 }

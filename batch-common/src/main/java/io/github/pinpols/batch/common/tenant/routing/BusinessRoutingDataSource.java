@@ -22,56 +22,56 @@ import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
  */
 public class BusinessRoutingDataSource extends AbstractRoutingDataSource implements AutoCloseable {
 
-  private final BusinessPlacementResolver resolver;
-  private final Set<DataSource> ownedDataSources;
-  private final AtomicBoolean closed = new AtomicBoolean();
+    private final BusinessPlacementResolver resolver;
+    private final Set<DataSource> ownedDataSources;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
-  public BusinessRoutingDataSource(BusinessPlacementResolver resolver) {
-    this(resolver, List.of());
-  }
-
-  public BusinessRoutingDataSource(
-      BusinessPlacementResolver resolver, Collection<? extends DataSource> ownedDataSources) {
-    this.resolver = resolver;
-    Set<DataSource> uniqueDataSources = Collections.newSetFromMap(new IdentityHashMap<>());
-    uniqueDataSources.addAll(ownedDataSources);
-    this.ownedDataSources = Collections.unmodifiableSet(uniqueDataSources);
-  }
-
-  @Override
-  protected Object determineCurrentLookupKey() {
-    String tenantId = RlsTenantContextHolder.get();
-    return resolver.resolve(tenantId);
-  }
-
-  /**
-   * 关闭路由器拥有的真实连接池。
-   *
-   * <p>分片池由 {@code BusinessDataSourceBuilder} 直接创建，并不是独立 Spring Bean；因此必须由路由 Bean
-   * 统一负责释放。按对象身份去重，避免默认数据源同时出现在 targets/default 时被重复关闭。
-   */
-  @Override
-  public void close() throws Exception {
-    if (!closed.compareAndSet(false, true)) {
-      return;
+    public BusinessRoutingDataSource(BusinessPlacementResolver resolver) {
+        this(resolver, List.of());
     }
-    Exception firstFailure = null;
-    for (DataSource dataSource : ownedDataSources) {
-      if (!(dataSource instanceof AutoCloseable closeable)) {
-        continue;
-      }
-      try {
-        closeable.close();
-      } catch (Exception ex) {
-        if (firstFailure == null) { // empty-check: allow - Sonar 需识别累积异常的非空分支。
-          firstFailure = ex;
-        } else {
-          firstFailure.addSuppressed(ex);
+
+    public BusinessRoutingDataSource(
+            BusinessPlacementResolver resolver, Collection<? extends DataSource> ownedDataSources) {
+        this.resolver = resolver;
+        Set<DataSource> uniqueDataSources = Collections.newSetFromMap(new IdentityHashMap<>());
+        uniqueDataSources.addAll(ownedDataSources);
+        this.ownedDataSources = Collections.unmodifiableSet(uniqueDataSources);
+    }
+
+    @Override
+    protected Object determineCurrentLookupKey() {
+        String tenantId = RlsTenantContextHolder.get();
+        return resolver.resolve(tenantId);
+    }
+
+    /**
+     * 关闭路由器拥有的真实连接池。
+     *
+     * <p>分片池由 {@code BusinessDataSourceBuilder} 直接创建，并不是独立 Spring Bean；因此必须由路由 Bean
+     * 统一负责释放。按对象身份去重，避免默认数据源同时出现在 targets/default 时被重复关闭。
+     */
+    @Override
+    public void close() throws Exception {
+        if (!closed.compareAndSet(false, true)) {
+            return;
         }
-      }
+        Exception firstFailure = null;
+        for (DataSource dataSource : ownedDataSources) {
+            if (!(dataSource instanceof AutoCloseable closeable)) {
+                continue;
+            }
+            try {
+                closeable.close();
+            } catch (Exception ex) {
+                if (firstFailure == null) { // empty-check: allow - Sonar 需识别累积异常的非空分支。
+                    firstFailure = ex;
+                } else {
+                    firstFailure.addSuppressed(ex);
+                }
+            }
+        }
+        if (firstFailure != null) { // empty-check: allow - Sonar 需识别抛出值非空。
+            throw firstFailure;
+        }
     }
-    if (firstFailure != null) { // empty-check: allow - Sonar 需识别抛出值非空。
-      throw firstFailure;
-    }
-  }
 }

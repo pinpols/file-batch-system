@@ -6,22 +6,20 @@ import java.util.Map;
 /** Worker 启动业务审计扩展点。实现必须只读、轻量，不能修复数据或阻塞业务启动。 */
 public interface WorkerStartupAuditContributor {
 
-  String name();
+    String name();
 
-  WorkerStartupAuditResult audit();
+    WorkerStartupAuditResult audit();
 
-  record WorkerStartupAuditResult(boolean healthy, Map<String, Object> details) {
+    record WorkerStartupAuditResult(boolean healthy, Map<String, Object> details) {
 
-    public static WorkerStartupAuditResult healthy(Map<String, Object> details) {
-      Map<String, Object> immutableDetails =
-          EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
-      return new WorkerStartupAuditResult(true, immutableDetails);
+        public static WorkerStartupAuditResult healthy(Map<String, Object> details) {
+            Map<String, Object> immutableDetails = EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
+            return new WorkerStartupAuditResult(true, immutableDetails);
+        }
+
+        public static WorkerStartupAuditResult unhealthy(Map<String, Object> details) {
+            Map<String, Object> immutableDetails = EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
+            return new WorkerStartupAuditResult(false, immutableDetails);
+        }
     }
-
-    public static WorkerStartupAuditResult unhealthy(Map<String, Object> details) {
-      Map<String, Object> immutableDetails =
-          EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
-      return new WorkerStartupAuditResult(false, immutableDetails);
-    }
-  }
 }

@@ -9,9 +9,9 @@ import java.time.Instant;
  * 只得到确认异步接收、派发以及实例关联所需的最小状态。
  */
 public record TriggerLaunchStatus(
-    String requestId,
-    String traceId,
-    String requestStatus,
-    Long relatedJobInstanceId,
-    String instanceStatus,
-    Instant updatedAt) {}
+        String requestId,
+        String traceId,
+        String requestStatus,
+        Long relatedJobInstanceId,
+        String instanceStatus,
+        Instant updatedAt) {}

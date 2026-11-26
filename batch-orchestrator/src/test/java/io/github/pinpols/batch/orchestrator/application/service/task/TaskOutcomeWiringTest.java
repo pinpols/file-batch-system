@@ -29,75 +29,72 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 @DisplayName("任务结果生产装配：直接注入窄协作者并在容器生命周期注册指标")
 class TaskOutcomeWiringTest {
 
-  private final ApplicationContextRunner runner = new ApplicationContextRunner()
-      .withUserConfiguration(
-          DefaultTaskOutcomeService.class,
-          TaskOutcomeInstanceProgressor.class,
-          TaskOutcomeNodeRunRecorder.class,
-          TaskOutcomeTerminalFinalizer.class,
-          TaskOutcomeDagProgressor.class,
-          TaskOutcomeWorkflowFinalizer.class,
-          WorkflowRunReportLock.class)
-      .withBean(OrchestratorJobMappers.class, () -> mock(OrchestratorJobMappers.class))
-      .withBean(OrchestratorWorkflowMappers.class, () -> mock(OrchestratorWorkflowMappers.class))
-      .withBean(WorkflowDefinitionMapper.class, () -> mock(WorkflowDefinitionMapper.class))
-      .withBean(BatchDayInstanceMapper.class, () -> mock(BatchDayInstanceMapper.class))
-      .withBean(RetryGovernanceService.class, () -> mock(RetryGovernanceService.class))
-      .withBean(VerifierFailureOutboxService.class, () -> mock(VerifierFailureOutboxService.class))
-      .withBean(CountContinuityOutboxService.class, () -> mock(CountContinuityOutboxService.class))
-      .withBean(FailureClassifier.class, () -> mock(FailureClassifier.class))
-      .withBean(LifecycleEventMapper.class, () -> mock(LifecycleEventMapper.class))
-      .withBean(
-          WorkflowTerminalOutboxService.class, () -> mock(WorkflowTerminalOutboxService.class))
-      .withBean(JobTerminalOutboxService.class, () -> mock(JobTerminalOutboxService.class))
-      .withBean(WorkflowDagService.class, () -> mock(WorkflowDagService.class))
-      .withBean(
-          WorkflowNodeTerminalFinalizer.class, () -> mock(WorkflowNodeTerminalFinalizer.class))
-      .withBean(SecretPayloadProtector.class, () -> mock(SecretPayloadProtector.class))
-      .withBean(
-          JobInstanceTerminalChildStateReconciler.class,
-          () -> mock(JobInstanceTerminalChildStateReconciler.class))
-      .withBean(ResultVersionWriter.class, () -> mock(ResultVersionWriter.class))
-      .withBean(
-          BatchDayReplayTerminalReconciler.class,
-          () -> mock(BatchDayReplayTerminalReconciler.class))
-      .withBean(JobLifecycleMetricsRecorder.class, () -> mock(JobLifecycleMetricsRecorder.class))
-      .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new);
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withUserConfiguration(
+                    DefaultTaskOutcomeService.class,
+                    TaskOutcomeInstanceProgressor.class,
+                    TaskOutcomeNodeRunRecorder.class,
+                    TaskOutcomeTerminalFinalizer.class,
+                    TaskOutcomeDagProgressor.class,
+                    TaskOutcomeWorkflowFinalizer.class,
+                    WorkflowRunReportLock.class)
+            .withBean(OrchestratorJobMappers.class, () -> mock(OrchestratorJobMappers.class))
+            .withBean(OrchestratorWorkflowMappers.class, () -> mock(OrchestratorWorkflowMappers.class))
+            .withBean(WorkflowDefinitionMapper.class, () -> mock(WorkflowDefinitionMapper.class))
+            .withBean(BatchDayInstanceMapper.class, () -> mock(BatchDayInstanceMapper.class))
+            .withBean(RetryGovernanceService.class, () -> mock(RetryGovernanceService.class))
+            .withBean(VerifierFailureOutboxService.class, () -> mock(VerifierFailureOutboxService.class))
+            .withBean(CountContinuityOutboxService.class, () -> mock(CountContinuityOutboxService.class))
+            .withBean(FailureClassifier.class, () -> mock(FailureClassifier.class))
+            .withBean(LifecycleEventMapper.class, () -> mock(LifecycleEventMapper.class))
+            .withBean(WorkflowTerminalOutboxService.class, () -> mock(WorkflowTerminalOutboxService.class))
+            .withBean(JobTerminalOutboxService.class, () -> mock(JobTerminalOutboxService.class))
+            .withBean(WorkflowDagService.class, () -> mock(WorkflowDagService.class))
+            .withBean(WorkflowNodeTerminalFinalizer.class, () -> mock(WorkflowNodeTerminalFinalizer.class))
+            .withBean(SecretPayloadProtector.class, () -> mock(SecretPayloadProtector.class))
+            .withBean(
+                    JobInstanceTerminalChildStateReconciler.class,
+                    () -> mock(JobInstanceTerminalChildStateReconciler.class))
+            .withBean(ResultVersionWriter.class, () -> mock(ResultVersionWriter.class))
+            .withBean(BatchDayReplayTerminalReconciler.class, () -> mock(BatchDayReplayTerminalReconciler.class))
+            .withBean(JobLifecycleMetricsRecorder.class, () -> mock(JobLifecycleMetricsRecorder.class))
+            .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new);
 
-  @Test
-  @DisplayName("生产构造器唯一且容器初始化指标，入口使用真实注入的推进协作者")
-  void shouldWireRealEntryAndProgressor_whenDependenciesAreAvailable() {
-    runner
-        .withBean(WorkflowNodeDispatchService.class, () -> mock(WorkflowNodeDispatchService.class))
-        .run(context -> {
-          assertThat(context)
-              .hasNotFailed()
-              .hasSingleBean(DefaultTaskOutcomeService.class)
-              .hasSingleBean(TaskOutcomeInstanceProgressor.class)
-              .hasSingleBean(WorkflowRunReportLock.class);
-          assertThat(DefaultTaskOutcomeService.class.getConstructors()).hasSize(1);
-          SimpleMeterRegistry registry = context.getBean(SimpleMeterRegistry.class);
-          assertThat(registry.find("batch.orchestrator.cas.miss").counter()).isNotNull();
-          assertThat(registry.find("batch.report.advisory_lock.wait").timer()).isNotNull();
-          assertThat(context.getBean(DefaultTaskOutcomeService.class))
-              .extracting("nodeRunRecorder", "instanceProgressor", "workflowRunReportLock")
-              .containsExactly(
-                  context.getBean(TaskOutcomeNodeRunRecorder.class),
-                  context.getBean(TaskOutcomeInstanceProgressor.class),
-                  context.getBean(WorkflowRunReportLock.class));
-        });
-  }
+    @Test
+    @DisplayName("生产构造器唯一且容器初始化指标，入口使用真实注入的推进协作者")
+    void shouldWireRealEntryAndProgressor_whenDependenciesAreAvailable() {
+        runner.withBean(WorkflowNodeDispatchService.class, () -> mock(WorkflowNodeDispatchService.class))
+                .run(context -> {
+                    assertThat(context)
+                            .hasNotFailed()
+                            .hasSingleBean(DefaultTaskOutcomeService.class)
+                            .hasSingleBean(TaskOutcomeInstanceProgressor.class)
+                            .hasSingleBean(WorkflowRunReportLock.class);
+                    assertThat(DefaultTaskOutcomeService.class.getConstructors())
+                            .hasSize(1);
+                    SimpleMeterRegistry registry = context.getBean(SimpleMeterRegistry.class);
+                    assertThat(registry.find("batch.orchestrator.cas.miss").counter())
+                            .isNotNull();
+                    assertThat(registry.find("batch.report.advisory_lock.wait").timer())
+                            .isNotNull();
+                    assertThat(context.getBean(DefaultTaskOutcomeService.class))
+                            .extracting("nodeRunRecorder", "instanceProgressor", "workflowRunReportLock")
+                            .containsExactly(
+                                    context.getBean(TaskOutcomeNodeRunRecorder.class),
+                                    context.getBean(TaskOutcomeInstanceProgressor.class),
+                                    context.getBean(WorkflowRunReportLock.class));
+                });
+    }
 
-  @Test
-  @DisplayName("惰性派发服务不能建立时仍在启动阶段失败，不延迟到首个回报")
-  void shouldFailStartup_whenLazyDispatchCannotBeCreated() {
-    runner
-        .withBean(WorkflowNodeDispatchService.class, () -> {
-          throw new IllegalStateException("dispatch unavailable");
-        })
-        .run(context -> {
-          assertThat(context).hasFailed();
-          assertThat(context.getStartupFailure()).hasRootCauseMessage("dispatch unavailable");
-        });
-  }
+    @Test
+    @DisplayName("惰性派发服务不能建立时仍在启动阶段失败，不延迟到首个回报")
+    void shouldFailStartup_whenLazyDispatchCannotBeCreated() {
+        runner.withBean(WorkflowNodeDispatchService.class, () -> {
+                    throw new IllegalStateException("dispatch unavailable");
+                })
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseMessage("dispatch unavailable");
+                });
+    }
 }

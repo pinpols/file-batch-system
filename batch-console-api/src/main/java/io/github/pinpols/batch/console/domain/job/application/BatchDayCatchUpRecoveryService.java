@@ -5,11 +5,10 @@ import java.time.LocalDate;
 
 /** 按原请求核对审批回执或接续待处理项目。 */
 public interface BatchDayCatchUpRecoveryService {
-  BatchDayCatchUpRequestStatusResponse abandonUnprepared(
-      String tenantId, String requestKey, LocalDate bizDate, String calendarCode);
+    BatchDayCatchUpRequestStatusResponse abandonUnprepared(
+            String tenantId, String requestKey, LocalDate bizDate, String calendarCode);
 
-  BatchDayCatchUpRequestStatusResponse continueRequest(String tenantId, String requestKey);
+    BatchDayCatchUpRequestStatusResponse continueRequest(String tenantId, String requestKey);
 
-  BatchDayCatchUpRequestStatusResponse reconcile(
-      String tenantId, String requestKey, String jobCode);
+    BatchDayCatchUpRequestStatusResponse reconcile(String tenantId, String requestKey, String jobCode);
 }

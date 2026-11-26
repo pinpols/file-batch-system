@@ -44,272 +44,264 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("分发步骤执行适配器:流水线描述、上下文构建、阶段委派、结果访问与成功响应产出字段")
 class DispatchStepExecutionAdapterTest {
 
-  @Mock
-  private DispatchStageExecutor stageExecutor;
+    @Mock
+    private DispatchStageExecutor stageExecutor;
 
-  @Mock
-  private DispatchReplayCapabilityResolver replayCapabilityResolver;
+    @Mock
+    private DispatchReplayCapabilityResolver replayCapabilityResolver;
 
-  @Mock
-  private PlatformFileRecordRepository fileRecords;
+    @Mock
+    private PlatformFileRecordRepository fileRecords;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  private DispatchStepExecutionAdapter adapter;
+    private DispatchStepExecutionAdapter adapter;
 
-  @BeforeEach
-  void setUp() {
-    adapter = new DispatchStepExecutionAdapter(
-        stageExecutor,
-        replayCapabilityResolver,
-        new ObjectMapper(),
-        pipelineRuns,
-        fileRecords,
-        emptyProvider(),
-        emptyProvider());
-  }
+    @BeforeEach
+    void setUp() {
+        adapter = new DispatchStepExecutionAdapter(
+                stageExecutor,
+                replayCapabilityResolver,
+                new ObjectMapper(),
+                pipelineRuns,
+                fileRecords,
+                emptyProvider(),
+                emptyProvider());
+    }
 
-  @Test
-  @DisplayName("适配器描述分发流水线:类型为分发,起始阶段为准备阶段")
-  void shouldExposeDispatchPipelineDescriptor_whenQueried() {
-    assertThat(adapter.pipelineType()).isEqualTo(DispatchWorkerType.DISPATCH);
-    assertThat(adapter.initialStage()).isEqualTo(DispatchStage.PREPARE.name());
-  }
+    @Test
+    @DisplayName("适配器描述分发流水线:类型为分发,起始阶段为准备阶段")
+    void shouldExposeDispatchPipelineDescriptor_whenQueried() {
+        assertThat(adapter.pipelineType()).isEqualTo(DispatchWorkerType.DISPATCH);
+        assertThat(adapter.initialStage()).isEqualTo(DispatchStage.PREPARE.name());
+    }
 
-  @Test
-  @DisplayName("构建上下文时优先取任务号,并解析出业务日期与载荷中的文件号与渠道号")
-  void shouldPreferTaskIdAndParsePayload_whenBuildingContext() throws Exception {
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.TASK_ID, 88L);
-    attributes.put("dispatchId", "legacy-id");
-    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
-    attributes.put("payload", "{\"fileId\":\"42\",\"channelCode\":\"SFTP\"}");
+    @Test
+    @DisplayName("构建上下文时优先取任务号,并解析出业务日期与载荷中的文件号与渠道号")
+    void shouldPreferTaskIdAndParsePayload_whenBuildingContext() throws Exception {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.TASK_ID, 88L);
+        attributes.put("dispatchId", "legacy-id");
+        attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
+        attributes.put("payload", "{\"fileId\":\"42\",\"channelCode\":\"SFTP\"}");
 
-    DispatchJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
+        DispatchJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
 
-    assertThat(context.getDispatchId()).isEqualTo("88");
-    assertThat(context.getBizDate()).isEqualTo("2026-09-11");
-    assertThat(context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
-        .isInstanceOfSatisfying(DispatchPayload.class, payload -> {
-          assertThat(payload.fileId()).isEqualTo("42");
-          assertThat(payload.channelCode()).isEqualTo("SFTP");
+        assertThat(context.getDispatchId()).isEqualTo("88");
+        assertThat(context.getBizDate()).isEqualTo("2026-09-11");
+        assertThat(context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
+                .isInstanceOfSatisfying(DispatchPayload.class, payload -> {
+                    assertThat(payload.fileId()).isEqualTo("42");
+                    assertThat(payload.channelCode()).isEqualTo("SFTP");
+                });
+    }
+
+    @Test
+    @DisplayName("执行阶段时原样委派给阶段执行器,并返回同一份阶段结果")
+    void shouldDelegateStageExecution_whenExecutingStages() {
+        DispatchJobContext context = new DispatchJobContext();
+        List<DispatchStageResult> expected = List.of(DispatchStageResult.success(DispatchStage.PREPARE));
+        when(stageExecutor.execute(context)).thenReturn(expected);
+
+        assertThat(adapter.executeStages(context)).isSameAs(expected);
+        verify(stageExecutor).execute(context);
+    }
+
+    @Test
+    @DisplayName("重放能力解析委派给精确配置解析器")
+    void shouldResolveReplayCapabilityFromFrozenDispatchConfiguration() {
+        StepExecutionRequest request = request(Map.of());
+        ReplayCapabilityDeclaration declaration = DispatchReplayCapability.declaration();
+        when(replayCapabilityResolver.resolve(request)).thenReturn(declaration);
+
+        assertThat(adapter.resolveReplayCapability(request)).isSameAs(declaration);
+        verify(replayCapabilityResolver).resolve(request);
+    }
+
+    @Test
+    @DisplayName("结果访问器读出阶段名、失败码与失败原因,空结果同样判定为不成功")
+    void shouldExposeStageResultFields_whenReadingResultAccessors() {
+        DispatchStageResult result =
+                DispatchStageResult.failure(DispatchStage.DISPATCH, "DELIVERY_FAILED", "delivery failed");
+
+        assertThat(adapter.isSuccess(null)).isFalse();
+        assertThat(adapter.isSuccess(result)).isFalse();
+        assertThat(adapter.resultStage(result)).isEqualTo("DISPATCH");
+        assertThat(adapter.resultCode(result)).isEqualTo("DELIVERY_FAILED");
+        assertThat(adapter.resultMessage(result)).isEqualTo("delivery failed");
+    }
+
+    @Test
+    @DisplayName("投递已知失败后重试和确认成功时对外报告成功")
+    void shouldReportSuccess_whenRetryAndAcknowledgementRecoverDelivery() {
+        prepareExecution();
+        when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+            DispatchJobContext context = invocation.getArgument(0);
+            context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+            return List.of(
+                    DispatchStageResult.success(DispatchStage.PREPARE),
+                    DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                    DispatchStageResult.success(DispatchStage.RETRY),
+                    DispatchStageResult.success(DispatchStage.ACK),
+                    DispatchStageResult.success(DispatchStage.COMPLETE));
         });
-  }
 
-  @Test
-  @DisplayName("执行阶段时原样委派给阶段执行器,并返回同一份阶段结果")
-  void shouldDelegateStageExecution_whenExecutingStages() {
-    DispatchJobContext context = new DispatchJobContext();
-    List<DispatchStageResult> expected =
-        List.of(DispatchStageResult.success(DispatchStage.PREPARE));
-    when(stageExecutor.execute(context)).thenReturn(expected);
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-    assertThat(adapter.executeStages(context)).isSameAs(expected);
-    verify(stageExecutor).execute(context);
-  }
+        assertThat(response.success()).isTrue();
+    }
 
-  @Test
-  @DisplayName("重放能力解析委派给精确配置解析器")
-  void shouldResolveReplayCapabilityFromFrozenDispatchConfiguration() {
-    StepExecutionRequest request = request(Map.of());
-    ReplayCapabilityDeclaration declaration = DispatchReplayCapability.declaration();
-    when(replayCapabilityResolver.resolve(request)).thenReturn(declaration);
+    @Test
+    @DisplayName("首次确定失败而重试外部结果不明时对外报告结果不明")
+    void shouldReportUnknown_whenRetryOutcomeIsUnknown() {
+        prepareExecution();
+        when(stageExecutor.execute(any()))
+                .thenReturn(List.of(
+                        DispatchStageResult.success(DispatchStage.PREPARE),
+                        DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                        DispatchStageResult.failure(DispatchStage.RETRY, "EXTERNAL_OUTCOME_UNKNOWN", "unknown")));
 
-    assertThat(adapter.resolveReplayCapability(request)).isSameAs(declaration);
-    verify(replayCapabilityResolver).resolve(request);
-  }
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-  @Test
-  @DisplayName("结果访问器读出阶段名、失败码与失败原因,空结果同样判定为不成功")
-  void shouldExposeStageResultFields_whenReadingResultAccessors() {
-    DispatchStageResult result =
-        DispatchStageResult.failure(DispatchStage.DISPATCH, "DELIVERY_FAILED", "delivery failed");
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
+    }
 
-    assertThat(adapter.isSuccess(null)).isFalse();
-    assertThat(adapter.isSuccess(result)).isFalse();
-    assertThat(adapter.resultStage(result)).isEqualTo("DISPATCH");
-    assertThat(adapter.resultCode(result)).isEqualTo("DELIVERY_FAILED");
-    assertThat(adapter.resultMessage(result)).isEqualTo("delivery failed");
-  }
+    @ParameterizedTest
+    @ValueSource(strings = {"ACK", "COMPLETE"})
+    @DisplayName("重试成功后确认或完成阶段失败时应返回后续失败")
+    void shouldReportLaterFailure_whenRecoveredRetryDoesNotComplete(String failureStage) {
+        prepareExecution();
+        when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+            DispatchJobContext context = invocation.getArgument(0);
+            context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+            DispatchStage stage = DispatchStage.valueOf(failureStage);
+            return List.of(
+                    DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                    DispatchStageResult.success(DispatchStage.RETRY),
+                    DispatchStageResult.failure(stage, "LATER_FAILURE", "failed later"));
+        });
 
-  @Test
-  @DisplayName("投递已知失败后重试和确认成功时对外报告成功")
-  void shouldReportSuccess_whenRetryAndAcknowledgementRecoverDelivery() {
-    prepareExecution();
-    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
-      DispatchJobContext context = invocation.getArgument(0);
-      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
-      return List.of(
-          DispatchStageResult.success(DispatchStage.PREPARE),
-          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-          DispatchStageResult.success(DispatchStage.RETRY),
-          DispatchStageResult.success(DispatchStage.ACK),
-          DispatchStageResult.success(DispatchStage.COMPLETE));
-    });
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("LATER_FAILURE");
+    }
 
-    assertThat(response.success()).isTrue();
-  }
+    @Test
+    @DisplayName("首次失败后固定密钥被撤销时返回密钥撤销错误")
+    void shouldReportBlockedSecret_whenRetrySecretIsRevoked() {
+        prepareExecution();
+        DispatchStageResult revoked = DispatchStageResult.failure(
+                DispatchStage.RETRY,
+                "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+                "error.dispatch.secret.blocked",
+                new Object[0],
+                "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+                ERROR_OBJECT_MAPPER);
+        when(stageExecutor.execute(any()))
+                .thenReturn(List.of(
+                        DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                        revoked));
 
-  @Test
-  @DisplayName("首次确定失败而重试外部结果不明时对外报告结果不明")
-  void shouldReportUnknown_whenRetryOutcomeIsUnknown() {
-    prepareExecution();
-    when(stageExecutor.execute(any()))
-        .thenReturn(List.of(
-            DispatchStageResult.success(DispatchStage.PREPARE),
-            DispatchStageResult.failure(
-                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-            DispatchStageResult.failure(
-                DispatchStage.RETRY, "EXTERNAL_OUTCOME_UNKNOWN", "unknown")));
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
+    }
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
-  }
+    @Test
+    @DisplayName("已知投递失败和重试失败后补偿不改变既有首错报告")
+    void shouldPreserveFirstFailure_whenKnownRetryFailsAndCompensates() {
+        prepareExecution();
+        when(stageExecutor.execute(any()))
+                .thenReturn(List.of(
+                        DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                        DispatchStageResult.failure(DispatchStage.RETRY, "DISPATCH_RETRY_FAILED", "failed"),
+                        DispatchStageResult.success(DispatchStage.COMPENSATE)));
 
-  @ParameterizedTest
-  @ValueSource(strings = {"ACK", "COMPLETE"})
-  @DisplayName("重试成功后确认或完成阶段失败时应返回后续失败")
-  void shouldReportLaterFailure_whenRecoveredRetryDoesNotComplete(String failureStage) {
-    prepareExecution();
-    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
-      DispatchJobContext context = invocation.getArgument(0);
-      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
-      DispatchStage stage = DispatchStage.valueOf(failureStage);
-      return List.of(
-          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-          DispatchStageResult.success(DispatchStage.RETRY),
-          DispatchStageResult.failure(stage, "LATER_FAILURE", "failed later"));
-    });
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
+    }
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("LATER_FAILURE");
-  }
+    @Test
+    @DisplayName("重试成功但缺少确认和完成阶段时不能报告成功")
+    void shouldNotReportSuccess_whenRecoveredRetryHasNoCompletion() {
+        prepareExecution();
+        when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+            DispatchJobContext context = invocation.getArgument(0);
+            context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+            return List.of(
+                    DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+                    DispatchStageResult.success(DispatchStage.RETRY));
+        });
 
-  @Test
-  @DisplayName("首次失败后固定密钥被撤销时返回密钥撤销错误")
-  void shouldReportBlockedSecret_whenRetrySecretIsRevoked() {
-    prepareExecution();
-    DispatchStageResult revoked = DispatchStageResult.failure(
-        DispatchStage.RETRY,
-        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
-        "error.dispatch.secret.blocked",
-        new Object[0],
-        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
-        ERROR_OBJECT_MAPPER);
-    when(stageExecutor.execute(any()))
-        .thenReturn(List.of(
-            DispatchStageResult.failure(
-                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-            revoked));
+        StepExecutionResponse response = adapter.execute(dispatchRequest());
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
+    }
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
-  }
+    private void prepareExecution() {
+        SystemPipelineDefinition definition =
+                SystemPipelineCatalog.forJobType("DISPATCH").orElseThrow();
+        List<PipelineStepTemplate> templates = definition.stages().stream()
+                .map(stage -> PipelineStepTemplate.builder()
+                        .stepCode(stage)
+                        .stepName(stage)
+                        .stageCode(stage)
+                        .stepOrder(definition.stages().indexOf(stage) + 1)
+                        .implCode(stage)
+                        .enabled(true)
+                        .build())
+                .toList();
+        when(stageExecutor.defaultStepDefinitions()).thenReturn(templates);
+        PipelineRunFence run = new PipelineRunFence(901L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
+        when(pipelineRuns.createPipelineInstance(any())).thenReturn(run);
+    }
 
-  @Test
-  @DisplayName("已知投递失败和重试失败后补偿不改变既有首错报告")
-  void shouldPreserveFirstFailure_whenKnownRetryFailsAndCompensates() {
-    prepareExecution();
-    when(stageExecutor.execute(any()))
-        .thenReturn(List.of(
-            DispatchStageResult.failure(
-                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-            DispatchStageResult.failure(DispatchStage.RETRY, "DISPATCH_RETRY_FAILED", "failed"),
-            DispatchStageResult.success(DispatchStage.COMPENSATE)));
+    private static StepExecutionRequest dispatchRequest() {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(SystemPipelineTaskKeys.CODE, "DISPATCH");
+        attributes.put(SystemPipelineTaskKeys.VERSION, 1);
+        return new StepExecutionRequest("tenant-a", "job-dispatch", "DISPATCH", "worker-1", attributes);
+    }
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+    @Test
+    @DisplayName("构建成功响应时把文件号、回执码、清单引用与渠道号写入节点输出")
+    @SuppressWarnings("unchecked")
+    void shouldPublishReceiptManifestAndChannel_whenBuildingSuccessResponse() {
+        DispatchJobContext context = new DispatchJobContext();
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
+        attributes.put(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1");
+        attributes.put(DispatchRuntimeKeys.DISPATCH_MANIFEST_REF, new DispatchManifestRef("daily.chk", "abc", 128L));
+        attributes.put(
+                DispatchRuntimeKeys.DISPATCH_PAYLOAD,
+                new DispatchPayload("42", "daily", "SFTP", "/in", null, null, true, false, null, Map.of()));
+        context.setAttributes(attributes);
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
-  }
+        StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
 
-  @Test
-  @DisplayName("重试成功但缺少确认和完成阶段时不能报告成功")
-  void shouldNotReportSuccess_whenRecoveredRetryHasNoCompletion() {
-    prepareExecution();
-    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
-      DispatchJobContext context = invocation.getArgument(0);
-      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
-      return List.of(
-          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
-          DispatchStageResult.success(DispatchStage.RETRY));
-    });
+        assertThat(response.success()).isTrue();
+        assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
+                .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
+                .containsEntry(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1")
+                .containsEntry("manifestRef", "daily.chk")
+                .containsEntry("manifestChecksum", "abc")
+                .containsEntry("manifestSizeBytes", 128L)
+                .containsEntry(DispatchRuntimeKeys.CHANNEL_CODE, "SFTP");
+    }
 
-    StepExecutionResponse response = adapter.execute(dispatchRequest());
+    private static StepExecutionRequest request(Map<String, Object> attributes) {
+        return new StepExecutionRequest("tenant-a", "job-dispatch", "DISPATCH_PREPARE", "worker-1", attributes);
+    }
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
-  }
-
-  private void prepareExecution() {
-    SystemPipelineDefinition definition =
-        SystemPipelineCatalog.forJobType("DISPATCH").orElseThrow();
-    List<PipelineStepTemplate> templates = definition.stages().stream()
-        .map(stage -> PipelineStepTemplate.builder()
-            .stepCode(stage)
-            .stepName(stage)
-            .stageCode(stage)
-            .stepOrder(definition.stages().indexOf(stage) + 1)
-            .implCode(stage)
-            .enabled(true)
-            .build())
-        .toList();
-    when(stageExecutor.defaultStepDefinitions()).thenReturn(templates);
-    PipelineRunFence run = new PipelineRunFence(901L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(run);
-  }
-
-  private static StepExecutionRequest dispatchRequest() {
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(SystemPipelineTaskKeys.CODE, "DISPATCH");
-    attributes.put(SystemPipelineTaskKeys.VERSION, 1);
-    return new StepExecutionRequest("tenant-a", "job-dispatch", "DISPATCH", "worker-1", attributes);
-  }
-
-  @Test
-  @DisplayName("构建成功响应时把文件号、回执码、清单引用与渠道号写入节点输出")
-  @SuppressWarnings("unchecked")
-  void shouldPublishReceiptManifestAndChannel_whenBuildingSuccessResponse() {
-    DispatchJobContext context = new DispatchJobContext();
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attributes.put(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1");
-    attributes.put(
-        DispatchRuntimeKeys.DISPATCH_MANIFEST_REF,
-        new DispatchManifestRef("daily.chk", "abc", 128L));
-    attributes.put(
-        DispatchRuntimeKeys.DISPATCH_PAYLOAD,
-        new DispatchPayload("42", "daily", "SFTP", "/in", null, null, true, false, null, Map.of()));
-    context.setAttributes(attributes);
-
-    StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
-
-    assertThat(response.success()).isTrue();
-    assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
-        .containsEntry(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1")
-        .containsEntry("manifestRef", "daily.chk")
-        .containsEntry("manifestChecksum", "abc")
-        .containsEntry("manifestSizeBytes", 128L)
-        .containsEntry(DispatchRuntimeKeys.CHANNEL_CODE, "SFTP");
-  }
-
-  private static StepExecutionRequest request(Map<String, Object> attributes) {
-    return new StepExecutionRequest(
-        "tenant-a", "job-dispatch", "DISPATCH_PREPARE", "worker-1", attributes);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <T> ObjectProvider<T> emptyProvider() {
-    return mock(ObjectProvider.class);
-  }
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> emptyProvider() {
+        return mock(ObjectProvider.class);
+    }
 }

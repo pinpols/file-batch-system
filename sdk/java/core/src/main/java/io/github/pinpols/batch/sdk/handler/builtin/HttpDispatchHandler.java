@@ -41,106 +41,103 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HttpDispatchHandler extends SdkAbstractTaskHandler {
 
-  private final HttpDispatchConfig config;
-  private final DataSource dataSource;
-  private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+    private final HttpDispatchConfig config;
+    private final DataSource dataSource;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
-  public HttpDispatchHandler(HttpDispatchConfig config, DataSource dataSource) {
-    this(config, dataSource, SdkJsonMapperFactory.create());
-  }
-
-  public HttpDispatchHandler(
-      HttpDispatchConfig config, DataSource dataSource, ObjectMapper objectMapper) {
-    this.config = Objects.requireNonNull(config, "config");
-    this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
-    this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-    HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-    Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
-    this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
-  }
-
-  @Override
-  public String taskType() {
-    return config.taskType();
-  }
-
-  @Override
-  protected SdkTaskResult doExecute(SdkTaskContext ctx) {
-    URI uri = URI.create(config.endpoint());
-    try {
-      checkSsrf(uri);
-    } catch (Exception ex) {
-      return SdkTaskResult.fail(ex);
+    public HttpDispatchHandler(HttpDispatchConfig config, DataSource dataSource) {
+        this(config, dataSource, SdkJsonMapperFactory.create());
     }
-    SdkRowResult counts = new SdkRowResult();
-    try (Connection conn = dataSource.getConnection();
-        Statement st = conn.createStatement();
-        ResultSet rs = st.executeQuery(config.selectQuery())) {
-      ResultSetMetaData meta = rs.getMetaData();
-      int cols = meta.getColumnCount();
-      while (rs.next()) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        for (int i = 1; i <= cols; i++) {
-          row.put(meta.getColumnLabel(i), rs.getObject(i));
+
+    public HttpDispatchHandler(HttpDispatchConfig config, DataSource dataSource, ObjectMapper objectMapper) {
+        this.config = Objects.requireNonNull(config, "config");
+        this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+        Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
+        this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
+    }
+
+    @Override
+    public String taskType() {
+        return config.taskType();
+    }
+
+    @Override
+    protected SdkTaskResult doExecute(SdkTaskContext ctx) {
+        URI uri = URI.create(config.endpoint());
+        try {
+            checkSsrf(uri);
+        } catch (Exception ex) {
+            return SdkTaskResult.fail(ex);
         }
-        pushRow(ctx, uri, row, counts);
-      }
-    } catch (Exception ex) {
-      log.error("dispatch from query failed", ex);
-      return SdkTaskResult.fail(ex);
-    }
-    return SdkTaskResult.ok(
-        "dispatched " + counts.success() + " ok, " + counts.failed() + " failed",
-        counts.toOutput());
-  }
-
-  private void pushRow(SdkTaskContext ctx, URI uri, Map<String, Object> row, SdkRowResult counts)
-      throws Exception {
-    if (ctx.isCancelled()) {
-      throw new IllegalStateException("cancelled by platform");
-    }
-    String json = objectMapper.writeValueAsString(row);
-    try {
-      HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri);
-      Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
-      HttpRequest req = requestBuilder
-          .timeout(requestTimeout)
-          .header("Content-Type", "application/json")
-          .POST(BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-          .build();
-      HttpResponse<Void> resp = httpClient.send(req, BodyHandlers.discarding());
-      if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-        counts.incSuccess();
-      } else {
-        counts.incFailed();
-        if (config.failFast()) {
-          throw new IllegalStateException("push failed with status " + resp.statusCode());
+        SdkRowResult counts = new SdkRowResult();
+        try (Connection conn = dataSource.getConnection();
+                Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(config.selectQuery())) {
+            ResultSetMetaData meta = rs.getMetaData();
+            int cols = meta.getColumnCount();
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int i = 1; i <= cols; i++) {
+                    row.put(meta.getColumnLabel(i), rs.getObject(i));
+                }
+                pushRow(ctx, uri, row, counts);
+            }
+        } catch (Exception ex) {
+            log.error("dispatch from query failed", ex);
+            return SdkTaskResult.fail(ex);
         }
-      }
-    } catch (Exception ex) {
-      counts.incFailed();
-      if (config.failFast()) {
-        throw ex;
-      }
-      log.warn("push row failed (continuing): {}", ExceptionLogSummary.of(ex));
+        return SdkTaskResult.ok(
+                "dispatched " + counts.success() + " ok, " + counts.failed() + " failed", counts.toOutput());
     }
-  }
 
-  private void checkSsrf(URI uri) throws UnknownHostException {
-    String host = uri.getHost();
-    if (host == null || host.isBlank()) {
-      throw new IllegalArgumentException("invalid endpoint, no host: " + config.endpoint());
+    private void pushRow(SdkTaskContext ctx, URI uri, Map<String, Object> row, SdkRowResult counts) throws Exception {
+        if (ctx.isCancelled()) {
+            throw new IllegalStateException("cancelled by platform");
+        }
+        String json = objectMapper.writeValueAsString(row);
+        try {
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri);
+            Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
+            HttpRequest req = requestBuilder
+                    .timeout(requestTimeout)
+                    .header("Content-Type", "application/json")
+                    .POST(BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<Void> resp = httpClient.send(req, BodyHandlers.discarding());
+            if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
+                counts.incSuccess();
+            } else {
+                counts.incFailed();
+                if (config.failFast()) {
+                    throw new IllegalStateException("push failed with status " + resp.statusCode());
+                }
+            }
+        } catch (Exception ex) {
+            counts.incFailed();
+            if (config.failFast()) {
+                throw ex;
+            }
+            log.warn("push row failed (continuing): {}", ExceptionLogSummary.of(ex));
+        }
     }
-    if (config.blockPrivateIps()) {
-      InetAddress addr = InetAddress.getByName(host);
-      boolean resolvedAddressIsPrivate = addr.isLoopbackAddress()
-          || addr.isAnyLocalAddress()
-          || addr.isLinkLocalAddress()
-          || addr.isSiteLocalAddress();
-      if (resolvedAddressIsPrivate) {
-        throw new SecurityException("SSRF blocked: private/loopback IP for host " + host);
-      }
+
+    private void checkSsrf(URI uri) throws UnknownHostException {
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("invalid endpoint, no host: " + config.endpoint());
+        }
+        if (config.blockPrivateIps()) {
+            InetAddress addr = InetAddress.getByName(host);
+            boolean resolvedAddressIsPrivate = addr.isLoopbackAddress()
+                    || addr.isAnyLocalAddress()
+                    || addr.isLinkLocalAddress()
+                    || addr.isSiteLocalAddress();
+            if (resolvedAddressIsPrivate) {
+                throw new SecurityException("SSRF blocked: private/loopback IP for host " + host);
+            }
+        }
     }
-  }
 }

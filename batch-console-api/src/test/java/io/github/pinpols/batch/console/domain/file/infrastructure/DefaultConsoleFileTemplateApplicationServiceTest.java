@@ -29,186 +29,181 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleFileTemplateApplicationServiceTest {
 
-  @Mock
-  private FileTemplateConfigMapper mapper;
+    @Mock
+    private FileTemplateConfigMapper mapper;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  private DefaultConsoleFileTemplateApplicationService service;
+    private DefaultConsoleFileTemplateApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultConsoleFileTemplateApplicationService(
-        mapper, tenantGuard, metadataResolver, new ObjectMapper());
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultConsoleFileTemplateApplicationService(
+                mapper, tenantGuard, metadataResolver, new ObjectMapper());
+    }
 
-  @Test
-  @DisplayName("导入方向映射草稿生成字段映射与查询参数结构")
-  void draftMapping_generatesImportTemplateJson() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
-        "t1",
-        "IMPORT",
-        "biz",
-        "orders",
-        null,
-        List.of("order_no"),
-        null,
-        null,
-        List.of(new FileTemplateMappingDraftCommand.Field(
-            "orderNo", "order_no", null, "STRING", true, null, null)));
+    @Test
+    @DisplayName("导入方向映射草稿生成字段映射与查询参数结构")
+    void draftMapping_generatesImportTemplateJson() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
+                "t1",
+                "IMPORT",
+                "biz",
+                "orders",
+                null,
+                List.of("order_no"),
+                null,
+                null,
+                List.of(new FileTemplateMappingDraftCommand.Field(
+                        "orderNo", "order_no", null, "STRING", true, null, null)));
 
-    FileTemplateMappingDraftResult response = service.draftMapping(command);
+        FileTemplateMappingDraftResult response = service.draftMapping(command);
 
-    assertThat(response.direction()).isEqualTo("IMPORT");
-    assertThat(response.fieldMappingsJson())
-        .contains("\"name\":\"orderNo\"")
-        .contains("\"targetColumn\":\"order_no\"")
-        .contains("\"required\":true");
-    assertThat(response.queryParamSchemaJson())
-        .contains("\"jdbcMappedImport\"")
-        .contains("\"schema\":\"biz\"")
-        .contains("\"table\":\"orders\"")
-        .contains("\"conflictColumns\":[\"order_no\"]");
-    assertThat(response.warnings()).isEmpty();
-  }
+        assertThat(response.direction()).isEqualTo("IMPORT");
+        assertThat(response.fieldMappingsJson())
+                .contains("\"name\":\"orderNo\"")
+                .contains("\"targetColumn\":\"order_no\"")
+                .contains("\"required\":true");
+        assertThat(response.queryParamSchemaJson())
+                .contains("\"jdbcMappedImport\"")
+                .contains("\"schema\":\"biz\"")
+                .contains("\"table\":\"orders\"")
+                .contains("\"conflictColumns\":[\"order_no\"]");
+        assertThat(response.warnings()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("未知批次关系时导出草稿要求填写 SQL，但不把游标强加到文件字段")
-  void draftMapping_exportRequiresScopedSqlWithoutAddingCursorToOutput() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
-        "t1",
-        "EXPORT",
-        "biz",
-        "orders",
-        null,
-        List.of(),
-        null,
-        null,
-        List.of(new FileTemplateMappingDraftCommand.Field(
-            "order_no", null, "Order", null, null, null, null)));
-    FileTemplateMappingDraftResult response = service.draftMapping(command);
-    assertThat(response.defaultQuerySql()).isNull();
-    assertThat(response.warnings())
-        .anySatisfy(warning -> assertThat(warning).contains(":tenantId", ":batchNo", "分页游标"));
-    assertThat(response.fieldMappingsJson())
-        .contains("\"sourceColumn\":\"order_no\"")
-        .doesNotContain("\"sourceColumn\":\"id\"");
-    assertThat(response.queryParamSchemaJson())
-        .contains("\"cursorColumn\":\"id\"")
-        .contains("\"csvColumns\":[{\"header\":\"Order\",\"source\":\"detail.order_no\"}]");
-  }
+    @Test
+    @DisplayName("未知批次关系时导出草稿要求填写 SQL，但不把游标强加到文件字段")
+    void draftMapping_exportRequiresScopedSqlWithoutAddingCursorToOutput() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
+                "t1",
+                "EXPORT",
+                "biz",
+                "orders",
+                null,
+                List.of(),
+                null,
+                null,
+                List.of(new FileTemplateMappingDraftCommand.Field("order_no", null, "Order", null, null, null, null)));
+        FileTemplateMappingDraftResult response = service.draftMapping(command);
+        assertThat(response.defaultQuerySql()).isNull();
+        assertThat(response.warnings())
+                .anySatisfy(warning -> assertThat(warning).contains(":tenantId", ":batchNo", "分页游标"));
+        assertThat(response.fieldMappingsJson())
+                .contains("\"sourceColumn\":\"order_no\"")
+                .doesNotContain("\"sourceColumn\":\"id\"");
+        assertThat(response.queryParamSchemaJson())
+                .contains("\"cursorColumn\":\"id\"")
+                .contains("\"csvColumns\":[{\"header\":\"Order\",\"source\":\"detail.order_no\"}]");
+    }
 
-  @Test
-  @DisplayName("导出草稿保留用户指定查询并正确生成文件列")
-  void draftMapping_exportExplicitSqlIsPreserved() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    var fields = List.of(
-        new FileTemplateMappingDraftCommand.Field("id", null, null, null, null, null, null));
-    var generated = new FileTemplateMappingDraftCommand(
-        "t1", "EXPORT", null, "orders", null, List.of(), null, null, fields);
-    assertThat(service.draftMapping(generated).defaultQuerySql()).isNull();
-    assertThat(service.draftMapping(generated).queryParamSchemaJson())
-        .contains("\"csvColumns\":[{\"header\":\"id\",\"source\":\"detail.id\"}]");
-    var explicit = new FileTemplateMappingDraftCommand(
-        "t1",
-        "EXPORT",
-        null,
-        "orders",
-        null,
-        List.of(),
-        null,
-        "select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo",
-        fields);
-    assertThat(service.draftMapping(explicit).defaultQuerySql())
-        .isEqualTo(
-            "select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo");
-  }
+    @Test
+    @DisplayName("导出草稿保留用户指定查询并正确生成文件列")
+    void draftMapping_exportExplicitSqlIsPreserved() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        var fields = List.of(new FileTemplateMappingDraftCommand.Field("id", null, null, null, null, null, null));
+        var generated = new FileTemplateMappingDraftCommand(
+                "t1", "EXPORT", null, "orders", null, List.of(), null, null, fields);
+        assertThat(service.draftMapping(generated).defaultQuerySql()).isNull();
+        assertThat(service.draftMapping(generated).queryParamSchemaJson())
+                .contains("\"csvColumns\":[{\"header\":\"id\",\"source\":\"detail.id\"}]");
+        var explicit = new FileTemplateMappingDraftCommand(
+                "t1",
+                "EXPORT",
+                null,
+                "orders",
+                null,
+                List.of(),
+                null,
+                "select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo",
+                fields);
+        assertThat(service.draftMapping(explicit).defaultQuerySql())
+                .isEqualTo("select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo");
+    }
 
-  @Test
-  @DisplayName("更新模板时持久化加载与导出插件引用")
-  void update_shouldPersistPluginRefs() {
-    when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(mapper.selectById("t1", 1L))
-        .thenReturn(FileTemplateConfigQueryView.builder()
-            .templateCode("IMP-ORDER")
-            .version(1)
-            .templateName("orders")
-            .templateType("IMPORT")
-            .bizType("demo")
-            .fileFormatType("DELIMITED")
-            .charset("UTF-8")
-            .targetCharset("UTF-8")
-            .withBom(false)
-            .recordLength(0)
-            .headerRows(1)
-            .footerRows(0)
-            .checksumType("NONE")
-            .compressType("NONE")
-            .encryptType("NONE")
-            .streamingEnabled(true)
-            .pageSize(1000)
-            .fetchSize(1000)
-            .chunkSize(500)
-            .previewMaskingEnabled(false)
-            .errorLineMaskingEnabled(false)
-            .logMaskingEnabled(false)
-            .contentEncryptionEnabled(false)
-            .downloadRequiresApproval(false)
-            .enabled(true)
-            .build());
-    FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
-    request.setTenantId("t1");
-    request.setLoadTargetRef("jdbc_mapped");
-    request.setExportDataRef(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
+    @Test
+    @DisplayName("更新模板时持久化加载与导出插件引用")
+    void update_shouldPersistPluginRefs() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(mapper.selectById("t1", 1L))
+                .thenReturn(FileTemplateConfigQueryView.builder()
+                        .templateCode("IMP-ORDER")
+                        .version(1)
+                        .templateName("orders")
+                        .templateType("IMPORT")
+                        .bizType("demo")
+                        .fileFormatType("DELIMITED")
+                        .charset("UTF-8")
+                        .targetCharset("UTF-8")
+                        .withBom(false)
+                        .recordLength(0)
+                        .headerRows(1)
+                        .footerRows(0)
+                        .checksumType("NONE")
+                        .compressType("NONE")
+                        .encryptType("NONE")
+                        .streamingEnabled(true)
+                        .pageSize(1000)
+                        .fetchSize(1000)
+                        .chunkSize(500)
+                        .previewMaskingEnabled(false)
+                        .errorLineMaskingEnabled(false)
+                        .logMaskingEnabled(false)
+                        .contentEncryptionEnabled(false)
+                        .downloadRequiresApproval(false)
+                        .enabled(true)
+                        .build());
+        FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
+        request.setTenantId("t1");
+        request.setLoadTargetRef("jdbc_mapped");
+        request.setExportDataRef(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
 
-    service.update(1L, request);
+        service.update(1L, request);
 
-    ArgumentCaptor<FileTemplateConfigUpsertParam> captor =
-        ArgumentCaptor.forClass(FileTemplateConfigUpsertParam.class);
-    verify(mapper).upsertFileTemplateConfig(captor.capture());
-    assertThat(captor.getValue().getPluginRefs().getLoadTargetRef()).isEqualTo("jdbc_mapped");
-    assertThat(captor.getValue().getPluginRefs().getExportDataRef())
-        .isEqualTo(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
-  }
+        ArgumentCaptor<FileTemplateConfigUpsertParam> captor =
+                ArgumentCaptor.forClass(FileTemplateConfigUpsertParam.class);
+        verify(mapper).upsertFileTemplateConfig(captor.capture());
+        assertThat(captor.getValue().getPluginRefs().getLoadTargetRef()).isEqualTo("jdbc_mapped");
+        assertThat(captor.getValue().getPluginRefs().getExportDataRef())
+                .isEqualTo(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
+    }
 
-  @Test
-  @DisplayName("更新时忽略传入版本号并就地更新既有行")
-  void update_shouldIgnoreIncomingVersionAndPinToExistingRow() {
-    when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
-    // #9 (adv-review 2026-07-13):update 携带新 version 不得改 upsert 的 version 键,
-    // 否则 on conflict(tenant,code,version)不命中 path id 的现有行 → INSERT 幽灵行(新 id),
-    // 而回读仍按旧 id 取回陈旧行。此处断言 upsert 用的是现有行的 version(1),回读按 path id。
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(mapper.selectById("t1", 1L))
-        .thenReturn(FileTemplateConfigQueryView.builder()
-            .templateCode("IMP-ORDER")
-            .version(1)
-            .templateName("orders")
-            .enabled(true)
-            .build());
-    FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
-    request.setTenantId("t1");
-    request.setVersion(9);
-    request.setTemplateName("orders-renamed");
+    @Test
+    @DisplayName("更新时忽略传入版本号并就地更新既有行")
+    void update_shouldIgnoreIncomingVersionAndPinToExistingRow() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
+        // #9 (adv-review 2026-07-13):update 携带新 version 不得改 upsert 的 version 键,
+        // 否则 on conflict(tenant,code,version)不命中 path id 的现有行 → INSERT 幽灵行(新 id),
+        // 而回读仍按旧 id 取回陈旧行。此处断言 upsert 用的是现有行的 version(1),回读按 path id。
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(mapper.selectById("t1", 1L))
+                .thenReturn(FileTemplateConfigQueryView.builder()
+                        .templateCode("IMP-ORDER")
+                        .version(1)
+                        .templateName("orders")
+                        .enabled(true)
+                        .build());
+        FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
+        request.setTenantId("t1");
+        request.setVersion(9);
+        request.setTemplateName("orders-renamed");
 
-    service.update(1L, request);
+        service.update(1L, request);
 
-    ArgumentCaptor<FileTemplateConfigUpsertParam> captor =
-        ArgumentCaptor.forClass(FileTemplateConfigUpsertParam.class);
-    verify(mapper).upsertFileTemplateConfig(captor.capture());
-    assertThat(captor.getValue().getBasicInfo().getVersion()).isEqualTo(1);
-    // 回读按 path id 命中被就地更新的同一行(而非幽灵新行)。
-    verify(mapper, times(2)).selectById("t1", 1L);
-  }
+        ArgumentCaptor<FileTemplateConfigUpsertParam> captor =
+                ArgumentCaptor.forClass(FileTemplateConfigUpsertParam.class);
+        verify(mapper).upsertFileTemplateConfig(captor.capture());
+        assertThat(captor.getValue().getBasicInfo().getVersion()).isEqualTo(1);
+        // 回读按 path id 命中被就地更新的同一行(而非幽灵新行)。
+        verify(mapper, times(2)).selectById("t1", 1L);
+    }
 }

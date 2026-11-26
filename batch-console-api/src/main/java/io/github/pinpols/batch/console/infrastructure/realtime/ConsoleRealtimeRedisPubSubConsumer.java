@@ -40,187 +40,182 @@ import org.springframework.util.ErrorHandler;
 @Slf4j
 public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
 
-  static final String CHANNEL_KEY = ConsoleRealtimeRedisPublisher.CHANNEL_KEY;
+    static final String CHANNEL_KEY = ConsoleRealtimeRedisPublisher.CHANNEL_KEY;
 
-  private final StringRedisTemplate redisTemplate;
-  private final BatchRedisNamespace redisNamespace;
-  private final ConsoleRealtimeEventHub realtimeEventHub;
-  private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
-  private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-  private final ConsoleRealtimeMetrics realtimeMetrics;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+    private final StringRedisTemplate redisTemplate;
+    private final BatchRedisNamespace redisNamespace;
+    private final ConsoleRealtimeEventHub realtimeEventHub;
+    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
+    private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+    private final ConsoleRealtimeMetrics realtimeMetrics;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-  private RedisMessageListenerContainer listenerContainer;
+    private RedisMessageListenerContainer listenerContainer;
 
-  @PostConstruct
-  void start() {
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
-    if (connectionFactory == null) {
-      throw new IllegalStateException(
-          "redis connection factory is required for realtime pub/sub consumer");
-    }
-    listenerContainer = new RedisMessageListenerContainer();
-    listenerContainer.setConnectionFactory(connectionFactory);
-    listenerContainer.setErrorHandler(logErrorHandler());
-    listenerContainer.addMessageListener(
-        this, new ChannelTopic(redisNamespace.channel(CHANNEL_KEY)));
-    listenerContainer.afterPropertiesSet();
-    listenerContainer.start();
-    log.info(
-        "console realtime redis pubsub consumer started: instanceId={}, channel={}",
-        instanceIdProvider.instanceId(),
-        redisNamespace.channel(CHANNEL_KEY));
-  }
-
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopContainer("context-closed");
-  }
-
-  @PreDestroy
-  void shutdown() {
-    stopContainer("pre-destroy");
-  }
-
-  private void stopContainer(String source) {
-    if (!running.compareAndSet(true, false)) {
-      return;
-    }
-    if (listenerContainer != null) {
-      log.info(
-          "console realtime redis pubsub consumer stopping: instanceId={}, source={}",
-          instanceIdProvider.instanceId(),
-          source);
-      try {
-        listenerContainer.stop();
-      } catch (Exception exception) {
-        if (isShutdownNoise(exception)) {
-          log.info(
-              "console realtime pubsub consumer stop skipped during shutdown: instanceId={},"
-                  + " reason={}",
-              instanceIdProvider.instanceId(),
-              SwallowedExceptionLogger.summary(exception));
-        } else {
-          log.warn(
-              "console realtime pubsub consumer stop failed: instanceId={}",
-              instanceIdProvider.instanceId(),
-              exception);
+    @PostConstruct
+    void start() {
+        if (!running.compareAndSet(false, true)) {
+            return;
         }
-      }
-      try {
-        listenerContainer.destroy();
-      } catch (Exception exception) {
-        log.debug(
-            "console realtime pubsub consumer destroy skipped: instanceId={}," + " reason={}",
-            instanceIdProvider.instanceId(),
-            SwallowedExceptionLogger.summary(exception),
-            exception);
-      }
-    }
-  }
-
-  @Override
-  public void onMessage(Message message, byte[] pattern) {
-    if (message == null || message.getBody() == null || message.getBody().length == 0) {
-      return;
-    }
-    String payload = new String(message.getBody(), StandardCharsets.UTF_8);
-    ConsoleRealtimeStreamEnvelope envelope;
-    try {
-      envelope = JsonUtils.fromJson(payload, ConsoleRealtimeStreamEnvelope.class);
-    } catch (IllegalArgumentException exception) {
-      realtimeMetrics.recordPubSubDecodeFailure();
-      log.warn(
-          "console realtime pubsub payload decode failed: channel={}",
-          redisNamespace.channel(CHANNEL_KEY),
-          exception);
-      return;
-    }
-    if (envelope == null) {
-      return;
-    }
-    if (instanceIdProvider.instanceId().equals(envelope.originInstanceId())) {
-      // 本实例已经在写路径上做过本机直发，避免 Pub/Sub 回环导致重复 SSE。
-      return;
-    }
-    publish(envelope);
-  }
-
-  private void publish(ConsoleRealtimeStreamEnvelope envelope) {
-    try {
-      if (shouldPublishSummarySnapshot(envelope)) {
-        summaryRealtimeStream.publishSnapshot(envelope.tenantId());
-        return;
-      }
-      String tenantId = envelope.tenantId();
-      String stream = envelope.stream();
-      String eventType = envelope.eventType();
-      String cursor = envelope.cursor();
-      Object eventData = null;
-      if (EmptyChecks.isNotNull(envelope.dataJson())
-          && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
-        String eventDataJson = envelope.dataJson();
-        eventData = JsonUtils.fromJson(eventDataJson, Object.class);
-      }
-      Instant emittedAt = EmptyChecks.isNull(envelope.emittedAt())
-          ? BatchDateTimeSupport.utcNow()
-          : envelope.emittedAt();
-      ConsoleSseEvent event =
-          new ConsoleSseEvent(tenantId, stream, eventType, cursor, eventData, emittedAt);
-      realtimeEventHub.publish(event);
-    } catch (Exception exception) {
-      realtimeMetrics.recordPubSubHandleFailure(envelope.stream(), envelope.eventType());
-      log.warn(
-          "console realtime pubsub record handling failed: tenantId={}, stream={},"
-              + " eventType={}",
-          envelope.tenantId(),
-          envelope.stream(),
-          envelope.eventType(),
-          exception);
-    }
-  }
-
-  private static boolean shouldPublishSummarySnapshot(ConsoleRealtimeStreamEnvelope envelope) {
-    if (!envelope.summaryRefresh()) {
-      return false;
-    }
-    boolean eventDataMissing = EmptyChecks.isNull(envelope.dataJson())
-        || EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()));
-    return eventDataMissing;
-  }
-
-  private ErrorHandler logErrorHandler() {
-    return throwable -> {
-      if (!running.get() && isShutdownNoise(throwable)) {
+        RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
+        if (connectionFactory == null) {
+            throw new IllegalStateException("redis connection factory is required for realtime pub/sub consumer");
+        }
+        listenerContainer = new RedisMessageListenerContainer();
+        listenerContainer.setConnectionFactory(connectionFactory);
+        listenerContainer.setErrorHandler(logErrorHandler());
+        listenerContainer.addMessageListener(this, new ChannelTopic(redisNamespace.channel(CHANNEL_KEY)));
+        listenerContainer.afterPropertiesSet();
+        listenerContainer.start();
         log.info(
-            "console realtime pubsub listener skipped during shutdown: channel={}, reason={}",
-            redisNamespace.channel(CHANNEL_KEY),
-            SwallowedExceptionLogger.summary(throwable));
-        return;
-      }
-      log.error(
-          "console realtime pubsub listener container failed: channel={}",
-          redisNamespace.channel(CHANNEL_KEY),
-          throwable);
-    };
-  }
-
-  private static boolean isShutdownNoise(Throwable throwable) {
-    Throwable current = throwable;
-    while (current != null) {
-      String message = current.getMessage();
-      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
-          && (message.contains("LettuceConnectionFactory is STOPPING")
-              || message.contains("has been closed")
-              || message.contains("Connection pool shut down"));
-      if (isConnectionShutdownMessage) {
-        return true;
-      }
-      current = current.getCause();
+                "console realtime redis pubsub consumer started: instanceId={}, channel={}",
+                instanceIdProvider.instanceId(),
+                redisNamespace.channel(CHANNEL_KEY));
     }
-    return false;
-  }
+
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopContainer("context-closed");
+    }
+
+    @PreDestroy
+    void shutdown() {
+        stopContainer("pre-destroy");
+    }
+
+    private void stopContainer(String source) {
+        if (!running.compareAndSet(true, false)) {
+            return;
+        }
+        if (listenerContainer != null) {
+            log.info(
+                    "console realtime redis pubsub consumer stopping: instanceId={}, source={}",
+                    instanceIdProvider.instanceId(),
+                    source);
+            try {
+                listenerContainer.stop();
+            } catch (Exception exception) {
+                if (isShutdownNoise(exception)) {
+                    log.info(
+                            "console realtime pubsub consumer stop skipped during shutdown: instanceId={},"
+                                    + " reason={}",
+                            instanceIdProvider.instanceId(),
+                            SwallowedExceptionLogger.summary(exception));
+                } else {
+                    log.warn(
+                            "console realtime pubsub consumer stop failed: instanceId={}",
+                            instanceIdProvider.instanceId(),
+                            exception);
+                }
+            }
+            try {
+                listenerContainer.destroy();
+            } catch (Exception exception) {
+                log.debug(
+                        "console realtime pubsub consumer destroy skipped: instanceId={}," + " reason={}",
+                        instanceIdProvider.instanceId(),
+                        SwallowedExceptionLogger.summary(exception),
+                        exception);
+            }
+        }
+    }
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        if (message == null || message.getBody() == null || message.getBody().length == 0) {
+            return;
+        }
+        String payload = new String(message.getBody(), StandardCharsets.UTF_8);
+        ConsoleRealtimeStreamEnvelope envelope;
+        try {
+            envelope = JsonUtils.fromJson(payload, ConsoleRealtimeStreamEnvelope.class);
+        } catch (IllegalArgumentException exception) {
+            realtimeMetrics.recordPubSubDecodeFailure();
+            log.warn(
+                    "console realtime pubsub payload decode failed: channel={}",
+                    redisNamespace.channel(CHANNEL_KEY),
+                    exception);
+            return;
+        }
+        if (envelope == null) {
+            return;
+        }
+        if (instanceIdProvider.instanceId().equals(envelope.originInstanceId())) {
+            // 本实例已经在写路径上做过本机直发，避免 Pub/Sub 回环导致重复 SSE。
+            return;
+        }
+        publish(envelope);
+    }
+
+    private void publish(ConsoleRealtimeStreamEnvelope envelope) {
+        try {
+            if (shouldPublishSummarySnapshot(envelope)) {
+                summaryRealtimeStream.publishSnapshot(envelope.tenantId());
+                return;
+            }
+            String tenantId = envelope.tenantId();
+            String stream = envelope.stream();
+            String eventType = envelope.eventType();
+            String cursor = envelope.cursor();
+            Object eventData = null;
+            if (EmptyChecks.isNotNull(envelope.dataJson())
+                    && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
+                String eventDataJson = envelope.dataJson();
+                eventData = JsonUtils.fromJson(eventDataJson, Object.class);
+            }
+            Instant emittedAt =
+                    EmptyChecks.isNull(envelope.emittedAt()) ? BatchDateTimeSupport.utcNow() : envelope.emittedAt();
+            ConsoleSseEvent event = new ConsoleSseEvent(tenantId, stream, eventType, cursor, eventData, emittedAt);
+            realtimeEventHub.publish(event);
+        } catch (Exception exception) {
+            realtimeMetrics.recordPubSubHandleFailure(envelope.stream(), envelope.eventType());
+            log.warn(
+                    "console realtime pubsub record handling failed: tenantId={}, stream={}," + " eventType={}",
+                    envelope.tenantId(),
+                    envelope.stream(),
+                    envelope.eventType(),
+                    exception);
+        }
+    }
+
+    private static boolean shouldPublishSummarySnapshot(ConsoleRealtimeStreamEnvelope envelope) {
+        if (!envelope.summaryRefresh()) {
+            return false;
+        }
+        boolean eventDataMissing = EmptyChecks.isNull(envelope.dataJson())
+                || EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()));
+        return eventDataMissing;
+    }
+
+    private ErrorHandler logErrorHandler() {
+        return throwable -> {
+            if (!running.get() && isShutdownNoise(throwable)) {
+                log.info(
+                        "console realtime pubsub listener skipped during shutdown: channel={}, reason={}",
+                        redisNamespace.channel(CHANNEL_KEY),
+                        SwallowedExceptionLogger.summary(throwable));
+                return;
+            }
+            log.error(
+                    "console realtime pubsub listener container failed: channel={}",
+                    redisNamespace.channel(CHANNEL_KEY),
+                    throwable);
+        };
+    }
+
+    private static boolean isShutdownNoise(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+                    && (message.contains("LettuceConnectionFactory is STOPPING")
+                            || message.contains("has been closed")
+                            || message.contains("Connection pool shut down"));
+            if (isConnectionShutdownMessage) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 }

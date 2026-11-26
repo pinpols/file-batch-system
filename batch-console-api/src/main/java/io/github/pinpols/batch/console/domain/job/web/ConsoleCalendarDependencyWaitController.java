@@ -34,40 +34,39 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleCalendarDependencyWaitController {
 
-  private final ConsoleOrchestratorPort orchestrator;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver metadataResolver;
+    private final ConsoleOrchestratorPort orchestrator;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver metadataResolver;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<List<ConsoleCalendarDependencyWaitResponse>> list(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "calendarCode", required = false) String calendarCode,
-      @RequestParam(value = "waitStatus", defaultValue = "WAITING") String waitStatus,
-      @RequestParam(value = "limit", defaultValue = "100") int limit) {
-    return responseFactory.success(
-        orchestrator.listCalendarDependencyWaits(tenantId, calendarCode, waitStatus, limit));
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<List<ConsoleCalendarDependencyWaitResponse>> list(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "calendarCode", required = false) String calendarCode,
+            @RequestParam(value = "waitStatus", defaultValue = "WAITING") String waitStatus,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        return responseFactory.success(
+                orchestrator.listCalendarDependencyWaits(tenantId, calendarCode, waitStatus, limit));
+    }
 
-  @PostMapping("/manual-action")
-  public CommonResponse<ConsoleCalendarDependencyWaitResponse> requestManualAction(
-      @Valid @RequestBody ManualActionRequest request) {
-    CalendarDependencyActionCommand command = new CalendarDependencyActionCommand(
-        request.tenantId(),
-        request.calendarCode(),
-        request.bizDate(),
-        request.action(),
-        metadataResolver.current().operatorId(),
-        request.reason());
-    ConsoleCalendarDependencyWaitResponse response =
-        orchestrator.requestCalendarDependencyWaitAction(command);
-    return responseFactory.success(response);
-  }
+    @PostMapping("/manual-action")
+    public CommonResponse<ConsoleCalendarDependencyWaitResponse> requestManualAction(
+            @Valid @RequestBody ManualActionRequest request) {
+        CalendarDependencyActionCommand command = new CalendarDependencyActionCommand(
+                request.tenantId(),
+                request.calendarCode(),
+                request.bizDate(),
+                request.action(),
+                metadataResolver.current().operatorId(),
+                request.reason());
+        ConsoleCalendarDependencyWaitResponse response = orchestrator.requestCalendarDependencyWaitAction(command);
+        return responseFactory.success(response);
+    }
 
-  public record ManualActionRequest(
-      @NotBlank @Size(max = 64) String tenantId,
-      @NotBlank @Size(max = 128) String calendarCode,
-      @NotNull LocalDate bizDate,
-      @NotBlank @Pattern(regexp = "^(RELEASE|SKIP)$") String action,
-      @NotBlank @Size(max = 1024) String reason) {}
+    public record ManualActionRequest(
+            @NotBlank @Size(max = 64) String tenantId,
+            @NotBlank @Size(max = 128) String calendarCode,
+            @NotNull LocalDate bizDate,
+            @NotBlank @Pattern(regexp = "^(RELEASE|SKIP)$") String action,
+            @NotBlank @Size(max = 1024) String reason) {}
 }

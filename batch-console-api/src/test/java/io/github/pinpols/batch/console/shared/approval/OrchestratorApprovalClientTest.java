@@ -36,223 +36,209 @@ import org.springframework.web.client.RestClient;
 @ExtendWith(MockitoExtension.class)
 class OrchestratorApprovalClientTest {
 
-  @Mock
-  private OrchestratorInternalRestClient orchestratorInternalRestClient;
+    @Mock
+    private OrchestratorInternalRestClient orchestratorInternalRestClient;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  private OrchestratorApprovalClient client;
+    private OrchestratorApprovalClient client;
 
-  @BeforeEach
-  void setUp() {
-    client = new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
-  }
+    @BeforeEach
+    void setUp() {
+        client = new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
+    }
 
-  private void stubApprovalRecord(String status, String targetType, String targetId) {
-    RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
-    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
-    when(restClient
-            .get()
-            .uri(anyString(), any(Object[].class))
-            .retrieve()
-            .body(ApprovalRecordResponse.class))
-        .thenReturn(new ApprovalRecordResponse(
-            new ApprovalRecord(status, targetType, targetId, null, null)));
-  }
+    private void stubApprovalRecord(String status, String targetType, String targetId) {
+        RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
+        when(orchestratorInternalRestClient.client()).thenReturn(restClient);
+        when(restClient.get().uri(anyString(), any(Object[].class)).retrieve().body(ApprovalRecordResponse.class))
+                .thenReturn(new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId, null, null)));
+    }
 
-  private RestClient.RequestBodySpec stubSubmit(ApprovalSubmitResponse response) {
-    RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
-    RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
-    RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
-    RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
-    when(restClient.post()).thenReturn(uriSpec);
-    when(uriSpec.uri(anyString())).thenReturn(bodySpec);
-    when(bodySpec.header(anyString(), any(String[].class))).thenReturn(bodySpec);
-    when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
-    when(bodySpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(ApprovalSubmitResponse.class)).thenReturn(response);
-    return bodySpec;
-  }
+    private RestClient.RequestBodySpec stubSubmit(ApprovalSubmitResponse response) {
+        RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
+        RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
+        RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
+        RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        when(orchestratorInternalRestClient.client()).thenReturn(restClient);
+        when(restClient.post()).thenReturn(uriSpec);
+        when(uriSpec.uri(anyString())).thenReturn(bodySpec);
+        when(bodySpec.header(anyString(), any(String[].class))).thenReturn(bodySpec);
+        when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
+        when(bodySpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.body(ApprovalSubmitResponse.class)).thenReturn(response);
+        return bodySpec;
+    }
 
-  // ── requireApprovedApproval：目标绑定 ──────────────────────────────────
+    // ── requireApprovedApproval：目标绑定 ──────────────────────────────────
 
-  @Test
-  @DisplayName("审批已通过且目标类型与标识均匹配时,目标绑定校验应放行")
-  void shouldPass_whenApprovedAndTargetMatches() {
-    stubApprovalRecord("APPROVED", "FILE", "100");
-    assertThatCode(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
-        .doesNotThrowAnyException();
-  }
+    @Test
+    @DisplayName("审批已通过且目标类型与标识均匹配时,目标绑定校验应放行")
+    void shouldPass_whenApprovedAndTargetMatches() {
+        stubApprovalRecord("APPROVED", "FILE", "100");
+        assertThatCode(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
+                .doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("审批状态为已执行时视同已通过,目标匹配校验应放行")
-  void shouldPass_whenExecutedTreatedAsApproved() {
-    stubApprovalRecord("EXECUTED", "FILE", "100");
-    assertThatCode(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
-        .doesNotThrowAnyException();
-  }
+    @Test
+    @DisplayName("审批状态为已执行时视同已通过,目标匹配校验应放行")
+    void shouldPass_whenExecutedTreatedAsApproved() {
+        stubApprovalRecord("EXECUTED", "FILE", "100");
+        assertThatCode(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
+                .doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("审批记录的目标标识与申请不一致时,应返回禁止访问错误")
-  void shouldRejectForbidden_whenTargetIdMismatch() {
-    stubApprovalRecord("APPROVED", "FILE", "200");
-    assertThatThrownBy(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
-        .isInstanceOf(BizException.class)
-        .extracting(e -> ((BizException) e).getCode())
-        .isEqualTo(ResultCode.FORBIDDEN);
-  }
+    @Test
+    @DisplayName("审批记录的目标标识与申请不一致时,应返回禁止访问错误")
+    void shouldRejectForbidden_whenTargetIdMismatch() {
+        stubApprovalRecord("APPROVED", "FILE", "200");
+        assertThatThrownBy(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getCode())
+                .isEqualTo(ResultCode.FORBIDDEN);
+    }
 
-  @Test
-  @DisplayName("审批记录的目标类型与申请不一致时,应返回禁止访问错误")
-  void shouldRejectForbidden_whenTargetTypeMismatch() {
-    stubApprovalRecord("APPROVED", "EXPORT", "100");
-    assertThatThrownBy(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
-        .isInstanceOf(BizException.class)
-        .extracting(e -> ((BizException) e).getCode())
-        .isEqualTo(ResultCode.FORBIDDEN);
-  }
+    @Test
+    @DisplayName("审批记录的目标类型与申请不一致时,应返回禁止访问错误")
+    void shouldRejectForbidden_whenTargetTypeMismatch() {
+        stubApprovalRecord("APPROVED", "EXPORT", "100");
+        assertThatThrownBy(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getCode())
+                .isEqualTo(ResultCode.FORBIDDEN);
+    }
 
-  @Test
-  @DisplayName("审批仍处于待处理状态时,应返回状态冲突错误")
-  void shouldRejectStateConflict_whenNotApprovedYet() {
-    stubApprovalRecord("PENDING", "FILE", "100");
-    assertThatThrownBy(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
-        .isInstanceOf(BizException.class)
-        .extracting(e -> ((BizException) e).getCode())
-        .isEqualTo(ResultCode.STATE_CONFLICT);
-  }
+    @Test
+    @DisplayName("审批仍处于待处理状态时,应返回状态冲突错误")
+    void shouldRejectStateConflict_whenNotApprovedYet() {
+        stubApprovalRecord("PENDING", "FILE", "100");
+        assertThatThrownBy(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(100L)))
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getCode())
+                .isEqualTo(ResultCode.STATE_CONFLICT);
+    }
 
-  @Test
-  @DisplayName("缺少文件目标时必须拒绝，不能退化为只校验审批状态")
-  void shouldRejectMissingTarget_whenApprovalIsApproved() {
-    stubApprovalRecord("APPROVED", "JOB", "999");
-    assertThatThrownBy(
-            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(null)))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.FORBIDDEN));
-  }
+    @Test
+    @DisplayName("缺少文件目标时必须拒绝，不能退化为只校验审批状态")
+    void shouldRejectMissingTarget_whenApprovalIsApproved() {
+        stubApprovalRecord("APPROVED", "JOB", "999");
+        assertThatThrownBy(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(null)))
+                .isInstanceOfSatisfying(
+                        BizException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.FORBIDDEN));
+    }
 
-  // ── submitApproval ──────────────────────────────────────────────────────
+    // ── submitApproval ──────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("批日审批绑定日历身份，修改日历不能复用已批准载荷")
-  void shouldBindBatchDayCalendarToApprovedCatchUp() {
-    ConsoleCatchUpApprovalRequest approved = new ConsoleCatchUpApprovalRequest();
-    approved.setTenantId("t1");
-    approved.setJobCode("JOB_A");
-    approved.setBizDate("2026-10-14");
-    approved.setBatchDayCalendarCode("CAL_A");
-    RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
-    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
-    when(restClient
-            .get()
-            .uri(anyString(), any(Object[].class))
-            .retrieve()
-            .body(ApprovalRecordResponse.class))
-        .thenReturn(new ApprovalRecordResponse(new ApprovalRecord(
-            "APPROVED", "CATCH_UP", null, "CATCH_UP", JsonUtils.toJson(approved))));
-    ConsoleCatchUpApprovalRequest execution =
-        JsonUtils.fromJsonStrict(JsonUtils.toJson(approved), ConsoleCatchUpApprovalRequest.class);
-    execution.setApprovalId("AP-1");
-    assertThatCode(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
-        .doesNotThrowAnyException();
-    execution.setBatchDayCalendarCode("CAL_B");
-    assertThatThrownBy(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            error -> assertThat(error.getCode()).isEqualTo(ResultCode.FORBIDDEN));
-  }
+    @Test
+    @DisplayName("批日审批绑定日历身份，修改日历不能复用已批准载荷")
+    void shouldBindBatchDayCalendarToApprovedCatchUp() {
+        ConsoleCatchUpApprovalRequest approved = new ConsoleCatchUpApprovalRequest();
+        approved.setTenantId("t1");
+        approved.setJobCode("JOB_A");
+        approved.setBizDate("2026-10-14");
+        approved.setBatchDayCalendarCode("CAL_A");
+        RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
+        when(orchestratorInternalRestClient.client()).thenReturn(restClient);
+        when(restClient.get().uri(anyString(), any(Object[].class)).retrieve().body(ApprovalRecordResponse.class))
+                .thenReturn(new ApprovalRecordResponse(
+                        new ApprovalRecord("APPROVED", "CATCH_UP", null, "CATCH_UP", JsonUtils.toJson(approved))));
+        ConsoleCatchUpApprovalRequest execution =
+                JsonUtils.fromJsonStrict(JsonUtils.toJson(approved), ConsoleCatchUpApprovalRequest.class);
+        execution.setApprovalId("AP-1");
+        assertThatCode(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
+                .doesNotThrowAnyException();
+        execution.setBatchDayCalendarCode("CAL_B");
+        assertThatThrownBy(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
+                .isInstanceOfSatisfying(
+                        BizException.class, error -> assertThat(error.getCode()).isEqualTo(ResultCode.FORBIDDEN));
+    }
 
-  @Test
-  @DisplayName("提交审批成功时,应返回服务端生成的审批编号")
-  void shouldReturnApprovalNo_onSuccessfulSubmit() {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    stubSubmit(new ApprovalSubmitResponse("APR-9"));
-    String approvalNo = client.submitApproval(ApprovalSubmitCommand.builder()
-        .tenantId("t1")
-        .approvalType("DOWNLOAD")
-        .actionType("DOWNLOAD")
-        .targetType("FILE")
-        .targetId("100")
-        .idempotencyKey("idem-1")
-        .build());
-    assertThat(approvalNo).isEqualTo("APR-9");
-  }
+    @Test
+    @DisplayName("提交审批成功时,应返回服务端生成的审批编号")
+    void shouldReturnApprovalNo_onSuccessfulSubmit() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        stubSubmit(new ApprovalSubmitResponse("APR-9"));
+        String approvalNo = client.submitApproval(ApprovalSubmitCommand.builder()
+                .tenantId("t1")
+                .approvalType("DOWNLOAD")
+                .actionType("DOWNLOAD")
+                .targetType("FILE")
+                .targetId("100")
+                .idempotencyKey("idem-1")
+                .build());
+        assertThat(approvalNo).isEqualTo("APR-9");
+    }
 
-  @Test
-  @DisplayName("提交审批返回空响应时,应使用默认错误消息键抛出业务异常")
-  void shouldThrowDefaultKey_whenSubmitResponseEmpty() {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    stubSubmit(null);
-    assertThatThrownBy(() -> client.submitApproval(
-            ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("i").build()))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.empty_response");
-  }
+    @Test
+    @DisplayName("提交审批返回空响应时,应使用默认错误消息键抛出业务异常")
+    void shouldThrowDefaultKey_whenSubmitResponseEmpty() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        stubSubmit(null);
+        assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
+                        .tenantId("t1")
+                        .idempotencyKey("i")
+                        .build()))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.empty_response");
+    }
 
-  @Test
-  @DisplayName("调用方给出自定义消息键且响应为空时,应使用调用方提供的消息键")
-  void shouldThrowCallerKey_whenSubmitResponseEmptyAndCustomKeyGiven() {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    stubSubmit(new ApprovalSubmitResponse("  "));
-    assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
-            .tenantId("t1")
-            .idempotencyKey("i")
-            .emptyResponseMessageKey("error.approval.submit_failed")
-            .build()))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.submit_failed");
-  }
+    @Test
+    @DisplayName("调用方给出自定义消息键且响应为空时,应使用调用方提供的消息键")
+    void shouldThrowCallerKey_whenSubmitResponseEmptyAndCustomKeyGiven() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        stubSubmit(new ApprovalSubmitResponse("  "));
+        assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
+                        .tenantId("t1")
+                        .idempotencyKey("i")
+                        .emptyResponseMessageKey("error.approval.submit_failed")
+                        .build()))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.submit_failed");
+    }
 
-  @Test
-  @DisplayName("提交审批时应清除申请人标识与审批理由中的空白与控制字符")
-  void shouldSanitizeRequesterIdAndReason() {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-10"));
-    client.submitApproval(ApprovalSubmitCommand.builder()
-        .tenantId("t1")
-        .approvalType("SELF_SERVICE")
-        .actionType("RERUN")
-        .targetType("JOB_INSTANCE")
-        .targetId("JOB-1")
-        .requesterId("  ops\u0007-user  ")
-        .approvalReason("  reason\u0000with-ctrl  ")
-        .idempotencyKey("idem-2")
-        .build());
-    ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
-    verify(bodySpec).body(captor.capture());
-    String json = JsonUtils.toJson(captor.getValue());
-    assertThat(json)
-        .contains("\"requesterId\":\"ops-user\"")
-        .contains("\"approvalReason\":\"reasonwith-ctrl\"");
-  }
+    @Test
+    @DisplayName("提交审批时应清除申请人标识与审批理由中的空白与控制字符")
+    void shouldSanitizeRequesterIdAndReason() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-10"));
+        client.submitApproval(ApprovalSubmitCommand.builder()
+                .tenantId("t1")
+                .approvalType("SELF_SERVICE")
+                .actionType("RERUN")
+                .targetType("JOB_INSTANCE")
+                .targetId("JOB-1")
+                .requesterId("  ops\u0007-user  ")
+                .approvalReason("  reason\u0000with-ctrl  ")
+                .idempotencyKey("idem-2")
+                .build());
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(bodySpec).body(captor.capture());
+        String json = JsonUtils.toJson(captor.getValue());
+        assertThat(json).contains("\"requesterId\":\"ops-user\"").contains("\"approvalReason\":\"reasonwith-ctrl\"");
+    }
 
-  @Test
-  @DisplayName("未提供申请人标识时,应回退为当前操作人并带上来源追踪与幂等标识")
-  void shouldFallbackRequesterIdToOperator_whenNotProvided() {
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-11"));
-    client.submitApproval(
-        ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("idem-3").build());
-    ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
-    verify(bodySpec).body(captor.capture());
-    String json = JsonUtils.toJson(captor.getValue());
-    assertThat(json)
-        .contains("\"requesterId\":\"op-1\"")
-        .contains("\"sourceTraceId\":\"trace-1\"")
-        .contains("\"sourceIdempotencyKey\":\"idem-3\"");
-  }
+    @Test
+    @DisplayName("未提供申请人标识时,应回退为当前操作人并带上来源追踪与幂等标识")
+    void shouldFallbackRequesterIdToOperator_whenNotProvided() {
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-11"));
+        client.submitApproval(ApprovalSubmitCommand.builder()
+                .tenantId("t1")
+                .idempotencyKey("idem-3")
+                .build());
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(bodySpec).body(captor.capture());
+        String json = JsonUtils.toJson(captor.getValue());
+        assertThat(json)
+                .contains("\"requesterId\":\"op-1\"")
+                .contains("\"sourceTraceId\":\"trace-1\"")
+                .contains("\"sourceIdempotencyKey\":\"idem-3\"");
+    }
 }

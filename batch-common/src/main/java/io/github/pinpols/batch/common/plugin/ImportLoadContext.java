@@ -6,14 +6,14 @@ import lombok.Builder;
 /** 传给 {@link ImportLoadPlugin} 的 LOAD 阶段上下文。由平台填充;插件不得假设固定的 entity 类型。 */
 @Builder(toBuilder = true)
 public record ImportLoadContext(
-    String tenantId,
-    String jobCode,
-    String traceId,
-    String workerId,
-    String sourceFileName,
-    String batchNo,
-    String bizDate,
-    String bizType,
-    String region,
-    String templateCode,
-    Map<String, Object> templateConfig) {}
+        String tenantId,
+        String jobCode,
+        String traceId,
+        String workerId,
+        String sourceFileName,
+        String batchNo,
+        String bizDate,
+        String bizType,
+        String region,
+        String templateCode,
+        Map<String, Object> templateConfig) {}

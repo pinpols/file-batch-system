@@ -46,262 +46,245 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("批量日重放调度器;验证开关与停机短路,会话范围筛选,条目派发与补偿提交失败处理,锁与事务配置")
 class BatchDayReplayDispatcherTest {
 
-  private BatchDayReplaySessionMapper sessionMapper;
-  private BatchDayReplayEntryMapper entryMapper;
-  private CompensationService compensationService;
-  private CompensationCommandMapper compensationCommandMapper;
-  private OrchestratorGracefulShutdown gracefulShutdown;
-  private BatchDayReplayDispatchProperties properties;
-  private BatchDayReplayDispatcher dispatcher;
+    private BatchDayReplaySessionMapper sessionMapper;
+    private BatchDayReplayEntryMapper entryMapper;
+    private CompensationService compensationService;
+    private CompensationCommandMapper compensationCommandMapper;
+    private OrchestratorGracefulShutdown gracefulShutdown;
+    private BatchDayReplayDispatchProperties properties;
+    private BatchDayReplayDispatcher dispatcher;
 
-  @BeforeEach
-  void setUp() {
-    sessionMapper = mock(BatchDayReplaySessionMapper.class);
-    entryMapper = mock(BatchDayReplayEntryMapper.class);
-    compensationService = mock(CompensationService.class);
-    compensationCommandMapper = mock(CompensationCommandMapper.class);
-    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    properties = new BatchDayReplayDispatchProperties();
-    properties.setEnabled(true);
-    properties.setSessionBatchSize(10);
-    properties.setEntryBatchSize(20);
-    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
-        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    dispatcher = new BatchDayReplayDispatcher(
-        sessionMapper,
-        entryMapper,
-        new BatchDayReplayEntryExecutor(
-            entryMapper, compensationCommandMapper, compensationService, dateTimeSupport),
-        mock(BatchDayReplayTerminalReconciler.class),
-        properties,
-        gracefulShutdown);
-  }
+    @BeforeEach
+    void setUp() {
+        sessionMapper = mock(BatchDayReplaySessionMapper.class);
+        entryMapper = mock(BatchDayReplayEntryMapper.class);
+        compensationService = mock(CompensationService.class);
+        compensationCommandMapper = mock(CompensationCommandMapper.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        properties = new BatchDayReplayDispatchProperties();
+        properties.setEnabled(true);
+        properties.setSessionBatchSize(10);
+        properties.setEntryBatchSize(20);
+        BatchDateTimeSupport dateTimeSupport =
+                new BatchDateTimeSupport(Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+        dispatcher = new BatchDayReplayDispatcher(
+                sessionMapper,
+                entryMapper,
+                new BatchDayReplayEntryExecutor(
+                        entryMapper, compensationCommandMapper, compensationService, dateTimeSupport),
+                mock(BatchDayReplayTerminalReconciler.class),
+                properties,
+                gracefulShutdown);
+    }
 
-  @Test
-  @DisplayName("调度开关关闭时不做任何会话扫描,避免无效派发")
-  void shouldSkipDispatch_whenDispatcherDisabled() {
-    properties.setEnabled(false);
-    dispatcher.scheduledDispatch();
-    verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
-  }
+    @Test
+    @DisplayName("调度开关关闭时不做任何会话扫描,避免无效派发")
+    void shouldSkipDispatch_whenDispatcherDisabled() {
+        properties.setEnabled(false);
+        dispatcher.scheduledDispatch();
+        verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("停机排水期间跳过派发,不再查询待处理的会话")
-  void shouldSkipDispatch_whenGracefulShutdownDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
-    dispatcher.scheduledDispatch();
-    verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
-  }
+    @Test
+    @DisplayName("停机排水期间跳过派发,不再查询待处理的会话")
+    void shouldSkipDispatch_whenGracefulShutdownDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
+        dispatcher.scheduledDispatch();
+        verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("调度锁的持有时长由外部配置提供,取值为配置占位符且默认值与占位符回退值一致")
-  void shouldUseConfigurableLockDurations_whenReplayDispatchScheduled() throws Exception {
-    Method scheduledDispatch =
-        BatchDayReplayDispatcher.class.getDeclaredMethod("scheduledDispatch");
-    SchedulerLock lock = scheduledDispatch.getAnnotation(SchedulerLock.class);
+    @Test
+    @DisplayName("调度锁的持有时长由外部配置提供,取值为配置占位符且默认值与占位符回退值一致")
+    void shouldUseConfigurableLockDurations_whenReplayDispatchScheduled() throws Exception {
+        Method scheduledDispatch = BatchDayReplayDispatcher.class.getDeclaredMethod("scheduledDispatch");
+        SchedulerLock lock = scheduledDispatch.getAnnotation(SchedulerLock.class);
 
-    assertThat(lock.lockAtLeastFor()).isEqualTo("${batch.replay.dispatch.lock-at-least-for:PT15S}");
-    assertThat(lock.lockAtMostFor()).isEqualTo("${batch.replay.dispatch.lock-at-most-for:PT1M}");
-    assertThat(properties.getLockAtLeastFor()).isEqualTo(Duration.ofSeconds(15));
-    assertThat(properties.getLockAtMostFor()).isEqualTo(Duration.ofMinutes(1));
-  }
+        assertThat(lock.lockAtLeastFor()).isEqualTo("${batch.replay.dispatch.lock-at-least-for:PT15S}");
+        assertThat(lock.lockAtMostFor()).isEqualTo("${batch.replay.dispatch.lock-at-most-for:PT1M}");
+        assertThat(properties.getLockAtLeastFor()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(properties.getLockAtMostFor()).isEqualTo(Duration.ofMinutes(1));
+    }
 
-  @Test
-  @DisplayName("没有处于运行中的重放会话时不派发任何条目")
-  void shouldDoNothing_whenNoRunningSessions() {
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of());
-    dispatcher.scheduledDispatch();
-    verify(entryMapper, never())
-        .selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
-  }
+    @Test
+    @DisplayName("没有处于运行中的重放会话时不派发任何条目")
+    void shouldDoNothing_whenNoRunningSessions() {
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of());
+        dispatcher.scheduledDispatch();
+        verify(entryMapper, never()).selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("仅重放产物的会话被跳过,既不查询待处理条目也不提交补偿请求")
-  void shouldSkipDispatch_whenSessionScopeIsOutputsOnly() {
-    BatchDayReplaySessionEntity outputs =
-        sessionAt(7L, BatchDayReplayScope.OUTPUTS_ONLY.code(), "RUNNING", "CREATE_NEW_VERSION");
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(outputs));
-    dispatcher.scheduledDispatch();
-    verify(entryMapper, never())
-        .selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
-    verify(compensationService, never()).submit(any());
-  }
+    @Test
+    @DisplayName("仅重放产物的会话被跳过,既不查询待处理条目也不提交补偿请求")
+    void shouldSkipDispatch_whenSessionScopeIsOutputsOnly() {
+        BatchDayReplaySessionEntity outputs =
+                sessionAt(7L, BatchDayReplayScope.OUTPUTS_ONLY.code(), "RUNNING", "CREATE_NEW_VERSION");
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(outputs));
+        dispatcher.scheduledDispatch();
+        verify(entryMapper, never()).selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
+        verify(compensationService, never()).submit(any());
+    }
 
-  @Test
-  @DisplayName("全失败范围的会话逐条派发待处理条目,并透传会话的结果策略")
-  void shouldDispatchEveryPendingEntry_whenSessionScopeIsAllFailed() {
-    BatchDayReplaySessionEntity session =
-        sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
-            .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
-            .build();
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
-        .id(1L)
-        .sessionId(8L)
-        .tenantId("t1")
-        .jobCode("JOB_A")
-        .sourceInstanceId(101L)
-        .status("PENDING")
-        .build();
-    BatchDayReplayEntryEntity e2 = BatchDayReplayEntryEntity.builder()
-        .id(2L)
-        .sessionId(8L)
-        .tenantId("t1")
-        .jobCode("JOB_B")
-        .sourceInstanceId(102L)
-        .status("PENDING")
-        .build();
-    when(entryMapper.selectBySessionAndStatus(8L, "t1", "PENDING", 20)).thenReturn(List.of(e1, e2));
-    when(entryMapper.claimPending(anyLong(), eq("t1"), eq(8L), any())).thenReturn(1);
-    when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-OK");
+    @Test
+    @DisplayName("全失败范围的会话逐条派发待处理条目,并透传会话的结果策略")
+    void shouldDispatchEveryPendingEntry_whenSessionScopeIsAllFailed() {
+        BatchDayReplaySessionEntity session = sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
+                .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
+                .build();
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
+        BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
+                .id(1L)
+                .sessionId(8L)
+                .tenantId("t1")
+                .jobCode("JOB_A")
+                .sourceInstanceId(101L)
+                .status("PENDING")
+                .build();
+        BatchDayReplayEntryEntity e2 = BatchDayReplayEntryEntity.builder()
+                .id(2L)
+                .sessionId(8L)
+                .tenantId("t1")
+                .jobCode("JOB_B")
+                .sourceInstanceId(102L)
+                .status("PENDING")
+                .build();
+        when(entryMapper.selectBySessionAndStatus(8L, "t1", "PENDING", 20)).thenReturn(List.of(e1, e2));
+        when(entryMapper.claimPending(anyLong(), eq("t1"), eq(8L), any())).thenReturn(1);
+        when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-OK");
 
-    dispatcher.scheduledDispatch();
+        dispatcher.scheduledDispatch();
 
-    ArgumentCaptor<CompensationSubmitCommand> captor =
-        ArgumentCaptor.forClass(CompensationSubmitCommand.class);
-    verify(compensationService, times(2)).submit(captor.capture());
-    assertThat(captor.getAllValues())
-        .allSatisfy(cmd -> assertThat(cmd.replaySessionId()).isEqualTo(8L));
-    assertThat(captor.getAllValues())
-        .allSatisfy(cmd -> assertThat(cmd.batchNo()).isNull());
-    assertThat(captor.getAllValues())
-        .allSatisfy(cmd ->
-            assertThat(cmd.resultPolicy()).isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
-    verify(entryMapper, times(2)).claimPending(anyLong(), eq("t1"), eq(8L), any());
-  }
+        ArgumentCaptor<CompensationSubmitCommand> captor = ArgumentCaptor.forClass(CompensationSubmitCommand.class);
+        verify(compensationService, times(2)).submit(captor.capture());
+        assertThat(captor.getAllValues())
+                .allSatisfy(cmd -> assertThat(cmd.replaySessionId()).isEqualTo(8L));
+        assertThat(captor.getAllValues())
+                .allSatisfy(cmd -> assertThat(cmd.batchNo()).isNull());
+        assertThat(captor.getAllValues())
+                .allSatisfy(cmd -> assertThat(cmd.resultPolicy()).isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
+        verify(entryMapper, times(2)).claimPending(anyLong(), eq("t1"), eq(8L), any());
+    }
 
-  @Test
-  @DisplayName("补偿提交抛错时把该条目标记为失败,避免条目停留在待处理状态")
-  void shouldMarkEntryFailed_whenCompensationSubmitThrows() {
-    BatchDayReplaySessionEntity session =
-        sessionAt(9L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(1L)
-        .sessionId(9L)
-        .tenantId("t1")
-        .jobCode("JOB_A")
-        .sourceInstanceId(101L)
-        .status("PENDING")
-        .build();
-    when(entryMapper.selectBySessionAndStatus(9L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
-    when(entryMapper.claimPending(eq(1L), eq("t1"), eq(9L), any())).thenReturn(1);
-    when(compensationService.submit(any(CompensationSubmitCommand.class)))
-        .thenThrow(new RuntimeException("compensation backpressure"));
+    @Test
+    @DisplayName("补偿提交抛错时把该条目标记为失败,避免条目停留在待处理状态")
+    void shouldMarkEntryFailed_whenCompensationSubmitThrows() {
+        BatchDayReplaySessionEntity session = sessionAt(9L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
+        BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+                .id(1L)
+                .sessionId(9L)
+                .tenantId("t1")
+                .jobCode("JOB_A")
+                .sourceInstanceId(101L)
+                .status("PENDING")
+                .build();
+        when(entryMapper.selectBySessionAndStatus(9L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
+        when(entryMapper.claimPending(eq(1L), eq("t1"), eq(9L), any())).thenReturn(1);
+        when(compensationService.submit(any(CompensationSubmitCommand.class)))
+                .thenThrow(new RuntimeException("compensation backpressure"));
 
-    dispatcher.scheduledDispatch();
+        dispatcher.scheduledDispatch();
 
-    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
-        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
-    verify(entryMapper).updateStatus(statusUpdate.capture());
-    assertThat(statusUpdate.getValue().getId()).isEqualTo(1L);
-    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo("FAILED");
-  }
+        ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+                ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+        verify(entryMapper).updateStatus(statusUpdate.capture());
+        assertThat(statusUpdate.getValue().getId()).isEqualTo(1L);
+        assertThat(statusUpdate.getValue().getToStatus()).isEqualTo("FAILED");
+    }
 
-  @Test
-  @DisplayName("调度计划候选的试运行派发使用冻结快照,配置版本与启动参数从快照还原且保持试运行标记")
-  void shouldUseFrozenSnapshotAndDryRun_whenCandidateSourceIsSchedulePlan() {
-    BatchDayReplaySessionEntity session =
-        sessionAt(10L, "ALL", "RUNNING", "DRY_RUN_ONLY").toBuilder()
-            .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
-            .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
-            .build();
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(3L)
-        .sessionId(10L)
-        .tenantId("t1")
-        .jobCode("JOB_PLAN")
-        .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
-        .status("PENDING")
-        .build();
-    when(entryMapper.selectBySessionAndStatus(10L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
-    when(entryMapper.claimPending(eq(3L), eq("t1"), eq(10L), any())).thenReturn(1);
-    when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
+    @Test
+    @DisplayName("调度计划候选的试运行派发使用冻结快照,配置版本与启动参数从快照还原且保持试运行标记")
+    void shouldUseFrozenSnapshotAndDryRun_whenCandidateSourceIsSchedulePlan() {
+        BatchDayReplaySessionEntity session = sessionAt(10L, "ALL", "RUNNING", "DRY_RUN_ONLY").toBuilder()
+                .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
+                .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
+                .build();
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
+        BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+                .id(3L)
+                .sessionId(10L)
+                .tenantId("t1")
+                .jobCode("JOB_PLAN")
+                .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
+                .status("PENDING")
+                .build();
+        when(entryMapper.selectBySessionAndStatus(10L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
+        when(entryMapper.claimPending(eq(3L), eq("t1"), eq(10L), any())).thenReturn(1);
+        when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
 
-    dispatcher.scheduledDispatch();
+        dispatcher.scheduledDispatch();
 
-    ArgumentCaptor<CompensationSubmitCommand> captor =
-        ArgumentCaptor.forClass(CompensationSubmitCommand.class);
-    verify(compensationService).submit(captor.capture());
-    CompensationSubmitCommand command = captor.getValue();
-    assertThat(command.compensationType()).isEqualTo("BATCH");
-    assertThat(command.dryRun()).isTrue();
-    assertThat(command.configVersion()).isEqualTo(12);
-    assertThat(command.launchParams()).containsEntry("region", "cn");
-    assertThat(command.replayEntryId()).isEqualTo(3L);
-    assertThat(command.batchNo()).isEqualTo("dry-run-session-10-entry-3");
-  }
+        ArgumentCaptor<CompensationSubmitCommand> captor = ArgumentCaptor.forClass(CompensationSubmitCommand.class);
+        verify(compensationService).submit(captor.capture());
+        CompensationSubmitCommand command = captor.getValue();
+        assertThat(command.compensationType()).isEqualTo("BATCH");
+        assertThat(command.dryRun()).isTrue();
+        assertThat(command.configVersion()).isEqualTo(12);
+        assertThat(command.launchParams()).containsEntry("region", "cn");
+        assertThat(command.replayEntryId()).isEqualTo(3L);
+        assertThat(command.batchNo()).isEqualTo("dry-run-session-10-entry-3");
+    }
 
-  @Test
-  @DisplayName("无源实例的计划回放继续使用条目级合成批次号")
-  void shouldKeepSyntheticBatchNo_whenReplayingSchedulePlanWithoutSourceInstance() {
-    BatchDayReplaySessionEntity session =
-        sessionAt(11L, "ALL", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
-            .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
-            .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
-            .build();
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(4L)
-        .sessionId(11L)
-        .tenantId("t1")
-        .jobCode("JOB_PLAN")
-        .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
-        .status("PENDING")
-        .build();
-    when(entryMapper.selectBySessionAndStatus(11L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
-    when(entryMapper.claimPending(eq(4L), eq("t1"), eq(11L), any())).thenReturn(1);
-    when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
+    @Test
+    @DisplayName("无源实例的计划回放继续使用条目级合成批次号")
+    void shouldKeepSyntheticBatchNo_whenReplayingSchedulePlanWithoutSourceInstance() {
+        BatchDayReplaySessionEntity session = sessionAt(11L, "ALL", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
+                .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
+                .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
+                .build();
+        when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
+        BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+                .id(4L)
+                .sessionId(11L)
+                .tenantId("t1")
+                .jobCode("JOB_PLAN")
+                .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
+                .status("PENDING")
+                .build();
+        when(entryMapper.selectBySessionAndStatus(11L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
+        when(entryMapper.claimPending(eq(4L), eq("t1"), eq(11L), any())).thenReturn(1);
+        when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
 
-    dispatcher.scheduledDispatch();
+        dispatcher.scheduledDispatch();
 
-    ArgumentCaptor<CompensationSubmitCommand> captor =
-        ArgumentCaptor.forClass(CompensationSubmitCommand.class);
-    verify(compensationService).submit(captor.capture());
-    CompensationSubmitCommand command = captor.getValue();
-    assertThat(command.dryRun()).isFalse();
-    assertThat(command.batchNo()).isEqualTo("dry-run-session-11-entry-4");
-  }
+        ArgumentCaptor<CompensationSubmitCommand> captor = ArgumentCaptor.forClass(CompensationSubmitCommand.class);
+        verify(compensationService).submit(captor.capture());
+        CompensationSubmitCommand command = captor.getValue();
+        assertThat(command.dryRun()).isFalse();
+        assertThat(command.batchNo()).isEqualTo("dry-run-session-11-entry-4");
+    }
 
-  @Test
-  @DisplayName("条目派发与失败标记各自开启独立事务,单个条目失败不影响其它条目")
-  void shouldOpenNewTransactionPerEntry_whenDispatchingAndMarkingFailed() throws Exception {
-    Method dispatch = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
-        "dispatch", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class);
+    @Test
+    @DisplayName("条目派发与失败标记各自开启独立事务,单个条目失败不影响其它条目")
+    void shouldOpenNewTransactionPerEntry_whenDispatchingAndMarkingFailed() throws Exception {
+        Method dispatch = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
+                "dispatch", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class);
 
-    assertThat(dispatch.getAnnotation(Transactional.class).propagation())
-        .isEqualTo(Propagation.REQUIRES_NEW);
+        assertThat(dispatch.getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.REQUIRES_NEW);
 
-    Method markFailed = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
-        "markFailed",
-        BatchDayReplaySessionEntity.class,
-        BatchDayReplayEntryEntity.class,
-        Exception.class);
-    assertThat(markFailed.getAnnotation(Transactional.class).propagation())
-        .isEqualTo(Propagation.REQUIRES_NEW);
-  }
+        Method markFailed = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
+                "markFailed", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class, Exception.class);
+        assertThat(markFailed.getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+    }
 
-  // ── helpers ─────────────────────────────────────────────────────────────
+    // ── helpers ─────────────────────────────────────────────────────────────
 
-  private static BatchDayReplaySessionEntity sessionAt(
-      Long id, String scope, String status, String resultPolicy) {
-    return BatchDayReplaySessionEntity.builder()
-        .id(id)
-        .tenantId("t1")
-        .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, Month.MAY, 4))
-        .scope(scope)
-        .resultPolicy(resultPolicy)
-        .configVersionPolicy("USE_ORIGINAL_CONFIG")
-        .reason("reason-" + id)
-        .status(status)
-        .totalCount(2)
-        .succeededCount(0)
-        .failedCount(0)
-        .inFlightCount(0)
-        .requestedBy("ops")
-        .build();
-  }
+    private static BatchDayReplaySessionEntity sessionAt(Long id, String scope, String status, String resultPolicy) {
+        return BatchDayReplaySessionEntity.builder()
+                .id(id)
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, Month.MAY, 4))
+                .scope(scope)
+                .resultPolicy(resultPolicy)
+                .configVersionPolicy("USE_ORIGINAL_CONFIG")
+                .reason("reason-" + id)
+                .status(status)
+                .totalCount(2)
+                .succeededCount(0)
+                .failedCount(0)
+                .inFlightCount(0)
+                .requestedBy("ops")
+                .build();
+    }
 }

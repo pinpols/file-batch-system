@@ -11,16 +11,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "batch.worker.dispatch")
 public record DispatchWorkerConfiguration(
-    String workerCode,
-    String workerType,
-    String tenantId,
-    Long heartbeatIntervalMillis,
-    String topic,
-    String consumerGroupId,
-    List<String> capabilityTags)
-    implements WorkerConfiguration {
+        String workerCode,
+        String workerType,
+        String tenantId,
+        Long heartbeatIntervalMillis,
+        String topic,
+        String consumerGroupId,
+        List<String> capabilityTags)
+        implements WorkerConfiguration {
 
-  public DispatchWorkerConfiguration {
-    capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
-  }
+    public DispatchWorkerConfiguration {
+        capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
+    }
 }

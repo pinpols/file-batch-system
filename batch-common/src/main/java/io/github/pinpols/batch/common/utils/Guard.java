@@ -22,64 +22,62 @@ import org.jetbrains.annotations.Contract;
 @SuppressWarnings("java:S2583")
 public final class Guard {
 
-  private Guard() {}
+    private Guard() {}
 
-  /**
-   * Mapper 查询结果非 null 断言。
-   *
-   * <pre>{@code
-   * // Before
-   * JobInstanceEntity entity = mapper.selectById(tenantId, id);
-   * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "job instance not found");
-   *
-   * // After
-   * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
-   * }</pre>
-   */
-  @Contract("null, _ -> fail; !null, _ -> param1")
-  public static <T> T requireFound(@Nullable T entity, String message) {
-    if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
+    /**
+     * Mapper 查询结果非 null 断言。
+     *
+     * <pre>{@code
+     * // Before
+     * JobInstanceEntity entity = mapper.selectById(tenantId, id);
+     * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "job instance not found");
+     *
+     * // After
+     * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
+     * }</pre>
+     */
+    @Contract("null, _ -> fail; !null, _ -> param1")
+    public static <T> T requireFound(@Nullable T entity, String message) {
+        if (entity == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
+        }
+        return entity;
     }
-    return entity;
-  }
 
-  /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
-  @Contract("null, _ -> fail")
-  public static void requireText(@Nullable String str, String message) {
-    if (!Texts.hasText(str)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
+    /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
+    @Contract("null, _ -> fail")
+    public static void requireText(@Nullable String str, String message) {
+        if (!Texts.hasText(str)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
+        }
     }
-  }
 
-  /** 通用业务条件断言。 */
-  @Contract("false, _ -> fail")
-  public static void require(boolean condition, String message) {
-    if (!condition) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
+    /** 通用业务条件断言。 */
+    @Contract("false, _ -> fail")
+    public static void require(boolean condition, String message) {
+        if (!condition) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
+        }
     }
-  }
 
-  /**
-   * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} / {@link ResultCode#STATE_CONFLICT} /
-   * {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时， 通过此重载指定，避免绕过工具类直接 throw。
-   */
-  @Contract("false, _, _ -> fail")
-  public static void require(boolean condition, ResultCode resultCode, String message) {
-    if (!condition) {
-      ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
-      throw BizException.of(code, code.detailKey(), message);
+    /**
+     * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} / {@link ResultCode#STATE_CONFLICT} /
+     * {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时， 通过此重载指定，避免绕过工具类直接 throw。
+     */
+    @Contract("false, _, _ -> fail")
+    public static void require(boolean condition, ResultCode resultCode, String message) {
+        if (!condition) {
+            ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
+            throw BizException.of(code, code.detailKey(), message);
+        }
     }
-  }
 
-  /** S-1.9：带错误码的字符串非空断言。 */
-  @Contract("null, _, _ -> fail")
-  public static void requireText(@Nullable String str, ResultCode resultCode, String message) {
-    if (!Texts.hasText(str)) {
-      ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
-      throw BizException.of(code, code.detailKey(), message);
+    /** S-1.9：带错误码的字符串非空断言。 */
+    @Contract("null, _, _ -> fail")
+    public static void requireText(@Nullable String str, ResultCode resultCode, String message) {
+        if (!Texts.hasText(str)) {
+            ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
+            throw BizException.of(code, code.detailKey(), message);
+        }
     }
-  }
 }

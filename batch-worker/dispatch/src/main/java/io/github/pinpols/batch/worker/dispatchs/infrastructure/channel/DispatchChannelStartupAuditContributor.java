@@ -13,41 +13,39 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchChannelStartupAuditContributor implements WorkerStartupAuditContributor {
 
-  private final DispatchChannelHealthRepository repository;
-  private final DispatchChannelHealthProperties properties;
+    private final DispatchChannelHealthRepository repository;
+    private final DispatchChannelHealthProperties properties;
 
-  @Override
-  public String name() {
-    return "dispatch-channel-health";
-  }
-
-  @Override
-  public WorkerStartupAuditResult audit() {
-    Map<String, Object> details = new LinkedHashMap<>();
-    details.put("enabled", properties.isEnabled());
-    details.put("probeIntervalMillis", properties.getProbeIntervalMillis());
-    details.put("maxBackoffMillis", properties.getMaxBackoffMillis());
-    details.put("probeChannelTypes", properties.getProbeChannelTypes());
-    details.put("officialChannelTypes", DispatchChannelTypePolicy.allowedTypes());
-    details.put("channelSafetyProfiles", DispatchChannelTypePolicy.safetyProfilesForAudit());
-    if (!properties.isEnabled()) {
-      return WorkerStartupAuditResult.healthy(details);
+    @Override
+    public String name() {
+        return "dispatch-channel-health";
     }
-    long degraded = repository.countByHealthStatus("DEGRADED");
-    long unhealthy = repository.countByHealthStatus("UNHEALTHY");
-    long overdue = repository.countProbeOverdue(BatchDateTimeSupport.utcNow());
-    details.put("degradedChannels", degraded);
-    details.put("unhealthyChannels", unhealthy);
-    details.put("probeOverdueChannels", overdue);
-    // 启动瞬间 probe scheduler 尚未首跑，DB 里残留的 UNHEALTHY 都伴随 last_probe_at 过期。
-    // 此时把整体判为 unhealthy 是 false positive；改为：当且仅当 *所有* UNHEALTHY 都是 overdue 时，
-    // 才视为 pendingFirstProbe。严格 == 防止"真故障 UNHEALTHY + 多余 overdue"被误吞
-    // （mapper SQL 已收紧为 UNHEALTHY-only，这里再守一层）。
-    boolean pendingFirstProbe = unhealthy > 0 && unhealthy == overdue;
-    details.put("pendingFirstProbe", pendingFirstProbe);
-    boolean healthy = unhealthy == 0 || pendingFirstProbe;
-    return healthy
-        ? WorkerStartupAuditResult.healthy(details)
-        : WorkerStartupAuditResult.unhealthy(details);
-  }
+
+    @Override
+    public WorkerStartupAuditResult audit() {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("enabled", properties.isEnabled());
+        details.put("probeIntervalMillis", properties.getProbeIntervalMillis());
+        details.put("maxBackoffMillis", properties.getMaxBackoffMillis());
+        details.put("probeChannelTypes", properties.getProbeChannelTypes());
+        details.put("officialChannelTypes", DispatchChannelTypePolicy.allowedTypes());
+        details.put("channelSafetyProfiles", DispatchChannelTypePolicy.safetyProfilesForAudit());
+        if (!properties.isEnabled()) {
+            return WorkerStartupAuditResult.healthy(details);
+        }
+        long degraded = repository.countByHealthStatus("DEGRADED");
+        long unhealthy = repository.countByHealthStatus("UNHEALTHY");
+        long overdue = repository.countProbeOverdue(BatchDateTimeSupport.utcNow());
+        details.put("degradedChannels", degraded);
+        details.put("unhealthyChannels", unhealthy);
+        details.put("probeOverdueChannels", overdue);
+        // 启动瞬间 probe scheduler 尚未首跑，DB 里残留的 UNHEALTHY 都伴随 last_probe_at 过期。
+        // 此时把整体判为 unhealthy 是 false positive；改为：当且仅当 *所有* UNHEALTHY 都是 overdue 时，
+        // 才视为 pendingFirstProbe。严格 == 防止"真故障 UNHEALTHY + 多余 overdue"被误吞
+        // （mapper SQL 已收紧为 UNHEALTHY-only，这里再守一层）。
+        boolean pendingFirstProbe = unhealthy > 0 && unhealthy == overdue;
+        details.put("pendingFirstProbe", pendingFirstProbe);
+        boolean healthy = unhealthy == 0 || pendingFirstProbe;
+        return healthy ? WorkerStartupAuditResult.healthy(details) : WorkerStartupAuditResult.unhealthy(details);
+    }
 }

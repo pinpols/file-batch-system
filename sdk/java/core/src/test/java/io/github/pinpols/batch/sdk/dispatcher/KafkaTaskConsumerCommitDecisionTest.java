@@ -28,195 +28,181 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("Kafka 消费位移决策 — 仅接收成功或终态坏消息提交位移,可恢复拒收不提交")
 class KafkaTaskConsumerCommitDecisionTest {
 
-  @Test
-  @DisplayName("单次 poll 最多接收一条，避免认领等待累积超过消费组时限")
-  void shouldLimitPollBatchForClaimBarrier() {
-    assertThat(KafkaTaskConsumer.consumerProperties(config)
-            .get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG))
-        .isEqualTo(1);
-  }
-
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("kafka:9092")
-      .kafkaTopicPattern("batch.task.dispatch.tx.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
-
-  @Test
-  @DisplayName("派发接收成功后提交该条消息的位移")
-  void shouldCommitOffset_whenDispatcherSubmitted() throws Exception {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(consumerRecord(7, message("tx")));
+    @Test
+    @DisplayName("单次 poll 最多接收一条，避免认领等待累积超过消费组时限")
+    void shouldLimitPollBatchForClaimBarrier() {
+        assertThat(KafkaTaskConsumer.consumerProperties(config).get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG))
+                .isEqualTo(1);
     }
 
-    verify(consumer)
-        .commitSync(
-            Map.of(new TopicPartition("batch.task.dispatch.tx.t0", 0), new OffsetAndMetadata(8)));
-  }
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  @Test
-  @DisplayName("瞬时背压拒收时不提交位移,回退到本条并暂停该分区")
-  void shouldNotCommitAndSeekBack_whenRetryLater() throws Exception {
-    // RETRY_LATER = 瞬时背压(容量满 / 平台 PAUSED / draining):seek 回本条 + pause 分区(可恢复,由
-    // applyBackpressure 在恢复后 resume)。
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.RETRY_LATER);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    boolean keepGoing;
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      keepGoing = kafka.handleRecordAndMaybeCommit(consumerRecord(11, message("tx")));
+    @Test
+    @DisplayName("派发接收成功后提交该条消息的位移")
+    void shouldCommitOffset_whenDispatcherSubmitted() throws Exception {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.handleRecordAndMaybeCommit(consumerRecord(7, message("tx")));
+        }
+
+        verify(consumer)
+                .commitSync(Map.of(new TopicPartition("batch.task.dispatch.tx.t0", 0), new OffsetAndMetadata(8)));
     }
 
-    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    assertThat(keepGoing).as("RETRY_LATER defers the current partition").isFalse();
-    verify(consumer, never())
-        .commitSync(ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
-    verify(consumer).seek(tp, 11);
-    verify(consumer).pause(Set.of(tp));
-  }
+    @Test
+    @DisplayName("瞬时背压拒收时不提交位移,回退到本条并暂停该分区")
+    void shouldNotCommitAndSeekBack_whenRetryLater() throws Exception {
+        // RETRY_LATER = 瞬时背压(容量满 / 平台 PAUSED / draining):seek 回本条 + pause 分区(可恢复,由
+        // applyBackpressure 在恢复后 resume)。
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.RETRY_LATER);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        boolean keepGoing;
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            keepGoing = kafka.handleRecordAndMaybeCommit(consumerRecord(11, message("tx")));
+        }
 
-  @Test
-  @DisplayName("拒收只影响当前分区,同一批次其它分区仍正常处理并提交")
-  void shouldSkipOnlyCurrentPartition_whenRetryLater() throws Exception {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.onMessage(any()))
-        .thenReturn(
-            TaskDispatcher.DispatchDecision.RETRY_LATER, TaskDispatcher.DispatchDecision.SUBMITTED);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    TopicPartition deferred = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
-
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.processPolledRecords(List.of(
-          consumerRecord(deferred.topic(), 5, message("tx")),
-          consumerRecord(deferred.topic(), 6, message("tx")),
-          consumerRecord(healthy.topic(), 7, message("tx"))));
+        TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+        assertThat(keepGoing).as("RETRY_LATER defers the current partition").isFalse();
+        verify(consumer, never()).commitSync(ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
+        verify(consumer).seek(tp, 11);
+        verify(consumer).pause(Set.of(tp));
     }
 
-    // t0 的 offset 6 被留给 seek(5)后的重投;同一 poll 中的 t1 仍正常处理并提交。
-    verify(dispatcher, times(2)).onMessage(any());
-    verify(consumer).seek(deferred, 5);
-    verify(consumer).pause(Set.of(deferred));
-    verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
-  }
+    @Test
+    @DisplayName("拒收只影响当前分区,同一批次其它分区仍正常处理并提交")
+    void shouldSkipOnlyCurrentPartition_whenRetryLater() throws Exception {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.onMessage(any()))
+                .thenReturn(TaskDispatcher.DispatchDecision.RETRY_LATER, TaskDispatcher.DispatchDecision.SUBMITTED);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        TopicPartition deferred = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+        TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
-  @Test
-  @DisplayName("提交位移失败时回退当前分区,不阻塞其它分区提交")
-  void shouldSeekBackWithoutBlockingOtherPartitions_whenCommitFails() throws Exception {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    doThrow(new IllegalStateException("broker timeout"))
-        .doNothing()
-        .when(consumer)
-        .commitSync(ArgumentMatchers.anyMap());
-    TopicPartition failed = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.processPolledRecords(List.of(
+                    consumerRecord(deferred.topic(), 5, message("tx")),
+                    consumerRecord(deferred.topic(), 6, message("tx")),
+                    consumerRecord(healthy.topic(), 7, message("tx"))));
+        }
 
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.processPolledRecords(List.of(
-          consumerRecord(failed.topic(), 5, message("tx")),
-          consumerRecord(failed.topic(), 6, message("tx")),
-          consumerRecord(healthy.topic(), 7, message("tx"))));
+        // t0 的 offset 6 被留给 seek(5)后的重投;同一 poll 中的 t1 仍正常处理并提交。
+        verify(dispatcher, times(2)).onMessage(any());
+        verify(consumer).seek(deferred, 5);
+        verify(consumer).pause(Set.of(deferred));
+        verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
     }
 
-    verify(dispatcher, times(2)).onMessage(any());
-    verify(consumer).seek(failed, 5);
-    verify(consumer).pause(Set.of(failed));
-    verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
-  }
+    @Test
+    @DisplayName("提交位移失败时回退当前分区,不阻塞其它分区提交")
+    void shouldSeekBackWithoutBlockingOtherPartitions_whenCommitFails() throws Exception {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        doThrow(new IllegalStateException("broker timeout"))
+                .doNothing()
+                .when(consumer)
+                .commitSync(ArgumentMatchers.anyMap());
+        TopicPartition failed = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+        TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
-  @Test
-  @DisplayName("报文无法解析等终态坏消息直接提交位移,避免重复消费")
-  void shouldCommitOffset_whenMessageTerminallyInvalid() {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(
-          "batch.task.dispatch.tx.t0", 0, 3, "k", "not-json".getBytes(StandardCharsets.UTF_8)));
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.processPolledRecords(List.of(
+                    consumerRecord(failed.topic(), 5, message("tx")),
+                    consumerRecord(failed.topic(), 6, message("tx")),
+                    consumerRecord(healthy.topic(), 7, message("tx"))));
+        }
+
+        verify(dispatcher, times(2)).onMessage(any());
+        verify(consumer).seek(failed, 5);
+        verify(consumer).pause(Set.of(failed));
+        verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
     }
 
-    verify(dispatcher, never()).onMessage(any());
-    verify(consumer)
-        .commitSync(
-            Map.of(new TopicPartition("batch.task.dispatch.tx.t0", 0), new OffsetAndMetadata(4)));
-  }
+    @Test
+    @DisplayName("报文无法解析等终态坏消息直接提交位移,避免重复消费")
+    void shouldCommitOffset_whenMessageTerminallyInvalid() {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(
+                    "batch.task.dispatch.tx.t0", 0, 3, "k", "not-json".getBytes(StandardCharsets.UTF_8)));
+        }
 
-  @Test
-  @DisplayName("协议版本不支持时仅暂缓当前分区,其他分区继续提交")
-  void shouldPauseOnlyAffectedPartition_whenSchemaUnsupported() throws Exception {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    byte[] v3 =
-        ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
-                + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
-            .getBytes(StandardCharsets.UTF_8);
-
-    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.processPolledRecords(List.of(
-          new ConsumerRecord<>(tp.topic(), 0, 5, "k", v3),
-          consumerRecord(tp.topic(), 6, message("tx")),
-          consumerRecord(healthy.topic(), 7, message("tx"))));
-      verify(consumer).seek(tp, 5);
-      verify(consumer).pause(Set.of(tp));
-      verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
-      verify(dispatcher).onMessage(any());
+        verify(dispatcher, never()).onMessage(any());
+        verify(consumer)
+                .commitSync(Map.of(new TopicPartition("batch.task.dispatch.tx.t0", 0), new OffsetAndMetadata(4)));
     }
-  }
 
-  @Test
-  @DisplayName("分区撤销后不保留旧的暂缓状态")
-  void shouldClearWithheldRetry_whenPartitionRevoked() {
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    @SuppressWarnings("unchecked")
-    Consumer<String, byte[]> consumer = mock(Consumer.class);
-    TopicPartition partition = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    when(consumer.assignment()).thenReturn(Set.of(partition));
-    byte[] v3 = "{\"tenantId\":\"tx\",\"schemaVersion\":\"v3\"}".getBytes(StandardCharsets.UTF_8);
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(partition.topic(), 0, 5, "k", v3));
-      kafka.new PauseAwareRebalanceListener().onPartitionsRevoked(Set.of(partition));
-      kafka.resumeWithheldPartitions(Long.MAX_VALUE);
-      verify(consumer, never()).resume(Set.of(partition));
+    @Test
+    @DisplayName("协议版本不支持时仅暂缓当前分区,其他分区继续提交")
+    void shouldPauseOnlyAffectedPartition_whenSchemaUnsupported() throws Exception {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        byte[] v3 = ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
+                        + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
+                .getBytes(StandardCharsets.UTF_8);
+
+        TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+        TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.processPolledRecords(List.of(
+                    new ConsumerRecord<>(tp.topic(), 0, 5, "k", v3),
+                    consumerRecord(tp.topic(), 6, message("tx")),
+                    consumerRecord(healthy.topic(), 7, message("tx"))));
+            verify(consumer).seek(tp, 5);
+            verify(consumer).pause(Set.of(tp));
+            verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
+            verify(dispatcher).onMessage(any());
+        }
     }
-  }
 
-  private static ConsumerRecord<String, byte[]> consumerRecord(long offset, TaskDispatchMessage msg)
-      throws Exception {
-    return consumerRecord("batch.task.dispatch.tx.t0", offset, msg);
-  }
+    @Test
+    @DisplayName("分区撤销后不保留旧的暂缓状态")
+    void shouldClearWithheldRetry_whenPartitionRevoked() {
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        @SuppressWarnings("unchecked")
+        Consumer<String, byte[]> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+        when(consumer.assignment()).thenReturn(Set.of(partition));
+        byte[] v3 = "{\"tenantId\":\"tx\",\"schemaVersion\":\"v3\"}".getBytes(StandardCharsets.UTF_8);
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(partition.topic(), 0, 5, "k", v3));
+            kafka.new PauseAwareRebalanceListener().onPartitionsRevoked(Set.of(partition));
+            kafka.resumeWithheldPartitions(Long.MAX_VALUE);
+            verify(consumer, never()).resume(Set.of(partition));
+        }
+    }
 
-  private static ConsumerRecord<String, byte[]> consumerRecord(
-      String topic, long offset, TaskDispatchMessage msg) throws Exception {
-    ObjectMapper mapper = new ObjectMapper();
-    return new ConsumerRecord<>(topic, 0, offset, "k", mapper.writeValueAsBytes(msg));
-  }
+    private static ConsumerRecord<String, byte[]> consumerRecord(long offset, TaskDispatchMessage msg)
+            throws Exception {
+        return consumerRecord("batch.task.dispatch.tx.t0", offset, msg);
+    }
 
-  private static TaskDispatchMessage message(String tenantId) {
-    return new TaskDispatchMessage(
-        42L, tenantId, "job-1", "task-type", "task-instance-1", Map.of(), Map.of());
-  }
+    private static ConsumerRecord<String, byte[]> consumerRecord(String topic, long offset, TaskDispatchMessage msg)
+            throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        return new ConsumerRecord<>(topic, 0, offset, "k", mapper.writeValueAsBytes(msg));
+    }
+
+    private static TaskDispatchMessage message(String tenantId) {
+        return new TaskDispatchMessage(42L, tenantId, "job-1", "task-type", "task-instance-1", Map.of(), Map.of());
+    }
 }

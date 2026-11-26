@@ -18,56 +18,56 @@ import java.util.Map;
  */
 public enum AtomicErrorCode {
 
-  /** 占位 — 成功路径不应使用,留作未来日志/对账对齐。 */
-  SUCCESS,
+    /** 占位 — 成功路径不应使用,留作未来日志/对账对齐。 */
+    SUCCESS,
 
-  /** 任务超时(进程 wall-clock / SQL statement_timeout / HTTP read 超时等)。 */
-  TIMEOUT,
+    /** 任务超时(进程 wall-clock / SQL statement_timeout / HTTP read 超时等)。 */
+    TIMEOUT,
 
-  /** 任务被强制终止(SIGTERM / SIGKILL / process destroyForcibly)。 */
-  KILLED,
+    /** 任务被强制终止(SIGTERM / SIGKILL / process destroyForcibly)。 */
+    KILLED,
 
-  /** 安全闸拒绝:命令/域名/Schema 白名单越界、SSRF 私网拦截、敏感凭据字段命中等。 */
-  SECURITY_REJECTED,
+    /** 安全闸拒绝:命令/域名/Schema 白名单越界、SSRF 私网拦截、敏感凭据字段命中等。 */
+    SECURITY_REJECTED,
 
-  /** 业务执行失败(命令非 0 退出、SQL 抛错、HTTP 非 2xx 等下游真错)。 */
-  EXECUTION_FAILED,
+    /** 业务执行失败(命令非 0 退出、SQL 抛错、HTTP 非 2xx 等下游真错)。 */
+    EXECUTION_FAILED,
 
-  /** 非幂等外部动作可能已提交,但 HTTP 响应或结果无法确认;必须人工核对后才能决定是否重做。 */
-  EXTERNAL_OUTCOME_UNKNOWN,
+    /** 非幂等外部动作可能已提交,但 HTTP 响应或结果无法确认;必须人工核对后才能决定是否重做。 */
+    EXTERNAL_OUTCOME_UNKNOWN,
 
-  /** 入参或配置非法(必填缺失、类型错、超上限等校验性拒绝)。 */
-  CONFIG_INVALID,
+    /** 入参或配置非法(必填缺失、类型错、超上限等校验性拒绝)。 */
+    CONFIG_INVALID,
 
-  /** 资源耗尽 / 强终(stdout 超 maxBytes、response body 超 maxResponseBytes 触发的截断后强终止)。 */
-  RESOURCE_EXHAUSTED;
+    /** 资源耗尽 / 强终(stdout 超 maxBytes、response body 超 maxResponseBytes 触发的截断后强终止)。 */
+    RESOURCE_EXHAUSTED;
 
-  /** output map key — 下游基于此 key 读 error code 字面值。 */
-  public static final String OUTPUT_KEY = "error_code";
+    /** output map key — 下游基于此 key 读 error code 字面值。 */
+    public static final String OUTPUT_KEY = "error_code";
 
-  /**
-   * 构造带 error_code 的失败 TaskResult。等价于 {@code new TaskResult(false, message, Map.of("error_code",
-   * code.name()), null)}, 但不动 TaskResult 类签名(它属于 batch-common SPI)。
-   */
-  public static TaskResult fail(AtomicErrorCode code, String message) {
-    Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
-    return new TaskResult(false, message, errorOutput, null);
-  }
-
-  /** 同上,附带原始 throwable 透传到 {@link TaskResult#error()}。 */
-  public static TaskResult fail(AtomicErrorCode code, String message, Throwable cause) {
-    Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
-    return new TaskResult(false, message, errorOutput, cause);
-  }
-
-  /** 同上,允许携带额外 output 字段(如 exitCode / statusCode);output 已含 error_code 时以本枚举为准覆盖。 */
-  public static TaskResult fail(
-      AtomicErrorCode code, String message, Map<String, Object> extraOutput, Throwable cause) {
-    Map<String, Object> merged = new LinkedHashMap<>();
-    if (extraOutput != null) {
-      merged.putAll(extraOutput);
+    /**
+     * 构造带 error_code 的失败 TaskResult。等价于 {@code new TaskResult(false, message, Map.of("error_code",
+     * code.name()), null)}, 但不动 TaskResult 类签名(它属于 batch-common SPI)。
+     */
+    public static TaskResult fail(AtomicErrorCode code, String message) {
+        Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
+        return new TaskResult(false, message, errorOutput, null);
     }
-    merged.put(OUTPUT_KEY, code.name());
-    return new TaskResult(false, message, merged, cause);
-  }
+
+    /** 同上,附带原始 throwable 透传到 {@link TaskResult#error()}。 */
+    public static TaskResult fail(AtomicErrorCode code, String message, Throwable cause) {
+        Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
+        return new TaskResult(false, message, errorOutput, cause);
+    }
+
+    /** 同上,允许携带额外 output 字段(如 exitCode / statusCode);output 已含 error_code 时以本枚举为准覆盖。 */
+    public static TaskResult fail(
+            AtomicErrorCode code, String message, Map<String, Object> extraOutput, Throwable cause) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (extraOutput != null) {
+            merged.putAll(extraOutput);
+        }
+        merged.put(OUTPUT_KEY, code.name());
+        return new TaskResult(false, message, merged, cause);
+    }
 }

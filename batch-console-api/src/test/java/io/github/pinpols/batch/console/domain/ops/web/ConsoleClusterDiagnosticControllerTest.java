@@ -32,71 +32,68 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleClusterDiagnosticControllerTest {
 
-  @Mock
-  private ConsoleClusterDiagnosticService diagnosticService;
+    @Mock
+    private ConsoleClusterDiagnosticService diagnosticService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("集群诊断:各分组明细按服务层结果回填, 响应码为成功")
-  void shouldReturnDiagnostic() throws Exception {
-    // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
-    // 输出一致：shedLock/workers/outbox/terminalChildren。
-    when(diagnosticService.diagnose("t1"))
-        .thenReturn(new ConsoleClusterDiagnosticResponse(
-            new ConsoleShedLockStatusResponse(2, 1L, List.of()),
-            ConsoleWorkerConsistencyResponse.builder()
-                .onlineWorkers(3L)
-                .healthy(true)
-                .workerGroups(List.of())
-                .build(),
-            new ConsoleOutboxHealthResponse(0L, null, null, List.of(), true),
-            new ConsoleTerminalChildrenHealthResponse(0L, true)));
+    @Test
+    @DisplayName("集群诊断:各分组明细按服务层结果回填, 响应码为成功")
+    void shouldReturnDiagnostic() throws Exception {
+        // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
+        // 输出一致：shedLock/workers/outbox/terminalChildren。
+        when(diagnosticService.diagnose("t1"))
+                .thenReturn(new ConsoleClusterDiagnosticResponse(
+                        new ConsoleShedLockStatusResponse(2, 1L, List.of()),
+                        ConsoleWorkerConsistencyResponse.builder()
+                                .onlineWorkers(3L)
+                                .healthy(true)
+                                .workerGroups(List.of())
+                                .build(),
+                        new ConsoleOutboxHealthResponse(0L, null, null, List.of(), true),
+                        new ConsoleTerminalChildrenHealthResponse(0L, true)));
 
-    mockMvc
-        .perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.shedLock.totalLocks").value(2))
-        .andExpect(jsonPath("$.data.workers.onlineWorkers").value(3))
-        .andExpect(jsonPath("$.data.outbox.healthy").value(true))
-        .andExpect(jsonPath("$.data.terminalChildren.terminalInstancesWithActiveChildren")
-            .value(0));
-  }
+        mockMvc.perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.shedLock.totalLocks").value(2))
+                .andExpect(jsonPath("$.data.workers.onlineWorkers").value(3))
+                .andExpect(jsonPath("$.data.outbox.healthy").value(true))
+                .andExpect(jsonPath("$.data.terminalChildren.terminalInstancesWithActiveChildren")
+                        .value(0));
+    }
 
-  @Test
-  @DisplayName("实例诊断:实例标识与健康标记按服务层结果回填")
-  void shouldReturnInstanceDiagnosis() throws Exception {
-    when(diagnosticService.instanceDiagnosis("t1", 7L))
-        .thenReturn(new ConsoleInstanceDiagnosisResponse(null, 7L, false, null, null, List.of()));
+    @Test
+    @DisplayName("实例诊断:实例标识与健康标记按服务层结果回填")
+    void shouldReturnInstanceDiagnosis() throws Exception {
+        when(diagnosticService.instanceDiagnosis("t1", 7L))
+                .thenReturn(new ConsoleInstanceDiagnosisResponse(null, 7L, false, null, null, List.of()));
 
-    mockMvc
-        .perform(get("/api/console/ops/cluster-diagnostic/instances/7").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.healthy").value(false))
-        .andExpect(jsonPath("$.data.jobInstanceId").value(7));
-  }
+        mockMvc.perform(get("/api/console/ops/cluster-diagnostic/instances/7").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.healthy").value(false))
+                .andExpect(jsonPath("$.data.jobInstanceId").value(7));
+    }
 }

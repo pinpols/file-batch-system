@@ -24,11 +24,11 @@ import lombok.Builder;
  */
 @Builder
 public record SchedulingContext(
-    LocalDate bizDate,
-    LocalDate prevBizDate,
-    LocalDate nextBizDate,
-    Boolean isHoliday,
-    Integer attemptNo,
-    String triggerType,
-    String triggerCode,
-    Long workflowRunId) {}
+        LocalDate bizDate,
+        LocalDate prevBizDate,
+        LocalDate nextBizDate,
+        Boolean isHoliday,
+        Integer attemptNo,
+        String triggerType,
+        String triggerCode,
+        Long workflowRunId) {}

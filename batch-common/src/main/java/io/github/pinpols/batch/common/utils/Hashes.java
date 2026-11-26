@@ -21,27 +21,27 @@ import javax.annotation.Nullable;
  */
 public final class Hashes {
 
-  private Hashes() {}
+    private Hashes() {}
 
-  /**
-   * SHA-256 后取前 8 字节,返回 16 字符小写 hex 字符串。null / 空入参 → null。
-   *
-   * <p>SHA-256 算法不可用时(理论不会发生)返回 null,调用方需做 null-safe 处理。
-   */
-  @Nullable
-  public static String sha256Short(@Nullable String raw) {
-    if (raw == null || raw.isEmpty()) {
-      return null;
+    /**
+     * SHA-256 后取前 8 字节,返回 16 字符小写 hex 字符串。null / 空入参 → null。
+     *
+     * <p>SHA-256 算法不可用时(理论不会发生)返回 null,调用方需做 null-safe 处理。
+     */
+    @Nullable
+    public static String sha256Short(@Nullable String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null;
+        }
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] rawBytes = raw.getBytes(StandardCharsets.UTF_8);
+            byte[] full = sha256.digest(rawBytes);
+            byte[] head = new byte[8];
+            System.arraycopy(full, 0, head, 0, 8);
+            return HexFormat.of().formatHex(head);
+        } catch (NoSuchAlgorithmException e) {
+            return null;
+        }
     }
-    try {
-      MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] rawBytes = raw.getBytes(StandardCharsets.UTF_8);
-      byte[] full = sha256.digest(rawBytes);
-      byte[] head = new byte[8];
-      System.arraycopy(full, 0, head, 0, 8);
-      return HexFormat.of().formatHex(head);
-    } catch (NoSuchAlgorithmException e) {
-      return null;
-    }
-  }
 }

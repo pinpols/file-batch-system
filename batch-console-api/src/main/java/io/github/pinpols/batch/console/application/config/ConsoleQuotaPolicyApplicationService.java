@@ -7,16 +7,16 @@ import io.github.pinpols.batch.console.application.contract.response.config.Quot
 /** 配额策略应用服务：管理租户配额策略的 CRUD 及启停操作。 */
 public interface ConsoleQuotaPolicyApplicationService {
 
-  PageResponse<QuotaPolicyResponse> list(
-      String tenantId, String policyCode, Boolean enabled, int pageNo, int pageSize);
+    PageResponse<QuotaPolicyResponse> list(
+            String tenantId, String policyCode, Boolean enabled, int pageNo, int pageSize);
 
-  default PageResponse<QuotaPolicyResponse> listAll(String tenantId, int pageNo, int pageSize) {
-    return list(tenantId, null, null, pageNo, pageSize);
-  }
+    default PageResponse<QuotaPolicyResponse> listAll(String tenantId, int pageNo, int pageSize) {
+        return list(tenantId, null, null, pageNo, pageSize);
+    }
 
-  QuotaPolicyResponse create(QuotaPolicySaveRequest request);
+    QuotaPolicyResponse create(QuotaPolicySaveRequest request);
 
-  QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request);
+    QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request);
 
-  void toggle(Long id, String tenantId, Boolean enabled);
+    void toggle(Long id, String tenantId, Boolean enabled);
 }

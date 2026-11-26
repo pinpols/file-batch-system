@@ -11,69 +11,54 @@ import lombok.Getter;
 @Getter
 public final class UpdateBatchDayReplaySessionStatusParam {
 
-  private final String tenantId;
-  private final Long id;
-  private final String toStatus;
-  private final List<String> expectedStatuses;
-  private final Instant startedAt;
-  private final Instant completedAt;
-  private final String approvedBy;
-  private final Instant now;
+    private final String tenantId;
+    private final Long id;
+    private final String toStatus;
+    private final List<String> expectedStatuses;
+    private final Instant startedAt;
+    private final Instant completedAt;
+    private final String approvedBy;
+    private final Instant now;
 
-  private UpdateBatchDayReplaySessionStatusParam(
-      String tenantId,
-      Long id,
-      String toStatus,
-      List<String> expectedStatuses,
-      Instant now,
-      SessionStatusDetails details) {
-    this.tenantId = Objects.requireNonNull(tenantId, "tenantId");
-    this.id = Objects.requireNonNull(id, "id");
-    this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
-    this.expectedStatuses =
-        List.copyOf(Objects.requireNonNull(expectedStatuses, "expectedStatuses"));
-    if (EmptyChecks.isEmpty(this.expectedStatuses)) {
-      throw new IllegalArgumentException("expectedStatuses must not be empty");
+    private UpdateBatchDayReplaySessionStatusParam(
+            String tenantId,
+            Long id,
+            String toStatus,
+            List<String> expectedStatuses,
+            Instant now,
+            SessionStatusDetails details) {
+        this.tenantId = Objects.requireNonNull(tenantId, "tenantId");
+        this.id = Objects.requireNonNull(id, "id");
+        this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
+        this.expectedStatuses = List.copyOf(Objects.requireNonNull(expectedStatuses, "expectedStatuses"));
+        if (EmptyChecks.isEmpty(this.expectedStatuses)) {
+            throw new IllegalArgumentException("expectedStatuses must not be empty");
+        }
+        SessionStatusDetails resolvedDetails = Objects.requireNonNull(details, "details");
+        this.startedAt = resolvedDetails.startedAt();
+        this.completedAt = resolvedDetails.completedAt();
+        this.approvedBy = resolvedDetails.approvedBy();
+        this.now = Objects.requireNonNull(now, "now");
     }
-    SessionStatusDetails resolvedDetails = Objects.requireNonNull(details, "details");
-    this.startedAt = resolvedDetails.startedAt();
-    this.completedAt = resolvedDetails.completedAt();
-    this.approvedBy = resolvedDetails.approvedBy();
-    this.now = Objects.requireNonNull(now, "now");
-  }
 
-  public static UpdateBatchDayReplaySessionStatusParam approved(
-      String tenantId,
-      Long id,
-      List<String> expectedStatuses,
-      String approvedBy,
-      Instant approvedAt) {
-    SessionStatusDetails details = new SessionStatusDetails(approvedAt, null, approvedBy);
-    return new UpdateBatchDayReplaySessionStatusParam(
-        tenantId,
-        id,
-        BatchDayReplaySessionStatus.RUNNING.code(),
-        expectedStatuses,
-        approvedAt,
-        details);
-  }
+    public static UpdateBatchDayReplaySessionStatusParam approved(
+            String tenantId, Long id, List<String> expectedStatuses, String approvedBy, Instant approvedAt) {
+        SessionStatusDetails details = new SessionStatusDetails(approvedAt, null, approvedBy);
+        return new UpdateBatchDayReplaySessionStatusParam(
+                tenantId, id, BatchDayReplaySessionStatus.RUNNING.code(), expectedStatuses, approvedAt, details);
+    }
 
-  public static UpdateBatchDayReplaySessionStatusParam cancelled(
-      String tenantId, Long id, List<String> expectedStatuses, Instant cancelledAt) {
-    return completed(
-        tenantId, id, BatchDayReplaySessionStatus.CANCELLED.code(), expectedStatuses, cancelledAt);
-  }
+    public static UpdateBatchDayReplaySessionStatusParam cancelled(
+            String tenantId, Long id, List<String> expectedStatuses, Instant cancelledAt) {
+        return completed(tenantId, id, BatchDayReplaySessionStatus.CANCELLED.code(), expectedStatuses, cancelledAt);
+    }
 
-  public static UpdateBatchDayReplaySessionStatusParam completed(
-      String tenantId,
-      Long id,
-      String toStatus,
-      List<String> expectedStatuses,
-      Instant completedAt) {
-    SessionStatusDetails details = new SessionStatusDetails(null, completedAt, null);
-    return new UpdateBatchDayReplaySessionStatusParam(
-        tenantId, id, toStatus, expectedStatuses, completedAt, details);
-  }
+    public static UpdateBatchDayReplaySessionStatusParam completed(
+            String tenantId, Long id, String toStatus, List<String> expectedStatuses, Instant completedAt) {
+        SessionStatusDetails details = new SessionStatusDetails(null, completedAt, null);
+        return new UpdateBatchDayReplaySessionStatusParam(
+                tenantId, id, toStatus, expectedStatuses, completedAt, details);
+    }
 
-  private record SessionStatusDetails(Instant startedAt, Instant completedAt, String approvedBy) {}
+    private record SessionStatusDetails(Instant startedAt, Instant completedAt, String approvedBy) {}
 }

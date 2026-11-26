@@ -13,48 +13,47 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImportLoadPluginRegistry {
 
-  private final Map<String, ImportLoadPlugin> byId;
+    private final Map<String, ImportLoadPlugin> byId;
 
-  public ImportLoadPluginRegistry(List<ImportLoadPlugin> plugins) {
-    Map<String, ImportLoadPlugin> resolved = new LinkedHashMap<>();
-    for (ImportLoadPlugin plugin : plugins) {
-      String id = plugin.id().toLowerCase(Locale.ROOT);
-      ImportLoadPlugin previous = resolved.putIfAbsent(id, plugin);
-      if (previous != null) {
-        throw new IllegalStateException("duplicate ImportLoadPlugin id: "
-            + id
-            + " ("
-            + previous.getClass().getName()
-            + ", "
-            + plugin.getClass().getName()
-            + ")");
-      }
+    public ImportLoadPluginRegistry(List<ImportLoadPlugin> plugins) {
+        Map<String, ImportLoadPlugin> resolved = new LinkedHashMap<>();
+        for (ImportLoadPlugin plugin : plugins) {
+            String id = plugin.id().toLowerCase(Locale.ROOT);
+            ImportLoadPlugin previous = resolved.putIfAbsent(id, plugin);
+            if (previous != null) {
+                throw new IllegalStateException("duplicate ImportLoadPlugin id: "
+                        + id
+                        + " ("
+                        + previous.getClass().getName()
+                        + ", "
+                        + plugin.getClass().getName()
+                        + ")");
+            }
+        }
+        this.byId = Map.copyOf(resolved);
     }
-    this.byId = Map.copyOf(resolved);
-  }
 
-  public ImportLoadPlugin require(String id) {
-    if (id == null || id.isBlank()) {
-      id = WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
+    public ImportLoadPlugin require(String id) {
+        if (id == null || id.isBlank()) {
+            id = WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
+        }
+        ImportLoadPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
+        if (plugin == null) {
+            throw new IllegalStateException("no ImportLoadPlugin registered for id: " + id);
+        }
+        return plugin;
     }
-    ImportLoadPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
-    if (plugin == null) {
-      throw new IllegalStateException("no ImportLoadPlugin registered for id: " + id);
+
+    /** 使用与 LOAD 相同的插件选择和冻结配置解析重放元数据。 */
+    public ReplayCapabilityDeclaration replayCapability(String id, Map<String, Object> frozenTemplateConfig) {
+        ImportLoadPlugin plugin = require(id);
+        return plugin.replayCapability(frozenTemplateConfig);
     }
-    return plugin;
-  }
 
-  /** 使用与 LOAD 相同的插件选择和冻结配置解析重放元数据。 */
-  public ReplayCapabilityDeclaration replayCapability(
-      String id, Map<String, Object> frozenTemplateConfig) {
-    ImportLoadPlugin plugin = require(id);
-    return plugin.replayCapability(frozenTemplateConfig);
-  }
-
-  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
-    return byId.values().stream()
-        .sorted(Comparator.comparing(ImportLoadPlugin::id))
-        .map(ImportLoadPlugin::replayCapabilityDeclaration)
-        .toList();
-  }
+    public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+        return byId.values().stream()
+                .sorted(Comparator.comparing(ImportLoadPlugin::id))
+                .map(ImportLoadPlugin::replayCapabilityDeclaration)
+                .toList();
+    }
 }

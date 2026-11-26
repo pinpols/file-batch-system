@@ -7,12 +7,11 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowRunMapper {
 
-  List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
+    List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
 
-  WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  long countByQuery(WorkflowRunQuery query);
+    long countByQuery(WorkflowRunQuery query);
 
-  long countByStatuses(
-      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+    long countByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 }

@@ -21,386 +21,374 @@ import lombok.Builder;
 /** 从 Job 冻结的 COMPUTE 阶段业务参数解析出的 SQL 加工规格。 */
 @Builder
 public record SqlTransformComputeSpec(
-    String implCode,
-    String sourceSql,
-    String targetSchema,
-    String targetTable,
-    WriteMode writeMode,
-    StagingMode stagingMode,
-    List<ColumnMapping> columns,
-    List<String> conflictColumns,
-    String watermarkColumn,
-    Map<String, Object> params,
-    List<ValidationRule> validations,
-    EmptyResultPolicy emptyResultPolicy,
-    int maxStagedRows) {
+        String implCode,
+        String sourceSql,
+        String targetSchema,
+        String targetTable,
+        WriteMode writeMode,
+        StagingMode stagingMode,
+        List<ColumnMapping> columns,
+        List<String> conflictColumns,
+        String watermarkColumn,
+        Map<String, Object> params,
+        List<ValidationRule> validations,
+        EmptyResultPolicy emptyResultPolicy,
+        int maxStagedRows) {
 
-  /** P1-6:单批 staging 行数上限默认值。配置 SQL 写错或数据激增时,防止业务库 + staging 表资源耗尽。 */
-  public static final int DEFAULT_MAX_STAGED_ROWS = 1_000_000;
+    /** P1-6:单批 staging 行数上限默认值。配置 SQL 写错或数据激增时,防止业务库 + staging 表资源耗尽。 */
+    public static final int DEFAULT_MAX_STAGED_ROWS = 1_000_000;
 
-  public enum WriteMode {
-    INSERT,
-    UPSERT,
-    INSERT_IGNORE
-  }
-
-  public enum StagingMode {
-    JSONB,
-    DIRECT
-  }
-
-  public enum EmptyResultPolicy {
-    FAIL,
-    SUCCESS
-  }
-
-  public record ColumnMapping(String source, String target) {}
-
-  /**
-   * VALIDATE 阶段在 staging 上跑的数据质量规则。每条 checkSql 必须返回单行,带列 {@code pass BOOLEAN} 与可选 {@code message
-   * TEXT};{@code pass=false} 即整体校验失败。框架隐式注入 {@code :batchKey} 命名参数。
-   */
-  public record ValidationRule(String name, String checkSql) {}
-
-  /**
-   * 内置保留参数名:{@code spec.params} 不可使用。{@link SqlTransformComputePlugin#buildSqlParams}
-   * 将这些名字与平台运行时上下文绑定,避免被业务配置静默覆盖造成跨租户 / 错位 SQL 绑定。
-   *
-   * <p>{@code metadata_*} 前缀也保留,通过 {@code payload.metadata.&lt;key&gt;} 展开;{@code spec.params}
-   * 同样不允许以该前缀开头,避免与 metadata 命名空间碰撞。
-   */
-  private static final Set<String> RESERVED_PARAMS = Set.of(
-      "tenantId",
-      PipelineRuntimeKeys.JOB_CODE,
-      "workerId",
-      PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
-      PipelineRuntimeKeys.TRACE_ID,
-      "stepCode",
-      "batchKey",
-      "stagingGenerationId",
-      "targetSchema",
-      "targetTable",
-      PipelineRuntimeKeys.PARTITION_NO,
-      PipelineRuntimeKeys.PARTITION_COUNT,
-      PipelineRuntimeKeys.PARTITION_KEY,
-      PipelineRuntimeKeys.BIZ_DATE);
-
-  private static final String METADATA_PARAM_PREFIX =
-      SqlTransformComputeConstants.METADATA_PARAM_PREFIX;
-
-  public static SqlTransformComputeSpec parse(
-      Map<String, Object> stepParams, ObjectMapper objectMapper) {
-    Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
-    if (EmptyChecks.isEmpty(root)) {
-      throw new IllegalArgumentException(
-          "sqlTransformCompute spec missing in COMPUTE step parameters");
+    public enum WriteMode {
+        INSERT,
+        UPSERT,
+        INSERT_IGNORE
     }
 
-    String sourceSql = required(root, "sourceSql", "source_sql", "querySql", "query_sql");
-    Object configuredTargetSchema = firstNonNull(root.get("targetSchema"), root.get("schema"));
-    String targetSchema = text(configuredTargetSchema);
-    if (!Texts.hasText(targetSchema)) {
-      targetSchema = "biz";
+    public enum StagingMode {
+        JSONB,
+        DIRECT
     }
-    String targetTable = required(root, "targetTable", "target_table", "table");
-    Object configuredWriteMode = firstNonNull(root.get("writeMode"), root.get("write_mode"));
-    WriteMode writeMode = parseWriteMode(configuredWriteMode);
-    Object configuredStagingMode = firstNonNull(root.get("stagingMode"), root.get("staging_mode"));
-    StagingMode stagingMode = parseStagingMode(configuredStagingMode);
-    List<ColumnMapping> columns = parseColumns(root.get("columns"));
-    if (EmptyChecks.isEmpty(columns)) {
-      throw new IllegalArgumentException("sqlTransformCompute.columns is required");
-    }
-    Object configuredConflictColumns =
-        firstNonNull(root.get("conflictColumns"), root.get("conflict_columns"));
-    List<String> conflictColumns = parseStringList(configuredConflictColumns);
-    Object configuredWatermarkColumn =
-        firstNonNull(root.get("watermarkColumn"), root.get("watermark_column"));
-    String watermarkColumn = text(configuredWatermarkColumn);
-    Object configuredParams = firstNonNull(root.get("params"), root.get("sqlParams"));
-    Map<String, Object> params = parseMap(configuredParams);
-    List<ValidationRule> validations = parseValidations(root.get("validations"));
-    Object configuredEmptyResultPolicy =
-        firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy"));
-    EmptyResultPolicy emptyResultPolicy = parseEmptyResultPolicy(configuredEmptyResultPolicy);
-    Object configuredMaxStagedRows =
-        firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows"));
-    int maxStagedRows = parseMaxStagedRows(configuredMaxStagedRows);
 
-    SqlTransformComputeSpec spec = SqlTransformComputeSpec.builder()
-        .implCode(SqlTransformComputePlugin.PLUGIN_ID)
-        .sourceSql(sourceSql)
-        .targetSchema(targetSchema)
-        .targetTable(targetTable)
-        .writeMode(writeMode)
-        .stagingMode(stagingMode)
-        .columns(columns)
-        .conflictColumns(conflictColumns)
-        .watermarkColumn(watermarkColumn)
-        .params(params)
-        .validations(validations)
-        .emptyResultPolicy(emptyResultPolicy)
-        .maxStagedRows(maxStagedRows)
-        .build();
-    spec.validateIdentifiers();
-    return spec;
-  }
+    public enum EmptyResultPolicy {
+        FAIL,
+        SUCCESS
+    }
 
-  private static int parseMaxStagedRows(Object raw) {
-    if (EmptyChecks.isNull(raw)) {
-      return DEFAULT_MAX_STAGED_ROWS;
-    }
-    int value;
-    if (raw instanceof Number n) {
-      value = n.intValue();
-    } else {
-      String rawText = String.valueOf(raw);
-      String text = rawText.trim();
-      if (EmptyChecks.isEmpty(text)) {
-        return DEFAULT_MAX_STAGED_ROWS;
-      }
-      try {
-        value = Integer.parseInt(text);
-      } catch (NumberFormatException ex) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.maxStagedRows must be a positive integer, got: " + text);
-      }
-    }
-    if (value <= 0) {
-      throw new IllegalArgumentException(
-          "sqlTransformCompute.maxStagedRows must be > 0, got: " + value);
-    }
-    return value;
-  }
+    public record ColumnMapping(String source, String target) {}
 
-  private static List<ValidationRule> parseValidations(Object raw) {
-    if (!(raw instanceof List<?> list)) {
-      return List.of();
-    }
-    return list.stream()
-        .map(SqlTransformComputeSpec::parseValidationRule)
-        .flatMap(Optional::stream)
-        .toList();
-  }
+    /**
+     * VALIDATE 阶段在 staging 上跑的数据质量规则。每条 checkSql 必须返回单行,带列 {@code pass BOOLEAN} 与可选 {@code message
+     * TEXT};{@code pass=false} 即整体校验失败。框架隐式注入 {@code :batchKey} 命名参数。
+     */
+    public record ValidationRule(String name, String checkSql) {}
 
-  private static Optional<ValidationRule> parseValidationRule(Object item) {
-    if (!(item instanceof Map<?, ?> m)) {
-      return Optional.empty();
-    }
-    String name = text(m.get("name"));
-    Object configuredCheckSql = firstNonNull(m.get("checkSql"), m.get("check_sql"));
-    String checkSql = text(configuredCheckSql);
-    return Texts.hasText(name) && Texts.hasText(checkSql)
-        ? Optional.of(new ValidationRule(name, checkSql))
-        : Optional.empty();
-  }
+    /**
+     * 内置保留参数名:{@code spec.params} 不可使用。{@link SqlTransformComputePlugin#buildSqlParams}
+     * 将这些名字与平台运行时上下文绑定,避免被业务配置静默覆盖造成跨租户 / 错位 SQL 绑定。
+     *
+     * <p>{@code metadata_*} 前缀也保留,通过 {@code payload.metadata.&lt;key&gt;} 展开;{@code spec.params}
+     * 同样不允许以该前缀开头,避免与 metadata 命名空间碰撞。
+     */
+    private static final Set<String> RESERVED_PARAMS = Set.of(
+            "tenantId",
+            PipelineRuntimeKeys.JOB_CODE,
+            "workerId",
+            PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
+            PipelineRuntimeKeys.TRACE_ID,
+            "stepCode",
+            "batchKey",
+            "stagingGenerationId",
+            "targetSchema",
+            "targetTable",
+            PipelineRuntimeKeys.PARTITION_NO,
+            PipelineRuntimeKeys.PARTITION_COUNT,
+            PipelineRuntimeKeys.PARTITION_KEY,
+            PipelineRuntimeKeys.BIZ_DATE);
 
-  public void validateIdentifiers() {
-    JdbcMappedSqlValidator.requireIdentifier(targetSchema, "targetSchema");
-    JdbcMappedSqlValidator.requireIdentifier(targetTable, "targetTable");
-    for (ColumnMapping column : columns) {
-      JdbcMappedSqlValidator.requireIdentifier(column.source(), "source column");
-      JdbcMappedSqlValidator.requireIdentifier(column.target(), "target column");
-    }
-    for (String conflictColumn : conflictColumns) {
-      JdbcMappedSqlValidator.requireIdentifier(conflictColumn, "conflictColumn");
-      if (columns.stream().noneMatch(column -> column.target().equals(conflictColumn))) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.conflictColumns must appear in target columns: " + conflictColumn);
-      }
-    }
-    // PROCESS at-least-once delivery (commit-后-report-丢、reclaim 重发) 要求所有 writeMode
-    // 都必须可幂等重放;空 conflictColumns 配 raw INSERT 会在 publish 重放时双写 target 行。
-    // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
-    // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
-    if (EmptyChecks.isEmpty(conflictColumns)) {
-      throw new IllegalArgumentException("sqlTransformCompute.conflictColumns is required for "
-          + writeMode
-          + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
-    }
-    if (Texts.hasText(watermarkColumn)) {
-      JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
-    }
-    if (stagingMode == StagingMode.DIRECT) {
-      if (EmptyChecks.isNotEmpty(validations)) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.validations are not supported when stagingMode=DIRECT"
-                + " (DIRECT does not write batch.process_staging)");
-      }
-      if (emptyResultPolicy != EmptyResultPolicy.SUCCESS) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.emptyResultPolicy must be SUCCESS when stagingMode=DIRECT"
-                + " (DIRECT avoids a pre-count scan)");
-      }
-    }
-    Set<String> reserved = new LinkedHashSet<>(RESERVED_PARAMS);
-    for (String paramName : params.keySet()) {
-      if (reserved.contains(paramName)) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.params contains reserved parameter: " + paramName);
-      }
-      if (EmptyChecks.isNotNull(paramName) && paramName.startsWith(METADATA_PARAM_PREFIX)) {
-        throw new IllegalArgumentException(
-            "sqlTransformCompute.params must not start with reserved prefix '"
-                + METADATA_PARAM_PREFIX
-                + "' (this namespace is for payload.metadata expansion): "
-                + paramName);
-      }
-    }
-  }
+    private static final String METADATA_PARAM_PREFIX = SqlTransformComputeConstants.METADATA_PARAM_PREFIX;
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> extractSpecRoot(
-      Map<String, Object> stepParams, ObjectMapper objectMapper) {
-    if (EmptyChecks.isEmpty(stepParams)) {
-      return Map.of();
-    }
-    Object nested = firstNonNull(
-        stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
-    if (nested instanceof Map<?, ?> m) {
-      return copyMap(m);
-    }
-    if (nested instanceof String text && Texts.hasText(text)) {
-      try {
-        return objectMapper.readValue(text, Map.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(SqlTransformComputeSpec.class, "catch:Exception", ignored);
+    public static SqlTransformComputeSpec parse(Map<String, Object> stepParams, ObjectMapper objectMapper) {
+        Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
+        if (EmptyChecks.isEmpty(root)) {
+            throw new IllegalArgumentException("sqlTransformCompute spec missing in COMPUTE step parameters");
+        }
 
+        String sourceSql = required(root, "sourceSql", "source_sql", "querySql", "query_sql");
+        Object configuredTargetSchema = firstNonNull(root.get("targetSchema"), root.get("schema"));
+        String targetSchema = text(configuredTargetSchema);
+        if (!Texts.hasText(targetSchema)) {
+            targetSchema = "biz";
+        }
+        String targetTable = required(root, "targetTable", "target_table", "table");
+        Object configuredWriteMode = firstNonNull(root.get("writeMode"), root.get("write_mode"));
+        WriteMode writeMode = parseWriteMode(configuredWriteMode);
+        Object configuredStagingMode = firstNonNull(root.get("stagingMode"), root.get("staging_mode"));
+        StagingMode stagingMode = parseStagingMode(configuredStagingMode);
+        List<ColumnMapping> columns = parseColumns(root.get("columns"));
+        if (EmptyChecks.isEmpty(columns)) {
+            throw new IllegalArgumentException("sqlTransformCompute.columns is required");
+        }
+        Object configuredConflictColumns = firstNonNull(root.get("conflictColumns"), root.get("conflict_columns"));
+        List<String> conflictColumns = parseStringList(configuredConflictColumns);
+        Object configuredWatermarkColumn = firstNonNull(root.get("watermarkColumn"), root.get("watermark_column"));
+        String watermarkColumn = text(configuredWatermarkColumn);
+        Object configuredParams = firstNonNull(root.get("params"), root.get("sqlParams"));
+        Map<String, Object> params = parseMap(configuredParams);
+        List<ValidationRule> validations = parseValidations(root.get("validations"));
+        Object configuredEmptyResultPolicy =
+                firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy"));
+        EmptyResultPolicy emptyResultPolicy = parseEmptyResultPolicy(configuredEmptyResultPolicy);
+        Object configuredMaxStagedRows = firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows"));
+        int maxStagedRows = parseMaxStagedRows(configuredMaxStagedRows);
+
+        SqlTransformComputeSpec spec = SqlTransformComputeSpec.builder()
+                .implCode(SqlTransformComputePlugin.PLUGIN_ID)
+                .sourceSql(sourceSql)
+                .targetSchema(targetSchema)
+                .targetTable(targetTable)
+                .writeMode(writeMode)
+                .stagingMode(stagingMode)
+                .columns(columns)
+                .conflictColumns(conflictColumns)
+                .watermarkColumn(watermarkColumn)
+                .params(params)
+                .validations(validations)
+                .emptyResultPolicy(emptyResultPolicy)
+                .maxStagedRows(maxStagedRows)
+                .build();
+        spec.validateIdentifiers();
+        return spec;
+    }
+
+    private static int parseMaxStagedRows(Object raw) {
+        if (EmptyChecks.isNull(raw)) {
+            return DEFAULT_MAX_STAGED_ROWS;
+        }
+        int value;
+        if (raw instanceof Number n) {
+            value = n.intValue();
+        } else {
+            String rawText = String.valueOf(raw);
+            String text = rawText.trim();
+            if (EmptyChecks.isEmpty(text)) {
+                return DEFAULT_MAX_STAGED_ROWS;
+            }
+            try {
+                value = Integer.parseInt(text);
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException(
+                        "sqlTransformCompute.maxStagedRows must be a positive integer, got: " + text);
+            }
+        }
+        if (value <= 0) {
+            throw new IllegalArgumentException("sqlTransformCompute.maxStagedRows must be > 0, got: " + value);
+        }
+        return value;
+    }
+
+    private static List<ValidationRule> parseValidations(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .map(SqlTransformComputeSpec::parseValidationRule)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private static Optional<ValidationRule> parseValidationRule(Object item) {
+        if (!(item instanceof Map<?, ?> m)) {
+            return Optional.empty();
+        }
+        String name = text(m.get("name"));
+        Object configuredCheckSql = firstNonNull(m.get("checkSql"), m.get("check_sql"));
+        String checkSql = text(configuredCheckSql);
+        return Texts.hasText(name) && Texts.hasText(checkSql)
+                ? Optional.of(new ValidationRule(name, checkSql))
+                : Optional.empty();
+    }
+
+    public void validateIdentifiers() {
+        JdbcMappedSqlValidator.requireIdentifier(targetSchema, "targetSchema");
+        JdbcMappedSqlValidator.requireIdentifier(targetTable, "targetTable");
+        for (ColumnMapping column : columns) {
+            JdbcMappedSqlValidator.requireIdentifier(column.source(), "source column");
+            JdbcMappedSqlValidator.requireIdentifier(column.target(), "target column");
+        }
+        for (String conflictColumn : conflictColumns) {
+            JdbcMappedSqlValidator.requireIdentifier(conflictColumn, "conflictColumn");
+            if (columns.stream().noneMatch(column -> column.target().equals(conflictColumn))) {
+                throw new IllegalArgumentException(
+                        "sqlTransformCompute.conflictColumns must appear in target columns: " + conflictColumn);
+            }
+        }
+        // PROCESS at-least-once delivery (commit-后-report-丢、reclaim 重发) 要求所有 writeMode
+        // 都必须可幂等重放;空 conflictColumns 配 raw INSERT 会在 publish 重放时双写 target 行。
+        // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
+        // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
+        if (EmptyChecks.isEmpty(conflictColumns)) {
+            throw new IllegalArgumentException("sqlTransformCompute.conflictColumns is required for "
+                    + writeMode
+                    + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
+        }
+        if (Texts.hasText(watermarkColumn)) {
+            JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
+        }
+        if (stagingMode == StagingMode.DIRECT) {
+            if (EmptyChecks.isNotEmpty(validations)) {
+                throw new IllegalArgumentException(
+                        "sqlTransformCompute.validations are not supported when stagingMode=DIRECT"
+                                + " (DIRECT does not write batch.process_staging)");
+            }
+            if (emptyResultPolicy != EmptyResultPolicy.SUCCESS) {
+                throw new IllegalArgumentException(
+                        "sqlTransformCompute.emptyResultPolicy must be SUCCESS when stagingMode=DIRECT"
+                                + " (DIRECT avoids a pre-count scan)");
+            }
+        }
+        Set<String> reserved = new LinkedHashSet<>(RESERVED_PARAMS);
+        for (String paramName : params.keySet()) {
+            if (reserved.contains(paramName)) {
+                throw new IllegalArgumentException(
+                        "sqlTransformCompute.params contains reserved parameter: " + paramName);
+            }
+            if (EmptyChecks.isNotNull(paramName) && paramName.startsWith(METADATA_PARAM_PREFIX)) {
+                throw new IllegalArgumentException("sqlTransformCompute.params must not start with reserved prefix '"
+                        + METADATA_PARAM_PREFIX
+                        + "' (this namespace is for payload.metadata expansion): "
+                        + paramName);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractSpecRoot(Map<String, Object> stepParams, ObjectMapper objectMapper) {
+        if (EmptyChecks.isEmpty(stepParams)) {
+            return Map.of();
+        }
+        Object nested = firstNonNull(stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
+        if (nested instanceof Map<?, ?> m) {
+            return copyMap(m);
+        }
+        if (nested instanceof String text && Texts.hasText(text)) {
+            try {
+                return objectMapper.readValue(text, Map.class);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(SqlTransformComputeSpec.class, "catch:Exception", ignored);
+
+                return Map.of();
+            }
+        }
+        return new LinkedHashMap<>(stepParams);
+    }
+
+    private static WriteMode parseWriteMode(Object raw) {
+        if (raw == null) { // empty-check: allow - Sonar S2259
+            return WriteMode.INSERT;
+        }
+        String value = text(raw);
+        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+            return WriteMode.INSERT;
+        }
+        String trimmedValue = value.trim();
+        String normalized = trimmedValue.toUpperCase(Locale.ROOT);
+        try {
+            return WriteMode.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            // P1-A2: 非法 enum 值不能让裸 IllegalArgumentException 被外层 catch(Exception) 包成 INFRA_ERROR，
+            // 改抛 BizException(INVALID_ARGUMENT) 让 stage 路径识别为配置错误并保留 i18n 错误码。
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.process.invalid_write_mode", value);
+        }
+    }
+
+    private static EmptyResultPolicy parseEmptyResultPolicy(Object raw) {
+        if (raw == null) { // empty-check: allow - Sonar S2259
+            return EmptyResultPolicy.SUCCESS;
+        }
+        String value = text(raw);
+        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+            return EmptyResultPolicy.SUCCESS;
+        }
+        String trimmedValue = value.trim();
+        String normalized = trimmedValue.toUpperCase(Locale.ROOT);
+        try {
+            return EmptyResultPolicy.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.process.invalid_empty_result_policy", value);
+        }
+    }
+
+    private static StagingMode parseStagingMode(Object raw) {
+        if (raw == null) { // empty-check: allow - Sonar S2259
+            return StagingMode.JSONB;
+        }
+        String value = text(raw);
+        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+            return StagingMode.JSONB;
+        }
+        String trimmedValue = value.trim();
+        String normalized = trimmedValue.toUpperCase(Locale.ROOT);
+        try {
+            return StagingMode.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.process.invalid_staging_mode", value);
+        }
+    }
+
+    private static List<ColumnMapping> parseColumns(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .map(SqlTransformComputeSpec::parseColumnMapping)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private static Optional<ColumnMapping> parseColumnMapping(Object item) {
+        if (item instanceof String name && Texts.hasText(name)) {
+            String column = name.trim();
+            return Optional.of(new ColumnMapping(column, column));
+        }
+        if (item instanceof Map<?, ?> m) {
+            Object configuredSource = firstNonNull(m.get("source"), m.get("from"));
+            String source = text(configuredSource);
+            Object configuredTarget = firstNonNull(m.get("target"), m.get("to"));
+            String target = text(configuredTarget);
+            return Texts.hasText(source) && Texts.hasText(target)
+                    ? Optional.of(new ColumnMapping(source, target))
+                    : Optional.empty();
+        }
+        return Optional.empty();
+    }
+
+    private static List<String> parseStringList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .map(SqlTransformComputeSpec::text)
+                .filter(Texts::hasText)
+                .toList();
+    }
+
+    private static Map<String, Object> parseMap(Object raw) {
+        if (raw instanceof Map<?, ?> m) {
+            return copyMap(m);
+        }
         return Map.of();
-      }
     }
-    return new LinkedHashMap<>(stepParams);
-  }
 
-  private static WriteMode parseWriteMode(Object raw) {
-    if (raw == null) { // empty-check: allow - Sonar S2259
-      return WriteMode.INSERT;
+    private static Map<String, Object> copyMap(Map<?, ?> raw) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        raw.forEach((key, value) -> out.put(String.valueOf(key), value));
+        return out;
     }
-    String value = text(raw);
-    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
-      return WriteMode.INSERT;
-    }
-    String trimmedValue = value.trim();
-    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
-    try {
-      return WriteMode.valueOf(normalized);
-    } catch (IllegalArgumentException ex) {
-      // P1-A2: 非法 enum 值不能让裸 IllegalArgumentException 被外层 catch(Exception) 包成 INFRA_ERROR，
-      // 改抛 BizException(INVALID_ARGUMENT) 让 stage 路径识别为配置错误并保留 i18n 错误码。
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.process.invalid_write_mode", value);
-    }
-  }
 
-  private static EmptyResultPolicy parseEmptyResultPolicy(Object raw) {
-    if (raw == null) { // empty-check: allow - Sonar S2259
-      return EmptyResultPolicy.SUCCESS;
+    private static String required(Map<String, Object> root, String... keys) {
+        Object[] candidateValues = values(root, keys);
+        Object configuredValue = firstNonNull(candidateValues);
+        String value = text(configuredValue);
+        if (!Texts.hasText(value)) {
+            throw new IllegalArgumentException("sqlTransformCompute." + keys[0] + " is required");
+        }
+        return value;
     }
-    String value = text(raw);
-    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
-      return EmptyResultPolicy.SUCCESS;
-    }
-    String trimmedValue = value.trim();
-    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
-    try {
-      return EmptyResultPolicy.valueOf(normalized);
-    } catch (IllegalArgumentException ex) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.process.invalid_empty_result_policy", value);
-    }
-  }
 
-  private static StagingMode parseStagingMode(Object raw) {
-    if (raw == null) { // empty-check: allow - Sonar S2259
-      return StagingMode.JSONB;
+    private static Object[] values(Map<String, Object> root, String[] keys) {
+        return Arrays.stream(keys).map(root::get).toArray();
     }
-    String value = text(raw);
-    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
-      return StagingMode.JSONB;
-    }
-    String trimmedValue = value.trim();
-    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
-    try {
-      return StagingMode.valueOf(normalized);
-    } catch (IllegalArgumentException ex) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.process.invalid_staging_mode", value);
-    }
-  }
 
-  private static List<ColumnMapping> parseColumns(Object raw) {
-    if (!(raw instanceof List<?> list)) {
-      return List.of();
+    private static Object firstNonNull(Object... values) {
+        return Arrays.stream(values).filter(EmptyChecks::isNotNull).findFirst().orElse(null);
     }
-    return list.stream()
-        .map(SqlTransformComputeSpec::parseColumnMapping)
-        .flatMap(Optional::stream)
-        .toList();
-  }
 
-  private static Optional<ColumnMapping> parseColumnMapping(Object item) {
-    if (item instanceof String name && Texts.hasText(name)) {
-      String column = name.trim();
-      return Optional.of(new ColumnMapping(column, column));
+    private static String text(Object value) {
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return Texts.hasText(text) ? text : null;
     }
-    if (item instanceof Map<?, ?> m) {
-      Object configuredSource = firstNonNull(m.get("source"), m.get("from"));
-      String source = text(configuredSource);
-      Object configuredTarget = firstNonNull(m.get("target"), m.get("to"));
-      String target = text(configuredTarget);
-      return Texts.hasText(source) && Texts.hasText(target)
-          ? Optional.of(new ColumnMapping(source, target))
-          : Optional.empty();
-    }
-    return Optional.empty();
-  }
-
-  private static List<String> parseStringList(Object raw) {
-    if (!(raw instanceof List<?> list)) {
-      return List.of();
-    }
-    return list.stream()
-        .map(SqlTransformComputeSpec::text)
-        .filter(Texts::hasText)
-        .toList();
-  }
-
-  private static Map<String, Object> parseMap(Object raw) {
-    if (raw instanceof Map<?, ?> m) {
-      return copyMap(m);
-    }
-    return Map.of();
-  }
-
-  private static Map<String, Object> copyMap(Map<?, ?> raw) {
-    Map<String, Object> out = new LinkedHashMap<>();
-    raw.forEach((key, value) -> out.put(String.valueOf(key), value));
-    return out;
-  }
-
-  private static String required(Map<String, Object> root, String... keys) {
-    Object[] candidateValues = values(root, keys);
-    Object configuredValue = firstNonNull(candidateValues);
-    String value = text(configuredValue);
-    if (!Texts.hasText(value)) {
-      throw new IllegalArgumentException("sqlTransformCompute." + keys[0] + " is required");
-    }
-    return value;
-  }
-
-  private static Object[] values(Map<String, Object> root, String[] keys) {
-    return Arrays.stream(keys).map(root::get).toArray();
-  }
-
-  private static Object firstNonNull(Object... values) {
-    return Arrays.stream(values).filter(EmptyChecks::isNotNull).findFirst().orElse(null);
-  }
-
-  private static String text(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return Texts.hasText(text) ? text : null;
-  }
 }

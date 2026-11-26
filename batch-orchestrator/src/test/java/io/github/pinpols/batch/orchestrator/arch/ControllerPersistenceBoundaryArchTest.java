@@ -12,20 +12,20 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Controller 不得直接依赖持久层")
 class ControllerPersistenceBoundaryArchTest {
 
-  @Test
-  @DisplayName("Controller 不得依赖 Mapper 或 Repository")
-  void controller_does_not_depend_on_persistence_mapper_or_repository() {
-    var classes = new ClassFileImporter()
-        .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-        .importPackages("io.github.pinpols.batch.orchestrator..");
+    @Test
+    @DisplayName("Controller 不得依赖 Mapper 或 Repository")
+    void controller_does_not_depend_on_persistence_mapper_or_repository() {
+        var classes = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("io.github.pinpols.batch.orchestrator..");
 
-    ArchRule rule = noClasses()
-        .that()
-        .resideInAnyPackage("..controller..", "..web..")
-        .should()
-        .dependOnClassesThat()
-        .resideInAnyPackage("..mapper..", "..repository..");
+        ArchRule rule = noClasses()
+                .that()
+                .resideInAnyPackage("..controller..", "..web..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..mapper..", "..repository..");
 
-    rule.check(classes);
-  }
+        rule.check(classes);
+    }
 }

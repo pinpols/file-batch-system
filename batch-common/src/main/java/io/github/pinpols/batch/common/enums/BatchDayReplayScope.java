@@ -9,15 +9,15 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchDayReplayScope implements DictEnum {
-  ALL("ALL", "全部实例"),
-  ALL_FAILED("ALL_FAILED", "全部失败实例"),
-  SUBSET_JOB_CODES("SUBSET_JOB_CODES", "指定作业"),
-  OUTPUTS_ONLY("OUTPUTS_ONLY", "仅提升结果版本");
+    ALL("ALL", "全部实例"),
+    ALL_FAILED("ALL_FAILED", "全部失败实例"),
+    SUBSET_JOB_CODES("SUBSET_JOB_CODES", "指定作业"),
+    OUTPUTS_ONLY("OUTPUTS_ONLY", "仅提升结果版本");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static BatchDayReplayScope fromCodeOrNull(String value) {
-    return DictEnum.fromCode(BatchDayReplayScope.class, value);
-  }
+    public static BatchDayReplayScope fromCodeOrNull(String value) {
+        return DictEnum.fromCode(BatchDayReplayScope.class, value);
+    }
 }

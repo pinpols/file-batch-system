@@ -23,133 +23,130 @@ import java.util.regex.Pattern;
  */
 public final class ConfigPackageGuidanceContent {
 
-  private static final String RESOURCE = "/config-package-guidance.json";
-  private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)}");
+    private static final String RESOURCE = "/config-package-guidance.json";
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)}");
 
-  private final Map<String, String> fragments;
-  private final Map<String, Sheet> sheets;
+    private final Map<String, String> fragments;
+    private final Map<String, Sheet> sheets;
 
-  private ConfigPackageGuidanceContent(Map<String, String> fragments, Map<String, Sheet> sheets) {
-    this.fragments = fragments;
-    this.sheets = sheets;
-  }
-
-  /** 不可变只读说明 sheet：表头 + 数据行（占位符已在加载期解析完毕）。 */
-  public static final class Sheet {
-    private final String[] headers;
-    private final List<String[]> rows;
-
-    private Sheet(String[] headers, List<String[]> rows) {
-      this.headers = headers;
-      this.rows = rows;
+    private ConfigPackageGuidanceContent(Map<String, String> fragments, Map<String, Sheet> sheets) {
+        this.fragments = fragments;
+        this.sheets = sheets;
     }
 
-    public String[] headers() {
-      return headers.clone();
+    /** 不可变只读说明 sheet：表头 + 数据行（占位符已在加载期解析完毕）。 */
+    public static final class Sheet {
+        private final String[] headers;
+        private final List<String[]> rows;
+
+        private Sheet(String[] headers, List<String[]> rows) {
+            this.headers = headers;
+            this.rows = rows;
+        }
+
+        public String[] headers() {
+            return headers.clone();
+        }
+
+        public List<String[]> rows() {
+            return rows;
+        }
     }
 
-    public List<String[]> rows() {
-      return rows;
-    }
-  }
+    /** 从 classpath 读取并解析 guidance 资源，解析所有 {@code ${key}} 占位符。fail-fast。 */
+    public static ConfigPackageGuidanceContent load() {
+        ObjectMapper mapper = JsonUtils.newDefaultMapper();
+        JsonNode root;
+        try (InputStream in = ConfigPackageGuidanceContent.class.getResourceAsStream(RESOURCE)) {
+            if (in == null) {
+                throw new IllegalStateException("Configuration package guidance resource is missing: " + RESOURCE);
+            }
+            root = mapper.readTree(in);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to parse configuration package guidance resource: " + RESOURCE, e);
+        }
 
-  /** 从 classpath 读取并解析 guidance 资源，解析所有 {@code ${key}} 占位符。fail-fast。 */
-  public static ConfigPackageGuidanceContent load() {
-    ObjectMapper mapper = JsonUtils.newDefaultMapper();
-    JsonNode root;
-    try (InputStream in = ConfigPackageGuidanceContent.class.getResourceAsStream(RESOURCE)) {
-      if (in == null) {
-        throw new IllegalStateException(
-            "Configuration package guidance resource is missing: " + RESOURCE);
-      }
-      root = mapper.readTree(in);
-    } catch (IOException e) {
-      throw new IllegalStateException(
-          "Failed to parse configuration package guidance resource: " + RESOURCE, e);
-    }
+        JsonNode fragmentsNode = root.get("fragments");
+        if (fragmentsNode == null || !fragmentsNode.isObject()) {
+            throw new IllegalStateException(RESOURCE + " is missing the fragments object");
+        }
+        Map<String, String> fragments = new LinkedHashMap<>();
+        fragmentsNode
+                .properties()
+                .forEach(e -> fragments.put(e.getKey(), e.getValue().asText()));
 
-    JsonNode fragmentsNode = root.get("fragments");
-    if (fragmentsNode == null || !fragmentsNode.isObject()) {
-      throw new IllegalStateException(RESOURCE + " is missing the fragments object");
-    }
-    Map<String, String> fragments = new LinkedHashMap<>();
-    fragmentsNode
-        .properties()
-        .forEach(e -> fragments.put(e.getKey(), e.getValue().asText()));
+        JsonNode sheetsNode = root.get("sheets");
+        if (sheetsNode == null || !sheetsNode.isObject()) {
+            throw new IllegalStateException(RESOURCE + " is missing the sheets object");
+        }
+        Map<String, Sheet> sheets = new LinkedHashMap<>();
+        sheetsNode.properties().forEach(entry -> {
+            String sheetName = entry.getKey();
+            JsonNode sheetNode = entry.getValue();
+            Sheet sheet = parseSheet(sheetName, sheetNode, fragments);
+            sheets.put(sheetName, sheet);
+        });
 
-    JsonNode sheetsNode = root.get("sheets");
-    if (sheetsNode == null || !sheetsNode.isObject()) {
-      throw new IllegalStateException(RESOURCE + " is missing the sheets object");
-    }
-    Map<String, Sheet> sheets = new LinkedHashMap<>();
-    sheetsNode.properties().forEach(entry -> {
-      String sheetName = entry.getKey();
-      JsonNode sheetNode = entry.getValue();
-      Sheet sheet = parseSheet(sheetName, sheetNode, fragments);
-      sheets.put(sheetName, sheet);
-    });
-
-    return new ConfigPackageGuidanceContent(fragments, sheets);
-  }
-
-  private static Sheet parseSheet(String name, JsonNode node, Map<String, String> fragments) {
-    JsonNode headersNode = node.get("headers");
-    if (headersNode == null || !headersNode.isArray()) {
-      throw new IllegalStateException(
-          RESOURCE + " sheet '" + name + "' is missing the headers array");
-    }
-    String[] headers = new String[headersNode.size()];
-    for (int i = 0; i < headersNode.size(); i++) {
-      headers[i] = resolve(headersNode.get(i).asText(), fragments, name);
+        return new ConfigPackageGuidanceContent(fragments, sheets);
     }
 
-    JsonNode rowsNode = node.get("rows");
-    if (rowsNode == null || !rowsNode.isArray()) {
-      throw new IllegalStateException(RESOURCE + " sheet '" + name + "' is missing the rows array");
-    }
-    List<String[]> rows = new ArrayList<>(rowsNode.size());
-    for (JsonNode rowNode : rowsNode) {
-      String[] cells = new String[rowNode.size()];
-      for (int c = 0; c < rowNode.size(); c++) {
-        cells[c] = resolve(rowNode.get(c).asText(), fragments, name);
-      }
-      rows.add(cells);
-    }
-    return new Sheet(headers, List.copyOf(rows));
-  }
+    private static Sheet parseSheet(String name, JsonNode node, Map<String, String> fragments) {
+        JsonNode headersNode = node.get("headers");
+        if (headersNode == null || !headersNode.isArray()) {
+            throw new IllegalStateException(RESOURCE + " sheet '" + name + "' is missing the headers array");
+        }
+        String[] headers = new String[headersNode.size()];
+        for (int i = 0; i < headersNode.size(); i++) {
+            headers[i] = resolve(headersNode.get(i).asText(), fragments, name);
+        }
 
-  /** 把单元格内所有 {@code ${key}} 替换为对应 fragment；未知占位符抛异常。 */
-  private static String resolve(String cell, Map<String, String> fragments, String sheetName) {
-    Matcher m = PLACEHOLDER.matcher(cell);
-    StringBuilder sb = new StringBuilder();
-    while (m.find()) {
-      String key = m.group(1);
-      String value = fragments.get(key);
-      if (value == null) {
-        throw new IllegalStateException(RESOURCE + " sheet '" + sheetName
-            + "' references an unknown fragment placeholder: ${" + key + "}");
-      }
-      m.appendReplacement(sb, Matcher.quoteReplacement(value));
+        JsonNode rowsNode = node.get("rows");
+        if (rowsNode == null || !rowsNode.isArray()) {
+            throw new IllegalStateException(RESOURCE + " sheet '" + name + "' is missing the rows array");
+        }
+        List<String[]> rows = new ArrayList<>(rowsNode.size());
+        for (JsonNode rowNode : rowsNode) {
+            String[] cells = new String[rowNode.size()];
+            for (int c = 0; c < rowNode.size(); c++) {
+                cells[c] = resolve(rowNode.get(c).asText(), fragments, name);
+            }
+            rows.add(cells);
+        }
+        return new Sheet(headers, List.copyOf(rows));
     }
-    m.appendTail(sb);
-    return sb.toString();
-  }
 
-  /** 取示例片段；未知 key 抛异常。 */
-  public String fragment(String key) {
-    String value = fragments.get(key);
-    if (value == null) {
-      throw new IllegalStateException(RESOURCE + " is missing fragment: " + key);
+    /** 把单元格内所有 {@code ${key}} 替换为对应 fragment；未知占位符抛异常。 */
+    private static String resolve(String cell, Map<String, String> fragments, String sheetName) {
+        Matcher m = PLACEHOLDER.matcher(cell);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            String key = m.group(1);
+            String value = fragments.get(key);
+            if (value == null) {
+                throw new IllegalStateException(RESOURCE + " sheet '" + sheetName
+                        + "' references an unknown fragment placeholder: ${" + key + "}");
+            }
+            m.appendReplacement(sb, Matcher.quoteReplacement(value));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
-    return value;
-  }
 
-  /** 取只读说明 sheet；未知 name 抛异常。 */
-  public Sheet sheet(String name) {
-    Sheet sheet = sheets.get(name);
-    if (sheet == null) {
-      throw new IllegalStateException(RESOURCE + " is missing sheet: " + name);
+    /** 取示例片段；未知 key 抛异常。 */
+    public String fragment(String key) {
+        String value = fragments.get(key);
+        if (value == null) {
+            throw new IllegalStateException(RESOURCE + " is missing fragment: " + key);
+        }
+        return value;
     }
-    return sheet;
-  }
+
+    /** 取只读说明 sheet；未知 name 抛异常。 */
+    public Sheet sheet(String name) {
+        Sheet sheet = sheets.get(name);
+        if (sheet == null) {
+            throw new IllegalStateException(RESOURCE + " is missing sheet: " + name);
+        }
+        return sheet;
+    }
 }

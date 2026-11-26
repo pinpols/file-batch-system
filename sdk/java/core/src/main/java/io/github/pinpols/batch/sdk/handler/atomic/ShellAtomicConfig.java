@@ -13,27 +13,23 @@ import java.util.Set;
  * @param cleanupWorkdir 执行后是否递归删除临时 workdir(默认 true)
  */
 public record ShellAtomicConfig(
-    String taskType,
-    Set<String> allowedCommands,
-    int timeoutSeconds,
-    int maxOutputBytes,
-    boolean cleanupWorkdir) {
+        String taskType, Set<String> allowedCommands, int timeoutSeconds, int maxOutputBytes, boolean cleanupWorkdir) {
 
-  public ShellAtomicConfig {
-    if (taskType == null || taskType.isBlank()) {
-      throw new IllegalArgumentException("taskType must not be blank");
+    public ShellAtomicConfig {
+        if (taskType == null || taskType.isBlank()) {
+            throw new IllegalArgumentException("taskType must not be blank");
+        }
+        allowedCommands = allowedCommands == null ? Set.of() : Set.copyOf(allowedCommands);
+        if (timeoutSeconds <= 0) {
+            throw new IllegalArgumentException("timeoutSeconds must be > 0");
+        }
+        if (maxOutputBytes <= 0) {
+            throw new IllegalArgumentException("maxOutputBytes must be > 0");
+        }
     }
-    allowedCommands = allowedCommands == null ? Set.of() : Set.copyOf(allowedCommands);
-    if (timeoutSeconds <= 0) {
-      throw new IllegalArgumentException("timeoutSeconds must be > 0");
-    }
-    if (maxOutputBytes <= 0) {
-      throw new IllegalArgumentException("maxOutputBytes must be > 0");
-    }
-  }
 
-  /** 默认配置:空白名单(dev 全放行)、60s 超时、64 KiB 截断、执行后清理 workdir。 */
-  public static ShellAtomicConfig defaults(String taskType) {
-    return new ShellAtomicConfig(taskType, Set.of(), 60, 64 * 1024, true);
-  }
+    /** 默认配置:空白名单(dev 全放行)、60s 超时、64 KiB 截断、执行后清理 workdir。 */
+    public static ShellAtomicConfig defaults(String taskType) {
+        return new ShellAtomicConfig(taskType, Set.of(), 60, 64 * 1024, true);
+    }
 }

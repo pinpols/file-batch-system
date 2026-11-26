@@ -17,19 +17,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class UploadSessionCleanupScheduler {
 
-  private final FileGovernanceScheduler fileGovernanceScheduler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(
-      fixedDelayString = "${batch.file-governance.upload-session.cleanup-interval-millis:3600000}")
-  @SchedulerLock(
-      name = "file_governance_upload_session_cleanup",
-      lockAtMostFor = "PT3M",
-      lockAtLeastFor = "PT30S")
-  public void cleanupOrphanUploadSessions() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.file-governance.upload-session.cleanup-interval-millis:3600000}")
+    @SchedulerLock(name = "file_governance_upload_session_cleanup", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
+    public void cleanupOrphanUploadSessions() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        fileGovernanceScheduler.cleanupOrphanUploadSessions();
     }
-    fileGovernanceScheduler.cleanupOrphanUploadSessions();
-  }
 }

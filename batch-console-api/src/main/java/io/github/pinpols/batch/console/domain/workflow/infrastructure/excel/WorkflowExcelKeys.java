@@ -11,91 +11,88 @@ import java.util.Objects;
  */
 public final class WorkflowExcelKeys {
 
-  private WorkflowExcelKeys() {}
+    private WorkflowExcelKeys() {}
 
-  public record WorkflowKey(String tenantId, String workflowCode, Integer version) {
-    public static WorkflowKey of(String tenantId, String workflowCode, Integer version) {
-      return new WorkflowKey(tenantId, workflowCode, version);
+    public record WorkflowKey(String tenantId, String workflowCode, Integer version) {
+        public static WorkflowKey of(String tenantId, String workflowCode, Integer version) {
+            return new WorkflowKey(tenantId, workflowCode, version);
+        }
+
+        public String display() {
+            return workflowCode + "#" + version;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof WorkflowKey that)) {
+                return false;
+            }
+            return Objects.equals(tenantId, that.tenantId)
+                    && Objects.equals(workflowCode, that.workflowCode)
+                    && Objects.equals(version, that.version);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(tenantId, workflowCode, version);
+        }
     }
 
-    public String display() {
-      return workflowCode + "#" + version;
+    public record NodeKey(WorkflowKey workflowKey, String nodeCode) {
+        public static NodeKey of(WorkflowKey workflowKey, String nodeCode) {
+            return new NodeKey(workflowKey, nodeCode);
+        }
+
+        public String display() {
+            return workflowKey.display() + "/" + nodeCode;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof NodeKey that)) {
+                return false;
+            }
+            return Objects.equals(workflowKey, that.workflowKey) && Objects.equals(nodeCode, that.nodeCode);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(workflowKey, nodeCode);
+        }
     }
 
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof WorkflowKey that)) {
-        return false;
-      }
-      return Objects.equals(tenantId, that.tenantId)
-          && Objects.equals(workflowCode, that.workflowCode)
-          && Objects.equals(version, that.version);
-    }
+    public record EdgeKey(WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
+        public static EdgeKey of(WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
+            return new EdgeKey(workflowKey, fromNodeCode, toNodeCode, edgeType);
+        }
 
-    @Override
-    public int hashCode() {
-      return Objects.hash(tenantId, workflowCode, version);
-    }
-  }
+        public String display() {
+            return workflowKey.display() + "/" + fromNodeCode + "->" + toNodeCode + "(" + edgeType + ")";
+        }
 
-  public record NodeKey(WorkflowKey workflowKey, String nodeCode) {
-    public static NodeKey of(WorkflowKey workflowKey, String nodeCode) {
-      return new NodeKey(workflowKey, nodeCode);
-    }
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof EdgeKey that)) {
+                return false;
+            }
+            return Objects.equals(workflowKey, that.workflowKey)
+                    && Objects.equals(fromNodeCode, that.fromNodeCode)
+                    && Objects.equals(toNodeCode, that.toNodeCode)
+                    && Objects.equals(edgeType, that.edgeType);
+        }
 
-    public String display() {
-      return workflowKey.display() + "/" + nodeCode;
+        @Override
+        public int hashCode() {
+            return Objects.hash(workflowKey, fromNodeCode, toNodeCode, edgeType);
+        }
     }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof NodeKey that)) {
-        return false;
-      }
-      return Objects.equals(workflowKey, that.workflowKey)
-          && Objects.equals(nodeCode, that.nodeCode);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(workflowKey, nodeCode);
-    }
-  }
-
-  public record EdgeKey(
-      WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
-    public static EdgeKey of(
-        WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
-      return new EdgeKey(workflowKey, fromNodeCode, toNodeCode, edgeType);
-    }
-
-    public String display() {
-      return workflowKey.display() + "/" + fromNodeCode + "->" + toNodeCode + "(" + edgeType + ")";
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof EdgeKey that)) {
-        return false;
-      }
-      return Objects.equals(workflowKey, that.workflowKey)
-          && Objects.equals(fromNodeCode, that.fromNodeCode)
-          && Objects.equals(toNodeCode, that.toNodeCode)
-          && Objects.equals(edgeType, that.edgeType);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(workflowKey, fromNodeCode, toNodeCode, edgeType);
-    }
-  }
 }

@@ -36,274 +36,269 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("任务派发执行器: 领取结果驱动的字段装配与批量执行边界")
 class TaskDispatchExecutorTest {
 
-  private TaskExecutionWrapper taskExecutionWrapper;
-  private TaskDispatchExecutor executor;
+    private TaskExecutionWrapper taskExecutionWrapper;
+    private TaskDispatchExecutor executor;
 
-  @BeforeEach
-  void setUp() {
-    taskExecutionWrapper = mock(TaskExecutionWrapper.class);
-    executor = new TaskDispatchExecutor(taskExecutionWrapper);
-  }
+    @BeforeEach
+    void setUp() {
+        taskExecutionWrapper = mock(TaskExecutionWrapper.class);
+        executor = new TaskDispatchExecutor(taskExecutionWrapper);
+    }
 
-  @Test
-  @DisplayName("领取被拒绝时返回空结果, 不进入执行阶段")
-  void shouldReturnNullWhenClaimDenied() {
-    TaskDispatchMessage message = sampleMessage();
-    when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("领取被拒绝时返回空结果, 不进入执行阶段")
+    void shouldReturnNullWhenClaimDenied() {
+        TaskDispatchMessage message = sampleMessage();
+        when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
 
-    WorkerExecutionResult result = executor.execute(message, "w1");
+        WorkerExecutionResult result = executor.execute(message, "w1");
 
-    assertThat(result).isNull();
-    verify(taskExecutionWrapper, never()).execute(any());
-  }
+        assertThat(result).isNull();
+        verify(taskExecutionWrapper, never()).execute(any());
+    }
 
-  @Test
-  @DisplayName("业务字段取自领取到的任务配置, 任务键与追踪标识取自派发消息")
-  void shouldReadBusinessFieldsFromClaimAndKeysFromMessage() {
-    TaskDispatchMessage message = sampleMessage();
-    DependencyResultReference upstreamResult = new DependencyResultReference(
-        "UPSTREAM_JOB",
-        "PREVIOUS_BIZ_DAY",
-        LocalDate.parse("2026-04-30"),
-        "job:UPSTREAM_JOB:2026-04-30",
-        4,
-        9001L,
-        8001L,
-        Instant.parse("2026-05-01T00:00:00Z"));
-    ReplayExecutionGuard replayExecutionGuard = new ReplayExecutionGuard(
-        77L,
-        new ReplayCapabilityDeclaration(
-            "csv-import",
-            "1.2.3",
-            List.of("FILE_READ", "DATABASE_WRITE"),
-            IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
-            "business-key",
-            "transactional-upsert",
-            ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION));
-    EffectiveTaskConfig fresh = new EffectiveTaskConfig(
-        "t1",
-        42L,
-        100L,
-        200L,
-        "INST-1",
-        "FRESH_JOB",
-        "FRESH_TYPE",
-        99,
-        "FRESH_TYPE",
-        "HIGH",
-        "fresh-biz",
-        "fresh-idem",
-        "{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876,"
-            + "\"versionNo\":3,\"output\":{\"total\":42}}}}",
-        "fresh-trace",
-        "INCREMENTAL",
-        "update_time",
-        "fresh-watermark",
-        "EXPONENTIAL",
-        5,
-        600,
-        1,
-        1,
-        "FRESH_JOB:2026-05-01:1",
-        1,
-        0,
-        1,
-        0L,
-        100L,
-        100L,
-        null,
-        null,
-        "inv-fresh",
-        List.of(upstreamResult),
-        replayExecutionGuard);
-    when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
-    when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
+    @Test
+    @DisplayName("业务字段取自领取到的任务配置, 任务键与追踪标识取自派发消息")
+    void shouldReadBusinessFieldsFromClaimAndKeysFromMessage() {
+        TaskDispatchMessage message = sampleMessage();
+        DependencyResultReference upstreamResult = new DependencyResultReference(
+                "UPSTREAM_JOB",
+                "PREVIOUS_BIZ_DAY",
+                LocalDate.parse("2026-04-30"),
+                "job:UPSTREAM_JOB:2026-04-30",
+                4,
+                9001L,
+                8001L,
+                Instant.parse("2026-05-01T00:00:00Z"));
+        ReplayExecutionGuard replayExecutionGuard = new ReplayExecutionGuard(
+                77L,
+                new ReplayCapabilityDeclaration(
+                        "csv-import",
+                        "1.2.3",
+                        List.of("FILE_READ", "DATABASE_WRITE"),
+                        IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
+                        "business-key",
+                        "transactional-upsert",
+                        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION));
+        EffectiveTaskConfig fresh = new EffectiveTaskConfig(
+                "t1",
+                42L,
+                100L,
+                200L,
+                "INST-1",
+                "FRESH_JOB",
+                "FRESH_TYPE",
+                99,
+                "FRESH_TYPE",
+                "HIGH",
+                "fresh-biz",
+                "fresh-idem",
+                "{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876,"
+                        + "\"versionNo\":3,\"output\":{\"total\":42}}}}",
+                "fresh-trace",
+                "INCREMENTAL",
+                "update_time",
+                "fresh-watermark",
+                "EXPONENTIAL",
+                5,
+                600,
+                1,
+                1,
+                "FRESH_JOB:2026-05-01:1",
+                1,
+                0,
+                1,
+                0L,
+                100L,
+                100L,
+                null,
+                null,
+                "inv-fresh",
+                List.of(upstreamResult),
+                replayExecutionGuard);
+        when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
+        when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
-    executor.execute(message, "w1");
+        executor.execute(message, "w1");
 
-    ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
-    verify(taskExecutionWrapper).execute(captor.capture());
-    PulledTask task = captor.getValue();
-    // task key 从 message 读(自带,无需 claim 重复)
-    assertThat(task.getTaskId()).isEqualTo("42");
-    assertThat(task.getTenantId()).isEqualTo("t1");
-    assertThat(task.getJobCode()).isEqualTo("MSG_JOB");
-    assertThat(task.getTraceId()).isEqualTo("msg-trace");
-    assertThat(task.getIdempotencyKey()).isEqualTo("msg-idem");
-    assertThat(task.getJobInstanceId()).isEqualTo(100L);
-    assertThat(task.getJobPartitionId()).isEqualTo(200L);
-    assertThat(task.getBizDate()).isEqualTo(LocalDate.parse("2026-05-01"));
-    // 业务字段全部从 effective config 读(message v2 已无这些字段)
-    assertThat(task.getTaskType()).isEqualTo("FRESH_TYPE");
-    assertThat(task.getBusinessKey()).isEqualTo("fresh-biz");
-    assertThat(task.getTaskSeq()).isEqualTo(99);
-    assertThat(task.getPayload())
-        .isEqualTo("{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876,"
-            + "\"versionNo\":3,\"output\":{\"total\":42}}}}");
-    assertThat(task.getHighWaterMarkIn()).isEqualTo("fresh-watermark");
-    assertThat(task.getPartitionPlanVersion()).isEqualTo(1);
-    assertThat(task.getShardIndex()).isZero();
-    assertThat(task.getShardTotal()).isEqualTo(1);
-    assertThat(task.getRangeStartInclusive()).isZero();
-    assertThat(task.getRangeEndExclusive()).isEqualTo(100L);
-    assertThat(task.getExpectedRows()).isEqualTo(100L);
-    assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
-    assertThat(task.getDependencyResultSnapshot()).containsExactly(upstreamResult);
-    assertThat(task.getReplayExecutionGuard()).isEqualTo(replayExecutionGuard);
-  }
+        ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
+        verify(taskExecutionWrapper).execute(captor.capture());
+        PulledTask task = captor.getValue();
+        // task key 从 message 读(自带,无需 claim 重复)
+        assertThat(task.getTaskId()).isEqualTo("42");
+        assertThat(task.getTenantId()).isEqualTo("t1");
+        assertThat(task.getJobCode()).isEqualTo("MSG_JOB");
+        assertThat(task.getTraceId()).isEqualTo("msg-trace");
+        assertThat(task.getIdempotencyKey()).isEqualTo("msg-idem");
+        assertThat(task.getJobInstanceId()).isEqualTo(100L);
+        assertThat(task.getJobPartitionId()).isEqualTo(200L);
+        assertThat(task.getBizDate()).isEqualTo(LocalDate.parse("2026-05-01"));
+        // 业务字段全部从 effective config 读(message v2 已无这些字段)
+        assertThat(task.getTaskType()).isEqualTo("FRESH_TYPE");
+        assertThat(task.getBusinessKey()).isEqualTo("fresh-biz");
+        assertThat(task.getTaskSeq()).isEqualTo(99);
+        assertThat(task.getPayload())
+                .isEqualTo("{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876,"
+                        + "\"versionNo\":3,\"output\":{\"total\":42}}}}");
+        assertThat(task.getHighWaterMarkIn()).isEqualTo("fresh-watermark");
+        assertThat(task.getPartitionPlanVersion()).isEqualTo(1);
+        assertThat(task.getShardIndex()).isZero();
+        assertThat(task.getShardTotal()).isEqualTo(1);
+        assertThat(task.getRangeStartInclusive()).isZero();
+        assertThat(task.getRangeEndExclusive()).isEqualTo(100L);
+        assertThat(task.getExpectedRows()).isEqualTo(100L);
+        assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
+        assertThat(task.getDependencyResultSnapshot()).containsExactly(upstreamResult);
+        assertThat(task.getReplayExecutionGuard()).isEqualTo(replayExecutionGuard);
+    }
 
-  @Test
-  @DisplayName("消息或 Worker 标识缺失时直接返回空, 不发起领取")
-  void shouldRejectInvalidInputs() {
-    assertThat(executor.execute(null, "w1")).isNull();
-    assertThat(executor.execute(sampleMessage(), null)).isNull();
-    assertThat(executor.execute(sampleMessage(), "")).isNull();
-    verify(taskExecutionWrapper, never()).claim(any(), any(), any());
-  }
+    @Test
+    @DisplayName("消息或 Worker 标识缺失时直接返回空, 不发起领取")
+    void shouldRejectInvalidInputs() {
+        assertThat(executor.execute(null, "w1")).isNull();
+        assertThat(executor.execute(sampleMessage(), null)).isNull();
+        assertThat(executor.execute(sampleMessage(), "")).isNull();
+        verify(taskExecutionWrapper, never()).claim(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("批量派发只发起一次领取, 仅执行领取成功的任务")
-  void shouldClaimOnceAndExecuteOnlyClaimedItems_whenBatchDispatch() {
-    TaskDispatchMessage m1 = messageWithTaskId(1L);
-    TaskDispatchMessage m2 = messageWithTaskId(2L);
-    // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
-    when(taskExecutionWrapper.claimBatch(any()))
-        .thenReturn(List.of(
-            new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
-    when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
+    @Test
+    @DisplayName("批量派发只发起一次领取, 仅执行领取成功的任务")
+    void shouldClaimOnceAndExecuteOnlyClaimedItems_whenBatchDispatch() {
+        TaskDispatchMessage m1 = messageWithTaskId(1L);
+        TaskDispatchMessage m2 = messageWithTaskId(2L);
+        // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
+        when(taskExecutionWrapper.claimBatch(any()))
+                .thenReturn(List.of(new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
+        when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
 
-    List<WorkerExecutionResult> results = executor.executeBatch(List.of(m1, m2), "w1");
+        List<WorkerExecutionResult> results = executor.executeBatch(List.of(m1, m2), "w1");
 
-    assertThat(results).hasSize(1); // 只执行领到的 taskId 1
-    verify(taskExecutionWrapper).claimBatch(any()); // 一次 claim-batch
-    ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
-    var order = inOrder(taskExecutionWrapper);
-    order
-        .verify(taskExecutionWrapper)
-        .registerClaimedBatch(ArgumentMatchers.argThat(tasks -> tasks.size() == 1));
-    order.verify(taskExecutionWrapper).execute(captor.capture());
-    assertThat(captor.getValue().getTaskId()).isEqualTo("1");
-  }
+        assertThat(results).hasSize(1); // 只执行领到的 taskId 1
+        verify(taskExecutionWrapper).claimBatch(any()); // 一次 claim-batch
+        ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
+        var order = inOrder(taskExecutionWrapper);
+        order.verify(taskExecutionWrapper).registerClaimedBatch(ArgumentMatchers.argThat(tasks -> tasks.size() == 1));
+        order.verify(taskExecutionWrapper).execute(captor.capture());
+        assertThat(captor.getValue().getTaskId()).isEqualTo("1");
+    }
 
-  @Test
-  @DisplayName("同一批重复派发同一个 task 时只 claim 和执行一次")
-  void shouldDeduplicateRepeatedTaskWithinBatch() {
-    TaskDispatchMessage message = messageWithTaskId(7L);
-    when(taskExecutionWrapper.claimBatch(any()))
-        .thenReturn(List.of(new TaskClaimResult(7L, true, freshCfg(7L))));
-    when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("7", true, ""));
+    @Test
+    @DisplayName("同一批重复派发同一个 task 时只 claim 和执行一次")
+    void shouldDeduplicateRepeatedTaskWithinBatch() {
+        TaskDispatchMessage message = messageWithTaskId(7L);
+        when(taskExecutionWrapper.claimBatch(any())).thenReturn(List.of(new TaskClaimResult(7L, true, freshCfg(7L))));
+        when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("7", true, ""));
 
-    List<TaskDispatchExecutor.BatchItemExecution> results =
-        executor.executeBatchDetailed(List.of(message, message), "w1");
+        List<TaskDispatchExecutor.BatchItemExecution> results =
+                executor.executeBatchDetailed(List.of(message, message), "w1");
 
-    assertThat(results).hasSize(2);
-    assertThat(results.get(0).skipped()).isFalse();
-    assertThat(results.get(1).skipped()).isTrue();
-    verify(taskExecutionWrapper).claimBatch(ArgumentMatchers.argThat(items -> items.size() == 1));
-    verify(taskExecutionWrapper)
-        .registerClaimedBatch(ArgumentMatchers.argThat(tasks -> tasks.size() == 1));
-    verify(taskExecutionWrapper).execute(any());
-  }
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).skipped()).isFalse();
+        assertThat(results.get(1).skipped()).isTrue();
+        verify(taskExecutionWrapper).claimBatch(ArgumentMatchers.argThat(items -> items.size() == 1));
+        verify(taskExecutionWrapper).registerClaimedBatch(ArgumentMatchers.argThat(tasks -> tasks.size() == 1));
+        verify(taskExecutionWrapper).execute(any());
+    }
 
-  @Test
-  @DisplayName("批量列表为空或 Worker 标识无效时返回空结果, 不发起领取")
-  void shouldReturnEmptyBatchResult_whenInputEmptyOrInvalid() {
-    assertThat(executor.executeBatch(List.of(), "w1")).isEmpty();
-    assertThat(executor.executeBatch(null, "w1")).isEmpty();
-    assertThat(executor.executeBatch(List.of(sampleMessage()), "")).isEmpty();
-    verify(taskExecutionWrapper, never()).claimBatch(any());
-  }
+    @Test
+    @DisplayName("批量列表为空或 Worker 标识无效时返回空结果, 不发起领取")
+    void shouldReturnEmptyBatchResult_whenInputEmptyOrInvalid() {
+        assertThat(executor.executeBatch(List.of(), "w1")).isEmpty();
+        assertThat(executor.executeBatch(null, "w1")).isEmpty();
+        assertThat(executor.executeBatch(List.of(sampleMessage()), "")).isEmpty();
+        verify(taskExecutionWrapper, never()).claimBatch(any());
+    }
 
-  private static EffectiveTaskConfig freshCfg(Long taskId) {
-    return new EffectiveTaskConfig(
-        "t1",
-        taskId,
-        100L,
-        200L,
-        "INST-1",
-        "FRESH_JOB",
-        "FRESH_TYPE",
-        99,
-        "FRESH_TYPE",
-        "HIGH",
-        "fresh-biz",
-        "fresh-idem",
-        "FRESH_PAYLOAD",
-        "fresh-trace",
-        "INCREMENTAL",
-        "update_time",
-        "fresh-watermark",
-        "EXPONENTIAL",
-        5,
-        600,
-        1,
-        1,
-        "FRESH_JOB:2026-05-01:1",
-        1,
-        0,
-        1,
-        0L,
-        100L,
-        100L,
-        null,
-        null,
-        "inv-fresh",
-        List.of(),
-        null);
-  }
+    private static EffectiveTaskConfig freshCfg(Long taskId) {
+        return new EffectiveTaskConfig(
+                "t1",
+                taskId,
+                100L,
+                200L,
+                "INST-1",
+                "FRESH_JOB",
+                "FRESH_TYPE",
+                99,
+                "FRESH_TYPE",
+                "HIGH",
+                "fresh-biz",
+                "fresh-idem",
+                "FRESH_PAYLOAD",
+                "fresh-trace",
+                "INCREMENTAL",
+                "update_time",
+                "fresh-watermark",
+                "EXPONENTIAL",
+                5,
+                600,
+                1,
+                1,
+                "FRESH_JOB:2026-05-01:1",
+                1,
+                0,
+                1,
+                0L,
+                100L,
+                100L,
+                null,
+                null,
+                "inv-fresh",
+                List.of(),
+                null);
+    }
 
-  private static TaskDispatchMessage messageWithTaskId(Long taskId) {
-    return new TaskDispatchMessage(
-        "v2",
-        "t1",
-        100L,
-        200L,
-        taskId,
-        "INST-1",
-        "MSG_JOB",
-        "IMPORT",
-        "w-pre-selected",
-        "HIGH",
-        "msg-trace",
-        "msg-idem",
-        Instant.parse("2026-04-27T12:00:00Z"),
-        new SchedulingContext(
-            LocalDate.parse("2026-05-01"),
-            LocalDate.parse("2026-04-30"),
-            LocalDate.parse("2026-05-04"),
-            false,
-            1,
-            "API",
-            null,
-            null));
-  }
+    private static TaskDispatchMessage messageWithTaskId(Long taskId) {
+        return new TaskDispatchMessage(
+                "v2",
+                "t1",
+                100L,
+                200L,
+                taskId,
+                "INST-1",
+                "MSG_JOB",
+                "IMPORT",
+                "w-pre-selected",
+                "HIGH",
+                "msg-trace",
+                "msg-idem",
+                Instant.parse("2026-04-27T12:00:00Z"),
+                new SchedulingContext(
+                        LocalDate.parse("2026-05-01"),
+                        LocalDate.parse("2026-04-30"),
+                        LocalDate.parse("2026-05-04"),
+                        false,
+                        1,
+                        "API",
+                        null,
+                        null));
+    }
 
-  private static TaskDispatchMessage sampleMessage() {
-    // P1-2.2 v2 字段清单:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
-    //                    instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
-    //                    traceId, idempotencyKey, dispatchAt
-    return new TaskDispatchMessage(
-        "v2",
-        "t1",
-        100L,
-        200L,
-        42L,
-        "INST-1",
-        "MSG_JOB",
-        "IMPORT",
-        "w-pre-selected",
-        "HIGH",
-        "msg-trace",
-        "msg-idem",
-        Instant.parse("2026-04-27T12:00:00Z"),
-        new SchedulingContext(
-            LocalDate.parse("2026-05-01"),
-            LocalDate.parse("2026-04-30"),
-            LocalDate.parse("2026-05-04"),
-            false,
-            1,
-            "API",
-            null,
-            null));
-  }
+    private static TaskDispatchMessage sampleMessage() {
+        // P1-2.2 v2 字段清单:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
+        //                    instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
+        //                    traceId, idempotencyKey, dispatchAt
+        return new TaskDispatchMessage(
+                "v2",
+                "t1",
+                100L,
+                200L,
+                42L,
+                "INST-1",
+                "MSG_JOB",
+                "IMPORT",
+                "w-pre-selected",
+                "HIGH",
+                "msg-trace",
+                "msg-idem",
+                Instant.parse("2026-04-27T12:00:00Z"),
+                new SchedulingContext(
+                        LocalDate.parse("2026-05-01"),
+                        LocalDate.parse("2026-04-30"),
+                        LocalDate.parse("2026-05-04"),
+                        false,
+                        1,
+                        "API",
+                        null,
+                        null));
+    }
 }

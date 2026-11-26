@@ -10,29 +10,28 @@ import javax.annotation.Nullable;
 @SuppressWarnings("java:S2583")
 public final class PostgresqlJsonbTexts {
 
-  private static final String PG_OBJECT_CLASS = "org.postgresql.util.PGobject";
+    private static final String PG_OBJECT_CLASS = "org.postgresql.util.PGobject";
 
-  private PostgresqlJsonbTexts() {}
+    private PostgresqlJsonbTexts() {}
 
-  /**
-   * @return PG json/jsonb 的原始 UTF-8 文本；非 PGobject 时返回 {@code null}
-   */
-  @Nullable
-  public static String tryExtract(@Nullable Object raw) {
-    if (raw == null) {
-      return null;
-    }
-    if (!PG_OBJECT_CLASS.equals(raw.getClass().getName())) {
-      return null;
-    }
-    try {
-      Object v = raw.getClass().getMethod("getValue").invoke(raw);
-      return v instanceof String s ? s : null;
-    } catch (ReflectiveOperationException ignored) {
-      SwallowedExceptionLogger.info(
-          PostgresqlJsonbTexts.class, "catch:ReflectiveOperationException", ignored);
+    /**
+     * @return PG json/jsonb 的原始 UTF-8 文本；非 PGobject 时返回 {@code null}
+     */
+    @Nullable
+    public static String tryExtract(@Nullable Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (!PG_OBJECT_CLASS.equals(raw.getClass().getName())) {
+            return null;
+        }
+        try {
+            Object v = raw.getClass().getMethod("getValue").invoke(raw);
+            return v instanceof String s ? s : null;
+        } catch (ReflectiveOperationException ignored) {
+            SwallowedExceptionLogger.info(PostgresqlJsonbTexts.class, "catch:ReflectiveOperationException", ignored);
 
-      return null;
+            return null;
+        }
     }
-  }
 }

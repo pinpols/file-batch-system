@@ -37,39 +37,37 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleJobDefinitionControllerValidationTest {
 
-  @Mock
-  private ConsoleJobDefinitionApplicationService service;
+    @Mock
+    private ConsoleJobDefinitionApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleJobDefinitionController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleJobDefinitionController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String createBody(String jobCode) {
-    return createBody(jobCode, "GENERAL");
-  }
+    private String createBody(String jobCode) {
+        return createBody(jobCode, "GENERAL");
+    }
 
-  private String createBody(String jobCode, String jobType) {
-    return """
+    private String createBody(String jobCode, String jobType) {
+        return """
         {
           "tenantId": "ta",
           "jobCode": "%s",
@@ -78,114 +76,105 @@ class ConsoleJobDefinitionControllerValidationTest {
           "scheduleType": "MANUAL"
         }
         """.formatted(jobCode, jobType).stripTrailing();
-  }
-
-  @Test
-  @DisplayName("作业编码含空格时返回参数校验失败, 且不写入下游")
-  void rejects_jobCode_with_space() throws Exception {
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("q q q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
-
-  @Test
-  @DisplayName("作业编码含中文时返回参数校验失败")
-  void rejects_jobCode_chinese() throws Exception {
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("中文测试")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
-
-  @Test
-  @DisplayName("作业编码以数字开头时返回参数校验失败")
-  void rejects_jobCode_starts_with_digit() throws Exception {
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("123abc")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
-
-  @Test
-  @DisplayName("作业编码为空时返回参数校验失败")
-  void rejects_jobCode_blank() throws Exception {
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
-
-  @Test
-  @DisplayName("作业编码符合格式要求时创建放行并触达下游")
-  void accepts_valid_jobCode() throws Exception {
-    // service mock 返回 null,responseFactory.success(null) 会被 controller 包成 SUCCESS;
-    // 本测试只关心 validation 是否放行,不关心返回体的具体字段
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("valid_job_01")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-
-    verify(service).create(ArgumentMatchers.any());
-  }
-
-  @Test
-  @DisplayName("所有执行型作业类型均可创建")
-  void shouldAcceptExecutableJobTypesAndRejectWorkflowAsJobType() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-
-    for (JobType jobType : JobType.values()) {
-      var result = mockMvc
-          .perform(post("/api/console/job-definitions")
-              .contentType(APPLICATION_JSON)
-              .content(createBody("JOB_" + jobType.code(), jobType.code())))
-          .andReturn();
-      Assertions.assertThat(result.getResponse().getStatus()).isEqualTo(200);
     }
-    var retiredType = mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("JOB_RETIRED_WORKFLOW", "WORKFLOW")))
-        .andReturn();
-    Assertions.assertThat(retiredType.getResponse().getStatus()).isEqualTo(400);
-  }
 
-  @Test
-  @DisplayName("未声明的作业类型返回参数校验失败, 且不写入下游")
-  void shouldRejectUnknownJobType_whenNotDeclared() throws Exception {
-    mockMvc
-        .perform(post("/api/console/job-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(createBody("JOB_UNKNOWN", "UNKNOWN")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("作业编码含空格时返回参数校验失败, 且不写入下游")
+    void rejects_jobCode_with_space() throws Exception {
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("q q q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("克隆入参的新作业编码含空格时返回参数校验失败")
-  void rejects_clone_newJobCode_with_space() throws Exception {
-    String body = "{\"tenantId\":\"ta\",\"newJobCode\":\"q q q\"}";
-    mockMvc
-        .perform(post("/api/console/job-definitions/1/clone")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("作业编码含中文时返回参数校验失败")
+    void rejects_jobCode_chinese() throws Exception {
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("中文测试")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("作业编码以数字开头时返回参数校验失败")
+    void rejects_jobCode_starts_with_digit() throws Exception {
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("123abc")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("作业编码为空时返回参数校验失败")
+    void rejects_jobCode_blank() throws Exception {
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("作业编码符合格式要求时创建放行并触达下游")
+    void accepts_valid_jobCode() throws Exception {
+        // service mock 返回 null,responseFactory.success(null) 会被 controller 包成 SUCCESS;
+        // 本测试只关心 validation 是否放行,不关心返回体的具体字段
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("valid_job_01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+
+        verify(service).create(ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("所有执行型作业类型均可创建")
+    void shouldAcceptExecutableJobTypesAndRejectWorkflowAsJobType() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+
+        for (JobType jobType : JobType.values()) {
+            var result = mockMvc.perform(post("/api/console/job-definitions")
+                            .contentType(APPLICATION_JSON)
+                            .content(createBody("JOB_" + jobType.code(), jobType.code())))
+                    .andReturn();
+            Assertions.assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        }
+        var retiredType = mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("JOB_RETIRED_WORKFLOW", "WORKFLOW")))
+                .andReturn();
+        Assertions.assertThat(retiredType.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("未声明的作业类型返回参数校验失败, 且不写入下游")
+    void shouldRejectUnknownJobType_whenNotDeclared() throws Exception {
+        mockMvc.perform(post("/api/console/job-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(createBody("JOB_UNKNOWN", "UNKNOWN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("克隆入参的新作业编码含空格时返回参数校验失败")
+    void rejects_clone_newJobCode_with_space() throws Exception {
+        String body = "{\"tenantId\":\"ta\",\"newJobCode\":\"q q q\"}";
+        mockMvc.perform(post("/api/console/job-definitions/1/clone")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 }

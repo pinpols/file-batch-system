@@ -29,112 +29,111 @@ import org.springframework.core.env.Environment;
 @DisplayName("原子隔离启动自检: 双用途执行器的隔离确认")
 class AtomicIsolationStartupCheckTest {
 
-  @Mock
-  private ObjectProvider<ShellExecutorProperties> shellProvider;
+    @Mock
+    private ObjectProvider<ShellExecutorProperties> shellProvider;
 
-  @Mock
-  private ObjectProvider<SqlExecutorProperties> sqlProvider;
+    @Mock
+    private ObjectProvider<SqlExecutorProperties> sqlProvider;
 
-  @Mock
-  private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
+    @Mock
+    private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
 
-  @Mock
-  private ObjectProvider<HttpExecutorProperties> httpProvider;
+    @Mock
+    private ObjectProvider<HttpExecutorProperties> httpProvider;
 
-  @Mock
-  private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
+    @Mock
+    private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
 
-  @Mock
-  private Environment environment;
+    @Mock
+    private Environment environment;
 
-  private AtomicIsolationStartupCheck newCheck() {
-    return new AtomicIsolationStartupCheck(
-        shellProvider, sqlProvider, storedProcProvider, httpProvider, sparkProvider, environment);
-  }
+    private AtomicIsolationStartupCheck newCheck() {
+        return new AtomicIsolationStartupCheck(
+                shellProvider, sqlProvider, storedProcProvider, httpProvider, sparkProvider, environment);
+    }
 
-  private void enableShell() {
-    ShellExecutorProperties shell = new ShellExecutorProperties();
-    shell.setEnabled(true);
-    when(shellProvider.getIfAvailable()).thenReturn(shell);
-  }
+    private void enableShell() {
+        ShellExecutorProperties shell = new ShellExecutorProperties();
+        shell.setEnabled(true);
+        when(shellProvider.getIfAvailable()).thenReturn(shell);
+    }
 
-  /** 把其余 provider 都设为「无 bean」,避免每个测试重复写。 */
-  private void noOtherExecutors() {
-    lenient().when(sqlProvider.getIfAvailable()).thenReturn(null);
-    lenient().when(storedProcProvider.getIfAvailable()).thenReturn(null);
-    lenient().when(httpProvider.getIfAvailable()).thenReturn(null);
-    lenient().when(shellProvider.getIfAvailable()).thenReturn(null);
-    lenient().when(sparkProvider.getIfAvailable()).thenReturn(null);
-  }
+    /** 把其余 provider 都设为「无 bean」,避免每个测试重复写。 */
+    private void noOtherExecutors() {
+        lenient().when(sqlProvider.getIfAvailable()).thenReturn(null);
+        lenient().when(storedProcProvider.getIfAvailable()).thenReturn(null);
+        lenient().when(httpProvider.getIfAvailable()).thenReturn(null);
+        lenient().when(shellProvider.getIfAvailable()).thenReturn(null);
+        lenient().when(sparkProvider.getIfAvailable()).thenReturn(null);
+    }
 
-  private void enableSpark() {
-    SparkSubmitExecutorProperties spark = new SparkSubmitExecutorProperties();
-    spark.setEnabled(true);
-    when(sparkProvider.getIfAvailable()).thenReturn(spark);
-  }
+    private void enableSpark() {
+        SparkSubmitExecutorProperties spark = new SparkSubmitExecutorProperties();
+        spark.setEnabled(true);
+        when(sparkProvider.getIfAvailable()).thenReturn(spark);
+    }
 
-  @Test
-  @DisplayName("外部计算引擎提交执行器启用且要求隔离但未确认时, 启动自检应快速失败")
-  void sparkEnabled_requireIsolation_notAcked_throws() {
-    // S-2:spark-submit 是 dual-use RCE,启用 + require-isolation + 未 ack 必须 fail-fast。
-    noOtherExecutors();
-    enableSpark();
-    stubFlags(true, false);
+    @Test
+    @DisplayName("外部计算引擎提交执行器启用且要求隔离但未确认时, 启动自检应快速失败")
+    void sparkEnabled_requireIsolation_notAcked_throws() {
+        // S-2:spark-submit 是 dual-use RCE,启用 + require-isolation + 未 ack 必须 fail-fast。
+        noOtherExecutors();
+        enableSpark();
+        stubFlags(true, false);
 
-    assertThatThrownBy(() -> newCheck().checkOnStartup())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("spark-submit");
-  }
+        assertThatThrownBy(() -> newCheck().checkOnStartup())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spark-submit");
+    }
 
-  private void stubFlags(boolean requireIsolation, boolean acknowledged) {
-    lenient()
-        .when(environment.getProperty(
-            AtomicIsolationStartupCheck.PROP_REQUIRE_ISOLATION, Boolean.class, false))
-        .thenReturn(requireIsolation);
-    lenient()
-        .when(environment.getProperty(
-            AtomicIsolationStartupCheck.PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false))
-        .thenReturn(acknowledged);
-  }
+    private void stubFlags(boolean requireIsolation, boolean acknowledged) {
+        lenient()
+                .when(environment.getProperty(AtomicIsolationStartupCheck.PROP_REQUIRE_ISOLATION, Boolean.class, false))
+                .thenReturn(requireIsolation);
+        lenient()
+                .when(environment.getProperty(
+                        AtomicIsolationStartupCheck.PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false))
+                .thenReturn(acknowledged);
+    }
 
-  @Test
-  @DisplayName("命令执行器启用且要求隔离但未确认时, 启动自检应抛出并指明执行器")
-  void enabled_requireIsolation_notAcked_throws() {
-    noOtherExecutors();
-    enableShell();
-    stubFlags(true, false);
+    @Test
+    @DisplayName("命令执行器启用且要求隔离但未确认时, 启动自检应抛出并指明执行器")
+    void enabled_requireIsolation_notAcked_throws() {
+        noOtherExecutors();
+        enableShell();
+        stubFlags(true, false);
 
-    assertThatThrownBy(() -> newCheck().checkOnStartup())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("ADR-029 isolation gate")
-        .hasMessageContaining("shell");
-  }
+        assertThatThrownBy(() -> newCheck().checkOnStartup())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ADR-029 isolation gate")
+                .hasMessageContaining("shell");
+    }
 
-  @Test
-  @DisplayName("启用执行器但未要求隔离时, 自检只告警不中断启动")
-  void enabled_notRequired_onlyWarns_noThrow() {
-    noOtherExecutors();
-    enableShell();
-    stubFlags(false, false);
+    @Test
+    @DisplayName("启用执行器但未要求隔离时, 自检只告警不中断启动")
+    void enabled_notRequired_onlyWarns_noThrow() {
+        noOtherExecutors();
+        enableShell();
+        stubFlags(false, false);
 
-    assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
-  }
+        assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("要求隔离且已完成确认时, 启动自检应放行")
-  void enabled_requireIsolation_acked_noThrow() {
-    noOtherExecutors();
-    enableShell();
-    stubFlags(true, true);
+    @Test
+    @DisplayName("要求隔离且已完成确认时, 启动自检应放行")
+    void enabled_requireIsolation_acked_noThrow() {
+        noOtherExecutors();
+        enableShell();
+        stubFlags(true, true);
 
-    assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
-  }
+        assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("没有启用任何双用途执行器时, 启动自检应直接放行")
-  void noDualUseEnabled_noThrow() {
-    noOtherExecutors();
+    @Test
+    @DisplayName("没有启用任何双用途执行器时, 启动自检应直接放行")
+    void noDualUseEnabled_noThrow() {
+        noOtherExecutors();
 
-    assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
-  }
+        assertThatCode(() -> newCheck().checkOnStartup()).doesNotThrowAnyException();
+    }
 }

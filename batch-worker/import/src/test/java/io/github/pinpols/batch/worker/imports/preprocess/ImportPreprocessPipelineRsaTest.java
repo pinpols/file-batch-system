@@ -35,157 +35,155 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入预处理签名校验单测:签名通过,内容篡改与公钥缺失的失败语义")
 class ImportPreprocessPipelineRsaTest {
 
-  private static final byte[] PAYLOAD =
-      "customerNo,customerName\nC001,Alice Wang\n".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] PAYLOAD = "customerNo,customerName\nC001,Alice Wang\n".getBytes(StandardCharsets.UTF_8);
 
-  private static String publicKeyPem;
-  private static String validSignatureB64;
+    private static String publicKeyPem;
+    private static String validSignatureB64;
 
-  @BeforeAll
-  static void loadKeys() throws Exception {
-    publicKeyPem = loadResource("fixtures/test-rsa-public.pem");
+    @BeforeAll
+    static void loadKeys() throws Exception {
+        publicKeyPem = loadResource("fixtures/test-rsa-public.pem");
 
-    // 使用 PKCS#8 私钥对测试载荷签名（每次测试运行生成新签名）
-    String privateKeyPem = loadResource("fixtures/test-rsa-private-pkcs8.pem");
-    PrivateKey privateKey = parsePkcs8PrivateKey(privateKeyPem);
-    Signature signer = Signature.getInstance("SHA256withRSA");
-    signer.initSign(privateKey);
-    signer.update(PAYLOAD);
-    validSignatureB64 = Base64.getEncoder().encodeToString(signer.sign());
-  }
-
-  // ── valid signature passes ─────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("签名有效时校验通过,载荷原样输出")
-  void shouldPassVerification_withValidRsaSignature() {
-    Map<String, Object> step = Map.of(
-        "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
-        "publicKeyPem", publicKeyPem,
-        "signatureBase64", validSignatureB64);
-    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
-
-    byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template);
-
-    assertThat(result).isEqualTo(PAYLOAD);
-  }
-
-  // ── tampered payload rejected ──────────────────────────────────────────────
-
-  @Test
-  @DisplayName("载荷被篡改时校验失败,并抛出预处理异常")
-  void shouldFailVerification_whenPayloadTampered() {
-    byte[] tamperedPayload =
-        "customerNo,customerName\nC001,Eve Test\n".getBytes(StandardCharsets.UTF_8);
-
-    Map<String, Object> step = Map.of(
-        "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
-        "publicKeyPem", publicKeyPem,
-        "signatureBase64", validSignatureB64);
-    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
-
-    assertThatThrownBy(() -> ImportPreprocessPipeline.run(tamperedPayload, null, template))
-        .isInstanceOf(ImportPreprocessException.class)
-        .hasMessageContaining("RSA");
-  }
-
-  // ── missing public key config rejected ────────────────────────────────────
-
-  @Test
-  @DisplayName("未提供公钥时校验失败,并在消息中点明公钥缺失")
-  void shouldFail_whenPublicKeyPemMissing() {
-    Map<String, Object> step = Map.of(
-        "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256, "signatureBase64", validSignatureB64
-        // 未提供 publicKeyPem
-        );
-    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
-
-    assertThatThrownBy(() -> ImportPreprocessPipeline.run(PAYLOAD, null, template))
-        .isInstanceOf(ImportPreprocessException.class)
-        .hasMessageContaining("publicKeyPem");
-  }
-
-  // ── signature supplied via payload metadata ────────────────────────────────
-
-  @Test
-  @DisplayName("签名改由载荷元数据提供时,校验同样通过")
-  void shouldPassVerification_signatureViaPayloadMetadata() {
-    ImportPayload payload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        "JSON",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        Map.of("signatureBase64", validSignatureB64));
-
-    Map<String, Object> step = Map.of(
-        "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256, "publicKeyPem", publicKeyPem
-        // signatureBase64 不在 step 中 — 通过 metadata 提供
-        );
-    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
-
-    byte[] result = ImportPreprocessPipeline.run(PAYLOAD, payload, template);
-
-    assertThat(result).isEqualTo(PAYLOAD);
-  }
-
-  // ── bypassMode bypasses RSA check ─────────────────────────────────────────
-
-  @Test
-  @DisplayName("测试旁路开关开启时,完全跳过签名校验")
-  void shouldBypassRsaVerification_whenTestingOpen() {
-    Map<String, Object> step = Map.of(
-        "type",
-        ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
-        "publicKeyPem",
-        publicKeyPem,
-        "signatureBase64",
-        "INVALID_BASE64_GARBAGE");
-    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
-
-    // bypassMode=true 时完全跳过 RSA 校验
-    byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template, true);
-    assertThat(result).isEqualTo(PAYLOAD);
-  }
-
-  // ── helpers ────────────────────────────────────────────────────────────────
-
-  private static String loadResource(String resourcePath) throws Exception {
-    URL url = ImportPreprocessPipelineRsaTest.class.getClassLoader().getResource(resourcePath);
-    assertThat(url).as("Resource not found: %s", resourcePath).isNotNull();
-    try {
-      return Files.readString(Path.of(url.toURI()));
-    } catch (URISyntaxException ex) {
-      throw new IOException("Invalid resource URI: " + resourcePath, ex);
+        // 使用 PKCS#8 私钥对测试载荷签名（每次测试运行生成新签名）
+        String privateKeyPem = loadResource("fixtures/test-rsa-private-pkcs8.pem");
+        PrivateKey privateKey = parsePkcs8PrivateKey(privateKeyPem);
+        Signature signer = Signature.getInstance("SHA256withRSA");
+        signer.initSign(privateKey);
+        signer.update(PAYLOAD);
+        validSignatureB64 = Base64.getEncoder().encodeToString(signer.sign());
     }
-  }
 
-  /**
-   * 解析 PKCS#8 PEM 编码的 RSA 私钥。 密钥生成命令： openssl genrsa -out test-rsa-private.pem 2048 openssl pkcs8
-   * -topk8 -nocrypt -in test-rsa-private.pem -out test-rsa-private-pkcs8.pem
-   */
-  private static PrivateKey parsePkcs8PrivateKey(String pem) throws Exception {
-    String base64 = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "")
-        .replaceAll("-----END PRIVATE KEY-----", "")
-        .replaceAll("\\s", "");
-    byte[] der = Base64.getDecoder().decode(base64);
-    return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
-  }
+    // ── valid signature passes ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("签名有效时校验通过,载荷原样输出")
+    void shouldPassVerification_withValidRsaSignature() {
+        Map<String, Object> step = Map.of(
+                "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
+                "publicKeyPem", publicKeyPem,
+                "signatureBase64", validSignatureB64);
+        Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
+
+        byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template);
+
+        assertThat(result).isEqualTo(PAYLOAD);
+    }
+
+    // ── tampered payload rejected ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("载荷被篡改时校验失败,并抛出预处理异常")
+    void shouldFailVerification_whenPayloadTampered() {
+        byte[] tamperedPayload = "customerNo,customerName\nC001,Eve Test\n".getBytes(StandardCharsets.UTF_8);
+
+        Map<String, Object> step = Map.of(
+                "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
+                "publicKeyPem", publicKeyPem,
+                "signatureBase64", validSignatureB64);
+        Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
+
+        assertThatThrownBy(() -> ImportPreprocessPipeline.run(tamperedPayload, null, template))
+                .isInstanceOf(ImportPreprocessException.class)
+                .hasMessageContaining("RSA");
+    }
+
+    // ── missing public key config rejected ────────────────────────────────────
+
+    @Test
+    @DisplayName("未提供公钥时校验失败,并在消息中点明公钥缺失")
+    void shouldFail_whenPublicKeyPemMissing() {
+        Map<String, Object> step = Map.of(
+                "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256, "signatureBase64", validSignatureB64
+                // 未提供 publicKeyPem
+                );
+        Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
+
+        assertThatThrownBy(() -> ImportPreprocessPipeline.run(PAYLOAD, null, template))
+                .isInstanceOf(ImportPreprocessException.class)
+                .hasMessageContaining("publicKeyPem");
+    }
+
+    // ── signature supplied via payload metadata ────────────────────────────────
+
+    @Test
+    @DisplayName("签名改由载荷元数据提供时,校验同样通过")
+    void shouldPassVerification_signatureViaPayloadMetadata() {
+        ImportPayload payload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                "JSON",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of("signatureBase64", validSignatureB64));
+
+        Map<String, Object> step = Map.of(
+                "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256, "publicKeyPem", publicKeyPem
+                // signatureBase64 不在 step 中 — 通过 metadata 提供
+                );
+        Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
+
+        byte[] result = ImportPreprocessPipeline.run(PAYLOAD, payload, template);
+
+        assertThat(result).isEqualTo(PAYLOAD);
+    }
+
+    // ── bypassMode bypasses RSA check ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("测试旁路开关开启时,完全跳过签名校验")
+    void shouldBypassRsaVerification_whenTestingOpen() {
+        Map<String, Object> step = Map.of(
+                "type",
+                ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
+                "publicKeyPem",
+                publicKeyPem,
+                "signatureBase64",
+                "INVALID_BASE64_GARBAGE");
+        Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
+
+        // bypassMode=true 时完全跳过 RSA 校验
+        byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template, true);
+        assertThat(result).isEqualTo(PAYLOAD);
+    }
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+
+    private static String loadResource(String resourcePath) throws Exception {
+        URL url = ImportPreprocessPipelineRsaTest.class.getClassLoader().getResource(resourcePath);
+        assertThat(url).as("Resource not found: %s", resourcePath).isNotNull();
+        try {
+            return Files.readString(Path.of(url.toURI()));
+        } catch (URISyntaxException ex) {
+            throw new IOException("Invalid resource URI: " + resourcePath, ex);
+        }
+    }
+
+    /**
+     * 解析 PKCS#8 PEM 编码的 RSA 私钥。 密钥生成命令： openssl genrsa -out test-rsa-private.pem 2048 openssl pkcs8
+     * -topk8 -nocrypt -in test-rsa-private.pem -out test-rsa-private-pkcs8.pem
+     */
+    private static PrivateKey parsePkcs8PrivateKey(String pem) throws Exception {
+        String base64 = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "")
+                .replaceAll("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+        byte[] der = Base64.getDecoder().decode(base64);
+        return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
+    }
 }

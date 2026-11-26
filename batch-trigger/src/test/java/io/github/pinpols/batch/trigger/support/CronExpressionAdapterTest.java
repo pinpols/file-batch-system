@@ -33,202 +33,208 @@ import org.quartz.CronExpression;
 @DisplayName("CronExpressionAdapter:next 计算与表达式校验,并与 Quartz 触发序列逐项对齐")
 class CronExpressionAdapterTest {
 
-  private final CronExpressionAdapter adapter = new CronExpressionAdapter();
-  private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private final CronExpressionAdapter adapter = new CronExpressionAdapter();
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
-  // ── 基础算法 ────────────────────────────────────────────
+    // ── 基础算法 ────────────────────────────────────────────
 
-  @Test
-  @DisplayName("整点 cron 从基准时刻推算出下一个整点触发时刻")
-  void nextForHourlyCron_isNextHour() {
-    Instant base =
-        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
-    Instant next = adapter.next("0 0 * * * ?", SHANGHAI, base);
-    assertThat(next)
-        .isEqualTo(
-            LocalDateTime.of(2026, Month.APRIL, 26, 11, 0, 0).atZone(SHANGHAI).toInstant());
-  }
-
-  @Test
-  @DisplayName("同一 cron 在不同时区按各自本地时刻触发,两地问差 8 小时")
-  void next_respectsTimezone() {
-    Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
-        .atZone(ZoneId.of("UTC"))
-        .toInstant();
-    Instant nextShanghai = adapter.next("0 0 9 * * ?", SHANGHAI, base);
-    Instant nextUtc = adapter.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
-    assertThat(nextShanghai).isNotEqualTo(nextUtc);
-    // Shanghai 09:00 = UTC 01:00,UTC 09:00 = Shanghai 17:00,差 8 小时
-    assertThat(nextUtc.toEpochMilli() - nextShanghai.toEpochMilli()).isEqualTo(8 * 3600 * 1000L);
-  }
-
-  @Test
-  @DisplayName("非法 cron 计算下一次触发时抛 IllegalArgumentException 并给出原因")
-  void invalidExpression_throwsIAE() {
-    assertThatThrownBy(() -> adapter.next("invalid", SHANGHAI, BatchDateTimeSupport.utcNow()))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("invalid cron expression");
-  }
-
-  @Test
-  @DisplayName("标准 6 字段与含 L 字符的合法表达式均应校验通过")
-  void isValid_returnsTrueForValidExpressions() {
-    assertThat(adapter.isValid("0 0 * * * ?")).isTrue();
-    assertThat(adapter.isValid("0 30 4 ? * SUN")).isTrue();
-    assertThat(adapter.isValid("0 0 20 L * ?")).isTrue();
-  }
-
-  @Test
-  @DisplayName("空串、null 与无意义字符串都应判定为非法表达式")
-  void isValid_returnsFalseForInvalid() {
-    assertThat(adapter.isValid("")).isFalse();
-    assertThat(adapter.isValid(null)).isFalse();
-    assertThat(adapter.isValid("xyz")).isFalse();
-  }
-
-  @Test
-  @DisplayName("容量淘汰后同一表达式按同一规则重算,结果与淘汰前一致")
-  void evictedExpression_recomputesToSameInstant() {
-    CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
-    Instant base =
-        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
-    Instant beforeEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
-    // 另一组合挤掉上一条,再查原表达式即走重新解析路径。
-    smallCache.next("0 30 7 * * ?", SHANGHAI, base);
-
-    Instant afterEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
-
-    assertThat(afterEviction).isEqualTo(beforeEviction);
-    assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(1);
-  }
-
-  @Test
-  @DisplayName("大量表达式与时区组合下缓存条目不超过容量上限")
-  void cache_staysWithinCapacity() {
-    int capacity = 4;
-    CronExpressionAdapter smallCache = new CronExpressionAdapter(capacity);
-    Instant base =
-        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
-
-    for (int minute = 0; minute < 20; minute++) {
-      assertThat(smallCache.next("0 " + minute + " * * * ?", SHANGHAI, base)).isNotNull();
-      assertThat(smallCache.next("0 " + minute + " * * * ?", ZoneId.of("UTC"), base))
-          .isNotNull();
+    @Test
+    @DisplayName("整点 cron 从基准时刻推算出下一个整点触发时刻")
+    void nextForHourlyCron_isNextHour() {
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0)
+                .atZone(SHANGHAI)
+                .toInstant();
+        Instant next = adapter.next("0 0 * * * ?", SHANGHAI, base);
+        assertThat(next)
+                .isEqualTo(LocalDateTime.of(2026, Month.APRIL, 26, 11, 0, 0)
+                        .atZone(SHANGHAI)
+                        .toInstant());
     }
 
-    assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(capacity);
-  }
+    @Test
+    @DisplayName("同一 cron 在不同时区按各自本地时刻触发,两地问差 8 小时")
+    void next_respectsTimezone() {
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
+                .atZone(ZoneId.of("UTC"))
+                .toInstant();
+        Instant nextShanghai = adapter.next("0 0 9 * * ?", SHANGHAI, base);
+        Instant nextUtc = adapter.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
+        assertThat(nextShanghai).isNotEqualTo(nextUtc);
+        // Shanghai 09:00 = UTC 01:00,UTC 09:00 = Shanghai 17:00,差 8 小时
+        assertThat(nextUtc.toEpochMilli() - nextShanghai.toEpochMilli()).isEqualTo(8 * 3600 * 1000L);
+    }
 
-  @Test
-  @DisplayName("同一表达式跨时区在容量淘汰下仍按各自时区计算")
-  void sameExpressionAcrossZones_staysIndependentUnderEviction() {
-    CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
-    Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
-        .atZone(ZoneId.of("UTC"))
-        .toInstant();
+    @Test
+    @DisplayName("非法 cron 计算下一次触发时抛 IllegalArgumentException 并给出原因")
+    void invalidExpression_throwsIAE() {
+        assertThatThrownBy(() -> adapter.next("invalid", SHANGHAI, BatchDateTimeSupport.utcNow()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid cron expression");
+    }
 
-    Instant shanghaiFirst = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
-    Instant utc = smallCache.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
-    Instant shanghaiAgain = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
+    @Test
+    @DisplayName("标准 6 字段与含 L 字符的合法表达式均应校验通过")
+    void isValid_returnsTrueForValidExpressions() {
+        assertThat(adapter.isValid("0 0 * * * ?")).isTrue();
+        assertThat(adapter.isValid("0 30 4 ? * SUN")).isTrue();
+        assertThat(adapter.isValid("0 0 20 L * ?")).isTrue();
+    }
 
-    assertThat(shanghaiAgain).isEqualTo(shanghaiFirst);
-    assertThat(utc.toEpochMilli() - shanghaiAgain.toEpochMilli()).isEqualTo(8 * 3600 * 1000L);
-  }
+    @Test
+    @DisplayName("空串、null 与无意义字符串都应判定为非法表达式")
+    void isValid_returnsFalseForInvalid() {
+        assertThat(adapter.isValid("")).isFalse();
+        assertThat(adapter.isValid(null)).isFalse();
+        assertThat(adapter.isValid("xyz")).isFalse();
+    }
 
-  // ── 与 Quartz CronExpression 一致性(切换 sanity check)──
+    @Test
+    @DisplayName("容量淘汰后同一表达式按同一规则重算,结果与淘汰前一致")
+    void evictedExpression_recomputesToSameInstant() {
+        CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0)
+                .atZone(SHANGHAI)
+                .toInstant();
+        Instant beforeEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
+        // 另一组合挤掉上一条,再查原表达式即走重新解析路径。
+        smallCache.next("0 30 7 * * ?", SHANGHAI, base);
 
-  /**
-   * 用一组常见 + 边界 cron,验证 adapter 算出的 next 序列跟直接调 Quartz CronExpression 完全一致。覆盖 24 次 fire — 跨整天 / 跨午夜
-   * / 跨周。
-   */
-  @ParameterizedTest
-  @DisplayName("常见与边界 cron 连续 24 次 next 计算须与 Quartz 触发序列逐项一致")
-  @ValueSource(
-      strings = {
-        "0 0 * * * ?", // 每小时整点
-        "0 30 7 * * ?", // 每天 07:30
-        "0 0 0 * * ?", // 每天午夜
-        "0 0 9 ? * MON-FRI", // 工作日 09:00
-        "0 0 0 1 * ?", // 每月 1 号
-        "0 0 20 L * ?", // 每月最后一天 20:00(L 字符)
-        "0 0/15 * * * ?", // 每 15 分钟
-        "30 * * * * ?", // 每分钟第 30 秒
-        "0 0 12 ? * 6#1", // 每月第一个周六(# 字符;day-of-month 必须 ?)
-      })
-  void adapter_matchesQuartzNextFireSeries(String cronExpr) throws ParseException {
-    Instant base =
-        LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0).atZone(SHANGHAI).toInstant();
+        Instant afterEviction = smallCache.next("0 0 * * * ?", SHANGHAI, base);
 
-    CronExpression quartzExpr = new CronExpression(cronExpr);
-    quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
+        assertThat(afterEviction).isEqualTo(beforeEviction);
+        assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(1);
+    }
 
-    List<Instant> adapterSeries = new ArrayList<>();
-    List<Instant> quartzSeries = new ArrayList<>();
+    @Test
+    @DisplayName("大量表达式与时区组合下缓存条目不超过容量上限")
+    void cache_staysWithinCapacity() {
+        int capacity = 4;
+        CronExpressionAdapter smallCache = new CronExpressionAdapter(capacity);
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0)
+                .atZone(SHANGHAI)
+                .toInstant();
 
-    Instant cursor = base;
-    for (int i = 0; i < 24; i++) {
-      Instant adapterNext = adapter.next(cronExpr, SHANGHAI, cursor);
-      Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(cursor));
-      if (adapterNext == null || quartzNext == null) {
-        // 两者都耗尽才 OK
+        for (int minute = 0; minute < 20; minute++) {
+            assertThat(smallCache.next("0 " + minute + " * * * ?", SHANGHAI, base))
+                    .isNotNull();
+            assertThat(smallCache.next("0 " + minute + " * * * ?", ZoneId.of("UTC"), base))
+                    .isNotNull();
+        }
+
+        assertThat(smallCache.cachedExpressionCount()).isLessThanOrEqualTo(capacity);
+    }
+
+    @Test
+    @DisplayName("同一表达式跨时区在容量淘汰下仍按各自时区计算")
+    void sameExpressionAcrossZones_staysIndependentUnderEviction() {
+        CronExpressionAdapter smallCache = new CronExpressionAdapter(1);
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
+                .atZone(ZoneId.of("UTC"))
+                .toInstant();
+
+        Instant shanghaiFirst = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
+        Instant utc = smallCache.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
+        Instant shanghaiAgain = smallCache.next("0 0 9 * * ?", SHANGHAI, base);
+
+        assertThat(shanghaiAgain).isEqualTo(shanghaiFirst);
+        assertThat(utc.toEpochMilli() - shanghaiAgain.toEpochMilli()).isEqualTo(8 * 3600 * 1000L);
+    }
+
+    // ── 与 Quartz CronExpression 一致性(切换 sanity check)──
+
+    /**
+     * 用一组常见 + 边界 cron,验证 adapter 算出的 next 序列跟直接调 Quartz CronExpression 完全一致。覆盖 24 次 fire — 跨整天 / 跨午夜
+     * / 跨周。
+     */
+    @ParameterizedTest
+    @DisplayName("常见与边界 cron 连续 24 次 next 计算须与 Quartz 触发序列逐项一致")
+    @ValueSource(
+            strings = {
+                "0 0 * * * ?", // 每小时整点
+                "0 30 7 * * ?", // 每天 07:30
+                "0 0 0 * * ?", // 每天午夜
+                "0 0 9 ? * MON-FRI", // 工作日 09:00
+                "0 0 0 1 * ?", // 每月 1 号
+                "0 0 20 L * ?", // 每月最后一天 20:00(L 字符)
+                "0 0/15 * * * ?", // 每 15 分钟
+                "30 * * * * ?", // 每分钟第 30 秒
+                "0 0 12 ? * 6#1", // 每月第一个周六(# 字符;day-of-month 必须 ?)
+            })
+    void adapter_matchesQuartzNextFireSeries(String cronExpr) throws ParseException {
+        Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
+                .atZone(SHANGHAI)
+                .toInstant();
+
+        CronExpression quartzExpr = new CronExpression(cronExpr);
+        quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
+
+        List<Instant> adapterSeries = new ArrayList<>();
+        List<Instant> quartzSeries = new ArrayList<>();
+
+        Instant cursor = base;
+        for (int i = 0; i < 24; i++) {
+            Instant adapterNext = adapter.next(cronExpr, SHANGHAI, cursor);
+            Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(cursor));
+            if (adapterNext == null || quartzNext == null) {
+                // 两者都耗尽才 OK
+                assertThat(adapterNext)
+                        .as("adapter null at iter %d for cron %s", i, cronExpr)
+                        .isNull();
+                assertThat(quartzNext)
+                        .as("quartz null at iter %d for cron %s", i, cronExpr)
+                        .isNull();
+                break;
+            }
+            adapterSeries.add(adapterNext);
+            quartzSeries.add(quartzNext.toInstant());
+            cursor = adapterNext;
+        }
+
+        assertThat(adapterSeries).as("cron series mismatch for: %s", cronExpr).containsExactlyElementsOf(quartzSeries);
+    }
+
+    /**
+     * 跨夏令时(项目用 Asia/Shanghai 不进夏令时,但用 America/New_York 测试 adapter 不会抖动)。 2026-03-08 02:00 美东春令时跳到
+     * 03:00。
+     */
+    @Test
+    @DisplayName("跨美东夏令时跳变时,连续 5 次 next 计算仍与 Quartz 对齐不抖动")
+    void daylightSavingTransition_matchesQuartz() throws ParseException {
+        String cron = "0 0 2 * * ?"; // 每天 02:00 — 春令时这天 02:00 不存在
+        ZoneId nyc = ZoneId.of("America/New_York");
+        Instant base = LocalDateTime.of(2026, Month.MARCH, 7, 0, 0).atZone(nyc).toInstant();
+
+        CronExpression quartzExpr = new CronExpression(cron);
+        quartzExpr.setTimeZone(TimeZone.getTimeZone(nyc));
+
+        Instant cursor = base;
+        for (int i = 0; i < 5; i++) {
+            Instant adapterNext = adapter.next(cron, nyc, cursor);
+            Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(cursor));
+            assertThat(adapterNext).as("DST iter %d", i).isEqualTo(quartzNext.toInstant());
+            cursor = adapterNext;
+        }
+    }
+
+    /** 跨年的 cron 计算应该正确。 */
+    @Test
+    @DisplayName("跨年 cron 的 next 计算结果与 Quartz 一致,并落在 2027 元旦零点")
+    void crossYear_matchesQuartz() throws ParseException {
+        String cron = "0 0 0 1 1 ?"; // 每年 1 月 1 日 00:00
+        Instant base = LocalDateTime.of(2026, Month.DECEMBER, 31, 23, 0)
+                .atZone(SHANGHAI)
+                .toInstant();
+
+        CronExpression quartzExpr = new CronExpression(cron);
+        quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
+
+        Instant adapterNext = adapter.next(cron, SHANGHAI, base);
+        Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(base));
+
+        assertThat(adapterNext).isEqualTo(quartzNext.toInstant());
         assertThat(adapterNext)
-            .as("adapter null at iter %d for cron %s", i, cronExpr)
-            .isNull();
-        assertThat(quartzNext)
-            .as("quartz null at iter %d for cron %s", i, cronExpr)
-            .isNull();
-        break;
-      }
-      adapterSeries.add(adapterNext);
-      quartzSeries.add(quartzNext.toInstant());
-      cursor = adapterNext;
+                .isEqualTo(LocalDateTime.of(2027, Month.JANUARY, 1, 0, 0)
+                        .atZone(SHANGHAI)
+                        .toInstant());
     }
-
-    assertThat(adapterSeries)
-        .as("cron series mismatch for: %s", cronExpr)
-        .containsExactlyElementsOf(quartzSeries);
-  }
-
-  /**
-   * 跨夏令时(项目用 Asia/Shanghai 不进夏令时,但用 America/New_York 测试 adapter 不会抖动)。 2026-03-08 02:00 美东春令时跳到
-   * 03:00。
-   */
-  @Test
-  @DisplayName("跨美东夏令时跳变时,连续 5 次 next 计算仍与 Quartz 对齐不抖动")
-  void daylightSavingTransition_matchesQuartz() throws ParseException {
-    String cron = "0 0 2 * * ?"; // 每天 02:00 — 春令时这天 02:00 不存在
-    ZoneId nyc = ZoneId.of("America/New_York");
-    Instant base = LocalDateTime.of(2026, Month.MARCH, 7, 0, 0).atZone(nyc).toInstant();
-
-    CronExpression quartzExpr = new CronExpression(cron);
-    quartzExpr.setTimeZone(TimeZone.getTimeZone(nyc));
-
-    Instant cursor = base;
-    for (int i = 0; i < 5; i++) {
-      Instant adapterNext = adapter.next(cron, nyc, cursor);
-      Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(cursor));
-      assertThat(adapterNext).as("DST iter %d", i).isEqualTo(quartzNext.toInstant());
-      cursor = adapterNext;
-    }
-  }
-
-  /** 跨年的 cron 计算应该正确。 */
-  @Test
-  @DisplayName("跨年 cron 的 next 计算结果与 Quartz 一致,并落在 2027 元旦零点")
-  void crossYear_matchesQuartz() throws ParseException {
-    String cron = "0 0 0 1 1 ?"; // 每年 1 月 1 日 00:00
-    Instant base =
-        LocalDateTime.of(2026, Month.DECEMBER, 31, 23, 0).atZone(SHANGHAI).toInstant();
-
-    CronExpression quartzExpr = new CronExpression(cron);
-    quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
-
-    Instant adapterNext = adapter.next(cron, SHANGHAI, base);
-    Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(base));
-
-    assertThat(adapterNext).isEqualTo(quartzNext.toInstant());
-    assertThat(adapterNext)
-        .isEqualTo(
-            LocalDateTime.of(2027, Month.JANUARY, 1, 0, 0).atZone(SHANGHAI).toInstant());
-  }
 }

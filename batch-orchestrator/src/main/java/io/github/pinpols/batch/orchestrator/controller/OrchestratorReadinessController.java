@@ -22,18 +22,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrchestratorReadinessController {
 
-  private final ReadinessService readinessService;
+    private final ReadinessService readinessService;
 
-  /**
-   * 查上游 job 在指定批次日是否就绪(已有 EFFECTIVE asset partition)。
-   *
-   * @return {@link ReadinessResult},{@code ready=true} 表示上游该批次日结果版本已生效,响应同时带 asset/version 明细
-   */
-  @GetMapping("/job")
-  public ReadinessResult checkJob(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("jobCode") String jobCode,
-      @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
-    return readinessService.checkJobReady(tenantId, jobCode, bizDate);
-  }
+    /**
+     * 查上游 job 在指定批次日是否就绪(已有 EFFECTIVE asset partition)。
+     *
+     * @return {@link ReadinessResult},{@code ready=true} 表示上游该批次日结果版本已生效,响应同时带 asset/version 明细
+     */
+    @GetMapping("/job")
+    public ReadinessResult checkJob(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("jobCode") String jobCode,
+            @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
+        return readinessService.checkJobReady(tenantId, jobCode, bizDate);
+    }
 }

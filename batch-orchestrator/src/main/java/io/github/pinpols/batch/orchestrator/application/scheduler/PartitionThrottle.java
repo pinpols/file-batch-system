@@ -10,5 +10,5 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
  */
 public interface PartitionThrottle {
 
-  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue);
+    ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue);
 }

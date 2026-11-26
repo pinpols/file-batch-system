@@ -8,20 +8,20 @@ package io.github.pinpols.batch.worker.core.support;
  */
 public interface StageExecutionResult {
 
-  boolean success();
+    boolean success();
 
-  /** 失败码——阶段成功时值为 {@code "SUCCESS"}。 */
-  String code();
+    /** 失败码——阶段成功时值为 {@code "SUCCESS"}。 */
+    String code();
 
-  String message();
+    String message();
 
-  /** i18n message key;null 表示老 literal / 第三方异常。 */
-  default String errorKey() {
-    return null;
-  }
+    /** i18n message key;null 表示老 literal / 第三方异常。 */
+    default String errorKey() {
+        return null;
+    }
 
-  /** i18n args JSON array;与 {@link #errorKey()} 一起持久化。 */
-  default String errorArgs() {
-    return null;
-  }
+    /** i18n args JSON array;与 {@link #errorKey()} 一起持久化。 */
+    default String errorArgs() {
+        return null;
+    }
 }

@@ -13,43 +13,37 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "batch.console.ai.persistence",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "batch.console.ai.persistence", name = "enabled", havingValue = "true")
 public class ConsoleAiConversationRetentionJob {
 
-  private final ConsoleAiConversationMapper mapper;
-  private final ConsoleAiConversationService conversationService;
-  private final ConsoleAiAttachmentService attachmentService;
-  private final ScheduledExecutorService executor =
-      Executors.newSingleThreadScheduledExecutor(runnable -> {
+    private final ConsoleAiConversationMapper mapper;
+    private final ConsoleAiConversationService conversationService;
+    private final ConsoleAiAttachmentService attachmentService;
+    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "console-ai-retention");
         thread.setDaemon(true);
         return thread;
-      });
+    });
 
-  @PostConstruct
-  void start() {
-    executor.scheduleWithFixedDelay(this::cleanExpired, 1, 1, TimeUnit.HOURS);
-  }
-
-  @PreDestroy
-  void stop() {
-    executor.shutdownNow();
-  }
-
-  private void cleanExpired() {
-    try {
-      for (String tenantId : mapper.selectTenantIds()) {
-        conversationService.deleteExpiredForTenant(tenantId);
-        attachmentService.cleanTenant(tenantId);
-      }
-    } catch (RuntimeException exception) {
-      SwallowedExceptionLogger.info(
-          ConsoleAiConversationRetentionJob.class,
-          "catch:ai-conversation-retention-failed",
-          exception);
+    @PostConstruct
+    void start() {
+        executor.scheduleWithFixedDelay(this::cleanExpired, 1, 1, TimeUnit.HOURS);
     }
-  }
+
+    @PreDestroy
+    void stop() {
+        executor.shutdownNow();
+    }
+
+    private void cleanExpired() {
+        try {
+            for (String tenantId : mapper.selectTenantIds()) {
+                conversationService.deleteExpiredForTenant(tenantId);
+                attachmentService.cleanTenant(tenantId);
+            }
+        } catch (RuntimeException exception) {
+            SwallowedExceptionLogger.info(
+                    ConsoleAiConversationRetentionJob.class, "catch:ai-conversation-retention-failed", exception);
+        }
+    }
 }

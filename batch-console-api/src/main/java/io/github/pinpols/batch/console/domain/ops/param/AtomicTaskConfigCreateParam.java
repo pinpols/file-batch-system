@@ -11,11 +11,11 @@ import lombok.Data;
 @Data
 public class AtomicTaskConfigCreateParam {
 
-  // INSERT 后 MyBatis 用 useGeneratedKeys 回写自增 id 到此字段;字段缺失 → "No setter found"
-  private Long id;
-  private String tenantId;
-  private String taskType;
-  private String name;
-  private String parametersJson;
-  private String createdBy;
+    // INSERT 后 MyBatis 用 useGeneratedKeys 回写自增 id 到此字段;字段缺失 → "No setter found"
+    private Long id;
+    private String tenantId;
+    private String taskType;
+    private String name;
+    private String parametersJson;
+    private String createdBy;
 }

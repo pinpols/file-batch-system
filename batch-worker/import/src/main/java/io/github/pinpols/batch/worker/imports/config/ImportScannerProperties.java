@@ -21,186 +21,182 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.worker.import.scanner")
 public class ImportScannerProperties {
 
-  private boolean enabled = true;
-  private long pollIntervalMillis = 30000L;
-  private int batchSize = 200;
-  private String prefix = "ingress/";
-  private boolean requireDoneFile = false;
+    private boolean enabled = true;
+    private long pollIntervalMillis = 30000L;
+    private int batchSize = 200;
+    private String prefix = "ingress/";
+    private boolean requireDoneFile = false;
 
-  /** 完成标记后缀(含点),默认 .done;上游用 .chk / .ok 时改此值。 */
-  private String doneFileSuffix = ".done";
+    /** 完成标记后缀(含点),默认 .done;上游用 .chk / .ok 时改此值。 */
+    private String doneFileSuffix = ".done";
 
-  /** 标记命名:APPEND_FULL_NAME(默认,全名+后缀)或 REPLACE_EXTENSION(去末段扩展名,旧行为)。 */
-  private String doneFileNaming = "APPEND_FULL_NAME";
+    /** 标记命名:APPEND_FULL_NAME(默认,全名+后缀)或 REPLACE_EXTENSION(去末段扩展名,旧行为)。 */
+    private String doneFileNaming = "APPEND_FULL_NAME";
 
-  /**
-   * 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。
-   *
-   * <p>JSON 是 MANIFEST 的兼容别名;使用枚举保证未知值在启动绑定阶段显式失败。
-   */
-  private DoneFileFormat doneFileFormat = DoneFileFormat.MARKER;
-
-  /** 批次清单(ADR-040)开关:true 时 scanner 识别批次清单对象,按其 requiredFiles 动态注入 required_file_set。 */
-  private boolean batchManifestEnabled = false;
-
-  /** 批次清单对象后缀(含点),默认 .batch.json；即使处理开关关闭也保留协议文件归属，不作普通数据登记。 */
-  private String batchManifestSuffix = ".batch.json";
-
-  /** 按租户和数据目录选择唯一文件组与权威批次清单位置。 */
-  private List<@NotNull @Valid ManifestBinding> manifestBindings = new ArrayList<>();
-
-  @AssertTrue(
-      message =
-          "manifest bindings must use unique tenant and directory pairs within scanner prefix")
-  public boolean isManifestBindingsValid() {
-    Set<List<String>> seen = new HashSet<>();
-    for (ManifestBinding binding : manifestBindings) {
-      if (EmptyChecks.isNull(binding)
-          || EmptyChecks.isNull(binding.getTenantId())
-          || EmptyChecks.isNull(binding.getObjectPrefix())) {
-        continue;
-      }
-      if (EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix)) {
-        return false;
-      }
-      if (EmptyChecks.isNull(batchManifestSuffix)
-          || batchManifestSuffix.isBlank()) { // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
-        return false;
-      }
-      if (EmptyChecks.isNull(binding.getManifestKeyTemplate())
-          || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)) {
-        return false;
-      }
-      if (!seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  @Data
-  public static class ManifestBinding {
-    @NotBlank
-    private String tenantId;
-
-    @NotBlank
-    @Pattern(regexp = ".+/", message = "object prefix must end with /")
-    private String objectPrefix;
-
-    @ValidResourceCode
-    private String fileGroupCode;
-
-    @NotBlank
-    private String manifestKeyTemplate;
-
-    @AssertTrue(
-        message = "manifest key must contain exactly one supported business date placeholder")
-    public boolean isManifestKeyTemplateValid() {
-      if (EmptyChecks.isNull(manifestKeyTemplate)
-          || manifestKeyTemplate.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
-          || manifestKeyTemplate.startsWith("/")
-          || List.of(manifestKeyTemplate.split("/", -1)).contains("..")) {
-        return false;
-      }
-      String expanded =
-          manifestKeyTemplate.replace("{bizDate}", "").replace("{bizDateCompact}", "");
-      int placeholders = (manifestKeyTemplate.length() - expanded.length());
-      return (placeholders == "{bizDate}".length() || placeholders == "{bizDateCompact}".length())
-          && !expanded.contains("{")
-          && !expanded.contains("}");
-    }
-  }
-
-  private long stabilityWindowSeconds = 30L;
-  private String sourceType = "SYSTEM";
-  private String defaultBizType = "IMPORT_SCAN";
-
-  /** 由部署配置指定租户和对象目录的可信渠道绑定；不从文件名或任务载荷推断渠道。 */
-  private List<@Valid ChannelBinding> channelBindings = new ArrayList<>();
-
-  @AssertTrue(message = "scanner channel bindings must not repeat a tenant and object prefix")
-  public boolean isChannelBindingsUnique() {
-    Set<List<String>> seen = new HashSet<>();
-    for (ChannelBinding binding : channelBindings) {
-      if (EmptyChecks.isNotNull(binding)
-          && EmptyChecks.isNotNull(binding.getTenantId())
-          && EmptyChecks.isNotNull(binding.getObjectPrefix())
-          && !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  @Data
-  public static class ChannelBinding {
-    @NotBlank
-    private String tenantId;
-
-    @NotBlank
-    @Pattern(regexp = ".+/", message = "object prefix must end with /")
-    private String objectPrefix;
-
-    @ValidResourceCode
-    private String channelCode;
-  }
-
-  /**
-   * 文件名/对象名解析 bizDate 的正则；必须包含命名捕获组 {@code (?<bizDate>...)}，匹配到的 token 用 {@code yyyyMMdd} 解析。
-   *
-   * <p>例如 {@code "(?<bizDate>\\d{8})"} 可从 {@code import-20260505-orders.csv} 抽出 {@code 2026-05-05}。
-   * 留空表示不启用，scanner 退化到 {@link #defaultBizDate}。
-   */
-  private String bizDatePattern = "";
-
-  /**
-   * {@link #bizDatePattern} 不命中时的回退业务日（{@code yyyy-MM-dd}）。空 / 非法 → scanner
-   * 跳过该对象（不再静默使用机器当前自然日，避免日切前后误归档）。
-   */
-  private String defaultBizDate = "";
-
-  private final Arrival arrival = new Arrival();
-
-  private final EventArrival eventArrival = new EventArrival();
-
-  @Getter
-  public enum DoneFileFormat {
-    MARKER(false),
-    MANIFEST(true),
-    JSON(true);
-
-    private final boolean manifest;
-
-    DoneFileFormat(boolean manifest) {
-      this.manifest = manifest;
-    }
-  }
-
-  @Data
-  public static class EventArrival {
     /**
-     * 事件驱动到达开关(默认关)。
+     * 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。
      *
-     * <p>开启后 worker 暴露 inbound 到达通知端点,收到通知即时触发一次扫描,把发现延迟降到接近实时。
-     *
-     * <p>关闭时端点存在但只回 triggered=false,行为完全等价历史纯轮询。
+     * <p>JSON 是 MANIFEST 的兼容别名;使用枚举保证未知值在启动绑定阶段显式失败。
      */
-    private boolean enabled = false;
-  }
+    private DoneFileFormat doneFileFormat = DoneFileFormat.MARKER;
 
-  @Data
-  public static class Arrival {
-    private boolean enabled = false;
-    private String fileGroupCode = "";
-    private String waitFileGroupMode = "ALL_OF";
-    private String requiredFileSet = "";
-    private String arrivalTimeoutAction = "MANUAL_CONFIRM";
-    private long expectedArrivalDelaySeconds = 0L;
-    private long latestTolerableDelaySeconds = 600L;
-    private boolean triggerOnComplete = true;
-    private boolean allowEmptyRun = false;
-    private boolean allowSkipBizDate = false;
-    private boolean notifyManual = true;
-    private String notifyChannels = "";
-  }
+    /** 批次清单(ADR-040)开关:true 时 scanner 识别批次清单对象,按其 requiredFiles 动态注入 required_file_set。 */
+    private boolean batchManifestEnabled = false;
+
+    /** 批次清单对象后缀(含点),默认 .batch.json；即使处理开关关闭也保留协议文件归属，不作普通数据登记。 */
+    private String batchManifestSuffix = ".batch.json";
+
+    /** 按租户和数据目录选择唯一文件组与权威批次清单位置。 */
+    private List<@NotNull @Valid ManifestBinding> manifestBindings = new ArrayList<>();
+
+    @AssertTrue(message = "manifest bindings must use unique tenant and directory pairs within scanner prefix")
+    public boolean isManifestBindingsValid() {
+        Set<List<String>> seen = new HashSet<>();
+        for (ManifestBinding binding : manifestBindings) {
+            if (EmptyChecks.isNull(binding)
+                    || EmptyChecks.isNull(binding.getTenantId())
+                    || EmptyChecks.isNull(binding.getObjectPrefix())) {
+                continue;
+            }
+            if (EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix)) {
+                return false;
+            }
+            if (EmptyChecks.isNull(batchManifestSuffix)
+                    || batchManifestSuffix.isBlank()) { // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+                return false;
+            }
+            if (EmptyChecks.isNull(binding.getManifestKeyTemplate())
+                    || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)) {
+                return false;
+            }
+            if (!seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Data
+    public static class ManifestBinding {
+        @NotBlank
+        private String tenantId;
+
+        @NotBlank
+        @Pattern(regexp = ".+/", message = "object prefix must end with /")
+        private String objectPrefix;
+
+        @ValidResourceCode
+        private String fileGroupCode;
+
+        @NotBlank
+        private String manifestKeyTemplate;
+
+        @AssertTrue(message = "manifest key must contain exactly one supported business date placeholder")
+        public boolean isManifestKeyTemplateValid() {
+            if (EmptyChecks.isNull(manifestKeyTemplate)
+                    || manifestKeyTemplate.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+                    || manifestKeyTemplate.startsWith("/")
+                    || List.of(manifestKeyTemplate.split("/", -1)).contains("..")) {
+                return false;
+            }
+            String expanded = manifestKeyTemplate.replace("{bizDate}", "").replace("{bizDateCompact}", "");
+            int placeholders = (manifestKeyTemplate.length() - expanded.length());
+            return (placeholders == "{bizDate}".length() || placeholders == "{bizDateCompact}".length())
+                    && !expanded.contains("{")
+                    && !expanded.contains("}");
+        }
+    }
+
+    private long stabilityWindowSeconds = 30L;
+    private String sourceType = "SYSTEM";
+    private String defaultBizType = "IMPORT_SCAN";
+
+    /** 由部署配置指定租户和对象目录的可信渠道绑定；不从文件名或任务载荷推断渠道。 */
+    private List<@Valid ChannelBinding> channelBindings = new ArrayList<>();
+
+    @AssertTrue(message = "scanner channel bindings must not repeat a tenant and object prefix")
+    public boolean isChannelBindingsUnique() {
+        Set<List<String>> seen = new HashSet<>();
+        for (ChannelBinding binding : channelBindings) {
+            if (EmptyChecks.isNotNull(binding)
+                    && EmptyChecks.isNotNull(binding.getTenantId())
+                    && EmptyChecks.isNotNull(binding.getObjectPrefix())
+                    && !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Data
+    public static class ChannelBinding {
+        @NotBlank
+        private String tenantId;
+
+        @NotBlank
+        @Pattern(regexp = ".+/", message = "object prefix must end with /")
+        private String objectPrefix;
+
+        @ValidResourceCode
+        private String channelCode;
+    }
+
+    /**
+     * 文件名/对象名解析 bizDate 的正则；必须包含命名捕获组 {@code (?<bizDate>...)}，匹配到的 token 用 {@code yyyyMMdd} 解析。
+     *
+     * <p>例如 {@code "(?<bizDate>\\d{8})"} 可从 {@code import-20260505-orders.csv} 抽出 {@code 2026-05-05}。
+     * 留空表示不启用，scanner 退化到 {@link #defaultBizDate}。
+     */
+    private String bizDatePattern = "";
+
+    /**
+     * {@link #bizDatePattern} 不命中时的回退业务日（{@code yyyy-MM-dd}）。空 / 非法 → scanner
+     * 跳过该对象（不再静默使用机器当前自然日，避免日切前后误归档）。
+     */
+    private String defaultBizDate = "";
+
+    private final Arrival arrival = new Arrival();
+
+    private final EventArrival eventArrival = new EventArrival();
+
+    @Getter
+    public enum DoneFileFormat {
+        MARKER(false),
+        MANIFEST(true),
+        JSON(true);
+
+        private final boolean manifest;
+
+        DoneFileFormat(boolean manifest) {
+            this.manifest = manifest;
+        }
+    }
+
+    @Data
+    public static class EventArrival {
+        /**
+         * 事件驱动到达开关(默认关)。
+         *
+         * <p>开启后 worker 暴露 inbound 到达通知端点,收到通知即时触发一次扫描,把发现延迟降到接近实时。
+         *
+         * <p>关闭时端点存在但只回 triggered=false,行为完全等价历史纯轮询。
+         */
+        private boolean enabled = false;
+    }
+
+    @Data
+    public static class Arrival {
+        private boolean enabled = false;
+        private String fileGroupCode = "";
+        private String waitFileGroupMode = "ALL_OF";
+        private String requiredFileSet = "";
+        private String arrivalTimeoutAction = "MANUAL_CONFIRM";
+        private long expectedArrivalDelaySeconds = 0L;
+        private long latestTolerableDelaySeconds = 600L;
+        private boolean triggerOnComplete = true;
+        private boolean allowEmptyRun = false;
+        private boolean allowSkipBizDate = false;
+        private boolean notifyManual = true;
+        private String notifyChannels = "";
+    }
 }

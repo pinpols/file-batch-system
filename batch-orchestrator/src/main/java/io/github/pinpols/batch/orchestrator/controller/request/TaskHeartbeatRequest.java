@@ -14,5 +14,4 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * <p>详情会持久化至 job_task 并供控制台读取，因此禁止包含数据库密码、OAuth 密钥等敏感凭据。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaskHeartbeatRequest(
-    String tenantId, String workerId, String partitionInvocationId, Object details) {}
+public record TaskHeartbeatRequest(String tenantId, String workerId, String partitionInvocationId, Object details) {}

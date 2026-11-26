@@ -18,24 +18,23 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration(proxyBeanMethods = false)
 public class WorkerCoreAsyncConfiguration {
 
-  public static final String WATCHDOG_SCHEDULER = "workerWatchdogScheduler";
+    public static final String WATCHDOG_SCHEDULER = "workerWatchdogScheduler";
 
-  @Bean(name = WATCHDOG_SCHEDULER, destroyMethod = "shutdown")
-  public ThreadPoolTaskScheduler workerWatchdogScheduler(
-      WorkerWatchdogSchedulerProperties properties) {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    int requestedPoolSize = properties.getPoolSize();
-    int poolSize = Math.max(1, requestedPoolSize);
-    scheduler.setPoolSize(poolSize);
-    scheduler.setThreadNamePrefix(properties.getThreadNamePrefix());
-    scheduler.setDaemon(true);
-    scheduler.setRemoveOnCancelPolicy(true);
-    scheduler.setWaitForTasksToCompleteOnShutdown(false);
-    int requestedShutdownWaitSeconds = properties.getAwaitTerminationSeconds();
-    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
-    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
-    // watchdog 任务极轻 (一次性 check); 极端情况下用 caller-runs 回退, 避免静默丢失
-    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    return scheduler;
-  }
+    @Bean(name = WATCHDOG_SCHEDULER, destroyMethod = "shutdown")
+    public ThreadPoolTaskScheduler workerWatchdogScheduler(WorkerWatchdogSchedulerProperties properties) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        int requestedPoolSize = properties.getPoolSize();
+        int poolSize = Math.max(1, requestedPoolSize);
+        scheduler.setPoolSize(poolSize);
+        scheduler.setThreadNamePrefix(properties.getThreadNamePrefix());
+        scheduler.setDaemon(true);
+        scheduler.setRemoveOnCancelPolicy(true);
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);
+        int requestedShutdownWaitSeconds = properties.getAwaitTerminationSeconds();
+        int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+        scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
+        // watchdog 任务极轻 (一次性 check); 极端情况下用 caller-runs 回退, 避免静默丢失
+        scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return scheduler;
+    }
 }

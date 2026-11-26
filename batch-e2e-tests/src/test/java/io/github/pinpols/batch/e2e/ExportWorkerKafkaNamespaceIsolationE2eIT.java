@@ -11,27 +11,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 
 @E2eSpringBootTest(
-    classes = E2eExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "spring.kafka.listener.auto-startup=true",
-      "batch.startup-self-check.enabled=false"
-    })
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"spring.kafka.listener.auto-startup=true", "batch.startup-self-check.enabled=false"})
 @Tag("critical")
 @SuppressWarnings("PMD.TestClassWithoutTestCases")
-class ExportWorkerKafkaNamespaceIsolationE2eIT
-    extends AbstractWorkerKafkaNamespaceIsolationSupport {
+class ExportWorkerKafkaNamespaceIsolationE2eIT extends AbstractWorkerKafkaNamespaceIsolationSupport {
 
-  @Autowired
-  ExportWorkerKafkaNamespaceIsolationE2eIT(
-      List<AbstractTaskConsumer> taskConsumers,
-      BatchKafkaTopicNamespace topicNamespace,
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
-    super(taskConsumers, topicNamespace, kafkaListenerEndpointRegistry);
-  }
+    @Autowired
+    ExportWorkerKafkaNamespaceIsolationE2eIT(
+            List<AbstractTaskConsumer> taskConsumers,
+            BatchKafkaTopicNamespace topicNamespace,
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+        super(taskConsumers, topicNamespace, kafkaListenerEndpointRegistry);
+    }
 
-  @Override
-  protected String legacyTopic() {
-    return BatchTopics.TASK_DISPATCH_EXPORT;
-  }
+    @Override
+    protected String legacyTopic() {
+        return BatchTopics.TASK_DISPATCH_EXPORT;
+    }
 }

@@ -34,125 +34,109 @@ import org.springframework.stereotype.Component;
 @Primary
 @Component
 public class ImportStepExecutionAdapter
-    extends AbstractPipelineStepExecutionAdapter<ImportJobContext, ImportStageResult> {
+        extends AbstractPipelineStepExecutionAdapter<ImportJobContext, ImportStageResult> {
 
-  private final ImportStageExecutor importStageExecutor;
+    private final ImportStageExecutor importStageExecutor;
 
-  public ImportStepExecutionAdapter(
-      ImportStageExecutor importStageExecutor,
-      PlatformPipelineRunRepository pipelineRuns,
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
-      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(
-        pipelineRuns,
-        fileRecords,
-        importStageExecutor,
-        verifierHookProvider,
-        compensationHookProvider);
-    this.importStageExecutor = importStageExecutor;
-  }
-
-  @Override
-  protected String pipelineType() {
-    return ImportWorkerType.IMPORT;
-  }
-
-  @Override
-  protected String initialStage() {
-    return ImportStage.RECEIVE.name();
-  }
-
-  @Override
-  protected ImportJobContext buildContext(
-      StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) {
-    ImportJobContext context = new ImportJobContext();
-    populateCommonFields(context, request, contextMap);
-    Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
-    String bizDate = String.valueOf(rawBizDate);
-    context.setBizDate(bizDate);
-    context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-    return context;
-  }
-
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
-      return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    public ImportStepExecutionAdapter(
+            ImportStageExecutor importStageExecutor,
+            PlatformPipelineRunRepository pipelineRuns,
+            PlatformFileRecordRepository fileRecords,
+            ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+            ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+        super(pipelineRuns, fileRecords, importStageExecutor, verifierHookProvider, compensationHookProvider);
+        this.importStageExecutor = importStageExecutor;
     }
-    Map<String, Object> requestContext = request.context();
-    Map<String, Object> attributes = EmptyChecks.isNull(requestContext)
-        ? new LinkedHashMap<>()
-        : new LinkedHashMap<>(requestContext);
-    resolveSystemPipelineSteps(attributes);
-    Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    ImportJobContext context = buildContext(request, attributes, fileId);
-    return importStageExecutor.resolveReplayCapability(context);
-  }
 
-  @Override
-  protected List<ImportStageResult> executeStages(ImportJobContext context) {
-    return importStageExecutor.execute(context);
-  }
-
-  @Override
-  protected boolean isSuccess(ImportStageResult result) {
-    return result != null && result.success();
-  }
-
-  @Override
-  protected String resultStage(ImportStageResult result) {
-    return result.stage().name();
-  }
-
-  @Override
-  protected String resultCode(ImportStageResult result) {
-    return result.code();
-  }
-
-  @Override
-  protected String resultMessage(ImportStageResult result) {
-    return result.message();
-  }
-
-  @Override
-  protected StepExecutionResponse buildSuccessResponse(
-      ImportJobContext context, List<ImportStageResult> results, Map<String, Object> attributes) {
-    Object importedCount =
-        context.getAttributes().getOrDefault(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0);
-    // ADR-009 Stage 1.2: 把 IMPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
-    Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.RECORD_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
-    // ADR-041 Phase1.3:归一化跨阶段 count 信封,供 orchestrator 核 import→process→export 连续性。
-    // import:input=文件原始行数(totalCount),output=入库行数(loadedCount)。
-    putIfPresent(
-        outputs,
-        NodeOutputKeys.INPUT_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
-    putIfPresent(
-        outputs,
-        NodeOutputKeys.OUTPUT_COUNT,
-        attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
-    if (!outputs.isEmpty()) {
-      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    @Override
+    protected String pipelineType() {
+        return ImportWorkerType.IMPORT;
     }
-    return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
-  }
+
+    @Override
+    protected String initialStage() {
+        return ImportStage.RECEIVE.name();
+    }
+
+    @Override
+    protected ImportJobContext buildContext(StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) {
+        ImportJobContext context = new ImportJobContext();
+        populateCommonFields(context, request, contextMap);
+        Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+        String bizDate = String.valueOf(rawBizDate);
+        context.setBizDate(bizDate);
+        context.setFileId(fileId == null ? "" : String.valueOf(fileId));
+        return context;
+    }
+
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+        if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+            return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+        }
+        Map<String, Object> requestContext = request.context();
+        Map<String, Object> attributes =
+                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+        resolveSystemPipelineSteps(attributes);
+        Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+        ImportJobContext context = buildContext(request, attributes, fileId);
+        return importStageExecutor.resolveReplayCapability(context);
+    }
+
+    @Override
+    protected List<ImportStageResult> executeStages(ImportJobContext context) {
+        return importStageExecutor.execute(context);
+    }
+
+    @Override
+    protected boolean isSuccess(ImportStageResult result) {
+        return result != null && result.success();
+    }
+
+    @Override
+    protected String resultStage(ImportStageResult result) {
+        return result.stage().name();
+    }
+
+    @Override
+    protected String resultCode(ImportStageResult result) {
+        return result.code();
+    }
+
+    @Override
+    protected String resultMessage(ImportStageResult result) {
+        return result.message();
+    }
+
+    @Override
+    protected StepExecutionResponse buildSuccessResponse(
+            ImportJobContext context, List<ImportStageResult> results, Map<String, Object> attributes) {
+        Object importedCount = context.getAttributes().getOrDefault(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0);
+        // ADR-009 Stage 1.2: 把 IMPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
+        Map<String, Object> outputs = new LinkedHashMap<>();
+        putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
+        putIfPresent(
+                outputs, PipelineRuntimeKeys.RECORD_COUNT, attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+        putIfPresent(
+                outputs,
+                PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
+                attributes.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+        putIfPresent(
+                outputs,
+                PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+                attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+        putIfPresent(
+                outputs,
+                PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+                attributes.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+        // ADR-041 Phase1.3:归一化跨阶段 count 信封,供 orchestrator 核 import→process→export 连续性。
+        // import:input=文件原始行数(totalCount),output=入库行数(loadedCount)。
+        putIfPresent(outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+        putIfPresent(outputs, NodeOutputKeys.OUTPUT_COUNT, attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+        putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
+        if (!outputs.isEmpty()) {
+            attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+        }
+        return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
+    }
 }

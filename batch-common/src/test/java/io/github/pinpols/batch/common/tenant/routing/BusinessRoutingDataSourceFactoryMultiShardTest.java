@@ -21,75 +21,72 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("多分片路由数据源工厂:按解析结果选取分片连接,独占实例路由,默认分片校验与资源释放")
 class BusinessRoutingDataSourceFactoryMultiShardTest {
 
-  @AfterEach
-  void clear() {
-    RlsTenantContextHolder.clear();
-  }
-
-  @Test
-  @DisplayName("多片:每个租户路由到 resolver 选定 shard 的连接")
-  void shouldRouteToResolvedShard_whenTenantPresent() throws Exception {
-    DataSource ds0 = mock(DataSource.class);
-    DataSource ds1 = mock(DataSource.class);
-    Connection c0 = mock(Connection.class);
-    Connection c1 = mock(Connection.class);
-    // lenient:某些 tenant 分布下可能只命中一片,另一片 stub 不被用,非错误
-    lenient().when(ds0.getConnection()).thenReturn(c0);
-    lenient().when(ds1.getConnection()).thenReturn(c1);
-    HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of());
-    Map<String, DataSource> shards = Map.of("shard-0", ds0, "shard-1", ds1);
-    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
-
-    for (String t : new String[] {"ta", "tb", "tc", "td", "te"}) {
-      RlsTenantContextHolder.set(t);
-      Connection expected = "shard-0".equals(resolver.resolve(t)) ? c0 : c1;
-      assertThat(routing.getConnection()).as("tenant %s 路由到选定 shard", t).isSameAs(expected);
-      RlsTenantContextHolder.clear();
+    @AfterEach
+    void clear() {
+        RlsTenantContextHolder.clear();
     }
-  }
 
-  @Test
-  @DisplayName("silo 租户路由到 silo 数据源连接")
-  void shouldRouteToSiloDataSource_whenSiloTenant() throws Exception {
-    DataSource ds0 = mock(DataSource.class);
-    DataSource siloDs = mock(DataSource.class);
-    Connection cs = mock(Connection.class);
-    lenient().when(siloDs.getConnection()).thenReturn(cs);
-    HashAndSiloPlacementResolver resolver =
-        new HashAndSiloPlacementResolver(2, Map.of("big", "silo-big"));
-    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(
-        Map.of("shard-0", ds0, "shard-1", mock(DataSource.class), "silo-big", siloDs), resolver);
-    RlsTenantContextHolder.set("big");
-    assertThat(routing.getConnection()).isSameAs(cs);
-  }
+    @Test
+    @DisplayName("多片:每个租户路由到 resolver 选定 shard 的连接")
+    void shouldRouteToResolvedShard_whenTenantPresent() throws Exception {
+        DataSource ds0 = mock(DataSource.class);
+        DataSource ds1 = mock(DataSource.class);
+        Connection c0 = mock(Connection.class);
+        Connection c1 = mock(Connection.class);
+        // lenient:某些 tenant 分布下可能只命中一片,另一片 stub 不被用,非错误
+        lenient().when(ds0.getConnection()).thenReturn(c0);
+        lenient().when(ds1.getConnection()).thenReturn(c1);
+        HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of());
+        Map<String, DataSource> shards = Map.of("shard-0", ds0, "shard-1", ds1);
+        DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
 
-  @Test
-  @DisplayName("shards 缺 default key(shard-0)拒绝")
-  void shouldReject_whenDefaultShardKeyMissing() {
-    assertThatThrownBy(() -> BusinessRoutingDataSourceFactory.multiShard(
-            Map.of("shard-1", mock(DataSource.class)),
-            new HashAndSiloPlacementResolver(2, Map.of())))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
+        for (String t : new String[] {"ta", "tb", "tc", "td", "te"}) {
+            RlsTenantContextHolder.set(t);
+            Connection expected = "shard-0".equals(resolver.resolve(t)) ? c0 : c1;
+            assertThat(routing.getConnection()).as("tenant %s 路由到选定 shard", t).isSameAs(expected);
+            RlsTenantContextHolder.clear();
+        }
+    }
 
-  @Test
-  @DisplayName("关闭路由数据源时每个真实分片只关闭一次")
-  void shouldCloseEachOwnedDataSourceOnce_whenClosedRepeatedly() throws Exception {
-    CloseableDataSource ds0 = mock(CloseableDataSource.class);
-    CloseableDataSource ds1 = mock(CloseableDataSource.class);
-    BusinessRoutingDataSource routing =
-        (BusinessRoutingDataSource) BusinessRoutingDataSourceFactory.multiShard(
-            Map.of("shard-0", ds0, "shard-1", ds1), new HashAndSiloPlacementResolver(2, Map.of()));
+    @Test
+    @DisplayName("silo 租户路由到 silo 数据源连接")
+    void shouldRouteToSiloDataSource_whenSiloTenant() throws Exception {
+        DataSource ds0 = mock(DataSource.class);
+        DataSource siloDs = mock(DataSource.class);
+        Connection cs = mock(Connection.class);
+        lenient().when(siloDs.getConnection()).thenReturn(cs);
+        HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of("big", "silo-big"));
+        DataSource routing = BusinessRoutingDataSourceFactory.multiShard(
+                Map.of("shard-0", ds0, "shard-1", mock(DataSource.class), "silo-big", siloDs), resolver);
+        RlsTenantContextHolder.set("big");
+        assertThat(routing.getConnection()).isSameAs(cs);
+    }
 
-    routing.close();
-    routing.close();
+    @Test
+    @DisplayName("shards 缺 default key(shard-0)拒绝")
+    void shouldReject_whenDefaultShardKeyMissing() {
+        assertThatThrownBy(() -> BusinessRoutingDataSourceFactory.multiShard(
+                        Map.of("shard-1", mock(DataSource.class)), new HashAndSiloPlacementResolver(2, Map.of())))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 
-    verify(ds0, times(1)).close();
-    verify(ds1, times(1)).close();
-  }
+    @Test
+    @DisplayName("关闭路由数据源时每个真实分片只关闭一次")
+    void shouldCloseEachOwnedDataSourceOnce_whenClosedRepeatedly() throws Exception {
+        CloseableDataSource ds0 = mock(CloseableDataSource.class);
+        CloseableDataSource ds1 = mock(CloseableDataSource.class);
+        BusinessRoutingDataSource routing = (BusinessRoutingDataSource) BusinessRoutingDataSourceFactory.multiShard(
+                Map.of("shard-0", ds0, "shard-1", ds1), new HashAndSiloPlacementResolver(2, Map.of()));
 
-  private interface CloseableDataSource extends DataSource, AutoCloseable {
-    @Override
-    void close() throws Exception;
-  }
+        routing.close();
+        routing.close();
+
+        verify(ds0, times(1)).close();
+        verify(ds1, times(1)).close();
+    }
+
+    private interface CloseableDataSource extends DataSource, AutoCloseable {
+        @Override
+        void close() throws Exception;
+    }
 }

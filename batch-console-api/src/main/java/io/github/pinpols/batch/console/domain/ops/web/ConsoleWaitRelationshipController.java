@@ -21,12 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleWaitRelationshipController {
-  private final ConsoleOrchestratorPort orchestrator;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestrator;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<ConsoleWaitRelationshipPage> list(
-      @Valid @ModelAttribute ConsoleWaitRelationshipQuery query) {
-    return responseFactory.success(orchestrator.listWaitRelationships(query));
-  }
+    @GetMapping
+    public CommonResponse<ConsoleWaitRelationshipPage> list(@Valid @ModelAttribute ConsoleWaitRelationshipQuery query) {
+        return responseFactory.success(orchestrator.listWaitRelationships(query));
+    }
 }

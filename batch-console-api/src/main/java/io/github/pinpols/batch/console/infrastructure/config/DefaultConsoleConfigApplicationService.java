@@ -83,730 +83,693 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultConsoleConfigApplicationService implements ConsoleConfigApplicationService {
 
-  /**
-   * config_release.config_key VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
-   */
-  private static final int CONFIG_KEY_MAX_LENGTH = 128;
+    /**
+     * config_release.config_key VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+     */
+    private static final int CONFIG_KEY_MAX_LENGTH = 128;
 
-  /**
-   * config_release.config_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql），
-   * 与 ConfigReleaseUpsertRequest.configName 的 @Size(max = 256) 一致。
-   */
-  private static final int CONFIG_NAME_MAX_LENGTH = 256;
+    /**
+     * config_release.config_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql），
+     * 与 ConfigReleaseUpsertRequest.configName 的 @Size(max = 256) 一致。
+     */
+    private static final int CONFIG_NAME_MAX_LENGTH = 256;
 
-  /**
-   * secret_version.secret_ref VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
-   */
-  private static final int SECRET_REF_MAX_LENGTH = 128;
+    /**
+     * secret_version.secret_ref VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+     */
+    private static final int SECRET_REF_MAX_LENGTH = 128;
 
-  /**
-   * secret_version.secret_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql）。
-   */
-  private static final int SECRET_NAME_MAX_LENGTH = 256;
+    /**
+     * secret_version.secret_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql）。
+     */
+    private static final int SECRET_NAME_MAX_LENGTH = 256;
 
-  /**
-   * 变更/轮换/吊销原因，对应 secret_version.rotation_reason VARCHAR(512)
-   * （V22__create_config_release_and_secret_version.sql），
-   * 与各配置请求 reason 的 @Size(max = 512) 一致。
-   */
-  private static final int REASON_MAX_LENGTH = 512;
+    /**
+     * 变更/轮换/吊销原因，对应 secret_version.rotation_reason VARCHAR(512)
+     * （V22__create_config_release_and_secret_version.sql），
+     * 与各配置请求 reason 的 @Size(max = 512) 一致。
+     */
+    private static final int REASON_MAX_LENGTH = 512;
 
-  /**
-   * config_change_log.operator_id VARCHAR(64)（V22__create_config_release_and_secret_version.sql）
-   * 。
-   */
-  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+    /**
+     * config_change_log.operator_id VARCHAR(64)（V22__create_config_release_and_secret_version.sql）
+     * 。
+     */
+    private static final int OPERATOR_ID_MAX_LENGTH = 64;
 
-  /**
-   * config_change_log.trace_id VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
-   */
-  private static final int TRACE_ID_MAX_LENGTH = 128;
+    /**
+     * config_change_log.trace_id VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+     */
+    private static final int TRACE_ID_MAX_LENGTH = 128;
 
-  // ── 重复使用的字段名常量 ───────────────────────────────────────────────
-  private static final String KEY_EFFECTIVE_FROM_AT = "effectiveFromAt";
-  private static final String KEY_EFFECTIVE_TO_AT = "effectiveToAt";
-  private static final String KEY_SECRET_STATUS = "secretStatus";
-  private static final String KEY_SECRET_VERSION_ID = "secretVersionId";
-  private static final String EMPTY_JSON_OBJECT = "{}";
-  private static final String REDACTED_SECRET_PAYLOAD = "{\"redacted\":true}";
+    // ── 重复使用的字段名常量 ───────────────────────────────────────────────
+    private static final String KEY_EFFECTIVE_FROM_AT = "effectiveFromAt";
+    private static final String KEY_EFFECTIVE_TO_AT = "effectiveToAt";
+    private static final String KEY_SECRET_STATUS = "secretStatus";
+    private static final String KEY_SECRET_VERSION_ID = "secretVersionId";
+    private static final String EMPTY_JSON_OBJECT = "{}";
+    private static final String REDACTED_SECRET_PAYLOAD = "{\"redacted\":true}";
 
-  /** 配置发布状态机合法转换（nextStatus → 允许的当前状态集合）。 */
-  private static final Map<String, Set<String>> ALLOWED_RELEASE_TRANSITIONS = Map.of(
-      ConfigLifecycleStatus.ROLLED_BACK.code(),
-      Set.of(ConfigLifecycleStatus.PUBLISHED.code(), ConfigLifecycleStatus.GRAY.code()));
+    /** 配置发布状态机合法转换（nextStatus → 允许的当前状态集合）。 */
+    private static final Map<String, Set<String>> ALLOWED_RELEASE_TRANSITIONS = Map.of(
+            ConfigLifecycleStatus.ROLLED_BACK.code(),
+            Set.of(ConfigLifecycleStatus.PUBLISHED.code(), ConfigLifecycleStatus.GRAY.code()));
 
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConfigReleaseMapper configReleaseMapper;
-  private final SecretVersionMapper secretVersionMapper;
-  private final ConfigChangeLogMapper configChangeLogMapper;
-  private final ConsoleDashboardQueryMapper dashboardQueryMapper;
-  private final ConfigurationGovernanceCatalog governanceCatalog;
-  private final ConfigReleaseApplyService configReleaseApplyService;
-  private final SecretPayloadProtector secretPayloadProtector;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleTenantGuard tenantGuard;
+    private final ConfigReleaseMapper configReleaseMapper;
+    private final SecretVersionMapper secretVersionMapper;
+    private final ConfigChangeLogMapper configChangeLogMapper;
+    private final ConsoleDashboardQueryMapper dashboardQueryMapper;
+    private final ConfigurationGovernanceCatalog governanceCatalog;
+    private final ConfigReleaseApplyService configReleaseApplyService;
+    private final SecretPayloadProtector secretPayloadProtector;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Override
-  public List<ConfigGovernanceItemResponse> configGovernanceCatalog() {
-    return governanceCatalog.items();
-  }
-
-  @Override
-  public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
-    ConfigReleaseQuery query = new ConfigReleaseQuery();
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    query.setTenantId(tenantId);
-    query.setConfigType(request.getConfigType());
-    query.setConfigKey(request.getConfigKey());
-    query.setConfigStatus(request.getConfigStatus());
-    query.setVersionNo(request.getVersionNo());
-    List<ConfigReleaseEntity> releases = configReleaseMapper.selectByQuery(query);
-    List<ConsoleConfigReleaseResponse> responses =
-        releases.stream().map(this::toConfigReleaseResponse).toList();
-    return responses;
-  }
-
-  @Override
-  @Transactional
-  public Long createConfigRelease(ConfigReleaseUpsertRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String configType = configReleaseApplyService.canonicalType(request.getConfigType());
-    validateJson(request.getConfigPayloadJson(), "configPayloadJson");
-    configReleaseApplyService.validate(
-        configType, request.getConfigKey(), request.getConfigPayloadJson());
-
-    configReleaseMapper.acquireVersionLock(tenantId, configType, request.getConfigKey());
-
-    Integer latestVersionNo =
-        configReleaseMapper.selectLatestVersionNo(tenantId, configType, request.getConfigKey());
-    int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
-    String safeConfigKey =
-        ConsoleTextSanitizer.safeInput(request.getConfigKey(), CONFIG_KEY_MAX_LENGTH);
-    String safeConfigName =
-        ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
-    String draftStatus = ConfigLifecycleStatus.DRAFT.code();
-    String configPayloadJson = request.getConfigPayloadJson();
-    Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
-    Instant effectiveTo = parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT);
-    String createdBy = currentOperator();
-    String updatedBy = currentOperator();
-    ConfigReleaseInsertParam releaseParameters = ConfigReleaseInsertParam.builder()
-        .tenantId(tenantId)
-        .configType(configType)
-        .configKey(safeConfigKey)
-        .configName(safeConfigName)
-        .configStatus(draftStatus)
-        .versionNo(nextVersionNo)
-        .grayScopeJson(null)
-        .configPayloadJson(configPayloadJson)
-        .effectiveFromAt(effectiveFrom)
-        .effectiveToAt(effectiveTo)
-        .createdBy(createdBy)
-        .updatedBy(updatedBy)
-        .build();
-    configReleaseMapper.insertConfigRelease(releaseParameters);
-    String changeOperator = currentOperator();
-    String changeTraceId = currentTraceId();
-    String changeReason = request.getReason();
-    ChangeLogContext changeContext =
-        new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
-    ChangeLogTarget changeTarget =
-        new ChangeLogTarget(configType, request.getConfigKey(), nextVersionNo);
-    String safeChangeLogConfigName =
-        ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
-    Map<String, Object> changeDetails = Map.of(
-        "configName", safeChangeLogConfigName, "configStatus", ConfigLifecycleStatus.DRAFT.code());
-    ChangeLogChange change = new ChangeLogChange("CREATE", "SUCCESS", changeDetails);
-    ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
-    logChange(changeLogCommand);
-    return Long.valueOf(nextVersionNo);
-  }
-
-  @Override
-  @Transactional
-  public String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
-    acquireReleaseLock(release);
-    release = loadRelease(tenantId, releaseId);
-    validateExpectedVersion(request.getExpectedVersionNo(), release);
-    validateLatestVersion(tenantId, release);
-    validateReleaseTransition(release.getConfigStatus(), ConfigLifecycleStatus.ROLLED_BACK.code());
-
-    ConfigReleaseEntity previousEffectiveRelease = configReleaseMapper.selectPreviousEffective(
-        tenantId, release.getConfigType(), release.getConfigKey(), release.getVersionNo());
-    ConfigReleaseEntity previous =
-        Guard.requireFound(previousEffectiveRelease, "previous effective config release not found");
-    configReleaseApplyService.apply(
-        previous, currentOperator(), "config-rollback-" + release.getId());
-    return changeReleaseStatus(
-        release, request, ConfigLifecycleStatus.ROLLED_BACK.code(), "ROLLBACK");
-  }
-
-  @Override
-  public List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request) {
-    SecretVersionQuery query = new SecretVersionQuery();
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    query.setTenantId(tenantId);
-    query.setSecretRef(request.getSecretRef());
-    query.setSecretStatus(request.getSecretStatus());
-    query.setCurrentVersion(request.getCurrentVersion());
-    List<SecretVersionEntity> versions = secretVersionMapper.selectByQuery(query);
-    List<ConsoleSecretVersionResponse> responses =
-        versions.stream().map(this::toSecretVersionResponse).toList();
-    return responses;
-  }
-
-  @Override
-  @Transactional
-  public Long rotateSecretVersion(SecretVersionRotateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String secretPayloadJson = resolveSecretPayload(request);
-    validateJson(secretPayloadJson, "secretPayloadJson");
-    String safeSecretRef =
-        ConsoleTextSanitizer.safeInput(request.getSecretRef(), SECRET_REF_MAX_LENGTH);
-    secretVersionMapper.acquireVersionLock(tenantId, safeSecretRef);
-    Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(tenantId, safeSecretRef);
-    int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
-    boolean hasRequestedSecretStatus = Texts.hasText(request.getSecretStatus());
-    String nextStatus;
-    if (hasRequestedSecretStatus) {
-      String requestedSecretStatus = request.getSecretStatus();
-      String trimmedSecretStatus = requestedSecretStatus.trim();
-      nextStatus = trimmedSecretStatus.toUpperCase();
-    } else {
-      nextStatus = ConfigLifecycleStatus.PUBLISHED.code();
+    @Override
+    public List<ConfigGovernanceItemResponse> configGovernanceCatalog() {
+        return governanceCatalog.items();
     }
-    if (!Set.of(
-            ConfigLifecycleStatus.DRAFT.code(),
-            ConfigLifecycleStatus.PUBLISHED.code(),
-            ConfigLifecycleStatus.GRAY.code())
-        .contains(nextStatus)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), KEY_SECRET_STATUS);
+
+    @Override
+    public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
+        ConfigReleaseQuery query = new ConfigReleaseQuery();
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        query.setTenantId(tenantId);
+        query.setConfigType(request.getConfigType());
+        query.setConfigKey(request.getConfigKey());
+        query.setConfigStatus(request.getConfigStatus());
+        query.setVersionNo(request.getVersionNo());
+        List<ConfigReleaseEntity> releases = configReleaseMapper.selectByQuery(query);
+        List<ConsoleConfigReleaseResponse> responses =
+                releases.stream().map(this::toConfigReleaseResponse).toList();
+        return responses;
     }
-    boolean currentVersion = !ConfigLifecycleStatus.DRAFT.code().equals(nextStatus);
-    if (currentVersion) {
-      secretVersionMapper.deactivateCurrentVersion(tenantId, safeSecretRef);
+
+    @Override
+    @Transactional
+    public Long createConfigRelease(ConfigReleaseUpsertRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        String configType = configReleaseApplyService.canonicalType(request.getConfigType());
+        validateJson(request.getConfigPayloadJson(), "configPayloadJson");
+        configReleaseApplyService.validate(configType, request.getConfigKey(), request.getConfigPayloadJson());
+
+        configReleaseMapper.acquireVersionLock(tenantId, configType, request.getConfigKey());
+
+        Integer latestVersionNo =
+                configReleaseMapper.selectLatestVersionNo(tenantId, configType, request.getConfigKey());
+        int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
+        String safeConfigKey = ConsoleTextSanitizer.safeInput(request.getConfigKey(), CONFIG_KEY_MAX_LENGTH);
+        String safeConfigName = ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
+        String draftStatus = ConfigLifecycleStatus.DRAFT.code();
+        String configPayloadJson = request.getConfigPayloadJson();
+        Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
+        Instant effectiveTo = parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT);
+        String createdBy = currentOperator();
+        String updatedBy = currentOperator();
+        ConfigReleaseInsertParam releaseParameters = ConfigReleaseInsertParam.builder()
+                .tenantId(tenantId)
+                .configType(configType)
+                .configKey(safeConfigKey)
+                .configName(safeConfigName)
+                .configStatus(draftStatus)
+                .versionNo(nextVersionNo)
+                .grayScopeJson(null)
+                .configPayloadJson(configPayloadJson)
+                .effectiveFromAt(effectiveFrom)
+                .effectiveToAt(effectiveTo)
+                .createdBy(createdBy)
+                .updatedBy(updatedBy)
+                .build();
+        configReleaseMapper.insertConfigRelease(releaseParameters);
+        String changeOperator = currentOperator();
+        String changeTraceId = currentTraceId();
+        String changeReason = request.getReason();
+        ChangeLogContext changeContext = new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
+        ChangeLogTarget changeTarget = new ChangeLogTarget(configType, request.getConfigKey(), nextVersionNo);
+        String safeChangeLogConfigName =
+                ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
+        Map<String, Object> changeDetails =
+                Map.of("configName", safeChangeLogConfigName, "configStatus", ConfigLifecycleStatus.DRAFT.code());
+        ChangeLogChange change = new ChangeLogChange("CREATE", "SUCCESS", changeDetails);
+        ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
+        logChange(changeLogCommand);
+        return Long.valueOf(nextVersionNo);
     }
-    String protectedPayload;
-    try {
-      protectedPayload = secretPayloadProtector.protect(secretPayloadJson);
-    } catch (IllegalArgumentException exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          exception.getMessage());
+
+    @Override
+    @Transactional
+    public String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+        acquireReleaseLock(release);
+        release = loadRelease(tenantId, releaseId);
+        validateExpectedVersion(request.getExpectedVersionNo(), release);
+        validateLatestVersion(tenantId, release);
+        validateReleaseTransition(release.getConfigStatus(), ConfigLifecycleStatus.ROLLED_BACK.code());
+
+        ConfigReleaseEntity previousEffectiveRelease = configReleaseMapper.selectPreviousEffective(
+                tenantId, release.getConfigType(), release.getConfigKey(), release.getVersionNo());
+        ConfigReleaseEntity previous =
+                Guard.requireFound(previousEffectiveRelease, "previous effective config release not found");
+        configReleaseApplyService.apply(previous, currentOperator(), "config-rollback-" + release.getId());
+        return changeReleaseStatus(release, request, ConfigLifecycleStatus.ROLLED_BACK.code(), "ROLLBACK");
     }
-    String safeSecretName =
-        ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
-    Instant rotationWindowStart =
-        parseInstant(request.getRotationWindowStartAt(), "rotationWindowStartAt");
-    Instant rotationWindowEnd =
-        parseInstant(request.getRotationWindowEndAt(), "rotationWindowEndAt");
-    Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
-    Instant effectiveTo = parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT);
-    String safeRotationReason =
-        ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    String createdBy = currentOperator();
-    String updatedBy = currentOperator();
-    SecretVersionInsertParam secretVersionParameters = SecretVersionInsertParam.builder()
-        .tenantId(tenantId)
-        .secretRef(safeSecretRef)
-        .secretName(safeSecretName)
-        .versionNo(nextVersionNo)
-        .secretStatus(nextStatus)
-        .currentVersion(currentVersion)
-        .rotationWindowStartAt(rotationWindowStart)
-        .rotationWindowEndAt(rotationWindowEnd)
-        .effectiveFromAt(effectiveFrom)
-        .effectiveToAt(effectiveTo)
-        .secretPayloadJson(protectedPayload)
-        .rotationReason(safeRotationReason)
-        .createdBy(createdBy)
-        .updatedBy(updatedBy)
-        .build();
-    secretVersionMapper.insertSecretVersion(secretVersionParameters);
-    String changeOperator = currentOperator();
-    String changeTraceId = currentTraceId();
-    String changeReason = request.getReason();
-    ChangeLogContext changeContext =
-        new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
-    ChangeLogTarget changeTarget = new ChangeLogTarget("SECRET", safeSecretRef, nextVersionNo);
-    String safeChangeLogSecretName =
-        ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
-    Map<String, Object> changeDetails =
-        Map.of("secretName", safeChangeLogSecretName, KEY_SECRET_STATUS, nextStatus);
-    ChangeLogChange change = new ChangeLogChange("ROTATE", "SUCCESS", changeDetails);
-    ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
-    logChange(changeLogCommand);
-    return Long.valueOf(nextVersionNo);
-  }
 
-  @Override
-  @Transactional
-  public void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-
-    SecretVersionEntity selectedVersion = secretVersionMapper.selectById(tenantId, secretVersionId);
-    SecretVersionEntity version =
-        Guard.requireFound(selectedVersion, "secret version not found: " + secretVersionId);
-    if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+    @Override
+    public List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request) {
+        SecretVersionQuery query = new SecretVersionQuery();
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        query.setTenantId(tenantId);
+        query.setSecretRef(request.getSecretRef());
+        query.setSecretStatus(request.getSecretStatus());
+        query.setCurrentVersion(request.getCurrentVersion());
+        List<SecretVersionEntity> versions = secretVersionMapper.selectByQuery(query);
+        List<ConsoleSecretVersionResponse> responses =
+                versions.stream().map(this::toSecretVersionResponse).toList();
+        return responses;
     }
-    if (EmptyChecks.isNotNull(version.getRevokedAt())) {
-      return;
+
+    @Override
+    @Transactional
+    public Long rotateSecretVersion(SecretVersionRotateRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        String secretPayloadJson = resolveSecretPayload(request);
+        validateJson(secretPayloadJson, "secretPayloadJson");
+        String safeSecretRef = ConsoleTextSanitizer.safeInput(request.getSecretRef(), SECRET_REF_MAX_LENGTH);
+        secretVersionMapper.acquireVersionLock(tenantId, safeSecretRef);
+        Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(tenantId, safeSecretRef);
+        int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
+        boolean hasRequestedSecretStatus = Texts.hasText(request.getSecretStatus());
+        String nextStatus;
+        if (hasRequestedSecretStatus) {
+            String requestedSecretStatus = request.getSecretStatus();
+            String trimmedSecretStatus = requestedSecretStatus.trim();
+            nextStatus = trimmedSecretStatus.toUpperCase();
+        } else {
+            nextStatus = ConfigLifecycleStatus.PUBLISHED.code();
+        }
+        if (!Set.of(
+                        ConfigLifecycleStatus.DRAFT.code(),
+                        ConfigLifecycleStatus.PUBLISHED.code(),
+                        ConfigLifecycleStatus.GRAY.code())
+                .contains(nextStatus)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), KEY_SECRET_STATUS);
+        }
+        boolean currentVersion = !ConfigLifecycleStatus.DRAFT.code().equals(nextStatus);
+        if (currentVersion) {
+            secretVersionMapper.deactivateCurrentVersion(tenantId, safeSecretRef);
+        }
+        String protectedPayload;
+        try {
+            protectedPayload = secretPayloadProtector.protect(secretPayloadJson);
+        } catch (IllegalArgumentException exception) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), exception.getMessage());
+        }
+        String safeSecretName = ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
+        Instant rotationWindowStart = parseInstant(request.getRotationWindowStartAt(), "rotationWindowStartAt");
+        Instant rotationWindowEnd = parseInstant(request.getRotationWindowEndAt(), "rotationWindowEndAt");
+        Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
+        Instant effectiveTo = parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT);
+        String safeRotationReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        String createdBy = currentOperator();
+        String updatedBy = currentOperator();
+        SecretVersionInsertParam secretVersionParameters = SecretVersionInsertParam.builder()
+                .tenantId(tenantId)
+                .secretRef(safeSecretRef)
+                .secretName(safeSecretName)
+                .versionNo(nextVersionNo)
+                .secretStatus(nextStatus)
+                .currentVersion(currentVersion)
+                .rotationWindowStartAt(rotationWindowStart)
+                .rotationWindowEndAt(rotationWindowEnd)
+                .effectiveFromAt(effectiveFrom)
+                .effectiveToAt(effectiveTo)
+                .secretPayloadJson(protectedPayload)
+                .rotationReason(safeRotationReason)
+                .createdBy(createdBy)
+                .updatedBy(updatedBy)
+                .build();
+        secretVersionMapper.insertSecretVersion(secretVersionParameters);
+        String changeOperator = currentOperator();
+        String changeTraceId = currentTraceId();
+        String changeReason = request.getReason();
+        ChangeLogContext changeContext = new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
+        ChangeLogTarget changeTarget = new ChangeLogTarget("SECRET", safeSecretRef, nextVersionNo);
+        String safeChangeLogSecretName =
+                ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
+        Map<String, Object> changeDetails =
+                Map.of("secretName", safeChangeLogSecretName, KEY_SECRET_STATUS, nextStatus);
+        ChangeLogChange change = new ChangeLogChange("ROTATE", "SUCCESS", changeDetails);
+        ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
+        logChange(changeLogCommand);
+        return Long.valueOf(nextVersionNo);
     }
-    String operator = currentOperator();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    int updated =
-        secretVersionMapper.revokeSecretVersion(tenantId, secretVersionId, operator, reason);
-    if (updated == 0) {
-      return;
+
+    @Override
+    @Transactional
+    public void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+
+        SecretVersionEntity selectedVersion = secretVersionMapper.selectById(tenantId, secretVersionId);
+        SecretVersionEntity version =
+                Guard.requireFound(selectedVersion, "secret version not found: " + secretVersionId);
+        if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+        }
+        if (EmptyChecks.isNotNull(version.getRevokedAt())) {
+            return;
+        }
+        String operator = currentOperator();
+        String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        int updated = secretVersionMapper.revokeSecretVersion(tenantId, secretVersionId, operator, reason);
+        if (updated == 0) {
+            return;
+        }
+        String traceId = currentTraceId();
+        ChangeLogContext changeContext = new ChangeLogContext(tenantId, operator, traceId, reason);
+        ChangeLogTarget changeTarget = new ChangeLogTarget("SECRET", version.getSecretRef(), version.getVersionNo());
+        Map<String, Object> changeDetails = Map.of(KEY_SECRET_VERSION_ID, secretVersionId);
+        ChangeLogChange change = new ChangeLogChange("REVOKE", "SUCCESS", changeDetails);
+        ChangeLogCommand changeCommand = new ChangeLogCommand(changeContext, changeTarget, change);
+        logChange(changeCommand);
     }
-    String traceId = currentTraceId();
-    ChangeLogContext changeContext = new ChangeLogContext(tenantId, operator, traceId, reason);
-    ChangeLogTarget changeTarget =
-        new ChangeLogTarget("SECRET", version.getSecretRef(), version.getVersionNo());
-    Map<String, Object> changeDetails = Map.of(KEY_SECRET_VERSION_ID, secretVersionId);
-    ChangeLogChange change = new ChangeLogChange("REVOKE", "SUCCESS", changeDetails);
-    ChangeLogCommand changeCommand = new ChangeLogCommand(changeContext, changeTarget, change);
-    logChange(changeCommand);
-  }
 
-  @Override
-  public List<ConsoleConfigChangeLogResponse> configChangeLogs(
-      ConfigChangeLogQueryRequest request) {
-    ConfigChangeLogQuery query = new ConfigChangeLogQuery();
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    query.setTenantId(tenantId);
-    query.setConfigType(request.getConfigType());
-    query.setConfigKey(request.getConfigKey());
-    query.setChangeAction(request.getChangeAction());
-    List<ConfigChangeLogEntity> changeLogs = configChangeLogMapper.selectByQuery(query);
-    List<ConsoleConfigChangeLogResponse> responses =
-        changeLogs.stream().map(this::toConfigChangeLogResponse).toList();
-    return responses;
-  }
-
-  private String changeReleaseStatus(
-      ConfigReleaseEntity release,
-      ConfigReleaseActionRequest request,
-      String nextStatus,
-      String changeAction) {
-    String tenantId = release.getTenantId();
-    ConfigReleaseStatusUpdateParam params = ConfigReleaseStatusUpdateParam.builder()
-        .tenantId(tenantId)
-        .releaseId(release.getId())
-        .nextStatus(nextStatus)
-        .expectedStatus(release.getConfigStatus())
-        .expectedVersionNo(release.getVersionNo())
-        .publishedAt(
-            ConfigLifecycleStatus.PUBLISHED.code().equals(nextStatus)
-                ? BatchDateTimeSupport.utcNow()
-                : null)
-        .rolledBackAt(
-            ConfigLifecycleStatus.ROLLED_BACK.code().equals(nextStatus)
-                ? BatchDateTimeSupport.utcNow()
-                : null)
-        .updatedBy(currentOperator())
-        .build();
-    int updated = configReleaseMapper.updateConfigReleaseStatus(params);
-    if (updated != 1) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_concurrent_change");
+    @Override
+    public List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request) {
+        ConfigChangeLogQuery query = new ConfigChangeLogQuery();
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        query.setTenantId(tenantId);
+        query.setConfigType(request.getConfigType());
+        query.setConfigKey(request.getConfigKey());
+        query.setChangeAction(request.getChangeAction());
+        List<ConfigChangeLogEntity> changeLogs = configChangeLogMapper.selectByQuery(query);
+        List<ConsoleConfigChangeLogResponse> responses =
+                changeLogs.stream().map(this::toConfigChangeLogResponse).toList();
+        return responses;
     }
-    String operator = currentOperator();
-    String traceId = currentTraceId();
-    String reason = request.getReason();
-    ChangeLogContext changeContext = new ChangeLogContext(tenantId, operator, traceId, reason);
-    String configType = release.getConfigType();
-    String configKey = release.getConfigKey();
-    Integer versionNo = release.getVersionNo();
-    ChangeLogTarget changeTarget = new ChangeLogTarget(configType, configKey, versionNo);
-    Map<String, Object> changeDetails = Map.of("nextStatus", nextStatus);
-    ChangeLogChange change = new ChangeLogChange(changeAction, "SUCCESS", changeDetails);
-    ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
-    logChange(changeLogCommand);
-    return nextStatus;
-  }
 
-  /** 校验配置发布状态转换合法性，非法转换抛 STATE_CONFLICT(409),避免绕过审批门禁/复活已回滚/重复发布。 */
-  private void validateReleaseTransition(String current, String next) {
-    if (!ALLOWED_RELEASE_TRANSITIONS.getOrDefault(next, Set.of()).contains(current)) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT, "error.config.release_transition_illegal", current, next);
+    private String changeReleaseStatus(
+            ConfigReleaseEntity release, ConfigReleaseActionRequest request, String nextStatus, String changeAction) {
+        String tenantId = release.getTenantId();
+        ConfigReleaseStatusUpdateParam params = ConfigReleaseStatusUpdateParam.builder()
+                .tenantId(tenantId)
+                .releaseId(release.getId())
+                .nextStatus(nextStatus)
+                .expectedStatus(release.getConfigStatus())
+                .expectedVersionNo(release.getVersionNo())
+                .publishedAt(
+                        ConfigLifecycleStatus.PUBLISHED.code().equals(nextStatus)
+                                ? BatchDateTimeSupport.utcNow()
+                                : null)
+                .rolledBackAt(
+                        ConfigLifecycleStatus.ROLLED_BACK.code().equals(nextStatus)
+                                ? BatchDateTimeSupport.utcNow()
+                                : null)
+                .updatedBy(currentOperator())
+                .build();
+        int updated = configReleaseMapper.updateConfigReleaseStatus(params);
+        if (updated != 1) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_concurrent_change");
+        }
+        String operator = currentOperator();
+        String traceId = currentTraceId();
+        String reason = request.getReason();
+        ChangeLogContext changeContext = new ChangeLogContext(tenantId, operator, traceId, reason);
+        String configType = release.getConfigType();
+        String configKey = release.getConfigKey();
+        Integer versionNo = release.getVersionNo();
+        ChangeLogTarget changeTarget = new ChangeLogTarget(configType, configKey, versionNo);
+        Map<String, Object> changeDetails = Map.of("nextStatus", nextStatus);
+        ChangeLogChange change = new ChangeLogChange(changeAction, "SUCCESS", changeDetails);
+        ChangeLogCommand changeLogCommand = new ChangeLogCommand(changeContext, changeTarget, change);
+        logChange(changeLogCommand);
+        return nextStatus;
     }
-  }
 
-  private void validateExpectedVersion(Integer expectedVersionNo, ConfigReleaseEntity release) {
-    if (EmptyChecks.isNotNull(expectedVersionNo)
-        && !Objects.equals(expectedVersionNo, release.getVersionNo())) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.config.release_version_stale",
-          expectedVersionNo,
-          release.getVersionNo());
+    /** 校验配置发布状态转换合法性，非法转换抛 STATE_CONFLICT(409),避免绕过审批门禁/复活已回滚/重复发布。 */
+    private void validateReleaseTransition(String current, String next) {
+        if (!ALLOWED_RELEASE_TRANSITIONS.getOrDefault(next, Set.of()).contains(current)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_transition_illegal", current, next);
+        }
     }
-  }
 
-  private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
-    Integer latestVersionNo = configReleaseMapper.selectLatestVersionNo(
-        tenantId, release.getConfigType(), release.getConfigKey());
-    if (EmptyChecks.isNotNull(latestVersionNo)
-        && !Objects.equals(latestVersionNo, release.getVersionNo())) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.config.release_not_latest",
-          release.getVersionNo(),
-          latestVersionNo);
+    private void validateExpectedVersion(Integer expectedVersionNo, ConfigReleaseEntity release) {
+        if (EmptyChecks.isNotNull(expectedVersionNo) && !Objects.equals(expectedVersionNo, release.getVersionNo())) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT,
+                    "error.config.release_version_stale",
+                    expectedVersionNo,
+                    release.getVersionNo());
+        }
     }
-  }
 
-  private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
-
-    ConfigReleaseEntity release = configReleaseMapper.selectById(tenantId, releaseId);
-    return Guard.requireFound(release, "config release not found");
-  }
-
-  private void acquireReleaseLock(ConfigReleaseEntity release) {
-    String tenantId = release.getTenantId();
-    String configType = release.getConfigType();
-    String canonicalConfigType = configReleaseApplyService.canonicalType(configType);
-    String configKey = release.getConfigKey();
-
-    configReleaseMapper.acquireVersionLock(tenantId, canonicalConfigType, configKey);
-  }
-
-  private void logChange(ChangeLogCommand command) {
-    ConfigChangeLogBuilder builder = ConfigChangeLogBuilder.create(
-            command.context().tenantId(),
-            command.context().operatorId(),
-            command.context().traceId())
-        .forType(command.target().configType())
-        .withKey(command.target().configKey())
-        .versionNo(command.target().versionNo())
-        .action(command.change().action())
-        .result(command.change().result())
-        .operatorType(AuditLogConstants.OPERATOR_TYPE_API);
-    String safeReason =
-        ConsoleTextSanitizer.safeInput(command.context().reason(), REASON_MAX_LENGTH);
-    Object changeDetails = command.change().detail();
-    Map<String, Object> summaryDetails = detailOf(safeReason, changeDetails);
-    String summaryJson = JsonUtils.toJson(summaryDetails);
-    ConfigChangeLogInsertParam changeLog = builder.summary(summaryJson).build();
-    configChangeLogMapper.insertConfigChangeLog(changeLog);
-  }
-
-  private void validateJson(String value, String fieldName) {
-    if (!Texts.hasText(value)) {
-      return;
+    private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
+        Integer latestVersionNo =
+                configReleaseMapper.selectLatestVersionNo(tenantId, release.getConfigType(), release.getConfigKey());
+        if (EmptyChecks.isNotNull(latestVersionNo) && !Objects.equals(latestVersionNo, release.getVersionNo())) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT,
+                    "error.config.release_not_latest",
+                    release.getVersionNo(),
+                    latestVersionNo);
+        }
     }
-    Object parsedJson = safeParseJson(value);
-    if (EmptyChecks.isNull(parsedJson)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
+
+    private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
+
+        ConfigReleaseEntity release = configReleaseMapper.selectById(tenantId, releaseId);
+        return Guard.requireFound(release, "config release not found");
     }
-  }
 
-  /**
-   * 容错解析 JSON:畸形 / 字面量 "null" / 空白 一律返回 null,不抛异常。
-   *
-   * <p>调用方按需翻译为 BizException(入参写路径)或当 null 处理(diff 读路径,容忍历史坏数据)。 旧实现直接调用 {@code JsonUtils.fromJson}
-   * 在畸形 JSON 时抛 {@link IllegalArgumentException}, 穿透 ControllerAdvice 变 500;统一收敛在此。
-   */
-  private static Object safeParseJson(String value) {
-    if (!Texts.hasText(value)) {
-      return null;
+    private void acquireReleaseLock(ConfigReleaseEntity release) {
+        String tenantId = release.getTenantId();
+        String configType = release.getConfigType();
+        String canonicalConfigType = configReleaseApplyService.canonicalType(configType);
+        String configKey = release.getConfigKey();
+
+        configReleaseMapper.acquireVersionLock(tenantId, canonicalConfigType, configKey);
     }
-    try {
-      return JsonUtils.fromJson(value, Object.class);
-    } catch (IllegalArgumentException e) {
-      return null;
+
+    private void logChange(ChangeLogCommand command) {
+        ConfigChangeLogBuilder builder = ConfigChangeLogBuilder.create(
+                        command.context().tenantId(),
+                        command.context().operatorId(),
+                        command.context().traceId())
+                .forType(command.target().configType())
+                .withKey(command.target().configKey())
+                .versionNo(command.target().versionNo())
+                .action(command.change().action())
+                .result(command.change().result())
+                .operatorType(AuditLogConstants.OPERATOR_TYPE_API);
+        String safeReason = ConsoleTextSanitizer.safeInput(command.context().reason(), REASON_MAX_LENGTH);
+        Object changeDetails = command.change().detail();
+        Map<String, Object> summaryDetails = detailOf(safeReason, changeDetails);
+        String summaryJson = JsonUtils.toJson(summaryDetails);
+        ConfigChangeLogInsertParam changeLog = builder.summary(summaryJson).build();
+        configChangeLogMapper.insertConfigChangeLog(changeLog);
     }
-  }
 
-  private Instant parseInstant(String value, String fieldName) {
-    if (!Texts.hasText(value)) {
-      return null;
+    private void validateJson(String value, String fieldName) {
+        if (!Texts.hasText(value)) {
+            return;
+        }
+        Object parsedJson = safeParseJson(value);
+        if (EmptyChecks.isNull(parsedJson)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
+        }
     }
-    try {
-      return Instant.parse(value);
-    } catch (DateTimeParseException exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
+
+    /**
+     * 容错解析 JSON:畸形 / 字面量 "null" / 空白 一律返回 null,不抛异常。
+     *
+     * <p>调用方按需翻译为 BizException(入参写路径)或当 null 处理(diff 读路径,容忍历史坏数据)。 旧实现直接调用 {@code JsonUtils.fromJson}
+     * 在畸形 JSON 时抛 {@link IllegalArgumentException}, 穿透 ControllerAdvice 变 500;统一收敛在此。
+     */
+    private static Object safeParseJson(String value) {
+        if (!Texts.hasText(value)) {
+            return null;
+        }
+        try {
+            return JsonUtils.fromJson(value, Object.class);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
-  }
 
-  private Map<String, Object> detailOf(String reason, Object detail) {
-    Map<String, Object> values = new LinkedHashMap<>();
-    values.put("reason", reason);
-    values.put("detail", detail);
-    return values;
-  }
-
-  private String currentOperator() {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
-    return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
-  }
-
-  private String currentTraceId() {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String traceId = metadata.traceId();
-    return ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH);
-  }
-
-  private String resolveSecretPayload(SecretVersionRotateRequest request) {
-    if (Texts.hasText(request.getSecretPayloadJson())) {
-      return request.getSecretPayloadJson();
+    private Instant parseInstant(String value, String fieldName) {
+        if (!Texts.hasText(value)) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
+        }
     }
-    if (EmptyChecks.isNotNull(request.getSecretPayload())) {
-      Object secretPayload = request.getSecretPayload();
-      return JsonUtils.toJson(secretPayload);
+
+    private Map<String, Object> detailOf(String reason, Object detail) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("reason", reason);
+        values.put("detail", detail);
+        return values;
     }
-    throw BizException.of(
-        ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "secretPayloadJson");
-  }
 
-  private record ChangeLogContext(
-      String tenantId, String operatorId, String traceId, String reason) {}
-
-  private record ChangeLogCommand(
-      ChangeLogContext context, ChangeLogTarget target, ChangeLogChange change) {}
-
-  private record ChangeLogTarget(String configType, String configKey, Integer versionNo) {}
-
-  private record ChangeLogChange(String action, String result, Object detail) {}
-
-  @Override
-  public ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-
-    ConfigReleaseEntity release = configReleaseMapper.selectById(resolved, releaseId);
-    ConfigReleaseEntity entity =
-        Guard.requireFound(release, "config release not found: " + releaseId);
-    return toConfigReleaseResponse(entity);
-  }
-
-  @Override
-  public ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-
-    SecretVersionEntity secretVersion = secretVersionMapper.selectById(resolved, secretVersionId);
-    SecretVersionEntity entity =
-        Guard.requireFound(secretVersion, "secret version not found: " + secretVersionId);
-    return toSecretVersionResponse(entity);
-  }
-
-  private ConsoleConfigReleaseResponse toConfigReleaseResponse(ConfigReleaseEntity entity) {
-    Long id = entity.getId();
-    String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
-    String configType = ConsoleTextSanitizer.safeDisplay(entity.getConfigType());
-    String configKey = ConsoleTextSanitizer.safeDisplay(entity.getConfigKey());
-    String configName = ConsoleTextSanitizer.safeDisplay(entity.getConfigName());
-    String configStatus = ConsoleTextSanitizer.safeDisplay(entity.getConfigStatus());
-    Integer versionNo = entity.getVersionNo();
-    String confirmationStatus = applyConfirmationStatus(entity.getConfigStatus());
-    String grayScope = jsonResponse(entity.getGrayScope());
-    String configPayload = jsonResponse(entity.getConfigPayload());
-    Instant effectiveFromAt = entity.getEffectiveFromAt();
-    Instant effectiveToAt = entity.getEffectiveToAt();
-    Instant publishedAt = entity.getPublishedAt();
-    Instant rolledBackAt = entity.getRolledBackAt();
-    String createdBy = ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy());
-    String updatedBy = ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy());
-    Instant createdAt = entity.getCreatedAt();
-    Instant updatedAt = entity.getUpdatedAt();
-    return ConsoleConfigReleaseResponse.builder()
-        .id(id)
-        .tenantId(tenantId)
-        .configType(configType)
-        .configKey(configKey)
-        .configName(configName)
-        .configStatus(configStatus)
-        .versionNo(versionNo)
-        .configSource("DYNAMIC_DB")
-        .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
-        .restartRequired(false)
-        .applyConfirmationStatus(confirmationStatus)
-        .grayScopeJson(grayScope)
-        .configPayloadJson(configPayload)
-        .effectiveFromAt(effectiveFromAt)
-        .effectiveToAt(effectiveToAt)
-        .publishedAt(publishedAt)
-        .rolledBackAt(rolledBackAt)
-        .createdBy(createdBy)
-        .updatedBy(updatedBy)
-        .createdAt(createdAt)
-        .updatedAt(updatedAt)
-        .build();
-  }
-
-  private String applyConfirmationStatus(String configStatus) {
-    if (ConfigLifecycleStatus.PUBLISHED.code().equals(configStatus)
-        || ConfigLifecycleStatus.GRAY.code().equals(configStatus)) {
-      return "CONFIRMATION_REQUIRED";
+    private String currentOperator() {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
+        return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
     }
-    if (ConfigLifecycleStatus.ROLLED_BACK.code().equals(configStatus)) {
-      return "ROLLED_BACK";
+
+    private String currentTraceId() {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        String traceId = metadata.traceId();
+        return ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH);
     }
-    return "NOT_RELEASED";
-  }
 
-  /** JSON 字符串由 Jackson 负责传输转义；HTML 转义会把引号改成实体并破坏客户端解析。 */
-  private static String jsonResponse(String value) {
-    return Texts.hasText(value) ? value : EMPTY_JSON_OBJECT;
-  }
-
-  private ConsoleSecretVersionResponse toSecretVersionResponse(SecretVersionEntity entity) {
-    Long id = entity.getId();
-    String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
-    String secretRef = ConsoleTextSanitizer.safeDisplay(entity.getSecretRef());
-    String secretName = ConsoleTextSanitizer.safeDisplay(entity.getSecretName());
-    Integer versionNo = entity.getVersionNo();
-    String secretStatus = ConsoleTextSanitizer.safeDisplay(entity.getSecretStatus());
-    Boolean currentVersion = entity.getCurrentVersion();
-    Instant rotationWindowStartAt = entity.getRotationWindowStartAt();
-    Instant rotationWindowEndAt = entity.getRotationWindowEndAt();
-    Instant effectiveFromAt = entity.getEffectiveFromAt();
-    Instant effectiveToAt = entity.getEffectiveToAt();
-    String rotationReason = ConsoleTextSanitizer.safeDisplay(entity.getRotationReason());
-    Instant revokedAt = entity.getRevokedAt();
-    String revokedBy = ConsoleTextSanitizer.safeDisplay(entity.getRevokedBy());
-    String revokeReason = ConsoleTextSanitizer.safeDisplay(entity.getRevokeReason());
-    String createdBy = ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy());
-    String updatedBy = ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy());
-    Instant createdAt = entity.getCreatedAt();
-    Instant updatedAt = entity.getUpdatedAt();
-    return ConsoleSecretVersionResponse.builder()
-        .id(id)
-        .tenantId(tenantId)
-        .secretRef(secretRef)
-        .secretName(secretName)
-        .versionNo(versionNo)
-        .secretStatus(secretStatus)
-        .currentVersion(currentVersion)
-        .rotationWindowStartAt(rotationWindowStartAt)
-        .rotationWindowEndAt(rotationWindowEndAt)
-        .effectiveFromAt(effectiveFromAt)
-        .effectiveToAt(effectiveToAt)
-        .secretPayloadJson(REDACTED_SECRET_PAYLOAD)
-        .rotationReason(rotationReason)
-        .revokedAt(revokedAt)
-        .revokedBy(revokedBy)
-        .revokeReason(revokeReason)
-        .createdBy(createdBy)
-        .updatedBy(updatedBy)
-        .createdAt(createdAt)
-        .updatedAt(updatedAt)
-        .build();
-  }
-
-  @Override
-  public ConfigDependenciesResponse configDependencies(
-      String tenantId, String configType, String configCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, DependencyQuery> dependencyQueryByType = dependencyQueries();
-    String canonicalType = canonicalDependencyType(configType);
-    DependencyQuery dependencyQuery = dependencyQueryByType.get(canonicalType);
-    List<ConfigDependentView> dependentJobs = EmptyChecks.isNull(dependencyQuery)
-        ? List.of()
-        : dependencyQuery.find(resolved, configCode);
-    List<ConfigDependenciesResponse.DependentJobResponse> dependentJobResponses =
-        dependentJobs.stream()
-            .map(job -> {
-              Long jobId = job.id();
-              String jobCode = job.code();
-              String jobName = EmptyChecks.isNull(job.name()) ? "" : job.name();
-              return new ConfigDependenciesResponse.DependentJobResponse(jobId, jobCode, jobName);
-            })
-            .toList();
-    return new ConfigDependenciesResponse(
-        configType, configCode, dependentJobResponses, dependentJobs.size());
-  }
-
-  private Map<String, DependencyQuery> dependencyQueries() {
-    return Map.of(
-        "RESOURCE_QUEUE",
-        dashboardQueryMapper::jobsByQueueCode,
-        "BUSINESS_CALENDAR",
-        dashboardQueryMapper::jobsByCalendarCode,
-        "BATCH_WINDOW",
-        dashboardQueryMapper::jobsByWindowCode,
-        "WORKER_GROUP",
-        dashboardQueryMapper::jobsByWorkerGroup);
-  }
-
-  private String canonicalDependencyType(String raw) {
-    if (!Texts.hasText(raw)) {
-      return "";
+    private String resolveSecretPayload(SecretVersionRotateRequest request) {
+        if (Texts.hasText(request.getSecretPayloadJson())) {
+            return request.getSecretPayloadJson();
+        }
+        if (EmptyChecks.isNotNull(request.getSecretPayload())) {
+            Object secretPayload = request.getSecretPayload();
+            return JsonUtils.toJson(secretPayload);
+        }
+        throw BizException.of(
+                ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "secretPayloadJson");
     }
-    String trimmedRaw = raw.trim();
-    String normalized = trimmedRaw.toUpperCase(Locale.ROOT);
-    return Map.of(
-            "QUEUE", "RESOURCE_QUEUE", "CALENDAR", "BUSINESS_CALENDAR", "WINDOW", "BATCH_WINDOW")
-        .getOrDefault(normalized, normalized);
-  }
 
-  @FunctionalInterface
-  private interface DependencyQuery {
-    List<ConfigDependentView> find(String tenantId, String configCode);
-  }
+    private record ChangeLogContext(String tenantId, String operatorId, String traceId, String reason) {}
 
-  @Override
-  public ConfigReleaseDiffResponse diffConfigReleases(
-      String tenantId, Long releaseIdA, Long releaseIdB) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    ConfigReleaseEntity a = loadRelease(resolved, releaseIdA);
-    ConfigReleaseEntity b = loadRelease(resolved, releaseIdB);
-    // JSON payload diff:容忍历史坏 JSON,坏数据按 null 比较(否则穿透 500)。
-    Object payloadA = safeParseJson(a.getConfigPayload());
-    Object payloadB = safeParseJson(b.getConfigPayload());
-    boolean payloadChanged = !Objects.equals(payloadA, payloadB);
-    // 灰度范围差异
-    Object grayA = safeParseJson(a.getGrayScope());
-    Object grayB = safeParseJson(b.getGrayScope());
-    boolean grayChanged = !Objects.equals(grayA, grayB);
-    ConsoleConfigReleaseResponse releaseA = toConfigReleaseResponse(a);
-    ConsoleConfigReleaseResponse releaseB = toConfigReleaseResponse(b);
-    boolean statusChanged = !Objects.equals(a.getConfigStatus(), b.getConfigStatus());
-    return new ConfigReleaseDiffResponse(
-        releaseA,
-        releaseB,
-        payloadChanged,
-        payloadChanged ? payloadA : null,
-        payloadChanged ? payloadB : null,
-        grayChanged,
-        statusChanged);
-  }
+    private record ChangeLogCommand(ChangeLogContext context, ChangeLogTarget target, ChangeLogChange change) {}
 
-  private ConsoleConfigChangeLogResponse toConfigChangeLogResponse(ConfigChangeLogEntity entity) {
-    Long changeLogId = entity.getId();
-    String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
-    String configType = ConsoleTextSanitizer.safeDisplay(entity.getConfigType());
-    String configKey = ConsoleTextSanitizer.safeDisplay(entity.getConfigKey());
-    Integer versionNo = entity.getVersionNo();
-    String changeAction = ConsoleTextSanitizer.safeDisplay(entity.getChangeAction());
-    String changeResult = ConsoleTextSanitizer.safeDisplay(entity.getChangeResult());
-    String operatorType = ConsoleTextSanitizer.safeDisplay(entity.getOperatorType());
-    String operatorId = ConsoleTextSanitizer.safeDisplay(entity.getOperatorId());
-    String traceId = ConsoleTextSanitizer.safeDisplay(entity.getTraceId());
-    String rawChangeSummary = entity.getChangeSummary();
-    String maskedChangeSummary = SecretMasking.maskSensitiveJson(rawChangeSummary);
-    String safeChangeSummary = ConsoleTextSanitizer.safeDisplay(maskedChangeSummary);
-    Instant createdAt = entity.getCreatedAt();
-    return ConsoleConfigChangeLogResponse.builder()
-        .id(changeLogId)
-        .tenantId(tenantId)
-        .configType(configType)
-        .configKey(configKey)
-        .versionNo(versionNo)
-        .changeAction(changeAction)
-        .changeResult(changeResult)
-        .operatorType(operatorType)
-        .operatorId(operatorId)
-        .traceId(traceId)
-        .changeSummaryJson(safeChangeSummary)
-        .createdAt(createdAt)
-        .build();
-  }
+    private record ChangeLogTarget(String configType, String configKey, Integer versionNo) {}
+
+    private record ChangeLogChange(String action, String result, Object detail) {}
+
+    @Override
+    public ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+
+        ConfigReleaseEntity release = configReleaseMapper.selectById(resolved, releaseId);
+        ConfigReleaseEntity entity = Guard.requireFound(release, "config release not found: " + releaseId);
+        return toConfigReleaseResponse(entity);
+    }
+
+    @Override
+    public ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+
+        SecretVersionEntity secretVersion = secretVersionMapper.selectById(resolved, secretVersionId);
+        SecretVersionEntity entity = Guard.requireFound(secretVersion, "secret version not found: " + secretVersionId);
+        return toSecretVersionResponse(entity);
+    }
+
+    private ConsoleConfigReleaseResponse toConfigReleaseResponse(ConfigReleaseEntity entity) {
+        Long id = entity.getId();
+        String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
+        String configType = ConsoleTextSanitizer.safeDisplay(entity.getConfigType());
+        String configKey = ConsoleTextSanitizer.safeDisplay(entity.getConfigKey());
+        String configName = ConsoleTextSanitizer.safeDisplay(entity.getConfigName());
+        String configStatus = ConsoleTextSanitizer.safeDisplay(entity.getConfigStatus());
+        Integer versionNo = entity.getVersionNo();
+        String confirmationStatus = applyConfirmationStatus(entity.getConfigStatus());
+        String grayScope = jsonResponse(entity.getGrayScope());
+        String configPayload = jsonResponse(entity.getConfigPayload());
+        Instant effectiveFromAt = entity.getEffectiveFromAt();
+        Instant effectiveToAt = entity.getEffectiveToAt();
+        Instant publishedAt = entity.getPublishedAt();
+        Instant rolledBackAt = entity.getRolledBackAt();
+        String createdBy = ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy());
+        String updatedBy = ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy());
+        Instant createdAt = entity.getCreatedAt();
+        Instant updatedAt = entity.getUpdatedAt();
+        return ConsoleConfigReleaseResponse.builder()
+                .id(id)
+                .tenantId(tenantId)
+                .configType(configType)
+                .configKey(configKey)
+                .configName(configName)
+                .configStatus(configStatus)
+                .versionNo(versionNo)
+                .configSource("DYNAMIC_DB")
+                .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
+                .restartRequired(false)
+                .applyConfirmationStatus(confirmationStatus)
+                .grayScopeJson(grayScope)
+                .configPayloadJson(configPayload)
+                .effectiveFromAt(effectiveFromAt)
+                .effectiveToAt(effectiveToAt)
+                .publishedAt(publishedAt)
+                .rolledBackAt(rolledBackAt)
+                .createdBy(createdBy)
+                .updatedBy(updatedBy)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .build();
+    }
+
+    private String applyConfirmationStatus(String configStatus) {
+        if (ConfigLifecycleStatus.PUBLISHED.code().equals(configStatus)
+                || ConfigLifecycleStatus.GRAY.code().equals(configStatus)) {
+            return "CONFIRMATION_REQUIRED";
+        }
+        if (ConfigLifecycleStatus.ROLLED_BACK.code().equals(configStatus)) {
+            return "ROLLED_BACK";
+        }
+        return "NOT_RELEASED";
+    }
+
+    /** JSON 字符串由 Jackson 负责传输转义；HTML 转义会把引号改成实体并破坏客户端解析。 */
+    private static String jsonResponse(String value) {
+        return Texts.hasText(value) ? value : EMPTY_JSON_OBJECT;
+    }
+
+    private ConsoleSecretVersionResponse toSecretVersionResponse(SecretVersionEntity entity) {
+        Long id = entity.getId();
+        String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
+        String secretRef = ConsoleTextSanitizer.safeDisplay(entity.getSecretRef());
+        String secretName = ConsoleTextSanitizer.safeDisplay(entity.getSecretName());
+        Integer versionNo = entity.getVersionNo();
+        String secretStatus = ConsoleTextSanitizer.safeDisplay(entity.getSecretStatus());
+        Boolean currentVersion = entity.getCurrentVersion();
+        Instant rotationWindowStartAt = entity.getRotationWindowStartAt();
+        Instant rotationWindowEndAt = entity.getRotationWindowEndAt();
+        Instant effectiveFromAt = entity.getEffectiveFromAt();
+        Instant effectiveToAt = entity.getEffectiveToAt();
+        String rotationReason = ConsoleTextSanitizer.safeDisplay(entity.getRotationReason());
+        Instant revokedAt = entity.getRevokedAt();
+        String revokedBy = ConsoleTextSanitizer.safeDisplay(entity.getRevokedBy());
+        String revokeReason = ConsoleTextSanitizer.safeDisplay(entity.getRevokeReason());
+        String createdBy = ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy());
+        String updatedBy = ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy());
+        Instant createdAt = entity.getCreatedAt();
+        Instant updatedAt = entity.getUpdatedAt();
+        return ConsoleSecretVersionResponse.builder()
+                .id(id)
+                .tenantId(tenantId)
+                .secretRef(secretRef)
+                .secretName(secretName)
+                .versionNo(versionNo)
+                .secretStatus(secretStatus)
+                .currentVersion(currentVersion)
+                .rotationWindowStartAt(rotationWindowStartAt)
+                .rotationWindowEndAt(rotationWindowEndAt)
+                .effectiveFromAt(effectiveFromAt)
+                .effectiveToAt(effectiveToAt)
+                .secretPayloadJson(REDACTED_SECRET_PAYLOAD)
+                .rotationReason(rotationReason)
+                .revokedAt(revokedAt)
+                .revokedBy(revokedBy)
+                .revokeReason(revokeReason)
+                .createdBy(createdBy)
+                .updatedBy(updatedBy)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .build();
+    }
+
+    @Override
+    public ConfigDependenciesResponse configDependencies(String tenantId, String configType, String configCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        Map<String, DependencyQuery> dependencyQueryByType = dependencyQueries();
+        String canonicalType = canonicalDependencyType(configType);
+        DependencyQuery dependencyQuery = dependencyQueryByType.get(canonicalType);
+        List<ConfigDependentView> dependentJobs =
+                EmptyChecks.isNull(dependencyQuery) ? List.of() : dependencyQuery.find(resolved, configCode);
+        List<ConfigDependenciesResponse.DependentJobResponse> dependentJobResponses = dependentJobs.stream()
+                .map(job -> {
+                    Long jobId = job.id();
+                    String jobCode = job.code();
+                    String jobName = EmptyChecks.isNull(job.name()) ? "" : job.name();
+                    return new ConfigDependenciesResponse.DependentJobResponse(jobId, jobCode, jobName);
+                })
+                .toList();
+        return new ConfigDependenciesResponse(configType, configCode, dependentJobResponses, dependentJobs.size());
+    }
+
+    private Map<String, DependencyQuery> dependencyQueries() {
+        return Map.of(
+                "RESOURCE_QUEUE",
+                dashboardQueryMapper::jobsByQueueCode,
+                "BUSINESS_CALENDAR",
+                dashboardQueryMapper::jobsByCalendarCode,
+                "BATCH_WINDOW",
+                dashboardQueryMapper::jobsByWindowCode,
+                "WORKER_GROUP",
+                dashboardQueryMapper::jobsByWorkerGroup);
+    }
+
+    private String canonicalDependencyType(String raw) {
+        if (!Texts.hasText(raw)) {
+            return "";
+        }
+        String trimmedRaw = raw.trim();
+        String normalized = trimmedRaw.toUpperCase(Locale.ROOT);
+        return Map.of("QUEUE", "RESOURCE_QUEUE", "CALENDAR", "BUSINESS_CALENDAR", "WINDOW", "BATCH_WINDOW")
+                .getOrDefault(normalized, normalized);
+    }
+
+    @FunctionalInterface
+    private interface DependencyQuery {
+        List<ConfigDependentView> find(String tenantId, String configCode);
+    }
+
+    @Override
+    public ConfigReleaseDiffResponse diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        ConfigReleaseEntity a = loadRelease(resolved, releaseIdA);
+        ConfigReleaseEntity b = loadRelease(resolved, releaseIdB);
+        // JSON payload diff:容忍历史坏 JSON,坏数据按 null 比较(否则穿透 500)。
+        Object payloadA = safeParseJson(a.getConfigPayload());
+        Object payloadB = safeParseJson(b.getConfigPayload());
+        boolean payloadChanged = !Objects.equals(payloadA, payloadB);
+        // 灰度范围差异
+        Object grayA = safeParseJson(a.getGrayScope());
+        Object grayB = safeParseJson(b.getGrayScope());
+        boolean grayChanged = !Objects.equals(grayA, grayB);
+        ConsoleConfigReleaseResponse releaseA = toConfigReleaseResponse(a);
+        ConsoleConfigReleaseResponse releaseB = toConfigReleaseResponse(b);
+        boolean statusChanged = !Objects.equals(a.getConfigStatus(), b.getConfigStatus());
+        return new ConfigReleaseDiffResponse(
+                releaseA,
+                releaseB,
+                payloadChanged,
+                payloadChanged ? payloadA : null,
+                payloadChanged ? payloadB : null,
+                grayChanged,
+                statusChanged);
+    }
+
+    private ConsoleConfigChangeLogResponse toConfigChangeLogResponse(ConfigChangeLogEntity entity) {
+        Long changeLogId = entity.getId();
+        String tenantId = ConsoleTextSanitizer.safeDisplay(entity.getTenantId());
+        String configType = ConsoleTextSanitizer.safeDisplay(entity.getConfigType());
+        String configKey = ConsoleTextSanitizer.safeDisplay(entity.getConfigKey());
+        Integer versionNo = entity.getVersionNo();
+        String changeAction = ConsoleTextSanitizer.safeDisplay(entity.getChangeAction());
+        String changeResult = ConsoleTextSanitizer.safeDisplay(entity.getChangeResult());
+        String operatorType = ConsoleTextSanitizer.safeDisplay(entity.getOperatorType());
+        String operatorId = ConsoleTextSanitizer.safeDisplay(entity.getOperatorId());
+        String traceId = ConsoleTextSanitizer.safeDisplay(entity.getTraceId());
+        String rawChangeSummary = entity.getChangeSummary();
+        String maskedChangeSummary = SecretMasking.maskSensitiveJson(rawChangeSummary);
+        String safeChangeSummary = ConsoleTextSanitizer.safeDisplay(maskedChangeSummary);
+        Instant createdAt = entity.getCreatedAt();
+        return ConsoleConfigChangeLogResponse.builder()
+                .id(changeLogId)
+                .tenantId(tenantId)
+                .configType(configType)
+                .configKey(configKey)
+                .versionNo(versionNo)
+                .changeAction(changeAction)
+                .changeResult(changeResult)
+                .operatorType(operatorType)
+                .operatorId(operatorId)
+                .traceId(traceId)
+                .changeSummaryJson(safeChangeSummary)
+                .createdAt(createdAt)
+                .build();
+    }
 }

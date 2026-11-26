@@ -24,7 +24,7 @@ import org.springframework.validation.annotation.Validated;
 @SuppressWarnings("ConfigurationProperties") // 与 WorkerTempFileProperties 共享前缀，子键互不重叠。
 public class WorkerConcurrencyProperties {
 
-  /** 单个 worker 实例允许并发执行的最大任务数。 */
-  @Min(value = 1, message = "worker max concurrent tasks must be positive")
-  private int maxConcurrentTasks = WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS;
+    /** 单个 worker 实例允许并发执行的最大任务数。 */
+    @Min(value = 1, message = "worker max concurrent tasks must be positive")
+    private int maxConcurrentTasks = WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS;
 }

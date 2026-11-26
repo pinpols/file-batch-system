@@ -9,71 +9,60 @@ import lombok.Getter;
 @Getter
 public final class UpdateBatchDayReplayEntryStatusParam {
 
-  private final Long id;
-  private final String toStatus;
-  private final Long rerunInstanceId;
-  private final Long resultVersionId;
-  private final String failureReason;
-  private final Instant startedAt;
-  private final Instant finishedAt;
-  private final Instant now;
+    private final Long id;
+    private final String toStatus;
+    private final Long rerunInstanceId;
+    private final Long resultVersionId;
+    private final String failureReason;
+    private final Instant startedAt;
+    private final Instant finishedAt;
+    private final Instant now;
 
-  private UpdateBatchDayReplayEntryStatusParam(
-      Long id, String toStatus, Instant now, EntryStatusDetails details) {
-    this.id = Objects.requireNonNull(id, "id");
-    this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
-    EntryStatusDetails resolvedDetails = Objects.requireNonNull(details, "details");
-    this.rerunInstanceId = resolvedDetails.rerunInstanceId();
-    this.resultVersionId = resolvedDetails.resultVersionId();
-    this.failureReason = resolvedDetails.failureReason();
-    this.startedAt = resolvedDetails.startedAt();
-    this.finishedAt = resolvedDetails.finishedAt();
-    this.now = Objects.requireNonNull(now, "now");
-  }
+    private UpdateBatchDayReplayEntryStatusParam(Long id, String toStatus, Instant now, EntryStatusDetails details) {
+        this.id = Objects.requireNonNull(id, "id");
+        this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
+        EntryStatusDetails resolvedDetails = Objects.requireNonNull(details, "details");
+        this.rerunInstanceId = resolvedDetails.rerunInstanceId();
+        this.resultVersionId = resolvedDetails.resultVersionId();
+        this.failureReason = resolvedDetails.failureReason();
+        this.startedAt = resolvedDetails.startedAt();
+        this.finishedAt = resolvedDetails.finishedAt();
+        this.now = Objects.requireNonNull(now, "now");
+    }
 
-  public static UpdateBatchDayReplayEntryStatusParam running(
-      Long id, Long rerunInstanceId, Instant startedAt, Instant now) {
-    EntryStatusDetails details =
-        new EntryStatusDetails(rerunInstanceId, null, null, startedAt, null);
-    return new UpdateBatchDayReplayEntryStatusParam(
-        id, BatchDayReplayEntryStatus.RUNNING.code(), now, details);
-  }
+    public static UpdateBatchDayReplayEntryStatusParam running(
+            Long id, Long rerunInstanceId, Instant startedAt, Instant now) {
+        EntryStatusDetails details = new EntryStatusDetails(rerunInstanceId, null, null, startedAt, null);
+        return new UpdateBatchDayReplayEntryStatusParam(id, BatchDayReplayEntryStatus.RUNNING.code(), now, details);
+    }
 
-  public static UpdateBatchDayReplayEntryStatusParam succeededWithResult(
-      Long id, Long resultVersionId, Instant completedAt) {
-    EntryStatusDetails details =
-        new EntryStatusDetails(null, resultVersionId, null, completedAt, completedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(
-        id, BatchDayReplayEntryStatus.SUCCEEDED.code(), completedAt, details);
-  }
+    public static UpdateBatchDayReplayEntryStatusParam succeededWithResult(
+            Long id, Long resultVersionId, Instant completedAt) {
+        EntryStatusDetails details = new EntryStatusDetails(null, resultVersionId, null, completedAt, completedAt);
+        return new UpdateBatchDayReplayEntryStatusParam(
+                id, BatchDayReplayEntryStatus.SUCCEEDED.code(), completedAt, details);
+    }
 
-  public static UpdateBatchDayReplayEntryStatusParam failedWithResult(
-      Long id, Long resultVersionId, String failureReason, Instant completedAt) {
-    EntryStatusDetails details =
-        new EntryStatusDetails(null, resultVersionId, failureReason, completedAt, completedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(
-        id, BatchDayReplayEntryStatus.FAILED.code(), completedAt, details);
-  }
+    public static UpdateBatchDayReplayEntryStatusParam failedWithResult(
+            Long id, Long resultVersionId, String failureReason, Instant completedAt) {
+        EntryStatusDetails details =
+                new EntryStatusDetails(null, resultVersionId, failureReason, completedAt, completedAt);
+        return new UpdateBatchDayReplayEntryStatusParam(
+                id, BatchDayReplayEntryStatus.FAILED.code(), completedAt, details);
+    }
 
-  public static UpdateBatchDayReplayEntryStatusParam failedOnSubmission(
-      Long id, String failureReason, Instant failedAt) {
-    EntryStatusDetails details =
-        new EntryStatusDetails(null, null, failureReason, failedAt, failedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(
-        id, BatchDayReplayEntryStatus.FAILED.code(), failedAt, details);
-  }
+    public static UpdateBatchDayReplayEntryStatusParam failedOnSubmission(
+            Long id, String failureReason, Instant failedAt) {
+        EntryStatusDetails details = new EntryStatusDetails(null, null, failureReason, failedAt, failedAt);
+        return new UpdateBatchDayReplayEntryStatusParam(id, BatchDayReplayEntryStatus.FAILED.code(), failedAt, details);
+    }
 
-  public static UpdateBatchDayReplayEntryStatusParam completedRerun(
-      Long id, String toStatus, Long rerunInstanceId, Instant finishedAt, Instant now) {
-    EntryStatusDetails details =
-        new EntryStatusDetails(rerunInstanceId, null, null, null, finishedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(id, toStatus, now, details);
-  }
+    public static UpdateBatchDayReplayEntryStatusParam completedRerun(
+            Long id, String toStatus, Long rerunInstanceId, Instant finishedAt, Instant now) {
+        EntryStatusDetails details = new EntryStatusDetails(rerunInstanceId, null, null, null, finishedAt);
+        return new UpdateBatchDayReplayEntryStatusParam(id, toStatus, now, details);
+    }
 
-  private record EntryStatusDetails(
-      Long rerunInstanceId,
-      Long resultVersionId,
-      String failureReason,
-      Instant startedAt,
-      Instant finishedAt) {}
+    private record EntryStatusDetails(
+            Long rerunInstanceId, Long resultVersionId, String failureReason, Instant startedAt, Instant finishedAt) {}
 }

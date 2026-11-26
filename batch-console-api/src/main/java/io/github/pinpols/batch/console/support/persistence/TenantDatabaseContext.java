@@ -9,8 +9,8 @@ package io.github.pinpols.batch.console.support.persistence;
 @FunctionalInterface
 public interface TenantDatabaseContext {
 
-  /** 不绑定数据库租户上下文；用于不访问数据库的单元测试。 */
-  TenantDatabaseContext NONE = tenantId -> {};
+    /** 不绑定数据库租户上下文；用于不访问数据库的单元测试。 */
+    TenantDatabaseContext NONE = tenantId -> {};
 
-  void bind(String tenantId);
+    void bind(String tenantId);
 }

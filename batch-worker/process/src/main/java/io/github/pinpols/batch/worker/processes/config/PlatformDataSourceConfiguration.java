@@ -26,44 +26,43 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 @RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "processPlatformHikariConfig")
-  @ConfigurationProperties("spring.datasource.hikari")
-  public HikariConfig processPlatformHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "processPlatformHikariConfig")
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig processPlatformHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "processPlatformDataSource")
-  @Primary
-  public DataSource processPlatformDataSource(
-      DataSourceProperties properties,
-      @Qualifier("processPlatformHikariConfig") HikariConfig hikariConfig) {
-    return WorkerDataSourceSupport.buildPlatformDataSource(
-        properties, hikariConfig, pgSessionProperties, environment, "batch-worker-process");
-  }
+    @Bean(name = "processPlatformDataSource")
+    @Primary
+    public DataSource processPlatformDataSource(
+            DataSourceProperties properties, @Qualifier("processPlatformHikariConfig") HikariConfig hikariConfig) {
+        return WorkerDataSourceSupport.buildPlatformDataSource(
+                properties, hikariConfig, pgSessionProperties, environment, "batch-worker-process");
+    }
 
-  @Bean(name = "processPlatformSqlSessionFactory")
-  public SqlSessionFactory processPlatformSqlSessionFactory(
-      @Qualifier("processPlatformDataSource") DataSource dataSource) throws Exception {
-    return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
-  }
+    @Bean(name = "processPlatformSqlSessionFactory")
+    public SqlSessionFactory processPlatformSqlSessionFactory(
+            @Qualifier("processPlatformDataSource") DataSource dataSource) throws Exception {
+        return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
+    }
 
-  @Bean(name = "processPlatformSqlSessionTemplate")
-  public SqlSessionTemplate processPlatformSqlSessionTemplate(
-      @Qualifier("processPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
-    return new SqlSessionTemplate(sqlSessionFactory);
-  }
+    @Bean(name = "processPlatformSqlSessionTemplate")
+    public SqlSessionTemplate processPlatformSqlSessionTemplate(
+            @Qualifier("processPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
 
-  /**
-   * 平台库 TransactionManager（区别于 {@code processBusinessTransactionManager}）——process 特有：process
-   * 模块存在需要跨平台库事务管理的场景，import/export 未见对应需求，保留为模块差异（详见任务报告）。
-   */
-  @Bean(name = "transactionManager")
-  @Primary
-  public DataSourceTransactionManager transactionManager(
-      @Qualifier("processPlatformDataSource") DataSource processPlatformDataSource) {
-    return WorkerDataSourceSupport.buildTransactionManager(processPlatformDataSource);
-  }
+    /**
+     * 平台库 TransactionManager（区别于 {@code processBusinessTransactionManager}）——process 特有：process
+     * 模块存在需要跨平台库事务管理的场景，import/export 未见对应需求，保留为模块差异（详见任务报告）。
+     */
+    @Bean(name = "transactionManager")
+    @Primary
+    public DataSourceTransactionManager transactionManager(
+            @Qualifier("processPlatformDataSource") DataSource processPlatformDataSource) {
+        return WorkerDataSourceSupport.buildTransactionManager(processPlatformDataSource);
+    }
 }

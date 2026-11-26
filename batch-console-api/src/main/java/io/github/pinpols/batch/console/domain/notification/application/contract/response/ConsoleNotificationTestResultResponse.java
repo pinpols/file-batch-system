@@ -6,10 +6,10 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
  * <p>{@code httpStatus} 和 {@code errorSummary} 即便为 null 也保留，以维持既有响应字段。
  */
 public record ConsoleNotificationTestResultResponse(
-    String channelCode,
-    String channelType,
-    Boolean success,
-    String status,
-    String message,
-    Integer httpStatus,
-    String errorSummary) {}
+        String channelCode,
+        String channelType,
+        Boolean success,
+        String status,
+        String message,
+        Integer httpStatus,
+        String errorSummary) {}

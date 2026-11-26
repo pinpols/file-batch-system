@@ -15,42 +15,41 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkerRuntimeState {
 
-  private final Map<String, WorkerRegistration> registrations = new ConcurrentHashMap<>();
+    private final Map<String, WorkerRegistration> registrations = new ConcurrentHashMap<>();
 
-  public void put(WorkerRegistration registration) {
-    registrations.put(registration.getWorkerId(), registration);
-  }
-
-  /** 仅更新发请求时的同一注册实例，迟到响应不能复活下线项或覆盖同标识的新注册。 */
-  public boolean replaceIfCurrent(
-      String workerId, WorkerRegistration expected, WorkerRegistration replacement) {
-    if (EmptyChecks.isNull(workerId)
-        || EmptyChecks.isNull(expected)
-        || EmptyChecks.isNull(replacement)
-        || !workerId.equals(replacement.getWorkerId())) {
-      return false;
+    public void put(WorkerRegistration registration) {
+        registrations.put(registration.getWorkerId(), registration);
     }
-    AtomicBoolean replaced = new AtomicBoolean();
-    registrations.computeIfPresent(workerId, (key, current) -> {
-      // 注册对象的字段可能相等，所有权仍须按实例身份区分。
-      if (current != expected) {
-        return current;
-      }
-      replaced.set(true);
-      return replacement;
-    });
-    return replaced.get();
-  }
 
-  public WorkerRegistration get(String workerId) {
-    return registrations.get(workerId);
-  }
+    /** 仅更新发请求时的同一注册实例，迟到响应不能复活下线项或覆盖同标识的新注册。 */
+    public boolean replaceIfCurrent(String workerId, WorkerRegistration expected, WorkerRegistration replacement) {
+        if (EmptyChecks.isNull(workerId)
+                || EmptyChecks.isNull(expected)
+                || EmptyChecks.isNull(replacement)
+                || !workerId.equals(replacement.getWorkerId())) {
+            return false;
+        }
+        AtomicBoolean replaced = new AtomicBoolean();
+        registrations.computeIfPresent(workerId, (key, current) -> {
+            // 注册对象的字段可能相等，所有权仍须按实例身份区分。
+            if (current != expected) {
+                return current;
+            }
+            replaced.set(true);
+            return replacement;
+        });
+        return replaced.get();
+    }
 
-  public WorkerRegistration remove(String workerId) {
-    return registrations.remove(workerId);
-  }
+    public WorkerRegistration get(String workerId) {
+        return registrations.get(workerId);
+    }
 
-  public Collection<WorkerRegistration> snapshot() {
-    return registrations.values();
-  }
+    public WorkerRegistration remove(String workerId) {
+        return registrations.remove(workerId);
+    }
+
+    public Collection<WorkerRegistration> snapshot() {
+        return registrations.values();
+    }
 }

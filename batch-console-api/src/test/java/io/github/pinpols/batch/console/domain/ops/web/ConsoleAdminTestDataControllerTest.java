@@ -45,91 +45,87 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAdminTestDataControllerTest {
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Mock
-  private Environment environment;
+    @Mock
+    private Environment environment;
 
-  @Mock
-  private ConsoleOrchestratorPort orchestratorProxyService;
+    @Mock
+    private ConsoleOrchestratorPort orchestratorProxyService;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    ConsoleAdminTestDataApplicationService applicationService =
-        new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
-    ConsoleAdminTestDataController controller =
-        new ConsoleAdminTestDataController(applicationService, responseFactory);
-    mockMvc = MockMvcBuilders.standaloneSetup(controller)
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        ConsoleAdminTestDataApplicationService applicationService =
+                new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
+        ConsoleAdminTestDataController controller =
+                new ConsoleAdminTestDataController(applicationService, responseFactory);
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("生产环境守卫:应用服务拒绝清理且不调用编排层")
-  void shouldRejectCleanupInProductionProfile() {
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
-    ConsoleAdminTestDataApplicationService applicationService =
-        new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
-    assertThatThrownBy(() -> applicationService.cleanupByPrefix("e2e"))
-        .isInstanceOf(BizException.class)
-        .extracting(exception -> ((BizException) exception).getCode())
-        .isEqualTo(ResultCode.FORBIDDEN);
-    verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("e2e");
-  }
+    @Test
+    @DisplayName("生产环境守卫:应用服务拒绝清理且不调用编排层")
+    void shouldRejectCleanupInProductionProfile() {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
+        ConsoleAdminTestDataApplicationService applicationService =
+                new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
+        assertThatThrownBy(() -> applicationService.cleanupByPrefix("e2e"))
+                .isInstanceOf(BizException.class)
+                .extracting(exception -> ((BizException) exception).getCode())
+                .isEqualTo(ResultCode.FORBIDDEN);
+        verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("e2e");
+    }
 
-  @Test
-  @DisplayName("空前缀守卫:仅空白的前缀返回参数错误, 且不触达编排层")
-  void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    // standalone MockMvc 不启用 MethodValidationPostProcessor；直接断言应用服务的入口策略。
-    mockMvc
-        .perform(delete("/api/console/admin/test-data").param("prefix", "   "))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
-    verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("   ");
-  }
+    @Test
+    @DisplayName("空前缀守卫:仅空白的前缀返回参数错误, 且不触达编排层")
+    void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        // standalone MockMvc 不启用 MethodValidationPostProcessor；直接断言应用服务的入口策略。
+        mockMvc.perform(delete("/api/console/admin/test-data").param("prefix", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+        verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("   ");
+    }
 
-  @Test
-  @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
-  void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
-    when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
-        .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.job_definition").value(1))
-        .andExpect(jsonPath("$.data.workflow_definition").value(1));
-    verify(orchestratorProxyService).adminTestDataCleanupByPrefix("e2e");
-  }
+    @Test
+    @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
+    void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+        when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
+                .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.job_definition").value(1))
+                .andExpect(jsonPath("$.data.workflow_definition").value(1));
+        verify(orchestratorProxyService).adminTestDataCleanupByPrefix("e2e");
+    }
 
-  @Test
-  @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
-  void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
-    when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
-        .thenReturn(Map.of("tenant", 2));
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(delete("/api/console/admin/test-data/by-ids").param("ids", "td,te"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.tenant").value(2));
-    verify(orchestratorProxyService).adminTestDataCleanupByExactTenantIds(List.of("td", "te"));
-  }
+    @Test
+    @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
+    void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+        when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
+                .thenReturn(Map.of("tenant", 2));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(delete("/api/console/admin/test-data/by-ids").param("ids", "td,te"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.tenant").value(2));
+        verify(orchestratorProxyService).adminTestDataCleanupByExactTenantIds(List.of("td", "te"));
+    }
 }

@@ -34,133 +34,127 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkflowParamResolver {
 
-  /** 引用语法形如 "$.nodes.SETTLE.output.fileId" / "$.workflowRun.bizDate"。 */
-  private static final Pattern REF_PATTERN = Pattern.compile("^\\$\\.([a-zA-Z_]\\w*)(\\..+)?$");
+    /** 引用语法形如 "$.nodes.SETTLE.output.fileId" / "$.workflowRun.bizDate"。 */
+    private static final Pattern REF_PATTERN = Pattern.compile("^\\$\\.([a-zA-Z_]\\w*)(\\..+)?$");
 
-  private static final String NODES_ROOT = "nodes";
-  private static final String WORKFLOW_RUN_ROOT = "workflowRun";
-  private static final String OUTPUT_SEGMENT = "output";
+    private static final String NODES_ROOT = "nodes";
+    private static final String WORKFLOW_RUN_ROOT = "workflowRun";
+    private static final String OUTPUT_SEGMENT = "output";
 
-  /**
-   * 把 {@code params} 中所有 String 值形如 {@code $.xxx} 的引用替换为 {@link WorkflowRunContext} 中实际值。 非引用字符串 /
-   * 数字 / Boolean 原样返回。
-   *
-   * <p>语义:递归遍历嵌套 Map / List。对 Map value:String 引用 → resolve;Map → 递归;List → 元素递归。
-   *
-   * @param params workflow_node.node_params 反序列化后的对象(通常是 Map);允许 null,返回 null
-   * @param context 当前 workflow_run 上下文(含已完成节点 output 与 workflow 级字段)
-   * @return 替换后的对象;原始结构不变
-   */
-  @Observed(name = "orch.workflow.param-resolve", contextualName = "orch.workflow.param-resolve")
-  public Object resolve(Object params, WorkflowRunContext context) {
-    if (params == null) {
-      return null;
+    /**
+     * 把 {@code params} 中所有 String 值形如 {@code $.xxx} 的引用替换为 {@link WorkflowRunContext} 中实际值。 非引用字符串 /
+     * 数字 / Boolean 原样返回。
+     *
+     * <p>语义:递归遍历嵌套 Map / List。对 Map value:String 引用 → resolve;Map → 递归;List → 元素递归。
+     *
+     * @param params workflow_node.node_params 反序列化后的对象(通常是 Map);允许 null,返回 null
+     * @param context 当前 workflow_run 上下文(含已完成节点 output 与 workflow 级字段)
+     * @return 替换后的对象;原始结构不变
+     */
+    @Observed(name = "orch.workflow.param-resolve", contextualName = "orch.workflow.param-resolve")
+    public Object resolve(Object params, WorkflowRunContext context) {
+        if (params == null) {
+            return null;
+        }
+        if (params instanceof String text) {
+            return resolveString(text, context);
+        }
+        if (params instanceof Map<?, ?> map) {
+            return resolveMap(map, context);
+        }
+        if (params instanceof List<?> list) {
+            return resolveList(list, context);
+        }
+        return params;
     }
-    if (params instanceof String text) {
-      return resolveString(text, context);
-    }
-    if (params instanceof Map<?, ?> map) {
-      return resolveMap(map, context);
-    }
-    if (params instanceof List<?> list) {
-      return resolveList(list, context);
-    }
-    return params;
-  }
 
-  private Map<String, Object> resolveMap(Map<?, ?> source, WorkflowRunContext context) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> entry : source.entrySet()) {
-      String key = String.valueOf(entry.getKey());
-      Object resolvedValue = resolve(entry.getValue(), context);
-      result.put(key, resolvedValue);
+    private Map<String, Object> resolveMap(Map<?, ?> source, WorkflowRunContext context) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object resolvedValue = resolve(entry.getValue(), context);
+            result.put(key, resolvedValue);
+        }
+        return result;
     }
-    return result;
-  }
 
-  private List<Object> resolveList(List<?> source, WorkflowRunContext context) {
-    List<Object> result = new ArrayList<>(source.size());
-    for (Object item : source) {
-      Object resolvedItem = resolve(item, context);
-      result.add(resolvedItem);
+    private List<Object> resolveList(List<?> source, WorkflowRunContext context) {
+        List<Object> result = new ArrayList<>(source.size());
+        for (Object item : source) {
+            Object resolvedItem = resolve(item, context);
+            result.add(resolvedItem);
+        }
+        return result;
     }
-    return result;
-  }
 
-  private Object resolveString(String text, WorkflowRunContext context) {
-    if (text == null || !text.startsWith("$.")) {
-      // 非引用字符串原样返回
-      return text;
+    private Object resolveString(String text, WorkflowRunContext context) {
+        if (text == null || !text.startsWith("$.")) {
+            // 非引用字符串原样返回
+            return text;
+        }
+        Matcher matcher = REF_PATTERN.matcher(text);
+        if (!matcher.matches()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
+        }
+        String root = matcher.group(1);
+        String tail = matcher.group(2);
+        return switch (root) {
+            case NODES_ROOT -> resolveNodeRef(text, tail, context);
+            case WORKFLOW_RUN_ROOT -> resolveWorkflowRunRef(text, tail, context);
+            default -> throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
+        };
     }
-    Matcher matcher = REF_PATTERN.matcher(text);
-    if (!matcher.matches()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
-    }
-    String root = matcher.group(1);
-    String tail = matcher.group(2);
-    return switch (root) {
-      case NODES_ROOT -> resolveNodeRef(text, tail, context);
-      case WORKFLOW_RUN_ROOT -> resolveWorkflowRunRef(text, tail, context);
-      default ->
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
-    };
-  }
 
-  private Object resolveNodeRef(String fullRef, String tail, WorkflowRunContext context) {
-    // tail 形如 ".SETTLE.output.fileId"
-    if (tail == null || tail.length() < 2) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+    private Object resolveNodeRef(String fullRef, String tail, WorkflowRunContext context) {
+        // tail 形如 ".SETTLE.output.fileId"
+        if (tail == null || tail.length() < 2) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+        }
+        String[] segments = tail.substring(1).split("\\.", 3);
+        if (segments.length != 3 || !OUTPUT_SEGMENT.equals(segments[1])) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+        }
+        String nodeCode = segments[0];
+        String outputKey = segments[2];
+        if (!context.hasNode(nodeCode)) {
+            // 引用未知 node code 视为 fail-fast(可能是 typo / 配置错)
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+        }
+        Map<String, Object> nodeOutput = context.nodeOutput(nodeCode);
+        if (nodeOutput == null) {
+            // 节点存在但 output 整体未上报(老 worker 或 worker 没填) → null fallback
+            return null;
+        }
+        return resolveDottedPath(nodeOutput, outputKey);
     }
-    String[] segments = tail.substring(1).split("\\.", 3);
-    if (segments.length != 3 || !OUTPUT_SEGMENT.equals(segments[1])) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
-    }
-    String nodeCode = segments[0];
-    String outputKey = segments[2];
-    if (!context.hasNode(nodeCode)) {
-      // 引用未知 node code 视为 fail-fast(可能是 typo / 配置错)
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
-    }
-    Map<String, Object> nodeOutput = context.nodeOutput(nodeCode);
-    if (nodeOutput == null) {
-      // 节点存在但 output 整体未上报(老 worker 或 worker 没填) → null fallback
-      return null;
-    }
-    return resolveDottedPath(nodeOutput, outputKey);
-  }
 
-  private Object resolveWorkflowRunRef(String fullRef, String tail, WorkflowRunContext context) {
-    if (tail == null || tail.length() < 2) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+    private Object resolveWorkflowRunRef(String fullRef, String tail, WorkflowRunContext context) {
+        if (tail == null || tail.length() < 2) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", fullRef);
+        }
+        String key = tail.substring(1);
+        Map<String, Object> shared = context.workflowRunFields();
+        if (shared == null) {
+            return null;
+        }
+        // P2-11：移除 containsKey 二次分割校验（与 resolveDottedPath 行为不一致）。
+        // 整段路径统一由 resolveDottedPath 决定：缺失 key / 中间非 Map 节点 → null（业务侧 null 回退）。
+        return resolveDottedPath(shared, key);
     }
-    String key = tail.substring(1);
-    Map<String, Object> shared = context.workflowRunFields();
-    if (shared == null) {
-      return null;
-    }
-    // P2-11：移除 containsKey 二次分割校验（与 resolveDottedPath 行为不一致）。
-    // 整段路径统一由 resolveDottedPath 决定：缺失 key / 中间非 Map 节点 → null（业务侧 null 回退）。
-    return resolveDottedPath(shared, key);
-  }
 
-  /** 支持 a.b.c 形式的嵌套 key 在 Map 中下钻;遇到非 Map 中间节点或缺失 key 返回 null。 */
-  private Object resolveDottedPath(Map<String, Object> root, String dottedPath) {
-    String[] segments = dottedPath.split("\\.");
-    Object current = root;
-    for (String segment : segments) {
-      if (!(current instanceof Map<?, ?> currentMap)) {
-        return null;
-      }
-      current = currentMap.get(segment);
-      if (current == null) {
-        return null;
-      }
+    /** 支持 a.b.c 形式的嵌套 key 在 Map 中下钻;遇到非 Map 中间节点或缺失 key 返回 null。 */
+    private Object resolveDottedPath(Map<String, Object> root, String dottedPath) {
+        String[] segments = dottedPath.split("\\.");
+        Object current = root;
+        for (String segment : segments) {
+            if (!(current instanceof Map<?, ?> currentMap)) {
+                return null;
+            }
+            current = currentMap.get(segment);
+            if (current == null) {
+                return null;
+            }
+        }
+        return current;
     }
-    return current;
-  }
 }

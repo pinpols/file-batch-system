@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 final class TenantDefinitionConfigMappers {
 
-  final JobDefinitionMapper jobDefinition;
-  final WorkflowDefinitionMapper workflowDefinition;
-  final WorkflowNodeMapper workflowNode;
-  final WorkflowEdgeMapper workflowEdge;
+    final JobDefinitionMapper jobDefinition;
+    final WorkflowDefinitionMapper workflowDefinition;
+    final WorkflowNodeMapper workflowNode;
+    final WorkflowEdgeMapper workflowEdge;
 }

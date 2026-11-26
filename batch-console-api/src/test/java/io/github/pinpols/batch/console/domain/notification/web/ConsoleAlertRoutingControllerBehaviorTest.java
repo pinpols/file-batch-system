@@ -41,33 +41,31 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAlertRoutingControllerBehaviorTest {
 
-  @Mock
-  private ConsoleAlertRoutingApplicationService service;
+    @Mock
+    private ConsoleAlertRoutingApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAlertRoutingController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAlertRoutingController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String saveBody(String routeCode) {
-    return """
+    private String saveBody(String routeCode) {
+        return """
         {
           "tenantId": "ta",
           "routeCode": "%s",
@@ -77,73 +75,67 @@ class ConsoleAlertRoutingControllerBehaviorTest {
           "receiver": "ops@example.com"
         }
         """.formatted(routeCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("清单查询把租户, 路由编码, 团队, 级别与启用状态全部透传给服务")
-  void shouldPassAllFilters_whenListingRoutings() throws Exception {
-    when(service.list(any(AlertRoutingQueryRequest.class)))
-        .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
-    mockMvc
-        .perform(get("/api/console/alert-routings")
-            .param("tenantId", "ta")
-            .param("routeCode", "RT_A")
-            .param("team", "ops")
-            .param("severity", "WARN")
-            .param("enabled", "true"))
-        .andExpect(status().isOk());
-    ArgumentCaptor<AlertRoutingQueryRequest> captor =
-        ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
-    verify(service).list(captor.capture());
-    assertThat(captor.getValue().getTenantId()).isEqualTo("ta");
-    assertThat(captor.getValue().getRouteCode()).isEqualTo("RT_A");
-    assertThat(captor.getValue().getTeam()).isEqualTo("ops");
-    assertThat(captor.getValue().getSeverity()).isEqualTo("WARN");
-    assertThat(captor.getValue().getEnabled()).isTrue();
-    assertThat(captor.getValue().getPageNo()).isEqualTo(1);
-    assertThat(captor.getValue().getPageSize()).isEqualTo(20);
-  }
+    @Test
+    @DisplayName("清单查询把租户, 路由编码, 团队, 级别与启用状态全部透传给服务")
+    void shouldPassAllFilters_whenListingRoutings() throws Exception {
+        when(service.list(any(AlertRoutingQueryRequest.class))).thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
+        mockMvc.perform(get("/api/console/alert-routings")
+                        .param("tenantId", "ta")
+                        .param("routeCode", "RT_A")
+                        .param("team", "ops")
+                        .param("severity", "WARN")
+                        .param("enabled", "true"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<AlertRoutingQueryRequest> captor = ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
+        verify(service).list(captor.capture());
+        assertThat(captor.getValue().getTenantId()).isEqualTo("ta");
+        assertThat(captor.getValue().getRouteCode()).isEqualTo("RT_A");
+        assertThat(captor.getValue().getTeam()).isEqualTo("ops");
+        assertThat(captor.getValue().getSeverity()).isEqualTo("WARN");
+        assertThat(captor.getValue().getEnabled()).isTrue();
+        assertThat(captor.getValue().getPageNo()).isEqualTo(1);
+        assertThat(captor.getValue().getPageSize()).isEqualTo(20);
+    }
 
-  @Test
-  @DisplayName("新增路由返回该行, 响应字段保持下划线命名")
-  void shouldReturnRow_whenCreatingRouting() throws Exception {
-    // 生产 AlertRoutingConfigMapper 以具名构造器投影返回行，
-    // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
-    when(service.create(any(AlertRoutingSaveRequest.class)))
-        .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
-            1L, "ta", "RT_NEW", null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null)));
-    mockMvc
-        .perform(post("/api/console/alert-routings")
-            .contentType(APPLICATION_JSON)
-            .content(saveBody("RT_NEW")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.route_code").value("RT_NEW"));
-  }
+    @Test
+    @DisplayName("新增路由返回该行, 响应字段保持下划线命名")
+    void shouldReturnRow_whenCreatingRouting() throws Exception {
+        // 生产 AlertRoutingConfigMapper 以具名构造器投影返回行，
+        // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
+        when(service.create(any(AlertRoutingSaveRequest.class)))
+                .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
+                        1L, "ta", "RT_NEW", null, null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, null, null)));
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(saveBody("RT_NEW")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.route_code").value("RT_NEW"));
+    }
 
-  @Test
-  @DisplayName("更新路由以路径主键为准, 请求体随附提交")
-  void shouldPassPathId_whenUpdatingRouting() throws Exception {
-    when(service.update(eq(7L), any(AlertRoutingSaveRequest.class)))
-        .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
-            7L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null)));
-    mockMvc
-        .perform(put("/api/console/alert-routings/7")
-            .contentType(APPLICATION_JSON)
-            .content(saveBody("RT_U")))
-        .andExpect(status().isOk());
-    verify(service).update(eq(7L), any(AlertRoutingSaveRequest.class));
-  }
+    @Test
+    @DisplayName("更新路由以路径主键为准, 请求体随附提交")
+    void shouldPassPathId_whenUpdatingRouting() throws Exception {
+        when(service.update(eq(7L), any(AlertRoutingSaveRequest.class)))
+                .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
+                        7L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, null)));
+        mockMvc.perform(put("/api/console/alert-routings/7")
+                        .contentType(APPLICATION_JSON)
+                        .content(saveBody("RT_U")))
+                .andExpect(status().isOk());
+        verify(service).update(eq(7L), any(AlertRoutingSaveRequest.class));
+    }
 
-  @Test
-  @DisplayName("启停路由时, 按路径主键与租户委托服务处理")
-  void shouldDelegate_whenTogglingEnabled() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/alert-routings/9/enabled")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
-  }
+    @Test
+    @DisplayName("启停路由时, 按路径主键与租户委托服务处理")
+    void shouldDelegate_whenTogglingEnabled() throws Exception {
+        mockMvc.perform(patch("/api/console/alert-routings/9/enabled")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
+                .andExpect(status().isOk());
+        verify(service).toggle(9L, "ta", true);
+    }
 }

@@ -24,73 +24,72 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleAlertRoutingApplicationServiceTest {
 
-  @Mock
-  private AlertRoutingConfigMapper mapper;
+    @Mock
+    private AlertRoutingConfigMapper mapper;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  private DefaultConsoleAlertRoutingApplicationService service;
+    private DefaultConsoleAlertRoutingApplicationService service;
 
-  @Test
-  @DisplayName("按查询条件计数并返回请求页的数据")
-  void list_uses_query_filters_and_returns_paged_rows() {
-    AlertRoutingQueryRequest request = new AlertRoutingQueryRequest();
-    request.setTenantId("ta");
-    request.setKeyword("payment");
-    request.setRouteCode("PAYMENT");
-    request.setTeam("ops");
-    request.setSeverity("WARN");
-    request.setEnabled(true);
-    request.setPageNo(3);
-    request.setPageSize(15);
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-    when(mapper.countByQuery(AlertRoutingConfigCountQuery.builder()
-            .tenantId("ta")
-            .keyword("payment")
-            .routeCode("PAYMENT")
-            .team("ops")
-            .severity("WARN")
-            .enabled(true)
-            .build()))
-        .thenReturn(31L);
-    when(mapper.selectByQuery(AlertRoutingConfigQuery.builder()
-            .tenantId("ta")
-            .keyword("payment")
-            .routeCode("PAYMENT")
-            .team("ops")
-            .severity("WARN")
-            .enabled(true)
-            .pageRequest(new PageRequest(3, 15))
-            .build()))
-        .thenReturn(List.of(new AlertRoutingConfigRow(
-            7L, "ta", "PAYMENT", null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null)));
+    @Test
+    @DisplayName("按查询条件计数并返回请求页的数据")
+    void list_uses_query_filters_and_returns_paged_rows() {
+        AlertRoutingQueryRequest request = new AlertRoutingQueryRequest();
+        request.setTenantId("ta");
+        request.setKeyword("payment");
+        request.setRouteCode("PAYMENT");
+        request.setTeam("ops");
+        request.setSeverity("WARN");
+        request.setEnabled(true);
+        request.setPageNo(3);
+        request.setPageSize(15);
+        when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+        when(mapper.countByQuery(AlertRoutingConfigCountQuery.builder()
+                        .tenantId("ta")
+                        .keyword("payment")
+                        .routeCode("PAYMENT")
+                        .team("ops")
+                        .severity("WARN")
+                        .enabled(true)
+                        .build()))
+                .thenReturn(31L);
+        when(mapper.selectByQuery(AlertRoutingConfigQuery.builder()
+                        .tenantId("ta")
+                        .keyword("payment")
+                        .routeCode("PAYMENT")
+                        .team("ops")
+                        .severity("WARN")
+                        .enabled(true)
+                        .pageRequest(new PageRequest(3, 15))
+                        .build()))
+                .thenReturn(List.of(new AlertRoutingConfigRow(
+                        7L, "ta", "PAYMENT", null, null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, null, null)));
 
-    var response = service.list(request);
+        var response = service.list(request);
 
-    assertThat(response.total()).isEqualTo(31L);
-    assertThat(response.pageNo()).isEqualTo(3);
-    assertThat(response.pageSize()).isEqualTo(15);
-    assertThat(response.items().getFirst().id()).isEqualTo(7L);
-    verify(mapper)
-        .selectByQuery(AlertRoutingConfigQuery.builder()
-            .tenantId("ta")
-            .keyword("payment")
-            .routeCode("PAYMENT")
-            .team("ops")
-            .severity("WARN")
-            .enabled(true)
-            .pageRequest(new PageRequest(3, 15))
-            .build());
-  }
+        assertThat(response.total()).isEqualTo(31L);
+        assertThat(response.pageNo()).isEqualTo(3);
+        assertThat(response.pageSize()).isEqualTo(15);
+        assertThat(response.items().getFirst().id()).isEqualTo(7L);
+        verify(mapper)
+                .selectByQuery(AlertRoutingConfigQuery.builder()
+                        .tenantId("ta")
+                        .keyword("payment")
+                        .routeCode("PAYMENT")
+                        .team("ops")
+                        .severity("WARN")
+                        .enabled(true)
+                        .pageRequest(new PageRequest(3, 15))
+                        .build());
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    service =
-        new DefaultConsoleAlertRoutingApplicationService(mapper, tenantGuard, metadataResolver);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        service = new DefaultConsoleAlertRoutingApplicationService(mapper, tenantGuard, metadataResolver);
+    }
 }

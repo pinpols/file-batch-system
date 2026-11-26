@@ -9,10 +9,10 @@ import java.util.Map;
  * <p>它把租户、触发类型、业务参数和幂等键作为一个不可拆分的操作上下文传递，避免调用方在新增字段时继续扩大跨层方法签名。
  */
 public record ConsoleLaunchCommand(
-    String tenantId,
-    String jobCode,
-    Long workflowDefinitionId,
-    String bizDate,
-    TriggerType triggerType,
-    Map<String, Object> params,
-    String idempotencyKey) {}
+        String tenantId,
+        String jobCode,
+        Long workflowDefinitionId,
+        String bizDate,
+        TriggerType triggerType,
+        Map<String, Object> params,
+        String idempotencyKey) {}

@@ -62,379 +62,362 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleApprovalApplicationService implements ConsoleApprovalApplicationService {
 
-  /** 批量审批逐条失败时回显给调用方的错误消息截断长度，只用于展示，不落库。 */
-  private static final int BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH = 512;
+    /** 批量审批逐条失败时回显给调用方的错误消息截断长度，只用于展示，不落库。 */
+    private static final int BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH = 512;
 
-  /** 审批人 ID，对应 approval_command.approver_id VARCHAR(64)（V27__approval_command.sql）。 */
-  private static final int APPROVER_ID_MAX_LENGTH = 64;
+    /** 审批人 ID，对应 approval_command.approver_id VARCHAR(64)（V27__approval_command.sql）。 */
+    private static final int APPROVER_ID_MAX_LENGTH = 64;
 
-  /**
-   * 审批/驳回意见长度上限，与 ApprovalActionRequest.reason 的 @Size(max = 512) 一致；
-   * 落库列 approval_command.approval_reason / rejection_reason 为 VARCHAR(1024)
-   * （V27__approval_command.sql）。
-   */
-  private static final int DECISION_REASON_MAX_LENGTH = 512;
+    /**
+     * 审批/驳回意见长度上限，与 ApprovalActionRequest.reason 的 @Size(max = 512) 一致；
+     * 落库列 approval_command.approval_reason / rejection_reason 为 VARCHAR(1024)
+     * （V27__approval_command.sql）。
+     */
+    private static final int DECISION_REASON_MAX_LENGTH = 512;
 
-  // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleJobRecoveryService consoleJobRecoveryService;
-  private final ConsoleJobApprovalService consoleJobApprovalService;
-  private final ConsoleFileApplicationService consoleFileApplicationService;
+    // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
+    private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleJobRecoveryService consoleJobRecoveryService;
+    private final ConsoleJobApprovalService consoleJobApprovalService;
+    private final ConsoleFileApplicationService consoleFileApplicationService;
 
-  @Override
-  public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
-    ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
-    ApprovalRecord approvalRecord = recordResponse.getRecord();
-    String status = approvalRecord.getApprovalStatus();
-    // EXECUTED:已完成,幂等返回。REJECTED:反动作冲突 → 409。
-    if ("EXECUTED".equalsIgnoreCase(status)) {
-      return approvalNo;
-    }
-    if (ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(status)) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, status);
-    }
-    // 原子性/可重试补偿:approveRemote(→APPROVED)与 markExecutedRemote(→EXECUTED)之间,
-    // 若 side-effect 失败则状态停在 APPROVED(非 EXECUTED),异常抛给调用方且不卡死——
-    // 重试同一 approvalNo 时命中 APPROVED:跳过重复推进,直接重跑 side-effect。只有 PENDING 才需推进。
-    if (ApprovalCommandStatus.PENDING.code().equalsIgnoreCase(status)) {
-      rejectSelfServiceSelfApproval(approvalRecord, operatorId);
-      ApprovalDecision decision = approveRemote(tenantId, approvalNo, operatorId, reason);
-      requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
-      String actualStatus = decision.approvalStatus();
-      if ("EXECUTED".equalsIgnoreCase(actualStatus)) {
-        return approvalNo;
-      }
-      if (!"APPROVED".equalsIgnoreCase(actualStatus)) {
-        throw decisionConflict(approvalNo, actualStatus);
-      }
-      approvalRecord.setApproverId(decision.approverId());
-    }
-    String result = executeApprovedAction(approvalRecord, tenantId, approvalNo, operatorId);
-    orchestratorInternalRestClient.markApprovalExecuted(tenantId, approvalNo);
-    return result;
-  }
-
-  private String executeApprovedAction(
-      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
-    String actionType = approvalRecord.getActionType();
-    return switch (actionType) {
-      case "COMPENSATION" -> {
-        CompensationCommandRequest request =
-            JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
-        request.setApprovalId(approvalNo);
-        // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
-        // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
-        if (EmptyChecks.isBlank(request.getCompensationType())) {
-          String targetType = approvalRecord.getTargetType();
-          String compensationType = deriveCompensationType(targetType);
-          request.setCompensationType(compensationType);
+    @Override
+    public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
+        ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
+        ApprovalRecord approvalRecord = recordResponse.getRecord();
+        String status = approvalRecord.getApprovalStatus();
+        // EXECUTED:已完成,幂等返回。REJECTED:反动作冲突 → 409。
+        if ("EXECUTED".equalsIgnoreCase(status)) {
+            return approvalNo;
         }
-        yield consoleJobRecoveryService.compensation(request, approvalNo);
-      }
-      case "RERUN" -> {
-        // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
-        // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
-        // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
-        RerunRequest request =
-            JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
-        request.setApprovalId(approvalNo);
-        yield consoleJobRecoveryService.rerun(request, approvalNo);
-      }
-      case "DLQ_REPLAY" -> {
-        DeadLetterReplayRequest request =
-            JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
-        request.setApprovalId(approvalNo);
-        request.setOperatorId(operatorId);
-        yield consoleJobRecoveryService.replayDeadLetter(request, approvalNo);
-      }
-      case "RETRY" -> replayApprovedTarget(approvalRecord, approvalNo);
-      case "DOWNLOAD" -> {
-        PresignDownloadFileRequest request =
-            JsonUtils.fromJson(approvalRecord.getPayloadJson(), PresignDownloadFileRequest.class);
-        request.setApprovalId(approvalNo);
-        ConsolePresignDownloadResponse downloadResponse =
-            consoleFileApplicationService.presignDownload(request, approvalNo);
-        yield EmptyChecks.isNull(downloadResponse) ? null : downloadResponse.downloadUrl();
-      }
-      case "CATCH_UP" -> {
-        ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(
-            approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
-        request.setApprovalId(approvalNo);
-        yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
-      }
-      case "WORKFLOW_RUN_REPLAY" ->
-        workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
-      default ->
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            ResultCode.INVALID_ARGUMENT.detailKey(),
-            "unsupported approval action: " + actionType);
-    };
-  }
+        if (ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(status)) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, status);
+        }
+        // 原子性/可重试补偿:approveRemote(→APPROVED)与 markExecutedRemote(→EXECUTED)之间,
+        // 若 side-effect 失败则状态停在 APPROVED(非 EXECUTED),异常抛给调用方且不卡死——
+        // 重试同一 approvalNo 时命中 APPROVED:跳过重复推进,直接重跑 side-effect。只有 PENDING 才需推进。
+        if (ApprovalCommandStatus.PENDING.code().equalsIgnoreCase(status)) {
+            rejectSelfServiceSelfApproval(approvalRecord, operatorId);
+            ApprovalDecision decision = approveRemote(tenantId, approvalNo, operatorId, reason);
+            requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
+            String actualStatus = decision.approvalStatus();
+            if ("EXECUTED".equalsIgnoreCase(actualStatus)) {
+                return approvalNo;
+            }
+            if (!"APPROVED".equalsIgnoreCase(actualStatus)) {
+                throw decisionConflict(approvalNo, actualStatus);
+            }
+            approvalRecord.setApproverId(decision.approverId());
+        }
+        String result = executeApprovedAction(approvalRecord, tenantId, approvalNo, operatorId);
+        orchestratorInternalRestClient.markApprovalExecuted(tenantId, approvalNo);
+        return result;
+    }
 
-  private String workflowrunreplayAction(
-      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
-    WorkflowRunReplayApprovalPayload payload =
-        JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
-    boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
-        || EmptyChecks.isNull(payload.replayOperationId())
-        || payload.replayOperationId() <= 0
-        || !tenantId.equals(payload.tenantId())
-        || EmptyChecks.isBlank(operatorId);
-    if (workflowRunReplayApprovalIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
+    private String executeApprovedAction(
+            ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+        String actionType = approvalRecord.getActionType();
+        return switch (actionType) {
+            case "COMPENSATION" -> {
+                CompensationCommandRequest request =
+                        JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
+                request.setApprovalId(approvalNo);
+                // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
+                // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
+                if (EmptyChecks.isBlank(request.getCompensationType())) {
+                    String targetType = approvalRecord.getTargetType();
+                    String compensationType = deriveCompensationType(targetType);
+                    request.setCompensationType(compensationType);
+                }
+                yield consoleJobRecoveryService.compensation(request, approvalNo);
+            }
+            case "RERUN" -> {
+                // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
+                // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
+                // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
+                RerunRequest request = JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
+                request.setApprovalId(approvalNo);
+                yield consoleJobRecoveryService.rerun(request, approvalNo);
+            }
+            case "DLQ_REPLAY" -> {
+                DeadLetterReplayRequest request =
+                        JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
+                request.setApprovalId(approvalNo);
+                request.setOperatorId(operatorId);
+                yield consoleJobRecoveryService.replayDeadLetter(request, approvalNo);
+            }
+            case "RETRY" -> replayApprovedTarget(approvalRecord, approvalNo);
+            case "DOWNLOAD" -> {
+                PresignDownloadFileRequest request =
+                        JsonUtils.fromJson(approvalRecord.getPayloadJson(), PresignDownloadFileRequest.class);
+                request.setApprovalId(approvalNo);
+                ConsolePresignDownloadResponse downloadResponse =
+                        consoleFileApplicationService.presignDownload(request, approvalNo);
+                yield EmptyChecks.isNull(downloadResponse) ? null : downloadResponse.downloadUrl();
+            }
+            case "CATCH_UP" -> {
+                ConsoleCatchUpApprovalRequest request =
+                        JsonUtils.fromJson(approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
+                request.setApprovalId(approvalNo);
+                yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
+            }
+            case "WORKFLOW_RUN_REPLAY" -> workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
+            default ->
+                throw BizException.of(
+                        ResultCode.INVALID_ARGUMENT,
+                        ResultCode.INVALID_ARGUMENT.detailKey(),
+                        "unsupported approval action: " + actionType);
+        };
     }
-    String approvedBy = approvalRecord.getApproverId();
-    if (EmptyChecks.isBlank(approvedBy)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
-    }
-    orchestratorInternalRestClient.approveWorkflowRunReplayOperation(
-        payload.replayOperationId(), tenantId, approvedBy);
-    return approvalNo;
-  }
 
-  @Override
-  public String reject(String tenantId, String approvalNo, String operatorId, String reason) {
-    // 同动作幂等:已 REJECTED 再 reject 直接返回;反动作冲突:已 APPROVED 不可再 reject → 409
-    // (此前 reject 无守卫,对已 APPROVED 委托远端静默忽略、返 200 却不改状态,误导操作员)。
-    ApprovalRecord approvalRecord = loadApproval(tenantId, approvalNo).getRecord();
-    if (ApprovalCommandStatus.REJECTED
-        .code()
-        .equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
-      rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);
-      return approvalNo;
+    private String workflowrunreplayAction(
+            ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+        WorkflowRunReplayApprovalPayload payload =
+                JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
+        boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
+                || EmptyChecks.isNull(payload.replayOperationId())
+                || payload.replayOperationId() <= 0
+                || !tenantId.equals(payload.tenantId())
+                || EmptyChecks.isBlank(operatorId);
+        if (workflowRunReplayApprovalIsInvalid) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
+        }
+        String approvedBy = approvalRecord.getApproverId();
+        if (EmptyChecks.isBlank(approvedBy)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
+        }
+        orchestratorInternalRestClient.approveWorkflowRunReplayOperation(
+                payload.replayOperationId(), tenantId, approvedBy);
+        return approvalNo;
     }
-    if (!ApprovalCommandStatus.PENDING
-        .code()
-        .equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.approval.not_pending_for_action",
-          approvalNo,
-          approvalRecord.getApprovalStatus());
-    }
-    ApprovalDecision decision = rejectRemote(tenantId, approvalNo, operatorId, reason);
-    requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
-    if (!ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(decision.approvalStatus())) {
-      throw decisionConflict(approvalNo, decision.approvalStatus());
-    }
-    rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);
-    return approvalNo;
-  }
 
-  private void rejectAssociatedWorkflowNodeReplay(String tenantId, ApprovalRecord approvalRecord) {
-    if ("WORKFLOW_RUN_REPLAY".equals(approvalRecord.getActionType())) {
-      rejectAssociatedWorkflowRunReplay(tenantId, approvalRecord);
-      return;
+    @Override
+    public String reject(String tenantId, String approvalNo, String operatorId, String reason) {
+        // 同动作幂等:已 REJECTED 再 reject 直接返回;反动作冲突:已 APPROVED 不可再 reject → 409
+        // (此前 reject 无守卫,对已 APPROVED 委托远端静默忽略、返 200 却不改状态,误导操作员)。
+        ApprovalRecord approvalRecord = loadApproval(tenantId, approvalNo).getRecord();
+        if (ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
+            rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);
+            return approvalNo;
+        }
+        if (!ApprovalCommandStatus.PENDING.code().equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT,
+                    "error.approval.not_pending_for_action",
+                    approvalNo,
+                    approvalRecord.getApprovalStatus());
+        }
+        ApprovalDecision decision = rejectRemote(tenantId, approvalNo, operatorId, reason);
+        requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
+        if (!ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(decision.approvalStatus())) {
+            throw decisionConflict(approvalNo, decision.approvalStatus());
+        }
+        rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);
+        return approvalNo;
     }
-    if (!"COMPENSATION".equals(approvalRecord.getActionType())) {
-      return;
+
+    private void rejectAssociatedWorkflowNodeReplay(String tenantId, ApprovalRecord approvalRecord) {
+        if ("WORKFLOW_RUN_REPLAY".equals(approvalRecord.getActionType())) {
+            rejectAssociatedWorkflowRunReplay(tenantId, approvalRecord);
+            return;
+        }
+        if (!"COMPENSATION".equals(approvalRecord.getActionType())) {
+            return;
+        }
+        CompensationCommandRequest request =
+                JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
+        boolean isWorkflowNodeReplayApproval = EmptyChecks.isNotNull(request)
+                && "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType())
+                && EmptyChecks.isNotNull(request.getReplayOperationId());
+        if (isWorkflowNodeReplayApproval) {
+            orchestratorInternalRestClient.rejectWorkflowNodeReplayOperation(request.getReplayOperationId(), tenantId);
+        }
     }
-    CompensationCommandRequest request =
-        JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
-    boolean isWorkflowNodeReplayApproval = EmptyChecks.isNotNull(request)
-        && "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType())
-        && EmptyChecks.isNotNull(request.getReplayOperationId());
-    if (isWorkflowNodeReplayApproval) {
-      orchestratorInternalRestClient.rejectWorkflowNodeReplayOperation(
-          request.getReplayOperationId(), tenantId);
+
+    private void rejectAssociatedWorkflowRunReplay(String tenantId, ApprovalRecord approvalRecord) {
+        WorkflowRunReplayApprovalPayload payload =
+                JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
+        boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
+                || EmptyChecks.isNull(payload.replayOperationId())
+                || payload.replayOperationId() <= 0
+                || !tenantId.equals(payload.tenantId());
+        if (workflowRunReplayApprovalIsInvalid) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
+        }
+        orchestratorInternalRestClient.rejectWorkflowRunReplayOperation(payload.replayOperationId(), tenantId);
     }
-  }
 
-  private void rejectAssociatedWorkflowRunReplay(String tenantId, ApprovalRecord approvalRecord) {
-    WorkflowRunReplayApprovalPayload payload =
-        JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
-    boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
-        || EmptyChecks.isNull(payload.replayOperationId())
-        || payload.replayOperationId() <= 0
-        || !tenantId.equals(payload.tenantId());
-    if (workflowRunReplayApprovalIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
+    @Override
+    public List<ConsoleBatchApprovalResultResponse> batchApprove(
+            String tenantId, List<String> approvalNos, String operatorId, String reason) {
+        if (approvalNos == null || approvalNos.isEmpty()) {
+            return List.of();
+        }
+        List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
+        for (String approvalNo : approvalNos) {
+            try {
+                approve(tenantId, approvalNo, operatorId, reason);
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "APPROVED"));
+            } catch (Exception ex) {
+                SwallowedExceptionLogger.warn(DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
+
+                String errorMessage = ex.getMessage();
+                String safeErrorMessage =
+                        ConsoleTextSanitizer.safeDisplay(errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
+            }
+        }
+        return List.copyOf(results);
     }
-    orchestratorInternalRestClient.rejectWorkflowRunReplayOperation(
-        payload.replayOperationId(), tenantId);
-  }
 
-  @Override
-  public List<ConsoleBatchApprovalResultResponse> batchApprove(
-      String tenantId, List<String> approvalNos, String operatorId, String reason) {
-    if (approvalNos == null || approvalNos.isEmpty()) {
-      return List.of();
+    @Override
+    public List<ConsoleBatchApprovalResultResponse> batchReject(
+            String tenantId, List<String> approvalNos, String operatorId, String reason) {
+        if (approvalNos == null || approvalNos.isEmpty()) {
+            return List.of();
+        }
+        List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
+        for (String approvalNo : approvalNos) {
+            try {
+                reject(tenantId, approvalNo, operatorId, reason);
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "REJECTED"));
+            } catch (Exception ex) {
+                SwallowedExceptionLogger.warn(DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
+
+                String errorMessage = ex.getMessage();
+                String safeErrorMessage =
+                        ConsoleTextSanitizer.safeDisplay(errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
+            }
+        }
+        return List.copyOf(results);
     }
-    List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
-    for (String approvalNo : approvalNos) {
-      try {
-        approve(tenantId, approvalNo, operatorId, reason);
-        results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "APPROVED"));
-      } catch (Exception ex) {
-        SwallowedExceptionLogger.warn(
-            DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
-        String errorMessage = ex.getMessage();
-        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(
-            errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
-        results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
-      }
+    private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
+        ApprovalRecordResponse response =
+                orchestratorInternalRestClient.loadApproval(tenantId, approvalNo, ApprovalRecordResponse.class);
+        ApprovalRecord approvalRecord = EmptyChecks.isNull(response) ? null : response.getRecord();
+        Guard.requireFound(approvalRecord, "approval request not found");
+        return response;
     }
-    return List.copyOf(results);
-  }
 
-  @Override
-  public List<ConsoleBatchApprovalResultResponse> batchReject(
-      String tenantId, List<String> approvalNos, String operatorId, String reason) {
-    if (approvalNos == null || approvalNos.isEmpty()) {
-      return List.of();
+    private ApprovalDecision approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        return orchestratorInternalRestClient.approveApproval(
+                tenantId,
+                approvalNo,
+                ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
+                ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
+                metadata.requestId(),
+                metadata.traceId());
     }
-    List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
-    for (String approvalNo : approvalNos) {
-      try {
-        reject(tenantId, approvalNo, operatorId, reason);
-        results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "REJECTED"));
-      } catch (Exception ex) {
-        SwallowedExceptionLogger.warn(
-            DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
-        String errorMessage = ex.getMessage();
-        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(
-            errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
-        results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
-      }
+    private String replayApprovedTarget(ApprovalRecord approval, String approvalNo) {
+        if ("JOB_TASK".equals(approval.getTargetType())) {
+            TaskReplayRequest request = JsonUtils.fromJson(approval.getPayloadJson(), TaskReplayRequest.class);
+            request.setApprovalId(approvalNo);
+            return consoleJobRecoveryService.replayTask(request, approvalNo);
+        }
+        if ("JOB_PARTITION".equals(approval.getTargetType())) {
+            PartitionReplayRequest request =
+                    JsonUtils.fromJson(approval.getPayloadJson(), PartitionReplayRequest.class);
+            request.setApprovalId(approvalNo);
+            return consoleJobRecoveryService.replayPartition(request, approvalNo);
+        }
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.approval.unsupported_retry_target");
     }
-    return List.copyOf(results);
-  }
 
-  private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-    ApprovalRecordResponse response = orchestratorInternalRestClient.loadApproval(
-        tenantId, approvalNo, ApprovalRecordResponse.class);
-    ApprovalRecord approvalRecord = EmptyChecks.isNull(response) ? null : response.getRecord();
-    Guard.requireFound(approvalRecord, "approval request not found");
-    return response;
-  }
-
-  private ApprovalDecision approveRemote(
-      String tenantId, String approvalNo, String operatorId, String reason) {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    return orchestratorInternalRestClient.approveApproval(
-        tenantId,
-        approvalNo,
-        ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
-        ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
-        metadata.requestId(),
-        metadata.traceId());
-  }
-
-  private String replayApprovedTarget(ApprovalRecord approval, String approvalNo) {
-    if ("JOB_TASK".equals(approval.getTargetType())) {
-      TaskReplayRequest request =
-          JsonUtils.fromJson(approval.getPayloadJson(), TaskReplayRequest.class);
-      request.setApprovalId(approvalNo);
-      return consoleJobRecoveryService.replayTask(request, approvalNo);
+    private ApprovalDecision rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        return orchestratorInternalRestClient.rejectApproval(
+                tenantId,
+                approvalNo,
+                ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
+                ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
+                metadata.requestId(),
+                metadata.traceId());
     }
-    if ("JOB_PARTITION".equals(approval.getTargetType())) {
-      PartitionReplayRequest request =
-          JsonUtils.fromJson(approval.getPayloadJson(), PartitionReplayRequest.class);
-      request.setApprovalId(approvalNo);
-      return consoleJobRecoveryService.replayPartition(request, approvalNo);
+
+    private void requireMatchingDecision(
+            String tenantId, String approvalNo, ApprovalRecord expected, ApprovalDecision actual) {
+        boolean sameDecision = EmptyChecks.isNotNull(actual)
+                && tenantId.equals(actual.tenantId())
+                && approvalNo.equals(actual.approvalNo())
+                && Objects.equals(expected.getActionType(), actual.actionType())
+                && Objects.equals(expected.getTargetType(), actual.targetType())
+                && Objects.equals(expected.getTargetId(), actual.targetId())
+                && Objects.equals(expected.getPayloadJson(), actual.payloadJson())
+                && Objects.equals(expected.getSourceIdempotencyKey(), actual.sourceIdempotencyKey());
+        if (!sameDecision) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.approval.execution_mismatch");
+        }
     }
-    throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.approval.unsupported_retry_target");
-  }
 
-  private ApprovalDecision rejectRemote(
-      String tenantId, String approvalNo, String operatorId, String reason) {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    return orchestratorInternalRestClient.rejectApproval(
-        tenantId,
-        approvalNo,
-        ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
-        ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
-        metadata.requestId(),
-        metadata.traceId());
-  }
-
-  private void requireMatchingDecision(
-      String tenantId, String approvalNo, ApprovalRecord expected, ApprovalDecision actual) {
-    boolean sameDecision = EmptyChecks.isNotNull(actual)
-        && tenantId.equals(actual.tenantId())
-        && approvalNo.equals(actual.approvalNo())
-        && Objects.equals(expected.getActionType(), actual.actionType())
-        && Objects.equals(expected.getTargetType(), actual.targetType())
-        && Objects.equals(expected.getTargetId(), actual.targetId())
-        && Objects.equals(expected.getPayloadJson(), actual.payloadJson())
-        && Objects.equals(expected.getSourceIdempotencyKey(), actual.sourceIdempotencyKey());
-    if (!sameDecision) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.approval.execution_mismatch");
+    private BizException decisionConflict(String approvalNo, String actualStatus) {
+        return BizException.of(
+                ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, actualStatus);
     }
-  }
 
-  private BizException decisionConflict(String approvalNo, String actualStatus) {
-    return BizException.of(
-        ResultCode.STATE_CONFLICT,
-        "error.approval.not_pending_for_action",
-        approvalNo,
-        actualStatus);
-  }
-
-  /** 自助服务申请与配置发布一样，申请人不能批准自己的单据。拒绝仍允许。已批准后的重试不在这里拦截。 */
-  private static void rejectSelfServiceSelfApproval(
-      ApprovalRecord approvalRecord, String operatorId) {
-    if (!"SELF_SERVICE".equals(approvalRecord.getApprovalType())) {
-      return;
+    /** 自助服务申请与配置发布一样，申请人不能批准自己的单据。拒绝仍允许。已批准后的重试不在这里拦截。 */
+    private static void rejectSelfServiceSelfApproval(ApprovalRecord approvalRecord, String operatorId) {
+        if (!"SELF_SERVICE".equals(approvalRecord.getApprovalType())) {
+            return;
+        }
+        String requesterId = approvalRecord.getRequesterId();
+        if (EmptyChecks.isBlank(requesterId) || EmptyChecks.isBlank(operatorId)) {
+            return;
+        }
+        if (requesterId.equals(operatorId)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.self_approval_forbidden");
+        }
     }
-    String requesterId = approvalRecord.getRequesterId();
-    if (EmptyChecks.isBlank(requesterId) || EmptyChecks.isBlank(operatorId)) {
-      return;
+
+    /**
+     * 补偿单缺 compensationType 时,按审批目标类型推导补偿粒度(JOB_INSTANCE→JOB、STEP→STEP …)。 合法值对齐
+     * ck_compensation_command_type:JOB/STEP/PARTITION/FILE/BATCH/DLQ。
+     */
+    private static String deriveCompensationType(String targetType) {
+        if (targetType == null) {
+            return "JOB";
+        }
+        return switch (targetType) {
+            case "STEP_INSTANCE", "STEP" -> "STEP";
+            case "PARTITION" -> "PARTITION";
+            case "FILE", "FILE_RECORD" -> "FILE";
+            case "BATCH", "BATCH_DAY" -> "BATCH";
+            case "DLQ", "DEAD_LETTER" -> "DLQ";
+            default -> "JOB";
+        };
     }
-    if (requesterId.equals(operatorId)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.self_approval_forbidden");
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecordResponse {
+        private ApprovalRecord record;
     }
-  }
 
-  /**
-   * 补偿单缺 compensationType 时,按审批目标类型推导补偿粒度(JOB_INSTANCE→JOB、STEP→STEP …)。 合法值对齐
-   * ck_compensation_command_type:JOB/STEP/PARTITION/FILE/BATCH/DLQ。
-   */
-  private static String deriveCompensationType(String targetType) {
-    if (targetType == null) {
-      return "JOB";
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecord {
+        private String tenantId;
+        private String approvalNo;
+        private String approvalType;
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String approvalStatus;
+        private String requesterId;
+        private String approverId;
+        private String rejectionReason;
+        private String approvalReason;
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
     }
-    return switch (targetType) {
-      case "STEP_INSTANCE", "STEP" -> "STEP";
-      case "PARTITION" -> "PARTITION";
-      case "FILE", "FILE_RECORD" -> "FILE";
-      case "BATCH", "BATCH_DAY" -> "BATCH";
-      case "DLQ", "DEAD_LETTER" -> "DLQ";
-      default -> "JOB";
-    };
-  }
 
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  private static class ApprovalRecordResponse {
-    private ApprovalRecord record;
-  }
-
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  private static class ApprovalRecord {
-    private String tenantId;
-    private String approvalNo;
-    private String approvalType;
-    private String actionType;
-    private String targetType;
-    private String targetId;
-    private String payloadJson;
-    private String approvalStatus;
-    private String requesterId;
-    private String approverId;
-    private String rejectionReason;
-    private String approvalReason;
-    private String sourceTraceId;
-    private String sourceIdempotencyKey;
-  }
-
-  private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
+    private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
 }

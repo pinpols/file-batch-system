@@ -18,16 +18,15 @@ import org.springframework.context.annotation.Bean;
 @EnableConfigurationProperties(BatchTimezoneProperties.class)
 public class BatchTimezoneAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public BatchTimezoneProvider batchTimezoneProvider(BatchTimezoneProperties properties) {
-    return new BatchTimezoneProvider(properties);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public BatchTimezoneProvider batchTimezoneProvider(BatchTimezoneProperties properties) {
+        return new BatchTimezoneProvider(properties);
+    }
 
-  @Bean
-  @ConditionalOnMissingBean
-  public BatchDateTimeSupport batchDateTimeSupport(
-      Clock clock, BatchTimezoneProvider timezoneProvider) {
-    return new BatchDateTimeSupport(clock, timezoneProvider);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public BatchDateTimeSupport batchDateTimeSupport(Clock clock, BatchTimezoneProvider timezoneProvider) {
+        return new BatchDateTimeSupport(clock, timezoneProvider);
+    }
 }

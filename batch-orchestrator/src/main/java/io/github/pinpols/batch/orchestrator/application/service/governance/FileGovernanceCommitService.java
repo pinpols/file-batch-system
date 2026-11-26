@@ -15,27 +15,27 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FileGovernanceCommitService {
 
-  private final FileGovernanceRepository fileGovernanceRepository;
+    private final FileGovernanceRepository fileGovernanceRepository;
 
-  /** 记录预签名成功审计，事务只覆盖数据库写入。 */
-  @Transactional
-  public void appendAudit(FileGovernanceRepository.FileAuditCommand auditCommand) {
-    fileGovernanceRepository.appendAudit(auditCommand);
-  }
+    /** 记录预签名成功审计，事务只覆盖数据库写入。 */
+    @Transactional
+    public void appendAudit(FileGovernanceRepository.FileAuditCommand auditCommand) {
+        fileGovernanceRepository.appendAudit(auditCommand);
+    }
 
-  /**
-   * 在对象存储探测完成后，用短事务提交到达状态和审计。
-   *
-   * <p>调用方应在进入本方法前完成对象存储探测；本方法不再访问对象存储。
-   */
-  @Transactional
-  public void confirmArrival(
-      String tenantId,
-      Long fileId,
-      long fileSizeBytes,
-      Object metadata,
-      FileGovernanceRepository.FileAuditCommand auditCommand) {
-    fileGovernanceRepository.markFileArrivalConfirmed(tenantId, fileId, fileSizeBytes, metadata);
-    fileGovernanceRepository.appendAudit(auditCommand);
-  }
+    /**
+     * 在对象存储探测完成后，用短事务提交到达状态和审计。
+     *
+     * <p>调用方应在进入本方法前完成对象存储探测；本方法不再访问对象存储。
+     */
+    @Transactional
+    public void confirmArrival(
+            String tenantId,
+            Long fileId,
+            long fileSizeBytes,
+            Object metadata,
+            FileGovernanceRepository.FileAuditCommand auditCommand) {
+        fileGovernanceRepository.markFileArrivalConfirmed(tenantId, fileId, fileSizeBytes, metadata);
+        fileGovernanceRepository.appendAudit(auditCommand);
+    }
 }

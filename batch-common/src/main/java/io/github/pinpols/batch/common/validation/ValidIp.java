@@ -22,12 +22,12 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = ValidIpValidator.class)
 public @interface ValidIp {
 
-  String message() default "ip address invalid";
+    String message() default "ip address invalid";
 
-  /** 仅允许 IPv4(默认 false,允许 v4+v6) */
-  boolean ipv4Only() default false;
+    /** 仅允许 IPv4(默认 false,允许 v4+v6) */
+    boolean ipv4Only() default false;
 
-  Class<?>[] groups() default {};
+    Class<?>[] groups() default {};
 
-  Class<? extends Payload>[] payload() default {};
+    Class<? extends Payload>[] payload() default {};
 }

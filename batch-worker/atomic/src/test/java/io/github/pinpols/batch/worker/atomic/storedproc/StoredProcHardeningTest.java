@@ -33,149 +33,143 @@ import org.springframework.beans.factory.BeanFactory;
 @DisplayName("存储过程加固: 数据源白名单与游标结果截断")
 class StoredProcHardeningTest {
 
-  private StoredProcExecutorProperties props;
-  private DataSource ds;
-  private BeanFactory beanFactory;
-  private StoredProcTaskExecutor executor;
+    private StoredProcExecutorProperties props;
+    private DataSource ds;
+    private BeanFactory beanFactory;
+    private StoredProcTaskExecutor executor;
 
-  @BeforeEach
-  void setUp() {
-    props = new StoredProcExecutorProperties();
-    props.setForbidOsCapableRole(false); // 单测 mock 连接,新 DB 闸由真 PG IT 覆盖
-    props.setAllowSecurityDefiner(true);
-    props.setEnabled(true);
-    ds = mock(DataSource.class);
-    beanFactory = mock(BeanFactory.class);
-    executor = new StoredProcTaskExecutor(props, beanFactory, ds);
-  }
+    @BeforeEach
+    void setUp() {
+        props = new StoredProcExecutorProperties();
+        props.setForbidOsCapableRole(false); // 单测 mock 连接,新 DB 闸由真 PG IT 覆盖
+        props.setAllowSecurityDefiner(true);
+        props.setEnabled(true);
+        ds = mock(DataSource.class);
+        beanFactory = mock(BeanFactory.class);
+        executor = new StoredProcTaskExecutor(props, beanFactory, ds);
+    }
 
-  private TaskContext ctx(Map<String, Object> params) {
-    return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
-  }
+    private TaskContext ctx(Map<String, Object> params) {
+        return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+    }
 
-  /** 配通 CALL 路径所需的 conn/cs mock(search_path 的 createStatement 也要返回 Statement)。 */
-  private CallableStatement wireConnection() throws Exception {
-    Connection conn = mock(Connection.class);
-    CallableStatement cs = mock(CallableStatement.class);
-    Statement st = mock(Statement.class);
-    when(ds.getConnection()).thenReturn(conn);
-    when(conn.getAutoCommit()).thenReturn(true);
-    when(conn.prepareCall(anyString())).thenReturn(cs);
-    lenient().when(conn.createStatement()).thenReturn(st);
-    return cs;
-  }
+    /** 配通 CALL 路径所需的 conn/cs mock(search_path 的 createStatement 也要返回 Statement)。 */
+    private CallableStatement wireConnection() throws Exception {
+        Connection conn = mock(Connection.class);
+        CallableStatement cs = mock(CallableStatement.class);
+        Statement st = mock(Statement.class);
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.getAutoCommit()).thenReturn(true);
+        when(conn.prepareCall(anyString())).thenReturn(cs);
+        lenient().when(conn.createStatement()).thenReturn(st);
+        return cs;
+    }
 
-  // ─── (b) dataSourceBean 不在白名单 → 拒绝 ──────────────────────────────────────
+    // ─── (b) dataSourceBean 不在白名单 → 拒绝 ──────────────────────────────────────
 
-  @Test
-  @DisplayName("指定未授权数据源时应判失败, 并提示数据源不被允许")
-  void shouldReject_whenDataSourceBeanNotAllowed() {
-    // allowedDataSourceBeans 默认空 + 配置默认为 null → 任意覆盖都拒
-    TaskResult r =
-        executor.execute(ctx(Map.of("procedureName", "batch.p", "dataSourceBean", "rogueDs")));
+    @Test
+    @DisplayName("指定未授权数据源时应判失败, 并提示数据源不被允许")
+    void shouldReject_whenDataSourceBeanNotAllowed() {
+        // allowedDataSourceBeans 默认空 + 配置默认为 null → 任意覆盖都拒
+        TaskResult r = executor.execute(ctx(Map.of("procedureName", "batch.p", "dataSourceBean", "rogueDs")));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.message()).contains("dataSourceBean not allowed");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.message()).contains("dataSourceBean not allowed");
+    }
 
-  @Test
-  @DisplayName("解析数据源时应支持缺省回退与白名单放行, 越权请求直接抛出")
-  void shouldResolveDataSourceBean_whenRequestedAbsentOrAllowed() {
-    // null requested → 返回 configured
-    assertThat(StoredProcTaskExecutor.resolveDataSourceBean(null, "mainDs", Set.of()))
-        .isEqualTo("mainDs");
-    // requested == configured → 放行
-    assertThat(StoredProcTaskExecutor.resolveDataSourceBean("mainDs", "mainDs", Set.of()))
-        .isEqualTo("mainDs");
-    // requested 在白名单 → 放行
-    assertThat(StoredProcTaskExecutor.resolveDataSourceBean(
-            "reportingDs", "mainDs", Set.of("reportingDs")))
-        .isEqualTo("reportingDs");
-    // 不同且不在白名单 → 抛
-    assertThatThrownBy(
-            () -> StoredProcTaskExecutor.resolveDataSourceBean("rogueDs", "mainDs", Set.of()))
-        .isInstanceOf(StoredProcValidationException.class)
-        .hasMessageContaining("dataSourceBean not allowed");
-  }
+    @Test
+    @DisplayName("解析数据源时应支持缺省回退与白名单放行, 越权请求直接抛出")
+    void shouldResolveDataSourceBean_whenRequestedAbsentOrAllowed() {
+        // null requested → 返回 configured
+        assertThat(StoredProcTaskExecutor.resolveDataSourceBean(null, "mainDs", Set.of()))
+                .isEqualTo("mainDs");
+        // requested == configured → 放行
+        assertThat(StoredProcTaskExecutor.resolveDataSourceBean("mainDs", "mainDs", Set.of()))
+                .isEqualTo("mainDs");
+        // requested 在白名单 → 放行
+        assertThat(StoredProcTaskExecutor.resolveDataSourceBean("reportingDs", "mainDs", Set.of("reportingDs")))
+                .isEqualTo("reportingDs");
+        // 不同且不在白名单 → 抛
+        assertThatThrownBy(() -> StoredProcTaskExecutor.resolveDataSourceBean("rogueDs", "mainDs", Set.of()))
+                .isInstanceOf(StoredProcValidationException.class)
+                .hasMessageContaining("dataSourceBean not allowed");
+    }
 
-  @Test
-  @DisplayName("白名单内的数据源应可用于执行并成功返回")
-  void shouldAllowDataSourceBean_whenInAllowlist() throws Exception {
-    props.setDataSourceBeanName("mainDs");
-    props.setAllowedDataSourceBeans(Set.of("reportingDs"));
-    Connection conn = mock(Connection.class);
-    CallableStatement cs = mock(CallableStatement.class);
-    Statement st = mock(Statement.class);
-    DataSource reporting = mock(DataSource.class);
-    when(beanFactory.getBean("reportingDs", DataSource.class)).thenReturn(reporting);
-    when(reporting.getConnection()).thenReturn(conn);
-    when(conn.getAutoCommit()).thenReturn(true);
-    when(conn.prepareCall(anyString())).thenReturn(cs);
-    lenient().when(conn.createStatement()).thenReturn(st);
+    @Test
+    @DisplayName("白名单内的数据源应可用于执行并成功返回")
+    void shouldAllowDataSourceBean_whenInAllowlist() throws Exception {
+        props.setDataSourceBeanName("mainDs");
+        props.setAllowedDataSourceBeans(Set.of("reportingDs"));
+        Connection conn = mock(Connection.class);
+        CallableStatement cs = mock(CallableStatement.class);
+        Statement st = mock(Statement.class);
+        DataSource reporting = mock(DataSource.class);
+        when(beanFactory.getBean("reportingDs", DataSource.class)).thenReturn(reporting);
+        when(reporting.getConnection()).thenReturn(conn);
+        when(conn.getAutoCommit()).thenReturn(true);
+        when(conn.prepareCall(anyString())).thenReturn(cs);
+        lenient().when(conn.createStatement()).thenReturn(st);
 
-    TaskResult r =
-        executor.execute(ctx(Map.of("procedureName", "batch.p", "dataSourceBean", "reportingDs")));
+        TaskResult r = executor.execute(ctx(Map.of("procedureName", "batch.p", "dataSourceBean", "reportingDs")));
 
-    assertThat(r.success()).isTrue();
-  }
+        assertThat(r.success()).isTrue();
+    }
 
-  // ─── (c) maxRefCursorRows 截断 ────────────────────────────────────────────────
+    // ─── (c) maxRefCursorRows 截断 ────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("游标结果超过行数上限时应截断到上限, 并标记已截断")
-  void shouldTruncateRefCursor_whenRowsExceedCap() throws Exception {
-    props.setMaxRefCursorRows(3);
-    CallableStatement cs = wireConnection();
+    @Test
+    @DisplayName("游标结果超过行数上限时应截断到上限, 并标记已截断")
+    void shouldTruncateRefCursor_whenRowsExceedCap() throws Exception {
+        props.setMaxRefCursorRows(3);
+        CallableStatement cs = wireConnection();
 
-    // mock REFCURSOR ResultSet:metadata 单列,next() 返回比 cap 更多的行
-    ResultSet cursor = mock(ResultSet.class);
-    ResultSetMetaData md = mock(ResultSetMetaData.class);
-    when(cs.getObject(1)).thenReturn(cursor);
-    when(cursor.getMetaData()).thenReturn(md);
-    when(md.getColumnCount()).thenReturn(1);
-    when(md.getColumnLabel(1)).thenReturn("c");
-    // 始终有下一行(无穷),验证 cap 必须主动 break,否则会一直读
-    when(cursor.next()).thenReturn(true);
-    when(cursor.getObject(anyInt())).thenReturn("v");
+        // mock REFCURSOR ResultSet:metadata 单列,next() 返回比 cap 更多的行
+        ResultSet cursor = mock(ResultSet.class);
+        ResultSetMetaData md = mock(ResultSetMetaData.class);
+        when(cs.getObject(1)).thenReturn(cursor);
+        when(cursor.getMetaData()).thenReturn(md);
+        when(md.getColumnCount()).thenReturn(1);
+        when(md.getColumnLabel(1)).thenReturn("c");
+        // 始终有下一行(无穷),验证 cap 必须主动 break,否则会一直读
+        when(cursor.next()).thenReturn(true);
+        when(cursor.getObject(anyInt())).thenReturn("v");
 
-    TaskResult r = executor.execute(
-        ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
+        TaskResult r = executor.execute(ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
-    assertThat(r.success()).isTrue();
-    assertThat(r.output()).containsEntry("truncated", true);
-    @SuppressWarnings("unchecked")
-    List<List<Map<String, Object>>> resultSets =
-        (List<List<Map<String, Object>>>) r.output().get("resultSets");
-    assertThat(resultSets).hasSize(1);
-    assertThat(resultSets.get(0)).hasSize(3); // 读到 cap 即停
-    @SuppressWarnings("unchecked")
-    Map<String, Object> outValues = (Map<String, Object>) r.output().get("outValues");
-    assertThat((String) outValues.get("p1")).contains("truncated");
-  }
+        assertThat(r.success()).isTrue();
+        assertThat(r.output()).containsEntry("truncated", true);
+        @SuppressWarnings("unchecked")
+        List<List<Map<String, Object>>> resultSets =
+                (List<List<Map<String, Object>>>) r.output().get("resultSets");
+        assertThat(resultSets).hasSize(1);
+        assertThat(resultSets.get(0)).hasSize(3); // 读到 cap 即停
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outValues = (Map<String, Object>) r.output().get("outValues");
+        assertThat((String) outValues.get("p1")).contains("truncated");
+    }
 
-  @Test
-  @DisplayName("游标结果未超过上限时应完整返回, 且不标记截断")
-  void shouldKeepRefCursor_whenRowsUnderCap() throws Exception {
-    props.setMaxRefCursorRows(10);
-    CallableStatement cs = wireConnection();
+    @Test
+    @DisplayName("游标结果未超过上限时应完整返回, 且不标记截断")
+    void shouldKeepRefCursor_whenRowsUnderCap() throws Exception {
+        props.setMaxRefCursorRows(10);
+        CallableStatement cs = wireConnection();
 
-    ResultSet cursor = mock(ResultSet.class);
-    ResultSetMetaData md = mock(ResultSetMetaData.class);
-    when(cs.getObject(1)).thenReturn(cursor);
-    when(cursor.getMetaData()).thenReturn(md);
-    when(md.getColumnCount()).thenReturn(1);
-    when(md.getColumnLabel(1)).thenReturn("c");
-    when(cursor.next()).thenReturn(true, true, false); // 2 行
-    when(cursor.getObject(anyInt())).thenReturn("v");
+        ResultSet cursor = mock(ResultSet.class);
+        ResultSetMetaData md = mock(ResultSetMetaData.class);
+        when(cs.getObject(1)).thenReturn(cursor);
+        when(cursor.getMetaData()).thenReturn(md);
+        when(md.getColumnCount()).thenReturn(1);
+        when(md.getColumnLabel(1)).thenReturn("c");
+        when(cursor.next()).thenReturn(true, true, false); // 2 行
+        when(cursor.getObject(anyInt())).thenReturn("v");
 
-    TaskResult r = executor.execute(
-        ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
+        TaskResult r = executor.execute(ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
-    assertThat(r.success()).isTrue();
-    assertThat(r.output()).containsEntry("truncated", false);
-    @SuppressWarnings("unchecked")
-    List<List<Map<String, Object>>> resultSets =
-        (List<List<Map<String, Object>>>) r.output().get("resultSets");
-    assertThat(resultSets.get(0)).hasSize(2);
-  }
+        assertThat(r.success()).isTrue();
+        assertThat(r.output()).containsEntry("truncated", false);
+        @SuppressWarnings("unchecked")
+        List<List<Map<String, Object>>> resultSets =
+                (List<List<Map<String, Object>>>) r.output().get("resultSets");
+        assertThat(resultSets.get(0)).hasSize(2);
+    }
 }

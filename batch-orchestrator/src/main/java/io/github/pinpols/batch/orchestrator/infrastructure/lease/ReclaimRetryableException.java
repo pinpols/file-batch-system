@@ -6,7 +6,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lease;
  */
 public class ReclaimRetryableException extends RuntimeException {
 
-  public ReclaimRetryableException(String message) {
-    super(message);
-  }
+    public ReclaimRetryableException(String message) {
+        super(message);
+    }
 }

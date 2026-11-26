@@ -23,18 +23,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class SsrfGuardedDns implements Dns {
 
-  private final BatchSecurityProperties securityProperties;
+    private final BatchSecurityProperties securityProperties;
 
-  public SsrfGuardedDns(BatchSecurityProperties securityProperties) {
-    this.securityProperties = securityProperties;
-  }
-
-  @Override
-  public List<InetAddress> lookup(String hostname) throws UnknownHostException {
-    if (securityProperties.isBypassMode()) {
-      return SYSTEM.lookup(hostname);
+    public SsrfGuardedDns(BatchSecurityProperties securityProperties) {
+        this.securityProperties = securityProperties;
     }
-    // resolve-then-connect：解析与受限网段校验在此完成，OkHttp 直接使用这份地址快照。
-    return DnsResolveGuard.resolveAllAndValidate(hostname);
-  }
+
+    @Override
+    public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+        if (securityProperties.isBypassMode()) {
+            return SYSTEM.lookup(hostname);
+        }
+        // resolve-then-connect：解析与受限网段校验在此完成，OkHttp 直接使用这份地址快照。
+        return DnsResolveGuard.resolveAllAndValidate(hostname);
+    }
 }

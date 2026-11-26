@@ -20,46 +20,43 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class FileGroupExpectationController {
 
-  private final FileGroupExpectationService expectationService;
+    private final FileGroupExpectationService expectationService;
 
-  @GetMapping("/upload-targets")
-  public List<FileGroupUploadTarget> listUploadTargets(@RequestParam String tenantId) {
-    return expectationService.listEnabledUploadTargets(tenantId);
-  }
+    @GetMapping("/upload-targets")
+    public List<FileGroupUploadTarget> listUploadTargets(@RequestParam String tenantId) {
+        return expectationService.listEnabledUploadTargets(tenantId);
+    }
 
-  @PutMapping
-  public ConfigureResponse configure(@RequestBody ConfigureRequest request) {
-    int rows = expectationService.configure(new DefinitionRequest(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.fileGroupCode(),
-        request.expectedLocalTime(),
-        request.dueLocalTime(),
-        request.enabled()));
-    return new ConfigureResponse(rows == 1, request.fileGroupCode());
-  }
+    @PutMapping
+    public ConfigureResponse configure(@RequestBody ConfigureRequest request) {
+        int rows = expectationService.configure(new DefinitionRequest(
+                request.tenantId(),
+                request.calendarCode(),
+                request.workflowDefinitionId(),
+                request.fileGroupCode(),
+                request.expectedLocalTime(),
+                request.dueLocalTime(),
+                request.enabled()));
+        return new ConfigureResponse(rows == 1, request.fileGroupCode());
+    }
 
-  @DeleteMapping
-  public boolean deleteDefinition(@RequestBody DeleteRequest request) {
-    return expectationService.deleteDefinition(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.fileGroupCode());
-  }
+    @DeleteMapping
+    public boolean deleteDefinition(@RequestBody DeleteRequest request) {
+        return expectationService.deleteDefinition(
+                request.tenantId(), request.calendarCode(), request.workflowDefinitionId(), request.fileGroupCode());
+    }
 
-  public record ConfigureRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String fileGroupCode,
-      LocalTime expectedLocalTime,
-      LocalTime dueLocalTime,
-      boolean enabled) {}
+    public record ConfigureRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String fileGroupCode,
+            LocalTime expectedLocalTime,
+            LocalTime dueLocalTime,
+            boolean enabled) {}
 
-  public record ConfigureResponse(boolean configured, String fileGroupCode) {}
+    public record ConfigureResponse(boolean configured, String fileGroupCode) {}
 
-  public record DeleteRequest(
-      String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {}
+    public record DeleteRequest(
+            String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {}
 }

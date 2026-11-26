@@ -62,353 +62,347 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("workflow definition version history (V167 — Polish 闭环)")
 class WorkflowDefinitionVersionTest {
 
-  private static final String TENANT = "t1";
-  private static final long DEF_ID = 100L;
-  private static final String USER = "alice";
-  private static final String WORKFLOW_CODE = "wf_demo";
+    private static final String TENANT = "t1";
+    private static final long DEF_ID = 100L;
+    private static final String USER = "alice";
+    private static final String WORKFLOW_CODE = "wf_demo";
 
-  private WorkflowDefinitionMapper definitionMapper;
-  private WorkflowNodeMapper nodeMapper;
-  private WorkflowEdgeMapper edgeMapper;
-  private WorkflowDefinitionVersionMapper versionMapper;
-  private JobDefinitionMapper jobDefinitionMapper;
-  private BusinessCalendarMapper businessCalendarMapper;
-  private WorkflowDesignLockService lockService;
-  private DefaultWorkflowDefinitionService service;
+    private WorkflowDefinitionMapper definitionMapper;
+    private WorkflowNodeMapper nodeMapper;
+    private WorkflowEdgeMapper edgeMapper;
+    private WorkflowDefinitionVersionMapper versionMapper;
+    private JobDefinitionMapper jobDefinitionMapper;
+    private BusinessCalendarMapper businessCalendarMapper;
+    private WorkflowDesignLockService lockService;
+    private DefaultWorkflowDefinitionService service;
 
-  @BeforeEach
-  void setUp() {
-    definitionMapper = mock(WorkflowDefinitionMapper.class);
-    nodeMapper = mock(WorkflowNodeMapper.class);
-    edgeMapper = mock(WorkflowEdgeMapper.class);
-    versionMapper = mock(WorkflowDefinitionVersionMapper.class);
-    jobDefinitionMapper = mock(JobDefinitionMapper.class);
-    businessCalendarMapper = mock(BusinessCalendarMapper.class);
-    when(businessCalendarMapper.selectActiveByTenantAndCalendarCode(TENANT, "cn_workday"))
-        .thenReturn(
-            new ActiveCalendarRow(1L, TENANT, "cn_workday", null, null, null, null, null, null));
-    lockService = mock(WorkflowDesignLockService.class);
-    ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-    when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
+    @BeforeEach
+    void setUp() {
+        definitionMapper = mock(WorkflowDefinitionMapper.class);
+        nodeMapper = mock(WorkflowNodeMapper.class);
+        edgeMapper = mock(WorkflowEdgeMapper.class);
+        versionMapper = mock(WorkflowDefinitionVersionMapper.class);
+        jobDefinitionMapper = mock(JobDefinitionMapper.class);
+        businessCalendarMapper = mock(BusinessCalendarMapper.class);
+        when(businessCalendarMapper.selectActiveByTenantAndCalendarCode(TENANT, "cn_workday"))
+                .thenReturn(new ActiveCalendarRow(1L, TENANT, "cn_workday", null, null, null, null, null, null));
+        lockService = mock(WorkflowDesignLockService.class);
+        ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+        when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    service = new DefaultWorkflowDefinitionService(
-        definitionMapper,
-        nodeMapper,
-        edgeMapper,
-        versionMapper,
-        mock(ConsoleRealtimeEventPort.class),
-        tenantGuard,
-        mock(ConsoleConfigCacheInvalidationService.class),
-        lockService,
-        mock(WorkflowDagValidator.class),
-        new WorkflowDefinitionResponseAssembler(),
-        new WorkflowDefinitionWriteSupport(
-            nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
-        new WorkflowDefinitionDagInspector(jobDefinitionMapper),
-        mock(JobResourceAssignmentGuard.class),
-        jobDefinitionMapper,
-        businessCalendarMapper);
-  }
+        service = new DefaultWorkflowDefinitionService(
+                definitionMapper,
+                nodeMapper,
+                edgeMapper,
+                versionMapper,
+                mock(ConsoleRealtimeEventPort.class),
+                tenantGuard,
+                mock(ConsoleConfigCacheInvalidationService.class),
+                lockService,
+                mock(WorkflowDagValidator.class),
+                new WorkflowDefinitionResponseAssembler(),
+                new WorkflowDefinitionWriteSupport(nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
+                new WorkflowDefinitionDagInspector(jobDefinitionMapper),
+                mock(JobResourceAssignmentGuard.class),
+                jobDefinitionMapper,
+                businessCalendarMapper);
+    }
 
-  @Test
-  @DisplayName("普通创建后立即保留 v1 完整日程与持久节点边快照")
-  void shouldAppendInitialSnapshotWhenCreatingWorkflow() {
-    WorkflowDefinitionSaveRequest request = prepareCreatedWorkflow();
+    @Test
+    @DisplayName("普通创建后立即保留 v1 完整日程与持久节点边快照")
+    void shouldAppendInitialSnapshotWhenCreatingWorkflow() {
+        WorkflowDefinitionSaveRequest request = prepareCreatedWorkflow();
 
-    service.create(request);
+        service.create(request);
 
-    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> inserted =
-        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
-    verify(versionMapper).insertVersionSnapshot(inserted.capture());
-    WorkflowDefinitionVersionInsertParam snapshot = inserted.getValue();
-    assertThat(snapshot.getTenantId()).isEqualTo(TENANT);
-    assertThat(snapshot.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
-    assertThat(snapshot.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
-    assertThat(snapshot.getVersion()).isEqualTo(1);
-    assertThat(snapshot.getWorkflowType()).isEqualTo("DAG");
-    assertThat(snapshot.getEnabled()).isTrue();
-    assertThat(snapshot.getScheduleEnabled()).isTrue();
-    assertThat(snapshot.getScheduleType()).isEqualTo("CRON");
-    assertThat(snapshot.getScheduleExpr()).isEqualTo("0 0 1 * * ?");
-    assertThat(snapshot.getTimezone()).isEqualTo("UTC");
-    assertThat(snapshot.getTriggerMode()).isEqualTo("SCHEDULED");
-    assertThat(snapshot.getCalendarCode()).isEqualTo("cn_workday");
-    assertThat(snapshot.getNodesJson()).contains("\"nodeCode\":\"start\"", "\"nodeCode\":\"end\"");
-    assertThat(snapshot.getEdgesJson()).contains("\"fromNodeCode\":\"start\"");
-  }
+        ArgumentCaptor<WorkflowDefinitionVersionInsertParam> inserted =
+                ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+        verify(versionMapper).insertVersionSnapshot(inserted.capture());
+        WorkflowDefinitionVersionInsertParam snapshot = inserted.getValue();
+        assertThat(snapshot.getTenantId()).isEqualTo(TENANT);
+        assertThat(snapshot.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
+        assertThat(snapshot.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
+        assertThat(snapshot.getVersion()).isEqualTo(1);
+        assertThat(snapshot.getWorkflowType()).isEqualTo("DAG");
+        assertThat(snapshot.getEnabled()).isTrue();
+        assertThat(snapshot.getScheduleEnabled()).isTrue();
+        assertThat(snapshot.getScheduleType()).isEqualTo("CRON");
+        assertThat(snapshot.getScheduleExpr()).isEqualTo("0 0 1 * * ?");
+        assertThat(snapshot.getTimezone()).isEqualTo("UTC");
+        assertThat(snapshot.getTriggerMode()).isEqualTo("SCHEDULED");
+        assertThat(snapshot.getCalendarCode()).isEqualTo("cn_workday");
+        assertThat(snapshot.getNodesJson()).contains("\"nodeCode\":\"start\"", "\"nodeCode\":\"end\"");
+        assertThat(snapshot.getEdgesJson()).contains("\"fromNodeCode\":\"start\"");
+    }
 
-  @Test
-  @DisplayName("普通创建的 v1 快照写入失败向外传播，不把部分聚合当创建成功")
-  void shouldPropagateInitialSnapshotFailureWhenCreatingWorkflow() {
-    WorkflowDefinitionSaveRequest request = prepareCreatedWorkflow();
-    IllegalStateException failure = new IllegalStateException("initial snapshot write failed");
-    when(versionMapper.insertVersionSnapshot(any())).thenThrow(failure);
+    @Test
+    @DisplayName("普通创建的 v1 快照写入失败向外传播，不把部分聚合当创建成功")
+    void shouldPropagateInitialSnapshotFailureWhenCreatingWorkflow() {
+        WorkflowDefinitionSaveRequest request = prepareCreatedWorkflow();
+        IllegalStateException failure = new IllegalStateException("initial snapshot write failed");
+        when(versionMapper.insertVersionSnapshot(any())).thenThrow(failure);
 
-    assertThatThrownBy(() -> service.create(request)).isSameAs(failure);
-  }
+        assertThatThrownBy(() -> service.create(request)).isSameAs(failure);
+    }
 
-  private WorkflowDefinitionSaveRequest prepareCreatedWorkflow() {
-    WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
-    request.setTenantId(TENANT);
-    request.setWorkflowCode(WORKFLOW_CODE);
-    request.setWorkflowName("demo");
-    request.setScheduleType("CRON");
-    request.setScheduleExpr("0 0 1 * * ?");
-    request.setTimezone("UTC");
-    request.setCalendarCode("CN_WORKDAY");
-    WorkflowDefinitionSaveRequest.NodeItem start = new WorkflowDefinitionSaveRequest.NodeItem();
-    start.setNodeCode("start");
-    start.setNodeType("START");
-    WorkflowDefinitionSaveRequest.NodeItem end = new WorkflowDefinitionSaveRequest.NodeItem();
-    end.setNodeCode("end");
-    end.setNodeType("END");
-    WorkflowDefinitionSaveRequest.EdgeItem edge = new WorkflowDefinitionSaveRequest.EdgeItem();
-    edge.setFromNodeCode("start");
-    edge.setToNodeCode("end");
-    request.setNodes(List.of(start, end));
-    request.setEdges(List.of(edge));
-    doAnswer(invocation -> {
-          WorkflowDefinitionEntity inserted = invocation.getArgument(0);
-          inserted.setId(DEF_ID);
-          return 1;
-        })
-        .when(definitionMapper)
-        .insert(any());
-    WorkflowDefinitionEntity persisted = defEntity(1);
-    persisted.setScheduleEnabled(true);
-    persisted.setScheduleType("CRON");
-    persisted.setScheduleExpr("0 0 1 * * ?");
-    persisted.setTimezone("UTC");
-    persisted.setTriggerMode("SCHEDULED");
-    persisted.setCalendarCode("cn_workday");
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(persisted);
-    WorkflowNodeEntity storedStart = nodeEntity("start", "START");
-    WorkflowNodeEntity storedEnd = nodeEntity("end", "END");
-    List<WorkflowNodeEntity> persistedNodes = List.of(storedStart, storedEnd);
-    WorkflowEdgeEntity storedEdge = edgeEntity("start", "end");
-    List<WorkflowEdgeEntity> persistedEdges = List.of(storedEdge);
-    when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(persistedNodes);
-    when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(persistedEdges);
-    return request;
-  }
+    private WorkflowDefinitionSaveRequest prepareCreatedWorkflow() {
+        WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
+        request.setTenantId(TENANT);
+        request.setWorkflowCode(WORKFLOW_CODE);
+        request.setWorkflowName("demo");
+        request.setScheduleType("CRON");
+        request.setScheduleExpr("0 0 1 * * ?");
+        request.setTimezone("UTC");
+        request.setCalendarCode("CN_WORKDAY");
+        WorkflowDefinitionSaveRequest.NodeItem start = new WorkflowDefinitionSaveRequest.NodeItem();
+        start.setNodeCode("start");
+        start.setNodeType("START");
+        WorkflowDefinitionSaveRequest.NodeItem end = new WorkflowDefinitionSaveRequest.NodeItem();
+        end.setNodeCode("end");
+        end.setNodeType("END");
+        WorkflowDefinitionSaveRequest.EdgeItem edge = new WorkflowDefinitionSaveRequest.EdgeItem();
+        edge.setFromNodeCode("start");
+        edge.setToNodeCode("end");
+        request.setNodes(List.of(start, end));
+        request.setEdges(List.of(edge));
+        doAnswer(invocation -> {
+                    WorkflowDefinitionEntity inserted = invocation.getArgument(0);
+                    inserted.setId(DEF_ID);
+                    return 1;
+                })
+                .when(definitionMapper)
+                .insert(any());
+        WorkflowDefinitionEntity persisted = defEntity(1);
+        persisted.setScheduleEnabled(true);
+        persisted.setScheduleType("CRON");
+        persisted.setScheduleExpr("0 0 1 * * ?");
+        persisted.setTimezone("UTC");
+        persisted.setTriggerMode("SCHEDULED");
+        persisted.setCalendarCode("cn_workday");
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(persisted);
+        WorkflowNodeEntity storedStart = nodeEntity("start", "START");
+        WorkflowNodeEntity storedEnd = nodeEntity("end", "END");
+        List<WorkflowNodeEntity> persistedNodes = List.of(storedStart, storedEnd);
+        WorkflowEdgeEntity storedEdge = edgeEntity("start", "end");
+        List<WorkflowEdgeEntity> persistedEdges = List.of(storedEdge);
+        when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(persistedNodes);
+        when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(persistedEdges);
+        return request;
+    }
 
-  @Test
-  @DisplayName("fullUpdate 成功 → 历史表取持久化后的版本与开关，画布不写回定时开关")
-  void shouldAppendSnapshot_whenFullUpdateSucceeds() {
-    // 准备
-    WorkflowDefinitionEntity def = defEntity(3);
-    def.setScheduleEnabled(true);
-    def.setScheduleType("CRON");
-    def.setScheduleExpr("0 0 * * * ?");
-    def.setTimezone("Asia/Shanghai");
-    def.setTriggerMode("SCHEDULED");
-    def.setCalendarCode("CN_WORKDAY");
-    def.setDependsOnJobCode("PREPARE_DATA");
-    // 保存前的读取仍是开启，保存期间暂停落库：快照必须取保存后的实际开关。
-    WorkflowDefinitionEntity persisted = defEntity(4);
-    persisted.setScheduleEnabled(false);
-    persisted.setScheduleType("CRON");
-    persisted.setScheduleExpr("0 0 * * * ?");
-    persisted.setTimezone("Asia/Shanghai");
-    persisted.setTriggerMode("SCHEDULED");
-    persisted.setCalendarCode("cn_workday");
-    persisted.setDependsOnJobCode("PREPARE_DATA");
-    JobDefinitionView dependency = new JobDefinitionView();
-    dependency.setId(101L);
-    dependency.setJobCode("PREPARE_DATA");
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "PREPARE_DATA")).thenReturn(dependency);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, persisted, persisted);
-    when(lockService.currentHolder(TENANT, DEF_ID))
-        .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
-    when(definitionMapper.updateAndBumpVersion(
-            argThat(value -> Objects.equals(value.tenantId(), TENANT)
-                && Objects.equals(value.id(), DEF_ID)
-                && Objects.equals(value.expectedVersion(), 3))))
-        .thenReturn(1);
-    when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
-        .thenReturn(List.of(nodeEntity("start", "START"), nodeEntity("end", "END")));
-    when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class)))
-        .thenReturn(List.of(edgeEntity("start", "end")));
+    @Test
+    @DisplayName("fullUpdate 成功 → 历史表取持久化后的版本与开关，画布不写回定时开关")
+    void shouldAppendSnapshot_whenFullUpdateSucceeds() {
+        // 准备
+        WorkflowDefinitionEntity def = defEntity(3);
+        def.setScheduleEnabled(true);
+        def.setScheduleType("CRON");
+        def.setScheduleExpr("0 0 * * * ?");
+        def.setTimezone("Asia/Shanghai");
+        def.setTriggerMode("SCHEDULED");
+        def.setCalendarCode("CN_WORKDAY");
+        def.setDependsOnJobCode("PREPARE_DATA");
+        // 保存前的读取仍是开启，保存期间暂停落库：快照必须取保存后的实际开关。
+        WorkflowDefinitionEntity persisted = defEntity(4);
+        persisted.setScheduleEnabled(false);
+        persisted.setScheduleType("CRON");
+        persisted.setScheduleExpr("0 0 * * * ?");
+        persisted.setTimezone("Asia/Shanghai");
+        persisted.setTriggerMode("SCHEDULED");
+        persisted.setCalendarCode("cn_workday");
+        persisted.setDependsOnJobCode("PREPARE_DATA");
+        JobDefinitionView dependency = new JobDefinitionView();
+        dependency.setId(101L);
+        dependency.setJobCode("PREPARE_DATA");
+        when(jobDefinitionMapper.selectByUniqueKey(TENANT, "PREPARE_DATA")).thenReturn(dependency);
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, persisted, persisted);
+        when(lockService.currentHolder(TENANT, DEF_ID))
+                .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
+        when(definitionMapper.updateAndBumpVersion(argThat(value -> Objects.equals(value.tenantId(), TENANT)
+                        && Objects.equals(value.id(), DEF_ID)
+                        && Objects.equals(value.expectedVersion(), 3))))
+                .thenReturn(1);
+        when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
+                .thenReturn(List.of(nodeEntity("start", "START"), nodeEntity("end", "END")));
+        when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of(edgeEntity("start", "end")));
 
-    // 执行
-    service.fullUpdate(DEF_ID, fullUpdateBody(3), USER);
+        // 执行
+        service.fullUpdate(DEF_ID, fullUpdateBody(3), USER);
 
-    // 断言
-    ArgumentCaptor<WorkflowDefinitionVersionUpdateParam> updateCaptor =
-        ArgumentCaptor.forClass(WorkflowDefinitionVersionUpdateParam.class);
-    verify(definitionMapper).updateAndBumpVersion(updateCaptor.capture());
-    assertThat(updateCaptor.getValue().scheduleEnabled()).isNull();
-    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
-        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
-    verify(versionMapper, times(1)).insertVersionSnapshot(captor.capture());
-    WorkflowDefinitionVersionInsertParam p = captor.getValue();
-    assertThat(p.getTenantId()).isEqualTo(TENANT);
-    assertThat(p.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
-    assertThat(p.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
-    assertThat(p.getVersion()).isEqualTo(4); // bumped from 3
-    assertThat(p.getScheduleEnabled()).isFalse();
-    assertThat(p.getScheduleType()).isEqualTo("CRON");
-    assertThat(p.getScheduleExpr()).isEqualTo("0 0 * * * ?");
-    assertThat(p.getTimezone()).isEqualTo("Asia/Shanghai");
-    assertThat(p.getTriggerMode()).isEqualTo("SCHEDULED");
-    assertThat(p.getCalendarCode()).isEqualTo("cn_workday");
-    assertThat(p.getDependsOnJobCode()).isEqualTo("PREPARE_DATA");
-    assertThat(p.getSavedBy()).isEqualTo(USER);
-    assertThat(p.getNodesJson()).contains("\"nodeCode\":\"start\"");
-    assertThat(p.getEdgesJson()).contains("\"fromNodeCode\":\"start\"");
-    assertThat(p.getSummary()).isNull();
-  }
+        // 断言
+        ArgumentCaptor<WorkflowDefinitionVersionUpdateParam> updateCaptor =
+                ArgumentCaptor.forClass(WorkflowDefinitionVersionUpdateParam.class);
+        verify(definitionMapper).updateAndBumpVersion(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().scheduleEnabled()).isNull();
+        ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
+                ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+        verify(versionMapper, times(1)).insertVersionSnapshot(captor.capture());
+        WorkflowDefinitionVersionInsertParam p = captor.getValue();
+        assertThat(p.getTenantId()).isEqualTo(TENANT);
+        assertThat(p.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
+        assertThat(p.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
+        assertThat(p.getVersion()).isEqualTo(4); // bumped from 3
+        assertThat(p.getScheduleEnabled()).isFalse();
+        assertThat(p.getScheduleType()).isEqualTo("CRON");
+        assertThat(p.getScheduleExpr()).isEqualTo("0 0 * * * ?");
+        assertThat(p.getTimezone()).isEqualTo("Asia/Shanghai");
+        assertThat(p.getTriggerMode()).isEqualTo("SCHEDULED");
+        assertThat(p.getCalendarCode()).isEqualTo("cn_workday");
+        assertThat(p.getDependsOnJobCode()).isEqualTo("PREPARE_DATA");
+        assertThat(p.getSavedBy()).isEqualTo(USER);
+        assertThat(p.getNodesJson()).contains("\"nodeCode\":\"start\"");
+        assertThat(p.getEdgesJson()).contains("\"fromNodeCode\":\"start\"");
+        assertThat(p.getSummary()).isNull();
+    }
 
-  @Test
-  @DisplayName("多次 fullUpdate → 历史表追加 N 行(每次 bump version)")
-  void shouldAppendMultipleSnapshots_whenFullUpdatedNTimes() {
-    // 准备
-    WorkflowDefinitionEntity def = defEntity(1);
-    // 每次保存先读当前定义，写后再读持久化结果并加载详情；version 从 1 → 2 → 3。
-    when(definitionMapper.selectById(TENANT, DEF_ID))
-        .thenReturn(def, defEntity(2), defEntity(2), defEntity(2), defEntity(3), defEntity(3));
-    when(lockService.currentHolder(TENANT, DEF_ID))
-        .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
-    when(definitionMapper.updateAndBumpVersion(argThat(value ->
-            Objects.equals(value.tenantId(), TENANT) && Objects.equals(value.id(), DEF_ID))))
-        .thenReturn(1);
-    when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
-        .thenReturn(Collections.emptyList());
-    when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class)))
-        .thenReturn(Collections.emptyList());
+    @Test
+    @DisplayName("多次 fullUpdate → 历史表追加 N 行(每次 bump version)")
+    void shouldAppendMultipleSnapshots_whenFullUpdatedNTimes() {
+        // 准备
+        WorkflowDefinitionEntity def = defEntity(1);
+        // 每次保存先读当前定义，写后再读持久化结果并加载详情；version 从 1 → 2 → 3。
+        when(definitionMapper.selectById(TENANT, DEF_ID))
+                .thenReturn(def, defEntity(2), defEntity(2), defEntity(2), defEntity(3), defEntity(3));
+        when(lockService.currentHolder(TENANT, DEF_ID))
+                .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
+        when(definitionMapper.updateAndBumpVersion(argThat(
+                        value -> Objects.equals(value.tenantId(), TENANT) && Objects.equals(value.id(), DEF_ID))))
+                .thenReturn(1);
+        when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(Collections.emptyList());
+        when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(Collections.emptyList());
 
-    // 执行
-    service.fullUpdate(DEF_ID, fullUpdateBody(1), USER);
-    service.fullUpdate(DEF_ID, fullUpdateBody(2), USER);
+        // 执行
+        service.fullUpdate(DEF_ID, fullUpdateBody(1), USER);
+        service.fullUpdate(DEF_ID, fullUpdateBody(2), USER);
 
-    // 断言
-    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
-        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
-    verify(versionMapper, times(2)).insertVersionSnapshot(captor.capture());
-    assertThat(captor.getAllValues()).extracting("version").containsExactly(2, 3);
-  }
+        // 断言
+        ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
+                ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+        verify(versionMapper, times(2)).insertVersionSnapshot(captor.capture());
+        assertThat(captor.getAllValues()).extracting("version").containsExactly(2, 3);
+    }
 
-  @Test
-  @DisplayName("listVersions 真实读历史表 → 全量返回 + 最新 version current=true")
-  void shouldReturnFullList_whenHistoryHasRows() {
-    // 准备 — 主表 current = 5,历史表 3 行 (5/4/3)
-    WorkflowDefinitionEntity def = defEntity(5);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
-    when(versionMapper.listByDefinitionId(TENANT, DEF_ID))
-        .thenReturn(List.of(versionRow(5, "alice"), versionRow(4, "bob"), versionRow(3, "alice")));
+    @Test
+    @DisplayName("listVersions 真实读历史表 → 全量返回 + 最新 version current=true")
+    void shouldReturnFullList_whenHistoryHasRows() {
+        // 准备 — 主表 current = 5,历史表 3 行 (5/4/3)
+        WorkflowDefinitionEntity def = defEntity(5);
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
+        when(versionMapper.listByDefinitionId(TENANT, DEF_ID))
+                .thenReturn(List.of(versionRow(5, "alice"), versionRow(4, "bob"), versionRow(3, "alice")));
 
-    // 执行
-    List<WorkflowDefinitionVersionSummaryResponse> versions = service.listVersions(DEF_ID, TENANT);
+        // 执行
+        List<WorkflowDefinitionVersionSummaryResponse> versions = service.listVersions(DEF_ID, TENANT);
 
-    // 断言
-    assertThat(versions).hasSize(3);
-    assertThat(versions.get(0).version()).isEqualTo(5);
-    assertThat(versions.get(0).current()).isTrue();
-    assertThat(versions.get(0).savedBy()).isEqualTo("alice");
-    assertThat(versions.get(1).current()).isFalse();
-    assertThat(versions.get(2).current()).isFalse();
-  }
+        // 断言
+        assertThat(versions).hasSize(3);
+        assertThat(versions.get(0).version()).isEqualTo(5);
+        assertThat(versions.get(0).current()).isTrue();
+        assertThat(versions.get(0).savedBy()).isEqualTo("alice");
+        assertThat(versions.get(1).current()).isFalse();
+        assertThat(versions.get(2).current()).isFalse();
+    }
 
-  @Test
-  @DisplayName("listVersions 历史表无数据 → 单条 current 降级(兼容 PR #370)")
-  void shouldDegradeToSingleCurrent_whenHistoryEmpty() {
-    WorkflowDefinitionEntity def = defEntity(1);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
-    when(versionMapper.listByDefinitionId(TENANT, DEF_ID)).thenReturn(Collections.emptyList());
+    @Test
+    @DisplayName("listVersions 历史表无数据 → 单条 current 降级(兼容 PR #370)")
+    void shouldDegradeToSingleCurrent_whenHistoryEmpty() {
+        WorkflowDefinitionEntity def = defEntity(1);
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
+        when(versionMapper.listByDefinitionId(TENANT, DEF_ID)).thenReturn(Collections.emptyList());
 
-    List<WorkflowDefinitionVersionSummaryResponse> versions = service.listVersions(DEF_ID, TENANT);
+        List<WorkflowDefinitionVersionSummaryResponse> versions = service.listVersions(DEF_ID, TENANT);
 
-    assertThat(versions).hasSize(1);
-    assertThat(versions.get(0).version()).isEqualTo(1);
-    assertThat(versions.get(0).current()).isTrue();
-    verify(versionMapper, never()).findByDefinitionIdAndVersion(any(), any(), any());
-  }
+        assertThat(versions).hasSize(1);
+        assertThat(versions.get(0).version()).isEqualTo(1);
+        assertThat(versions.get(0).current()).isTrue();
+        verify(versionMapper, never()).findByDefinitionIdAndVersion(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("getVersion 历史 version → JSONB 反序列化 → detail 可读")
-  void shouldReadHistoricalVersion_whenSnapshotPresent() {
-    // 准备 — 主表 current = 5;读 version=3 走快照路径
-    WorkflowDefinitionEntity def = defEntity(5);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
-    WorkflowDefinitionVersionEntity snap = new WorkflowDefinitionVersionEntity();
-    snap.setWorkflowDefinitionId(DEF_ID);
-    snap.setTenantId(TENANT);
-    snap.setWorkflowCode(WORKFLOW_CODE);
-    snap.setVersion(3);
-    snap.setWorkflowName("v3-name");
-    snap.setWorkflowType("DAG");
-    snap.setEnabled(true);
-    snap.setNodesJson("[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
-        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}]");
-    snap.setEdgesJson("[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]");
-    snap.setSavedAt(Instant.parse("2026-06-01T00:00:00Z"));
-    when(versionMapper.findByDefinitionIdAndVersion(TENANT, DEF_ID, 3)).thenReturn(snap);
+    @Test
+    @DisplayName("getVersion 历史 version → JSONB 反序列化 → detail 可读")
+    void shouldReadHistoricalVersion_whenSnapshotPresent() {
+        // 准备 — 主表 current = 5;读 version=3 走快照路径
+        WorkflowDefinitionEntity def = defEntity(5);
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
+        WorkflowDefinitionVersionEntity snap = new WorkflowDefinitionVersionEntity();
+        snap.setWorkflowDefinitionId(DEF_ID);
+        snap.setTenantId(TENANT);
+        snap.setWorkflowCode(WORKFLOW_CODE);
+        snap.setVersion(3);
+        snap.setWorkflowName("v3-name");
+        snap.setWorkflowType("DAG");
+        snap.setEnabled(true);
+        snap.setNodesJson(
+                "[{\"nodeCode\":\"start\",\"nodeType\":\"START\"}," + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}]");
+        snap.setEdgesJson("[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]");
+        snap.setSavedAt(Instant.parse("2026-06-01T00:00:00Z"));
+        when(versionMapper.findByDefinitionIdAndVersion(TENANT, DEF_ID, 3)).thenReturn(snap);
 
-    // 执行
-    WorkflowDefinitionDetailResponse detail = service.getVersion(DEF_ID, TENANT, 3);
+        // 执行
+        WorkflowDefinitionDetailResponse detail = service.getVersion(DEF_ID, TENANT, 3);
 
-    // 断言
-    assertThat(detail.version()).isEqualTo(3);
-    assertThat(detail.workflowName()).isEqualTo("v3-name");
-    assertThat(detail.nodes()).hasSize(2);
-    assertThat(detail.nodes()).extracting("nodeCode").containsExactly("start", "end");
-    assertThat(detail.edges()).hasSize(1);
-    assertThat(detail.edges().get(0).fromNodeCode()).isEqualTo("start");
-  }
+        // 断言
+        assertThat(detail.version()).isEqualTo(3);
+        assertThat(detail.workflowName()).isEqualTo("v3-name");
+        assertThat(detail.nodes()).hasSize(2);
+        assertThat(detail.nodes()).extracting("nodeCode").containsExactly("start", "end");
+        assertThat(detail.edges()).hasSize(1);
+        assertThat(detail.edges().get(0).fromNodeCode()).isEqualTo("start");
+    }
 
-  // ── fixtures ────────────────────────────────────────────────────────────
+    // ── fixtures ────────────────────────────────────────────────────────────
 
-  private static WorkflowDefinitionEntity defEntity(int version) {
-    WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
-    def.setId(DEF_ID);
-    def.setTenantId(TENANT);
-    def.setWorkflowCode(WORKFLOW_CODE);
-    def.setWorkflowName("demo");
-    def.setWorkflowType("DAG");
-    def.setVersion(version);
-    def.setEnabled(true);
-    return def;
-  }
+    private static WorkflowDefinitionEntity defEntity(int version) {
+        WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+        def.setId(DEF_ID);
+        def.setTenantId(TENANT);
+        def.setWorkflowCode(WORKFLOW_CODE);
+        def.setWorkflowName("demo");
+        def.setWorkflowType("DAG");
+        def.setVersion(version);
+        def.setEnabled(true);
+        return def;
+    }
 
-  private static WorkflowDefinitionFullUpdateRequest fullUpdateBody(int expectedVersion) {
-    WorkflowDefinitionSaveRequest save = new WorkflowDefinitionSaveRequest();
-    save.setTenantId(TENANT);
-    save.setWorkflowCode(WORKFLOW_CODE);
-    save.setWorkflowName("demo");
-    save.setWorkflowType("DAG");
-    save.setEnabled(true);
-    save.setNodes(new ArrayList<>());
-    save.setEdges(new ArrayList<>());
-    WorkflowDefinitionFullUpdateRequest req = new WorkflowDefinitionFullUpdateRequest();
-    req.setDefinition(save);
-    req.setExpectedVersion(expectedVersion);
-    return req;
-  }
+    private static WorkflowDefinitionFullUpdateRequest fullUpdateBody(int expectedVersion) {
+        WorkflowDefinitionSaveRequest save = new WorkflowDefinitionSaveRequest();
+        save.setTenantId(TENANT);
+        save.setWorkflowCode(WORKFLOW_CODE);
+        save.setWorkflowName("demo");
+        save.setWorkflowType("DAG");
+        save.setEnabled(true);
+        save.setNodes(new ArrayList<>());
+        save.setEdges(new ArrayList<>());
+        WorkflowDefinitionFullUpdateRequest req = new WorkflowDefinitionFullUpdateRequest();
+        req.setDefinition(save);
+        req.setExpectedVersion(expectedVersion);
+        return req;
+    }
 
-  private static WorkflowNodeEntity nodeEntity(String code, String type) {
-    WorkflowNodeEntity n = new WorkflowNodeEntity();
-    n.setWorkflowDefinitionId(DEF_ID);
-    n.setNodeCode(code);
-    n.setNodeType(type);
-    n.setEnabled(true);
-    return n;
-  }
+    private static WorkflowNodeEntity nodeEntity(String code, String type) {
+        WorkflowNodeEntity n = new WorkflowNodeEntity();
+        n.setWorkflowDefinitionId(DEF_ID);
+        n.setNodeCode(code);
+        n.setNodeType(type);
+        n.setEnabled(true);
+        return n;
+    }
 
-  private static WorkflowEdgeEntity edgeEntity(String from, String to) {
-    WorkflowEdgeEntity e = new WorkflowEdgeEntity();
-    e.setWorkflowDefinitionId(DEF_ID);
-    e.setFromNodeCode(from);
-    e.setToNodeCode(to);
-    e.setEdgeType("ALWAYS");
-    e.setEnabled(true);
-    return e;
-  }
+    private static WorkflowEdgeEntity edgeEntity(String from, String to) {
+        WorkflowEdgeEntity e = new WorkflowEdgeEntity();
+        e.setWorkflowDefinitionId(DEF_ID);
+        e.setFromNodeCode(from);
+        e.setToNodeCode(to);
+        e.setEdgeType("ALWAYS");
+        e.setEnabled(true);
+        return e;
+    }
 
-  private static WorkflowDefinitionVersionEntity versionRow(int version, String savedBy) {
-    WorkflowDefinitionVersionEntity v = new WorkflowDefinitionVersionEntity();
-    v.setVersion(version);
-    v.setSavedBy(savedBy);
-    v.setSavedAt(Instant.now());
-    return v;
-  }
+    private static WorkflowDefinitionVersionEntity versionRow(int version, String savedBy) {
+        WorkflowDefinitionVersionEntity v = new WorkflowDefinitionVersionEntity();
+        v.setVersion(version);
+        v.setSavedBy(savedBy);
+        v.setSavedAt(Instant.now());
+        return v;
+    }
 }

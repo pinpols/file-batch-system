@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrchestratorWorkflowMappers {
 
-  public final WorkflowNodeMapper workflowNodeMapper;
-  public final WorkflowRunMapper workflowRunMapper;
-  public final WorkflowNodeRunMapper workflowNodeRunMapper;
+    public final WorkflowNodeMapper workflowNodeMapper;
+    public final WorkflowRunMapper workflowRunMapper;
+    public final WorkflowNodeRunMapper workflowNodeRunMapper;
 }

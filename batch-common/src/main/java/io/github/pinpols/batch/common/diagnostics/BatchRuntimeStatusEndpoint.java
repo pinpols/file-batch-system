@@ -25,91 +25,87 @@ import org.springframework.core.env.Environment;
 @Endpoint(id = "batchruntime")
 public class BatchRuntimeStatusEndpoint {
 
-  private final Environment environment;
-  private final ObjectProvider<BatchSecurityProperties> securityProvider;
-  private final ObjectProvider<S3StorageProperties> s3Provider;
-  private final ObjectProvider<FilesystemStorageProperties> filesystemProvider;
-  private final ObjectProvider<StorageBackendGuardProperties> guardProvider;
-  private final StorageBackendProperties backendProperties;
+    private final Environment environment;
+    private final ObjectProvider<BatchSecurityProperties> securityProvider;
+    private final ObjectProvider<S3StorageProperties> s3Provider;
+    private final ObjectProvider<FilesystemStorageProperties> filesystemProvider;
+    private final ObjectProvider<StorageBackendGuardProperties> guardProvider;
+    private final StorageBackendProperties backendProperties;
 
-  public BatchRuntimeStatusEndpoint(
-      Environment environment,
-      ObjectProvider<BatchSecurityProperties> securityProvider,
-      ObjectProvider<S3StorageProperties> s3Provider,
-      ObjectProvider<FilesystemStorageProperties> filesystemProvider,
-      ObjectProvider<StorageBackendGuardProperties> guardProvider,
-      StorageBackendProperties backendProperties) {
-    this.environment = environment;
-    this.securityProvider = securityProvider;
-    this.s3Provider = s3Provider;
-    this.filesystemProvider = filesystemProvider;
-    this.guardProvider = guardProvider;
-    this.backendProperties = backendProperties;
-  }
-
-  @ReadOperation
-  public Map<String, Object> status() {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("application", ApplicationNameProvider.resolve(environment, "unknown"));
-    result.put("profiles", environment.getActiveProfiles());
-    result.put("storage", storageStatus());
-    result.put("security", securityStatus());
-    result.put("lifecycle", lifecycleStatus());
-    return result;
-  }
-
-  private Map<String, Object> storageStatus() {
-    String backend = backendProperties.getBackend();
-    Map<String, Object> storage = new LinkedHashMap<>();
-    storage.put("backend", backend);
-    StorageBackendGuardProperties guard = guardProvider.getIfAvailable();
-    storage.put("backendCutoverConfigured", guard != null && Texts.hasText(guard.getCutoverId()));
-    S3StorageProperties s3 = s3Provider.getIfAvailable();
-    if ("s3".equalsIgnoreCase(backend) && s3 != null) {
-      String endpointHost = hostOf(s3.getEndpoint());
-      storage.put("endpointHost", endpointHost);
-      storage.put("bucketConfigured", Texts.hasText(s3.getBucket()));
-      storage.put(
-          "credentialsConfigured",
-          Texts.hasText(s3.getAccessKey()) && Texts.hasText(s3.getSecretKey()));
+    public BatchRuntimeStatusEndpoint(
+            Environment environment,
+            ObjectProvider<BatchSecurityProperties> securityProvider,
+            ObjectProvider<S3StorageProperties> s3Provider,
+            ObjectProvider<FilesystemStorageProperties> filesystemProvider,
+            ObjectProvider<StorageBackendGuardProperties> guardProvider,
+            StorageBackendProperties backendProperties) {
+        this.environment = environment;
+        this.securityProvider = securityProvider;
+        this.s3Provider = s3Provider;
+        this.filesystemProvider = filesystemProvider;
+        this.guardProvider = guardProvider;
+        this.backendProperties = backendProperties;
     }
-    FilesystemStorageProperties filesystem = filesystemProvider.getIfAvailable();
-    if ("filesystem".equalsIgnoreCase(backend) && filesystem != null) {
-      storage.put("rootConfigured", Texts.hasText(filesystem.getRoot()));
-      storage.put("downloadBaseUrlConfigured", Texts.hasText(filesystem.getDownloadBaseUrl()));
-      storage.put("presignSecretConfigured", Texts.hasText(filesystem.getPresignSecret()));
-    }
-    return storage;
-  }
 
-  private Map<String, Object> securityStatus() {
-    Map<String, Object> security = new LinkedHashMap<>();
-    BatchSecurityProperties properties = securityProvider.getIfAvailable();
-    security.put("bypassMode", properties != null && properties.isBypassMode());
-    security.put(
-        "internalSecretConfigured",
-        properties != null && Texts.hasText(properties.getInternalSecret()));
-    return security;
-  }
-
-  private static Map<String, Object> lifecycleStatus() {
-    Map<String, Object> lifecycle = new LinkedHashMap<>();
-    lifecycle.put("firstToStopRelay", BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
-    lifecycle.put("workerSdkClient", BatchLifecyclePhases.WORKER_SDK_CLIENT);
-    lifecycle.put("managedScheduler", BatchLifecyclePhases.MANAGED_SCHEDULER);
-    lifecycle.put("infrastructureDefault", BatchLifecyclePhases.INFRASTRUCTURE_CLIENT_DEFAULT);
-    return lifecycle;
-  }
-
-  private static String hostOf(String endpoint) {
-    if (!Texts.hasText(endpoint)) {
-      return "";
+    @ReadOperation
+    public Map<String, Object> status() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("application", ApplicationNameProvider.resolve(environment, "unknown"));
+        result.put("profiles", environment.getActiveProfiles());
+        result.put("storage", storageStatus());
+        result.put("security", securityStatus());
+        result.put("lifecycle", lifecycleStatus());
+        return result;
     }
-    try {
-      URI endpointUri = URI.create(endpoint);
-      return endpointUri.getHost();
-    } catch (IllegalArgumentException ex) {
-      return "invalid-endpoint";
+
+    private Map<String, Object> storageStatus() {
+        String backend = backendProperties.getBackend();
+        Map<String, Object> storage = new LinkedHashMap<>();
+        storage.put("backend", backend);
+        StorageBackendGuardProperties guard = guardProvider.getIfAvailable();
+        storage.put("backendCutoverConfigured", guard != null && Texts.hasText(guard.getCutoverId()));
+        S3StorageProperties s3 = s3Provider.getIfAvailable();
+        if ("s3".equalsIgnoreCase(backend) && s3 != null) {
+            String endpointHost = hostOf(s3.getEndpoint());
+            storage.put("endpointHost", endpointHost);
+            storage.put("bucketConfigured", Texts.hasText(s3.getBucket()));
+            storage.put("credentialsConfigured", Texts.hasText(s3.getAccessKey()) && Texts.hasText(s3.getSecretKey()));
+        }
+        FilesystemStorageProperties filesystem = filesystemProvider.getIfAvailable();
+        if ("filesystem".equalsIgnoreCase(backend) && filesystem != null) {
+            storage.put("rootConfigured", Texts.hasText(filesystem.getRoot()));
+            storage.put("downloadBaseUrlConfigured", Texts.hasText(filesystem.getDownloadBaseUrl()));
+            storage.put("presignSecretConfigured", Texts.hasText(filesystem.getPresignSecret()));
+        }
+        return storage;
     }
-  }
+
+    private Map<String, Object> securityStatus() {
+        Map<String, Object> security = new LinkedHashMap<>();
+        BatchSecurityProperties properties = securityProvider.getIfAvailable();
+        security.put("bypassMode", properties != null && properties.isBypassMode());
+        security.put("internalSecretConfigured", properties != null && Texts.hasText(properties.getInternalSecret()));
+        return security;
+    }
+
+    private static Map<String, Object> lifecycleStatus() {
+        Map<String, Object> lifecycle = new LinkedHashMap<>();
+        lifecycle.put("firstToStopRelay", BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
+        lifecycle.put("workerSdkClient", BatchLifecyclePhases.WORKER_SDK_CLIENT);
+        lifecycle.put("managedScheduler", BatchLifecyclePhases.MANAGED_SCHEDULER);
+        lifecycle.put("infrastructureDefault", BatchLifecyclePhases.INFRASTRUCTURE_CLIENT_DEFAULT);
+        return lifecycle;
+    }
+
+    private static String hostOf(String endpoint) {
+        if (!Texts.hasText(endpoint)) {
+            return "";
+        }
+        try {
+            URI endpointUri = URI.create(endpoint);
+            return endpointUri.getHost();
+        } catch (IllegalArgumentException ex) {
+            return "invalid-endpoint";
+        }
+    }
 }

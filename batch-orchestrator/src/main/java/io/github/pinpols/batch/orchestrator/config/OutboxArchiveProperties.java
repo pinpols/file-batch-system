@@ -21,15 +21,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.outbox.archive")
 public class OutboxArchiveProperties {
 
-  private boolean enabled = true;
+    private boolean enabled = true;
 
-  private int publishedRetentionDays = 7;
+    private int publishedRetentionDays = 7;
 
-  private int giveUpRetentionDays = 30;
+    private int giveUpRetentionDays = 30;
 
-  /** 单批上限：每次最多删 N 条 outbox + 关联 delivery log，防长事务锁表。 */
-  private int batchSize = 5_000;
+    /** 单批上限：每次最多删 N 条 outbox + 关联 delivery log，防长事务锁表。 */
+    private int batchSize = 5_000;
 
-  /** 默认每天 03:30；与 quota reset / file archive / workflow archive (04:15) 错峰。 */
-  private String cron = "0 30 3 * * *";
+    /** 默认每天 03:30；与 quota reset / file archive / workflow archive (04:15) 错峰。 */
+    private String cron = "0 30 3 * * *";
 }

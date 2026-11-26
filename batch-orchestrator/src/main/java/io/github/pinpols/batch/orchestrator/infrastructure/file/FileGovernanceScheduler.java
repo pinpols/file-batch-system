@@ -31,589 +31,552 @@ import org.springframework.stereotype.Service;
 /** 共享文件治理实现。具体的 @Scheduled 包装类委托到此处， 使每个任务可以独立演进，避免将无关的扫描耦合到同一个调度器 Bean 中。 */
 public class FileGovernanceScheduler {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String STATUS_TIMEOUT = "TIMEOUT";
-  private static final String SCHEDULER_NAME = "file-governance-scheduler";
-  private static final String STATUS_TRIGGERED = "TRIGGERED";
-  private static final String STATUS_WAITING_ARRIVAL = "WAITING_ARRIVAL";
-  private static final String STATUS_WAITING_MANUAL_CONFIRM = "WAITING_MANUAL_CONFIRM";
+    // ── duplicate literal constants ─────────────────────────────────────────
+    private static final String STATUS_TIMEOUT = "TIMEOUT";
+    private static final String SCHEDULER_NAME = "file-governance-scheduler";
+    private static final String STATUS_TRIGGERED = "TRIGGERED";
+    private static final String STATUS_WAITING_ARRIVAL = "WAITING_ARRIVAL";
+    private static final String STATUS_WAITING_MANUAL_CONFIRM = "WAITING_MANUAL_CONFIRM";
 
-  private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
+    private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
 
-  private record ArrivalGroupUpdateFiles(
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
-      Set<String> requiredFiles,
-      Set<String> missingFiles) {}
+    private record ArrivalGroupUpdateFiles(
+            List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
+            Set<String> requiredFiles,
+            Set<String> missingFiles) {}
 
-  private record ArrivalGroupUpdateContext(
-      ArrivalGroupKey key, ArrivalGroupUpdateState state, ArrivalGroupUpdateFiles files) {}
+    private record ArrivalGroupUpdateContext(
+            ArrivalGroupKey key, ArrivalGroupUpdateState state, ArrivalGroupUpdateFiles files) {}
 
-  private final FileGovernanceRepository fileGovernanceRepository;
-  private final FileGovernanceProperties properties;
-  private final FileGovernanceMetricsCacheService metricsCacheService;
-  private final MeterRegistry meterRegistry;
+    private final FileGovernanceRepository fileGovernanceRepository;
+    private final FileGovernanceProperties properties;
+    private final FileGovernanceMetricsCacheService metricsCacheService;
+    private final MeterRegistry meterRegistry;
 
-  /** ADR-046:到达组满足条件时,若该组是文件束则发起 BUNDLE_* launch。 */
-  private final BundleArrivalLauncher bundleArrivalLauncher;
+    /** ADR-046:到达组满足条件时,若该组是文件束则发起 BUNDLE_* launch。 */
+    private final BundleArrivalLauncher bundleArrivalLauncher;
 
-  private final FileGovernanceStorageMaintenance storageMaintenance;
+    private final FileGovernanceStorageMaintenance storageMaintenance;
 
-  private final AtomicLong arrivalDelayViolations = new AtomicLong();
-  private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
-  private final AtomicLong arrivalGroupWaitingCount = new AtomicLong();
-  private final AtomicLong arrivalGroupOldestWaitSeconds = new AtomicLong();
-  private final AtomicLong arrivalGroupTriggeredCount = new AtomicLong();
-  private final AtomicLong arrivalGroupTimeoutCount = new AtomicLong();
-  private final AtomicLong processingDelayViolations = new AtomicLong();
-  private final AtomicLong processingDelayMaxSeconds = new AtomicLong();
+    private final AtomicLong arrivalDelayViolations = new AtomicLong();
+    private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
+    private final AtomicLong arrivalGroupWaitingCount = new AtomicLong();
+    private final AtomicLong arrivalGroupOldestWaitSeconds = new AtomicLong();
+    private final AtomicLong arrivalGroupTriggeredCount = new AtomicLong();
+    private final AtomicLong arrivalGroupTimeoutCount = new AtomicLong();
+    private final AtomicLong processingDelayViolations = new AtomicLong();
+    private final AtomicLong processingDelayMaxSeconds = new AtomicLong();
 
-  public FileGovernanceScheduler(
-      FileGovernanceRepository fileGovernanceRepository,
-      S3GovernanceStorage s3GovernanceStorage,
-      FileGovernanceProperties properties,
-      FileGovernanceMetricsCacheService metricsCacheService,
-      MeterRegistry meterRegistry,
-      BundleArrivalLauncher bundleArrivalLauncher) {
-    this.fileGovernanceRepository = fileGovernanceRepository;
-    this.properties = properties;
-    this.metricsCacheService = metricsCacheService;
-    this.meterRegistry = meterRegistry;
-    this.bundleArrivalLauncher = bundleArrivalLauncher;
-    this.storageMaintenance = new FileGovernanceStorageMaintenance(
-        fileGovernanceRepository, s3GovernanceStorage, properties);
-  }
-
-  @PostConstruct
-  void initializeMeters() {
-    meterRegistry.gauge("batch.file.arrival.delay.violations", arrivalDelayViolations);
-    meterRegistry.gauge("batch.file.arrival.delay.max.seconds", arrivalDelayMaxSeconds);
-    meterRegistry.gauge("batch.file.arrival.group.waiting.count", arrivalGroupWaitingCount);
-    meterRegistry.gauge(
-        "batch.file.arrival.group.oldest_wait.seconds", arrivalGroupOldestWaitSeconds);
-    meterRegistry.gauge("batch.file.arrival.group.triggered.count", arrivalGroupTriggeredCount);
-    meterRegistry.gauge("batch.file.arrival.group.timeout.count", arrivalGroupTimeoutCount);
-    meterRegistry.gauge("batch.pipeline.processing.delay.violations", processingDelayViolations);
-    meterRegistry.gauge("batch.pipeline.processing.delay.max.seconds", processingDelayMaxSeconds);
-  }
-
-  /** 文件治理指标由中心定时收敛，先保证延迟可见，再谈更复杂的告警策略。 */
-  public void collectLatencyMetrics() {
-    if (!properties.getLatency().isEnabled()) {
-      return;
+    public FileGovernanceScheduler(
+            FileGovernanceRepository fileGovernanceRepository,
+            S3GovernanceStorage s3GovernanceStorage,
+            FileGovernanceProperties properties,
+            FileGovernanceMetricsCacheService metricsCacheService,
+            MeterRegistry meterRegistry,
+            BundleArrivalLauncher bundleArrivalLauncher) {
+        this.fileGovernanceRepository = fileGovernanceRepository;
+        this.properties = properties;
+        this.metricsCacheService = metricsCacheService;
+        this.meterRegistry = meterRegistry;
+        this.bundleArrivalLauncher = bundleArrivalLauncher;
+        this.storageMaintenance =
+                new FileGovernanceStorageMaintenance(fileGovernanceRepository, s3GovernanceStorage, properties);
     }
-    String tenantId = properties.getReconcile().getDefaultTenantId();
-    sweepStaleRunningPipelines(tenantId);
-    FileGovernanceLatencyMetrics metrics = metricsCacheService.compute(
-        tenantId,
-        properties.getLatency().getArrivalDelayThresholdSeconds(),
-        properties.getLatency().getProcessingDelayThresholdSeconds(),
-        properties.getLatency().getProcessingDelayMaxAgeSeconds(),
-        properties.getLatency().getSampleSize());
-    long arrivalCount = metrics.arrivalDelayViolations();
-    long arrivalMax = metrics.maxArrivalDelaySeconds();
-    long processingCount = metrics.processingDelayViolations();
-    long processingMax = metrics.maxProcessingDelaySeconds();
-    arrivalDelayViolations.set(arrivalCount);
-    arrivalDelayMaxSeconds.set(arrivalMax);
-    processingDelayViolations.set(processingCount);
-    processingDelayMaxSeconds.set(processingMax);
-    metricsCacheService.write(tenantId, metrics);
 
-    if (arrivalCount > 0) {
-      List<Map<String, Object>> samples = metrics.arrivalDelaySamples();
-      log.warn(
-          "file arrival delay violations detected: count={}, maxDelaySeconds={}," + " samples={}",
-          arrivalCount,
-          arrivalMax,
-          samples);
+    @PostConstruct
+    void initializeMeters() {
+        meterRegistry.gauge("batch.file.arrival.delay.violations", arrivalDelayViolations);
+        meterRegistry.gauge("batch.file.arrival.delay.max.seconds", arrivalDelayMaxSeconds);
+        meterRegistry.gauge("batch.file.arrival.group.waiting.count", arrivalGroupWaitingCount);
+        meterRegistry.gauge("batch.file.arrival.group.oldest_wait.seconds", arrivalGroupOldestWaitSeconds);
+        meterRegistry.gauge("batch.file.arrival.group.triggered.count", arrivalGroupTriggeredCount);
+        meterRegistry.gauge("batch.file.arrival.group.timeout.count", arrivalGroupTimeoutCount);
+        meterRegistry.gauge("batch.pipeline.processing.delay.violations", processingDelayViolations);
+        meterRegistry.gauge("batch.pipeline.processing.delay.max.seconds", processingDelayMaxSeconds);
     }
-    if (processingCount > 0) {
-      List<Map<String, Object>> samples = metrics.processingDelaySamples();
-      log.warn(
-          "pipeline processing delay violations detected: count={}, maxDelaySeconds={},"
-              + " samples={}",
-          processingCount,
-          processingMax,
-          samples);
-    }
-  }
 
-  private void sweepStaleRunningPipelines(String tenantId) {
-    long staleSeconds = properties.getLatency().getStaleRunningFailSeconds();
-    int limit = properties.getLatency().getStaleSweepBatchSize();
-    if (staleSeconds <= 0 || limit <= 0) {
-      return;
-    }
-    try {
-      FileGovernanceRepository.StaleSweepResult result =
-          fileGovernanceRepository.markStaleRunningPipelinesAndStepsFailed(
-              tenantId, staleSeconds, limit);
-      if (result.failedPipelines() <= 0) {
-        return;
-      }
-      log.warn(
-          "stale running pipeline sweep finalized records: tenantId={}, staleSeconds={},"
-              + " failedPipelines={}, failedSteps={}",
-          tenantId,
-          staleSeconds,
-          result.failedPipelines(),
-          result.failedSteps());
-    } catch (Exception exception) {
-      log.warn(
-          "stale running pipeline sweep failed: tenantId={}, staleSeconds={}",
-          tenantId,
-          staleSeconds,
-          exception);
-    }
-  }
+    /** 文件治理指标由中心定时收敛，先保证延迟可见，再谈更复杂的告警策略。 */
+    public void collectLatencyMetrics() {
+        if (!properties.getLatency().isEnabled()) {
+            return;
+        }
+        String tenantId = properties.getReconcile().getDefaultTenantId();
+        sweepStaleRunningPipelines(tenantId);
+        FileGovernanceLatencyMetrics metrics = metricsCacheService.compute(
+                tenantId,
+                properties.getLatency().getArrivalDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayMaxAgeSeconds(),
+                properties.getLatency().getSampleSize());
+        long arrivalCount = metrics.arrivalDelayViolations();
+        long arrivalMax = metrics.maxArrivalDelaySeconds();
+        long processingCount = metrics.processingDelayViolations();
+        long processingMax = metrics.maxProcessingDelaySeconds();
+        arrivalDelayViolations.set(arrivalCount);
+        arrivalDelayMaxSeconds.set(arrivalMax);
+        processingDelayViolations.set(processingCount);
+        processingDelayMaxSeconds.set(processingMax);
+        metricsCacheService.write(tenantId, metrics);
 
-  public FileGovernanceLatencyMetrics loadLatencyMetrics(String tenantId) {
-    return metricsCacheService.load(
-        tenantId,
-        properties.getLatency().getArrivalDelayThresholdSeconds(),
-        properties.getLatency().getProcessingDelayThresholdSeconds(),
-        properties.getLatency().getProcessingDelayMaxAgeSeconds(),
-        properties.getLatency().getSampleSize());
-  }
+        if (arrivalCount > 0) {
+            List<Map<String, Object>> samples = metrics.arrivalDelaySamples();
+            log.warn(
+                    "file arrival delay violations detected: count={}, maxDelaySeconds={}," + " samples={}",
+                    arrivalCount,
+                    arrivalMax,
+                    samples);
+        }
+        if (processingCount > 0) {
+            List<Map<String, Object>> samples = metrics.processingDelaySamples();
+            log.warn(
+                    "pipeline processing delay violations detected: count={}, maxDelaySeconds={}," + " samples={}",
+                    processingCount,
+                    processingMax,
+                    samples);
+        }
+    }
 
-  public void manageFileArrivalGroups() {
-    if (!properties.getArrival().isEnabled()) {
-      return;
+    private void sweepStaleRunningPipelines(String tenantId) {
+        long staleSeconds = properties.getLatency().getStaleRunningFailSeconds();
+        int limit = properties.getLatency().getStaleSweepBatchSize();
+        if (staleSeconds <= 0 || limit <= 0) {
+            return;
+        }
+        try {
+            FileGovernanceRepository.StaleSweepResult result =
+                    fileGovernanceRepository.markStaleRunningPipelinesAndStepsFailed(tenantId, staleSeconds, limit);
+            if (result.failedPipelines() <= 0) {
+                return;
+            }
+            log.warn(
+                    "stale running pipeline sweep finalized records: tenantId={}, staleSeconds={},"
+                            + " failedPipelines={}, failedSteps={}",
+                    tenantId,
+                    staleSeconds,
+                    result.failedPipelines(),
+                    result.failedSteps());
+        } catch (Exception exception) {
+            log.warn(
+                    "stale running pipeline sweep failed: tenantId={}, staleSeconds={}",
+                    tenantId,
+                    staleSeconds,
+                    exception);
+        }
     }
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> candidates =
-        fileGovernanceRepository.selectArrivalGovernanceCandidates(
-            properties.getArrival().getBatchSize());
-    Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped =
-        new HashMap<>();
-    if (EmptyChecks.isEmpty(candidates)) {
-      arrivalGroupTriggeredCount.set(0L);
-      arrivalGroupTimeoutCount.set(0L);
-      refreshArrivalGroupBacklogMetrics();
-      return;
-    }
-    for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
-      ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
-      if (EmptyChecks.isNull(key)) {
-        continue;
-      }
-      grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
-    }
-    long triggeredGroups = 0L;
-    long timeoutGroups = 0L;
-    Instant now = BatchDateTimeSupport.utcNow();
-    for (Map.Entry<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> entry :
-        grouped.entrySet()) {
-      ArrivalGroupKey key = entry.getKey();
-      ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
-          key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
-      if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
-        continue;
-      }
-      switch (decision.state()) {
-        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> {}
-        case STATUS_TRIGGERED -> triggeredGroups++;
-        case STATUS_TIMEOUT -> timeoutGroups++;
-        default -> {}
-      }
-    }
-    arrivalGroupTriggeredCount.set(triggeredGroups);
-    arrivalGroupTimeoutCount.set(timeoutGroups);
-    refreshArrivalGroupBacklogMetrics();
-  }
 
-  private void refreshArrivalGroupBacklogMetrics() {
-    try {
-      FileGovernanceArrivalViews.ArrivalGroupBacklogView backlog =
-          fileGovernanceRepository.selectArrivalGroupBacklogMetrics();
-      long waitingGroups = valueOrZero(backlog.waitingGroups());
-      long oldestWaitSeconds = valueOrZero(backlog.oldestWaitSeconds());
-      arrivalGroupWaitingCount.set(Math.max(0L, waitingGroups));
-      arrivalGroupOldestWaitSeconds.set(Math.max(0L, oldestWaitSeconds));
-    } catch (RuntimeException failure) {
-      log.warn(
-          "file arrival group backlog metrics refresh failed: {}",
-          SwallowedExceptionLogger.summary(failure));
+    public FileGovernanceLatencyMetrics loadLatencyMetrics(String tenantId) {
+        return metricsCacheService.load(
+                tenantId,
+                properties.getLatency().getArrivalDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayMaxAgeSeconds(),
+                properties.getLatency().getSampleSize());
     }
-  }
 
-  private long valueOrZero(Long value) {
-    return EmptyChecks.isNull(value) ? 0L : value;
-  }
-
-  public void cleanupArchivedFiles() {
-    storageMaintenance.cleanupArchivedFiles();
-  }
-
-  /**
-   * 托管上传会话孤儿清理（#440）：{@code createUploadSession} 写入的占位 file_record（RECEIVED + APP_MANAGED +
-   * WAITING_ARRIVAL），前端既不上传也不调 confirmFileArrival 时会永久滞留—— 到达组调度不处理（无 fileGroupCode）、归档清理不清（非
-   * ARCHIVED）、对账不清（S3 对象不存在）。 超过 TTL 且对象存储确认无对象的占位行在此置为 DELETED 终态；对象已存在（用户上传了但没 confirm）则跳过并记日志。
-   */
-  public void cleanupOrphanUploadSessions() {
-    storageMaintenance.cleanupOrphanUploadSessions();
-  }
-
-  public void reconcileObjectStorage() {
-    storageMaintenance.reconcileObjectStorage();
-  }
-
-  private ArrivalGroupDecision evaluateArrivalGroup(
-      ArrivalGroupKey key,
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
-      Instant now) {
-    if (EmptyChecks.isEmpty(groupFiles)) {
-      return new ArrivalGroupDecision(null);
+    public void manageFileArrivalGroups() {
+        if (!properties.getArrival().isEnabled()) {
+            return;
+        }
+        List<FileGovernanceArrivalViews.ArrivalCandidateView> candidates =
+                fileGovernanceRepository.selectArrivalGovernanceCandidates(
+                        properties.getArrival().getBatchSize());
+        Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped = new HashMap<>();
+        if (EmptyChecks.isEmpty(candidates)) {
+            arrivalGroupTriggeredCount.set(0L);
+            arrivalGroupTimeoutCount.set(0L);
+            refreshArrivalGroupBacklogMetrics();
+            return;
+        }
+        for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
+            ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
+            if (EmptyChecks.isNull(key)) {
+                continue;
+            }
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
+        }
+        long triggeredGroups = 0L;
+        long timeoutGroups = 0L;
+        Instant now = BatchDateTimeSupport.utcNow();
+        for (Map.Entry<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> entry :
+                grouped.entrySet()) {
+            ArrivalGroupKey key = entry.getKey();
+            ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
+                    key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
+            if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
+                continue;
+            }
+            switch (decision.state()) {
+                case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> {}
+                case STATUS_TRIGGERED -> triggeredGroups++;
+                case STATUS_TIMEOUT -> timeoutGroups++;
+                default -> {}
+            }
+        }
+        arrivalGroupTriggeredCount.set(triggeredGroups);
+        arrivalGroupTimeoutCount.set(timeoutGroups);
+        refreshArrivalGroupBacklogMetrics();
     }
-    FileGovernanceArrivalViews.ArrivalCandidateView firstFile = groupFiles.get(0);
-    Set<String> requiredFiles = parseRequiredFileSet(firstFile.requiredFileSet());
-    Set<String> arrivedFiles = new HashSet<>();
-    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
-      String fileName = file.fileName();
-      if (EmptyChecks.isNotNull(fileName)) {
-        arrivedFiles.add(fileName);
-      }
+
+    private void refreshArrivalGroupBacklogMetrics() {
+        try {
+            FileGovernanceArrivalViews.ArrivalGroupBacklogView backlog =
+                    fileGovernanceRepository.selectArrivalGroupBacklogMetrics();
+            long waitingGroups = valueOrZero(backlog.waitingGroups());
+            long oldestWaitSeconds = valueOrZero(backlog.oldestWaitSeconds());
+            arrivalGroupWaitingCount.set(Math.max(0L, waitingGroups));
+            arrivalGroupOldestWaitSeconds.set(Math.max(0L, oldestWaitSeconds));
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "file arrival group backlog metrics refresh failed: {}", SwallowedExceptionLogger.summary(failure));
+        }
     }
-    Set<String> missingFiles = new HashSet<>(requiredFiles);
-    missingFiles.removeAll(arrivedFiles);
-    // 文件已齐且请求已交给批次日等待队列后,到达超时不再覆盖该请求的真实恢复结果。
-    if ("BUNDLE_LAUNCH_WAITING".equals(firstFile.arrivalReason())) {
-      return triggerArrivalGroup(
-          key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
+
+    private long valueOrZero(Long value) {
+        return EmptyChecks.isNull(value) ? 0L : value;
     }
-    Instant latestTolerableTime = parseInstant(firstFile.latestTolerableTime());
-    boolean triggerOnComplete =
-        parseBoolean(firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
-    String timeoutAction = defaultText(
-        firstFile.arrivalTimeoutAction(), properties.getArrival().getDefaultTimeoutAction());
-    boolean timedOut =
-        EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
-    if (timedOut) {
-      if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
-        ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(
-            STATUS_WAITING_MANUAL_CONFIRM, "TIMEOUT_WAITING_MANUAL_CONFIRM", now);
-        ArrivalGroupUpdateFiles updateFiles =
-            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-        ArrivalGroupUpdateContext updateContext =
-            new ArrivalGroupUpdateContext(key, updateState, updateFiles);
-        updateGroupState(updateContext);
-        return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
-      }
-      if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction)
-          || "BLOCK".equalsIgnoreCase(timeoutAction)) {
+
+    public void cleanupArchivedFiles() {
+        storageMaintenance.cleanupArchivedFiles();
+    }
+
+    /**
+     * 托管上传会话孤儿清理（#440）：{@code createUploadSession} 写入的占位 file_record（RECEIVED + APP_MANAGED +
+     * WAITING_ARRIVAL），前端既不上传也不调 confirmFileArrival 时会永久滞留—— 到达组调度不处理（无 fileGroupCode）、归档清理不清（非
+     * ARCHIVED）、对账不清（S3 对象不存在）。 超过 TTL 且对象存储确认无对象的占位行在此置为 DELETED 终态；对象已存在（用户上传了但没 confirm）则跳过并记日志。
+     */
+    public void cleanupOrphanUploadSessions() {
+        storageMaintenance.cleanupOrphanUploadSessions();
+    }
+
+    public void reconcileObjectStorage() {
+        storageMaintenance.reconcileObjectStorage();
+    }
+
+    private ArrivalGroupDecision evaluateArrivalGroup(
+            ArrivalGroupKey key, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles, Instant now) {
+        if (EmptyChecks.isEmpty(groupFiles)) {
+            return new ArrivalGroupDecision(null);
+        }
+        FileGovernanceArrivalViews.ArrivalCandidateView firstFile = groupFiles.get(0);
+        Set<String> requiredFiles = parseRequiredFileSet(firstFile.requiredFileSet());
+        Set<String> arrivedFiles = new HashSet<>();
+        for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+            String fileName = file.fileName();
+            if (EmptyChecks.isNotNull(fileName)) {
+                arrivedFiles.add(fileName);
+            }
+        }
+        Set<String> missingFiles = new HashSet<>(requiredFiles);
+        missingFiles.removeAll(arrivedFiles);
+        // 文件已齐且请求已交给批次日等待队列后,到达超时不再覆盖该请求的真实恢复结果。
+        if ("BUNDLE_LAUNCH_WAITING".equals(firstFile.arrivalReason())) {
+            return triggerArrivalGroup(key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
+        }
+        Instant latestTolerableTime = parseInstant(firstFile.latestTolerableTime());
+        boolean triggerOnComplete = parseBoolean(
+                firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
+        String timeoutAction = defaultText(
+                firstFile.arrivalTimeoutAction(), properties.getArrival().getDefaultTimeoutAction());
+        boolean timedOut = EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
+        if (timedOut) {
+            if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
+                ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(
+                        STATUS_WAITING_MANUAL_CONFIRM, "TIMEOUT_WAITING_MANUAL_CONFIRM", now);
+                ArrivalGroupUpdateFiles updateFiles =
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+                ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+                updateGroupState(updateContext);
+                return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
+            }
+            if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction) || "BLOCK".equalsIgnoreCase(timeoutAction)) {
+                ArrivalGroupUpdateState updateState =
+                        new ArrivalGroupUpdateState(STATUS_TIMEOUT, "LATEST_TOLERABLE_TIME_EXCEEDED", now);
+                ArrivalGroupUpdateFiles updateFiles =
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+                ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+                updateGroupState(updateContext);
+                return new ArrivalGroupDecision(STATUS_TIMEOUT);
+            }
+            return triggerArrivalGroup(
+                    key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
+        }
+        boolean allRequiredFilesArrived = EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles);
+        if (allRequiredFilesArrived) {
+            if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
+                // 文件名虽齐，但有成员缺少实际字节校验形成的 VERIFIED 证据：保持等待，超时仍走 timeoutAction。
+                ArrivalGroupUpdateState updateState =
+                        new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "ARRIVED_PENDING_VERIFY", now);
+                ArrivalGroupUpdateFiles updateFiles =
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+                ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+                updateGroupState(updateContext);
+                return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
+            }
+            if (triggerOnComplete) {
+                return triggerArrivalGroup(key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
+            }
+            ArrivalGroupUpdateState updateState =
+                    new ArrivalGroupUpdateState(STATUS_WAITING_MANUAL_CONFIRM, "COMPLETE_WAITING_MANUAL_CONFIRM", now);
+            ArrivalGroupUpdateFiles updateFiles = new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+            ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+            updateGroupState(updateContext);
+            return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
+        }
+        // 配置不全守卫:有 fileGroupCode 但 requiredFileSet 为空 → 既不能判定"完成"也不能判定"等"。
+        // 此时若仍写 WAITING_ARRIVAL,scheduler 会在每个 30s tick 重复评估同一行,造成日志 +
+        // updated_at 抖动(2026-05-01 5207.fw 类噪声根因)。改为静默跳过,等业务方补全 metadata 或
+        // 数据治理手工置终态。
+        if (EmptyChecks.isEmpty(requiredFiles)) {
+            log.warn(
+                    "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
+                            + " arrivedCount={} - metadata is incomplete, so the trigger condition cannot be determined; add requiredFileSet or set a terminal state",
+                    key.tenantId(),
+                    key.fileGroupCode(),
+                    arrivedFiles.size());
+            return new ArrivalGroupDecision(null);
+        }
         ArrivalGroupUpdateState updateState =
-            new ArrivalGroupUpdateState(STATUS_TIMEOUT, "LATEST_TOLERABLE_TIME_EXCEEDED", now);
-        ArrivalGroupUpdateFiles updateFiles =
-            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-        ArrivalGroupUpdateContext updateContext =
-            new ArrivalGroupUpdateContext(key, updateState, updateFiles);
-        updateGroupState(updateContext);
-        return new ArrivalGroupDecision(STATUS_TIMEOUT);
-      }
-      return triggerArrivalGroup(
-          key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
-    }
-    boolean allRequiredFilesArrived =
-        EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles);
-    if (allRequiredFilesArrived) {
-      if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
-        // 文件名虽齐，但有成员缺少实际字节校验形成的 VERIFIED 证据：保持等待，超时仍走 timeoutAction。
-        ArrivalGroupUpdateState updateState =
-            new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "ARRIVED_PENDING_VERIFY", now);
-        ArrivalGroupUpdateFiles updateFiles =
-            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-        ArrivalGroupUpdateContext updateContext =
-            new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+                new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "WAITING_REQUIRED_FILES", now);
+        ArrivalGroupUpdateFiles updateFiles = new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+        ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
         updateGroupState(updateContext);
         return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
-      }
-      if (triggerOnComplete) {
-        return triggerArrivalGroup(
-            key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
-      }
-      ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(
-          STATUS_WAITING_MANUAL_CONFIRM, "COMPLETE_WAITING_MANUAL_CONFIRM", now);
-      ArrivalGroupUpdateFiles updateFiles =
-          new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-      ArrivalGroupUpdateContext updateContext =
-          new ArrivalGroupUpdateContext(key, updateState, updateFiles);
-      updateGroupState(updateContext);
-      return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
-    }
-    // 配置不全守卫:有 fileGroupCode 但 requiredFileSet 为空 → 既不能判定"完成"也不能判定"等"。
-    // 此时若仍写 WAITING_ARRIVAL,scheduler 会在每个 30s tick 重复评估同一行,造成日志 +
-    // updated_at 抖动(2026-05-01 5207.fw 类噪声根因)。改为静默跳过,等业务方补全 metadata 或
-    // 数据治理手工置终态。
-    if (EmptyChecks.isEmpty(requiredFiles)) {
-      log.warn(
-          "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
-              + " arrivedCount={} - metadata is incomplete, so the trigger condition cannot be determined; add requiredFileSet or set a terminal state",
-          key.tenantId(),
-          key.fileGroupCode(),
-          arrivedFiles.size());
-      return new ArrivalGroupDecision(null);
-    }
-    ArrivalGroupUpdateState updateState =
-        new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "WAITING_REQUIRED_FILES", now);
-    ArrivalGroupUpdateFiles updateFiles =
-        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-    ArrivalGroupUpdateContext updateContext =
-        new ArrivalGroupUpdateContext(key, updateState, updateFiles);
-    updateGroupState(updateContext);
-    return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
-  }
-
-  private ArrivalGroupDecision triggerArrivalGroup(
-      ArrivalGroupKey key,
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
-      Set<String> requiredFiles,
-      Set<String> missingFiles,
-      String reason,
-      Instant now) {
-    BundleArrivalLauncher.LaunchOutcome outcome;
-    try {
-      outcome =
-          bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
-    } catch (RuntimeException exception) {
-      // P1-2:束 launch 失败 → 保持组 retryable(不丢触发)。但永久畸形组(混 jobCode/bizDate)会每轮
-      // sweep 重试,只 ERROR 日志运维不可见 → 加 counter 供告警(瞬时故障可恢复,永久故障靠该 metric
-      // 触达人工修数据;不引终态以免误丢「迟到文件可修复」的组)。
-      meterRegistry.counter("batch.file.arrival.bundle.launch.failed").increment();
-      log.error(
-          "file arrival group bundle launch failed, keep group retryable: tenantId={},"
-              + " fileGroupCode={}, reason={}",
-          key.tenantId(),
-          key.fileGroupCode(),
-          reason,
-          exception);
-      return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
-    }
-    String state = STATUS_TRIGGERED;
-    if (outcome == BundleArrivalLauncher.LaunchOutcome.WAITING) {
-      state = STATUS_WAITING_ARRIVAL;
-      reason = "BUNDLE_LAUNCH_WAITING";
-    } else if (outcome == BundleArrivalLauncher.LaunchOutcome.REJECTED) {
-      state = STATUS_WAITING_MANUAL_CONFIRM;
-      reason = "BUNDLE_LAUNCH_REJECTED";
-    }
-    ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(state, reason, now);
-    ArrivalGroupUpdateFiles updateFiles =
-        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
-    ArrivalGroupUpdateContext updateContext =
-        new ArrivalGroupUpdateContext(key, updateState, updateFiles);
-    updateGroupState(updateContext);
-    return new ArrivalGroupDecision(state);
-  }
-
-  private void updateGroupState(ArrivalGroupUpdateContext context) {
-    // 幂等跳过:group 内所有文件 arrivalState + arrivalReason 已与目标一致,跳过 update / audit / log
-    // (避免 schedule tick 在稳态下反复写 updated_at 和重复 INFO 日志,2026-05-01 噪声治理)。
-    String targetState = context.state().arrivalState();
-    String targetReason = context.state().reason();
-    boolean allInSync = true;
-    for (FileGovernanceArrivalViews.ArrivalCandidateView file : context.files().groupFiles()) {
-      String currentState = file.arrivalState();
-      String currentReason = file.arrivalReason();
-      if (!targetState.equals(currentState) || !Objects.equals(targetReason, currentReason)) {
-        allInSync = false;
-        break;
-      }
-    }
-    if (allInSync) {
-      return;
-    }
-    Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("fileGroupCode", context.key().fileGroupCode());
-    metadata.put("waitFileGroupMode", context.key().waitFileGroupMode());
-    metadata.put("requiredFileSet", context.key().requiredFileSet());
-    metadata.put("arrivalTimeoutAction", context.key().arrivalTimeoutAction());
-    metadata.put("arrivalState", targetState);
-    metadata.put("arrivalReason", targetReason);
-    String arrivalCheckedAt = context.state().now().toString();
-    metadata.put("arrivalCheckedAt", arrivalCheckedAt);
-    metadata.put("groupArrivedCount", context.files().groupFiles().size());
-    metadata.put("groupRequiredCount", context.files().requiredFiles().size());
-    Set<String> missingFileNames = context.files().missingFiles();
-    String missingFileSet = String.join(",", missingFileNames);
-    metadata.put("groupMissingFileSet", missingFileSet);
-    if (STATUS_TRIGGERED.equals(targetState)) {
-      metadata.put("arrivalTriggeredAt", arrivalCheckedAt);
-    }
-    if (STATUS_TIMEOUT.equals(targetState)) {
-      metadata.put("arrivalTimedOutAt", arrivalCheckedAt);
-    }
-    int updatedFiles = 0;
-    for (FileGovernanceArrivalViews.ArrivalCandidateView file : context.files().groupFiles()) {
-      Long fileId = file.fileId();
-      String tenantId = file.tenantId();
-      if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
-        continue;
-      }
-      int updated = fileGovernanceRepository.updateArrivalGroupMetadataIfNonTerminal(
-          tenantId, fileId, metadata);
-      if (updated == 0) {
-        continue;
-      }
-      updatedFiles += updated;
-      FileGovernanceRepository.FileAuditCommand auditCommand =
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "ARRIVAL_GROUP_" + context.state().arrivalState(),
-              "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor(
-                  AuditLogConstants.OPERATOR_TYPE_SYSTEM, SCHEDULER_NAME),
-              "arrival-group-" + context.key().fileGroupCode(),
-              metadata);
-      fileGovernanceRepository.appendAudit(auditCommand);
-    }
-    if (updatedFiles == 0) {
-      return;
-    }
-    log.info(
-        "file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={},"
-            + " arrivedCount={}, requiredCount={}, missingCount={}",
-        context.key().tenantId(),
-        context.key().fileGroupCode(),
-        context.state().arrivalState(),
-        context.state().reason(),
-        context.files().groupFiles().size(),
-        context.files().requiredFiles().size(),
-        context.files().missingFiles().size());
-  }
-
-  private Instant parseInstant(String value) {
-    if (EmptyChecks.isBlank(value)) {
-      return null;
-    }
-    try {
-      return Instant.parse(value);
-    } catch (Exception exception) {
-      SwallowedExceptionLogger.warn(FileGovernanceScheduler.class, "catch:Exception", exception);
-
-      return null;
-    }
-  }
-
-  /** 组内每个成员都已完成原始对象字节校验，不能仅凭记录上有期望 checksum 判定通过。 */
-  private boolean allMembersVerified(
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
-      if (!hasVerifiedIntegrityState(file.metadataJson())) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean hasVerifiedIntegrityState(Object metadataJson) {
-    if (metadataJson instanceof Map<?, ?> metadata) {
-      return FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
-    }
-    String json =
-        metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
-    if (EmptyChecks.isBlank(json)) {
-      return false;
-    }
-    try {
-      Map<String, Object> metadata =
-          JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
-      return EmptyChecks.isNotNull(metadata)
-          && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
-    } catch (RuntimeException exception) {
-      return false;
-    }
-  }
-
-  private Set<String> parseRequiredFileSet(String value) {
-    Set<String> files = new HashSet<>();
-    if (EmptyChecks.isBlank(value)) {
-      return files;
-    }
-    for (String item : value.split(",")) {
-      String trimmed = item.trim();
-      if (EmptyChecks.isNotBlank(trimmed)) {
-        files.add(trimmed);
-      }
-    }
-    return files;
-  }
-
-  private boolean parseBoolean(String value, boolean fallback) {
-    if (EmptyChecks.isBlank(value)) {
-      return fallback;
-    }
-    return Boolean.parseBoolean(value);
-  }
-
-  private String defaultText(String value, String fallback) {
-    return EmptyChecks.isBlank(value) ? fallback : value;
-  }
-
-  private record ArrivalGroupKey(
-      String tenantId,
-      String bizDate,
-      String fileGroupCode,
-      String waitFileGroupMode,
-      String requiredFileSet,
-      String arrivalTimeoutAction) {
-
-    private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
-
-    static ArrivalGroupKey from(FileGovernanceArrivalViews.ArrivalCandidateView candidate) {
-      if (EmptyChecks.isNull(candidate)) {
-        return null;
-      }
-      String tenantId = candidate.tenantId();
-      String fileGroupCode = candidate.fileGroupCode();
-      if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
-        return null;
-      }
-      String bizDate = defaultString(candidate.bizDate(), MISSING_BIZ_DATE);
-      String waitFileGroupMode = defaultString(candidate.waitFileGroupMode(), "ALL_OF");
-      String requiredFileSet = defaultString(candidate.requiredFileSet(), "");
-      String arrivalTimeoutAction =
-          defaultString(candidate.arrivalTimeoutAction(), "MANUAL_CONFIRM");
-      return new ArrivalGroupKey(
-          tenantId,
-          bizDate,
-          fileGroupCode,
-          waitFileGroupMode,
-          requiredFileSet,
-          arrivalTimeoutAction);
     }
 
-    private static String defaultString(String value, String fallback) {
-      return EmptyChecks.isBlank(value) ? fallback : value;
+    private ArrivalGroupDecision triggerArrivalGroup(
+            ArrivalGroupKey key,
+            List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
+            Set<String> requiredFiles,
+            Set<String> missingFiles,
+            String reason,
+            Instant now) {
+        BundleArrivalLauncher.LaunchOutcome outcome;
+        try {
+            outcome = bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
+        } catch (RuntimeException exception) {
+            // P1-2:束 launch 失败 → 保持组 retryable(不丢触发)。但永久畸形组(混 jobCode/bizDate)会每轮
+            // sweep 重试,只 ERROR 日志运维不可见 → 加 counter 供告警(瞬时故障可恢复,永久故障靠该 metric
+            // 触达人工修数据;不引终态以免误丢「迟到文件可修复」的组)。
+            meterRegistry.counter("batch.file.arrival.bundle.launch.failed").increment();
+            log.error(
+                    "file arrival group bundle launch failed, keep group retryable: tenantId={},"
+                            + " fileGroupCode={}, reason={}",
+                    key.tenantId(),
+                    key.fileGroupCode(),
+                    reason,
+                    exception);
+            return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
+        }
+        String state = STATUS_TRIGGERED;
+        if (outcome == BundleArrivalLauncher.LaunchOutcome.WAITING) {
+            state = STATUS_WAITING_ARRIVAL;
+            reason = "BUNDLE_LAUNCH_WAITING";
+        } else if (outcome == BundleArrivalLauncher.LaunchOutcome.REJECTED) {
+            state = STATUS_WAITING_MANUAL_CONFIRM;
+            reason = "BUNDLE_LAUNCH_REJECTED";
+        }
+        ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(state, reason, now);
+        ArrivalGroupUpdateFiles updateFiles = new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
+        ArrivalGroupUpdateContext updateContext = new ArrivalGroupUpdateContext(key, updateState, updateFiles);
+        updateGroupState(updateContext);
+        return new ArrivalGroupDecision(state);
     }
 
-    // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
+    private void updateGroupState(ArrivalGroupUpdateContext context) {
+        // 幂等跳过:group 内所有文件 arrivalState + arrivalReason 已与目标一致,跳过 update / audit / log
+        // (避免 schedule tick 在稳态下反复写 updated_at 和重复 INFO 日志,2026-05-01 噪声治理)。
+        String targetState = context.state().arrivalState();
+        String targetReason = context.state().reason();
+        boolean allInSync = true;
+        for (FileGovernanceArrivalViews.ArrivalCandidateView file :
+                context.files().groupFiles()) {
+            String currentState = file.arrivalState();
+            String currentReason = file.arrivalReason();
+            if (!targetState.equals(currentState) || !Objects.equals(targetReason, currentReason)) {
+                allInSync = false;
+                break;
+            }
+        }
+        if (allInSync) {
+            return;
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("fileGroupCode", context.key().fileGroupCode());
+        metadata.put("waitFileGroupMode", context.key().waitFileGroupMode());
+        metadata.put("requiredFileSet", context.key().requiredFileSet());
+        metadata.put("arrivalTimeoutAction", context.key().arrivalTimeoutAction());
+        metadata.put("arrivalState", targetState);
+        metadata.put("arrivalReason", targetReason);
+        String arrivalCheckedAt = context.state().now().toString();
+        metadata.put("arrivalCheckedAt", arrivalCheckedAt);
+        metadata.put("groupArrivedCount", context.files().groupFiles().size());
+        metadata.put("groupRequiredCount", context.files().requiredFiles().size());
+        Set<String> missingFileNames = context.files().missingFiles();
+        String missingFileSet = String.join(",", missingFileNames);
+        metadata.put("groupMissingFileSet", missingFileSet);
+        if (STATUS_TRIGGERED.equals(targetState)) {
+            metadata.put("arrivalTriggeredAt", arrivalCheckedAt);
+        }
+        if (STATUS_TIMEOUT.equals(targetState)) {
+            metadata.put("arrivalTimedOutAt", arrivalCheckedAt);
+        }
+        int updatedFiles = 0;
+        for (FileGovernanceArrivalViews.ArrivalCandidateView file :
+                context.files().groupFiles()) {
+            Long fileId = file.fileId();
+            String tenantId = file.tenantId();
+            if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
+                continue;
+            }
+            int updated = fileGovernanceRepository.updateArrivalGroupMetadataIfNonTerminal(tenantId, fileId, metadata);
+            if (updated == 0) {
+                continue;
+            }
+            updatedFiles += updated;
+            FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                    tenantId,
+                    fileId,
+                    "ARRIVAL_GROUP_" + context.state().arrivalState(),
+                    "SUCCESS",
+                    new FileGovernanceRepository.FileAuditActor(AuditLogConstants.OPERATOR_TYPE_SYSTEM, SCHEDULER_NAME),
+                    "arrival-group-" + context.key().fileGroupCode(),
+                    metadata);
+            fileGovernanceRepository.appendAudit(auditCommand);
+        }
+        if (updatedFiles == 0) {
+            return;
+        }
+        log.info(
+                "file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={},"
+                        + " arrivedCount={}, requiredCount={}, missingCount={}",
+                context.key().tenantId(),
+                context.key().fileGroupCode(),
+                context.state().arrivalState(),
+                context.state().reason(),
+                context.files().groupFiles().size(),
+                context.files().requiredFiles().size(),
+                context.files().missingFiles().size());
+    }
+
+    private Instant parseInstant(String value) {
+        if (EmptyChecks.isBlank(value)) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception exception) {
+            SwallowedExceptionLogger.warn(FileGovernanceScheduler.class, "catch:Exception", exception);
+
+            return null;
+        }
+    }
+
+    /** 组内每个成员都已完成原始对象字节校验，不能仅凭记录上有期望 checksum 判定通过。 */
+    private boolean allMembersVerified(List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
+        for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+            if (!hasVerifiedIntegrityState(file.metadataJson())) {
+                return false;
+            }
+        }
         return true;
-      }
-      if (!(obj instanceof ArrivalGroupKey that)) {
-        return false;
-      }
-      return Objects.equals(tenantId, that.tenantId)
-          && Objects.equals(bizDate, that.bizDate)
-          && Objects.equals(fileGroupCode, that.fileGroupCode)
-          && Objects.equals(waitFileGroupMode, that.waitFileGroupMode)
-          && Objects.equals(requiredFileSet, that.requiredFileSet)
-          && Objects.equals(arrivalTimeoutAction, that.arrivalTimeoutAction);
     }
 
-    @Override
-    public int hashCode() {
-      return Objects.hash(
-          tenantId,
-          bizDate,
-          fileGroupCode,
-          waitFileGroupMode,
-          requiredFileSet,
-          arrivalTimeoutAction);
+    private boolean hasVerifiedIntegrityState(Object metadataJson) {
+        if (metadataJson instanceof Map<?, ?> metadata) {
+            return FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+        }
+        String json = metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
+        if (EmptyChecks.isBlank(json)) {
+            return false;
+        }
+        try {
+            Map<String, Object> metadata = JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
+            return EmptyChecks.isNotNull(metadata)
+                    && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
-  }
 
-  private record ArrivalGroupDecision(String state) {}
+    private Set<String> parseRequiredFileSet(String value) {
+        Set<String> files = new HashSet<>();
+        if (EmptyChecks.isBlank(value)) {
+            return files;
+        }
+        for (String item : value.split(",")) {
+            String trimmed = item.trim();
+            if (EmptyChecks.isNotBlank(trimmed)) {
+                files.add(trimmed);
+            }
+        }
+        return files;
+    }
+
+    private boolean parseBoolean(String value, boolean fallback) {
+        if (EmptyChecks.isBlank(value)) {
+            return fallback;
+        }
+        return Boolean.parseBoolean(value);
+    }
+
+    private String defaultText(String value, String fallback) {
+        return EmptyChecks.isBlank(value) ? fallback : value;
+    }
+
+    private record ArrivalGroupKey(
+            String tenantId,
+            String bizDate,
+            String fileGroupCode,
+            String waitFileGroupMode,
+            String requiredFileSet,
+            String arrivalTimeoutAction) {
+
+        private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
+
+        static ArrivalGroupKey from(FileGovernanceArrivalViews.ArrivalCandidateView candidate) {
+            if (EmptyChecks.isNull(candidate)) {
+                return null;
+            }
+            String tenantId = candidate.tenantId();
+            String fileGroupCode = candidate.fileGroupCode();
+            if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
+                return null;
+            }
+            String bizDate = defaultString(candidate.bizDate(), MISSING_BIZ_DATE);
+            String waitFileGroupMode = defaultString(candidate.waitFileGroupMode(), "ALL_OF");
+            String requiredFileSet = defaultString(candidate.requiredFileSet(), "");
+            String arrivalTimeoutAction = defaultString(candidate.arrivalTimeoutAction(), "MANUAL_CONFIRM");
+            return new ArrivalGroupKey(
+                    tenantId, bizDate, fileGroupCode, waitFileGroupMode, requiredFileSet, arrivalTimeoutAction);
+        }
+
+        private static String defaultString(String value, String fallback) {
+            return EmptyChecks.isBlank(value) ? fallback : value;
+        }
+
+        // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof ArrivalGroupKey that)) {
+                return false;
+            }
+            return Objects.equals(tenantId, that.tenantId)
+                    && Objects.equals(bizDate, that.bizDate)
+                    && Objects.equals(fileGroupCode, that.fileGroupCode)
+                    && Objects.equals(waitFileGroupMode, that.waitFileGroupMode)
+                    && Objects.equals(requiredFileSet, that.requiredFileSet)
+                    && Objects.equals(arrivalTimeoutAction, that.arrivalTimeoutAction);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(
+                    tenantId, bizDate, fileGroupCode, waitFileGroupMode, requiredFileSet, arrivalTimeoutAction);
+        }
+    }
+
+    private record ArrivalGroupDecision(String state) {}
 }

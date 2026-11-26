@@ -65,395 +65,380 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("真实数据库上的批量语句机制,验证多行插入的主键按序回填,批量续租的命中集合与调用标识比较,以及事件抢占与后续标记的守卫语义")
 class BatchInsertGeneratedKeysIntegrationTest {
 
-  private static final String TENANT_ID =
-      "batch-insert-" + Long.toUnsignedString(System.nanoTime());
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 14);
+    private static final String TENANT_ID = "batch-insert-" + Long.toUnsignedString(System.nanoTime());
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 14);
 
-  @Container
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      TestPostgresContainers.create("batch_sql_batch_it");
+    @Container
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create("batch_sql_batch_it");
 
-  private static SingleConnectionDataSource dataSource;
-  private static SqlSessionFactory sqlSessionFactory;
-  private static JdbcTemplate jdbc;
+    private static SingleConnectionDataSource dataSource;
+    private static SqlSessionFactory sqlSessionFactory;
+    private static JdbcTemplate jdbc;
 
-  @BeforeAll
-  static void setUp() throws Exception {
-    final String insertTenantSql = """
+    @BeforeAll
+    static void setUp() throws Exception {
+        final String insertTenantSql = """
         insert into batch.tenant (tenant_id, tenant_name) values (?, 'Batch SQL integration')
         """;
-    final String bindTenantSql = """
+        final String bindTenantSql = """
         select set_config('app.tenant_id', ?, false)
         """;
 
-    flywayConfiguration().load().migrate();
-    dataSource = new SingleConnectionDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
-    jdbc = new JdbcTemplate(dataSource);
-    jdbc.update(insertTenantSql, TENANT_ID);
-    jdbc.queryForObject(bindTenantSql, String.class, TENANT_ID);
-    Configuration configuration =
-        new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));
-    for (String resource : List.of(
-        "mapper/JobPartitionMapper.xml",
-        "mapper/JobTaskMapper.xml",
-        "mapper/JobStepInstanceMapper.xml",
-        "mapper/OutboxEventMapper.xml")) {
-      try (InputStream in = Resources.getResourceAsStream(resource)) {
-        new XMLMapperBuilder(in, configuration, resource, configuration.getSqlFragments()).parse();
-      }
+        flywayConfiguration().load().migrate();
+        dataSource = new SingleConnectionDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+        jdbc = new JdbcTemplate(dataSource);
+        jdbc.update(insertTenantSql, TENANT_ID);
+        jdbc.queryForObject(bindTenantSql, String.class, TENANT_ID);
+        Configuration configuration =
+                new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));
+        for (String resource : List.of(
+                "mapper/JobPartitionMapper.xml",
+                "mapper/JobTaskMapper.xml",
+                "mapper/JobStepInstanceMapper.xml",
+                "mapper/OutboxEventMapper.xml")) {
+            try (InputStream in = Resources.getResourceAsStream(resource)) {
+                new XMLMapperBuilder(in, configuration, resource, configuration.getSqlFragments()).parse();
+            }
+        }
+        sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     }
-    sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
-  }
 
-  private static FluentConfiguration flywayConfiguration() {
-    return Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
-  }
+    private static FluentConfiguration flywayConfiguration() {
+        return Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas("batch", "quartz")
+                .defaultSchema("batch")
+                .locations("classpath:db/migration")
+                .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
+    }
 
-  @AfterEach
-  void cleanOwnedRows() {
-    final String deleteChildTriggerRequestsSql = """
+    @AfterEach
+    void cleanOwnedRows() {
+        final String deleteChildTriggerRequestsSql = """
         delete from batch.trigger_request where tenant_id = ? and parent_workflow_run_id is not null
         """;
-    for (String table : List.of("outbox_event", "job_task", "job_partition", "job_instance")) {
-      deleteOwnedRows(table);
+        for (String table : List.of("outbox_event", "job_task", "job_partition", "job_instance")) {
+            deleteOwnedRows(table);
+        }
+        jdbc.update(deleteChildTriggerRequestsSql, TENANT_ID);
+        deleteOwnedRows("workflow_run");
+        for (String table : List.of(
+                "trigger_request",
+                "workflow_edge",
+                "workflow_node",
+                "workflow_definition_version",
+                "workflow_definition",
+                "job_definition",
+                "business_calendar",
+                "tenant_configuration_revision")) {
+            deleteOwnedRows(table);
+        }
     }
-    jdbc.update(deleteChildTriggerRequestsSql, TENANT_ID);
-    deleteOwnedRows("workflow_run");
-    for (String table : List.of(
-        "trigger_request",
-        "workflow_edge",
-        "workflow_node",
-        "workflow_definition_version",
-        "workflow_definition",
-        "job_definition",
-        "business_calendar",
-        "tenant_configuration_revision")) {
-      deleteOwnedRows(table);
+
+    private static void deleteOwnedRows(String table) {
+        // 表名只来自本类固定清理顺序；租户始终绑定，不能清理其它测试或迁移种子。
+        String deleteOwnedRowsSql = "delete from batch." + table + " where tenant_id = ?";
+        jdbc.update(deleteOwnedRowsSql, TENANT_ID);
     }
-  }
 
-  private static void deleteOwnedRows(String table) {
-    // 表名只来自本类固定清理顺序；租户始终绑定，不能清理其它测试或迁移种子。
-    String deleteOwnedRowsSql = "delete from batch." + table + " where tenant_id = ?";
-    jdbc.update(deleteOwnedRowsSql, TENANT_ID);
-  }
-
-  @AfterAll
-  static void tearDown() {
-    if (dataSource != null) {
-      final String deleteTenantSql = """
+    @AfterAll
+    static void tearDown() {
+        if (dataSource != null) {
+            final String deleteTenantSql = """
           delete from batch.tenant where tenant_id = ?
           """;
-      try {
-        jdbc.update(deleteTenantSql, TENANT_ID);
-      } finally {
-        dataSource.destroy();
-      }
+            try {
+                jdbc.update(deleteTenantSql, TENANT_ID);
+            } finally {
+                dataSource.destroy();
+            }
+        }
     }
-  }
 
-  @Test
-  @DisplayName("批量插入多行时按序回填生成主键,回填标识与数据库行一一对应且任务插入同样按序回填")
-  void shouldBackfillGeneratedIdsInOrder_whenBatchInserting() {
-    final String selectIdSql = """
+    @Test
+    @DisplayName("批量插入多行时按序回填生成主键,回填标识与数据库行一一对应且任务插入同样按序回填")
+    void shouldBackfillGeneratedIdsInOrder_whenBatchInserting() {
+        final String selectIdSql = """
         select id from batch.job_partition where tenant_id=? and job_instance_id=? and partition_no=?\
         """;
 
-    Long instanceId = seedJobInstance("generated-keys");
-    try (SqlSession session = sqlSessionFactory.openSession(true)) {
-      JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
-      List<JobPartitionEntity> partitions = List.of(
-          partition(TENANT_ID, instanceId, 1),
-          partition(TENANT_ID, instanceId, 2),
-          partition(TENANT_ID, instanceId, 3));
-      int inserted = partitionMapper.insertBatch(partitions);
+        Long instanceId = seedJobInstance("generated-keys");
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
+            List<JobPartitionEntity> partitions = List.of(
+                    partition(TENANT_ID, instanceId, 1),
+                    partition(TENANT_ID, instanceId, 2),
+                    partition(TENANT_ID, instanceId, 3));
+            int inserted = partitionMapper.insertBatch(partitions);
 
-      assertThat(inserted).isEqualTo(3);
-      assertThat(partitions).allMatch(p -> p.getId() != null);
-      assertThat(partitions.get(0).getId()).isLessThan(partitions.get(1).getId());
-      assertThat(partitions.get(1).getId()).isLessThan(partitions.get(2).getId());
-      // 回填的 id 与 DB 行一一对应(按 partition_no 反查)
-      for (JobPartitionEntity p : partitions) {
-        Long dbId = jdbc.queryForObject(
-            selectIdSql, Long.class, p.getTenantId(), p.getJobInstanceId(), p.getPartitionNo());
-        assertThat(p.getId()).isEqualTo(dbId);
-      }
+            assertThat(inserted).isEqualTo(3);
+            assertThat(partitions).allMatch(p -> p.getId() != null);
+            assertThat(partitions.get(0).getId()).isLessThan(partitions.get(1).getId());
+            assertThat(partitions.get(1).getId()).isLessThan(partitions.get(2).getId());
+            // 回填的 id 与 DB 行一一对应(按 partition_no 反查)
+            for (JobPartitionEntity p : partitions) {
+                Long dbId = jdbc.queryForObject(
+                        selectIdSql, Long.class, p.getTenantId(), p.getJobInstanceId(), p.getPartitionNo());
+                assertThat(p.getId()).isEqualTo(dbId);
+            }
 
-      JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
-      List<JobTaskEntity> tasks = List.of(
-          task(TENANT_ID, instanceId, partitions.get(0).getId()),
-          task(TENANT_ID, instanceId, partitions.get(1).getId()));
-      taskMapper.insertBatch(tasks);
-      assertThat(tasks).allMatch(t -> t.getId() != null);
-      assertThat(tasks.get(0).getId()).isLessThan(tasks.get(1).getId());
+            JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
+            List<JobTaskEntity> tasks = List.of(
+                    task(TENANT_ID, instanceId, partitions.get(0).getId()),
+                    task(TENANT_ID, instanceId, partitions.get(1).getId()));
+            taskMapper.insertBatch(tasks);
+            assertThat(tasks).allMatch(t -> t.getId() != null);
+            assertThat(tasks.get(0).getId()).isLessThan(tasks.get(1).getId());
+        }
     }
-  }
 
-  @Test
-  @DisplayName("批量续租只命中调用标识匹配的占位,回读取消标记并真正写入租约到期时间")
-  void shouldUpdateLeaseAndReturnCancelFlag_whenBatchRenewing() {
-    final String updateJobPartitionSql = """
+    @Test
+    @DisplayName("批量续租只命中调用标识匹配的占位,回读取消标记并真正写入租约到期时间")
+    void shouldUpdateLeaseAndReturnCancelFlag_whenBatchRenewing() {
+        final String updateJobPartitionSql = """
         update batch.job_partition set partition_status='RUNNING', worker_code='w1',\s\
         current_invocation_id='inv-'||partition_no where tenant_id=? and job_instance_id=?\
         """;
-    final String updateJobTaskSql = """
+        final String updateJobTaskSql = """
         update batch.job_task set task_status='RUNNING', assigned_worker_code='w1' where tenant_id=? and job_instance_id=?\
         """;
-    final String updateJobTaskSql2 = """
+        final String updateJobTaskSql2 = """
         update batch.job_task set cancel_requested=true where tenant_id=? and id=?
     """;
-    final String selectCountSql = """
+        final String selectCountSql = """
         select count(*) from batch.job_partition where tenant_id=? and job_instance_id=? and lease_expire_at is not null\
         """;
 
-    Long instanceId = seedJobInstance("batch-lease");
-    try (SqlSession session = sqlSessionFactory.openSession(true)) {
-      JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
-      JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
-      JobPartitionEntity p1 = partition(TENANT_ID, instanceId, 1);
-      JobPartitionEntity p2 = partition(TENANT_ID, instanceId, 2);
-      partitionMapper.insertBatch(List.of(p1, p2));
-      jdbc.update(updateJobPartitionSql, TENANT_ID, instanceId);
-      JobTaskEntity t1 = task(TENANT_ID, instanceId, p1.getId());
-      JobTaskEntity t2 = task(TENANT_ID, instanceId, p2.getId());
-      taskMapper.insertBatch(List.of(t1, t2));
-      jdbc.update(updateJobTaskSql, TENANT_ID, instanceId);
-      jdbc.update(updateJobTaskSql2, TENANT_ID, t2.getId());
+        Long instanceId = seedJobInstance("batch-lease");
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
+            JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
+            JobPartitionEntity p1 = partition(TENANT_ID, instanceId, 1);
+            JobPartitionEntity p2 = partition(TENANT_ID, instanceId, 2);
+            partitionMapper.insertBatch(List.of(p1, p2));
+            jdbc.update(updateJobPartitionSql, TENANT_ID, instanceId);
+            JobTaskEntity t1 = task(TENANT_ID, instanceId, p1.getId());
+            JobTaskEntity t2 = task(TENANT_ID, instanceId, p2.getId());
+            taskMapper.insertBatch(List.of(t1, t2));
+            jdbc.update(updateJobTaskSql, TENANT_ID, instanceId);
+            jdbc.update(updateJobTaskSql2, TENANT_ID, t2.getId());
 
-      Instant newLease = Instant.now().plus(300, ChronoUnit.SECONDS);
-      List<RenewLeaseBatchRow> rows = partitionMapper.renewLeaseBatch(
-          List.of(
-              item(TENANT_ID, t1.getId(), "w1", "inv-1"),
-              item(TENANT_ID, t2.getId(), "w1", "inv-2"),
-              // invocation 不匹配(R3-P1-10 CAS):不得续、不得出现在 RETURNING
-              item(TENANT_ID, t1.getId(), "w1", "inv-wrong")),
-          newLease,
-          "RUNNING");
+            Instant newLease = Instant.now().plus(300, ChronoUnit.SECONDS);
+            List<RenewLeaseBatchRow> rows = partitionMapper.renewLeaseBatch(
+                    List.of(
+                            item(TENANT_ID, t1.getId(), "w1", "inv-1"),
+                            item(TENANT_ID, t2.getId(), "w1", "inv-2"),
+                            // invocation 不匹配(R3-P1-10 CAS):不得续、不得出现在 RETURNING
+                            item(TENANT_ID, t1.getId(), "w1", "inv-wrong")),
+                    newLease,
+                    "RUNNING");
 
-      assertThat(rows).hasSize(2);
-      assertThat(rows)
-          .extracting(RenewLeaseBatchRow::getTaskId)
-          .containsExactlyInAnyOrder(t1.getId(), t2.getId());
-      RenewLeaseBatchRow rowT2 = rows.stream()
-          .filter(r -> r.getTaskId().equals(t2.getId()))
-          .findFirst()
-          .orElseThrow();
-      assertThat(rowT2.getCancelRequested()).isTrue();
-      // lease 确实写进去了
-      Integer renewedCount =
-          jdbc.queryForObject(selectCountSql, Integer.class, TENANT_ID, instanceId);
-      assertThat(renewedCount).isEqualTo(2);
+            assertThat(rows).hasSize(2);
+            assertThat(rows)
+                    .extracting(RenewLeaseBatchRow::getTaskId)
+                    .containsExactlyInAnyOrder(t1.getId(), t2.getId());
+            RenewLeaseBatchRow rowT2 = rows.stream()
+                    .filter(r -> r.getTaskId().equals(t2.getId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(rowT2.getCancelRequested()).isTrue();
+            // lease 确实写进去了
+            Integer renewedCount = jdbc.queryForObject(selectCountSql, Integer.class, TENANT_ID, instanceId);
+            assertThat(renewedCount).isEqualTo(2);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("批量抢占发布中状态时只命中可发布的行,递增发布尝试次数且已发布行不被后续标记误改")
-  void shouldClaimOnlyPublishableRows_whenBatchMarkingPublishing() {
-    final String insertOutboxEventSql = """
+    @Test
+    @DisplayName("批量抢占发布中状态时只命中可发布的行,递增发布尝试次数且已发布行不被后续标记误改")
+    void shouldClaimOnlyPublishableRows_whenBatchMarkingPublishing() {
+        final String insertOutboxEventSql = """
         insert into batch.outbox_event (tenant_id, aggregate_type, aggregate_id, event_type, event_key,\s\
         payload_json, publish_status, publish_attempt)\s\
         values (?,'JOB_TASK',1,'IMPORT','k1','{}','NEW',0),\s\
         (?,'JOB_TASK',2,'IMPORT','k2','{}','FAILED',1), (?,'JOB_TASK',3,'IMPORT','k3','{}','PUBLISHED',1)\
         """;
-    final String selectIdSql = """
+        final String selectIdSql = """
         select id from batch.outbox_event where tenant_id=? order by id
     """;
-    final String selectPublishAttemptSql = """
+        final String selectPublishAttemptSql = """
         select publish_attempt from batch.outbox_event where tenant_id=? and id=?
     """;
 
-    try (SqlSession session = sqlSessionFactory.openSession(true)) {
-      OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
-      jdbc.update(insertOutboxEventSql, TENANT_ID, TENANT_ID, TENANT_ID);
-      List<Long> ids = jdbc.queryForList(selectIdSql, Long.class, TENANT_ID);
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
+            jdbc.update(insertOutboxEventSql, TENANT_ID, TENANT_ID, TENANT_ID);
+            List<Long> ids = jdbc.queryForList(selectIdSql, Long.class, TENANT_ID);
 
-      List<OutboxPublishClaim> won =
-          outboxMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
-              .tenantId(TENANT_ID)
-              .ids(ids)
-              .publishingStatus("PUBLISHING")
-              .pendingStatus1("NEW")
-              .pendingStatus2("FAILED")
-              .build());
+            List<OutboxPublishClaim> won =
+                    outboxMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
+                            .tenantId(TENANT_ID)
+                            .ids(ids)
+                            .publishingStatus("PUBLISHING")
+                            .pendingStatus1("NEW")
+                            .pendingStatus2("FAILED")
+                            .build());
 
-      // 只有 NEW/FAILED 两行被抢占;PUBLISHED 行不动(可重入集 CAS 与单条 markPublishing 一致)
-      assertThat(won)
-          .extracting(OutboxPublishClaim::id)
-          .containsExactlyInAnyOrder(ids.get(0), ids.get(1));
-      assertThat(won)
-          .extracting(OutboxPublishClaim::id, OutboxPublishClaim::publishAttempt)
-          .containsExactlyInAnyOrder(
-              org.assertj.core.groups.Tuple.tuple(ids.get(0), 1),
-              org.assertj.core.groups.Tuple.tuple(ids.get(1), 2));
-      Integer selectedPublishAttempt =
-          jdbc.queryForObject(selectPublishAttemptSql, Integer.class, TENANT_ID, ids.get(0));
-      assertThat(selectedPublishAttempt).isEqualTo(1);
+            // 只有 NEW/FAILED 两行被抢占;PUBLISHED 行不动(可重入集 CAS 与单条 markPublishing 一致)
+            assertThat(won).extracting(OutboxPublishClaim::id).containsExactlyInAnyOrder(ids.get(0), ids.get(1));
+            assertThat(won)
+                    .extracting(OutboxPublishClaim::id, OutboxPublishClaim::publishAttempt)
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.groups.Tuple.tuple(ids.get(0), 1),
+                            org.assertj.core.groups.Tuple.tuple(ids.get(1), 2));
+            Integer selectedPublishAttempt =
+                    jdbc.queryForObject(selectPublishAttemptSql, Integer.class, TENANT_ID, ids.get(0));
+            assertThat(selectedPublishAttempt).isEqualTo(1);
 
-      // 阶段三:markPublishedBatch 带 PUBLISHING 守卫 —— 已 PUBLISHED 的第三行不被误改
-      int staleAttemptUpdated = outboxMapper.markPublishedBatch(publishedBatchParam(ids, 0));
-      assertThat(staleAttemptUpdated).isZero();
-      int publishedFirst =
-          outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(0)), 1));
-      int publishedSecond =
-          outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(1)), 2));
-      assertThat(publishedFirst).isEqualTo(1);
-      assertThat(publishedSecond).isEqualTo(1);
+            // 阶段三:markPublishedBatch 带 PUBLISHING 守卫 —— 已 PUBLISHED 的第三行不被误改
+            int staleAttemptUpdated = outboxMapper.markPublishedBatch(publishedBatchParam(ids, 0));
+            assertThat(staleAttemptUpdated).isZero();
+            int publishedFirst = outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(0)), 1));
+            int publishedSecond = outboxMapper.markPublishedBatch(publishedBatchParam(List.of(ids.get(1)), 2));
+            assertThat(publishedFirst).isEqualTo(1);
+            assertThat(publishedSecond).isEqualTo(1);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("同一事件重新领取后，旧发布者的成功/失败/放弃均更新 0 行，新发布者成功更新 1 行")
-  void shouldRejectStalePublisherWritebacks_whenEventIsReclaimed() {
-    final String insertOutboxEventSql = """
+    @Test
+    @DisplayName("同一事件重新领取后，旧发布者的成功/失败/放弃均更新 0 行，新发布者成功更新 1 行")
+    void shouldRejectStalePublisherWritebacks_whenEventIsReclaimed() {
+        final String insertOutboxEventSql = """
         insert into batch.outbox_event (tenant_id, aggregate_type, aggregate_id, event_type, event_key,\s\
         payload_json, publish_status, publish_attempt)\s\
         values (?,'JOB_TASK',1,'IMPORT','reclaim','{}','NEW',0)\
         """;
-    final String selectIdSql =
-        "select id from batch.outbox_event where tenant_id=? and event_key='reclaim'";
-    final String resetSql =
-        "update batch.outbox_event set publish_status = 'FAILED' where tenant_id=? and id=?";
+        final String selectIdSql = "select id from batch.outbox_event where tenant_id=? and event_key='reclaim'";
+        final String resetSql = "update batch.outbox_event set publish_status = 'FAILED' where tenant_id=? and id=?";
 
-    try (SqlSession session = sqlSessionFactory.openSession(true)) {
-      OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
-      jdbc.update(insertOutboxEventSql, TENANT_ID);
-      Long eventId = jdbc.queryForObject(selectIdSql, Long.class, TENANT_ID);
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
+            jdbc.update(insertOutboxEventSql, TENANT_ID);
+            Long eventId = jdbc.queryForObject(selectIdSql, Long.class, TENANT_ID);
 
-      OutboxPublishClaim firstClaim = outboxMapper
-          .markPublishingBatch(publishingBatchParam(List.of(eventId)))
-          .getFirst();
-      assertThat(firstClaim.publishAttempt()).isEqualTo(1);
-      // 模拟超时回收后另一实例重新领取。
-      jdbc.update(resetSql, TENANT_ID, eventId);
-      OutboxPublishClaim secondClaim = outboxMapper
-          .markPublishingBatch(publishingBatchParam(List.of(eventId)))
-          .getFirst();
-      assertThat(secondClaim.publishAttempt()).isEqualTo(2);
+            OutboxPublishClaim firstClaim = outboxMapper
+                    .markPublishingBatch(publishingBatchParam(List.of(eventId)))
+                    .getFirst();
+            assertThat(firstClaim.publishAttempt()).isEqualTo(1);
+            // 模拟超时回收后另一实例重新领取。
+            jdbc.update(resetSql, TENANT_ID, eventId);
+            OutboxPublishClaim secondClaim = outboxMapper
+                    .markPublishingBatch(publishingBatchParam(List.of(eventId)))
+                    .getFirst();
+            assertThat(secondClaim.publishAttempt()).isEqualTo(2);
 
-      assertThat(outboxMapper.markPublishedBatch(
-              publishedBatchParam(List.of(eventId), firstClaim.publishAttempt())))
-          .isZero();
-      assertThat(outboxMapper.markFailedBatch(OutboxEventMarkFailedBatchParam.builder()
-              .tenantId(TENANT_ID)
-              .ids(List.of(eventId))
-              .status("FAILED")
-              .nextPublishAt(Instant.now().plusSeconds(30))
-              .publishingStatus("PUBLISHING")
-              .publishAttempt(firstClaim.publishAttempt())
-              .build()))
-          .isZero();
-      assertThat(outboxMapper.markGiveUpBatch(
-              giveUpBatchParam(List.of(eventId), firstClaim.publishAttempt())))
-          .isZero();
+            assertThat(outboxMapper.markPublishedBatch(
+                            publishedBatchParam(List.of(eventId), firstClaim.publishAttempt())))
+                    .isZero();
+            assertThat(outboxMapper.markFailedBatch(OutboxEventMarkFailedBatchParam.builder()
+                            .tenantId(TENANT_ID)
+                            .ids(List.of(eventId))
+                            .status("FAILED")
+                            .nextPublishAt(Instant.now().plusSeconds(30))
+                            .publishingStatus("PUBLISHING")
+                            .publishAttempt(firstClaim.publishAttempt())
+                            .build()))
+                    .isZero();
+            assertThat(outboxMapper.markGiveUpBatch(giveUpBatchParam(List.of(eventId), firstClaim.publishAttempt())))
+                    .isZero();
 
-      assertThat(outboxMapper.markPublishedBatch(
-              publishedBatchParam(List.of(eventId), secondClaim.publishAttempt())))
-          .isEqualTo(1);
+            assertThat(outboxMapper.markPublishedBatch(
+                            publishedBatchParam(List.of(eventId), secondClaim.publishAttempt())))
+                    .isEqualTo(1);
+        }
     }
-  }
 
-  private static OutboxEventMarkPublishedBatchParam publishedBatchParam(
-      List<Long> ids, int publishAttempt) {
-    return OutboxEventMarkPublishedBatchParam.builder()
-        .tenantId(TENANT_ID)
-        .ids(ids)
-        .status("PUBLISHED")
-        .publishingStatus("PUBLISHING")
-        .publishAttempt(publishAttempt)
-        .build();
-  }
+    private static OutboxEventMarkPublishedBatchParam publishedBatchParam(List<Long> ids, int publishAttempt) {
+        return OutboxEventMarkPublishedBatchParam.builder()
+                .tenantId(TENANT_ID)
+                .ids(ids)
+                .status("PUBLISHED")
+                .publishingStatus("PUBLISHING")
+                .publishAttempt(publishAttempt)
+                .build();
+    }
 
-  private static OutboxEventMarkGiveUpBatchParam giveUpBatchParam(
-      List<Long> ids, int publishAttempt) {
-    return OutboxEventMarkGiveUpBatchParam.builder()
-        .tenantId(TENANT_ID)
-        .ids(ids)
-        .status("GIVE_UP")
-        .publishingStatus("PUBLISHING")
-        .publishAttempt(publishAttempt)
-        .build();
-  }
+    private static OutboxEventMarkGiveUpBatchParam giveUpBatchParam(List<Long> ids, int publishAttempt) {
+        return OutboxEventMarkGiveUpBatchParam.builder()
+                .tenantId(TENANT_ID)
+                .ids(ids)
+                .status("GIVE_UP")
+                .publishingStatus("PUBLISHING")
+                .publishAttempt(publishAttempt)
+                .build();
+    }
 
-  private static OutboxEventMarkPublishingBatchParam publishingBatchParam(List<Long> ids) {
-    return OutboxEventMarkPublishingBatchParam.builder()
-        .tenantId(TENANT_ID)
-        .ids(ids)
-        .publishingStatus("PUBLISHING")
-        .pendingStatus1("NEW")
-        .pendingStatus2("FAILED")
-        .build();
-  }
+    private static OutboxEventMarkPublishingBatchParam publishingBatchParam(List<Long> ids) {
+        return OutboxEventMarkPublishingBatchParam.builder()
+                .tenantId(TENANT_ID)
+                .ids(ids)
+                .publishingStatus("PUBLISHING")
+                .pendingStatus1("NEW")
+                .pendingStatus2("FAILED")
+                .build();
+    }
 
-  private static Long seedJobInstance(String suffix) {
-    final String insertJobDefinitionSql = """
+    private static Long seedJobInstance(String suffix) {
+        final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
         ) values (?, ?, ?, 'IMPORT', 'MANUAL', 'UTC', 'API') returning id
         """;
-    final String insertJobInstanceSql = """
+        final String insertJobInstanceSql = """
         insert into batch.job_instance (
             tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
             trigger_type, instance_status, dedup_key, biz_date
         ) values (?, ?, ?, ?, ?, 'EVENT', 'RUNNING', ?, ?) returning id
         """;
-    String jobCode = "BATCH_SQL_" + suffix;
-    Long jobDefinitionId =
-        jdbc.queryForObject(insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
-    WorkflowChildTriggerSeed child =
-        LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
-            jdbc, TENANT_ID, jobDefinitionId, jobCode, suffix, BIZ_DATE, TriggerType.API);
-    return jdbc.queryForObject(
-        insertJobInstanceSql,
-        Long.class,
-        TENANT_ID,
-        jobDefinitionId,
-        child.triggerRequestId(),
-        jobCode,
-        "INSTANCE_" + suffix,
-        "DEDUP_" + suffix,
-        BIZ_DATE);
-  }
+        String jobCode = "BATCH_SQL_" + suffix;
+        Long jobDefinitionId = jdbc.queryForObject(insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
+        WorkflowChildTriggerSeed child = LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
+                jdbc, TENANT_ID, jobDefinitionId, jobCode, suffix, BIZ_DATE, TriggerType.API);
+        return jdbc.queryForObject(
+                insertJobInstanceSql,
+                Long.class,
+                TENANT_ID,
+                jobDefinitionId,
+                child.triggerRequestId(),
+                jobCode,
+                "INSTANCE_" + suffix,
+                "DEDUP_" + suffix,
+                BIZ_DATE);
+    }
 
-  private static JobPartitionEntity partition(String tenantId, Long instanceId, int no) {
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setTenantId(tenantId);
-    p.setJobInstanceId(instanceId);
-    p.setJobInstanceBizDate(BIZ_DATE);
-    p.setPartitionNo(no);
-    p.setPartitionKey("k-" + instanceId + "-" + no);
-    p.setPartitionStatus("CREATED");
-    p.setRetryCount(0);
-    p.setIdempotencyKey(instanceId + ":" + no);
-    return p;
-  }
+    private static JobPartitionEntity partition(String tenantId, Long instanceId, int no) {
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setTenantId(tenantId);
+        p.setJobInstanceId(instanceId);
+        p.setJobInstanceBizDate(BIZ_DATE);
+        p.setPartitionNo(no);
+        p.setPartitionKey("k-" + instanceId + "-" + no);
+        p.setPartitionStatus("CREATED");
+        p.setRetryCount(0);
+        p.setIdempotencyKey(instanceId + ":" + no);
+        return p;
+    }
 
-  private static JobTaskEntity task(String tenantId, Long instanceId, Long partitionId) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setTenantId(tenantId);
-    t.setJobInstanceId(instanceId);
-    t.setJobInstanceBizDate(BIZ_DATE);
-    t.setJobPartitionId(partitionId);
-    t.setTaskType("IMPORT");
-    t.setTaskSeq(1);
-    t.setTaskStatus("CREATED");
-    t.setVersion(0L);
-    return t;
-  }
+    private static JobTaskEntity task(String tenantId, Long instanceId, Long partitionId) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setTenantId(tenantId);
+        t.setJobInstanceId(instanceId);
+        t.setJobInstanceBizDate(BIZ_DATE);
+        t.setJobPartitionId(partitionId);
+        t.setTaskType("IMPORT");
+        t.setTaskSeq(1);
+        t.setTaskStatus("CREATED");
+        t.setVersion(0L);
+        return t;
+    }
 
-  private static RenewLeaseBatchItem item(
-      String tenantId, Long taskId, String workerCode, String invocationId) {
-    return RenewLeaseBatchItem.builder()
-        .tenantId(tenantId)
-        .taskId(taskId)
-        .workerCode(workerCode)
-        .invocationId(invocationId)
-        .build();
-  }
+    private static RenewLeaseBatchItem item(String tenantId, Long taskId, String workerCode, String invocationId) {
+        return RenewLeaseBatchItem.builder()
+                .tenantId(tenantId)
+                .taskId(taskId)
+                .workerCode(workerCode)
+                .invocationId(invocationId)
+                .build();
+    }
 }

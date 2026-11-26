@@ -10,24 +10,22 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowTerminalNotificationMapper {
-  String bindTenant(@Param("tenantId") String tenantId);
+    String bindTenant(@Param("tenantId") String tenantId);
 
-  boolean lockReceipt(@Param("tenantId") String tenantId, @Param("eventKey") String eventKey);
+    boolean lockReceipt(@Param("tenantId") String tenantId, @Param("eventKey") String eventKey);
 
-  int insertReceipt(
-      @Param("tenantId") String tenantId,
-      @Param("eventKey") String eventKey,
-      @Param("payload") String payload);
+    int insertReceipt(
+            @Param("tenantId") String tenantId, @Param("eventKey") String eventKey, @Param("payload") String payload);
 
-  String receiptPayload(@Param("tenantId") String tenantId, @Param("eventKey") String eventKey);
+    String receiptPayload(@Param("tenantId") String tenantId, @Param("eventKey") String eventKey);
 
-  int insertWebhook(WorkflowTerminalNotificationInsertWebhookParam parameters);
+    int insertWebhook(WorkflowTerminalNotificationInsertWebhookParam parameters);
 
-  int insertRule(WorkflowTerminalNotificationInsertRuleParam parameters);
+    int insertRule(WorkflowTerminalNotificationInsertRuleParam parameters);
 
-  List<TerminalNotificationDelivery> pending(@Param("now") Instant now, @Param("limit") int limit);
+    List<TerminalNotificationDelivery> pending(@Param("now") Instant now, @Param("limit") int limit);
 
-  int claim(WorkflowTerminalNotificationClaimParam parameters);
+    int claim(WorkflowTerminalNotificationClaimParam parameters);
 
-  int finish(WorkflowTerminalNotificationFinishParam parameters);
+    int finish(WorkflowTerminalNotificationFinishParam parameters);
 }

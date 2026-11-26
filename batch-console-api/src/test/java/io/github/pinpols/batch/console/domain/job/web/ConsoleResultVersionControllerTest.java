@@ -31,97 +31,88 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleResultVersionControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestratorProxy;
+    @Mock
+    private ConsoleOrchestratorPort orchestratorProxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleResultVersionController(orchestratorProxy, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleResultVersionController(orchestratorProxy, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("列表查询按租户与业务键下发下游, 未传条数时使用默认值")
-  void shouldDelegateList_whenTenantAndBusinessKeyProvided() throws Exception {
-    when(orchestratorProxy.resultVersions("ta", "BK_A", 50))
-        .thenReturn(CommonResponse.success(List.of()));
-    mockMvc
-        .perform(get("/api/console/result-versions")
-            .param("tenantId", "ta")
-            .param("businessKey", "BK_A"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy).resultVersions("ta", "BK_A", 50);
-  }
+    @Test
+    @DisplayName("列表查询按租户与业务键下发下游, 未传条数时使用默认值")
+    void shouldDelegateList_whenTenantAndBusinessKeyProvided() throws Exception {
+        when(orchestratorProxy.resultVersions("ta", "BK_A", 50)).thenReturn(CommonResponse.success(List.of()));
+        mockMvc.perform(get("/api/console/result-versions")
+                        .param("tenantId", "ta")
+                        .param("businessKey", "BK_A"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy).resultVersions("ta", "BK_A", 50);
+    }
 
-  @Test
-  @DisplayName("生效版本查询按租户与业务键下发下游")
-  void shouldDelegateEffectiveLookup_whenBusinessKeyProvided() throws Exception {
-    when(orchestratorProxy.effectiveResultVersion("ta", "BK_A"))
-        .thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(get("/api/console/result-versions/effective")
-            .param("tenantId", "ta")
-            .param("businessKey", "BK_A"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy).effectiveResultVersion("ta", "BK_A");
-  }
+    @Test
+    @DisplayName("生效版本查询按租户与业务键下发下游")
+    void shouldDelegateEffectiveLookup_whenBusinessKeyProvided() throws Exception {
+        when(orchestratorProxy.effectiveResultVersion("ta", "BK_A")).thenReturn(CommonResponse.success(null));
+        mockMvc.perform(get("/api/console/result-versions/effective")
+                        .param("tenantId", "ta")
+                        .param("businessKey", "BK_A"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy).effectiveResultVersion("ta", "BK_A");
+    }
 
-  @Test
-  @DisplayName("详情查询按记录标识与租户下发下游")
-  void shouldDelegateDetail_whenIdAndTenantProvided() throws Exception {
-    when(orchestratorProxy.resultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(get("/api/console/result-versions/7").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy).resultVersion(7L, "ta");
-  }
+    @Test
+    @DisplayName("详情查询按记录标识与租户下发下游")
+    void shouldDelegateDetail_whenIdAndTenantProvided() throws Exception {
+        when(orchestratorProxy.resultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
+        mockMvc.perform(get("/api/console/result-versions/7").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy).resultVersion(7L, "ta");
+    }
 
-  @Test
-  @DisplayName("晋升操作按记录标识与租户下发下游并返回成功")
-  void shouldDelegatePromote_whenIdAndTenantProvided() throws Exception {
-    when(orchestratorProxy.promoteResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(post("/api/console/result-versions/7/promote")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy).promoteResultVersion(7L, "ta");
-  }
+    @Test
+    @DisplayName("晋升操作按记录标识与租户下发下游并返回成功")
+    void shouldDelegatePromote_whenIdAndTenantProvided() throws Exception {
+        when(orchestratorProxy.promoteResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
+        mockMvc.perform(post("/api/console/result-versions/7/promote")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy).promoteResultVersion(7L, "ta");
+    }
 
-  @Test
-  @DisplayName("驳回操作按记录标识与租户下发下游并返回成功")
-  void shouldDelegateReject_whenIdAndTenantProvided() throws Exception {
-    when(orchestratorProxy.rejectResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(post("/api/console/result-versions/7/reject")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy).rejectResultVersion(7L, "ta");
-  }
+    @Test
+    @DisplayName("驳回操作按记录标识与租户下发下游并返回成功")
+    void shouldDelegateReject_whenIdAndTenantProvided() throws Exception {
+        when(orchestratorProxy.rejectResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
+        mockMvc.perform(post("/api/console/result-versions/7/reject")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy).rejectResultVersion(7L, "ta");
+    }
 
-  @Test
-  @DisplayName("跨租户访问被应用层拒绝时返回禁止状态, 仍完成一次调用")
-  void shouldPropagateApplicationTenantRejection() throws Exception {
-    when(orchestratorProxy.resultVersions("tb", "BK_A", 50))
-        .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
-    mockMvc
-        .perform(get("/api/console/result-versions")
-            .param("tenantId", "tb")
-            .param("businessKey", "BK_A"))
-        .andExpect(status().isForbidden());
-    verify(orchestratorProxy).resultVersions("tb", "BK_A", 50);
-  }
+    @Test
+    @DisplayName("跨租户访问被应用层拒绝时返回禁止状态, 仍完成一次调用")
+    void shouldPropagateApplicationTenantRejection() throws Exception {
+        when(orchestratorProxy.resultVersions("tb", "BK_A", 50))
+                .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
+        mockMvc.perform(get("/api/console/result-versions")
+                        .param("tenantId", "tb")
+                        .param("businessKey", "BK_A"))
+                .andExpect(status().isForbidden());
+        verify(orchestratorProxy).resultVersions("tb", "BK_A", 50);
+    }
 }

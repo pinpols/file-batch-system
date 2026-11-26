@@ -45,60 +45,53 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataController {
 
-  // 禁用 `_`:SQL LIKE 中 `_` 是单字符通配符,管理员删除接口误删风险高,严格规避。
-  // 改用 hyphen 作为分隔(本就是文档示例: `e2e-suite-A`)。
-  private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
+    // 禁用 `_`:SQL LIKE 中 `_` 是单字符通配符,管理员删除接口误删风险高,严格规避。
+    // 改用 hyphen 作为分隔(本就是文档示例: `e2e-suite-A`)。
+    private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
-  private final ConsoleAdminTestDataApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAdminTestDataApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /**
-   * 按 prefix 批量级联清理测试数据。返回 map 列出每张表删了多少行。
-   *
-   * <p>prefix 已被正则严格限制,SQL LIKE 模板里手动加 `-%` 后缀 → 只会匹配 `prefix-xxx` 而不会匹配 `prefix...` 误删合法数据。
-   */
-  @DeleteMapping
-  @AuditAction(
-      action = "admin.testDataCleanup",
-      aggregateType = "test_data",
-      aggregateId = "#prefix")
-  public CommonResponse<Map<String, Integer>> cleanup(
-      @RequestParam
-          @Pattern(
-              regexp = PREFIX_PATTERN,
-              message =
-                  "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
-          String prefix) {
-    if (prefix == null || prefix.isBlank()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    /**
+     * 按 prefix 批量级联清理测试数据。返回 map 列出每张表删了多少行。
+     *
+     * <p>prefix 已被正则严格限制,SQL LIKE 模板里手动加 `-%` 后缀 → 只会匹配 `prefix-xxx` 而不会匹配 `prefix...` 误删合法数据。
+     */
+    @DeleteMapping
+    @AuditAction(action = "admin.testDataCleanup", aggregateType = "test_data", aggregateId = "#prefix")
+    public CommonResponse<Map<String, Integer>> cleanup(
+            @RequestParam
+                    @Pattern(
+                            regexp = PREFIX_PATTERN,
+                            message =
+                                    "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
+                    String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+        }
+        Map<String, Integer> result = applicationService.cleanupByPrefix(prefix);
+        return responseFactory.success(result);
     }
-    Map<String, Integer> result = applicationService.cleanupByPrefix(prefix);
-    return responseFactory.success(result);
-  }
 
-  /**
-   * 按精确 tenantId 列表清理(prefix 模式无法清纯短名 ID 如 `tx` / `td` 等历史残留时的补充处理)。
-   *
-   * <p>**白名单保护**:`system` / `default` / `default-tenant` / `ta` / `tb` / `tc` 任何场景拒删。
-   *
-   * <p>用法:`DELETE /api/console/admin/test-data/by-ids?ids=td,te,tf`
-   */
-  @DeleteMapping("/by-ids")
-  @AuditAction(
-      action = "admin.testDataCleanupByIds",
-      aggregateType = "test_data",
-      aggregateId = "#ids")
-  public CommonResponse<Map<String, Integer>> cleanupByExactIds(
-      @RequestParam
-          @Pattern(
-              regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
-              message =
-                  "ids must start with a letter, be comma-separated, and contain 3-256 characters")
-          String ids) {
-    if (ids == null || ids.isBlank()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    /**
+     * 按精确 tenantId 列表清理(prefix 模式无法清纯短名 ID 如 `tx` / `td` 等历史残留时的补充处理)。
+     *
+     * <p>**白名单保护**:`system` / `default` / `default-tenant` / `ta` / `tb` / `tc` 任何场景拒删。
+     *
+     * <p>用法:`DELETE /api/console/admin/test-data/by-ids?ids=td,te,tf`
+     */
+    @DeleteMapping("/by-ids")
+    @AuditAction(action = "admin.testDataCleanupByIds", aggregateType = "test_data", aggregateId = "#ids")
+    public CommonResponse<Map<String, Integer>> cleanupByExactIds(
+            @RequestParam
+                    @Pattern(
+                            regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
+                            message = "ids must start with a letter, be comma-separated, and contain 3-256 characters")
+                    String ids) {
+        if (ids == null || ids.isBlank()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+        }
+        Map<String, Integer> result = applicationService.cleanupByExactIds(ids);
+        return responseFactory.success(result);
     }
-    Map<String, Integer> result = applicationService.cleanupByExactIds(ids);
-    return responseFactory.success(result);
-  }
 }

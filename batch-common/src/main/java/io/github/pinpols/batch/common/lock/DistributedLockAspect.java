@@ -35,88 +35,86 @@ import org.springframework.expression.spel.support.StandardEvaluationContext;
 @SuppressWarnings("deprecation") // implements the reserved-but-unadopted @DistributedLock machinery
 public class DistributedLockAspect {
 
-  private final LockingTaskExecutor lockingTaskExecutor;
-  private final ExpressionParser parser = new SpelExpressionParser();
-  private final ParameterNameDiscoverer paramNames = new DefaultParameterNameDiscoverer();
+    private final LockingTaskExecutor lockingTaskExecutor;
+    private final ExpressionParser parser = new SpelExpressionParser();
+    private final ParameterNameDiscoverer paramNames = new DefaultParameterNameDiscoverer();
 
-  @Around("@annotation(io.github.pinpols.batch.common.lock.DistributedLock)")
-  public Object around(ProceedingJoinPoint pjp) throws Throwable {
-    MethodSignature signature = (MethodSignature) pjp.getSignature();
-    Method method = signature.getMethod();
-    DistributedLock ann = method.getAnnotation(DistributedLock.class);
-    String lockKey = resolveKey(ann, method, pjp.getArgs());
+    @Around("@annotation(io.github.pinpols.batch.common.lock.DistributedLock)")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        Method method = signature.getMethod();
+        DistributedLock ann = method.getAnnotation(DistributedLock.class);
+        String lockKey = resolveKey(ann, method, pjp.getArgs());
 
-    Instant now = BatchDateTimeSupport.utcNow();
-    Duration lockAtMostFor = Duration.ofSeconds(ann.leaseSeconds());
-    Duration lockAtLeastFor = Duration.ofSeconds(ann.atLeastSeconds());
-    LockConfiguration config = new LockConfiguration(now, lockKey, lockAtMostFor, lockAtLeastFor);
+        Instant now = BatchDateTimeSupport.utcNow();
+        Duration lockAtMostFor = Duration.ofSeconds(ann.leaseSeconds());
+        Duration lockAtLeastFor = Duration.ofSeconds(ann.atLeastSeconds());
+        LockConfiguration config = new LockConfiguration(now, lockKey, lockAtMostFor, lockAtLeastFor);
 
-    Throwable[] thrown = new Throwable[1];
-    Object[] result = new Object[1];
-    LockingTaskExecutor.TaskResult<Object> taskResult = lockingTaskExecutor.executeWithLock(
-        (LockingTaskExecutor.TaskWithResult<Object>) () -> {
-          try {
-            result[0] = pjp.proceed();
-            return result[0];
-          } catch (Throwable t) {
-            thrown[0] = t;
-            return null;
-          }
-        },
-        config);
+        Throwable[] thrown = new Throwable[1];
+        Object[] result = new Object[1];
+        LockingTaskExecutor.TaskResult<Object> taskResult = lockingTaskExecutor.executeWithLock(
+                (LockingTaskExecutor.TaskWithResult<Object>) () -> {
+                    try {
+                        result[0] = pjp.proceed();
+                        return result[0];
+                    } catch (Throwable t) {
+                        thrown[0] = t;
+                        return null;
+                    }
+                },
+                config);
 
-    if (thrown[0] != null) {
-      throw thrown[0];
-    }
-    if (!taskResult.wasExecuted()) {
-      if (ann.throwOnFailure()) {
-        throw new DistributedLockAcquireException(lockKey);
-      }
-      log.debug("DistributedLock skipped (already held): {}", lockKey);
-      return defaultReturn(method.getReturnType());
-    }
-    return result[0];
-  }
-
-  private String resolveKey(DistributedLock ann, Method method, Object[] args) {
-    String prefix =
-        ann.prefix().isEmpty() ? method.getDeclaringClass().getSimpleName() : ann.prefix();
-    if (ann.key().isEmpty()) {
-      return prefix + ":" + method.getName();
-    }
-    try {
-      StandardEvaluationContext ctx = new StandardEvaluationContext();
-      String[] names = paramNames.getParameterNames(method);
-      if (names != null) {
-        for (int i = 0; i < names.length && i < args.length; i++) {
-          ctx.setVariable(names[i], args[i]);
+        if (thrown[0] != null) {
+            throw thrown[0];
         }
-      }
-      Expression expr = parser.parseExpression(ann.key());
-      Object value = expr.getValue(ctx);
-      return prefix + ":" + (value == null ? "null" : value);
-    } catch (Exception e) {
-      // SpEL 求值失败用方法签名回退,避免误锁全局
-      log.warn(
-          "DistributedLock SpEL eval failed, falling back to signature key: method={}, key={},"
-              + " error={}",
-          method.getName(),
-          ann.key(),
-          SwallowedExceptionLogger.summary(e));
-      return prefix + ":" + method.getName();
+        if (!taskResult.wasExecuted()) {
+            if (ann.throwOnFailure()) {
+                throw new DistributedLockAcquireException(lockKey);
+            }
+            log.debug("DistributedLock skipped (already held): {}", lockKey);
+            return defaultReturn(method.getReturnType());
+        }
+        return result[0];
     }
-  }
 
-  private Object defaultReturn(Class<?> type) {
-    if (type == void.class || type == Void.class) {
-      return null;
+    private String resolveKey(DistributedLock ann, Method method, Object[] args) {
+        String prefix = ann.prefix().isEmpty() ? method.getDeclaringClass().getSimpleName() : ann.prefix();
+        if (ann.key().isEmpty()) {
+            return prefix + ":" + method.getName();
+        }
+        try {
+            StandardEvaluationContext ctx = new StandardEvaluationContext();
+            String[] names = paramNames.getParameterNames(method);
+            if (names != null) {
+                for (int i = 0; i < names.length && i < args.length; i++) {
+                    ctx.setVariable(names[i], args[i]);
+                }
+            }
+            Expression expr = parser.parseExpression(ann.key());
+            Object value = expr.getValue(ctx);
+            return prefix + ":" + (value == null ? "null" : value);
+        } catch (Exception e) {
+            // SpEL 求值失败用方法签名回退,避免误锁全局
+            log.warn(
+                    "DistributedLock SpEL eval failed, falling back to signature key: method={}, key={}," + " error={}",
+                    method.getName(),
+                    ann.key(),
+                    SwallowedExceptionLogger.summary(e));
+            return prefix + ":" + method.getName();
+        }
     }
-    if (type == boolean.class) {
-      return false;
+
+    private Object defaultReturn(Class<?> type) {
+        if (type == void.class || type == Void.class) {
+            return null;
+        }
+        if (type == boolean.class) {
+            return false;
+        }
+        if (type.isPrimitive()) {
+            return 0;
+        }
+        return null;
     }
-    if (type.isPrimitive()) {
-      return 0;
-    }
-    return null;
-  }
 }

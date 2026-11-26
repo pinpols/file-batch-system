@@ -62,615 +62,594 @@ import org.springframework.stereotype.Component;
 @Component
 public class GenerateStep implements ExportStageStep {
 
-  // 同一 (tenant, jobCode, batchNo, errorClass) 的重复失败在 60s 内只 WARN 一次。
-  // 触发场景:trigger misfire 把同一 job 反复补点 + 配置错(如 biz 表缺失)导致每次都死在同一处,
-  // 单条 catch:Exception 的诊断价值在第一次后递减,后续合并成"自上次后又失败 N 次"。
-  private static final Duration FAILURE_LOG_COOLDOWN = Duration.ofSeconds(60);
-  private static final Duration FINGERPRINT_LOG_COOLDOWN = Duration.ofMinutes(5);
+    // 同一 (tenant, jobCode, batchNo, errorClass) 的重复失败在 60s 内只 WARN 一次。
+    // 触发场景:trigger misfire 把同一 job 反复补点 + 配置错(如 biz 表缺失)导致每次都死在同一处,
+    // 单条 catch:Exception 的诊断价值在第一次后递减,后续合并成"自上次后又失败 N 次"。
+    private static final Duration FAILURE_LOG_COOLDOWN = Duration.ofSeconds(60);
+    private static final Duration FINGERPRINT_LOG_COOLDOWN = Duration.ofMinutes(5);
 
-  private final ThrottledLogger failureLogThrottle = new ThrottledLogger(FAILURE_LOG_COOLDOWN);
-  private final ThrottledLogger fingerprintLogThrottle =
-      new ThrottledLogger(FINGERPRINT_LOG_COOLDOWN);
+    private final ThrottledLogger failureLogThrottle = new ThrottledLogger(FAILURE_LOG_COOLDOWN);
+    private final ThrottledLogger fingerprintLogThrottle = new ThrottledLogger(FINGERPRINT_LOG_COOLDOWN);
 
-  private final ExportDataPluginRegistry exportDataPluginRegistry;
-  private final ExportFormatStrategyRegistry formatStrategyRegistry;
-  private final ExportWorkerConfiguration workerConfiguration;
-  private final ObjectMapper objectMapper;
-  // ADR-038 P3:GENERATE 续跑(默认启用,开关 batch.worker.checkpoint.enabled=false 可关闭)。
-  private final WorkerCheckpointProperties checkpointProperties;
-  private final ProcessingPositionStore positionStore;
-  private final GenerateCursorCodec cursorCodec;
-  private final PipelineStageProgressRegistry progressRegistry;
+    private final ExportDataPluginRegistry exportDataPluginRegistry;
+    private final ExportFormatStrategyRegistry formatStrategyRegistry;
+    private final ExportWorkerConfiguration workerConfiguration;
+    private final ObjectMapper objectMapper;
+    // ADR-038 P3:GENERATE 续跑(默认启用,开关 batch.worker.checkpoint.enabled=false 可关闭)。
+    private final WorkerCheckpointProperties checkpointProperties;
+    private final ProcessingPositionStore positionStore;
+    private final GenerateCursorCodec cursorCodec;
+    private final PipelineStageProgressRegistry progressRegistry;
 
-  public GenerateStep(
-      ExportDataPluginRegistry exportDataPluginRegistry,
-      ExportFormatStrategyRegistry formatStrategyRegistry,
-      ExportWorkerConfiguration workerConfiguration,
-      ObjectMapper objectMapper,
-      GenerateRuntimeSupport runtimeSupport) {
-    this.exportDataPluginRegistry = exportDataPluginRegistry;
-    this.formatStrategyRegistry = formatStrategyRegistry;
-    this.workerConfiguration = workerConfiguration;
-    this.objectMapper = objectMapper;
-    this.checkpointProperties = runtimeSupport.checkpointProperties();
-    this.positionStore = runtimeSupport.positionStore();
-    this.cursorCodec = runtimeSupport.cursorCodec();
-    this.progressRegistry = runtimeSupport.progressRegistry();
-  }
-
-  @Override
-  public ExportStage stage() {
-    return ExportStage.GENERATE;
-  }
-
-  ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
-    String exportDataRef = resolveExportDataRef(frozenTemplateConfig);
-    if (!Texts.hasText(exportDataRef)) {
-      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    public GenerateStep(
+            ExportDataPluginRegistry exportDataPluginRegistry,
+            ExportFormatStrategyRegistry formatStrategyRegistry,
+            ExportWorkerConfiguration workerConfiguration,
+            ObjectMapper objectMapper,
+            GenerateRuntimeSupport runtimeSupport) {
+        this.exportDataPluginRegistry = exportDataPluginRegistry;
+        this.formatStrategyRegistry = formatStrategyRegistry;
+        this.workerConfiguration = workerConfiguration;
+        this.objectMapper = objectMapper;
+        this.checkpointProperties = runtimeSupport.checkpointProperties();
+        this.positionStore = runtimeSupport.positionStore();
+        this.cursorCodec = runtimeSupport.cursorCodec();
+        this.progressRegistry = runtimeSupport.progressRegistry();
     }
-    return exportDataPluginRegistry.replayCapability(exportDataRef, frozenTemplateConfig);
-  }
 
-  @Override
-  public ExportStageResult execute(ExportJobContext context) {
-    Object payload = EmptyChecks.isNull(context)
-        ? null
-        : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    if (!(payload instanceof ExportPayload exportPayload)
-        || !Texts.hasText(exportPayload.batchNo())) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_GENERATE_NO_PAYLOAD",
-          "error.export.generate.no_payload",
-          new Object[0],
-          "export payload missing",
-          objectMapper);
+    @Override
+    public ExportStage stage() {
+        return ExportStage.GENERATE;
     }
-    GenerationAttempt attempt = new GenerationAttempt();
-    try {
-      return generateExport(context, exportPayload, attempt);
-    } catch (Exception ex) {
-      return failGeneration(
-          context, exportPayload, attempt.generatedFile, attempt.keepPartialFileOnFailure, ex);
-    }
-  }
 
-  private ExportStageResult generateExport(
-      ExportJobContext context, ExportPayload exportPayload, GenerationAttempt attempt)
-      throws Exception {
-    Map<String, Object> attrs = context.getAttributes();
-    String exportDataRef = resolveExportDataRef(context);
-    if (DryRunGuard.fromAttributes(attrs).isDryRun()
-        && WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE.equalsIgnoreCase(exportDataRef)) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_DRY_RUN_SQL_UNAVAILABLE",
-          "error.export.generate.dry_run_sql_unavailable",
-          new Object[0],
-          "SQL template export is unavailable in dry-run because SQL planning may have side effects",
-          objectMapper);
-    }
-    attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
-    ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
-    ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
-    Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
-    if (EmptyChecks.isEmpty(batch)) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_BATCH_NOT_FOUND",
-          "error.export.batch_not_found",
-          new Object[0],
-          "export batch not found",
-          objectMapper);
-    }
-    Object batchId = batch.get("id");
-    ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
-    if (EmptyChecks.isNotNull(rowLimitFailure)) {
-      return rowLimitFailure;
-    }
-    int pageSize = resolvePageSize(context);
-    int chunkSize = resolveChunkSize(context);
-    Object configuredFileFormatType = attrs.getOrDefault(
-        PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
-    String fileFormatType = String.valueOf(configuredFileFormatType);
-    // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
-    ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
-    attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
-    attrs.put(ExportRuntimeKeys.EXPORT_WITH_BOM, encoding.withBom());
-    attrs.put(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR, encoding.lineSeparator());
-
-    // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
-    // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
-    Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
-    boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
-    attempt.generatedFile = checkpointEnabled
-        ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
-        : createGeneratedFile(context, exportPayload, fileFormatType);
-
-    GenerateCheckpoint checkpoint = null;
-    if (checkpointEnabled) {
-      ProcessingPosition pos =
-          positionStore.load(context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
-      boolean checkpointCompletedFileExists =
-          pos.completed() && Files.exists(attempt.generatedFile);
-      if (checkpointCompletedFileExists) {
-        // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
-        // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
-        long expectedSize =
-            GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
-        long actualSize = Files.size(attempt.generatedFile);
-        boolean completedFileSizeMatchesCheckpoint =
-            expectedSize >= 0 && actualSize == expectedSize;
-        if (completedFileSizeMatchesCheckpoint) {
-          long maxRows = effectiveMaxRows();
-          if (maxRows > 0 && pos.processedCount() > maxRows) {
-            attempt.keepPartialFileOnFailure = true;
-            throw new ExportRowLimitExceededException(pos.processedCount(), maxRows);
-          }
-          // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
-          return completeGeneration(
-              context, context.getAttributes(), batch, attempt.generatedFile, pos.processedCount());
+    ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
+        String exportDataRef = resolveExportDataRef(frozenTemplateConfig);
+        if (!Texts.hasText(exportDataRef)) {
+            return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
         }
-        logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
-        // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
-      }
-      checkpoint = GenerateCheckpoint.open(
-          positionStore,
-          cursorCodec,
-          context.getTenantId(),
-          checkpointInstanceId,
-          pos,
-          attempt.generatedFile);
-      attempt.keepPartialFileOnFailure = true;
+        return exportDataPluginRegistry.replayCapability(exportDataRef, frozenTemplateConfig);
     }
 
-    ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
-    ExportFormatContext formatCtx = ExportFormatContext.builder()
-        .batch(batch)
-        .batchId(batchId)
-        .pageSize(pageSize)
-        .chunkSize(chunkSize)
-        .maxRows(effectiveMaxRows())
-        .generatedFile(attempt.generatedFile)
-        .jobContext(context)
-        .dataPlugin(dataPlugin)
-        .dataCtx(dataCtx)
-        .charset(encoding.charset())
-        .withBom(encoding.withBom())
-        .lineSeparator(encoding.lineSeparator())
-        .checkpoint(checkpoint)
-        .progressRegistry(progressRegistry)
-        .build();
-    long recordCount = strategy.generate(formatCtx);
-
-    if (EmptyChecks.isNotNull(checkpoint)) {
-      // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
-      checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
+    @Override
+    public ExportStageResult execute(ExportJobContext context) {
+        Object payload =
+                EmptyChecks.isNull(context) ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+        if (!(payload instanceof ExportPayload exportPayload) || !Texts.hasText(exportPayload.batchNo())) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_GENERATE_NO_PAYLOAD",
+                    "error.export.generate.no_payload",
+                    new Object[0],
+                    "export payload missing",
+                    objectMapper);
+        }
+        GenerationAttempt attempt = new GenerationAttempt();
+        try {
+            return generateExport(context, exportPayload, attempt);
+        } catch (Exception ex) {
+            return failGeneration(context, exportPayload, attempt.generatedFile, attempt.keepPartialFileOnFailure, ex);
+        }
     }
 
-    return completeGeneration(context, attrs, batch, attempt.generatedFile, recordCount);
-  }
+    private ExportStageResult generateExport(
+            ExportJobContext context, ExportPayload exportPayload, GenerationAttempt attempt) throws Exception {
+        Map<String, Object> attrs = context.getAttributes();
+        String exportDataRef = resolveExportDataRef(context);
+        if (DryRunGuard.fromAttributes(attrs).isDryRun()
+                && WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE.equalsIgnoreCase(exportDataRef)) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_DRY_RUN_SQL_UNAVAILABLE",
+                    "error.export.generate.dry_run_sql_unavailable",
+                    new Object[0],
+                    "SQL template export is unavailable in dry-run because SQL planning may have side effects",
+                    objectMapper);
+        }
+        attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
+        ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
+        ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
+        Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
+        if (EmptyChecks.isEmpty(batch)) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_BATCH_NOT_FOUND",
+                    "error.export.batch_not_found",
+                    new Object[0],
+                    "export batch not found",
+                    objectMapper);
+        }
+        Object batchId = batch.get("id");
+        ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
+        if (EmptyChecks.isNotNull(rowLimitFailure)) {
+            return rowLimitFailure;
+        }
+        int pageSize = resolvePageSize(context);
+        int chunkSize = resolveChunkSize(context);
+        Object configuredFileFormatType =
+                attrs.getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
+        String fileFormatType = String.valueOf(configuredFileFormatType);
+        // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
+        ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
+        attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
+        attrs.put(ExportRuntimeKeys.EXPORT_WITH_BOM, encoding.withBom());
+        attrs.put(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR, encoding.lineSeparator());
 
-  /** 续跑失败时保留残文件，供下次截断后续写。 */
-  private static final class GenerationAttempt {
-    private Path generatedFile;
-    private boolean keepPartialFileOnFailure;
-  }
+        // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
+        // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
+        Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
+        boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
+        attempt.generatedFile = checkpointEnabled
+                ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
+                : createGeneratedFile(context, exportPayload, fileFormatType);
 
-  /** 在读取明细和创建生成文件前，先检查批次声明的行数上限。 */
-  private ExportStageResult validateExportRowLimit(Map<String, Object> batch) {
-    // H-8: 生成前强制检查最大行数限制，防止 OOM
-    long maxRows = effectiveMaxRows();
-    Object totalCountObj = batch.get("total_count");
-    Number totalCount = totalCountObj instanceof Number number ? number : null;
-    boolean totalCountExceedsMaxRows =
-        EmptyChecks.isNotNull(totalCount) && maxRows > 0 && totalCount.longValue() > maxRows;
-    if (totalCountExceedsMaxRows) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_EXCEEDS_MAX_ROWS",
-          "error.export.exceeds_max_rows",
-          new Object[] {totalCount, maxRows},
-          "export row count " + totalCount + " exceeds limit " + maxRows,
-          objectMapper);
-    }
-    return null;
-  }
+        GenerateCheckpoint checkpoint = null;
+        if (checkpointEnabled) {
+            ProcessingPosition pos =
+                    positionStore.load(context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
+            boolean checkpointCompletedFileExists = pos.completed() && Files.exists(attempt.generatedFile);
+            if (checkpointCompletedFileExists) {
+                // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
+                // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
+                long expectedSize = GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
+                long actualSize = Files.size(attempt.generatedFile);
+                boolean completedFileSizeMatchesCheckpoint = expectedSize >= 0 && actualSize == expectedSize;
+                if (completedFileSizeMatchesCheckpoint) {
+                    long maxRows = effectiveMaxRows();
+                    if (maxRows > 0 && pos.processedCount() > maxRows) {
+                        attempt.keepPartialFileOnFailure = true;
+                        throw new ExportRowLimitExceededException(pos.processedCount(), maxRows);
+                    }
+                    // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
+                    return completeGeneration(
+                            context, context.getAttributes(), batch, attempt.generatedFile, pos.processedCount());
+                }
+                logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
+                // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
+            }
+            checkpoint = GenerateCheckpoint.open(
+                    positionStore,
+                    cursorCodec,
+                    context.getTenantId(),
+                    checkpointInstanceId,
+                    pos,
+                    attempt.generatedFile);
+            attempt.keepPartialFileOnFailure = true;
+        }
 
-  private long effectiveMaxRows() {
-    return workerConfiguration.effectiveMaxExportRows();
-  }
+        ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
+        ExportFormatContext formatCtx = ExportFormatContext.builder()
+                .batch(batch)
+                .batchId(batchId)
+                .pageSize(pageSize)
+                .chunkSize(chunkSize)
+                .maxRows(effectiveMaxRows())
+                .generatedFile(attempt.generatedFile)
+                .jobContext(context)
+                .dataPlugin(dataPlugin)
+                .dataCtx(dataCtx)
+                .charset(encoding.charset())
+                .withBom(encoding.withBom())
+                .lineSeparator(encoding.lineSeparator())
+                .checkpoint(checkpoint)
+                .progressRegistry(progressRegistry)
+                .build();
+        long recordCount = strategy.generate(formatCtx);
 
-  /** 失败清理仍由原 catch 调用；续跑文件只有成功打开 checkpoint 后才保留。 */
-  private ExportStageResult failGeneration(
-      ExportJobContext context,
-      ExportPayload exportPayload,
-      Path generatedFile,
-      boolean keepPartialFileOnFailure,
-      Exception ex) {
-    // 失败也清,同理
-    progressRegistry.clear(context, stage().name());
-    logFailureThrottled(context, exportPayload, ex);
+        if (EmptyChecks.isNotNull(checkpoint)) {
+            // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
+            checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
+        }
 
-    // 续跑激活时故意保留残文件:下次重派 truncate 到 fsync 位点后续写。否则按今天行为删临时文件。
-    if (!keepPartialFileOnFailure) {
-      deleteQuietly(generatedFile);
+        return completeGeneration(context, attrs, batch, attempt.generatedFile, recordCount);
     }
-    if (ex instanceof ExportRowLimitExceededException limit) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_EXCEEDS_MAX_ROWS",
-          "error.export.exceeds_max_rows",
-          new Object[] {limit.observedRows(), limit.maxRows()},
-          limit.getMessage(),
-          objectMapper);
-    }
-    if (ex instanceof ExportResumeLayoutUnknownException layoutUnknown) {
-      return ExportStageResult.failure(
-          stage(),
-          "EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN",
-          "error.export.generate.resume_layout_unknown",
-          new Object[] {layoutUnknown.formatType()},
-          layoutUnknown.getMessage(),
-          objectMapper);
-    }
-    boolean configError = ex instanceof WorkerConfigException;
-    ExportStage failureStage = stage();
-    String failureCode = configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED";
-    String failureMessageKey =
-        configError ? "error.export.generate.config_invalid" : "error.export.generate.failed";
-    String localizedMessageArgument = ex.getMessage();
-    String fallbackMessage = ex.getMessage();
-    return ExportStageResult.failure(
-        failureStage,
-        failureCode,
-        failureMessageKey,
-        new Object[] {localizedMessageArgument},
-        fallbackMessage,
-        objectMapper);
-  }
 
-  private void logFingerprintMismatch(
-      ExportJobContext context, long checkpointInstanceId, long expectedSize, long actualSize) {
-    ThrottledLogger.Decision decision =
-        fingerprintLogThrottle.evaluate(context.getTenantId() + ':' + checkpointInstanceId);
-    if (decision.shouldLog()) {
-      log.warn(
-          "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
-              + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={},"
-              + " suppressedSincePrevious={}",
-          context.getTenantId(),
-          checkpointInstanceId,
-          expectedSize,
-          actualSize,
-          decision.suppressedSincePrevious());
+    /** 续跑失败时保留残文件，供下次截断后续写。 */
+    private static final class GenerationAttempt {
+        private Path generatedFile;
+        private boolean keepPartialFileOnFailure;
     }
-  }
 
-  private ExportDataContext buildExportDataContext(
-      ExportJobContext context, ExportPayload exportPayload) {
-    Map<String, Object> tc = templateConfigMap(context);
-    Object snap = context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
-    Map<String, Object> snapMap = new LinkedHashMap<>();
-    if (snap instanceof Map<?, ?> raw) {
-      raw.forEach((k, v) -> snapMap.put(String.valueOf(k), v));
+    /** 在读取明细和创建生成文件前，先检查批次声明的行数上限。 */
+    private ExportStageResult validateExportRowLimit(Map<String, Object> batch) {
+        // H-8: 生成前强制检查最大行数限制，防止 OOM
+        long maxRows = effectiveMaxRows();
+        Object totalCountObj = batch.get("total_count");
+        Number totalCount = totalCountObj instanceof Number number ? number : null;
+        boolean totalCountExceedsMaxRows =
+                EmptyChecks.isNotNull(totalCount) && maxRows > 0 && totalCount.longValue() > maxRows;
+        if (totalCountExceedsMaxRows) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_EXCEEDS_MAX_ROWS",
+                    "error.export.exceeds_max_rows",
+                    new Object[] {totalCount, maxRows},
+                    "export row count " + totalCount + " exceeds limit " + maxRows,
+                    objectMapper);
+        }
+        return null;
     }
-    int partitionNo =
-        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO), 1);
-    int partitionCount =
-        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
-    return new ExportDataContext(
-        context.getTenantId(),
-        context.getJobCode(),
-        exportPayload.batchNo(),
-        exportPayload.templateCode(),
-        tc,
-        snapMap,
-        partitionNo,
-        partitionCount);
-  }
 
-  private static int intOrDefault(Object value, int def) {
-    if (value instanceof Number n) {
-      return n.intValue();
+    private long effectiveMaxRows() {
+        return workerConfiguration.effectiveMaxExportRows();
     }
-    if (value == null) {
-      return def;
-    }
-    try {
-      String textValue = String.valueOf(value);
-      String trimmedValue = textValue.trim();
-      return Integer.parseInt(trimmedValue);
-    } catch (NumberFormatException ignored) {
-      return def;
-    }
-  }
 
-  private Map<String, Object> templateConfigMap(ExportJobContext context) {
-    Object o = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (o instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
-    }
-    return Map.of();
-  }
+    /** 失败清理仍由原 catch 调用；续跑文件只有成功打开 checkpoint 后才保留。 */
+    private ExportStageResult failGeneration(
+            ExportJobContext context,
+            ExportPayload exportPayload,
+            Path generatedFile,
+            boolean keepPartialFileOnFailure,
+            Exception ex) {
+        // 失败也清,同理
+        progressRegistry.clear(context, stage().name());
+        logFailureThrottled(context, exportPayload, ex);
 
-  private String resolveExportDataRef(ExportJobContext context) {
-    Map<String, Object> templateConfig = templateConfigMap(context);
-    return resolveExportDataRef(templateConfig);
-  }
+        // 续跑激活时故意保留残文件:下次重派 truncate 到 fsync 位点后续写。否则按今天行为删临时文件。
+        if (!keepPartialFileOnFailure) {
+            deleteQuietly(generatedFile);
+        }
+        if (ex instanceof ExportRowLimitExceededException limit) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_EXCEEDS_MAX_ROWS",
+                    "error.export.exceeds_max_rows",
+                    new Object[] {limit.observedRows(), limit.maxRows()},
+                    limit.getMessage(),
+                    objectMapper);
+        }
+        if (ex instanceof ExportResumeLayoutUnknownException layoutUnknown) {
+            return ExportStageResult.failure(
+                    stage(),
+                    "EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN",
+                    "error.export.generate.resume_layout_unknown",
+                    new Object[] {layoutUnknown.formatType()},
+                    layoutUnknown.getMessage(),
+                    objectMapper);
+        }
+        boolean configError = ex instanceof WorkerConfigException;
+        ExportStage failureStage = stage();
+        String failureCode = configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED";
+        String failureMessageKey =
+                configError ? "error.export.generate.config_invalid" : "error.export.generate.failed";
+        String localizedMessageArgument = ex.getMessage();
+        String fallbackMessage = ex.getMessage();
+        return ExportStageResult.failure(
+                failureStage,
+                failureCode,
+                failureMessageKey,
+                new Object[] {localizedMessageArgument},
+                fallbackMessage,
+                objectMapper);
+    }
 
-  private String resolveExportDataRef(Map<String, Object> tc) {
-    Object v = tc.get("export_data_ref");
-    if (EmptyChecks.isNotNull(v)) {
-      String presenceText = String.valueOf(v);
-      if (Texts.hasText(presenceText)) {
-        String rawExportDataRef = String.valueOf(v);
-        return rawExportDataRef.trim();
-      }
+    private void logFingerprintMismatch(
+            ExportJobContext context, long checkpointInstanceId, long expectedSize, long actualSize) {
+        ThrottledLogger.Decision decision =
+                fingerprintLogThrottle.evaluate(context.getTenantId() + ':' + checkpointInstanceId);
+        if (decision.shouldLog()) {
+            log.warn(
+                    "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
+                            + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={},"
+                            + " suppressedSincePrevious={}",
+                    context.getTenantId(),
+                    checkpointInstanceId,
+                    expectedSize,
+                    actualSize,
+                    decision.suppressedSincePrevious());
+        }
     }
-    // 与 JdbcMappedImportSpec.extractJdbcMappedImport 的双层 lookup 对齐：顶层没有时再查
-    // query_param_schema 里的 export_data_ref。schema 里 file_template_config 没有独立
-    // export_data_ref 列，seed 通常把它写入 query_param_schema jsonb。
-    Object qps = tc.get("query_param_schema");
-    Map<String, Object> qpsMap = toStringKeyMap(qps);
-    Object nested = qpsMap.get("export_data_ref");
-    if (EmptyChecks.isNotNull(nested)) {
-      String nestedPresenceText = String.valueOf(nested);
-      if (Texts.hasText(nestedPresenceText)) {
-        String rawNestedExportDataRef = String.valueOf(nested);
-        return rawNestedExportDataRef.trim();
-      }
-    }
-    return null;
-  }
 
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> toStringKeyMap(Object raw) {
-    if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, val) -> out.put(String.valueOf(k), val));
-      return out;
+    private ExportDataContext buildExportDataContext(ExportJobContext context, ExportPayload exportPayload) {
+        Map<String, Object> tc = templateConfigMap(context);
+        Object snap = context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
+        Map<String, Object> snapMap = new LinkedHashMap<>();
+        if (snap instanceof Map<?, ?> raw) {
+            raw.forEach((k, v) -> snapMap.put(String.valueOf(k), v));
+        }
+        int partitionNo = intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO), 1);
+        int partitionCount = intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
+        return new ExportDataContext(
+                context.getTenantId(),
+                context.getJobCode(),
+                exportPayload.batchNo(),
+                exportPayload.templateCode(),
+                tc,
+                snapMap,
+                partitionNo,
+                partitionCount);
     }
-    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-    if (Texts.hasText(text)) {
-      try {
-        return objectMapper.readValue(text, Map.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ignored);
+
+    private static int intOrDefault(Object value, int def) {
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        if (value == null) {
+            return def;
+        }
+        try {
+            String textValue = String.valueOf(value);
+            String trimmedValue = textValue.trim();
+            return Integer.parseInt(trimmedValue);
+        } catch (NumberFormatException ignored) {
+            return def;
+        }
+    }
+
+    private Map<String, Object> templateConfigMap(ExportJobContext context) {
+        Object o = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (o instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
         return Map.of();
-      }
     }
-    return Map.of();
-  }
 
-  private int resolvePageSize(ExportJobContext context) {
-    return ExportConfigValueSupport.resolveTemplateInt(
-        context, "page_size", workerConfiguration.pageSize());
-  }
+    private String resolveExportDataRef(ExportJobContext context) {
+        Map<String, Object> templateConfig = templateConfigMap(context);
+        return resolveExportDataRef(templateConfig);
+    }
 
-  private int resolveChunkSize(ExportJobContext context) {
-    return ExportConfigValueSupport.resolveTemplateInt(
-        context, "chunk_size", workerConfiguration.chunkSize());
-  }
+    private String resolveExportDataRef(Map<String, Object> tc) {
+        Object v = tc.get("export_data_ref");
+        if (EmptyChecks.isNotNull(v)) {
+            String presenceText = String.valueOf(v);
+            if (Texts.hasText(presenceText)) {
+                String rawExportDataRef = String.valueOf(v);
+                return rawExportDataRef.trim();
+            }
+        }
+        // 与 JdbcMappedImportSpec.extractJdbcMappedImport 的双层 lookup 对齐：顶层没有时再查
+        // query_param_schema 里的 export_data_ref。schema 里 file_template_config 没有独立
+        // export_data_ref 列，seed 通常把它写入 query_param_schema jsonb。
+        Object qps = tc.get("query_param_schema");
+        Map<String, Object> qpsMap = toStringKeyMap(qps);
+        Object nested = qpsMap.get("export_data_ref");
+        if (EmptyChecks.isNotNull(nested)) {
+            String nestedPresenceText = String.valueOf(nested);
+            if (Texts.hasText(nestedPresenceText)) {
+                String rawNestedExportDataRef = String.valueOf(nested);
+                return rawNestedExportDataRef.trim();
+            }
+        }
+        return null;
+    }
 
-  /** 导出编码选项（charset / BOM / 行分隔符），由模板 target_charset / with_bom / line_separator 解析。 */
-  private record ExportEncodingOptions(Charset charset, Boolean withBom, String lineSeparator) {}
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> toStringKeyMap(Object raw) {
+        if (raw instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, val) -> out.put(String.valueOf(k), val));
+            return out;
+        }
+        String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
+        if (Texts.hasText(text)) {
+            try {
+                return objectMapper.readValue(text, Map.class);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ignored);
+                return Map.of();
+            }
+        }
+        return Map.of();
+    }
 
-  /** 导出侧允许的目标字符集：UTF-8（默认）/ GBK / GB18030 / ISO-8859-1，与设计文档 §9.4 一致。 */
-  private static final Set<Charset> SUPPORTED_EXPORT_CHARSETS = Set.of(
-      StandardCharsets.UTF_8,
-      StandardCharsets.ISO_8859_1,
-      EncodingUtils.GBK,
-      EncodingUtils.GB18030);
+    private int resolvePageSize(ExportJobContext context) {
+        return ExportConfigValueSupport.resolveTemplateInt(context, "page_size", workerConfiguration.pageSize());
+    }
 
-  /**
-   * 解析导出编码选项并透传给格式策略与 REGISTER。
-   *
-   * <p>EXCEL 是二进制 zip 容器（内部恒为 UTF-8），不套用文本编码/换行/BOM 配置，恒回退 UTF-8 + LF + 无 BOM。
-   * 其余文本格式按模板 {@code target_charset}（回退 {@code charset}）解析；不支持的值抛 {@link WorkerConfigException}，
-   * 由 execute 转 EXPORT_GENERATE_CONFIG_INVALID（不重试，走人工修模板）。
-   */
-  private ExportEncodingOptions resolveExportEncodingOptions(
-      ExportJobContext context, String fileFormatType) {
-    if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType)) {
-      return new ExportEncodingOptions(StandardCharsets.UTF_8, Boolean.FALSE, "\n");
+    private int resolveChunkSize(ExportJobContext context) {
+        return ExportConfigValueSupport.resolveTemplateInt(context, "chunk_size", workerConfiguration.chunkSize());
     }
-    Map<String, Object> tc = templateConfigMap(context);
-    Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
-    String target = "";
-    if (EmptyChecks.isNotNull(targetRaw)) {
-      String rawTarget = String.valueOf(targetRaw);
-      target = rawTarget.trim();
-    }
-    Charset charset = StandardCharsets.UTF_8;
-    if (Texts.hasText(target)) {
-      try {
-        charset = EncodingUtils.resolve(target);
-      } catch (IllegalArgumentException ex) {
-        throw new WorkerConfigException("unsupported export target_charset: " + target, ex);
-      }
-      if (!SUPPORTED_EXPORT_CHARSETS.contains(charset)) {
-        throw new WorkerConfigException("unsupported export target_charset: "
-            + target
-            + " (allowed: UTF-8, GBK, GB18030, ISO-8859-1)");
-      }
-    }
-    boolean withBom = asBoolean(tc.get("with_bom"));
-    String lineSeparator = normalizeExportLineSeparator(tc.get("line_separator"));
-    return new ExportEncodingOptions(charset, withBom, lineSeparator);
-  }
 
-  private static Object firstConfigured(Object first, Object second) {
-    if (EmptyChecks.isNull(first)) {
-      return second;
-    }
-    String firstText = String.valueOf(first);
-    return Texts.hasText(firstText) ? first : second;
-  }
+    /** 导出编码选项（charset / BOM / 行分隔符），由模板 target_charset / with_bom / line_separator 解析。 */
+    private record ExportEncodingOptions(Charset charset, Boolean withBom, String lineSeparator) {}
 
-  private static boolean asBoolean(Object value) {
-    if (value instanceof Boolean b) {
-      return b;
-    }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    String textValue = String.valueOf(value);
-    String trimmedValue = textValue.trim();
-    return "true".equalsIgnoreCase(trimmedValue);
-  }
+    /** 导出侧允许的目标字符集：UTF-8（默认）/ GBK / GB18030 / ISO-8859-1，与设计文档 §9.4 一致。 */
+    private static final Set<Charset> SUPPORTED_EXPORT_CHARSETS =
+            Set.of(StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1, EncodingUtils.GBK, EncodingUtils.GB18030);
 
-  /**
-   * 行分隔符归一：接受真实换行（DB 直存 {@code E'\n'}）、转义串（console 表单的 {@code \n} / {@code \r\n} / {@code \r}）
-   * 与 LF / CRLF 别名。非法值抛 {@link WorkerConfigException} 转配置硬错。
-   */
-  static String normalizeExportLineSeparator(Object raw) {
-    String value = raw == null ? "" : String.valueOf(raw);
-    // 注意：不能用 trim()/isEmpty() 归一——真实 CRLF 会被 trim 掉变成空串，导致 CRLF 配置静默退化成 LF。
-    if (value.length() == 0) {
-      return "\n";
+    /**
+     * 解析导出编码选项并透传给格式策略与 REGISTER。
+     *
+     * <p>EXCEL 是二进制 zip 容器（内部恒为 UTF-8），不套用文本编码/换行/BOM 配置，恒回退 UTF-8 + LF + 无 BOM。
+     * 其余文本格式按模板 {@code target_charset}（回退 {@code charset}）解析；不支持的值抛 {@link WorkerConfigException}，
+     * 由 execute 转 EXPORT_GENERATE_CONFIG_INVALID（不重试，走人工修模板）。
+     */
+    private ExportEncodingOptions resolveExportEncodingOptions(ExportJobContext context, String fileFormatType) {
+        if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType)) {
+            return new ExportEncodingOptions(StandardCharsets.UTF_8, Boolean.FALSE, "\n");
+        }
+        Map<String, Object> tc = templateConfigMap(context);
+        Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
+        String target = "";
+        if (EmptyChecks.isNotNull(targetRaw)) {
+            String rawTarget = String.valueOf(targetRaw);
+            target = rawTarget.trim();
+        }
+        Charset charset = StandardCharsets.UTF_8;
+        if (Texts.hasText(target)) {
+            try {
+                charset = EncodingUtils.resolve(target);
+            } catch (IllegalArgumentException ex) {
+                throw new WorkerConfigException("unsupported export target_charset: " + target, ex);
+            }
+            if (!SUPPORTED_EXPORT_CHARSETS.contains(charset)) {
+                throw new WorkerConfigException(
+                        "unsupported export target_charset: " + target + " (allowed: UTF-8, GBK, GB18030, ISO-8859-1)");
+            }
+        }
+        boolean withBom = asBoolean(tc.get("with_bom"));
+        String lineSeparator = normalizeExportLineSeparator(tc.get("line_separator"));
+        return new ExportEncodingOptions(charset, withBom, lineSeparator);
     }
-    return switch (value) {
-      case "\n", "\\n", "LF" -> "\n";
-      case "\r\n", "\\r\\n", "CRLF" -> "\r\n";
-      case "\r", "\\r" -> "\r";
-      default -> throw new WorkerConfigException("unsupported export line_separator: " + value);
-    };
-  }
 
-  private Path createGeneratedFile(
-      ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
-    String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
-    Path dir = privateExportDirectory();
-    String filePrefix =
-        BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo());
-    Path created =
-        Files.createTempFile(dir, filePrefix, suffix, OwnerOnlyFiles.attributes(dir, false));
-    OwnerOnlyFiles.protectExisting(created, false);
-    return created;
-  }
+    private static Object firstConfigured(Object first, Object second) {
+        if (EmptyChecks.isNull(first)) {
+            return second;
+        }
+        String firstText = String.valueOf(first);
+        return Texts.hasText(firstText) ? first : second;
+    }
 
-  /**
-   * ADR-038 P3:续跑启用时返回 pipelineInstanceId,否则返回 {@code null}(不续跑)。续跑要求:开关开 + 有正的 pipelineInstanceId
-   * + 非 Excel(SXSSF zip 工作簿无法 append/truncate,不参与续跑,见 runbook)+ 单分区任务。
-   *
-   * <p>多分区降级(P0 守卫):partitionCount > 1(ADR-046 bundle export 的 K 个 file partition 等)时,各 partition
-   * 任务共享同一 {@code pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),GENERATE 位点行会被
-   * 交叉读写 —— A 的 markCompleted 会让 B 误判"已完成"、advance marker(字节偏移@cursor)互相覆盖后续跑会 truncate/续写错位。P0
-   * 保守整体降级为不续跑(行为同开关关);bundle 的崩溃恢复由 {@code job_partition} 分区级重跑覆盖,分区内行级续跑要按 partition 拆位点键,属 P1+
-   * 不在 P0 做。
-   */
-  private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
-    boolean exportCheckpointIsUnavailable = !checkpointProperties.isEnabled()
-        || FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType);
-    if (exportCheckpointIsUnavailable) {
-      return null;
+    private static boolean asBoolean(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return false;
+        }
+        String textValue = String.valueOf(value);
+        String trimmedValue = textValue.trim();
+        return "true".equalsIgnoreCase(trimmedValue);
     }
-    Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
-    // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
-    if (CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
-      log.debug(
-          "export GENERATE checkpoint resume degraded (multi-partition or illegal partition count):"
-              + " tenantId={}, jobCode={}, partitionCount={}",
-          context.getTenantId(),
-          context.getJobCode(),
-          rawPartitionCount);
-      return null;
-    }
-    Long instanceId = toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    return instanceId != null && instanceId > 0L ? instanceId : null;
-  }
 
-  /**
-   * 续跑用的确定化生成文件路径 {@code ${tmpdir}/file-batch-export/inst-<id>.<ext>}:同一 pipeline 实例多次
-   * 重派落到同一文件,崩溃后下次能找到残文件续写。STORE 成功上传后照常删除该文件。
-   */
-  private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType)
-      throws IOException {
-    String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
-    Path path = privateExportDirectory().resolve("inst-" + pipelineInstanceId + suffix);
-    if (Files.notExists(path)) {
-      OwnerOnlyFiles.createFile(path);
-    } else {
-      OwnerOnlyFiles.protectExisting(path, false);
+    /**
+     * 行分隔符归一：接受真实换行（DB 直存 {@code E'\n'}）、转义串（console 表单的 {@code \n} / {@code \r\n} / {@code \r}）
+     * 与 LF / CRLF 别名。非法值抛 {@link WorkerConfigException} 转配置硬错。
+     */
+    static String normalizeExportLineSeparator(Object raw) {
+        String value = raw == null ? "" : String.valueOf(raw);
+        // 注意：不能用 trim()/isEmpty() 归一——真实 CRLF 会被 trim 掉变成空串，导致 CRLF 配置静默退化成 LF。
+        if (value.length() == 0) {
+            return "\n";
+        }
+        return switch (value) {
+            case "\n", "\\n", "LF" -> "\n";
+            case "\r\n", "\\r\\n", "CRLF" -> "\r\n";
+            case "\r", "\\r" -> "\r";
+            default -> throw new WorkerConfigException("unsupported export line_separator: " + value);
+        };
     }
-    return path;
-  }
 
-  private static Path privateExportDirectory() throws IOException {
-    Path dir = PrivateTempFiles.resolveUnderTempRoot("file-batch-export");
-    OwnerOnlyFiles.createDirectories(dir);
-    return dir;
-  }
+    private Path createGeneratedFile(ExportJobContext context, ExportPayload payload, String fileFormatType)
+            throws IOException {
+        String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
+        Path dir = privateExportDirectory();
+        String filePrefix = BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo());
+        Path created = Files.createTempFile(dir, filePrefix, suffix, OwnerOnlyFiles.attributes(dir, false));
+        OwnerOnlyFiles.protectExisting(created, false);
+        return created;
+    }
 
-  /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */
-  private ExportStageResult completeGeneration(
-      ExportJobContext context,
-      Map<String, Object> attrs,
-      Map<String, Object> batch,
-      Path generatedFile,
-      long recordCount)
-      throws IOException {
-    attrs.put(ExportRuntimeKeys.EXPORT_BATCH, batch);
-    attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
-    attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
-    attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-    long fileSizeBytes = Files.size(generatedFile);
-    attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSizeBytes);
-    progressRegistry.clear(context, stage().name());
-    return ExportStageResult.success(stage());
-  }
+    /**
+     * ADR-038 P3:续跑启用时返回 pipelineInstanceId,否则返回 {@code null}(不续跑)。续跑要求:开关开 + 有正的 pipelineInstanceId
+     * + 非 Excel(SXSSF zip 工作簿无法 append/truncate,不参与续跑,见 runbook)+ 单分区任务。
+     *
+     * <p>多分区降级(P0 守卫):partitionCount > 1(ADR-046 bundle export 的 K 个 file partition 等)时,各 partition
+     * 任务共享同一 {@code pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),GENERATE 位点行会被
+     * 交叉读写 —— A 的 markCompleted 会让 B 误判"已完成"、advance marker(字节偏移@cursor)互相覆盖后续跑会 truncate/续写错位。P0
+     * 保守整体降级为不续跑(行为同开关关);bundle 的崩溃恢复由 {@code job_partition} 分区级重跑覆盖,分区内行级续跑要按 partition 拆位点键,属 P1+
+     * 不在 P0 做。
+     */
+    private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
+        boolean exportCheckpointIsUnavailable = !checkpointProperties.isEnabled()
+                || FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType);
+        if (exportCheckpointIsUnavailable) {
+            return null;
+        }
+        Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
+        // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
+        if (CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
+            log.debug(
+                    "export GENERATE checkpoint resume degraded (multi-partition or illegal partition count):"
+                            + " tenantId={}, jobCode={}, partitionCount={}",
+                    context.getTenantId(),
+                    context.getJobCode(),
+                    rawPartitionCount);
+            return null;
+        }
+        Long instanceId = toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        return instanceId != null && instanceId > 0L ? instanceId : null;
+    }
 
-  private static Long toLong(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue();
+    /**
+     * 续跑用的确定化生成文件路径 {@code ${tmpdir}/file-batch-export/inst-<id>.<ext>}:同一 pipeline 实例多次
+     * 重派落到同一文件,崩溃后下次能找到残文件续写。STORE 成功上传后照常删除该文件。
+     */
+    private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType) throws IOException {
+        String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
+        Path path = privateExportDirectory().resolve("inst-" + pipelineInstanceId + suffix);
+        if (Files.notExists(path)) {
+            OwnerOnlyFiles.createFile(path);
+        } else {
+            OwnerOnlyFiles.protectExisting(path, false);
+        }
+        return path;
     }
-    if (value == null) {
-      return null;
-    }
-    try {
-      String textValue = String.valueOf(value);
-      String trimmedValue = textValue.trim();
-      return Long.parseLong(trimmedValue);
-    } catch (NumberFormatException ex) {
-      return null;
-    }
-  }
 
-  private void logFailureThrottled(ExportJobContext context, ExportPayload payload, Exception ex) {
-    String tenantId = context == null ? "?" : String.valueOf(context.getTenantId());
-    String jobCode = context == null ? "?" : String.valueOf(context.getJobCode());
-    String batchNo = payload == null ? "?" : String.valueOf(payload.batchNo());
-    String errorClass = ex.getClass().getSimpleName();
-    String key = tenantId + '|' + jobCode + '|' + batchNo + '|' + errorClass;
-    ThrottledLogger.Decision decision = failureLogThrottle.evaluate(key);
-    if (decision.shouldLog()) {
-      String msg = ex.getMessage();
-      log.warn(
-          "export GENERATE failed: tenantId={}, jobCode={}, batchNo={}, errorClass={},"
-              + " suppressedSincePrevious={}, message={}",
-          tenantId,
-          jobCode,
-          batchNo,
-          errorClass,
-          decision.suppressedSincePrevious(),
-          msg);
-    } else {
-      // 抑制窗口内:留一条 DEBUG 回退,便于 verbose 排查
-      SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception-throttled", ex);
+    private static Path privateExportDirectory() throws IOException {
+        Path dir = PrivateTempFiles.resolveUnderTempRoot("file-batch-export");
+        OwnerOnlyFiles.createDirectories(dir);
+        return dir;
     }
-  }
 
-  private void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
+    /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */
+    private ExportStageResult completeGeneration(
+            ExportJobContext context,
+            Map<String, Object> attrs,
+            Map<String, Object> batch,
+            Path generatedFile,
+            long recordCount)
+            throws IOException {
+        attrs.put(ExportRuntimeKeys.EXPORT_BATCH, batch);
+        attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
+        attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
+        attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
+        long fileSizeBytes = Files.size(generatedFile);
+        attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSizeBytes);
+        progressRegistry.clear(context, stage().name());
+        return ExportStageResult.success(stage());
     }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ex) {
-      log.warn("Failed to delete temp file: {}", path, ex);
+
+    private static Long toLong(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            String textValue = String.valueOf(value);
+            String trimmedValue = textValue.trim();
+            return Long.parseLong(trimmedValue);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
-  }
+
+    private void logFailureThrottled(ExportJobContext context, ExportPayload payload, Exception ex) {
+        String tenantId = context == null ? "?" : String.valueOf(context.getTenantId());
+        String jobCode = context == null ? "?" : String.valueOf(context.getJobCode());
+        String batchNo = payload == null ? "?" : String.valueOf(payload.batchNo());
+        String errorClass = ex.getClass().getSimpleName();
+        String key = tenantId + '|' + jobCode + '|' + batchNo + '|' + errorClass;
+        ThrottledLogger.Decision decision = failureLogThrottle.evaluate(key);
+        if (decision.shouldLog()) {
+            String msg = ex.getMessage();
+            log.warn(
+                    "export GENERATE failed: tenantId={}, jobCode={}, batchNo={}, errorClass={},"
+                            + " suppressedSincePrevious={}, message={}",
+                    tenantId,
+                    jobCode,
+                    batchNo,
+                    errorClass,
+                    decision.suppressedSincePrevious(),
+                    msg);
+        } else {
+            // 抑制窗口内:留一条 DEBUG 回退,便于 verbose 排查
+            SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception-throttled", ex);
+        }
+    }
+
+    private void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ex) {
+            log.warn("Failed to delete temp file: {}", path, ex);
+        }
+    }
 }

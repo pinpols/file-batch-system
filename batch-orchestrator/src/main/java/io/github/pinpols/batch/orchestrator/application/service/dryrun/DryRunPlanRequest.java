@@ -15,8 +15,4 @@ import lombok.Builder;
  */
 @Builder
 public record DryRunPlanRequest(
-    String tenantId,
-    String jobCode,
-    LocalDate bizDate,
-    DryRunLevel level,
-    Map<String, Object> params) {}
+        String tenantId, String jobCode, LocalDate bizDate, DryRunLevel level, Map<String, Object> params) {}

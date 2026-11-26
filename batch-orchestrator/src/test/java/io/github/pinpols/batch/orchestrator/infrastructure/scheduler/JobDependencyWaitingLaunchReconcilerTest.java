@@ -35,66 +35,64 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class JobDependencyWaitingLaunchReconcilerTest {
 
-  @Mock
-  private TenantDirectoryMapper tenantDirectoryMapper;
+    @Mock
+    private TenantDirectoryMapper tenantDirectoryMapper;
 
-  @Mock
-  private JobDependencyWaitingLaunchService waitingLaunchService;
+    @Mock
+    private JobDependencyWaitingLaunchService waitingLaunchService;
 
-  @Mock
-  private ObjectProvider<LaunchService> launchServiceProvider;
+    @Mock
+    private ObjectProvider<LaunchService> launchServiceProvider;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private AlertEventService alertEventService;
+    @Mock
+    private AlertEventService alertEventService;
 
-  @Mock
-  private ObjectProvider<WorkflowNodeDispatchService> workflowDispatchProvider;
+    @Mock
+    private ObjectProvider<WorkflowNodeDispatchService> workflowDispatchProvider;
 
-  private JobDependencyWaitingLaunchReconciler reconciler;
+    private JobDependencyWaitingLaunchReconciler reconciler;
 
-  @BeforeEach
-  void setUp() {
-    reconciler = new JobDependencyWaitingLaunchReconciler(
-        tenantDirectoryMapper,
-        waitingLaunchService,
-        launchServiceProvider,
-        gracefulShutdown,
-        alertEventService,
-        mock(BatchDateTimeSupport.class),
-        workflowDispatchProvider,
-        new JobDependencyWaitProperties());
-  }
+    @BeforeEach
+    void setUp() {
+        reconciler = new JobDependencyWaitingLaunchReconciler(
+                tenantDirectoryMapper,
+                waitingLaunchService,
+                launchServiceProvider,
+                gracefulShutdown,
+                alertEventService,
+                mock(BatchDateTimeSupport.class),
+                workflowDispatchProvider,
+                new JobDependencyWaitProperties());
+    }
 
-  @Test
-  @DisplayName("派发抛异常时记录 LAUNCH_RETRY 前缀且有长度上限的重试原因")
-  void shouldRecordBoundedRetryReason_whenLaunchThrows() {
-    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
-    triggerRequest.setRequestStatus(TriggerRequestStatus.PENDING.code());
-    JobDependencyWaitingLaunchEntity entry = JobDependencyWaitingLaunchEntity.builder()
-        .tenantId("t1")
-        .requestId("req-1")
-        .jobCode("job-1")
-        .bizDate(LocalDate.of(2026, 11, 14))
-        .dependencySnapshot("{}")
-        .build();
-    LaunchRequest launchRequest = LaunchRequest.builder().tenantId("t1").build();
-    when(waitingLaunchService.selectOriginalRequest("t1", "req-1")).thenReturn(triggerRequest);
-    when(waitingLaunchService.restoreWaitRequest(entry, triggerRequest))
-        .thenReturn(Optional.of(launchRequest));
-    when(waitingLaunchService.findNotReadyReason(
-            eq("t1"), eq("job-1"), any(LocalDate.class), anyString()))
-        .thenReturn(null);
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any())).thenThrow(new IllegalStateException("boom"));
+    @Test
+    @DisplayName("派发抛异常时记录 LAUNCH_RETRY 前缀且有长度上限的重试原因")
+    void shouldRecordBoundedRetryReason_whenLaunchThrows() {
+        TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+        triggerRequest.setRequestStatus(TriggerRequestStatus.PENDING.code());
+        JobDependencyWaitingLaunchEntity entry = JobDependencyWaitingLaunchEntity.builder()
+                .tenantId("t1")
+                .requestId("req-1")
+                .jobCode("job-1")
+                .bizDate(LocalDate.of(2026, 11, 14))
+                .dependencySnapshot("{}")
+                .build();
+        LaunchRequest launchRequest = LaunchRequest.builder().tenantId("t1").build();
+        when(waitingLaunchService.selectOriginalRequest("t1", "req-1")).thenReturn(triggerRequest);
+        when(waitingLaunchService.restoreWaitRequest(entry, triggerRequest)).thenReturn(Optional.of(launchRequest));
+        when(waitingLaunchService.findNotReadyReason(eq("t1"), eq("job-1"), any(LocalDate.class), anyString()))
+                .thenReturn(null);
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any())).thenThrow(new IllegalStateException("boom"));
 
-    reconciler.reconcileOne("t1", entry);
+        reconciler.reconcileOne("t1", entry);
 
-    ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
-    verify(waitingLaunchService).recordWaitCheck(eq("t1"), eq("req-1"), reason.capture());
-    assertThat(reason.getValue()).startsWith("LAUNCH_RETRY:").hasSizeLessThanOrEqualTo(500);
-  }
+        ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
+        verify(waitingLaunchService).recordWaitCheck(eq("t1"), eq("req-1"), reason.capture());
+        assertThat(reason.getValue()).startsWith("LAUNCH_RETRY:").hasSizeLessThanOrEqualTo(500);
+    }
 }

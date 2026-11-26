@@ -29,114 +29,102 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("历史密钥载荷迁移:逐级升级加密历史明文,并在就绪前收紧最终约束")
 class SecretPayloadMigrationIntegrationTest {
 
-  private static final String LEGACY_PAYLOAD =
-      "{\"format\":\"PLAINTEXT\",\"token\":\"legacy-plain-token\"}";
-  private static final String V210_NULL_CHECK_PAYLOAD =
-      "{\"token\":\"v210-null-check-plain-token\"}";
+    private static final String LEGACY_PAYLOAD = "{\"format\":\"PLAINTEXT\",\"token\":\"legacy-plain-token\"}";
+    private static final String V210_NULL_CHECK_PAYLOAD = "{\"token\":\"v210-null-check-plain-token\"}";
 
-  @Container
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      TestPostgresContainers.create("secret_payload_migration");
+    @Container
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create("secret_payload_migration");
 
-  @Test
-  @DisplayName("逐级升级过程中历史明文载荷被加密,最终约束生效后明文与字段缺失的写入均被拒绝")
-  void shouldEncryptLegacyPayloadAndValidateConstraint_whenUpgradingMigrations() {
-    final String insertSecretVersionSql = """
+    @Test
+    @DisplayName("逐级升级过程中历史明文载荷被加密,最终约束生效后明文与字段缺失的写入均被拒绝")
+    void shouldEncryptLegacyPayloadAndValidateConstraint_whenUpgradingMigrations() {
+        final String insertSecretVersionSql = """
         insert into batch.secret_version(
           tenant_id, secret_ref, secret_name, version_no, secret_status,
           current_version, secret_payload
         ) values (?, ?, ?, 1, 'DRAFT', false, ?::jsonb)
         """;
-    final String insertSecretVersionSql2 = """
+        final String insertSecretVersionSql2 = """
             insert into batch.secret_version(
               tenant_id, secret_ref, secret_name, version_no, secret_status,
               current_version, secret_payload
             ) values ('tenant-a', 'plain-ref', 'Plain Secret', 1, 'DRAFT', false, ?::jsonb)
             """;
-    final String insertSecretVersionSql3 = """
+        final String insertSecretVersionSql3 = """
             insert into batch.secret_version(
               tenant_id, secret_ref, secret_name, version_no, secret_status,
               current_version, secret_payload
             ) values ('tenant-a', 'missing-fields-ref', 'Missing Fields', 1, 'DRAFT', false, ?::jsonb)
             """;
 
-    SecretPayloadFlywayCallback callback =
-        new SecretPayloadFlywayCallback(secretPayloadProtector());
-    flyway(callback).target("209").load().migrate();
-    JdbcTemplate jdbc = jdbcTemplate();
-    jdbc.update(insertSecretVersionSql, "tenant-a", "legacy-ref", "Legacy Secret", LEGACY_PAYLOAD);
+        SecretPayloadFlywayCallback callback = new SecretPayloadFlywayCallback(secretPayloadProtector());
+        flyway(callback).target("209").load().migrate();
+        JdbcTemplate jdbc = jdbcTemplate();
+        jdbc.update(insertSecretVersionSql, "tenant-a", "legacy-ref", "Legacy Secret", LEGACY_PAYLOAD);
 
-    flyway(callback).target("210").load().migrate();
-    jdbc.update(
-        insertSecretVersionSql,
-        "tenant-a",
-        "v210-ref",
-        "V210 Legacy Secret",
-        V210_NULL_CHECK_PAYLOAD);
+        flyway(callback).target("210").load().migrate();
+        jdbc.update(insertSecretVersionSql, "tenant-a", "v210-ref", "V210 Legacy Secret", V210_NULL_CHECK_PAYLOAD);
 
-    flyway(callback).load().migrate();
+        flyway(callback).load().migrate();
 
-    String protectedV209Payload = secretPayload(jdbc, "legacy-ref");
-    assertThat(protectedV209Payload)
-        .contains(SecretPayloadProtector.FORMAT)
-        .doesNotContain("legacy-plain-token");
-    String protectedV210Payload = secretPayload(jdbc, "v210-ref");
-    assertThat(protectedV210Payload)
-        .contains(SecretPayloadProtector.FORMAT)
-        .doesNotContain("v210-null-check-plain-token");
-    assertThat(constraintValidated(jdbc)).isTrue();
-    assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql2, LEGACY_PAYLOAD))
-        .hasMessageContaining("ck_secret_version_payload_protected");
-    assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql3, V210_NULL_CHECK_PAYLOAD))
-        .hasMessageContaining("ck_secret_version_payload_protected");
-  }
+        String protectedV209Payload = secretPayload(jdbc, "legacy-ref");
+        assertThat(protectedV209Payload).contains(SecretPayloadProtector.FORMAT).doesNotContain("legacy-plain-token");
+        String protectedV210Payload = secretPayload(jdbc, "v210-ref");
+        assertThat(protectedV210Payload)
+                .contains(SecretPayloadProtector.FORMAT)
+                .doesNotContain("v210-null-check-plain-token");
+        assertThat(constraintValidated(jdbc)).isTrue();
+        assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql2, LEGACY_PAYLOAD))
+                .hasMessageContaining("ck_secret_version_payload_protected");
+        assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql3, V210_NULL_CHECK_PAYLOAD))
+                .hasMessageContaining("ck_secret_version_payload_protected");
+    }
 
-  private static FluentConfiguration flyway(SecretPayloadFlywayCallback callback) {
-    return Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .callbacks(callback)
-        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
-  }
+    private static FluentConfiguration flyway(SecretPayloadFlywayCallback callback) {
+        return Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas("batch", "quartz")
+                .defaultSchema("batch")
+                .locations("classpath:db/migration")
+                .callbacks(callback)
+                .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
+    }
 
-  private static JdbcTemplate jdbcTemplate() {
-    DriverManagerDataSource dataSource = new DriverManagerDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-    return new JdbcTemplate(dataSource);
-  }
+    private static JdbcTemplate jdbcTemplate() {
+        DriverManagerDataSource dataSource =
+                new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        return new JdbcTemplate(dataSource);
+    }
 
-  private static SecretPayloadProtector secretPayloadProtector() {
-    BatchSecurityProperties securityProperties = new BatchSecurityProperties();
-    securityProperties.setBypassMode(false);
-    BatchKmsProperties kmsProperties = new BatchKmsProperties();
-    kmsProperties.setDefaultKeyRef("migration-test");
-    kmsProperties.setKeys(Map.of(
-        "migration-test",
-        Base64.getEncoder()
-            .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8))));
-    return new SecretPayloadProtector(
-        new BatchObjectCryptoService(securityProperties, kmsProperties));
-  }
+    private static SecretPayloadProtector secretPayloadProtector() {
+        BatchSecurityProperties securityProperties = new BatchSecurityProperties();
+        securityProperties.setBypassMode(false);
+        BatchKmsProperties kmsProperties = new BatchKmsProperties();
+        kmsProperties.setDefaultKeyRef("migration-test");
+        kmsProperties.setKeys(Map.of(
+                "migration-test",
+                Base64.getEncoder()
+                        .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8))));
+        return new SecretPayloadProtector(new BatchObjectCryptoService(securityProperties, kmsProperties));
+    }
 
-  private static String secretPayload(JdbcTemplate jdbc, String secretRef) {
-    final String selectSecretPayloadSql = """
+    private static String secretPayload(JdbcTemplate jdbc, String secretRef) {
+        final String selectSecretPayloadSql = """
         select secret_payload::text from batch.secret_version where secret_ref = ?
     """;
 
-    return jdbc.queryForObject(selectSecretPayloadSql, String.class, secretRef);
-  }
+        return jdbc.queryForObject(selectSecretPayloadSql, String.class, secretRef);
+    }
 
-  private static boolean constraintValidated(JdbcTemplate jdbc) {
-    final String selectConvalidatedSql = """
+    private static boolean constraintValidated(JdbcTemplate jdbc) {
+        final String selectConvalidatedSql = """
         select convalidated
           from pg_constraint
          where conname = 'ck_secret_version_payload_protected'
            and conrelid = 'batch.secret_version'::regclass
         """;
 
-    return Boolean.TRUE.equals(jdbc.queryForObject(selectConvalidatedSql, Boolean.class));
-  }
+        return Boolean.TRUE.equals(jdbc.queryForObject(selectConvalidatedSql, Boolean.class));
+    }
 }

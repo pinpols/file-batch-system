@@ -29,256 +29,252 @@ import javax.annotation.Nullable;
 /** 控制台查询子服务的共享工具方法。 */
 public final class ConsoleQuerySupport {
 
-  /** PostgreSQL timestamp 精度为微秒；“当天结束”取次日零点前 1 微秒（1000 纳秒）。 */
-  private static final int TIMESTAMP_RESOLUTION_NANOS = 1_000;
+    /** PostgreSQL timestamp 精度为微秒；“当天结束”取次日零点前 1 微秒（1000 纳秒）。 */
+    private static final int TIMESTAMP_RESOLUTION_NANOS = 1_000;
 
-  private ConsoleQuerySupport() {}
+    private ConsoleQuerySupport() {}
 
-  public static <S, T> PageResponse<T> page(
-      PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
-    int pageNo = pageRequest.pageNo();
-    int pageSize = pageRequest.pageSize();
-    List<T> items = rows.stream().map(mapper).toList();
-    return new PageResponse<>(total, pageNo, pageSize, items);
-  }
-
-  public static <S, T> PageResponse<T> cursorPage(
-      PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
-    List<T> items = rows.stream().map(mapper).toList();
-    String nextCursor = null;
-    if (rows.size() >= pageRequest.pageSize()
-        && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
-      S lastRow = rows.get(rows.size() - 1);
-      long lastRowId = idExtractor.applyAsLong(lastRow);
-      nextCursor = CursorCodec.encode(Map.of("id", lastRowId));
+    public static <S, T> PageResponse<T> page(
+            PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
+        int pageNo = pageRequest.pageNo();
+        int pageSize = pageRequest.pageSize();
+        List<T> items = rows.stream().map(mapper).toList();
+        return new PageResponse<>(total, pageNo, pageSize, items);
     }
-    return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
-  }
 
-  /** 空游标表示第一页；非空游标必须包含可解析的 id，避免损坏 token 静默回到第一页。 */
-  public static Long decodeCursorId(String token) {
-    if (token == null || token.isBlank()) {
-      return null;
+    public static <S, T> PageResponse<T> cursorPage(
+            PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
+        List<T> items = rows.stream().map(mapper).toList();
+        String nextCursor = null;
+        if (rows.size() >= pageRequest.pageSize() && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
+            S lastRow = rows.get(rows.size() - 1);
+            long lastRowId = idExtractor.applyAsLong(lastRow);
+            nextCursor = CursorCodec.encode(Map.of("id", lastRowId));
+        }
+        return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
     }
-    Object raw = CursorCodec.decode(token).get("id");
-    if (raw instanceof Integer || raw instanceof Long) {
-      return ((Number) raw).longValue();
-    }
-    if (raw instanceof BigInteger integer) {
-      try {
-        return integer.longValueExact();
-      } catch (ArithmeticException ignored) {
+
+    /** 空游标表示第一页；非空游标必须包含可解析的 id，避免损坏 token 静默回到第一页。 */
+    public static Long decodeCursorId(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        Object raw = CursorCodec.decode(token).get("id");
+        if (raw instanceof Integer || raw instanceof Long) {
+            return ((Number) raw).longValue();
+        }
+        if (raw instanceof BigInteger integer) {
+            try {
+                return integer.longValueExact();
+            } catch (ArithmeticException ignored) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+            }
+        }
+        if (raw instanceof String string) {
+            try {
+                return Long.parseLong(string);
+            } catch (NumberFormatException ignored) {
+                SwallowedExceptionLogger.info(ConsoleQuerySupport.class, "catch:NumberFormatException", ignored);
+            }
+        }
         throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
-      }
     }
-    if (raw instanceof String string) {
-      try {
-        return Long.parseLong(string);
-      } catch (NumberFormatException ignored) {
-        SwallowedExceptionLogger.info(
-            ConsoleQuerySupport.class, "catch:NumberFormatException", ignored);
-      }
-    }
-    throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
-  }
 
-  public static <T> T requireNotNull(T value, String message) {
-    if (value == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
+    public static <T> T requireNotNull(T value, String message) {
+        if (value == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
+        }
+        return value;
     }
-    return value;
-  }
 
-  public static String resolveTenant(TenantIdResolver tenantResolver, String requestTenantId) {
-    return tenantResolver.resolveTenant(requestTenantId);
-  }
+    public static String resolveTenant(TenantIdResolver tenantResolver, String requestTenantId) {
+        return tenantResolver.resolveTenant(requestTenantId);
+    }
 
-  public static Instant parseInstant(String value, String fieldName) {
-    if (value == null || value.isBlank()) {
-      return null;
+    public static Instant parseInstant(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
+        }
     }
-    try {
-      return Instant.parse(value);
-    } catch (DateTimeParseException exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
-    }
-  }
 
-  /**
-   * 控制台搜索框宽松解析：无 Z/偏移的 {@code yyyy-MM-dd}、{@code yyyy-MM-dd HH:mm:ss} 在 {@code zone} 下转为 {@link
-   * Instant}。 宜传 {@code BatchTimezoneProvider.defaultZone()}，与 {@code batch.timezone.default-zone}
-   * 对齐。
-   */
-  public static Instant parseFlexibleInstant(String value, String fieldName, ZoneId zone) {
-    if (value == null || value.isBlank()) {
-      return null;
+    /**
+     * 控制台搜索框宽松解析：无 Z/偏移的 {@code yyyy-MM-dd}、{@code yyyy-MM-dd HH:mm:ss} 在 {@code zone} 下转为 {@link
+     * Instant}。 宜传 {@code BatchTimezoneProvider.defaultZone()}，与 {@code batch.timezone.default-zone}
+     * 对齐。
+     */
+    public static Instant parseFlexibleInstant(String value, String fieldName, ZoneId zone) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
+            try {
+                LocalDate parsedDate = LocalDate.parse(trimmed);
+                ZonedDateTime dateStartInZone = parsedDate.atStartOfDay(zone);
+                return dateStartInZone.toInstant();
+            } catch (DateTimeParseException ignored) {
+            }
+        }
+        boolean hasExplicitTimezoneOffset =
+                trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 9;
+        if (hasExplicitTimezoneOffset) {
+            try {
+                return Instant.parse(trimmed);
+            } catch (DateTimeParseException ignored) {
+            }
+        }
+        try {
+            String normalizedDateTime = trimmed.replace(' ', 'T');
+            LocalDateTime localDateTime = LocalDateTime.parse(normalizedDateTime);
+            ZonedDateTime zonedDateTime = localDateTime.atZone(zone);
+            return zonedDateTime.toInstant();
+        } catch (DateTimeParseException ignored) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
+        }
     }
-    String trimmed = value.trim();
-    if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
-      try {
-        LocalDate parsedDate = LocalDate.parse(trimmed);
-        ZonedDateTime dateStartInZone = parsedDate.atStartOfDay(zone);
-        return dateStartInZone.toInstant();
-      } catch (DateTimeParseException ignored) {
-      }
-    }
-    boolean hasExplicitTimezoneOffset =
-        trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 9;
-    if (hasExplicitTimezoneOffset) {
-      try {
-        return Instant.parse(trimmed);
-      } catch (DateTimeParseException ignored) {
-      }
-    }
-    try {
-      String normalizedDateTime = trimmed.replace(' ', 'T');
-      LocalDateTime localDateTime = LocalDateTime.parse(normalizedDateTime);
-      ZonedDateTime zonedDateTime = localDateTime.atZone(zone);
-      return zonedDateTime.toInstant();
-    } catch (DateTimeParseException ignored) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
-    }
-  }
 
-  /**
-   * @see #parseFlexibleInstant(String, String, ZoneId)
-   */
-  public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName, ZoneId zone) {
-    if (value == null || value.isBlank()) {
-      return null;
+    /**
+     * @see #parseFlexibleInstant(String, String, ZoneId)
+     */
+    public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName, ZoneId zone) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
+            try {
+                LocalDate date = LocalDate.parse(trimmed);
+                LocalDate nextDate = date.plusDays(1);
+                ZonedDateTime nextDateStartInZone = nextDate.atStartOfDay(zone);
+                Instant nextDateStart = nextDateStartInZone.toInstant();
+                Instant inclusiveEndOfDay = nextDateStart.minusNanos(TIMESTAMP_RESOLUTION_NANOS);
+                return inclusiveEndOfDay;
+            } catch (DateTimeParseException ignored) {
+                SwallowedExceptionLogger.info(ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
+            }
+        }
+        return parseFlexibleInstant(trimmed, fieldName, zone);
     }
-    String trimmed = value.trim();
-    if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
-      try {
-        LocalDate date = LocalDate.parse(trimmed);
-        LocalDate nextDate = date.plusDays(1);
-        ZonedDateTime nextDateStartInZone = nextDate.atStartOfDay(zone);
-        Instant nextDateStart = nextDateStartInZone.toInstant();
-        Instant inclusiveEndOfDay = nextDateStart.minusNanos(TIMESTAMP_RESOLUTION_NANOS);
-        return inclusiveEndOfDay;
-      } catch (DateTimeParseException ignored) {
-        SwallowedExceptionLogger.info(
-            ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
-      }
-    }
-    return parseFlexibleInstant(trimmed, fieldName, zone);
-  }
 
-  public static String firstNonBlank(String first, String second) {
-    if (first != null && !first.isBlank()) {
-      return first;
+    public static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second;
     }
-    return second;
-  }
 
-  public static LocalDate parseLocalDate(String value, String fieldName) {
-    if (value == null || value.isBlank()) {
-      return null;
+    public static LocalDate parseLocalDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.biz_date_format", fieldName);
+        }
     }
-    try {
-      return LocalDate.parse(value);
-    } catch (DateTimeParseException exception) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.biz_date_format", fieldName);
-    }
-  }
 
-  public static Long parseLong(String value, String fieldName) {
-    if (value == null || value.isBlank()) {
-      return null;
+    public static Long parseLong(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", fieldName);
+        }
     }
-    try {
-      return Long.valueOf(value);
-    } catch (NumberFormatException exception) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", fieldName);
-    }
-  }
 
-  public static String stringValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (EmptyChecks.isNull(value)) {
-      return null;
+    public static String stringValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        return ConsoleTextSanitizer.safeDisplay(rawText);
     }
-    String rawText = String.valueOf(value);
-    return ConsoleTextSanitizer.safeDisplay(rawText);
-  }
 
-  public static String display(String value) {
-    return value == null ? null : ConsoleTextSanitizer.safeDisplay(value);
-  }
+    public static String display(String value) {
+        return value == null ? null : ConsoleTextSanitizer.safeDisplay(value);
+    }
 
-  public static LocalDate localDateValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (value == null) {
-      return null;
+    public static LocalDate localDateValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        // 显式类型转换,不依赖 toString() 的隐式格式(coding-conventions §20.1:禁止依赖隐式格式化)。
+        if (ConsoleSqlDateSupport.isSqlDate(value)) {
+            return ConsoleSqlDateSupport.toLocalDate(value);
+        }
+        return LocalDate.parse(String.valueOf(value));
     }
-    if (value instanceof LocalDate localDate) {
-      return localDate;
-    }
-    // 显式类型转换,不依赖 toString() 的隐式格式(coding-conventions §20.1:禁止依赖隐式格式化)。
-    if (ConsoleSqlDateSupport.isSqlDate(value)) {
-      return ConsoleSqlDateSupport.toLocalDate(value);
-    }
-    return LocalDate.parse(String.valueOf(value));
-  }
 
-  public static Long longValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (value == null) {
-      return null;
+    public static Long longValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(String.valueOf(value));
     }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    return Long.parseLong(String.valueOf(value));
-  }
 
-  public static Integer intValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (value == null) {
-      return null;
+    public static Integer intValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return Integer.parseInt(String.valueOf(value));
     }
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    return Integer.parseInt(String.valueOf(value));
-  }
 
-  @Nullable
-  public static Boolean booleanValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (value == null) {
-      return null;
+    @Nullable
+    public static Boolean booleanValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
     }
-    if (value instanceof Boolean bool) {
-      return bool;
-    }
-    return Boolean.parseBoolean(String.valueOf(value));
-  }
 
-  public static Instant instantValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    if (value == null) {
-      return null;
+    public static Instant instantValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toInstant(ZoneOffset.UTC);
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
+        if (value instanceof Date date) {
+            return date.toInstant();
+        }
+        return Instant.parse(String.valueOf(value));
     }
-    if (value instanceof Instant instant) {
-      return instant;
-    }
-    if (value instanceof Timestamp timestamp) {
-      return timestamp.toInstant();
-    }
-    if (value instanceof LocalDateTime localDateTime) {
-      return localDateTime.toInstant(ZoneOffset.UTC);
-    }
-    if (value instanceof OffsetDateTime offsetDateTime) {
-      return offsetDateTime.toInstant();
-    }
-    if (value instanceof Date date) {
-      return date.toInstant();
-    }
-    return Instant.parse(String.valueOf(value));
-  }
 }

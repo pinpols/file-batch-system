@@ -21,18 +21,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImportStore {
 
-  private static final String KEY_PREFIX = "batch:console:tenant-config-upload:";
-  private static final Duration SESSION_TTL = Duration.ofMinutes(30);
-  private static final Duration APPLY_TTL = Duration.ofHours(1);
-  private static final TypeReference<PackageExcelSession> SESSION_TYPE = new TypeReference<>() {};
+    private static final String KEY_PREFIX = "batch:console:tenant-config-upload:";
+    private static final Duration SESSION_TTL = Duration.ofMinutes(30);
+    private static final Duration APPLY_TTL = Duration.ofHours(1);
+    private static final TypeReference<PackageExcelSession> SESSION_TYPE = new TypeReference<>() {};
 
-  private static final DefaultRedisScript<Long> SAVE = new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> SAVE = new DefaultRedisScript<>("""
       redis.call('HSET', KEYS[1], 'payload', ARGV[1], 'state', 'READY', 'preview_token', '')
       redis.call('PEXPIRE', KEYS[1], ARGV[2])
       return 1
       """, Long.class);
-  private static final DefaultRedisScript<Long> ISSUE_PREVIEW =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> ISSUE_PREVIEW = new DefaultRedisScript<>("""
       if redis.call('EXISTS', KEYS[1]) == 0
           or redis.call('HGET', KEYS[1], 'state') == 'APPLYING' then
         return 0
@@ -40,8 +39,8 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
       redis.call('HSET', KEYS[1], 'preview_token', ARGV[1])
       return 1
       """, Long.class);
-  private static final DefaultRedisScript<String> ISSUE_PREVIEW_SNAPSHOT =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<String> ISSUE_PREVIEW_SNAPSHOT =
+            new DefaultRedisScript<>("""
           if redis.call('EXISTS', KEYS[1]) == 0
               or redis.call('HGET', KEYS[1], 'state') == 'APPLYING' then
             return false
@@ -51,8 +50,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
               'preview_config_revision', ARGV[2])
           return payload .. ':' .. ARGV[1] .. ':' .. ARGV[2]
           """, String.class);
-  private static final DefaultRedisScript<Long> CLAIM_APPLY =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> CLAIM_APPLY = new DefaultRedisScript<>("""
       if redis.call('EXISTS', KEYS[1]) == 0
           or redis.call('HGET', KEYS[1], 'state') ~= 'READY'
           or redis.call('HGET', KEYS[1], 'preview_token') ~= ARGV[1] then
@@ -62,8 +60,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
       redis.call('PEXPIRE', KEYS[1], ARGV[3])
       return 1
       """, Long.class);
-  private static final DefaultRedisScript<Long> COMPLETE_APPLY =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> COMPLETE_APPLY = new DefaultRedisScript<>("""
       if redis.call('EXISTS', KEYS[1]) == 0
           or redis.call('HGET', KEYS[1], 'state') ~= 'APPLYING'
           or redis.call('HGET', KEYS[1], 'apply_owner') ~= ARGV[1] then
@@ -71,8 +68,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
       end
       return redis.call('DEL', KEYS[1])
       """, Long.class);
-  private static final DefaultRedisScript<Long> RELEASE_APPLY =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> RELEASE_APPLY = new DefaultRedisScript<>("""
       if redis.call('EXISTS', KEYS[1]) == 0
           or redis.call('HGET', KEYS[1], 'state') ~= 'APPLYING'
           or redis.call('HGET', KEYS[1], 'apply_owner') ~= ARGV[1] then
@@ -83,8 +79,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
       redis.call('PEXPIRE', KEYS[1], ARGV[2])
       return 1
       """, Long.class);
-  private static final DefaultRedisScript<Long> REPLACE_SESSION =
-      new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> REPLACE_SESSION = new DefaultRedisScript<>("""
       if redis.call('EXISTS', KEYS[1]) == 0
           or redis.call('HGET', KEYS[1], 'state') ~= 'READY'
           or redis.call('HGET', KEYS[1], 'preview_token') ~= ARGV[1] then
@@ -96,160 +91,152 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
       return 1
       """, Long.class);
 
-  private final StringRedisTemplate redisTemplate;
-  private final ObjectMapper objectMapper;
-  private final BatchObjectCryptoService cryptoService;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+    private final BatchObjectCryptoService cryptoService;
 
-  @Override
-  public String save(PackageExcelSession session) {
-    UUID tokenUuid = UUID.randomUUID();
-    String tokenUuidText = tokenUuid.toString();
-    String token = tokenUuidText.replace("-", "");
-    String redisKey = key(token);
-    List<String> keys = List.of(redisKey);
-    String payload = encode(session);
-    String ttlMillis = Long.toString(SESSION_TTL.toMillis());
-    redisTemplate.execute(SAVE, keys, payload, ttlMillis);
-    return token;
-  }
-
-  @Override
-  public PackageExcelSession get(String uploadToken) {
-    String payload = redisTemplate.<String, String>opsForHash().get(key(uploadToken), "payload");
-    return EmptyChecks.isNull(payload) ? null : decode(payload);
-  }
-
-  @Override
-  public PreviewSnapshot issuePreviewSnapshot(String uploadToken, long configurationRevision) {
-    UUID previewTokenUuid = UUID.randomUUID();
-    String previewTokenUuidText = previewTokenUuid.toString();
-    String previewToken = previewTokenUuidText.replace("-", "");
-    String stored = redisTemplate.execute(
-        ISSUE_PREVIEW_SNAPSHOT,
-        List.of(key(uploadToken)),
-        previewToken,
-        Long.toString(configurationRevision));
-    if (EmptyChecks.isNull(stored)) {
-      return null;
+    @Override
+    public String save(PackageExcelSession session) {
+        UUID tokenUuid = UUID.randomUUID();
+        String tokenUuidText = tokenUuid.toString();
+        String token = tokenUuidText.replace("-", "");
+        String redisKey = key(token);
+        List<String> keys = List.of(redisKey);
+        String payload = encode(session);
+        String ttlMillis = Long.toString(SESSION_TTL.toMillis());
+        redisTemplate.execute(SAVE, keys, payload, ttlMillis);
+        return token;
     }
-    int revisionSeparator = stored.lastIndexOf(':');
-    int tokenSeparator =
-        revisionSeparator < 0 ? -1 : stored.lastIndexOf(':', revisionSeparator - 1);
-    if (tokenSeparator < 0) {
-      throw new IllegalStateException("invalid config upload preview snapshot");
+
+    @Override
+    public PackageExcelSession get(String uploadToken) {
+        String payload = redisTemplate.<String, String>opsForHash().get(key(uploadToken), "payload");
+        return EmptyChecks.isNull(payload) ? null : decode(payload);
     }
-    String encodedUploadToken = stored.substring(0, tokenSeparator);
-    PackageExcelSession session = decode(encodedUploadToken);
-    String storedPreviewToken = stored.substring(tokenSeparator + 1, revisionSeparator);
-    String revisionText = stored.substring(revisionSeparator + 1);
-    long storedRevision = Long.parseLong(revisionText);
-    return new PreviewSnapshot(session, storedPreviewToken, storedRevision);
-  }
 
-  @Override
-  public boolean isApplyInProgress(String uploadToken) {
-    String state = redisTemplate.<String, String>opsForHash().get(key(uploadToken), "state");
-    return "APPLYING".equals(state);
-  }
-
-  @Override
-  public boolean claimForApply(String uploadToken, String previewToken, String applyOwnerToken) {
-    if (EmptyChecks.isNull(previewToken) || EmptyChecks.isNull(applyOwnerToken)) {
-      return false;
+    @Override
+    public PreviewSnapshot issuePreviewSnapshot(String uploadToken, long configurationRevision) {
+        UUID previewTokenUuid = UUID.randomUUID();
+        String previewTokenUuidText = previewTokenUuid.toString();
+        String previewToken = previewTokenUuidText.replace("-", "");
+        String stored = redisTemplate.execute(
+                ISSUE_PREVIEW_SNAPSHOT, List.of(key(uploadToken)), previewToken, Long.toString(configurationRevision));
+        if (EmptyChecks.isNull(stored)) {
+            return null;
+        }
+        int revisionSeparator = stored.lastIndexOf(':');
+        int tokenSeparator = revisionSeparator < 0 ? -1 : stored.lastIndexOf(':', revisionSeparator - 1);
+        if (tokenSeparator < 0) {
+            throw new IllegalStateException("invalid config upload preview snapshot");
+        }
+        String encodedUploadToken = stored.substring(0, tokenSeparator);
+        PackageExcelSession session = decode(encodedUploadToken);
+        String storedPreviewToken = stored.substring(tokenSeparator + 1, revisionSeparator);
+        String revisionText = stored.substring(revisionSeparator + 1);
+        long storedRevision = Long.parseLong(revisionText);
+        return new PreviewSnapshot(session, storedPreviewToken, storedRevision);
     }
-    Long successResult = Long.valueOf(1);
-    List<String> keys = List.of(key(uploadToken));
-    String applyTtlMillis = Long.toString(APPLY_TTL.toMillis());
-    Long claimResult =
-        redisTemplate.execute(CLAIM_APPLY, keys, previewToken, applyOwnerToken, applyTtlMillis);
-    return successResult.equals(claimResult);
-  }
 
-  @Override
-  public long configurationRevisionForApply(String uploadToken, String applyOwnerToken) {
-    String sessionKey = key(uploadToken);
-    String state = redisTemplate.<String, String>opsForHash().get(sessionKey, "state");
-    String owner = redisTemplate.<String, String>opsForHash().get(sessionKey, "apply_owner");
-    String revision =
-        redisTemplate.<String, String>opsForHash().get(sessionKey, "preview_config_revision");
-    boolean applyOwnershipIsInvalid =
-        !"APPLYING".equals(state) || !applyOwnerToken.equals(owner) || EmptyChecks.isNull(revision);
-    if (applyOwnershipIsInvalid) {
-      throw new IllegalStateException("config upload apply claim lost its preview revision");
+    @Override
+    public boolean isApplyInProgress(String uploadToken) {
+        String state = redisTemplate.<String, String>opsForHash().get(key(uploadToken), "state");
+        return "APPLYING".equals(state);
     }
-    return Long.parseLong(revision);
-  }
 
-  @Override
-  public boolean replaceSession(
-      String uploadToken,
-      String expectedPreviewToken,
-      PackageExcelSession session,
-      String replacementPreviewToken,
-      long configurationRevision) {
-    if (EmptyChecks.isNull(expectedPreviewToken) || EmptyChecks.isNull(replacementPreviewToken)) {
-      return false;
+    @Override
+    public boolean claimForApply(String uploadToken, String previewToken, String applyOwnerToken) {
+        if (EmptyChecks.isNull(previewToken) || EmptyChecks.isNull(applyOwnerToken)) {
+            return false;
+        }
+        Long successResult = Long.valueOf(1);
+        List<String> keys = List.of(key(uploadToken));
+        String applyTtlMillis = Long.toString(APPLY_TTL.toMillis());
+        Long claimResult = redisTemplate.execute(CLAIM_APPLY, keys, previewToken, applyOwnerToken, applyTtlMillis);
+        return successResult.equals(claimResult);
     }
-    Long successResult = Long.valueOf(1);
-    List<String> keys = List.of(key(uploadToken));
-    String encodedSession = encode(session);
-    String configurationRevisionText = Long.toString(configurationRevision);
-    String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
-    Long replaceResult = redisTemplate.execute(
-        REPLACE_SESSION,
-        keys,
-        expectedPreviewToken,
-        encodedSession,
-        replacementPreviewToken,
-        configurationRevisionText,
-        sessionTtlMillis);
-    return successResult.equals(replaceResult);
-  }
 
-  @Override
-  public void completeApply(String uploadToken, String applyOwnerToken) {
-    redisTemplate.execute(COMPLETE_APPLY, List.of(key(uploadToken)), applyOwnerToken);
-  }
-
-  @Override
-  public void releaseApply(String uploadToken, String applyOwnerToken) {
-    List<String> keys = List.of(key(uploadToken));
-    String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
-    redisTemplate.execute(RELEASE_APPLY, keys, applyOwnerToken, sessionTtlMillis);
-  }
-
-  @Override
-  public void remove(String uploadToken) {
-    redisTemplate.delete(key(uploadToken));
-  }
-
-  private String encode(PackageExcelSession session) {
-    try {
-      byte[] json = objectMapper.writeValueAsBytes(session);
-      byte[] ciphertext = cryptoService.encrypt(json, null);
-      return Base64.getEncoder().encodeToString(ciphertext);
-    } catch (Exception exception) {
-      throw new IllegalStateException(
-          "failed to encode encrypted config upload session", exception);
+    @Override
+    public long configurationRevisionForApply(String uploadToken, String applyOwnerToken) {
+        String sessionKey = key(uploadToken);
+        String state = redisTemplate.<String, String>opsForHash().get(sessionKey, "state");
+        String owner = redisTemplate.<String, String>opsForHash().get(sessionKey, "apply_owner");
+        String revision = redisTemplate.<String, String>opsForHash().get(sessionKey, "preview_config_revision");
+        boolean applyOwnershipIsInvalid =
+                !"APPLYING".equals(state) || !applyOwnerToken.equals(owner) || EmptyChecks.isNull(revision);
+        if (applyOwnershipIsInvalid) {
+            throw new IllegalStateException("config upload apply claim lost its preview revision");
+        }
+        return Long.parseLong(revision);
     }
-  }
 
-  private PackageExcelSession decode(String payload) {
-    try {
-      byte[] ciphertext = Base64.getDecoder().decode(payload);
-      if (!cryptoService.isEncryptedContent(ciphertext)) {
-        throw new IllegalStateException("config upload session payload is not encrypted");
-      }
-      byte[] json = cryptoService.decrypt(ciphertext);
-      String sessionJson = new String(json, StandardCharsets.UTF_8);
-      return objectMapper.readValue(sessionJson, SESSION_TYPE);
-    } catch (Exception exception) {
-      throw new IllegalStateException(
-          "failed to decode encrypted config upload session", exception);
+    @Override
+    public boolean replaceSession(
+            String uploadToken,
+            String expectedPreviewToken,
+            PackageExcelSession session,
+            String replacementPreviewToken,
+            long configurationRevision) {
+        if (EmptyChecks.isNull(expectedPreviewToken) || EmptyChecks.isNull(replacementPreviewToken)) {
+            return false;
+        }
+        Long successResult = Long.valueOf(1);
+        List<String> keys = List.of(key(uploadToken));
+        String encodedSession = encode(session);
+        String configurationRevisionText = Long.toString(configurationRevision);
+        String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
+        Long replaceResult = redisTemplate.execute(
+                REPLACE_SESSION,
+                keys,
+                expectedPreviewToken,
+                encodedSession,
+                replacementPreviewToken,
+                configurationRevisionText,
+                sessionTtlMillis);
+        return successResult.equals(replaceResult);
     }
-  }
 
-  private static String key(String uploadToken) {
-    return KEY_PREFIX + uploadToken;
-  }
+    @Override
+    public void completeApply(String uploadToken, String applyOwnerToken) {
+        redisTemplate.execute(COMPLETE_APPLY, List.of(key(uploadToken)), applyOwnerToken);
+    }
+
+    @Override
+    public void releaseApply(String uploadToken, String applyOwnerToken) {
+        List<String> keys = List.of(key(uploadToken));
+        String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
+        redisTemplate.execute(RELEASE_APPLY, keys, applyOwnerToken, sessionTtlMillis);
+    }
+
+    @Override
+    public void remove(String uploadToken) {
+        redisTemplate.delete(key(uploadToken));
+    }
+
+    private String encode(PackageExcelSession session) {
+        try {
+            byte[] json = objectMapper.writeValueAsBytes(session);
+            byte[] ciphertext = cryptoService.encrypt(json, null);
+            return Base64.getEncoder().encodeToString(ciphertext);
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to encode encrypted config upload session", exception);
+        }
+    }
+
+    private PackageExcelSession decode(String payload) {
+        try {
+            byte[] ciphertext = Base64.getDecoder().decode(payload);
+            if (!cryptoService.isEncryptedContent(ciphertext)) {
+                throw new IllegalStateException("config upload session payload is not encrypted");
+            }
+            byte[] json = cryptoService.decrypt(ciphertext);
+            String sessionJson = new String(json, StandardCharsets.UTF_8);
+            return objectMapper.readValue(sessionJson, SESSION_TYPE);
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to decode encrypted config upload session", exception);
+        }
+    }
+
+    private static String key(String uploadToken) {
+        return KEY_PREFIX + uploadToken;
+    }
 }

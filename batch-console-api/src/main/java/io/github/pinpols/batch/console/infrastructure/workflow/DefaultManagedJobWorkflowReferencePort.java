@@ -11,18 +11,16 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultManagedJobWorkflowReferencePort implements ManagedJobWorkflowReferencePort {
 
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
 
-  @Override
-  public boolean isEnabledSingleJobWorkflow(
-      String tenantId, Long workflowDefinitionId, Long jobDefinitionId) {
-    if (EmptyChecks.isNull(workflowDefinitionId) || EmptyChecks.isNull(jobDefinitionId)) {
-      return false;
+    @Override
+    public boolean isEnabledSingleJobWorkflow(String tenantId, Long workflowDefinitionId, Long jobDefinitionId) {
+        if (EmptyChecks.isNull(workflowDefinitionId) || EmptyChecks.isNull(jobDefinitionId)) {
+            return false;
+        }
+        WorkflowDefinitionEntity workflow = workflowDefinitionMapper.selectById(tenantId, workflowDefinitionId);
+        return EmptyChecks.isNotNull(workflow)
+                && Boolean.TRUE.equals(workflow.getEnabled())
+                && jobDefinitionId.equals(workflow.getSingleJobDefinitionId());
     }
-    WorkflowDefinitionEntity workflow =
-        workflowDefinitionMapper.selectById(tenantId, workflowDefinitionId);
-    return EmptyChecks.isNotNull(workflow)
-        && Boolean.TRUE.equals(workflow.getEnabled())
-        && jobDefinitionId.equals(workflow.getSingleJobDefinitionId());
-  }
 }

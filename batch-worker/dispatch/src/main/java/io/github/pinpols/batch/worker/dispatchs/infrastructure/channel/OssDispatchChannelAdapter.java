@@ -24,29 +24,29 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  private final DispatchFileContentResolver contentResolver;
-  private final S3StorageProperties s3StorageProperties;
-  private final DispatchRuntimeProperties runtimeProperties;
-  // 复用 Spring 装配的中心对象存储 bean(底层 client 带超时 + 连接池);
-  // ObjectProvider 惰性取,避免硬依赖——未配对象存储时保持 null(同历史行为)。
-  private final ObjectProvider<BatchObjectStore> objectStoreProvider;
-  private BatchObjectStore objectStore;
+    private final DispatchFileContentResolver contentResolver;
+    private final S3StorageProperties s3StorageProperties;
+    private final DispatchRuntimeProperties runtimeProperties;
+    // 复用 Spring 装配的中心对象存储 bean(底层 client 带超时 + 连接池);
+    // ObjectProvider 惰性取,避免硬依赖——未配对象存储时保持 null(同历史行为)。
+    private final ObjectProvider<BatchObjectStore> objectStoreProvider;
+    private BatchObjectStore objectStore;
 
-  @PostConstruct
-  void init() {
-    // 中心对象存储仅在 S3 配置有效时由 S3AutoConfiguration 建出;未配则 getIfAvailable() 返回 null
-    // (保持历史"未配置 → objectStore 为 null"语义,下游按 null 判定降级)。
-    this.objectStore = objectStoreProvider.getIfAvailable();
-  }
+    @PostConstruct
+    void init() {
+        // 中心对象存储仅在 S3 配置有效时由 S3AutoConfiguration 建出;未配则 getIfAvailable() 返回 null
+        // (保持历史"未配置 → objectStore 为 null"语义,下游按 null 判定降级)。
+        this.objectStore = objectStoreProvider.getIfAvailable();
+    }
 
-  @Override
-  public boolean supports(String channelType) {
-    return FileChannelType.OSS.code().equalsIgnoreCase(channelType);
-  }
+    @Override
+    public boolean supports(String channelType) {
+        return FileChannelType.OSS.code().equalsIgnoreCase(channelType);
+    }
 
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    return RemoteFilesystemDispatchSupport.dispatchOss(
-        command, contentResolver, s3StorageProperties, objectStore, runtimeProperties);
-  }
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        return RemoteFilesystemDispatchSupport.dispatchOss(
+                command, contentResolver, s3StorageProperties, objectStore, runtimeProperties);
+    }
 }

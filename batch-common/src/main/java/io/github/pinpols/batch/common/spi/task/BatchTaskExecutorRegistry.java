@@ -37,161 +37,157 @@ import org.springframework.stereotype.Component;
 @Component
 public class BatchTaskExecutorRegistry {
 
-  private final Map<String, BatchTaskExecutor> byType;
-  private final Set<String> enabledFilter;
+    private final Map<String, BatchTaskExecutor> byType;
+    private final Set<String> enabledFilter;
 
-  /** Test-friendly 构造器:不过滤,全注册。Spring 路径请用主构造器。 */
-  public BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans) {
-    this(springBeans, Set.of());
-  }
-
-  @Autowired
-  public BatchTaskExecutorRegistry(
-      List<BatchTaskExecutor> springBeans,
-      ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
-    this(springBeans, resolveFilter(propsProvider));
-  }
-
-  private static Set<String> resolveFilter(
-      ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
-    BatchWorkerAtomicProperties props = propsProvider.getIfAvailable();
-    return props == null ? Set.of() : Set.copyOf(props.getEnabledTaskTypes());
-  }
-
-  private BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans, Set<String> filter) {
-    this.enabledFilter = filter;
-
-    Map<String, BatchTaskExecutor> merged = new LinkedHashMap<>();
-    Set<String> filteredOut = new LinkedHashSet<>();
-
-    // 1) Spring 容器内的所有 BatchTaskExecutor bean
-    for (BatchTaskExecutor exec : springBeans) {
-      registerWithFilter(merged, filteredOut, exec, "spring");
+    /** Test-friendly 构造器:不过滤,全注册。Spring 路径请用主构造器。 */
+    public BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans) {
+        this(springBeans, Set.of());
     }
 
-    // 2) ServiceLoader:META-INF/services 声明的实现
-    for (BatchTaskExecutor exec : ServiceLoader.load(BatchTaskExecutor.class)) {
-      registerWithFilter(merged, filteredOut, exec, "service-loader");
+    @Autowired
+    public BatchTaskExecutorRegistry(
+            List<BatchTaskExecutor> springBeans, ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
+        this(springBeans, resolveFilter(propsProvider));
     }
 
-    this.byType = Map.copyOf(merged);
-
-    if (byType.isEmpty()) {
-      log.warn(
-          "BatchTaskExecutorRegistry started with no BatchTaskExecutor registered (pipeline tasks still use the @Primary path;"
-              + " atomic task SPI is disabled)");
-    } else {
-      log.info(
-          "BatchTaskExecutorRegistry started with {} registered task types: {}",
-          byType.size(),
-          byType.keySet());
+    private static Set<String> resolveFilter(ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
+        BatchWorkerAtomicProperties props = propsProvider.getIfAvailable();
+        return props == null ? Set.of() : Set.copyOf(props.getEnabledTaskTypes());
     }
-    if (!filteredOut.isEmpty()) {
-      log.info(
-          "BatchTaskExecutorRegistry filtered {} disabled task types: {} (enabled allowlist: {})",
-          filteredOut.size(),
-          filteredOut,
-          enabledFilter);
+
+    private BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans, Set<String> filter) {
+        this.enabledFilter = filter;
+
+        Map<String, BatchTaskExecutor> merged = new LinkedHashMap<>();
+        Set<String> filteredOut = new LinkedHashSet<>();
+
+        // 1) Spring 容器内的所有 BatchTaskExecutor bean
+        for (BatchTaskExecutor exec : springBeans) {
+            registerWithFilter(merged, filteredOut, exec, "spring");
+        }
+
+        // 2) ServiceLoader:META-INF/services 声明的实现
+        for (BatchTaskExecutor exec : ServiceLoader.load(BatchTaskExecutor.class)) {
+            registerWithFilter(merged, filteredOut, exec, "service-loader");
+        }
+
+        this.byType = Map.copyOf(merged);
+
+        if (byType.isEmpty()) {
+            log.warn(
+                    "BatchTaskExecutorRegistry started with no BatchTaskExecutor registered (pipeline tasks still use the @Primary path;"
+                            + " atomic task SPI is disabled)");
+        } else {
+            log.info(
+                    "BatchTaskExecutorRegistry started with {} registered task types: {}",
+                    byType.size(),
+                    byType.keySet());
+        }
+        if (!filteredOut.isEmpty()) {
+            log.info(
+                    "BatchTaskExecutorRegistry filtered {} disabled task types: {} (enabled allowlist: {})",
+                    filteredOut.size(),
+                    filteredOut,
+                    enabledFilter);
+        }
     }
-  }
 
-  private void registerWithFilter(
-      Map<String, BatchTaskExecutor> merged,
-      Set<String> filteredOut,
-      BatchTaskExecutor exec,
-      String source) {
-    String type = exec.taskType();
-    boolean taskTypeIsExcludedByEnabledFilter = EmptyChecks.isNotNull(type)
-        && !type.isBlank()
-        && !enabledFilter.isEmpty()
-        && !enabledFilter.contains(type);
-    if (taskTypeIsExcludedByEnabledFilter) {
-      filteredOut.add(type);
-      return;
+    private void registerWithFilter(
+            Map<String, BatchTaskExecutor> merged, Set<String> filteredOut, BatchTaskExecutor exec, String source) {
+        String type = exec.taskType();
+        boolean taskTypeIsExcludedByEnabledFilter = EmptyChecks.isNotNull(type)
+                && !type.isBlank()
+                && !enabledFilter.isEmpty()
+                && !enabledFilter.contains(type);
+        if (taskTypeIsExcludedByEnabledFilter) {
+            filteredOut.add(type);
+            return;
+        }
+        register(merged, exec, source);
     }
-    register(merged, exec, source);
-  }
 
-  private static void register(
-      Map<String, BatchTaskExecutor> merged, BatchTaskExecutor exec, String source) {
-    String type = exec.taskType();
-    if (type == null || type.isBlank()) {
-      throw new IllegalStateException("BatchTaskExecutor "
-          + exec.getClass().getName()
-          + " returned null/blank taskType() (source="
-          + source
-          + ")");
+    private static void register(Map<String, BatchTaskExecutor> merged, BatchTaskExecutor exec, String source) {
+        String type = exec.taskType();
+        if (type == null || type.isBlank()) {
+            throw new IllegalStateException("BatchTaskExecutor "
+                    + exec.getClass().getName()
+                    + " returned null/blank taskType() (source="
+                    + source
+                    + ")");
+        }
+        BatchTaskExecutor prev = merged.get(type);
+        if (prev != null) {
+            if (prev == exec) {
+                // 同一实例(同时被 Spring 收 + ServiceLoader 扫到),幂等,不重复登记
+                return;
+            }
+            throw new IllegalStateException("BatchTaskExecutor duplicate taskType="
+                    + type
+                    + ": already registered="
+                    + prev.getClass().getName()
+                    + ", duplicate from "
+                    + source
+                    + "="
+                    + exec.getClass().getName());
+        }
+        merged.put(type, exec);
     }
-    BatchTaskExecutor prev = merged.get(type);
-    if (prev != null) {
-      if (prev == exec) {
-        // 同一实例(同时被 Spring 收 + ServiceLoader 扫到),幂等,不重复登记
-        return;
-      }
-      throw new IllegalStateException("BatchTaskExecutor duplicate taskType="
-          + type
-          + ": already registered="
-          + prev.getClass().getName()
-          + ", duplicate from "
-          + source
-          + "="
-          + exec.getClass().getName());
+
+    /** 按 taskType 查找,无注册返回 null(调用方负责降级 / 抛友好错)。 */
+    public BatchTaskExecutor find(String taskType) {
+        if (taskType == null) {
+            return null;
+        }
+        return byType.get(taskType);
     }
-    merged.put(type, exec);
-  }
 
-  /** 按 taskType 查找,无注册返回 null(调用方负责降级 / 抛友好错)。 */
-  public BatchTaskExecutor find(String taskType) {
-    if (taskType == null) {
-      return null;
+    /** 使用运行期实际选定的执行器实例解析元数据。 */
+    public ReplayCapabilityDeclaration replayCapability(String taskType, Map<String, Object> frozenConfig) {
+        BatchTaskExecutor executor = find(taskType);
+        if (EmptyChecks.isNull(executor)) {
+            throw new IllegalStateException("no BatchTaskExecutor registered for taskType: " + taskType);
+        }
+        return executor.replayCapability(frozenConfig);
     }
-    return byType.get(taskType);
-  }
 
-  /** 使用运行期实际选定的执行器实例解析元数据。 */
-  public ReplayCapabilityDeclaration replayCapability(
-      String taskType, Map<String, Object> frozenConfig) {
-    BatchTaskExecutor executor = find(taskType);
-    if (EmptyChecks.isNull(executor)) {
-      throw new IllegalStateException("no BatchTaskExecutor registered for taskType: " + taskType);
+    public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+        return byType.values().stream()
+                .sorted(Comparator.comparing(BatchTaskExecutor::taskType))
+                .map(BatchTaskExecutor::replayCapabilityDeclaration)
+                .toList();
     }
-    return executor.replayCapability(frozenConfig);
-  }
 
-  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
-    return byType.values().stream()
-        .sorted(Comparator.comparing(BatchTaskExecutor::taskType))
-        .map(BatchTaskExecutor::replayCapabilityDeclaration)
-        .toList();
-  }
+    /** 当前所有已注册的 taskType(给 console-api 拉下拉框用)。 */
+    public Set<String> registeredTypes() {
+        return byType.keySet();
+    }
 
-  /** 当前所有已注册的 taskType(给 console-api 拉下拉框用)。 */
-  public Set<String> registeredTypes() {
-    return byType.keySet();
-  }
+    /** 返回稳定排序的能力快照，用于注册展示，不作为调度路由数据。 */
+    public List<WorkerTaskCapabilityDto> capabilitySnapshot() {
+        return byType.values().stream()
+                .map(executor -> {
+                    TaskCapability capability = executor.capability();
+                    String taskType = executor.taskType();
+                    List<String> resourceKinds = capability.resourceKinds().stream()
+                            .map(Enum::name)
+                            .sorted()
+                            .toList();
+                    boolean idempotent = capability.idempotent();
+                    boolean cancellable = capability.cancellable();
+                    long recommendedTimeoutMillis =
+                            capability.recommendedTimeout().toMillis();
+                    return new WorkerTaskCapabilityDto(
+                            taskType, resourceKinds, idempotent, cancellable, recommendedTimeoutMillis);
+                })
+                .sorted(Comparator.comparing(WorkerTaskCapabilityDto::taskType))
+                .toList();
+    }
 
-  /** 返回稳定排序的能力快照，用于注册展示，不作为调度路由数据。 */
-  public List<WorkerTaskCapabilityDto> capabilitySnapshot() {
-    return byType.values().stream()
-        .map(executor -> {
-          TaskCapability capability = executor.capability();
-          String taskType = executor.taskType();
-          List<String> resourceKinds =
-              capability.resourceKinds().stream().map(Enum::name).sorted().toList();
-          boolean idempotent = capability.idempotent();
-          boolean cancellable = capability.cancellable();
-          long recommendedTimeoutMillis = capability.recommendedTimeout().toMillis();
-          return new WorkerTaskCapabilityDto(
-              taskType, resourceKinds, idempotent, cancellable, recommendedTimeoutMillis);
-        })
-        .sorted(Comparator.comparing(WorkerTaskCapabilityDto::taskType))
-        .toList();
-  }
-
-  /** 用于诊断:列所有注册项(taskType → 实现类全名)。 */
-  public Map<String, String> dumpRegistry() {
-    Map<String, String> dump = new HashMap<>();
-    byType.forEach((k, v) -> dump.put(k, v.getClass().getName()));
-    return Map.copyOf(dump);
-  }
+    /** 用于诊断:列所有注册项(taskType → 实现类全名)。 */
+    public Map<String, String> dumpRegistry() {
+        Map<String, String> dump = new HashMap<>();
+        byType.forEach((k, v) -> dump.put(k, v.getClass().getName()));
+        return Map.copyOf(dump);
+    }
 }

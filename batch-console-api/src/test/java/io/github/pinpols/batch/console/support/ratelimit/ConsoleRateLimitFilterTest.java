@@ -39,353 +39,327 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @DisplayName("控制台限流过滤器: 登录、高开销与文件操作三个维度的拦截")
 class ConsoleRateLimitFilterTest {
 
-  @Mock
-  private SlidingWindowRateLimiter rateLimiter;
+    @Mock
+    private SlidingWindowRateLimiter rateLimiter;
 
-  @Mock
-  private FilterChain filterChain;
+    @Mock
+    private FilterChain filterChain;
 
-  @Mock
-  private ConsoleSecurityResponseWriter responseWriter;
+    @Mock
+    private ConsoleSecurityResponseWriter responseWriter;
 
-  private ConsoleRateLimitFilter filter;
-  private ConsoleLoginIpRateLimiter loginIpRateLimiter;
+    private ConsoleRateLimitFilter filter;
+    private ConsoleLoginIpRateLimiter loginIpRateLimiter;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
-    props.setLoginIpLimitPerMinute(3);
-    props.setSensitiveOpUserLimitPerMinute(5);
-    loginIpRateLimiter = new ConsoleLoginIpRateLimiter(
-        rateLimiter,
-        props,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(props));
-    filter = new ConsoleRateLimitFilter(
-        rateLimiter,
-        props,
-        responseWriter,
-        RedisRateLimitCircuitBreaker.forTesting(props),
-        loginIpRateLimiter);
-  }
-
-  // ── disabled ──────────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("限流关闭时连续五次登录请求全部放行, 且不触达限流器")
-  void shouldPassThroughWhenDisabled() throws Exception {
-    ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
-    disabledProps.setEnabled(false);
-    ConsoleLoginIpRateLimiter disabledLoginLimiter = new ConsoleLoginIpRateLimiter(
-        rateLimiter,
-        disabledProps,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(disabledProps));
-    ConsoleRateLimitFilter disabledFilter = new ConsoleRateLimitFilter(
-        rateLimiter,
-        disabledProps,
-        responseWriter,
-        RedisRateLimitCircuitBreaker.forTesting(disabledProps),
-        disabledLoginLimiter);
-
-    MockHttpServletRequest request = loginRequest("1.2.3.4");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    for (int i = 0; i < 5; i++) {
-      disabledFilter.doFilter(request, response, filterChain);
+    @BeforeEach
+    void setUp() {
+        ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
+        props.setLoginIpLimitPerMinute(3);
+        props.setSensitiveOpUserLimitPerMinute(5);
+        loginIpRateLimiter = new ConsoleLoginIpRateLimiter(
+                rateLimiter, props, new ConsoleSecurityProperties(), RedisRateLimitCircuitBreaker.forTesting(props));
+        filter = new ConsoleRateLimitFilter(
+                rateLimiter, props, responseWriter, RedisRateLimitCircuitBreaker.forTesting(props), loginIpRateLimiter);
     }
-    verify(filterChain, times(5)).doFilter(any(), any());
-    verifyNoInteractions(rateLimiter);
-  }
 
-  // ── login IP rate limit ───────────────────────────────────────────────────
+    // ── disabled ──────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("登录限流放行时请求继续执行, 且不写任何错误响应")
-  void shouldAllowLoginWhenRateLimiterPermits() throws Exception {
-    when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(true);
+    @Test
+    @DisplayName("限流关闭时连续五次登录请求全部放行, 且不触达限流器")
+    void shouldPassThroughWhenDisabled() throws Exception {
+        ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
+        disabledProps.setEnabled(false);
+        ConsoleLoginIpRateLimiter disabledLoginLimiter = new ConsoleLoginIpRateLimiter(
+                rateLimiter,
+                disabledProps,
+                new ConsoleSecurityProperties(),
+                RedisRateLimitCircuitBreaker.forTesting(disabledProps));
+        ConsoleRateLimitFilter disabledFilter = new ConsoleRateLimitFilter(
+                rateLimiter,
+                disabledProps,
+                responseWriter,
+                RedisRateLimitCircuitBreaker.forTesting(disabledProps),
+                disabledLoginLimiter);
 
-    MockHttpServletRequest request = loginRequest("10.0.0.1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    filter.doFilter(request, response, filterChain);
+        MockHttpServletRequest request = loginRequest("1.2.3.4");
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
-    verify(filterChain).doFilter(any(), any());
-    verifyNoInteractions(responseWriter);
-  }
+        for (int i = 0; i < 5; i++) {
+            disabledFilter.doFilter(request, response, filterChain);
+        }
+        verify(filterChain, times(5)).doFilter(any(), any());
+        verifyNoInteractions(rateLimiter);
+    }
 
-  @Test
-  @DisplayName("登录限流拒绝时请求被中断, 返回请求过多状态且提示访问频繁")
-  void shouldRejectLoginWhenRateLimiterDenies() throws Exception {
-    when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(false);
+    // ── login IP rate limit ───────────────────────────────────────────────────
 
-    MockHttpServletRequest request = loginRequest("10.0.0.2");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    filter.doFilter(request, response, filterChain);
+    @Test
+    @DisplayName("登录限流放行时请求继续执行, 且不写任何错误响应")
+    void shouldAllowLoginWhenRateLimiterPermits() throws Exception {
+        when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(true);
 
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            any(HttpServletResponse.class),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            contains("频繁"));
-  }
+        MockHttpServletRequest request = loginRequest("10.0.0.1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, filterChain);
 
-  /**
-   * trust-forwarded-headers=true(应用挂在受信反代/Ingress 后)时, XFF 第一段作为客户端真实 IP 作限流 key。
-   *
-   * <p>默认实例(本类大多数 case)是 false,直接走 remoteAddr 防伪造;本 case 单独构造启用 trust 的 filter 实例覆盖 resolveClientIp
-   * 的 XFF 分支。
-   */
-  @Test
-  @DisplayName("启用转发头信任时, 取转发链首个地址作为限流键")
-  void shouldResolveXForwardedForAsIpKeyWhenTrustEnabled() throws Exception {
-    ConsoleSecurityProperties trustProps = new ConsoleSecurityProperties();
-    trustProps.setTrustForwardedHeaders(true);
-    ConsoleRateLimitProperties limitProps = new ConsoleRateLimitProperties();
-    limitProps.setLoginIpLimitPerMinute(3);
-    ConsoleLoginIpRateLimiter trustingLoginLimiter = new ConsoleLoginIpRateLimiter(
-        rateLimiter, limitProps, trustProps, RedisRateLimitCircuitBreaker.forTesting(limitProps));
-    ConsoleRateLimitFilter trustingFilter = new ConsoleRateLimitFilter(
-        rateLimiter,
-        limitProps,
-        responseWriter,
-        RedisRateLimitCircuitBreaker.forTesting(limitProps),
-        trustingLoginLimiter);
+        verify(filterChain).doFilter(any(), any());
+        verifyNoInteractions(responseWriter);
+    }
 
-    when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
+    @Test
+    @DisplayName("登录限流拒绝时请求被中断, 返回请求过多状态且提示访问频繁")
+    void shouldRejectLoginWhenRateLimiterDenies() throws Exception {
+        when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(false);
 
-    MockHttpServletRequest request = loginRequest("10.0.0.3");
-    request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
+        MockHttpServletRequest request = loginRequest("10.0.0.2");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, filterChain);
 
-    trustingFilter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(
+                        any(HttpServletResponse.class),
+                        eq(HttpStatus.TOO_MANY_REQUESTS),
+                        eq(ResultCode.RATE_LIMITED),
+                        contains("频繁"));
+    }
 
-    verify(rateLimiter).tryAcquire(contains("203.0.113.5"), anyInt());
-  }
+    /**
+     * trust-forwarded-headers=true(应用挂在受信反代/Ingress 后)时, XFF 第一段作为客户端真实 IP 作限流 key。
+     *
+     * <p>默认实例(本类大多数 case)是 false,直接走 remoteAddr 防伪造;本 case 单独构造启用 trust 的 filter 实例覆盖 resolveClientIp
+     * 的 XFF 分支。
+     */
+    @Test
+    @DisplayName("启用转发头信任时, 取转发链首个地址作为限流键")
+    void shouldResolveXForwardedForAsIpKeyWhenTrustEnabled() throws Exception {
+        ConsoleSecurityProperties trustProps = new ConsoleSecurityProperties();
+        trustProps.setTrustForwardedHeaders(true);
+        ConsoleRateLimitProperties limitProps = new ConsoleRateLimitProperties();
+        limitProps.setLoginIpLimitPerMinute(3);
+        ConsoleLoginIpRateLimiter trustingLoginLimiter = new ConsoleLoginIpRateLimiter(
+                rateLimiter, limitProps, trustProps, RedisRateLimitCircuitBreaker.forTesting(limitProps));
+        ConsoleRateLimitFilter trustingFilter = new ConsoleRateLimitFilter(
+                rateLimiter,
+                limitProps,
+                responseWriter,
+                RedisRateLimitCircuitBreaker.forTesting(limitProps),
+                trustingLoginLimiter);
 
-  /** 默认 trust=false 时, XFF header 必须被忽略,key 走 remoteAddr 防伪造(curl -H 'XFF: 1.2.3.4' 绕过限流)。 */
-  @Test
-  @DisplayName("未启用转发头信任时忽略转发头, 以远端地址作为限流键")
-  void shouldIgnoreXForwardedForWhenTrustDisabled() throws Exception {
-    when(rateLimiter.tryAcquire(contains("10.0.0.3"), anyInt())).thenReturn(true);
+        when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
 
-    MockHttpServletRequest request = loginRequest("10.0.0.3");
-    request.addHeader("X-Forwarded-For", "203.0.113.5"); // 伪造伪客户端 IP — 默认应忽略
+        MockHttpServletRequest request = loginRequest("10.0.0.3");
+        request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
 
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        trustingFilter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    verify(rateLimiter).tryAcquire(contains("10.0.0.3"), anyInt());
-    verify(rateLimiter, never()).tryAcquire(contains("203.0.113.5"), anyInt());
-  }
+        verify(rateLimiter).tryAcquire(contains("203.0.113.5"), anyInt());
+    }
 
-  // ── 非登录请求不受此限制 ───────────────────────────────────────
+    /** 默认 trust=false 时, XFF header 必须被忽略,key 走 remoteAddr 防伪造(curl -H 'XFF: 1.2.3.4' 绕过限流)。 */
+    @Test
+    @DisplayName("未启用转发头信任时忽略转发头, 以远端地址作为限流键")
+    void shouldIgnoreXForwardedForWhenTrustDisabled() throws Exception {
+        when(rateLimiter.tryAcquire(contains("10.0.0.3"), anyInt())).thenReturn(true);
 
-  @Test
-  @DisplayName("查询方法的登录路径不参与限流, 请求直接放行且不触达限流器")
-  void shouldNotRateLimitGetRequests() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/auth/login");
-    request.setRemoteAddr("1.2.3.4");
-    MockHttpServletResponse response = new MockHttpServletResponse();
+        MockHttpServletRequest request = loginRequest("10.0.0.3");
+        request.addHeader("X-Forwarded-For", "203.0.113.5"); // 伪造伪客户端 IP — 默认应忽略
 
-    filter.doFilter(request, response, filterChain);
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    verify(filterChain).doFilter(any(), any());
-    verifyNoInteractions(rateLimiter);
-  }
+        verify(rateLimiter).tryAcquire(contains("10.0.0.3"), anyInt());
+        verify(rateLimiter, never()).tryAcquire(contains("203.0.113.5"), anyInt());
+    }
 
-  @Test
-  @DisplayName("非登录的提交路径不参与登录限流, 请求直接放行且不触达限流器")
-  void shouldNotRateLimitOtherPostEndpoints() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/launch");
-    request.setRemoteAddr("1.2.3.4");
+    // ── 非登录请求不受此限制 ───────────────────────────────────────
 
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("查询方法的登录路径不参与限流, 请求直接放行且不触达限流器")
+    void shouldNotRateLimitGetRequests() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/auth/login");
+        request.setRemoteAddr("1.2.3.4");
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
-    verify(filterChain).doFilter(any(), any());
-    verifyNoInteractions(rateLimiter);
-  }
+        filter.doFilter(request, response, filterChain);
 
-  // ── expensive endpoint rate limit (导出/导入/Excel/报表,按用户,任意方法) ──────────
+        verify(filterChain).doFilter(any(), any());
+        verifyNoInteractions(rateLimiter);
+    }
 
-  @AfterEach
-  void clearSecurityContext() {
-    SecurityContextHolder.clearContext();
-  }
+    @Test
+    @DisplayName("非登录的提交路径不参与登录限流, 请求直接放行且不触达限流器")
+    void shouldNotRateLimitOtherPostEndpoints() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/launch");
+        request.setRemoteAddr("1.2.3.4");
 
-  @Test
-  @DisplayName("已认证用户超出高开销接口配额时被拦截, 返回请求过多状态并提示访问频繁")
-  void shouldRejectExpensiveEndpointWhenUserOverLimit() throws Exception {
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/api/console/reports/excel");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        verify(filterChain).doFilter(any(), any());
+        verifyNoInteractions(rateLimiter);
+    }
 
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            any(HttpServletResponse.class),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            contains("频繁"));
-  }
+    // ── expensive endpoint rate limit (导出/导入/Excel/报表,按用户,任意方法) ──────────
 
-  @Test
-  @DisplayName("已认证用户在高开销接口配额内时请求正常放行")
-  void shouldAllowExpensiveEndpointWhenUnderLimit() throws Exception {
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/api/console/config/sync/export");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("已认证用户超出高开销接口配额时被拦截, 返回请求过多状态并提示访问频繁")
+    void shouldRejectExpensiveEndpointWhenUserOverLimit() throws Exception {
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
 
-    verify(filterChain).doFilter(any(), any());
-  }
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/reports/excel");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  @Test
-  @DisplayName("前端遥测复用高开销接口配额, 防止高频上报压垮 Console")
-  void shouldRateLimitTelemetryEndpointAsExpensiveOperation() throws Exception {
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(
+                        any(HttpServletResponse.class),
+                        eq(HttpStatus.TOO_MANY_REQUESTS),
+                        eq(ResultCode.RATE_LIMITED),
+                        contains("频繁"));
+    }
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/api/console/telemetry/events");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("已认证用户在高开销接口配额内时请求正常放行")
+    void shouldAllowExpensiveEndpointWhenUnderLimit() throws Exception {
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
 
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            any(HttpServletResponse.class),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            contains("频繁"));
-  }
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/config/sync/export");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  @Test
-  @DisplayName("控制台认证主体按用户名生成限流键, 不把租户和角色文本混入身份")
-  void shouldUseConsolePrincipalUsernameAsRateLimitIdentity() throws Exception {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_AUDITOR"));
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, "n/a", List.of()));
-    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
+        verify(filterChain).doFilter(any(), any());
+    }
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/api/console/reports/excel");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("前端遥测复用高开销接口配额, 防止高频上报压垮 Console")
+    void shouldRateLimitTelemetryEndpointAsExpensiveOperation() throws Exception {
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
 
-    verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
-    verify(filterChain).doFilter(any(), any());
-  }
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/telemetry/events");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  @Test
-  @DisplayName("未认证请求不适用高开销接口限流, 放行且不触达限流器")
-  void shouldNotApplyExpensiveLimitToUnauthenticatedRequest() throws Exception {
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/api/console/reports/excel");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(
+                        any(HttpServletResponse.class),
+                        eq(HttpStatus.TOO_MANY_REQUESTS),
+                        eq(ResultCode.RATE_LIMITED),
+                        contains("频繁"));
+    }
 
-    verify(filterChain).doFilter(any(), any());
-    verifyNoInteractions(rateLimiter);
-  }
+    @Test
+    @DisplayName("控制台认证主体按用户名生成限流键, 不把租户和角色文本混入身份")
+    void shouldUseConsolePrincipalUsernameAsRateLimitIdentity() throws Exception {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_AUDITOR"));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(principal, "n/a", List.of()));
+        when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
 
-  // ── file-op endpoint rate limit (下载/错误导出/归档/重派/到达组,按用户,任意方法) ──────────
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/reports/excel");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  @Test
-  @DisplayName("已认证用户超出文件操作配额时下载被拦截, 返回请求过多状态并提示访问频繁")
-  void shouldRejectFileDownloadWhenUserOverLimit() throws Exception {
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(false);
+        verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
+        verify(filterChain).doFilter(any(), any());
+    }
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/api/console/files/F-1/download");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("未认证请求不适用高开销接口限流, 放行且不触达限流器")
+    void shouldNotApplyExpensiveLimitToUnauthenticatedRequest() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/reports/excel");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            any(HttpServletResponse.class),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            contains("频繁"));
-  }
+        verify(filterChain).doFilter(any(), any());
+        verifyNoInteractions(rateLimiter);
+    }
 
-  @Test
-  @DisplayName("已认证用户在文件操作配额内时归档请求放行")
-  void shouldAllowFileMutationWhenUnderLimit() throws Exception {
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(true);
+    // ── file-op endpoint rate limit (下载/错误导出/归档/重派/到达组,按用户,任意方法) ──────────
 
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/api/console/files/archive");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    @Test
+    @DisplayName("已认证用户超出文件操作配额时下载被拦截, 返回请求过多状态并提示访问频繁")
+    void shouldRejectFileDownloadWhenUserOverLimit() throws Exception {
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(false);
 
-    verify(filterChain).doFilter(any(), any());
-  }
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/files/F-1/download");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  /** presign 下载（fs-download）无登录态，取不到用户名 → 文件操作限流自然跳过，不应触达 rateLimiter。 */
-  @Test
-  @DisplayName("无登录态的预签名下载不适用文件操作限流, 放行且不触达限流器")
-  void shouldNotApplyFileOpLimitToUnauthenticatedPresignDownload() throws Exception {
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/api/console/files/fs-download");
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(
+                        any(HttpServletResponse.class),
+                        eq(HttpStatus.TOO_MANY_REQUESTS),
+                        eq(ResultCode.RATE_LIMITED),
+                        contains("频繁"));
+    }
 
-    verify(filterChain).doFilter(any(), any());
-    verifyNoInteractions(rateLimiter);
-  }
+    @Test
+    @DisplayName("已认证用户在文件操作配额内时归档请求放行")
+    void shouldAllowFileMutationWhenUnderLimit() throws Exception {
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(true);
 
-  @Test
-  @DisplayName("路径同时匹配多种限流时按顺序检查，超限后不继续执行")
-  void shouldCheckOverlappingLimitsInOrderAndStopWhenRejected() throws Exception {
-    String prefix = "/api/console/ops/triggers/";
-    ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
-    props.setSensitiveOpUserLimitPerMinute(5);
-    props.setExpensiveOpPathPrefixes(List.of(prefix));
-    props.setFileOpPathPrefixes(List.of(prefix));
-    ConsoleLoginIpRateLimiter loginLimiter = new ConsoleLoginIpRateLimiter(
-        rateLimiter,
-        props,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(props));
-    ConsoleRateLimitFilter overlappingFilter = new ConsoleRateLimitFilter(
-        rateLimiter,
-        props,
-        responseWriter,
-        RedisRateLimitCircuitBreaker.forTesting(props),
-        loginLimiter);
-    authenticateAs("alice");
-    when(rateLimiter.tryAcquire(eq("sensitive:user:alice"), anyInt())).thenReturn(true);
-    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/files/archive");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", prefix + "execute");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    overlappingFilter.doFilter(request, response, filterChain);
+        verify(filterChain).doFilter(any(), any());
+    }
 
-    InOrder order = inOrder(rateLimiter);
-    order.verify(rateLimiter).tryAcquire(eq("sensitive:user:alice"), anyInt());
-    order.verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
-    verify(rateLimiter, never()).tryAcquire(eq("fileop:user:alice"), anyInt());
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            eq(response),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            anyString());
-  }
+    /** presign 下载（fs-download）无登录态，取不到用户名 → 文件操作限流自然跳过，不应触达 rateLimiter。 */
+    @Test
+    @DisplayName("无登录态的预签名下载不适用文件操作限流, 放行且不触达限流器")
+    void shouldNotApplyFileOpLimitToUnauthenticatedPresignDownload() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/files/fs-download");
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+        verify(filterChain).doFilter(any(), any());
+        verifyNoInteractions(rateLimiter);
+    }
 
-  private void authenticateAs(String username) {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(username, "n/a", List.of()));
-  }
+    @Test
+    @DisplayName("路径同时匹配多种限流时按顺序检查，超限后不继续执行")
+    void shouldCheckOverlappingLimitsInOrderAndStopWhenRejected() throws Exception {
+        String prefix = "/api/console/ops/triggers/";
+        ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
+        props.setSensitiveOpUserLimitPerMinute(5);
+        props.setExpensiveOpPathPrefixes(List.of(prefix));
+        props.setFileOpPathPrefixes(List.of(prefix));
+        ConsoleLoginIpRateLimiter loginLimiter = new ConsoleLoginIpRateLimiter(
+                rateLimiter, props, new ConsoleSecurityProperties(), RedisRateLimitCircuitBreaker.forTesting(props));
+        ConsoleRateLimitFilter overlappingFilter = new ConsoleRateLimitFilter(
+                rateLimiter, props, responseWriter, RedisRateLimitCircuitBreaker.forTesting(props), loginLimiter);
+        authenticateAs("alice");
+        when(rateLimiter.tryAcquire(eq("sensitive:user:alice"), anyInt())).thenReturn(true);
+        when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
 
-  private MockHttpServletRequest loginRequest(String remoteAddr) {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/auth/login");
-    request.setRemoteAddr(remoteAddr);
-    return request;
-  }
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", prefix + "execute");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        overlappingFilter.doFilter(request, response, filterChain);
+
+        InOrder order = inOrder(rateLimiter);
+        order.verify(rateLimiter).tryAcquire(eq("sensitive:user:alice"), anyInt());
+        order.verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
+        verify(rateLimiter, never()).tryAcquire(eq("fileop:user:alice"), anyInt());
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(eq(response), eq(HttpStatus.TOO_MANY_REQUESTS), eq(ResultCode.RATE_LIMITED), anyString());
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private void authenticateAs(String username) {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(username, "n/a", List.of()));
+    }
+
+    private MockHttpServletRequest loginRequest(String remoteAddr) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/auth/login");
+        request.setRemoteAddr(remoteAddr);
+        return request;
+    }
 }

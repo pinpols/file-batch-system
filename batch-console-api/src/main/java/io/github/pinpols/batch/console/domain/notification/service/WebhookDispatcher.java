@@ -59,369 +59,345 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class WebhookDispatcher {
 
-  /** 失败响应摘要长度上限，对应 webhook_delivery_log.response_body VARCHAR(2048)（V45）。 */
-  private static final int RESPONSE_SUMMARY_MAX_LENGTH = 2048;
+    /** 失败响应摘要长度上限，对应 webhook_delivery_log.response_body VARCHAR(2048)（V45）。 */
+    private static final int RESPONSE_SUMMARY_MAX_LENGTH = 2048;
 
-  private static final int MAX_ATTEMPTS = 3;
+    private static final int MAX_ATTEMPTS = 3;
 
-  /** 出站 Webhook 建连超时秒数。 */
-  private static final int CONNECT_TIMEOUT_SECONDS = 5;
+    /** 出站 Webhook 建连超时秒数。 */
+    private static final int CONNECT_TIMEOUT_SECONDS = 5;
 
-  /** 出站 Webhook 读超时秒数。 */
-  private static final int READ_TIMEOUT_SECONDS = 10;
+    /** 出站 Webhook 读超时秒数。 */
+    private static final int READ_TIMEOUT_SECONDS = 10;
 
-  /** 出站 Webhook 写超时秒数。 */
-  private static final int WRITE_TIMEOUT_SECONDS = 10;
+    /** 出站 Webhook 写超时秒数。 */
+    private static final int WRITE_TIMEOUT_SECONDS = 10;
 
-  /** 单次 Webhook 调用的总超时秒数。 */
-  private static final int CALL_TIMEOUT_SECONDS = 15;
+    /** 单次 Webhook 调用的总超时秒数。 */
+    private static final int CALL_TIMEOUT_SECONDS = 15;
 
-  /** 同步重试的首次退避毫秒数，此后每次翻倍。 */
-  private static final long INITIAL_RETRY_BACKOFF_MILLIS = 250L;
+    /** 同步重试的首次退避毫秒数，此后每次翻倍。 */
+    private static final long INITIAL_RETRY_BACKOFF_MILLIS = 250L;
 
-  private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
+    private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
 
-  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-  /** 有界队列容量 — 防止流量尖峰下内存积压。 */
-  private static final int QUEUE_CAPACITY = 1024;
+    /** 有界队列容量 — 防止流量尖峰下内存积压。 */
+    private static final int QUEUE_CAPACITY = 1024;
 
-  /**
-   * PENDING/EXHAUSTED 行 → relay 接力的初始退避:5 分钟后允许 {@link WebhookDeliveryRelay} 重投。 与 ADR §5.11
-   * 配合,本类只做进程内 burst,持久化重试由 relay 接管。
-   */
-  private static final long INITIAL_RELAY_DELAY_SECONDS = 5L * 60L;
+    /**
+     * PENDING/EXHAUSTED 行 → relay 接力的初始退避:5 分钟后允许 {@link WebhookDeliveryRelay} 重投。 与 ADR §5.11
+     * 配合,本类只做进程内 burst,持久化重试由 relay 接管。
+     */
+    private static final long INITIAL_RELAY_DELAY_SECONDS = 5L * 60L;
 
-  private final ConsoleWebhookService webhookService;
-  private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
+    private final ConsoleWebhookService webhookService;
+    private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
 
-  /**
-   * OkHttp 客户端一次性构造并复用:内置 {@link SsrfGuardedDns} 在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的 那个
-   * IP,关闭 DNS-rebinding 的 TOCTOU 窗口,且 TLS 仍按 hostname 校验(SNI/证书不动)。 5.11:显式 connect/read/write +
-   * callTimeout,避免慢回调长期占用线程。
-   */
-  private final OkHttpClient httpClient;
+    /**
+     * OkHttp 客户端一次性构造并复用:内置 {@link SsrfGuardedDns} 在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的 那个
+     * IP,关闭 DNS-rebinding 的 TOCTOU 窗口,且 TLS 仍按 hostname 校验(SNI/证书不动)。 5.11:显式 connect/read/write +
+     * callTimeout,避免慢回调长期占用线程。
+     */
+    private final OkHttpClient httpClient;
 
-  public WebhookDispatcher(
-      ConsoleWebhookService webhookService,
-      ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
-      SsrfGuardedDns ssrfGuardedDns) {
-    this.webhookService = webhookService;
-    this.deliveryLogRepository = deliveryLogRepository;
-    this.httpClient = new OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .dns(ssrfGuardedDns)
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .build();
-  }
-
-  // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
-  //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 回退)
-  private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-
-  private final ExecutorService executor = new ThreadPoolExecutor(
-      4,
-      4,
-      60L,
-      TimeUnit.SECONDS,
-      new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-      runnable -> {
-        Thread thread =
-            new Thread(runnable, "console-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
-        thread.setDaemon(true);
-        return thread;
-      },
-      new AbortPolicy());
-
-  public void dispatchAsync(
-      String tenantId,
-      String eventType,
-      String stream,
-      String cursor,
-      Object data,
-      Instant emittedAt) {
-    if (stopping.get()) {
-      log.info(
-          "webhook dispatch skipped during shutdown: tenant={}, eventType={}", tenantId, eventType);
-      return;
+    public WebhookDispatcher(
+            ConsoleWebhookService webhookService,
+            ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
+            SsrfGuardedDns ssrfGuardedDns) {
+        this.webhookService = webhookService;
+        this.deliveryLogRepository = deliveryLogRepository;
+        this.httpClient = new OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .dns(ssrfGuardedDns)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build();
     }
-    List<PendingWebhookDelivery> pendingDeliveries =
-        persistPendingDeliveries(tenantId, eventType, stream, cursor, data, emittedAt);
-    if (stopping.get()) {
-      log.info(
-          "webhook dispatch persisted but skipped enqueue during shutdown: tenant={}, eventType={}",
-          tenantId,
-          eventType);
-      return;
+
+    // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
+    //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 回退)
+    private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+
+    private final ExecutorService executor = new ThreadPoolExecutor(
+            4,
+            4,
+            60L,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(QUEUE_CAPACITY),
+            runnable -> {
+                Thread thread = new Thread(runnable, "console-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            },
+            new AbortPolicy());
+
+    public void dispatchAsync(
+            String tenantId, String eventType, String stream, String cursor, Object data, Instant emittedAt) {
+        if (stopping.get()) {
+            log.info("webhook dispatch skipped during shutdown: tenant={}, eventType={}", tenantId, eventType);
+            return;
+        }
+        List<PendingWebhookDelivery> pendingDeliveries =
+                persistPendingDeliveries(tenantId, eventType, stream, cursor, data, emittedAt);
+        if (stopping.get()) {
+            log.info(
+                    "webhook dispatch persisted but skipped enqueue during shutdown: tenant={}, eventType={}",
+                    tenantId,
+                    eventType);
+            return;
+        }
+        try {
+            for (PendingWebhookDelivery pending : pendingDeliveries) {
+                executor.submit(() -> deliverPersisted(pending));
+            }
+        } catch (RejectedExecutionException e) {
+            log.warn(
+                    "webhook dispatch rejected after PENDING persisted; relay will retry: tenant={}," + " eventType={}",
+                    tenantId,
+                    eventType);
+        }
     }
-    try {
-      for (PendingWebhookDelivery pending : pendingDeliveries) {
-        executor.submit(() -> deliverPersisted(pending));
-      }
-    } catch (RejectedExecutionException e) {
-      log.warn(
-          "webhook dispatch rejected after PENDING persisted; relay will retry: tenant={},"
-              + " eventType={}",
-          tenantId,
-          eventType);
+
+    @EventListener(ContextClosedEvent.class)
+    public void shutdownOnContextClosed(ContextClosedEvent event) {
+        shutdown();
     }
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  public void shutdownOnContextClosed(ContextClosedEvent event) {
-    shutdown();
-  }
+    @PreDestroy
+    public void shutdown() {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("webhook dispatcher did not terminate in 5 s; forcing shutdown");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
 
-  @PreDestroy
-  public void shutdown() {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        httpClient.dispatcher().cancelAll();
+        httpClient.dispatcher().executorService().shutdown();
+        httpClient.connectionPool().evictAll();
     }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("webhook dispatcher did not terminate in 5 s; forcing shutdown");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
 
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-    httpClient.dispatcher().cancelAll();
-    httpClient.dispatcher().executorService().shutdown();
-    httpClient.connectionPool().evictAll();
-  }
-
-  private List<PendingWebhookDelivery> persistPendingDeliveries(
-      String tenantId,
-      String eventType,
-      String stream,
-      String cursor,
-      Object data,
-      Instant emittedAt) {
-    List<WebhookSubscriptionEntity> subscriptions =
-        webhookService.findEnabledSubscriptions(tenantId);
-    if (subscriptions == null || subscriptions.isEmpty()) {
-      return List.of();
-    }
-    String normalizedEventType = normalizeEventType(eventType);
-    Instant payloadEmittedAt =
-        EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
-    WebhookEventPayload payload = new WebhookEventPayload(
-        tenantId, normalizedEventType, stream, cursor, payloadEmittedAt, data);
-    String payloadJson = JsonUtils.toJson(payload);
-    List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
-    for (WebhookSubscriptionEntity subscription : subscriptions) {
-      boolean subscriptionCannotReceiveEvent = EmptyChecks.isNull(subscription)
-          || subscription.getId() == null
-          || !SubscriptionRuleDispatchPolicy.eventTypeMatches(
-              subscription.getEventTypes(), payload.eventType());
-      if (subscriptionCannotReceiveEvent) {
-        continue;
-      }
-      WebhookDeliveryLogInsertParam deliveryLogParam = WebhookDeliveryLogInsertParam.builder()
-          .tenantId(payload.tenantId())
-          .subscriptionId(subscription.getId())
-          .eventType(payload.eventType())
-          .payloadJson(payloadJson)
-          .deliveryStatus("PENDING")
-          .attempt(0)
-          .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
-          .build();
-      Long deliveryLogId = deliveryLogRepository.insertReturningId(deliveryLogParam);
-      pendingDeliveries.add(
-          new PendingWebhookDelivery(deliveryLogId, subscription, payload, payloadJson));
-    }
-    return pendingDeliveries;
-  }
-
-  private void deliverPersisted(PendingWebhookDelivery pending) {
-    long backoffMillis = INITIAL_RETRY_BACKOFF_MILLIS;
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      WebhookDeliveryResult result =
-          attemptDelivery(pending.subscription(), pending.payload(), pending.payloadJson());
-
-      if (result.success()) {
-        deliveryLogRepository.markRetrySuccess(
-            pending.deliveryLogId(), attempt, result.httpStatus());
-        return;
-      }
-
-      if (attempt < MAX_ATTEMPTS) {
-        sleep(backoffMillis);
-        backoffMillis *= 2;
-      } else {
-        ConsoleWebhookDeliveryLogMarkRetryFailureParam
-            consoleWebhookDeliveryLogMarkRetryFailureParam =
-                ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-                    .id(pending.deliveryLogId())
-                    .attempt(attempt)
-                    .httpStatus(result.httpStatus())
-                    .responseBody(result.errorSummary())
-                    .nextRetryAt(
-                        BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+    private List<PendingWebhookDelivery> persistPendingDeliveries(
+            String tenantId, String eventType, String stream, String cursor, Object data, Instant emittedAt) {
+        List<WebhookSubscriptionEntity> subscriptions = webhookService.findEnabledSubscriptions(tenantId);
+        if (subscriptions == null || subscriptions.isEmpty()) {
+            return List.of();
+        }
+        String normalizedEventType = normalizeEventType(eventType);
+        Instant payloadEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
+        WebhookEventPayload payload =
+                new WebhookEventPayload(tenantId, normalizedEventType, stream, cursor, payloadEmittedAt, data);
+        String payloadJson = JsonUtils.toJson(payload);
+        List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
+        for (WebhookSubscriptionEntity subscription : subscriptions) {
+            boolean subscriptionCannotReceiveEvent = EmptyChecks.isNull(subscription)
+                    || subscription.getId() == null
+                    || !SubscriptionRuleDispatchPolicy.eventTypeMatches(
+                            subscription.getEventTypes(), payload.eventType());
+            if (subscriptionCannotReceiveEvent) {
+                continue;
+            }
+            WebhookDeliveryLogInsertParam deliveryLogParam = WebhookDeliveryLogInsertParam.builder()
+                    .tenantId(payload.tenantId())
+                    .subscriptionId(subscription.getId())
+                    .eventType(payload.eventType())
+                    .payloadJson(payloadJson)
+                    .deliveryStatus("PENDING")
+                    .attempt(0)
+                    .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
                     .build();
-        deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
-      }
-    }
-  }
-
-  /**
-   * 单次 HTTP 投递,捕获所有异常并返回结构化结果。
-   *
-   * <p>同时供 burst-retry 与 {@link WebhookDeliveryRelay} 共用 — 两侧都不应自己 catch 网络异常,统一从 {@link
-   * WebhookDeliveryResult} 决策。
-   */
-  public WebhookDeliveryResult attemptDelivery(
-      WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson) {
-    try {
-      deliver(subscription, payload, payloadJson);
-      return WebhookDeliveryResult.ok();
-    } catch (WebhookHttpStatusException ex) {
-      SwallowedExceptionLogger.info(
-          WebhookDispatcher.class, "catch:WebhookHttpStatusException", ex);
-
-      int responseStatus = ex.status();
-      String sanitizedResponseBody = sanitize(ex.responseBody());
-      return WebhookDeliveryResult.failure(responseStatus, sanitizedResponseBody);
-    } catch (Exception ex) {
-      // 含 SsrfGuardedDns 抛出的 BlockedAddressException(rebinding 到内网被拦):投递失败,不建连。
-      String sanitizedFailureMessage = sanitize(ex.getMessage());
-      return WebhookDeliveryResult.failure(null, sanitizedFailureMessage);
-    }
-  }
-
-  private void deliver(
-      WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
-      throws IOException {
-    // SSRF 防护：主机名由 OkHttp DNS guard 校验并固定连接 IP；此处额外校验字面量 IP，避免绕过 DNS 回调。
-    URI callbackUri = URI.create(subscription.getCallbackUrl());
-    String host = callbackUri.getHost();
-    if (host != null) {
-      DnsResolveGuard.resolveAndValidate(host);
-    }
-    Request.Builder builder = new Request.Builder()
-        .url(subscription.getCallbackUrl())
-        .header("X-Batch-Tenant-Id", payload.tenantId())
-        .header("X-Batch-Event-Type", payload.eventType())
-        .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
-        .post(RequestBody.create(payloadJson, JSON));
-    boolean alertmanagerNotification =
-        "alertmanager".equals(payload.stream()) && "ALERTMANAGER".equals(payload.eventType());
-    boolean terminalBusinessEvent = ("workflow-runs".equals(payload.stream())
-            && ("WORKFLOW_SUCCESS".equals(payload.eventType())
-                || "WORKFLOW_FAILED".equals(payload.eventType())))
-        || ("job-instances".equals(payload.stream())
-            && ("JOB_SUCCESS".equals(payload.eventType())
-                || "JOB_FAILED".equals(payload.eventType())));
-    boolean receiverCanDeduplicate = alertmanagerNotification || terminalBusinessEvent;
-    if (receiverCanDeduplicate && EmptyChecks.isNotBlank(payload.cursor())) {
-      Base64.Encoder idempotencyKeyEncoder = Base64.getUrlEncoder().withoutPadding();
-      byte[] cursorBytes = payload.cursor().getBytes(StandardCharsets.UTF_8);
-      String idempotencyKey = idempotencyKeyEncoder.encodeToString(cursorBytes);
-      builder = builder.header("Idempotency-Key", idempotencyKey);
-    }
-    if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
-      String signature = sign(payloadJson, subscription.getSecret());
-      builder = builder.header("X-Batch-Signature", signature);
-    }
-    Request request = builder.build();
-    Call call = httpClient.newCall(request);
-    try (Response response = call.execute()) {
-      if (!response.isSuccessful()) {
-        String body = readBoundedErrorBody(response.body());
-        throw new WebhookHttpStatusException(response.code(), body);
-      }
-    }
-  }
-
-  /** 非 2xx 响应的结构化载体:把 HTTP 状态码 + 响应体带回 {@link #attemptDelivery} 决策(替代原 RestClient 的异常映射)。 */
-  private static final class WebhookHttpStatusException extends IOException {
-    private final int status;
-    private final String responseBody;
-
-    WebhookHttpStatusException(int status, String responseBody) {
-      super("webhook responded with non-2xx status: " + status);
-      this.status = status;
-      this.responseBody = responseBody;
+            Long deliveryLogId = deliveryLogRepository.insertReturningId(deliveryLogParam);
+            pendingDeliveries.add(new PendingWebhookDelivery(deliveryLogId, subscription, payload, payloadJson));
+        }
+        return pendingDeliveries;
     }
 
-    int status() {
-      return status;
+    private void deliverPersisted(PendingWebhookDelivery pending) {
+        long backoffMillis = INITIAL_RETRY_BACKOFF_MILLIS;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            WebhookDeliveryResult result =
+                    attemptDelivery(pending.subscription(), pending.payload(), pending.payloadJson());
+
+            if (result.success()) {
+                deliveryLogRepository.markRetrySuccess(pending.deliveryLogId(), attempt, result.httpStatus());
+                return;
+            }
+
+            if (attempt < MAX_ATTEMPTS) {
+                sleep(backoffMillis);
+                backoffMillis *= 2;
+            } else {
+                ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
+                        ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+                                .id(pending.deliveryLogId())
+                                .attempt(attempt)
+                                .httpStatus(result.httpStatus())
+                                .responseBody(result.errorSummary())
+                                .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+                                .build();
+                deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
+            }
+        }
     }
 
-    String responseBody() {
-      return responseBody;
+    /**
+     * 单次 HTTP 投递,捕获所有异常并返回结构化结果。
+     *
+     * <p>同时供 burst-retry 与 {@link WebhookDeliveryRelay} 共用 — 两侧都不应自己 catch 网络异常,统一从 {@link
+     * WebhookDeliveryResult} 决策。
+     */
+    public WebhookDeliveryResult attemptDelivery(
+            WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson) {
+        try {
+            deliver(subscription, payload, payloadJson);
+            return WebhookDeliveryResult.ok();
+        } catch (WebhookHttpStatusException ex) {
+            SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:WebhookHttpStatusException", ex);
+
+            int responseStatus = ex.status();
+            String sanitizedResponseBody = sanitize(ex.responseBody());
+            return WebhookDeliveryResult.failure(responseStatus, sanitizedResponseBody);
+        } catch (Exception ex) {
+            // 含 SsrfGuardedDns 抛出的 BlockedAddressException(rebinding 到内网被拦):投递失败,不建连。
+            String sanitizedFailureMessage = sanitize(ex.getMessage());
+            return WebhookDeliveryResult.failure(null, sanitizedFailureMessage);
+        }
     }
-  }
 
-  /** 包内可见供测试直接调用。 */
-  String normalizeEventType(String eventType) {
-    if (EmptyChecks.isNull(eventType)) {
-      return "UNKNOWN";
+    private void deliver(WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
+            throws IOException {
+        // SSRF 防护：主机名由 OkHttp DNS guard 校验并固定连接 IP；此处额外校验字面量 IP，避免绕过 DNS 回调。
+        URI callbackUri = URI.create(subscription.getCallbackUrl());
+        String host = callbackUri.getHost();
+        if (host != null) {
+            DnsResolveGuard.resolveAndValidate(host);
+        }
+        Request.Builder builder = new Request.Builder()
+                .url(subscription.getCallbackUrl())
+                .header("X-Batch-Tenant-Id", payload.tenantId())
+                .header("X-Batch-Event-Type", payload.eventType())
+                .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
+                .post(RequestBody.create(payloadJson, JSON));
+        boolean alertmanagerNotification =
+                "alertmanager".equals(payload.stream()) && "ALERTMANAGER".equals(payload.eventType());
+        boolean terminalBusinessEvent = ("workflow-runs".equals(payload.stream())
+                        && ("WORKFLOW_SUCCESS".equals(payload.eventType())
+                                || "WORKFLOW_FAILED".equals(payload.eventType())))
+                || ("job-instances".equals(payload.stream())
+                        && ("JOB_SUCCESS".equals(payload.eventType()) || "JOB_FAILED".equals(payload.eventType())));
+        boolean receiverCanDeduplicate = alertmanagerNotification || terminalBusinessEvent;
+        if (receiverCanDeduplicate && EmptyChecks.isNotBlank(payload.cursor())) {
+            Base64.Encoder idempotencyKeyEncoder = Base64.getUrlEncoder().withoutPadding();
+            byte[] cursorBytes = payload.cursor().getBytes(StandardCharsets.UTF_8);
+            String idempotencyKey = idempotencyKeyEncoder.encodeToString(cursorBytes);
+            builder = builder.header("Idempotency-Key", idempotencyKey);
+        }
+        if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
+            String signature = sign(payloadJson, subscription.getSecret());
+            builder = builder.header("X-Batch-Signature", signature);
+        }
+        Request request = builder.build();
+        Call call = httpClient.newCall(request);
+        try (Response response = call.execute()) {
+            if (!response.isSuccessful()) {
+                String body = readBoundedErrorBody(response.body());
+                throw new WebhookHttpStatusException(response.code(), body);
+            }
+        }
     }
-    String trimmedEventType = eventType.trim();
-    return trimmedEventType.toUpperCase(Locale.ROOT);
-  }
 
-  /** 包内可见供测试直接调用。 */
-  String sign(String payloadJson, String secret) {
-    try {
-      Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-      byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-      SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
-      mac.init(signingKey);
-      byte[] payloadBytes = payloadJson.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = mac.doFinal(payloadBytes);
-      return "sha256=" + HexFormat.of().formatHex(digest);
-    } catch (Exception ex) {
-      throw new IllegalStateException("failed to sign webhook payload", ex);
+    /** 非 2xx 响应的结构化载体:把 HTTP 状态码 + 响应体带回 {@link #attemptDelivery} 决策(替代原 RestClient 的异常映射)。 */
+    private static final class WebhookHttpStatusException extends IOException {
+        private final int status;
+        private final String responseBody;
+
+        WebhookHttpStatusException(int status, String responseBody) {
+            super("webhook responded with non-2xx status: " + status);
+            this.status = status;
+            this.responseBody = responseBody;
+        }
+
+        int status() {
+            return status;
+        }
+
+        String responseBody() {
+            return responseBody;
+        }
     }
-  }
 
-  private String sanitize(String text) {
-    String normalized = ConsoleTextSanitizer.normalize(text);
-    String safeMessage =
-        SwallowedExceptionLogger.safeMessage(normalized, RESPONSE_SUMMARY_MAX_LENGTH);
-    return ConsoleTextSanitizer.safeDisplay(safeMessage, RESPONSE_SUMMARY_MAX_LENGTH);
-  }
-
-  private static String readBoundedErrorBody(ResponseBody body) throws IOException {
-    if (EmptyChecks.isNull(body)) {
-      return "";
+    /** 包内可见供测试直接调用。 */
+    String normalizeEventType(String eventType) {
+        if (EmptyChecks.isNull(eventType)) {
+            return "UNKNOWN";
+        }
+        String trimmedEventType = eventType.trim();
+        return trimmedEventType.toUpperCase(Locale.ROOT);
     }
-    byte[] bytes;
-    try (InputStream stream = body.byteStream()) {
-      bytes = stream.readNBytes(MAX_ERROR_RESPONSE_BYTES + 1);
+
+    /** 包内可见供测试直接调用。 */
+    String sign(String payloadJson, String secret) {
+        try {
+            Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+            byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+            SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
+            mac.init(signingKey);
+            byte[] payloadBytes = payloadJson.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = mac.doFinal(payloadBytes);
+            return "sha256=" + HexFormat.of().formatHex(digest);
+        } catch (Exception ex) {
+            throw new IllegalStateException("failed to sign webhook payload", ex);
+        }
     }
-    int length = Math.min(bytes.length, MAX_ERROR_RESPONSE_BYTES);
-    MediaType contentType = body.contentType();
-    Charset charset = EmptyChecks.isNull(contentType)
-        ? StandardCharsets.UTF_8
-        : contentType.charset(StandardCharsets.UTF_8);
-    return new String(bytes, 0, length, charset);
-  }
 
-  private void sleep(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
-
-      Thread.currentThread().interrupt();
+    private String sanitize(String text) {
+        String normalized = ConsoleTextSanitizer.normalize(text);
+        String safeMessage = SwallowedExceptionLogger.safeMessage(normalized, RESPONSE_SUMMARY_MAX_LENGTH);
+        return ConsoleTextSanitizer.safeDisplay(safeMessage, RESPONSE_SUMMARY_MAX_LENGTH);
     }
-  }
 
-  private record PendingWebhookDelivery(
-      Long deliveryLogId,
-      WebhookSubscriptionEntity subscription,
-      WebhookEventPayload payload,
-      String payloadJson) {}
+    private static String readBoundedErrorBody(ResponseBody body) throws IOException {
+        if (EmptyChecks.isNull(body)) {
+            return "";
+        }
+        byte[] bytes;
+        try (InputStream stream = body.byteStream()) {
+            bytes = stream.readNBytes(MAX_ERROR_RESPONSE_BYTES + 1);
+        }
+        int length = Math.min(bytes.length, MAX_ERROR_RESPONSE_BYTES);
+        MediaType contentType = body.contentType();
+        Charset charset =
+                EmptyChecks.isNull(contentType) ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
+        return new String(bytes, 0, length, charset);
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ex) {
+            SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
+
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private record PendingWebhookDelivery(
+            Long deliveryLogId,
+            WebhookSubscriptionEntity subscription,
+            WebhookEventPayload payload,
+            String payloadJson) {}
 }

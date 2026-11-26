@@ -35,129 +35,127 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @DisplayName("运维概览实时流: 订阅的首帧策略与重复刷新节流")
 class ConsoleOpsSummaryRealtimeStreamTest {
 
-  @Mock
-  private ConsoleOpsSummaryPort opsApplicationService;
+    @Mock
+    private ConsoleOpsSummaryPort opsApplicationService;
 
-  @Mock
-  private ConsoleRealtimeEventHub realtimeEventHub;
+    @Mock
+    private ConsoleRealtimeEventHub realtimeEventHub;
 
-  @Mock
-  private ConsoleRealtimeRedisPublisher redisPublisher;
+    @Mock
+    private ConsoleRealtimeRedisPublisher redisPublisher;
 
-  @Mock
-  private ConsoleRealtimeCursorFactory cursorFactory;
+    @Mock
+    private ConsoleRealtimeCursorFactory cursorFactory;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  private ConsoleOpsSummaryRealtimeStream stream;
-  private ThreadPoolTaskScheduler scheduler;
+    private ConsoleOpsSummaryRealtimeStream stream;
+    private ThreadPoolTaskScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("console-realtime-test-");
-    scheduler.initialize();
-    stream = new ConsoleOpsSummaryRealtimeStream(
-        opsApplicationService,
-        realtimeEventHub,
-        redisPublisher,
-        cursorFactory,
-        tenantGuard,
-        dateTimeSupport(),
-        scheduler);
-    when(tenantGuard.resolveTenant(anyString()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(cursorFactory.nextCursor()).thenReturn("cursor-1");
-    when(realtimeEventHub.subscribeAllEvents(anyString(), anyString(), isNull()))
-        .thenReturn(new SseEmitter());
-  }
-
-  @AfterEach
-  void tearDown() {
-    try {
-      if (stream != null) {
-        stream.shutdown();
-      }
-    } finally {
-      if (scheduler != null) {
-        scheduler.shutdown();
-      }
-    }
-  }
-
-  private static BatchDateTimeSupport dateTimeSupport() {
-    return new BatchDateTimeSupport(
-        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-  }
-
-  @Test
-  @DisplayName("订阅时关闭首帧推送则不查询概览也不发布事件")
-  void shouldSkipInitialSnapshotWhenDisabled() {
-    SseEmitter emitter = stream.subscribe("t1", null, false);
-
-    assertThat(emitter).isNotNull();
-    verify(realtimeEventHub).subscribeAllEvents("t1", "ops-summary", null);
-    verify(realtimeEventHub, never()).publish(any());
-    verify(opsApplicationService, never()).summary(anyString());
-  }
-
-  @Test
-  @DisplayName("节流窗口内连续两次刷新请求只查询并发布一次")
-  void shouldThrottleRepeatedRefreshRequests() {
-    when(opsApplicationService.summary("t1"))
-        .thenReturn(ConsoleOpsSummaryResponse.builder()
-            .tenantId("t1")
-            .pendingApprovals(1)
-            .openAlerts(2)
-            .criticalAlerts(3)
-            .runningJobs(4)
-            .failedJobs(5)
-            .slaBreaches(6)
-            .onlineWorkers(7)
-            .drainingWorkers(8)
-            .offlineWorkers(9)
-            .outboxRetryBacklog(10)
-            .outboxDeliveryFailures(11)
-            .build());
-
-    stream.publishRefresh("t1");
-    stream.publishRefresh("t1");
-    try {
-      Thread.sleep(500L);
-    } catch (InterruptedException exception) {
-      Thread.currentThread().interrupt();
+    @BeforeEach
+    void setUp() {
+        scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("console-realtime-test-");
+        scheduler.initialize();
+        stream = new ConsoleOpsSummaryRealtimeStream(
+                opsApplicationService,
+                realtimeEventHub,
+                redisPublisher,
+                cursorFactory,
+                tenantGuard,
+                dateTimeSupport(),
+                scheduler);
+        when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cursorFactory.nextCursor()).thenReturn("cursor-1");
+        when(realtimeEventHub.subscribeAllEvents(anyString(), anyString(), isNull()))
+                .thenReturn(new SseEmitter());
     }
 
-    verify(opsApplicationService).summary("t1");
-    verify(realtimeEventHub).publish(any());
-    verify(redisPublisher).publish(any());
-  }
+    @AfterEach
+    void tearDown() {
+        try {
+            if (stream != null) {
+                stream.shutdown();
+            }
+        } finally {
+            if (scheduler != null) {
+                scheduler.shutdown();
+            }
+        }
+    }
 
-  @Test
-  @DisplayName("订阅时开启首帧推送会立即查询概览并发布事件")
-  void shouldForceInitialSnapshotWhenSubscribed() {
-    when(opsApplicationService.summary("t1"))
-        .thenReturn(ConsoleOpsSummaryResponse.builder()
-            .tenantId("t1")
-            .pendingApprovals(1)
-            .openAlerts(2)
-            .criticalAlerts(3)
-            .runningJobs(4)
-            .failedJobs(5)
-            .slaBreaches(6)
-            .onlineWorkers(7)
-            .drainingWorkers(8)
-            .offlineWorkers(9)
-            .outboxRetryBacklog(10)
-            .outboxDeliveryFailures(11)
-            .build());
+    private static BatchDateTimeSupport dateTimeSupport() {
+        return new BatchDateTimeSupport(Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    }
 
-    stream.subscribe("t1", null, true);
+    @Test
+    @DisplayName("订阅时关闭首帧推送则不查询概览也不发布事件")
+    void shouldSkipInitialSnapshotWhenDisabled() {
+        SseEmitter emitter = stream.subscribe("t1", null, false);
 
-    verify(opsApplicationService).summary("t1");
-    verify(realtimeEventHub).publish(any());
-    verify(redisPublisher).publish(any());
-  }
+        assertThat(emitter).isNotNull();
+        verify(realtimeEventHub).subscribeAllEvents("t1", "ops-summary", null);
+        verify(realtimeEventHub, never()).publish(any());
+        verify(opsApplicationService, never()).summary(anyString());
+    }
+
+    @Test
+    @DisplayName("节流窗口内连续两次刷新请求只查询并发布一次")
+    void shouldThrottleRepeatedRefreshRequests() {
+        when(opsApplicationService.summary("t1"))
+                .thenReturn(ConsoleOpsSummaryResponse.builder()
+                        .tenantId("t1")
+                        .pendingApprovals(1)
+                        .openAlerts(2)
+                        .criticalAlerts(3)
+                        .runningJobs(4)
+                        .failedJobs(5)
+                        .slaBreaches(6)
+                        .onlineWorkers(7)
+                        .drainingWorkers(8)
+                        .offlineWorkers(9)
+                        .outboxRetryBacklog(10)
+                        .outboxDeliveryFailures(11)
+                        .build());
+
+        stream.publishRefresh("t1");
+        stream.publishRefresh("t1");
+        try {
+            Thread.sleep(500L);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+
+        verify(opsApplicationService).summary("t1");
+        verify(realtimeEventHub).publish(any());
+        verify(redisPublisher).publish(any());
+    }
+
+    @Test
+    @DisplayName("订阅时开启首帧推送会立即查询概览并发布事件")
+    void shouldForceInitialSnapshotWhenSubscribed() {
+        when(opsApplicationService.summary("t1"))
+                .thenReturn(ConsoleOpsSummaryResponse.builder()
+                        .tenantId("t1")
+                        .pendingApprovals(1)
+                        .openAlerts(2)
+                        .criticalAlerts(3)
+                        .runningJobs(4)
+                        .failedJobs(5)
+                        .slaBreaches(6)
+                        .onlineWorkers(7)
+                        .drainingWorkers(8)
+                        .offlineWorkers(9)
+                        .outboxRetryBacklog(10)
+                        .outboxDeliveryFailures(11)
+                        .build());
+
+        stream.subscribe("t1", null, true);
+
+        verify(opsApplicationService).summary("t1");
+        verify(realtimeEventHub).publish(any());
+        verify(redisPublisher).publish(any());
+    }
 }

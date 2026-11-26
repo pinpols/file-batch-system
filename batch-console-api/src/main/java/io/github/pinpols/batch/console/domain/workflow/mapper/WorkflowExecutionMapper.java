@@ -6,11 +6,9 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowExecutionMapper {
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  WorkflowExecutionSnapshotView selectSnapshot(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    WorkflowExecutionSnapshotView selectSnapshot(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  List<WorkflowExecutionNodeView> selectLatestNodes(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    List<WorkflowExecutionNodeView> selectLatestNodes(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

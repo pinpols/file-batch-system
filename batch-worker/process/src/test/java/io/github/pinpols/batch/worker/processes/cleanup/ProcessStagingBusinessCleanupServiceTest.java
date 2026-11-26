@@ -18,46 +18,46 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ProcessStagingBusinessCleanupServiceTest {
 
-  @Mock
-  private ProcessStagingBusinessCleanupTransaction transaction;
+    @Mock
+    private ProcessStagingBusinessCleanupTransaction transaction;
 
-  private ProcessStagingBusinessCleanupService service;
+    private ProcessStagingBusinessCleanupService service;
 
-  @AfterEach
-  void clearTenantContext() {
-    RlsTenantContextHolder.clear();
-  }
+    @AfterEach
+    void clearTenantContext() {
+        RlsTenantContextHolder.clear();
+    }
 
-  @DisplayName("进入事务代理前绑定租户上下文")
-  @Test
-  void shouldBindTenantBeforeEnteringTransactionalDelegate() {
-    when(transaction.listExpired("tenant_a", 24, 50, 0)).thenAnswer(invocation -> {
-      assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant_a");
-      return List.of();
-    });
-
-    assertThat(service.listExpired("tenant_a", 24, 50, 0)).isEmpty();
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
-
-  @BeforeEach
-  void initializeSubject() {
-    service = new ProcessStagingBusinessCleanupService(transaction);
-  }
-
-  @Test
-  @DisplayName("游标扫描在进入业务事务前绑定租户并传递完整游标")
-  void shouldBindTenantAndPassCursorForExpiredScan() {
-    Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-    String generationId = "10000000-0000-0000-0000-000000000001";
-    when(transaction.listExpiredAfter("tenant_a", 24, 50, createdAt, generationId))
-        .thenAnswer(invocation -> {
-          assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant_a");
-          return List.of();
+    @DisplayName("进入事务代理前绑定租户上下文")
+    @Test
+    void shouldBindTenantBeforeEnteringTransactionalDelegate() {
+        when(transaction.listExpired("tenant_a", 24, 50, 0)).thenAnswer(invocation -> {
+            assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant_a");
+            return List.of();
         });
 
-    assertThat(service.listExpiredAfter("tenant_a", 24, 50, createdAt, generationId))
-        .isEmpty();
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(service.listExpired("tenant_a", 24, 50, 0)).isEmpty();
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
+
+    @BeforeEach
+    void initializeSubject() {
+        service = new ProcessStagingBusinessCleanupService(transaction);
+    }
+
+    @Test
+    @DisplayName("游标扫描在进入业务事务前绑定租户并传递完整游标")
+    void shouldBindTenantAndPassCursorForExpiredScan() {
+        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
+        String generationId = "10000000-0000-0000-0000-000000000001";
+        when(transaction.listExpiredAfter("tenant_a", 24, 50, createdAt, generationId))
+                .thenAnswer(invocation -> {
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant_a");
+                    return List.of();
+                });
+
+        assertThat(service.listExpiredAfter("tenant_a", 24, 50, createdAt, generationId))
+                .isEmpty();
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 }

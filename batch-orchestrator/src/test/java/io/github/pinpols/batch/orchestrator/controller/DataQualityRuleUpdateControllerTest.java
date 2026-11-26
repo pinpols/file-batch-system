@@ -26,31 +26,29 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("数据质量规则更新接口")
 class DataQualityRuleUpdateControllerTest {
 
-  @Mock
-  private DataQualityRuleMapper mapper;
+    @Mock
+    private DataQualityRuleMapper mapper;
 
-  @ParameterizedTest
-  @CsvSource({"tenant-a, 999", "tenant-b, 42"})
-  @DisplayName("不存在的规则或其他租户的规则更新零行时返回 404")
-  void shouldReturnNotFoundWhenNoTenantScopedRowWasUpdated(String tenantId, long id)
-      throws Exception {
-    when(mapper.update(any(DataQualityRuleEntity.class))).thenReturn(0);
-    MockMvc mvc = MockMvcBuilders.standaloneSetup(
-            new DataQualityRuleController(new DataQualityRuleApplicationService(mapper)))
-        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-        .build();
+    @ParameterizedTest
+    @CsvSource({"tenant-a, 999", "tenant-b, 42"})
+    @DisplayName("不存在的规则或其他租户的规则更新零行时返回 404")
+    void shouldReturnNotFoundWhenNoTenantScopedRowWasUpdated(String tenantId, long id) throws Exception {
+        when(mapper.update(any(DataQualityRuleEntity.class))).thenReturn(0);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new DataQualityRuleController(new DataQualityRuleApplicationService(mapper)))
+                .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+                .build();
 
-    mvc.perform(put("/internal/orchestrator/dq/rules/{id}", id)
-            .param("tenantId", tenantId)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"tenantId\":\"tenant-a\",\"ruleCode\":\"RULE\"}"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        mvc.perform(put("/internal/orchestrator/dq/rules/{id}", id)
+                        .param("tenantId", tenantId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"tenant-a\",\"ruleCode\":\"RULE\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
-    ArgumentCaptor<DataQualityRuleEntity> rule =
-        ArgumentCaptor.forClass(DataQualityRuleEntity.class);
-    verify(mapper).update(rule.capture());
-    assertThat(rule.getValue().getTenantId()).isEqualTo(tenantId);
-    assertThat(rule.getValue().getId()).isEqualTo(id);
-  }
+        ArgumentCaptor<DataQualityRuleEntity> rule = ArgumentCaptor.forClass(DataQualityRuleEntity.class);
+        verify(mapper).update(rule.capture());
+        assertThat(rule.getValue().getTenantId()).isEqualTo(tenantId);
+        assertThat(rule.getValue().getId()).isEqualTo(id);
+    }
 }

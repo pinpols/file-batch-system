@@ -26,54 +26,50 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ExtendWith(MockitoExtension.class)
 class ConsoleOutboxRealtimeControllerTest {
 
-  @Mock
-  private ConsoleRealtimeSubscriptionPort realtimeEventHub;
+    @Mock
+    private ConsoleRealtimeSubscriptionPort realtimeEventHub;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
-        new ConsoleResponseFactory(requestMetadataResolver));
+    @BeforeEach
+    void setUp() {
+        ConsoleApiExceptionHandler exceptionHandler =
+                ConsoleApiExceptionHandler.forStandaloneTest(new ConsoleResponseFactory(requestMetadataResolver));
 
-    when(tenantGuard.resolveTenant(anyString()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
-        .thenReturn(new SseEmitter());
+        when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
+                .thenReturn(new SseEmitter());
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleOutboxRealtimeController(realtimeEventHub, tenantGuard))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOutboxRealtimeController(realtimeEventHub, tenantGuard))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("重试流:解析租户后按重试通道订阅, 异步请求已启动")
-  void shouldExposeOutboxRetryRealtimeStream() throws Exception {
-    mockMvc
-        .perform(get("/api/console/stream/outbox-retries/events").param("tenantId", "t1"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("重试流:解析租户后按重试通道订阅, 异步请求已启动")
+    void shouldExposeOutboxRetryRealtimeStream() throws Exception {
+        mockMvc.perform(get("/api/console/stream/outbox-retries/events").param("tenantId", "t1"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(tenantGuard).resolveTenant("t1");
-    verify(realtimeEventHub).subscribe("t1", "outbox-retries", null, null, null);
-  }
+        verify(tenantGuard).resolveTenant("t1");
+        verify(realtimeEventHub).subscribe("t1", "outbox-retries", null, null, null);
+    }
 
-  @Test
-  @DisplayName("投递流:解析租户后按投递通道订阅, 异步请求已启动")
-  void shouldExposeOutboxDeliveryRealtimeStream() throws Exception {
-    mockMvc
-        .perform(get("/api/console/stream/outbox-deliveries/events").param("tenantId", "t2"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("投递流:解析租户后按投递通道订阅, 异步请求已启动")
+    void shouldExposeOutboxDeliveryRealtimeStream() throws Exception {
+        mockMvc.perform(get("/api/console/stream/outbox-deliveries/events").param("tenantId", "t2"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(tenantGuard).resolveTenant("t2");
-    verify(realtimeEventHub).subscribe("t2", "outbox-deliveries", null, null, null);
-  }
+        verify(tenantGuard).resolveTenant("t2");
+        verify(realtimeEventHub).subscribe("t2", "outbox-deliveries", null, null, null);
+    }
 }

@@ -19,62 +19,61 @@ import org.springframework.core.env.Environment;
 @Slf4j
 public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
 
-  static final String FEATURE_KEY = "object-storage";
+    static final String FEATURE_KEY = "object-storage";
 
-  private final StatefulBackendGuard guard;
-  private final S3StorageProperties s3;
-  private final FilesystemStorageProperties filesystem;
-  private final StorageBackendGuardProperties properties;
-  private final StorageBackendProperties backendProperties;
-  private final Environment environment;
+    private final StatefulBackendGuard guard;
+    private final S3StorageProperties s3;
+    private final FilesystemStorageProperties filesystem;
+    private final StorageBackendGuardProperties properties;
+    private final StorageBackendProperties backendProperties;
+    private final Environment environment;
 
-  public ObjectStorageBackendGuard(
-      DataSource platformDataSource,
-      S3StorageProperties s3,
-      FilesystemStorageProperties filesystem,
-      StorageBackendGuardProperties properties,
-      StorageBackendProperties backendProperties,
-      Environment environment) {
-    this.guard = new StatefulBackendGuard(platformDataSource);
-    this.s3 = s3;
-    this.filesystem = filesystem;
-    this.properties = properties;
-    this.backendProperties = backendProperties;
-    this.environment = environment;
-  }
+    public ObjectStorageBackendGuard(
+            DataSource platformDataSource,
+            S3StorageProperties s3,
+            FilesystemStorageProperties filesystem,
+            StorageBackendGuardProperties properties,
+            StorageBackendProperties backendProperties,
+            Environment environment) {
+        this.guard = new StatefulBackendGuard(platformDataSource);
+        this.s3 = s3;
+        this.filesystem = filesystem;
+        this.properties = properties;
+        this.backendProperties = backendProperties;
+        this.environment = environment;
+    }
 
-  @Override
-  public void run(ApplicationArguments args) {
-    StatefulBackendGuard.DesiredBackend desired = desiredBackend();
-    StatefulBackendGuard.GuardResult result = guard.verify(desired);
-    log.info(
-        "object storage backend guard {}: backend={}, identity={}, generation={}",
-        result.action(),
-        desired.backend(),
-        desired.backendIdentity(),
-        result.generation());
-  }
+    @Override
+    public void run(ApplicationArguments args) {
+        StatefulBackendGuard.DesiredBackend desired = desiredBackend();
+        StatefulBackendGuard.GuardResult result = guard.verify(desired);
+        log.info(
+                "object storage backend guard {}: backend={}, identity={}, generation={}",
+                result.action(),
+                desired.backend(),
+                desired.backendIdentity(),
+                result.generation());
+    }
 
-  StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String configuredBackend = backendProperties.getBackend();
-    String trimmedBackend = configuredBackend.trim();
-    String backend = trimmedBackend.toLowerCase(Locale.ROOT);
-    String identity =
-        switch (backend) {
-          case ObjectStorageBackends.S3 ->
-            StatefulBackendIdentity.s3(s3.getEndpoint(), s3.getRegion(), s3.getBucket());
-          case ObjectStorageBackends.FILESYSTEM ->
-            StatefulBackendIdentity.filesystem(filesystem.getRoot(), s3.getBucket());
-          default ->
-            throw new IllegalStateException("unsupported batch.storage.backend: " + backend);
-        };
-    String actor = ApplicationNameProvider.resolve(environment, "batch-service");
-    return new StatefulBackendGuard.DesiredBackend(
-        FEATURE_KEY, backend, identity, properties.getCutoverId(), actor);
-  }
+    StatefulBackendGuard.DesiredBackend desiredBackend() {
+        String configuredBackend = backendProperties.getBackend();
+        String trimmedBackend = configuredBackend.trim();
+        String backend = trimmedBackend.toLowerCase(Locale.ROOT);
+        String identity =
+                switch (backend) {
+                    case ObjectStorageBackends.S3 ->
+                        StatefulBackendIdentity.s3(s3.getEndpoint(), s3.getRegion(), s3.getBucket());
+                    case ObjectStorageBackends.FILESYSTEM ->
+                        StatefulBackendIdentity.filesystem(filesystem.getRoot(), s3.getBucket());
+                    default -> throw new IllegalStateException("unsupported batch.storage.backend: " + backend);
+                };
+        String actor = ApplicationNameProvider.resolve(environment, "batch-service");
+        return new StatefulBackendGuard.DesiredBackend(
+                FEATURE_KEY, backend, identity, properties.getCutoverId(), actor);
+    }
 
-  @Override
-  public int getOrder() {
-    return HIGHEST_PRECEDENCE + 20;
-  }
+    @Override
+    public int getOrder() {
+        return HIGHEST_PRECEDENCE + 20;
+    }
 }

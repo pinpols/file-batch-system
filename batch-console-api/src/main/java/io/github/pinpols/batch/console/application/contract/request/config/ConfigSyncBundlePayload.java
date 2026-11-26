@@ -17,21 +17,21 @@ import lombok.Data;
 @Data
 public class ConfigSyncBundlePayload {
 
-  private List<@NotNull @Valid JobDefinitionSpec> jobDefinitions;
+    private List<@NotNull @Valid JobDefinitionSpec> jobDefinitions;
 
-  private List<@NotNull @Valid WorkflowDefinitionSpec> workflowDefinitions;
+    private List<@NotNull @Valid WorkflowDefinitionSpec> workflowDefinitions;
 
-  private List<@NotNull @Valid FileChannelSpec> fileChannels;
+    private List<@NotNull @Valid FileChannelSpec> fileChannels;
 
-  private List<@NotNull @Valid FileTemplateSpec> fileTemplates;
+    private List<@NotNull @Valid FileTemplateSpec> fileTemplates;
 
-  private List<@NotNull @Valid ResourceQueueSpec> resourceQueues;
+    private List<@NotNull @Valid ResourceQueueSpec> resourceQueues;
 
-  private List<@NotNull @Valid BatchWindowSpec> batchWindows;
+    private List<@NotNull @Valid BatchWindowSpec> batchWindows;
 
-  private List<@NotNull @Valid BusinessCalendarSpec> businessCalendars;
+    private List<@NotNull @Valid BusinessCalendarSpec> businessCalendars;
 
-  private List<@NotNull @Valid TenantQuotaPolicySpec> quotaPolicies;
+    private List<@NotNull @Valid TenantQuotaPolicySpec> quotaPolicies;
 
-  private List<@NotNull @Valid AlertRoutingSpec> alertRoutings;
+    private List<@NotNull @Valid AlertRoutingSpec> alertRoutings;
 }

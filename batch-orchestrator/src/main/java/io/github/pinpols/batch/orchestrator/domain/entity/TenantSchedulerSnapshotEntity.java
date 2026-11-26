@@ -6,18 +6,18 @@ import lombok.Builder;
 
 @Builder
 public record TenantSchedulerSnapshotEntity(
-    Long id,
-    String tenantId,
-    Instant snapshotAt,
-    String fairShareGroup,
-    String policyCode,
-    Integer activeJobs,
-    Integer activePartitions,
-    Integer maxJobsBase,
-    Integer burstLimit,
-    Integer effectiveJobCap,
-    Integer groupActiveJobs,
-    Integer groupMaxJobs,
-    String quotaResetPolicy,
-    Integer onlineWorkers,
-    JsonbString detailJson) {}
+        Long id,
+        String tenantId,
+        Instant snapshotAt,
+        String fairShareGroup,
+        String policyCode,
+        Integer activeJobs,
+        Integer activePartitions,
+        Integer maxJobsBase,
+        Integer burstLimit,
+        Integer effectiveJobCap,
+        Integer groupActiveJobs,
+        Integer groupMaxJobs,
+        String quotaResetPolicy,
+        Integer onlineWorkers,
+        JsonbString detailJson) {}

@@ -12,20 +12,19 @@ import org.springframework.web.context.annotation.RequestScope;
 @RequiredArgsConstructor
 public class ConsoleRequestMetadataResolver {
 
-  private final HttpServletRequest request;
+    private final HttpServletRequest request;
 
-  public ConsoleRequestMetadata current() {
-    Object metadata = request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
-    if (metadata instanceof ConsoleRequestMetadata consoleRequestMetadata) {
-      return consoleRequestMetadata;
+    public ConsoleRequestMetadata current() {
+        Object metadata = request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
+        if (metadata instanceof ConsoleRequestMetadata consoleRequestMetadata) {
+            return consoleRequestMetadata;
+        }
+        String clientIp = request.getRemoteAddr();
+        return ConsoleRequestMetadata.withClientIpOnly(clientIp);
     }
-    String clientIp = request.getRemoteAddr();
-    return ConsoleRequestMetadata.withClientIpOnly(clientIp);
-  }
 
-  public ResponseMeta responseMeta() {
-    ConsoleRequestMetadata metadata = current();
-    return new ResponseMeta(
-        metadata.requestId(), metadata.traceId(), BatchDateTimeSupport.utcNow());
-  }
+    public ResponseMeta responseMeta() {
+        ConsoleRequestMetadata metadata = current();
+        return new ResponseMeta(metadata.requestId(), metadata.traceId(), BatchDateTimeSupport.utcNow());
+    }
 }

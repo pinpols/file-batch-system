@@ -18,66 +18,67 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("业务库运行账号必须受 RLS 约束")
 class BusinessDataSourceRoleCheckIntegrationTest {
 
-  private static PostgreSQLContainer postgres;
-  private static HikariDataSource adminDataSource;
-  private static HikariDataSource writerDataSource;
+    private static PostgreSQLContainer postgres;
+    private static HikariDataSource adminDataSource;
+    private static HikariDataSource writerDataSource;
 
-  @BeforeAll
-  static void startPostgres() {
-    final String createRoleSql = """
+    @BeforeAll
+    static void startPostgres() {
+        final String createRoleSql = """
         CREATE ROLE role_guard_writer LOGIN PASSWORD 'role_guard_password' NOSUPERUSER NOBYPASSRLS\
         """;
 
-    postgres = TestPostgresContainers.business();
-    postgres.start();
-    adminDataSource = dataSource(postgres.getUsername(), postgres.getPassword());
-    JdbcTemplate jdbc = new JdbcTemplate(adminDataSource);
-    jdbc.execute(createRoleSql);
-    writerDataSource = dataSource("role_guard_writer", "role_guard_password");
-  }
-
-  @AfterAll
-  static void stopPostgres() {
-    if (writerDataSource != null) {
-      writerDataSource.close();
+        postgres = TestPostgresContainers.business();
+        postgres.start();
+        adminDataSource = dataSource(postgres.getUsername(), postgres.getPassword());
+        JdbcTemplate jdbc = new JdbcTemplate(adminDataSource);
+        jdbc.execute(createRoleSql);
+        writerDataSource = dataSource("role_guard_writer", "role_guard_password");
     }
-    if (adminDataSource != null) {
-      adminDataSource.close();
+
+    @AfterAll
+    static void stopPostgres() {
+        if (writerDataSource != null) {
+            writerDataSource.close();
+        }
+        if (adminDataSource != null) {
+            adminDataSource.close();
+        }
+        if (postgres != null) {
+            postgres.stop();
+        }
     }
-    if (postgres != null) {
-      postgres.stop();
+
+    @Test
+    @DisplayName("SUPERUSER/BYPASSRLS 账号使健康检查 DOWN 且阻止启动")
+    void shouldFailHealthAndStartup_whenRoleUnsafe() {
+        assertThat(new BusinessDataSourceRoleHealthIndicator(adminDataSource)
+                        .health()
+                        .getStatus())
+                .isEqualTo(Status.DOWN);
+        BusinessDataSourceRoleStartupCheck startupCheck = new BusinessDataSourceRoleStartupCheck(adminDataSource);
+        assertThatThrownBy(startupCheck::checkOnStartup)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bypasses PostgreSQL RLS");
     }
-  }
 
-  @Test
-  @DisplayName("SUPERUSER/BYPASSRLS 账号使健康检查 DOWN 且阻止启动")
-  void shouldFailHealthAndStartup_whenRoleUnsafe() {
-    assertThat(
-            new BusinessDataSourceRoleHealthIndicator(adminDataSource).health().getStatus())
-        .isEqualTo(Status.DOWN);
-    BusinessDataSourceRoleStartupCheck startupCheck =
-        new BusinessDataSourceRoleStartupCheck(adminDataSource);
-    assertThatThrownBy(startupCheck::checkOnStartup)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypasses PostgreSQL RLS");
-  }
+    @Test
+    @DisplayName("NOSUPERUSER/NOBYPASSRLS writer 账号通过健康检查与启动守门")
+    void shouldPassHealthAndStartup_whenWriterRoleConstrained() {
+        assertThat(new BusinessDataSourceRoleHealthIndicator(writerDataSource)
+                        .health()
+                        .getStatus())
+                .isEqualTo(Status.UP);
+        assertThatCode(() -> new BusinessDataSourceRoleStartupCheck(writerDataSource).checkOnStartup())
+                .doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("NOSUPERUSER/NOBYPASSRLS writer 账号通过健康检查与启动守门")
-  void shouldPassHealthAndStartup_whenWriterRoleConstrained() {
-    assertThat(
-            new BusinessDataSourceRoleHealthIndicator(writerDataSource).health().getStatus())
-        .isEqualTo(Status.UP);
-    assertThatCode(() -> new BusinessDataSourceRoleStartupCheck(writerDataSource).checkOnStartup())
-        .doesNotThrowAnyException();
-  }
-
-  private static HikariDataSource dataSource(String username, String password) {
-    HikariConfig config = new HikariConfig();
-    config.setJdbcUrl(postgres.getJdbcUrl());
-    config.setUsername(username);
-    config.setPassword(password);
-    config.setMaximumPoolSize(2);
-    return new HikariDataSource(config);
-  }
+    private static HikariDataSource dataSource(String username, String password) {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(postgres.getJdbcUrl());
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setMaximumPoolSize(2);
+        return new HikariDataSource(config);
+    }
 }

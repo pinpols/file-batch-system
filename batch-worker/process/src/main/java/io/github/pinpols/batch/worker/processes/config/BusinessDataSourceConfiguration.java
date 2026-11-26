@@ -30,116 +30,99 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
  * 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。
  */
 @Configuration(value = "processWorkerBusinessDataSourceConfiguration", proxyBeanMethods = false)
-@EnableConfigurationProperties({
-  BusinessDataSourceProperties.class,
-  BusinessRoutingProperties.class,
-  RlsProperties.class
+@EnableConfigurationProperties({BusinessDataSourceProperties.class, BusinessRoutingProperties.class, RlsProperties.class
 })
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "processBusinessHikariConfig")
-  @ConfigurationProperties("batch.datasource.business.hikari")
-  public HikariConfig processBusinessHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "processBusinessHikariConfig")
+    @ConfigurationProperties("batch.datasource.business.hikari")
+    public HikariConfig processBusinessHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "processBusinessDataSource", destroyMethod = "close")
-  public DataSource processBusinessDataSource(
-      BusinessDataSourceProperties properties,
-      BusinessRoutingProperties routingProperties,
-      BusinessTenantPlacementMapper placementMapper,
-      @Qualifier("processBusinessHikariConfig") HikariConfig hikariConfig) {
-    String appName = ApplicationNameProvider.resolve(environment, "batch-worker-process");
-    return WorkerDataSourceSupport.buildBusinessDataSource(
-        hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
-  }
+    @Bean(name = "processBusinessDataSource", destroyMethod = "close")
+    public DataSource processBusinessDataSource(
+            BusinessDataSourceProperties properties,
+            BusinessRoutingProperties routingProperties,
+            BusinessTenantPlacementMapper placementMapper,
+            @Qualifier("processBusinessHikariConfig") HikariConfig hikariConfig) {
+        String appName = ApplicationNameProvider.resolve(environment, "batch-worker-process");
+        return WorkerDataSourceSupport.buildBusinessDataSource(
+                hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
+    }
 
-  @Bean(name = "processBusinessSqlSessionFactory")
-  public SqlSessionFactory processBusinessSqlSessionFactory(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource)
-      throws Exception {
-    return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(processBusinessDataSource);
-  }
+    @Bean(name = "processBusinessSqlSessionFactory")
+    public SqlSessionFactory processBusinessSqlSessionFactory(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) throws Exception {
+        return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(processBusinessDataSource);
+    }
 
-  @Bean(name = "processBusinessSqlSessionTemplate")
-  public SqlSessionTemplate processBusinessSqlSessionTemplate(
-      @Qualifier("processBusinessSqlSessionFactory")
-          SqlSessionFactory processBusinessSqlSessionFactory) {
-    return new SqlSessionTemplate(processBusinessSqlSessionFactory);
-  }
+    @Bean(name = "processBusinessSqlSessionTemplate")
+    public SqlSessionTemplate processBusinessSqlSessionTemplate(
+            @Qualifier("processBusinessSqlSessionFactory") SqlSessionFactory processBusinessSqlSessionFactory) {
+        return new SqlSessionTemplate(processBusinessSqlSessionFactory);
+    }
 
-  /**
-   * 业务库 TransactionManager —— 被 {@code SqlTransformComputePlugin} 通过
-   * {@code @Transactional(transactionManager = "processBusinessTransactionManager")} 显式引用，process
-   * 特有，import/export 无对应调用点，保留为模块差异（详见任务报告）。
-   */
-  @Bean(name = "processBusinessTransactionManager")
-  public DataSourceTransactionManager processBusinessTransactionManager(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
-    return WorkerDataSourceSupport.buildTransactionManager(processBusinessDataSource);
-  }
+    /**
+     * 业务库 TransactionManager —— 被 {@code SqlTransformComputePlugin} 通过
+     * {@code @Transactional(transactionManager = "processBusinessTransactionManager")} 显式引用，process
+     * 特有，import/export 无对应调用点，保留为模块差异（详见任务报告）。
+     */
+    @Bean(name = "processBusinessTransactionManager")
+    public DataSourceTransactionManager processBusinessTransactionManager(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
+        return WorkerDataSourceSupport.buildTransactionManager(processBusinessDataSource);
+    }
 
-  /**
-   * 注册 RLS 健康探针到 actuator/health。worker-process 是持有 business 数据源的运行时,缺 ENABLE/FORCE/policy 即报 DOWN,
-   * 让平台运维加新 biz 表时漏配 RLS 立刻可见。默认开启;e2e/单库测试经 {@code batch.business.rls.health-check.enabled=false}
-   * 关闭(测试库未跑 rls-phase-a 脚本)。
-   */
-  @Bean(name = "rlsPolicyHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public RlsPolicyHealthIndicator rlsPolicyHealthIndicator(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(
-        processBusinessDataSource, rlsProperties);
-  }
+    /**
+     * 注册 RLS 健康探针到 actuator/health。worker-process 是持有 business 数据源的运行时,缺 ENABLE/FORCE/policy 即报 DOWN,
+     * 让平台运维加新 biz 表时漏配 RLS 立刻可见。默认开启;e2e/单库测试经 {@code batch.business.rls.health-check.enabled=false}
+     * 关闭(测试库未跑 rls-phase-a 脚本)。
+     */
+    @Bean(name = "rlsPolicyHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public RlsPolicyHealthIndicator rlsPolicyHealthIndicator(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(processBusinessDataSource, rlsProperties);
+    }
 
-  /**
-   * 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启。测试库必须显式设置 {@code batch.rls.startup-fail-fast=false}；上下文里有
-   * business datasource 时才装配，复用 health indicator 同一套闭世界检查逻辑。
-   *
-   * <p>{@code @ConditionalOnBean(processBusinessDataSource)} 守门:无 biz datasource 的上下文不装配本副作用
-   * bean,避免牵连其他 worker 启动失败。
-   */
-  @Bean(name = "rlsStartupFailFastCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "processBusinessDataSource")
-  public RlsStartupFailFastCheck rlsStartupFailFastCheck(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(
-        processBusinessDataSource, rlsProperties);
-  }
+    /**
+     * 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启。测试库必须显式设置 {@code batch.rls.startup-fail-fast=false}；上下文里有
+     * business datasource 时才装配，复用 health indicator 同一套闭世界检查逻辑。
+     *
+     * <p>{@code @ConditionalOnBean(processBusinessDataSource)} 守门:无 biz datasource 的上下文不装配本副作用
+     * bean,避免牵连其他 worker 启动失败。
+     */
+    @Bean(name = "rlsStartupFailFastCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "processBusinessDataSource")
+    public RlsStartupFailFastCheck rlsStartupFailFastCheck(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(processBusinessDataSource, rlsProperties);
+    }
 
-  @Bean(name = "businessDataSourceRoleHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public BusinessDataSourceRoleHealthIndicator businessDataSourceRoleHealthIndicator(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(
-        processBusinessDataSource);
-  }
+    @Bean(name = "businessDataSourceRoleHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public BusinessDataSourceRoleHealthIndicator businessDataSourceRoleHealthIndicator(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(processBusinessDataSource);
+    }
 
-  @Bean(name = "businessDataSourceRoleStartupCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "processBusinessDataSource")
-  public BusinessDataSourceRoleStartupCheck businessDataSourceRoleStartupCheck(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(
-        processBusinessDataSource);
-  }
+    @Bean(name = "businessDataSourceRoleStartupCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "processBusinessDataSource")
+    public BusinessDataSourceRoleStartupCheck businessDataSourceRoleStartupCheck(
+            @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(processBusinessDataSource);
+    }
 }

@@ -22,36 +22,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class BatchDayCatchupPreviewController {
 
-  private final BatchDayCatchupPreviewService previewService;
-  private final BatchDayCatchupControlService controlService;
+    private final BatchDayCatchupPreviewService previewService;
+    private final BatchDayCatchupControlService controlService;
 
-  @GetMapping
-  public BatchDayCatchupPreview preview(
-      @RequestParam String tenantId, @RequestParam String calendarCode) {
-    return previewService.preview(tenantId, calendarCode);
-  }
+    @GetMapping
+    public BatchDayCatchupPreview preview(@RequestParam String tenantId, @RequestParam String calendarCode) {
+        return previewService.preview(tenantId, calendarCode);
+    }
 
-  @GetMapping("/historical-gaps")
-  public BatchDayHistoricalGapInventory inventoryHistoricalGaps(
-      @RequestParam String tenantId,
-      @RequestParam String calendarCode,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate throughDate) {
-    return previewService.inventoryHistoricalGaps(tenantId, calendarCode, fromDate, throughDate);
-  }
+    @GetMapping("/historical-gaps")
+    public BatchDayHistoricalGapInventory inventoryHistoricalGaps(
+            @RequestParam String tenantId,
+            @RequestParam String calendarCode,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate throughDate) {
+        return previewService.inventoryHistoricalGaps(tenantId, calendarCode, fromDate, throughDate);
+    }
 
-  @PostMapping("/control")
-  public BatchDayCatchupControlResponse changeControl(@RequestBody CatchupControlRequest request) {
-    BatchDayCatchupControlEntity control =
-        controlService.change(new BatchDayCatchupControlService.PauseCommand(
-            request.tenantId(),
-            request.calendarCode(),
-            request.action(),
-            request.operatorId(),
-            request.reason()));
-    return BatchDayCatchupControlResponse.from(control);
-  }
+    @PostMapping("/control")
+    public BatchDayCatchupControlResponse changeControl(@RequestBody CatchupControlRequest request) {
+        BatchDayCatchupControlEntity control = controlService.change(new BatchDayCatchupControlService.PauseCommand(
+                request.tenantId(), request.calendarCode(), request.action(), request.operatorId(), request.reason()));
+        return BatchDayCatchupControlResponse.from(control);
+    }
 
-  public record CatchupControlRequest(
-      String tenantId, String calendarCode, String action, String operatorId, String reason) {}
+    public record CatchupControlRequest(
+            String tenantId, String calendarCode, String action, String operatorId, String reason) {}
 }

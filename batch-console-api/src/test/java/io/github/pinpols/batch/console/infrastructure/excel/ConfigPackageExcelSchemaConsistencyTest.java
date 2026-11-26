@@ -14,72 +14,72 @@ import org.junit.jupiter.api.Test;
 @DisplayName("配置包 Excel 列定义:各 sheet 与共享 schema 的一致性")
 class ConfigPackageExcelSchemaConsistencyTest {
 
-  @Test
-  @DisplayName("日历导出按既有列名保留字段、节假日及空值")
-  void shouldExportCalendarFieldsAndNulls() {
-    CalendarQueryRow row = new CalendarQueryRow(
-        11L, "tenant-a", "CAL", "name", "Asia/Shanghai", "NEXT", "NONE", 5, true, null, null, null);
-    assertThat(ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, "2026-01-01"))
-        .containsEntry("tenant_id", "tenant-a")
-        .containsEntry("calendar_code", "CAL")
-        .containsEntry("calendar_name", "name")
-        .containsEntry("timezone", "Asia/Shanghai")
-        .containsEntry("holiday_roll_rule", "NEXT")
-        .containsEntry("catch_up_policy", "NONE")
-        .containsEntry("catch_up_max_days", 5)
-        .containsEntry("holidays", "2026-01-01")
-        .containsEntry("enabled", true)
-        .containsEntry("description", null)
-        .hasSize(10);
-  }
+    @Test
+    @DisplayName("日历导出按既有列名保留字段、节假日及空值")
+    void shouldExportCalendarFieldsAndNulls() {
+        CalendarQueryRow row = new CalendarQueryRow(
+                11L, "tenant-a", "CAL", "name", "Asia/Shanghai", "NEXT", "NONE", 5, true, null, null, null);
+        assertThat(ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, "2026-01-01"))
+                .containsEntry("tenant_id", "tenant-a")
+                .containsEntry("calendar_code", "CAL")
+                .containsEntry("calendar_name", "name")
+                .containsEntry("timezone", "Asia/Shanghai")
+                .containsEntry("holiday_roll_rule", "NEXT")
+                .containsEntry("catch_up_policy", "NONE")
+                .containsEntry("catch_up_max_days", 5)
+                .containsEntry("holidays", "2026-01-01")
+                .containsEntry("enabled", true)
+                .containsEntry("description", null)
+                .hasSize(10);
+    }
 
-  @Test
-  @DisplayName("配置包写出列:所有 sheet 全部取自共享 schema 定义")
-  void shouldUseSharedSchemaColumns_whenWritingWorkbook() {
-    assertThat(ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.ResourceQueue.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.BusinessCalendar.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.BATCH_WINDOW_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.BatchWindow.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.JOB_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.JobDefinition.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.FileChannel.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.FileTemplate.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.WF_DEF_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.WF_NODE_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.WorkflowNode.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.WF_EDGE_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.WorkflowEdge.COLUMNS);
-  }
+    @Test
+    @DisplayName("配置包写出列:所有 sheet 全部取自共享 schema 定义")
+    void shouldUseSharedSchemaColumns_whenWritingWorkbook() {
+        assertThat(ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.ResourceQueue.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.BusinessCalendar.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.BATCH_WINDOW_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.BatchWindow.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.JOB_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.JobDefinition.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.FileChannel.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.FileTemplate.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.WF_DEF_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.WF_NODE_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.WorkflowNode.COLUMNS);
+        assertThat(ConfigPackageExcelWorkbookWriter.WF_EDGE_COLUMNS)
+                .isEqualTo(ConfigPackageExcelSchema.WorkflowEdge.COLUMNS);
+    }
 
-  @Test
-  @DisplayName("作业定义列顺序:依赖作业编码列位于调度表达式与日历编码之间")
-  void shouldKeepDependsOnColumnNearSchedule_whenSchemaChanges() {
-    assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
-        .containsSubsequence("schedule_expr", "depends_on_job_code", "calendar_code");
-  }
+    @Test
+    @DisplayName("作业定义列顺序:依赖作业编码列位于调度表达式与日历编码之间")
+    void shouldKeepDependsOnColumnNearSchedule_whenSchemaChanges() {
+        assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
+                .containsSubsequence("schedule_expr", "depends_on_job_code", "calendar_code");
+    }
 
-  @Test
-  @DisplayName("作业监控策略列独立于作业定义 sheet")
-  void shouldKeepMonitoringPolicyInDedicatedSheet() {
-    assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
-        .doesNotContain(
-            ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
-            ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
-            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME);
-    assertThat(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS)
-        .contains(
-            ConfigPackageExcelSchema.COL_JOB_CODE,
-            ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
-            ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
-            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME,
-            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET,
-            ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS);
-  }
+    @Test
+    @DisplayName("作业监控策略列独立于作业定义 sheet")
+    void shouldKeepMonitoringPolicyInDedicatedSheet() {
+        assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
+                .doesNotContain(
+                        ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
+                        ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
+                        ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME);
+        assertThat(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS)
+                .contains(
+                        ConfigPackageExcelSchema.COL_JOB_CODE,
+                        ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
+                        ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
+                        ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                        ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                        ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS);
+    }
 }

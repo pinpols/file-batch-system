@@ -14,34 +14,29 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerRequestPolicy {
 
-  private final TriggerApiKeyVerifier apiKeyVerifier;
+    private final TriggerApiKeyVerifier apiKeyVerifier;
 
-  public void authorizeLaunch(
-      TriggerApiKeyPrincipal principal,
-      TriggerType triggerType,
-      String tenantId,
-      String externalEventSource) {
-    if (EmptyChecks.isNotNull(principal)
-        && (triggerType != TriggerType.EVENT
-            || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, externalEventSource))) {
-      throw forbidden();
+    public void authorizeLaunch(
+            TriggerApiKeyPrincipal principal, TriggerType triggerType, String tenantId, String externalEventSource) {
+        if (EmptyChecks.isNotNull(principal)
+                && (triggerType != TriggerType.EVENT
+                        || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, externalEventSource))) {
+            throw forbidden();
+        }
     }
-  }
 
-  public void authorizeExternalEvent(
-      TriggerApiKeyPrincipal principal, String tenantId, String eventSource) {
-    if (EmptyChecks.isNull(principal)
-        || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, eventSource)) {
-      throw forbidden();
+    public void authorizeExternalEvent(TriggerApiKeyPrincipal principal, String tenantId, String eventSource) {
+        if (EmptyChecks.isNull(principal)
+                || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, eventSource)) {
+            throw forbidden();
+        }
     }
-  }
 
-  public void authorizeExternalEvent(TriggerApiKeyPrincipal principal, String tenantId) {
-    authorizeExternalEvent(
-        principal, tenantId, EmptyChecks.isNull(principal) ? null : principal.keyName());
-  }
+    public void authorizeExternalEvent(TriggerApiKeyPrincipal principal, String tenantId) {
+        authorizeExternalEvent(principal, tenantId, EmptyChecks.isNull(principal) ? null : principal.keyName());
+    }
 
-  private static BizException forbidden() {
-    return BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
-  }
+    private static BizException forbidden() {
+        return BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
+    }
 }

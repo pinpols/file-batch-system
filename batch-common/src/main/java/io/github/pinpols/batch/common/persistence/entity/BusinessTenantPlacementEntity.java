@@ -11,8 +11,8 @@ import lombok.Data;
 @Data
 public class BusinessTenantPlacementEntity {
 
-  private String tenantId;
-  private String placementKey;
-  private Instant updatedAt;
-  private String updatedBy;
+    private String tenantId;
+    private String placementKey;
+    private Instant updatedAt;
+    private String updatedBy;
 }

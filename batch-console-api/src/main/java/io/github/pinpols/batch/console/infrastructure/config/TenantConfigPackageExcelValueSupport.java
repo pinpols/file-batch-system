@@ -10,54 +10,53 @@ import java.util.Set;
 @SuppressWarnings("java:S2583")
 final class TenantConfigPackageExcelValueSupport {
 
-  /**
-   * 配置包导入写入的 created_by / updated_by，各配置表该列为 VARCHAR(64)（如 file_template_config，
-   * V6__create_file_tables.sql）。
-   */
-  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+    /**
+     * 配置包导入写入的 created_by / updated_by，各配置表该列为 VARCHAR(64)（如 file_template_config，
+     * V6__create_file_tables.sql）。
+     */
+    private static final int OPERATOR_ID_MAX_LENGTH = 64;
 
-  private TenantConfigPackageExcelValueSupport() {}
+    private TenantConfigPackageExcelValueSupport() {}
 
-  static String normalize(String value) {
-    return ConsoleTextSanitizer.normalize(value);
-  }
-
-  static String normalizeEnum(String value) {
-    String n = normalize(value);
-    return n == null ? null : n.toUpperCase(Locale.ROOT);
-  }
-
-  static Integer parseInteger(String value) {
-    String n = normalize(value);
-    if (!Texts.hasText(n)) {
-      return null;
+    static String normalize(String value) {
+        return ConsoleTextSanitizer.normalize(value);
     }
-    try {
-      return Integer.parseInt(n);
-    } catch (NumberFormatException e) {
-      SwallowedExceptionLogger.info(
-          TenantConfigPackageExcelValueSupport.class, "catch:NumberFormatException", e);
 
-      return null;
+    static String normalizeEnum(String value) {
+        String n = normalize(value);
+        return n == null ? null : n.toUpperCase(Locale.ROOT);
     }
-  }
 
-  static Boolean parseBoolean(String value, Boolean defaultValue) {
-    String n = normalize(value);
-    if (!Texts.hasText(n)) {
-      return defaultValue;
-    }
-    String upper = n.toUpperCase(Locale.ROOT);
-    if (Set.of("TRUE", "Y", "1", "YES").contains(upper)) {
-      return true;
-    }
-    if (Set.of("FALSE", "N", "0", "NO").contains(upper)) {
-      return false;
-    }
-    return defaultValue;
-  }
+    static Integer parseInteger(String value) {
+        String n = normalize(value);
+        if (!Texts.hasText(n)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(n);
+        } catch (NumberFormatException e) {
+            SwallowedExceptionLogger.info(TenantConfigPackageExcelValueSupport.class, "catch:NumberFormatException", e);
 
-  static String safeOp(String operatorId) {
-    return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
-  }
+            return null;
+        }
+    }
+
+    static Boolean parseBoolean(String value, Boolean defaultValue) {
+        String n = normalize(value);
+        if (!Texts.hasText(n)) {
+            return defaultValue;
+        }
+        String upper = n.toUpperCase(Locale.ROOT);
+        if (Set.of("TRUE", "Y", "1", "YES").contains(upper)) {
+            return true;
+        }
+        if (Set.of("FALSE", "N", "0", "NO").contains(upper)) {
+            return false;
+        }
+        return defaultValue;
+    }
+
+    static String safeOp(String operatorId) {
+        return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
+    }
 }

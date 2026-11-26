@@ -38,53 +38,53 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleConfigSyncController {
 
-  private final ConsoleConfigSyncApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleConfigSyncApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/export")
-  public CommonResponse<ConfigSyncExportResponse> export(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ConfigSyncExportRequest request) {
-    return responseFactory.success(applicationService.export(request));
-  }
+    @PostMapping("/export")
+    public CommonResponse<ConfigSyncExportResponse> export(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody ConfigSyncExportRequest request) {
+        return responseFactory.success(applicationService.export(request));
+    }
 
-  @PostMapping("/preview")
-  public CommonResponse<ConfigSyncPreviewResponse> preview(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ConfigSyncPreviewRequest request) {
-    return responseFactory.success(applicationService.preview(request));
-  }
+    @PostMapping("/preview")
+    public CommonResponse<ConfigSyncPreviewResponse> preview(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody ConfigSyncPreviewRequest request) {
+        return responseFactory.success(applicationService.preview(request));
+    }
 
-  @PostMapping("/import")
-  public CommonResponse<ConfigSyncImportResponse> importBundle(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ConfigSyncImportRequest request) {
-    return responseFactory.success(applicationService.importBundle(request));
-  }
+    @PostMapping("/import")
+    public CommonResponse<ConfigSyncImportResponse> importBundle(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody ConfigSyncImportRequest request) {
+        return responseFactory.success(applicationService.importBundle(request));
+    }
 
-  /** 按原幂等键读取同步审计，不重新执行导入。 */
-  @GetMapping("/requests/status")
-  public CommonResponse<ConfigSyncRequestStatusResponse> requestStatus(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) @NotBlank String requestKey,
-      @RequestParam("tenantId") @NotBlank String tenantId) {
-    ConfigSyncRequestStatusResponse result = applicationService.requestStatus(tenantId, requestKey);
-    return responseFactory.success(result);
-  }
+    /** 按原幂等键读取同步审计，不重新执行导入。 */
+    @GetMapping("/requests/status")
+    public CommonResponse<ConfigSyncRequestStatusResponse> requestStatus(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) @NotBlank String requestKey,
+            @RequestParam("tenantId") @NotBlank String tenantId) {
+        ConfigSyncRequestStatusResponse result = applicationService.requestStatus(tenantId, requestKey);
+        return responseFactory.success(result);
+    }
 
-  @PostMapping("/logs/{logId}/reconcile")
-  public CommonResponse<ConfigSyncLogResponse> reconcile(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestParam("tenantId") @NotBlank String tenantId,
-      @PathVariable("logId") @Positive Long logId) {
-    ConfigSyncLogResponse result = applicationService.reconcile(tenantId, logId);
-    return responseFactory.success(result);
-  }
+    @PostMapping("/logs/{logId}/reconcile")
+    public CommonResponse<ConfigSyncLogResponse> reconcile(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestParam("tenantId") @NotBlank String tenantId,
+            @PathVariable("logId") @Positive Long logId) {
+        ConfigSyncLogResponse result = applicationService.reconcile(tenantId, logId);
+        return responseFactory.success(result);
+    }
 
-  @GetMapping("/logs")
-  public CommonResponse<PageResponse<ConfigSyncLogResponse>> logs(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-      @RequestParam(value = "pageSize", defaultValue = "15") int pageSize) {
-    return responseFactory.success(applicationService.logs(tenantId, pageNo, pageSize));
-  }
+    @GetMapping("/logs")
+    public CommonResponse<PageResponse<ConfigSyncLogResponse>> logs(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "15") int pageSize) {
+        return responseFactory.success(applicationService.logs(tenantId, pageNo, pageSize));
+    }
 }

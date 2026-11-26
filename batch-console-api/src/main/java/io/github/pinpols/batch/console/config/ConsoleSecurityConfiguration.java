@@ -52,265 +52,253 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /** Console Web 安全链、认证和授权规则。 */
 public class ConsoleSecurityConfiguration {
 
-  private final ConsoleSecurityProperties properties;
-  private final BatchSecurityProperties batchSecurityProperties;
-  private static final String[] CSRF_IGNORED_MATCHERS = {
-    "/actuator/**",
-    // Alertmanager 出口:AM 独立进程无 XSRF cookie,走 bearer token 自校验(见 AlertmanagerNotifyController)。
-    "/internal/am-notify/**",
-    "/api/console/auth/login",
-    "/api/console/auth/logout",
-    "/api/console/auth/public-key",
-    "/api/console/auth/token",
-    "/api/console/push/vapid-public-key",
-    "/api/console/files/fs-download",
-    "/console-login.html",
-    "/favicon.ico"
-  };
-  private static final String[] BYPASS_MODE_CSRF_IGNORED_MATCHERS = {"/**"};
+    private final ConsoleSecurityProperties properties;
+    private final BatchSecurityProperties batchSecurityProperties;
+    private static final String[] CSRF_IGNORED_MATCHERS = {
+        "/actuator/**",
+        // Alertmanager 出口:AM 独立进程无 XSRF cookie,走 bearer token 自校验(见 AlertmanagerNotifyController)。
+        "/internal/am-notify/**",
+        "/api/console/auth/login",
+        "/api/console/auth/logout",
+        "/api/console/auth/public-key",
+        "/api/console/auth/token",
+        "/api/console/push/vapid-public-key",
+        "/api/console/files/fs-download",
+        "/console-login.html",
+        "/favicon.ico"
+    };
+    private static final String[] BYPASS_MODE_CSRF_IGNORED_MATCHERS = {"/**"};
 
-  @Bean
-  public ConsoleLoginIpRateLimiter consoleLoginIpRateLimiter(
-      SlidingWindowRateLimiter rateLimiter,
-      ConsoleRateLimitProperties rateLimitProperties,
-      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker) {
-    return new ConsoleLoginIpRateLimiter(
-        rateLimiter, rateLimitProperties, properties, redisRateLimitCircuitBreaker);
-  }
-
-  @Bean
-  public ConsoleOidcAuthorizationRateLimitFilter consoleOidcAuthorizationRateLimitFilter(
-      ConsoleRateLimitProperties rateLimitProperties,
-      ConsoleLoginIpRateLimiter loginIpRateLimiter,
-      ConsoleSecurityResponseWriter responseWriter) {
-    return new ConsoleOidcAuthorizationRateLimitFilter(
-        rateLimitProperties, loginIpRateLimiter, responseWriter);
-  }
-
-  @Bean
-  public FilterRegistrationBean<ConsoleOidcAuthorizationRateLimitFilter>
-      consoleOidcAuthorizationRateLimitFilterRegistration(
-          ConsoleOidcAuthorizationRateLimitFilter filter) {
-    return securityChainOnly(filter);
-  }
-
-  @Bean
-  public ConsoleRateLimitFilter consoleRateLimitFilter(
-      SlidingWindowRateLimiter rateLimiter,
-      ConsoleRateLimitProperties rateLimitProperties,
-      ConsoleSecurityResponseWriter responseWriter,
-      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker,
-      ConsoleLoginIpRateLimiter loginIpRateLimiter) {
-    return new ConsoleRateLimitFilter(
-        rateLimiter,
-        rateLimitProperties,
-        responseWriter,
-        redisRateLimitCircuitBreaker,
-        loginIpRateLimiter);
-  }
-
-  @Bean
-  public FilterRegistrationBean<ConsoleRateLimitFilter> consoleRateLimitFilterRegistration(
-      ConsoleRateLimitFilter filter) {
-    return securityChainOnly(filter);
-  }
-
-  @Bean
-  public FilterRegistrationBean<ConsoleAuthenticationFilter>
-      consoleAuthenticationFilterRegistration(ConsoleAuthenticationFilter filter) {
-    return securityChainOnly(filter);
-  }
-
-  @Bean
-  public FilterRegistrationBean<MaintenanceModeFilter> maintenanceModeFilterRegistration(
-      MaintenanceModeFilter filter) {
-    return securityChainOnly(filter);
-  }
-
-  private static <T extends Filter> FilterRegistrationBean<T> securityChainOnly(T filter) {
-    FilterRegistrationBean<T> registration = new FilterRegistrationBean<>(filter);
-    registration.setEnabled(false);
-    return registration;
-  }
-
-  /**
-   * 把过滤器链装配所需的协作 bean 聚合成单一持有类,避免 {@link #consoleSecurityFilterChain} 参数 ≥ 7 触发 PMD
-   * ExcessiveParameterList(docs/agent-baseline.md 红线 #2)。Spring 按类型逐个注入各成员,装配语义不变。
-   */
-  @Bean
-  public ConsoleSecurityFilterChainComponents consoleSecurityFilterChainComponents(
-      ConsoleAuthenticationFilter consoleAuthenticationFilter,
-      ConsoleRateLimitFilter consoleRateLimitFilter,
-      MaintenanceModeFilter maintenanceModeFilter,
-      ConsoleSecurityResponseWriter responseWriter,
-      ConsoleSecurityHeadersWriter securityHeadersWriter,
-      CorsConfigurationSource consoleCorsConfigurationSource) {
-    return new ConsoleSecurityFilterChainComponents(
-        consoleAuthenticationFilter,
-        consoleRateLimitFilter,
-        maintenanceModeFilter,
-        responseWriter,
-        securityHeadersWriter,
-        consoleCorsConfigurationSource);
-  }
-
-  @Bean
-  public ConsoleOidcSecurityComponents consoleOidcSecurityComponents(
-      RedisOidcAuthorizationRequestRepository repository,
-      ConsoleOidcAuthenticationSuccessHandler successHandler,
-      ConsoleOidcAuthenticationFailureHandler failureHandler,
-      DiscardingOidcAuthorizedClientRepository authorizedClientRepository,
-      ConsoleOidcAuthorizationRateLimitFilter oidcAuthorizationRateLimitFilter) {
-    return new ConsoleOidcSecurityComponents(
-        repository,
-        successHandler,
-        failureHandler,
-        authorizedClientRepository,
-        oidcAuthorizationRateLimitFilter);
-  }
-
-  @Bean
-  @SuppressWarnings({"java:S4502", "java:S3330"})
-  public SecurityFilterChain consoleSecurityFilterChain(
-      HttpSecurity http,
-      ConsoleSecurityFilterChainComponents components,
-      ConsoleOidcSecurityComponents oidcComponents) {
-    ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
-    ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
-    MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
-    ConsoleSecurityResponseWriter responseWriter = components.responseWriter();
-    ConsoleSecurityHeadersWriter securityHeadersWriter = components.securityHeadersWriter();
-    CorsConfigurationSource consoleCorsConfigurationSource = components.corsConfigurationSource();
-    http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource));
-    // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
-    // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
-    // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
-    // 例外 matcher 仅覆盖无 cookie 凭据的内部回调、登录前端点和本地 bypass-mode。
-    // XSRF-TOKEN 按设计允许浏览器 JavaScript 读取：axios 会将其复制到
-    // X-XSRF-TOKEN 请求头，供 Spring Security 执行双提交 CSRF 校验。
-    http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-        // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
-        // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。
-        .csrfTokenRequestHandler(csrfTokenRequestHandler())
-        // 无状态 JWT 每个请求都会重新认证；默认会话策略会在认证后的 GET 清除 XSRF-TOKEN，
-        // 导致后续写请求缺少 CSRF 请求头。
-        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
-        .ignoringRequestMatchers(csrfIgnoredMatchers()));
-    return http.sessionManagement(
-            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
-        // R6 P0-3：禁用 Spring Security HTTP Basic。
-        // console 走 ADR-030 §D7 HttpOnly cookie JWT 单一认证路径，HTTP Basic 会让 401 响应附带
-        // WWW-Authenticate: Basic realm=...，浏览器弹原生登录框 + 还允许 Authorization: Basic
-        // 直接绕过 cookie filter 链。生产环境不可暴露。
-        .httpBasic(AbstractHttpConfigurer::disable)
-        .exceptionHandling(exceptionHandling -> exceptionHandling
-            .authenticationEntryPoint(authenticationEntryPoint(responseWriter))
-            .accessDeniedHandler(accessDeniedHandler(responseWriter)))
-        .authorizeHttpRequests(authorize -> authorize
-            .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
-            .permitAll()
-            // Alertmanager 出口内网端点:AM 够不到 console cookie/JWT(ADR-030 §D7),
-            // 由 AlertmanagerNotifyController 用共享密钥 bearer token 自校验(fail-closed)。
-            .requestMatchers("/internal/am-notify/**")
-            .permitAll()
-            .requestMatchers(
-                "/oauth2/authorization/**",
-                "/login/oauth2/code/**",
-                "/api/console/auth/login",
-                "/api/console/auth/logout",
-                "/api/console/auth/public-key",
-                "/api/console/auth/oidc/provider",
-                // 验证码配置登录前即需访问(无认证态),仅下发公开 provider/siteKey。
-                "/api/console/captcha/config",
-                "/api/console/push/vapid-public-key",
-                "/api/console/system/maintenance",
-                // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
-                // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
-                // ConditionalOnProperty 不装
-                // controller，permitAll 仅是路径白名单不会引入新攻击面。
-                "/api/console/files/fs-download",
-                "/console-login.html",
-                "/favicon.ico")
-            .permitAll()
-            .requestMatchers("/actuator/loggers/**")
-            .hasAuthority(ConsoleRoles.ADMIN)
-            // P0-1 回退（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
-            // 避免新加 controller 漏加 @PreAuthorize 时被无角色账号访问。
-            // 高危端点已在 controller 上叠加更严格的 @PreAuthorize。
-            .requestMatchers("/api/console/**")
-            .hasAnyAuthority(
-                ConsoleRoles.ADMIN,
-                ConsoleRoles.TENANT_ADMIN,
-                ConsoleRoles.AUDITOR,
-                ConsoleRoles.TENANT_USER)
-            .anyRequest()
-            .authenticated())
-        .oauth2Login(oauth2 -> oauth2
-            .authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(
-                oidcComponents.authorizationRequestRepository()))
-            .successHandler(oidcComponents.successHandler())
-            .failureHandler(oidcComponents.failureHandler())
-            .authorizedClientRepository(oidcComponents.authorizedClientRepository()))
-        // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
-        // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
-        .addFilterAfter(new CsrfCookieMaterializeFilter(), CsrfFilter.class)
-        .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-        .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
-        .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
-        .addFilterBefore(
-            oidcComponents.authorizationRateLimitFilter(),
-            OAuth2AuthorizationRequestRedirectFilter.class)
-        .build();
-  }
-
-  private String[] csrfIgnoredMatchers() {
-    return batchSecurityProperties.isBypassMode()
-        ? BYPASS_MODE_CSRF_IGNORED_MATCHERS
-        : CSRF_IGNORED_MATCHERS;
-  }
-
-  static CsrfTokenRequestHandler csrfTokenRequestHandler() {
-    return new CsrfTokenRequestAttributeHandler();
-  }
-
-  private AuthenticationEntryPoint authenticationEntryPoint(
-      ConsoleSecurityResponseWriter responseWriter) {
-    return (request, response, authException) -> responseWriter.write(
-        response,
-        HttpStatus.UNAUTHORIZED,
-        ResultCode.UNAUTHORIZED,
-        CommonErrorMessages.AUTHENTICATION_REQUIRED);
-  }
-
-  private AccessDeniedHandler accessDeniedHandler(ConsoleSecurityResponseWriter responseWriter) {
-    return (request, response, accessDeniedException) -> responseWriter.write(
-        response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED);
-  }
-
-  /**
-   * 过滤器链装配协作 bean 聚合体。仅承载注入,不持有行为;成员均为 Spring 单例 bean,由 {@link
-   * #consoleSecurityFilterChainComponents} 工厂按类型注入。
-   */
-  public record ConsoleSecurityFilterChainComponents(
-      ConsoleAuthenticationFilter authenticationFilter,
-      ConsoleRateLimitFilter rateLimitFilter,
-      MaintenanceModeFilter maintenanceModeFilter,
-      ConsoleSecurityResponseWriter responseWriter,
-      ConsoleSecurityHeadersWriter securityHeadersWriter,
-      CorsConfigurationSource corsConfigurationSource) {}
-
-  /** Spring Security 6 默认延迟生成 CSRF token;SPA 需要在首次 GET 时拿到 XSRF-TOKEN cookie。 */
-  private static final class CsrfCookieMaterializeFilter extends OncePerRequestFilter {
-    @Override
-    protected void doFilterInternal(
-        HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-        throws ServletException, IOException {
-      CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
-      if (csrfToken != null) {
-        csrfToken.getToken();
-      }
-      filterChain.doFilter(request, response);
+    @Bean
+    public ConsoleLoginIpRateLimiter consoleLoginIpRateLimiter(
+            SlidingWindowRateLimiter rateLimiter,
+            ConsoleRateLimitProperties rateLimitProperties,
+            RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker) {
+        return new ConsoleLoginIpRateLimiter(
+                rateLimiter, rateLimitProperties, properties, redisRateLimitCircuitBreaker);
     }
-  }
+
+    @Bean
+    public ConsoleOidcAuthorizationRateLimitFilter consoleOidcAuthorizationRateLimitFilter(
+            ConsoleRateLimitProperties rateLimitProperties,
+            ConsoleLoginIpRateLimiter loginIpRateLimiter,
+            ConsoleSecurityResponseWriter responseWriter) {
+        return new ConsoleOidcAuthorizationRateLimitFilter(rateLimitProperties, loginIpRateLimiter, responseWriter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<ConsoleOidcAuthorizationRateLimitFilter>
+            consoleOidcAuthorizationRateLimitFilterRegistration(ConsoleOidcAuthorizationRateLimitFilter filter) {
+        return securityChainOnly(filter);
+    }
+
+    @Bean
+    public ConsoleRateLimitFilter consoleRateLimitFilter(
+            SlidingWindowRateLimiter rateLimiter,
+            ConsoleRateLimitProperties rateLimitProperties,
+            ConsoleSecurityResponseWriter responseWriter,
+            RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker,
+            ConsoleLoginIpRateLimiter loginIpRateLimiter) {
+        return new ConsoleRateLimitFilter(
+                rateLimiter, rateLimitProperties, responseWriter, redisRateLimitCircuitBreaker, loginIpRateLimiter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<ConsoleRateLimitFilter> consoleRateLimitFilterRegistration(
+            ConsoleRateLimitFilter filter) {
+        return securityChainOnly(filter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<ConsoleAuthenticationFilter> consoleAuthenticationFilterRegistration(
+            ConsoleAuthenticationFilter filter) {
+        return securityChainOnly(filter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<MaintenanceModeFilter> maintenanceModeFilterRegistration(
+            MaintenanceModeFilter filter) {
+        return securityChainOnly(filter);
+    }
+
+    private static <T extends Filter> FilterRegistrationBean<T> securityChainOnly(T filter) {
+        FilterRegistrationBean<T> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /**
+     * 把过滤器链装配所需的协作 bean 聚合成单一持有类,避免 {@link #consoleSecurityFilterChain} 参数 ≥ 7 触发 PMD
+     * ExcessiveParameterList(docs/agent-baseline.md 红线 #2)。Spring 按类型逐个注入各成员,装配语义不变。
+     */
+    @Bean
+    public ConsoleSecurityFilterChainComponents consoleSecurityFilterChainComponents(
+            ConsoleAuthenticationFilter consoleAuthenticationFilter,
+            ConsoleRateLimitFilter consoleRateLimitFilter,
+            MaintenanceModeFilter maintenanceModeFilter,
+            ConsoleSecurityResponseWriter responseWriter,
+            ConsoleSecurityHeadersWriter securityHeadersWriter,
+            CorsConfigurationSource consoleCorsConfigurationSource) {
+        return new ConsoleSecurityFilterChainComponents(
+                consoleAuthenticationFilter,
+                consoleRateLimitFilter,
+                maintenanceModeFilter,
+                responseWriter,
+                securityHeadersWriter,
+                consoleCorsConfigurationSource);
+    }
+
+    @Bean
+    public ConsoleOidcSecurityComponents consoleOidcSecurityComponents(
+            RedisOidcAuthorizationRequestRepository repository,
+            ConsoleOidcAuthenticationSuccessHandler successHandler,
+            ConsoleOidcAuthenticationFailureHandler failureHandler,
+            DiscardingOidcAuthorizedClientRepository authorizedClientRepository,
+            ConsoleOidcAuthorizationRateLimitFilter oidcAuthorizationRateLimitFilter) {
+        return new ConsoleOidcSecurityComponents(
+                repository,
+                successHandler,
+                failureHandler,
+                authorizedClientRepository,
+                oidcAuthorizationRateLimitFilter);
+    }
+
+    @Bean
+    @SuppressWarnings({"java:S4502", "java:S3330"})
+    public SecurityFilterChain consoleSecurityFilterChain(
+            HttpSecurity http,
+            ConsoleSecurityFilterChainComponents components,
+            ConsoleOidcSecurityComponents oidcComponents) {
+        ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
+        ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
+        MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
+        ConsoleSecurityResponseWriter responseWriter = components.responseWriter();
+        ConsoleSecurityHeadersWriter securityHeadersWriter = components.securityHeadersWriter();
+        CorsConfigurationSource consoleCorsConfigurationSource = components.corsConfigurationSource();
+        http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource));
+        // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
+        // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
+        // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
+        // 例外 matcher 仅覆盖无 cookie 凭据的内部回调、登录前端点和本地 bypass-mode。
+        // XSRF-TOKEN 按设计允许浏览器 JavaScript 读取：axios 会将其复制到
+        // X-XSRF-TOKEN 请求头，供 Spring Security 执行双提交 CSRF 校验。
+        http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
+                // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。
+                .csrfTokenRequestHandler(csrfTokenRequestHandler())
+                // 无状态 JWT 每个请求都会重新认证；默认会话策略会在认证后的 GET 清除 XSRF-TOKEN，
+                // 导致后续写请求缺少 CSRF 请求头。
+                .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
+                .ignoringRequestMatchers(csrfIgnoredMatchers()));
+        return http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
+                // R6 P0-3：禁用 Spring Security HTTP Basic。
+                // console 走 ADR-030 §D7 HttpOnly cookie JWT 单一认证路径，HTTP Basic 会让 401 响应附带
+                // WWW-Authenticate: Basic realm=...，浏览器弹原生登录框 + 还允许 Authorization: Basic
+                // 直接绕过 cookie filter 链。生产环境不可暴露。
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exceptionHandling -> exceptionHandling
+                        .authenticationEntryPoint(authenticationEntryPoint(responseWriter))
+                        .accessDeniedHandler(accessDeniedHandler(responseWriter)))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+                        .permitAll()
+                        // Alertmanager 出口内网端点:AM 够不到 console cookie/JWT(ADR-030 §D7),
+                        // 由 AlertmanagerNotifyController 用共享密钥 bearer token 自校验(fail-closed)。
+                        .requestMatchers("/internal/am-notify/**")
+                        .permitAll()
+                        .requestMatchers(
+                                "/oauth2/authorization/**",
+                                "/login/oauth2/code/**",
+                                "/api/console/auth/login",
+                                "/api/console/auth/logout",
+                                "/api/console/auth/public-key",
+                                "/api/console/auth/oidc/provider",
+                                // 验证码配置登录前即需访问(无认证态),仅下发公开 provider/siteKey。
+                                "/api/console/captcha/config",
+                                "/api/console/push/vapid-public-key",
+                                "/api/console/system/maintenance",
+                                // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
+                                // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
+                                // ConditionalOnProperty 不装
+                                // controller，permitAll 仅是路径白名单不会引入新攻击面。
+                                "/api/console/files/fs-download",
+                                "/console-login.html",
+                                "/favicon.ico")
+                        .permitAll()
+                        .requestMatchers("/actuator/loggers/**")
+                        .hasAuthority(ConsoleRoles.ADMIN)
+                        // P0-1 回退（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
+                        // 避免新加 controller 漏加 @PreAuthorize 时被无角色账号访问。
+                        // 高危端点已在 controller 上叠加更严格的 @PreAuthorize。
+                        .requestMatchers("/api/console/**")
+                        .hasAnyAuthority(
+                                ConsoleRoles.ADMIN,
+                                ConsoleRoles.TENANT_ADMIN,
+                                ConsoleRoles.AUDITOR,
+                                ConsoleRoles.TENANT_USER)
+                        .anyRequest()
+                        .authenticated())
+                .oauth2Login(oauth2 -> oauth2.authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(
+                                oidcComponents.authorizationRequestRepository()))
+                        .successHandler(oidcComponents.successHandler())
+                        .failureHandler(oidcComponents.failureHandler())
+                        .authorizedClientRepository(oidcComponents.authorizedClientRepository()))
+                // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
+                // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
+                .addFilterAfter(new CsrfCookieMaterializeFilter(), CsrfFilter.class)
+                .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
+                .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
+                .addFilterBefore(
+                        oidcComponents.authorizationRateLimitFilter(), OAuth2AuthorizationRequestRedirectFilter.class)
+                .build();
+    }
+
+    private String[] csrfIgnoredMatchers() {
+        return batchSecurityProperties.isBypassMode() ? BYPASS_MODE_CSRF_IGNORED_MATCHERS : CSRF_IGNORED_MATCHERS;
+    }
+
+    static CsrfTokenRequestHandler csrfTokenRequestHandler() {
+        return new CsrfTokenRequestAttributeHandler();
+    }
+
+    private AuthenticationEntryPoint authenticationEntryPoint(ConsoleSecurityResponseWriter responseWriter) {
+        return (request, response, authException) -> responseWriter.write(
+                response,
+                HttpStatus.UNAUTHORIZED,
+                ResultCode.UNAUTHORIZED,
+                CommonErrorMessages.AUTHENTICATION_REQUIRED);
+    }
+
+    private AccessDeniedHandler accessDeniedHandler(ConsoleSecurityResponseWriter responseWriter) {
+        return (request, response, accessDeniedException) -> responseWriter.write(
+                response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED);
+    }
+
+    /**
+     * 过滤器链装配协作 bean 聚合体。仅承载注入,不持有行为;成员均为 Spring 单例 bean,由 {@link
+     * #consoleSecurityFilterChainComponents} 工厂按类型注入。
+     */
+    public record ConsoleSecurityFilterChainComponents(
+            ConsoleAuthenticationFilter authenticationFilter,
+            ConsoleRateLimitFilter rateLimitFilter,
+            MaintenanceModeFilter maintenanceModeFilter,
+            ConsoleSecurityResponseWriter responseWriter,
+            ConsoleSecurityHeadersWriter securityHeadersWriter,
+            CorsConfigurationSource corsConfigurationSource) {}
+
+    /** Spring Security 6 默认延迟生成 CSRF token;SPA 需要在首次 GET 时拿到 XSRF-TOKEN cookie。 */
+    private static final class CsrfCookieMaterializeFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+            CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+            if (csrfToken != null) {
+                csrfToken.getToken();
+            }
+            filterChain.doFilter(request, response);
+        }
+    }
 }

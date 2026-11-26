@@ -8,15 +8,15 @@ import lombok.Data;
 @Data
 public class RedispatchFileRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  private Long fileId;
+    @NotNull
+    private Long fileId;
 
-  @Size(max = 128, message = "channelCode too long (max 128)")
-  private String channelCode;
+    @Size(max = 128, message = "channelCode too long (max 128)")
+    private String channelCode;
 
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 }

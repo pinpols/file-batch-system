@@ -21,38 +21,37 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class UnknownExternalOutcomeCloser {
 
-  static final String OUTCOME_UNKNOWN_MESSAGE =
-      "Worker lease expired after non-idempotent execution started; external outcome requires reconciliation.";
+    static final String OUTCOME_UNKNOWN_MESSAGE =
+            "Worker lease expired after non-idempotent execution started; external outcome requires reconciliation.";
 
-  private final JobPartitionMapper jobPartitionMapper;
-  // TaskOutcomeService 依赖 RetryGovernanceService；用 provider 断开“接管→收口→结果服务→接管”的构造环，
-  // 只在真正收口时解析。
-  private final ObjectProvider<TaskOutcomeService> taskOutcomeServiceProvider;
+    private final JobPartitionMapper jobPartitionMapper;
+    // TaskOutcomeService 依赖 RetryGovernanceService；用 provider 断开“接管→收口→结果服务→接管”的构造环，
+    // 只在真正收口时解析。
+    private final ObjectProvider<TaskOutcomeService> taskOutcomeServiceProvider;
 
-  /**
-   * 以 partition 当前 invocation 关闭任务。
-   *
-   * @return {@code true} 表示结果已落库；{@code false} 表示缺少当前 invocation 或结果未记录，调用方应让本轮回收失败并等待下一轮重试
-   */
-  public boolean close(JobTaskEntity task) {
-    JobPartitionEntity partition =
-        jobPartitionMapper.selectById(task.getTenantId(), task.getJobPartitionId());
-    if (EmptyChecks.isNull(partition)
-        || EmptyChecks.isNull(partition.getCurrentInvocationId())
-        || EmptyChecks.isBlank(partition.getCurrentInvocationId())) {
-      return false;
+    /**
+     * 以 partition 当前 invocation 关闭任务。
+     *
+     * @return {@code true} 表示结果已落库；{@code false} 表示缺少当前 invocation 或结果未记录，调用方应让本轮回收失败并等待下一轮重试
+     */
+    public boolean close(JobTaskEntity task) {
+        JobPartitionEntity partition = jobPartitionMapper.selectById(task.getTenantId(), task.getJobPartitionId());
+        if (EmptyChecks.isNull(partition)
+                || EmptyChecks.isNull(partition.getCurrentInvocationId())
+                || EmptyChecks.isBlank(partition.getCurrentInvocationId())) {
+            return false;
+        }
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId(task.getTenantId())
+                .taskId(task.getId())
+                .workerId(task.getAssignedWorkerCode())
+                .success(false)
+                .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
+                .errorMessage(OUTCOME_UNKNOWN_MESSAGE)
+                .partitionInvocationId(partition.getCurrentInvocationId())
+                .build();
+        TaskOutcomeService taskOutcomeService = taskOutcomeServiceProvider.getObject();
+        JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(command);
+        return EmptyChecks.isNotNull(outcome);
     }
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId(task.getTenantId())
-        .taskId(task.getId())
-        .workerId(task.getAssignedWorkerCode())
-        .success(false)
-        .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
-        .errorMessage(OUTCOME_UNKNOWN_MESSAGE)
-        .partitionInvocationId(partition.getCurrentInvocationId())
-        .build();
-    TaskOutcomeService taskOutcomeService = taskOutcomeServiceProvider.getObject();
-    JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(command);
-    return EmptyChecks.isNotNull(outcome);
-  }
 }

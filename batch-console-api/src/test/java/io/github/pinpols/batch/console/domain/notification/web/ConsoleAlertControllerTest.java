@@ -32,76 +32,72 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAlertControllerTest {
 
-  @Mock
-  private ConsoleAlertApplicationService alertApplicationService;
+    @Mock
+    private ConsoleAlertApplicationService alertApplicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAlertController(alertApplicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAlertController(alertApplicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("缺少幂等键头时返回参数错误, 不触达应用服务")
-  void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/alerts/100/ack").contentType(APPLICATION_JSON).content("""
+    @Test
+    @DisplayName("缺少幂等键头时返回参数错误, 不触达应用服务")
+    void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+        mockMvc.perform(post("/api/console/alerts/100/ack")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(alertApplicationService);
-  }
+        verifyNoInteractions(alertApplicationService);
+    }
 
-  @Test
-  @DisplayName("确认告警成功后返回统一响应, 数据中状态为已确认")
-  void shouldAckAlertAndReturnCommonResponseOnSuccess() throws Exception {
-    when(alertApplicationService.ack(anyLong(), any(), anyString()))
-        .thenReturn(new ConsoleAlertActionResponse(100L, "t1", "ack", "ACKED"));
+    @Test
+    @DisplayName("确认告警成功后返回统一响应, 数据中状态为已确认")
+    void shouldAckAlertAndReturnCommonResponseOnSuccess() throws Exception {
+        when(alertApplicationService.ack(anyLong(), any(), anyString()))
+                .thenReturn(new ConsoleAlertActionResponse(100L, "t1", "ack", "ACKED"));
 
-    mockMvc
-        .perform(post("/api/console/alerts/100/ack")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/alerts/100/ack")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.status").value("ACKED"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.status").value("ACKED"));
+    }
 
-  @Test
-  @DisplayName("请求体必填字段为空时, 返回校验错误")
-  void shouldReturn400WhenRequestBodyInvalid() throws Exception {
-    mockMvc
-        .perform(post("/api/console/alerts/100/close")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("请求体必填字段为空时, 返回校验错误")
+    void shouldReturn400WhenRequestBodyInvalid() throws Exception {
+        mockMvc.perform(post("/api/console/alerts/100/close")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"","operatorId":"","reason":"ok"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 }

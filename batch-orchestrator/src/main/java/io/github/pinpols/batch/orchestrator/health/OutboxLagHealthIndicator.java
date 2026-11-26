@@ -22,39 +22,39 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  */
 public class OutboxLagHealthIndicator implements HealthIndicator {
 
-  private static final List<String> PENDING_STATUSES =
-      List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
+    private static final List<String> PENDING_STATUSES =
+            List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
 
-  private final OutboxEventMapper mapper;
-  private final OutboxLagHealthProperties properties;
+    private final OutboxEventMapper mapper;
+    private final OutboxLagHealthProperties properties;
 
-  public OutboxLagHealthIndicator(OutboxEventMapper mapper, OutboxLagHealthProperties properties) {
-    this.mapper = mapper;
-    this.properties = properties;
-  }
-
-  @Override
-  public Health health() {
-    try {
-      long backlog = mapper.countByStatuses(PENDING_STATUSES);
-      long stalePublishing = mapper.countStalePublishing(
-          OutboxPublishStatus.PUBLISHING.code(), properties.getStalePublishingSeconds());
-      Health.Builder builder = (backlog >= properties.getBacklogThreshold() || stalePublishing > 0
-              ? Health.down()
-              : Health.up())
-          .withDetail("backlog", backlog)
-          .withDetail("backlogThreshold", properties.getBacklogThreshold())
-          .withDetail("stalePublishing", stalePublishing)
-          .withDetail("stalePublishingTimeoutSeconds", properties.getStalePublishingSeconds());
-      return builder.build();
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(OutboxLagHealthIndicator.class, "catch:Exception", ex);
-      // Outbox 是控制面的持久交付链路。DB 查询失败时必须摘出 readiness，
-      // 否则实例仍接收新任务但无法可靠推进状态，形成静默积压。
-      return Health.down()
-          .withDetail("error", ex.getClass().getSimpleName())
-          .withDetail("reason", "outbox health query unavailable")
-          .build();
+    public OutboxLagHealthIndicator(OutboxEventMapper mapper, OutboxLagHealthProperties properties) {
+        this.mapper = mapper;
+        this.properties = properties;
     }
-  }
+
+    @Override
+    public Health health() {
+        try {
+            long backlog = mapper.countByStatuses(PENDING_STATUSES);
+            long stalePublishing = mapper.countStalePublishing(
+                    OutboxPublishStatus.PUBLISHING.code(), properties.getStalePublishingSeconds());
+            Health.Builder builder = (backlog >= properties.getBacklogThreshold() || stalePublishing > 0
+                            ? Health.down()
+                            : Health.up())
+                    .withDetail("backlog", backlog)
+                    .withDetail("backlogThreshold", properties.getBacklogThreshold())
+                    .withDetail("stalePublishing", stalePublishing)
+                    .withDetail("stalePublishingTimeoutSeconds", properties.getStalePublishingSeconds());
+            return builder.build();
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(OutboxLagHealthIndicator.class, "catch:Exception", ex);
+            // Outbox 是控制面的持久交付链路。DB 查询失败时必须摘出 readiness，
+            // 否则实例仍接收新任务但无法可靠推进状态，形成静默积压。
+            return Health.down()
+                    .withDetail("error", ex.getClass().getSimpleName())
+                    .withDetail("reason", "outbox health query unavailable")
+                    .build();
+        }
+    }
 }

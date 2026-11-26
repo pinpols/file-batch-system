@@ -19,26 +19,25 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ReadinessService {
 
-  private final AssetPartitionService assetPartitionService;
+    private final AssetPartitionService assetPartitionService;
 
-  /**
-   * 上游 job 在指定批次日是否已就绪(**当前 asset partition 有 EFFECTIVE result_version**)。
-   *
-   * <p>口径不再直接读 job_instance：只有 result_version EFFECTIVE 代表可被下游消费。DQ BLOCKED 的 PENDING、
-   * dry-run、失败/部分失败且未生效的 attempt 都不会放行。
-   *
-   * @param tenantId 租户
-   * @param jobCode 上游 job code
-   * @param bizDate 对齐后的批次日
-   */
-  public ReadinessResult checkJobReady(String tenantId, String jobCode, LocalDate bizDate) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
-      return ReadinessResult.ofNotReady("invalid-readiness-query");
+    /**
+     * 上游 job 在指定批次日是否已就绪(**当前 asset partition 有 EFFECTIVE result_version**)。
+     *
+     * <p>口径不再直接读 job_instance：只有 result_version EFFECTIVE 代表可被下游消费。DQ BLOCKED 的 PENDING、
+     * dry-run、失败/部分失败且未生效的 attempt 都不会放行。
+     *
+     * @param tenantId 租户
+     * @param jobCode 上游 job code
+     * @param bizDate 对齐后的批次日
+     */
+    public ReadinessResult checkJobReady(String tenantId, String jobCode, LocalDate bizDate) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+            return ReadinessResult.ofNotReady("invalid-readiness-query");
+        }
+        return assetPartitionService
+                .findEffectiveJobPartition(tenantId, jobCode, bizDate)
+                .map(ReadinessResult::ofReady)
+                .orElseGet(() -> ReadinessResult.ofNotReady("asset-partition-not-effective", jobCode, bizDate));
     }
-    return assetPartitionService
-        .findEffectiveJobPartition(tenantId, jobCode, bizDate)
-        .map(ReadinessResult::ofReady)
-        .orElseGet(
-            () -> ReadinessResult.ofNotReady("asset-partition-not-effective", jobCode, bizDate));
-  }
 }

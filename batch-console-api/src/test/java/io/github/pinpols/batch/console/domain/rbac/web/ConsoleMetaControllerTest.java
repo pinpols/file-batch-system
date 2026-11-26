@@ -30,96 +30,83 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleMetaControllerTest {
 
-  @Mock
-  private ConsoleMetaQueryService service;
+    @Mock
+    private ConsoleMetaQueryService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleMetaController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleMetaController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("枚举元数据端点返回按枚举类型分组的映射")
-  void shouldReturnMapForEnums() throws Exception {
-    when(service.enums())
-        .thenReturn(Map.of("scheduleType", List.of(new ConsoleMetaEnumItem("CRON", "CRON"))));
-    mockMvc
-        .perform(get("/api/console/meta/enums"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.scheduleType[0].code").value("CRON"));
-  }
+    @Test
+    @DisplayName("枚举元数据端点返回按枚举类型分组的映射")
+    void shouldReturnMapForEnums() throws Exception {
+        when(service.enums()).thenReturn(Map.of("scheduleType", List.of(new ConsoleMetaEnumItem("CRON", "CRON"))));
+        mockMvc.perform(get("/api/console/meta/enums"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scheduleType[0].code").value("CRON"));
+    }
 
-  @Test
-  @DisplayName("队列、日历、时间窗、工作组与业务类型五类端点均按请求租户下传查询")
-  void shouldPassTenantIdForQueuesAndCalendarsAndWindowsAndWorkerGroupsAndBizTypes()
-      throws Exception {
-    List<ConsoleMetaOption> opt = List.of(new ConsoleMetaOption("c1", "C1"));
-    when(service.queues("ta")).thenReturn(opt);
-    when(service.calendars("ta")).thenReturn(opt);
-    when(service.windows("ta")).thenReturn(opt);
-    when(service.workerGroups("ta")).thenReturn(opt);
-    when(service.bizTypes("ta")).thenReturn(opt);
-    mockMvc
-        .perform(get("/api/console/meta/queues").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(get("/api/console/meta/calendars").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(get("/api/console/meta/windows").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(get("/api/console/meta/worker-groups").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(get("/api/console/meta/biz-types").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(service).queues("ta");
-    verify(service).calendars("ta");
-    verify(service).windows("ta");
-    verify(service).workerGroups("ta");
-    verify(service).bizTypes("ta");
-  }
+    @Test
+    @DisplayName("队列、日历、时间窗、工作组与业务类型五类端点均按请求租户下传查询")
+    void shouldPassTenantIdForQueuesAndCalendarsAndWindowsAndWorkerGroupsAndBizTypes() throws Exception {
+        List<ConsoleMetaOption> opt = List.of(new ConsoleMetaOption("c1", "C1"));
+        when(service.queues("ta")).thenReturn(opt);
+        when(service.calendars("ta")).thenReturn(opt);
+        when(service.windows("ta")).thenReturn(opt);
+        when(service.workerGroups("ta")).thenReturn(opt);
+        when(service.bizTypes("ta")).thenReturn(opt);
+        mockMvc.perform(get("/api/console/meta/queues").param("tenantId", "ta")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/console/meta/calendars").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/console/meta/windows").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/console/meta/worker-groups").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/console/meta/biz-types").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(service).queues("ta");
+        verify(service).calendars("ta");
+        verify(service).windows("ta");
+        verify(service).workerGroups("ta");
+        verify(service).bizTypes("ta");
+    }
 
-  @Test
-  @DisplayName("流水线阶段按业务类型分组返回对应阶段列表")
-  void shouldReturnPerTypeMapForPipelineStages() throws Exception {
-    when(service.pipelineStages())
-        .thenReturn(Map.of("IMPORT", List.of("PARSE", "VALIDATE", "LOAD")));
-    mockMvc
-        .perform(get("/api/console/meta/pipeline-stages"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.IMPORT[0]").value("PARSE"));
-  }
+    @Test
+    @DisplayName("流水线阶段按业务类型分组返回对应阶段列表")
+    void shouldReturnPerTypeMapForPipelineStages() throws Exception {
+        when(service.pipelineStages()).thenReturn(Map.of("IMPORT", List.of("PARSE", "VALIDATE", "LOAD")));
+        mockMvc.perform(get("/api/console/meta/pipeline-stages"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.IMPORT[0]").value("PARSE"));
+    }
 
-  @Test
-  @DisplayName("步骤实现列表按模块过滤参数下传查询")
-  void shouldPassModuleFilterForStepImpls() throws Exception {
-    when(service.stepImpls("IMPORT")).thenReturn(List.of("jdbcMappedImport", "csvParse"));
-    mockMvc
-        .perform(get("/api/console/meta/step-impls").param("module", "IMPORT"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0]").value("jdbcMappedImport"));
-    verify(service).stepImpls("IMPORT");
-  }
+    @Test
+    @DisplayName("步骤实现列表按模块过滤参数下传查询")
+    void shouldPassModuleFilterForStepImpls() throws Exception {
+        when(service.stepImpls("IMPORT")).thenReturn(List.of("jdbcMappedImport", "csvParse"));
+        mockMvc.perform(get("/api/console/meta/step-impls").param("module", "IMPORT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0]").value("jdbcMappedImport"));
+        verify(service).stepImpls("IMPORT");
+    }
 
-  @Test
-  @DisplayName("未指定模块时返回全部步骤实现")
-  void shouldReturnAllForStepImplsWithoutModule() throws Exception {
-    when(service.stepImpls(null)).thenReturn(List.of("any"));
-    mockMvc.perform(get("/api/console/meta/step-impls")).andExpect(status().isOk());
-    verify(service).stepImpls(null);
-  }
+    @Test
+    @DisplayName("未指定模块时返回全部步骤实现")
+    void shouldReturnAllForStepImplsWithoutModule() throws Exception {
+        when(service.stepImpls(null)).thenReturn(List.of("any"));
+        mockMvc.perform(get("/api/console/meta/step-impls")).andExpect(status().isOk());
+        verify(service).stepImpls(null);
+    }
 }

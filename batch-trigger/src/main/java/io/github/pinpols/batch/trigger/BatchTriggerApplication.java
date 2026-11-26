@@ -18,15 +18,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // password: ..." 启动 WARN — 噪声且可能误导。
 // @EnableScheduling:TriggerReconciler / TriggerOutboxRelay 等周期任务使用 Spring @Scheduled。
 @SpringBootApplication(
-    scanBasePackages = "io.github.pinpols.batch",
-    exclude = UserDetailsServiceAutoConfiguration.class)
+        scanBasePackages = "io.github.pinpols.batch",
+        exclude = UserDetailsServiceAutoConfiguration.class)
 @EnableScheduling
 @ImportAutoConfiguration({BatchJsonAutoConfiguration.class, RestClientAutoConfiguration.class})
 @MapperScan({"io.github.pinpols.batch.trigger.mapper", "io.github.pinpols.batch.common.mapper"})
 /** Trigger 服务启动入口。 */
 public class BatchTriggerApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(BatchTriggerApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(BatchTriggerApplication.class, args);
+    }
 }

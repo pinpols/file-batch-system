@@ -8,13 +8,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum FileChannelAuthType implements DictEnum {
-  NONE("NONE", "无"),
-  PASSWORD("PASSWORD", "用户名密码"),
-  KEY_PAIR("KEY_PAIR", "密钥对"),
-  TOKEN("TOKEN", "Token"),
-  OAUTH2("OAUTH2", "OAuth2"),
-  CUSTOM("CUSTOM", "自定义");
+    NONE("NONE", "无"),
+    PASSWORD("PASSWORD", "用户名密码"),
+    KEY_PAIR("KEY_PAIR", "密钥对"),
+    TOKEN("TOKEN", "Token"),
+    OAUTH2("OAUTH2", "OAuth2"),
+    CUSTOM("CUSTOM", "自定义");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

@@ -35,76 +35,76 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("WR-04 候选: 已批准的一次性恢复授权不能被第二个无关根请求复用")
 class ApprovedRecoveryAuthorizationReuseReproTest {
 
-  @Mock
-  private CompensationCommandMapper compensationCommandMapper;
+    @Mock
+    private CompensationCommandMapper compensationCommandMapper;
 
-  @Mock
-  private ApprovalCommandMapper approvalCommandMapper;
+    @Mock
+    private ApprovalCommandMapper approvalCommandMapper;
 
-  @Mock
-  private DeadLetterTaskMapper deadLetterTaskMapper;
+    @Mock
+    private DeadLetterTaskMapper deadLetterTaskMapper;
 
-  @Mock
-  private OrchestratorJobMappers jobMappers;
+    @Mock
+    private OrchestratorJobMappers jobMappers;
 
-  @Mock
-  private RetryGovernanceService retryGovernanceService;
+    @Mock
+    private RetryGovernanceService retryGovernanceService;
 
-  @Mock
-  private FileGovernanceService fileGovernanceService;
+    @Mock
+    private FileGovernanceService fileGovernanceService;
 
-  @Mock
-  private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private DomainEventPublisher domainEventPublisher;
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private TaskAssignmentService taskAssignmentService;
+    @Mock
+    private TaskAssignmentService taskAssignmentService;
 
-  @Mock
-  private CompensationTransactionExecutor transactionExecutor;
+    @Mock
+    private CompensationTransactionExecutor transactionExecutor;
 
-  @Mock
-  private RelatedFileReferenceValidator relatedFileReferenceValidator;
+    @Mock
+    private RelatedFileReferenceValidator relatedFileReferenceValidator;
 
-  @Mock
-  private WorkflowNodeReplayTargetResolver workflowNodeReplayTargetResolver;
+    @Mock
+    private WorkflowNodeReplayTargetResolver workflowNodeReplayTargetResolver;
 
-  @Mock
-  private ReplayOperationMapper replayOperationMapper;
+    @Mock
+    private ReplayOperationMapper replayOperationMapper;
 
-  @InjectMocks
-  private DefaultCompensationService compensationService;
+    @InjectMocks
+    private DefaultCompensationService compensationService;
 
-  @Test
-  @DisplayName("同一 approvalId + 另一个无关根目标 → 必须拒绝且不放行外部动作")
-  void shouldRejectUnrelatedRootReusingApprovedRecoveryAuthorization() {
-    CompensationCommandEntity authorizationConsumedByRootR1 = new CompensationCommandEntity();
-    authorizationConsumedByRootR1.setTenantId("tenant-wr04");
-    authorizationConsumedByRootR1.setCommandNo("cmp-root-r1");
-    authorizationConsumedByRootR1.setApprovalId("approval-wr04");
-    authorizationConsumedByRootR1.setRequestFingerprint("sha256-of-root-r1-payload");
-    authorizationConsumedByRootR1.setCommandStatus(CompensationCommandStatus.SUCCESS.code());
-    when(compensationCommandMapper.selectByTenantAndApprovalId("tenant-wr04", "approval-wr04"))
-        .thenReturn(authorizationConsumedByRootR1);
+    @Test
+    @DisplayName("同一 approvalId + 另一个无关根目标 → 必须拒绝且不放行外部动作")
+    void shouldRejectUnrelatedRootReusingApprovedRecoveryAuthorization() {
+        CompensationCommandEntity authorizationConsumedByRootR1 = new CompensationCommandEntity();
+        authorizationConsumedByRootR1.setTenantId("tenant-wr04");
+        authorizationConsumedByRootR1.setCommandNo("cmp-root-r1");
+        authorizationConsumedByRootR1.setApprovalId("approval-wr04");
+        authorizationConsumedByRootR1.setRequestFingerprint("sha256-of-root-r1-payload");
+        authorizationConsumedByRootR1.setCommandStatus(CompensationCommandStatus.SUCCESS.code());
+        when(compensationCommandMapper.selectByTenantAndApprovalId("tenant-wr04", "approval-wr04"))
+                .thenReturn(authorizationConsumedByRootR1);
 
-    // 非 DISPATCH 作业（EXPORT）的另一个无关根请求，复用同一 approvalId
-    CompensationSubmitCommand unrelatedRootR2 = CompensationSubmitCommand.builder()
-        .tenantId("tenant-wr04")
-        .compensationType("JOB")
-        .targetId(999L)
-        .jobCode("TA_EXPORT_REPORT")
-        .bizDate(LocalDate.parse("2026-10-24"))
-        .reason("reuse approved recovery authorization for another root")
-        .operatorId("operator-2")
-        .approvalId("approval-wr04")
-        .traceId("trace-root-r2")
-        .build();
+        // 非 DISPATCH 作业（EXPORT）的另一个无关根请求，复用同一 approvalId
+        CompensationSubmitCommand unrelatedRootR2 = CompensationSubmitCommand.builder()
+                .tenantId("tenant-wr04")
+                .compensationType("JOB")
+                .targetId(999L)
+                .jobCode("TA_EXPORT_REPORT")
+                .bizDate(LocalDate.parse("2026-10-24"))
+                .reason("reuse approved recovery authorization for another root")
+                .operatorId("operator-2")
+                .approvalId("approval-wr04")
+                .traceId("trace-root-r2")
+                .build();
 
-    assertThatThrownBy(() -> compensationService.submit(unrelatedRootR2))
-        .as("若这里没有抛错或返回原 commandNo，说明另一无关根复用了同一一次性授权（WR-04 复现）")
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.compensation.approval_request_mismatch");
-  }
+        assertThatThrownBy(() -> compensationService.submit(unrelatedRootR2))
+                .as("若这里没有抛错或返回原 commandNo，说明另一无关根复用了同一一次性授权（WR-04 复现）")
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.compensation.approval_request_mismatch");
+    }
 }

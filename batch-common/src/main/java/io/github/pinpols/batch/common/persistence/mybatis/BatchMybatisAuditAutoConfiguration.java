@@ -15,21 +15,17 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration
 @ConditionalOnClass(SqlSessionFactory.class)
-@ConditionalOnProperty(
-    name = "batch.mybatis.audit.enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.mybatis.audit.enabled", havingValue = "true", matchIfMissing = true)
 public class BatchMybatisAuditAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public AuditFieldsInterceptor auditFieldsInterceptor(Clock batchClock) {
-    return new AuditFieldsInterceptor(batchClock);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public AuditFieldsInterceptor auditFieldsInterceptor(Clock batchClock) {
+        return new AuditFieldsInterceptor(batchClock);
+    }
 
-  @Bean
-  public ConfigurationCustomizer auditFieldsConfigurationCustomizer(
-      AuditFieldsInterceptor interceptor) {
-    return configuration -> configuration.addInterceptor(interceptor);
-  }
+    @Bean
+    public ConfigurationCustomizer auditFieldsConfigurationCustomizer(AuditFieldsInterceptor interceptor) {
+        return configuration -> configuration.addInterceptor(interceptor);
+    }
 }

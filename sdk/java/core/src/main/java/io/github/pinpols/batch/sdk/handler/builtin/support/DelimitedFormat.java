@@ -9,13 +9,13 @@ package io.github.pinpols.batch.sdk.handler.builtin.support;
  */
 public record DelimitedFormat(char delimiter, char quote, boolean header) {
 
-  /** 默认:逗号分隔、双引号、含表头。 */
-  public static DelimitedFormat defaults() {
-    return new DelimitedFormat(',', '"', true);
-  }
+    /** 默认:逗号分隔、双引号、含表头。 */
+    public static DelimitedFormat defaults() {
+        return new DelimitedFormat(',', '"', true);
+    }
 
-  /** 指定分隔符,其余取默认(双引号、含表头)。 */
-  public static DelimitedFormat of(char delimiter) {
-    return new DelimitedFormat(delimiter, '"', true);
-  }
+    /** 指定分隔符,其余取默认(双引号、含表头)。 */
+    public static DelimitedFormat of(char delimiter) {
+        return new DelimitedFormat(delimiter, '"', true);
+    }
 }

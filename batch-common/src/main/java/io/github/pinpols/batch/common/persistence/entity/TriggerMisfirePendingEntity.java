@@ -12,30 +12,30 @@ import lombok.Data;
 @Data
 public class TriggerMisfirePendingEntity {
 
-  private Long id;
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private String jobCode;
+    private Long id;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private String jobCode;
 
-  /** 错过的预定 fire 时刻。 */
-  private Instant scheduledFireTime;
+    /** 错过的预定 fire 时刻。 */
+    private Instant scheduledFireTime;
 
-  /** 实际发现 misfire 的时刻;detected_at - scheduled_fire_time = 延迟。 */
-  private Instant detectedAt;
+    /** 实际发现 misfire 的时刻;detected_at - scheduled_fire_time = 延迟。 */
+    private Instant detectedAt;
 
-  /** PENDING / APPROVED / REJECTED / EXPIRED。 */
-  private String status;
+    /** PENDING / APPROVED / REJECTED / EXPIRED。 */
+    private String status;
 
-  private String approvedBy;
-  private Instant approvedAt;
-  private String rejectionReason;
+    private String approvedBy;
+    private Instant approvedAt;
+    private String rejectionReason;
 
-  /** 审批通过后真正补 fire 的 trigger_request.id。 */
-  private Long catchUpRequestId;
+    /** 审批通过后真正补 fire 的 trigger_request.id。 */
+    private Long catchUpRequestId;
 
-  /** 默认 detectedAt + 7 days;周期任务把 PENDING + 已过期 改 EXPIRED。 */
-  private Instant expiresAt;
+    /** 默认 detectedAt + 7 days;周期任务把 PENDING + 已过期 改 EXPIRED。 */
+    private Instant expiresAt;
 
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

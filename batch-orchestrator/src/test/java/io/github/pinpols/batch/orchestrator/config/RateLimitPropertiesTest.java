@@ -15,21 +15,25 @@ import org.junit.jupiter.api.Test;
 @DisplayName("限流配置默认值 - 校验限流默认即开启且各动作每分钟阈值为正向高水位")
 class RateLimitPropertiesTest {
 
-  @Test
-  @DisplayName("未显式覆盖配置时限流默认开启,令牌桶版本与各动作阈值符合发布契约")
-  void shouldEnableRateLimitByDefault_whenNoOverrideProvided() {
-    RateLimitProperties props = new RateLimitProperties();
+    @Test
+    @DisplayName("未显式覆盖配置时限流默认开启,令牌桶版本与各动作阈值符合发布契约")
+    void shouldEnableRateLimitByDefault_whenNoOverrideProvided() {
+        RateLimitProperties props = new RateLimitProperties();
 
-    assertThat(props.isEnabled()).as("限流默认应开启").isTrue();
-    assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(2L);
-    assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值应为正").isGreaterThan(0L);
-    assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
-        .as("worker register 阈值应为正")
-        .isGreaterThan(0L);
-    assertThat(props.getMaxReleaseRequestsPerTenantPerMinute())
-        .as("dispatch release 阈值应为正")
-        .isGreaterThan(0L);
-    assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
-    assertThat(props.getMaxReportRequestsPerTenantPerMinute()).as("report 阈值").isEqualTo(30000L);
-  }
+        assertThat(props.isEnabled()).as("限流默认应开启").isTrue();
+        assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(2L);
+        assertThat(props.getMaxNewRequestsPerTenantPerMinute())
+                .as("launch 阈值应为正")
+                .isGreaterThan(0L);
+        assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
+                .as("worker register 阈值应为正")
+                .isGreaterThan(0L);
+        assertThat(props.getMaxReleaseRequestsPerTenantPerMinute())
+                .as("dispatch release 阈值应为正")
+                .isGreaterThan(0L);
+        assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
+        assertThat(props.getMaxReportRequestsPerTenantPerMinute())
+                .as("report 阈值")
+                .isEqualTo(30000L);
+    }
 }

@@ -39,213 +39,195 @@ import okhttp3.ResponseBody;
 @Slf4j
 public class PlatformHttpClient {
 
-  private final BatchPlatformClientConfig config;
-  private static final MediaType JSON = MediaType.get("application/json");
+    private final BatchPlatformClientConfig config;
+    private static final MediaType JSON = MediaType.get("application/json");
 
-  private final OkHttpClient httpClient;
-  private final ObjectMapper objectMapper;
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
 
-  public PlatformHttpClient(BatchPlatformClientConfig config) {
-    this(config, createHttpClient(config.getHttpTimeout()));
-  }
-
-  PlatformHttpClient(BatchPlatformClientConfig config, OkHttpClient httpClient) {
-    this.config = config;
-    this.httpClient = httpClient;
-    this.objectMapper = SdkJsonMapperFactory.create();
-  }
-
-  static OkHttpClient createHttpClient(Duration timeout) {
-    return new OkHttpClient.Builder()
-        .connectTimeout(timeout)
-        .readTimeout(timeout)
-        .writeTimeout(timeout)
-        .callTimeout(timeout)
-        .fastFallback(true)
-        .followRedirects(false)
-        .followSslRedirects(false)
-        // CLAIM/REPORT 重试由 SDK 决策层持有，连接层不能隐式重放 POST。
-        .retryOnConnectionFailure(false)
-        .build();
-  }
-
-  /** POST /internal/workers/register — 固定注册协议由 wire DTO 表达。 */
-  public WorkerRegistrationResponse register(RegisterRequest body) throws IOException {
-    return postJson("/internal/workers/register", body, null, WorkerRegistrationResponse.class);
-  }
-
-  /** POST /internal/workers/{workerCode}/heartbeat — body schema = WorkerHeartbeatDto。 */
-  public HeartbeatDirective heartbeat(String workerCode, Map<String, Object> body)
-      throws IOException {
-    return postJson(
-        "/internal/workers/" + workerCode + "/heartbeat", body, null, HeartbeatDirective.class);
-  }
-
-  /** POST /internal/workers/{workerCode}/deactivate — SDK stop 时优雅下线。 */
-  public void deactivate(String workerCode, Map<String, Object> body) throws IOException {
-    postJson("/internal/workers/" + workerCode + "/deactivate", body, null, Void.class);
-  }
-
-  /**
-   * 在剩余停机预算内完成优雅下线。该超时只收窄当前调用，不改变共享客户端的正常请求超时。
-   */
-  public void deactivate(String workerCode, Map<String, Object> body, Duration remainingTimeout)
-      throws IOException {
-    postJson(
-        "/internal/workers/" + workerCode + "/deactivate",
-        body,
-        null,
-        Void.class,
-        remainingTimeout);
-  }
-
-  /**
-   * 取消当前正在解析、建连或等待响应的同步/异步调用。
-   *
-   * <p>OkHttp 的同步 {@code execute()} 不以线程中断作为稳定取消契约。SDK 停机必须显式取消心跳、续租和超时后的
-   * REPORT，才能守住 {@code stop(timeout)} 总预算。
-   */
-  public void cancelInFlightCalls() {
-    httpClient.dispatcher().cancelAll();
-  }
-
-  /** 释放空闲连接；不关闭共享执行器，允许同一个 SDK client 在 stop 后再次 start。 */
-  public void evictIdleConnections() {
-    httpClient.connectionPool().evictAll();
-  }
-
-  /** POST /internal/tasks/{taskId}/claim — body=TaskClaimRequest,返回 EffectiveTaskConfig JSON。 */
-  public TaskClaimResponse claim(Long taskId, String idempotencyKey, Map<String, Object> body)
-      throws IOException {
-    return postJson(
-        "/internal/tasks/" + taskId + "/claim", body, idempotencyKey, TaskClaimResponse.class);
-  }
-
-  /** 非幂等动作前确认当前 task/worker/invocation，非 2xx 或传输失败均不能放行动作。 */
-  public void markNonIdempotentExecutionStarted(Long taskId, Map<String, Object> body)
-      throws IOException {
-    postJson("/internal/tasks/" + taskId + "/non-idempotent-started", body, null, Void.class);
-  }
-
-  /** POST /internal/tasks/{taskId}/report — body schema = TaskExecutionReportDto。 */
-  public void report(Long taskId, String idempotencyKey, Map<String, Object> body)
-      throws IOException {
-    postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey, Void.class);
-  }
-
-  /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
-  public TaskRenewResponse renew(Long taskId, Map<String, Object> body) throws IOException {
-    return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
-  }
-
-  /** 确认执行线程已到达业务入口；响应未知时禁止执行业务，返回值表示平台是否已请求取消。 */
-  public boolean confirmExecutionStarted(Long taskId, Map<String, Object> identity)
-      throws IOException {
-    Map<String, Object> body = new HashMap<>(identity);
-    body.put(
-        "details",
-        Map.of("executionStarted", true, "executionAttemptId", UUID.randomUUID().toString()));
-    TaskRenewResponse response = renew(taskId, body);
-    if (EmptyChecks.isNull(response)) {
-      throw new IOException("execution start response was empty");
-    }
-    return response.cancelRequested();
-  }
-
-  private <T> T postJson(String path, Object body, String idempotencyKey, Class<T> responseType)
-      throws IOException {
-    return postJson(path, body, idempotencyKey, responseType, null);
-  }
-
-  private <T> T postJson(
-      String path,
-      Object body,
-      String idempotencyKey,
-      Class<T> responseType,
-      Duration timeoutOverride)
-      throws IOException {
-    String url = config.getBaseUrl() + path;
-    Object requestBody = EmptyChecks.isNull(body) ? Map.of() : body;
-    // 注册时间遵循 OpenAPI date-time 字符串格式，不依赖 ObjectMapper 的全局时间戳默认值。
-    byte[] payload = body instanceof RegisterRequest
-        ? objectMapper
-            .writer()
-            .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .writeValueAsBytes(requestBody)
-        : objectMapper.writeValueAsBytes(requestBody);
-
-    Request.Builder req = new Request.Builder()
-        .url(url)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .header("X-Batch-Tenant-Id", config.getTenantId())
-        .post(RequestBody.create(payload, JSON));
-    String apiKey = config.getApiKey();
-    if (EmptyChecks.isNotBlank(apiKey)) {
-      req.header("X-Batch-Api-Key", apiKey);
-      // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
-      if (config.isRequestSigningEnabled()) {
-        String timestamp = Long.toString(System.currentTimeMillis());
-        UUID nonceUuid = UUID.randomUUID();
-        String nonce = nonceUuid.toString();
-        String signature = RequestSigner.sign(apiKey, "POST", path, timestamp, nonce, payload);
-        req.header("X-Batch-Timestamp", timestamp)
-            .header("X-Batch-Nonce", nonce)
-            .header("X-Batch-Signature", signature);
-      }
-    }
-    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-      req.header("Idempotency-Key", idempotencyKey);
+    public PlatformHttpClient(BatchPlatformClientConfig config) {
+        this(config, createHttpClient(config.getHttpTimeout()));
     }
 
-    Call call = httpClient.newCall(req.build());
-    if (EmptyChecks.isNotNull(timeoutOverride)) {
-      long requestedTimeoutMillis = timeoutOverride.toMillis();
-      long configuredTimeoutMillis = config.getHttpTimeout().toMillis();
-      long boundedTimeoutMillis = Math.min(requestedTimeoutMillis, configuredTimeoutMillis);
-      long timeoutMillis = Math.max(1L, boundedTimeoutMillis);
-      call.timeout().timeout(timeoutMillis, TimeUnit.MILLISECONDS);
+    PlatformHttpClient(BatchPlatformClientConfig config, OkHttpClient httpClient) {
+        this.config = config;
+        this.httpClient = httpClient;
+        this.objectMapper = SdkJsonMapperFactory.create();
     }
-    try (Response resp = call.execute()) {
-      ResponseBody responseBody = resp.body();
-      byte[] responseBytes = responseBody.bytes();
-      if (resp.code() >= 200 && resp.code() < 300) {
-        if (responseType == Void.class || EmptyChecks.isEmpty(responseBytes)) {
-          return null;
+
+    static OkHttpClient createHttpClient(Duration timeout) {
+        return new OkHttpClient.Builder()
+                .connectTimeout(timeout)
+                .readTimeout(timeout)
+                .writeTimeout(timeout)
+                .callTimeout(timeout)
+                .fastFallback(true)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                // CLAIM/REPORT 重试由 SDK 决策层持有，连接层不能隐式重放 POST。
+                .retryOnConnectionFailure(false)
+                .build();
+    }
+
+    /** POST /internal/workers/register — 固定注册协议由 wire DTO 表达。 */
+    public WorkerRegistrationResponse register(RegisterRequest body) throws IOException {
+        return postJson("/internal/workers/register", body, null, WorkerRegistrationResponse.class);
+    }
+
+    /** POST /internal/workers/{workerCode}/heartbeat — body schema = WorkerHeartbeatDto。 */
+    public HeartbeatDirective heartbeat(String workerCode, Map<String, Object> body) throws IOException {
+        return postJson("/internal/workers/" + workerCode + "/heartbeat", body, null, HeartbeatDirective.class);
+    }
+
+    /** POST /internal/workers/{workerCode}/deactivate — SDK stop 时优雅下线。 */
+    public void deactivate(String workerCode, Map<String, Object> body) throws IOException {
+        postJson("/internal/workers/" + workerCode + "/deactivate", body, null, Void.class);
+    }
+
+    /**
+     * 在剩余停机预算内完成优雅下线。该超时只收窄当前调用，不改变共享客户端的正常请求超时。
+     */
+    public void deactivate(String workerCode, Map<String, Object> body, Duration remainingTimeout) throws IOException {
+        postJson("/internal/workers/" + workerCode + "/deactivate", body, null, Void.class, remainingTimeout);
+    }
+
+    /**
+     * 取消当前正在解析、建连或等待响应的同步/异步调用。
+     *
+     * <p>OkHttp 的同步 {@code execute()} 不以线程中断作为稳定取消契约。SDK 停机必须显式取消心跳、续租和超时后的
+     * REPORT，才能守住 {@code stop(timeout)} 总预算。
+     */
+    public void cancelInFlightCalls() {
+        httpClient.dispatcher().cancelAll();
+    }
+
+    /** 释放空闲连接；不关闭共享执行器，允许同一个 SDK client 在 stop 后再次 start。 */
+    public void evictIdleConnections() {
+        httpClient.connectionPool().evictAll();
+    }
+
+    /** POST /internal/tasks/{taskId}/claim — body=TaskClaimRequest,返回 EffectiveTaskConfig JSON。 */
+    public TaskClaimResponse claim(Long taskId, String idempotencyKey, Map<String, Object> body) throws IOException {
+        return postJson("/internal/tasks/" + taskId + "/claim", body, idempotencyKey, TaskClaimResponse.class);
+    }
+
+    /** 非幂等动作前确认当前 task/worker/invocation，非 2xx 或传输失败均不能放行动作。 */
+    public void markNonIdempotentExecutionStarted(Long taskId, Map<String, Object> body) throws IOException {
+        postJson("/internal/tasks/" + taskId + "/non-idempotent-started", body, null, Void.class);
+    }
+
+    /** POST /internal/tasks/{taskId}/report — body schema = TaskExecutionReportDto。 */
+    public void report(Long taskId, String idempotencyKey, Map<String, Object> body) throws IOException {
+        postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey, Void.class);
+    }
+
+    /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
+    public TaskRenewResponse renew(Long taskId, Map<String, Object> body) throws IOException {
+        return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
+    }
+
+    /** 确认执行线程已到达业务入口；响应未知时禁止执行业务，返回值表示平台是否已请求取消。 */
+    public boolean confirmExecutionStarted(Long taskId, Map<String, Object> identity) throws IOException {
+        Map<String, Object> body = new HashMap<>(identity);
+        body.put(
+                "details",
+                Map.of(
+                        "executionStarted",
+                        true,
+                        "executionAttemptId",
+                        UUID.randomUUID().toString()));
+        TaskRenewResponse response = renew(taskId, body);
+        if (EmptyChecks.isNull(response)) {
+            throw new IOException("execution start response was empty");
         }
-        return objectMapper.readValue(responseBytes, responseType);
-      }
-      int statusCode = resp.code();
-      log.debug("non-2xx response: status={} responseBytes={}", statusCode, responseBytes.length);
-      throw new PlatformHttpException(statusCode, "HTTP " + statusCode + " from " + path);
-    }
-  }
-
-  /** register 回包中 SDK 实际消费和记录的稳定字段；平台新增字段由 Jackson 向后兼容忽略。 */
-  public record WorkerRegistrationResponse(
-      Long id, String tenantId, String workerCode, String status) {}
-
-  /** claim 回包中的 SDK 执行字段；payload 是由平台持久化任务载荷提供的权威业务参数 JSON。 */
-  public record TaskClaimResponse(
-      String partitionInvocationId,
-      String payload,
-      List<SdkDependencyResultReference> dependencyResultSnapshot) {
-    public TaskClaimResponse {
-      dependencyResultSnapshot = EmptyChecks.isNull(dependencyResultSnapshot)
-          ? List.of()
-          : List.copyOf(dependencyResultSnapshot);
+        return response.cancelRequested();
     }
 
-    public TaskClaimResponse(String partitionInvocationId) {
-      this(partitionInvocationId, null, List.of());
+    private <T> T postJson(String path, Object body, String idempotencyKey, Class<T> responseType) throws IOException {
+        return postJson(path, body, idempotencyKey, responseType, null);
     }
 
-    public TaskClaimResponse(
-        String partitionInvocationId, List<SdkDependencyResultReference> dependencyResultSnapshot) {
-      this(partitionInvocationId, null, dependencyResultSnapshot);
-    }
-  }
+    private <T> T postJson(
+            String path, Object body, String idempotencyKey, Class<T> responseType, Duration timeoutOverride)
+            throws IOException {
+        String url = config.getBaseUrl() + path;
+        Object requestBody = EmptyChecks.isNull(body) ? Map.of() : body;
+        // 注册时间遵循 OpenAPI date-time 字符串格式，不依赖 ObjectMapper 的全局时间戳默认值。
+        byte[] payload = body instanceof RegisterRequest
+                ? objectMapper
+                        .writer()
+                        .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                        .writeValueAsBytes(requestBody)
+                : objectMapper.writeValueAsBytes(requestBody);
 
-  /** renew 回包中的取消指令。 */
-  public record TaskRenewResponse(boolean cancelRequested) {}
+        Request.Builder req = new Request.Builder()
+                .url(url)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("X-Batch-Tenant-Id", config.getTenantId())
+                .post(RequestBody.create(payload, JSON));
+        String apiKey = config.getApiKey();
+        if (EmptyChecks.isNotBlank(apiKey)) {
+            req.header("X-Batch-Api-Key", apiKey);
+            // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
+            if (config.isRequestSigningEnabled()) {
+                String timestamp = Long.toString(System.currentTimeMillis());
+                UUID nonceUuid = UUID.randomUUID();
+                String nonce = nonceUuid.toString();
+                String signature = RequestSigner.sign(apiKey, "POST", path, timestamp, nonce, payload);
+                req.header("X-Batch-Timestamp", timestamp)
+                        .header("X-Batch-Nonce", nonce)
+                        .header("X-Batch-Signature", signature);
+            }
+        }
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            req.header("Idempotency-Key", idempotencyKey);
+        }
+
+        Call call = httpClient.newCall(req.build());
+        if (EmptyChecks.isNotNull(timeoutOverride)) {
+            long requestedTimeoutMillis = timeoutOverride.toMillis();
+            long configuredTimeoutMillis = config.getHttpTimeout().toMillis();
+            long boundedTimeoutMillis = Math.min(requestedTimeoutMillis, configuredTimeoutMillis);
+            long timeoutMillis = Math.max(1L, boundedTimeoutMillis);
+            call.timeout().timeout(timeoutMillis, TimeUnit.MILLISECONDS);
+        }
+        try (Response resp = call.execute()) {
+            ResponseBody responseBody = resp.body();
+            byte[] responseBytes = responseBody.bytes();
+            if (resp.code() >= 200 && resp.code() < 300) {
+                if (responseType == Void.class || EmptyChecks.isEmpty(responseBytes)) {
+                    return null;
+                }
+                return objectMapper.readValue(responseBytes, responseType);
+            }
+            int statusCode = resp.code();
+            log.debug("non-2xx response: status={} responseBytes={}", statusCode, responseBytes.length);
+            throw new PlatformHttpException(statusCode, "HTTP " + statusCode + " from " + path);
+        }
+    }
+
+    /** register 回包中 SDK 实际消费和记录的稳定字段；平台新增字段由 Jackson 向后兼容忽略。 */
+    public record WorkerRegistrationResponse(Long id, String tenantId, String workerCode, String status) {}
+
+    /** claim 回包中的 SDK 执行字段；payload 是由平台持久化任务载荷提供的权威业务参数 JSON。 */
+    public record TaskClaimResponse(
+            String partitionInvocationId, String payload, List<SdkDependencyResultReference> dependencyResultSnapshot) {
+        public TaskClaimResponse {
+            dependencyResultSnapshot =
+                    EmptyChecks.isNull(dependencyResultSnapshot) ? List.of() : List.copyOf(dependencyResultSnapshot);
+        }
+
+        public TaskClaimResponse(String partitionInvocationId) {
+            this(partitionInvocationId, null, List.of());
+        }
+
+        public TaskClaimResponse(
+                String partitionInvocationId, List<SdkDependencyResultReference> dependencyResultSnapshot) {
+            this(partitionInvocationId, null, dependencyResultSnapshot);
+        }
+    }
+
+    /** renew 回包中的取消指令。 */
+    public record TaskRenewResponse(boolean cancelRequested) {}
 }

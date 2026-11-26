@@ -12,23 +12,23 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface ConsoleUsageDailyMapper {
 
-  /** 在当前事务连接上设置租户上下文，配合严格 RLS 使用。 */
-  String setTenantContext(@Param("tenantId") String tenantId);
+    /** 在当前事务连接上设置租户上下文，配合严格 RLS 使用。 */
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  int insertDaily(@Param("row") DailyUsageRow row);
+    int insertDaily(@Param("row") DailyUsageRow row);
 
-  List<DailyUsageRow> querySummary(ConsoleUsageDailySummaryQuery parameters);
+    List<DailyUsageRow> querySummary(ConsoleUsageDailySummaryQuery parameters);
 
-  @Builder
-  record DailyUsageRow(
-      LocalDate statDate,
-      String tenantId,
-      String source,
-      String metricCode,
-      String pageCode,
-      String appVersion,
-      long eventCount,
-      long successCount,
-      long failureCount,
-      OffsetDateTime lastSeenAt) {}
+    @Builder
+    record DailyUsageRow(
+            LocalDate statDate,
+            String tenantId,
+            String source,
+            String metricCode,
+            String pageCode,
+            String appVersion,
+            long eventCount,
+            long successCount,
+            long failureCount,
+            OffsetDateTime lastSeenAt) {}
 }

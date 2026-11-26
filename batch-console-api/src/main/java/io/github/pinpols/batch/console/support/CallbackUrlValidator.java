@@ -23,37 +23,37 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CallbackUrlValidator {
 
-  private final BatchSecurityProperties securityProperties;
+    private final BatchSecurityProperties securityProperties;
 
-  public void validate(String callbackUrl) {
-    if (securityProperties.isBypassMode()) {
-      return;
-    }
+    public void validate(String callbackUrl) {
+        if (securityProperties.isBypassMode()) {
+            return;
+        }
 
-    URI uri;
-    try {
-      uri = new URI(callbackUrl);
-    } catch (URISyntaxException e) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.invalid_url");
-    }
+        URI uri;
+        try {
+            uri = new URI(callbackUrl);
+        } catch (URISyntaxException e) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.invalid_url");
+        }
 
-    String scheme = uri.getScheme();
-    if (!"https".equalsIgnoreCase(scheme)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.https_required");
-    }
+        String scheme = uri.getScheme();
+        if (!"https".equalsIgnoreCase(scheme)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.https_required");
+        }
 
-    String host = uri.getHost();
-    if (host == null) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.no_host");
-    }
+        String host = uri.getHost();
+        if (host == null) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.no_host");
+        }
 
-    // S-2.6: DNS 解析后校验真实 IP，消除 DNS rebinding 窗口
-    try {
-      DnsResolveGuard.resolveAllAndValidate(host);
-    } catch (BlockedAddressException e) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address");
-    } catch (UnknownHostException e) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.host_unresolved");
+        // S-2.6: DNS 解析后校验真实 IP，消除 DNS rebinding 窗口
+        try {
+            DnsResolveGuard.resolveAllAndValidate(host);
+        } catch (BlockedAddressException e) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address");
+        } catch (UnknownHostException e) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.host_unresolved");
+        }
     }
-  }
 }

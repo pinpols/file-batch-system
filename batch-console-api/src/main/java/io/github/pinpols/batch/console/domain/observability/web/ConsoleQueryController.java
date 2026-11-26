@@ -105,361 +105,357 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 @BoundedContextExemption(
-    reason = "历史遗留的跨上下文只读查询聚合入口，按前端已发布 /api/console/queries/** 契约聚合各上下文查询结果",
-    cleanupBy = "P1-B/P1-C 按上下文拆分为只读端点后移除")
+        reason = "历史遗留的跨上下文只读查询聚合入口，按前端已发布 /api/console/queries/** 契约聚合各上下文查询结果",
+        cleanupBy = "P1-B/P1-C 按上下文拆分为只读端点后移除")
 public class ConsoleQueryController {
 
-  private final ConsoleQueryApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
-  private final OperationAuditQueryService operationAuditQueryService;
-  private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleQueryApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
+    private final OperationAuditQueryService operationAuditQueryService;
+    private final ConsoleOrchestratorPort orchestratorProxy;
 
-  /**
-   * GET /pipeline-progress?pipelineInstanceId=... — 拉取单个 pipeline instance 的 step 行级进度。
-   *
-   * <p>这是 FilePipelineObservability 前端使用的正式契约，返回 {@code {pipelineInstanceId, steps}}。
-   */
-  @GetMapping("/pipeline-progress")
-  public CommonResponse<ConsoleFilePipelineProgressResponse> pipelineProgress(
-      @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
-    return responseFactory.success(applicationService.pipelineProgress(pipelineInstanceId));
-  }
+    /**
+     * GET /pipeline-progress?pipelineInstanceId=... — 拉取单个 pipeline instance 的 step 行级进度。
+     *
+     * <p>这是 FilePipelineObservability 前端使用的正式契约，返回 {@code {pipelineInstanceId, steps}}。
+     */
+    @GetMapping("/pipeline-progress")
+    public CommonResponse<ConsoleFilePipelineProgressResponse> pipelineProgress(
+            @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
+        return responseFactory.success(applicationService.pipelineProgress(pipelineInstanceId));
+    }
 
-  /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
-  @GetMapping("/audits")
-  public CommonResponse<PageResponse<ConsoleAuditLogResponse>> audits(
-      @Valid @ModelAttribute AuditLogQueryRequest request) {
-    return responseFactory.success(applicationService.auditLogs(request));
-  }
+    /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
+    @GetMapping("/audits")
+    public CommonResponse<PageResponse<ConsoleAuditLogResponse>> audits(
+            @Valid @ModelAttribute AuditLogQueryRequest request) {
+        return responseFactory.success(applicationService.auditLogs(request));
+    }
 
-  /**
-   * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 写入数据库)。 跟 /audits 不同:这是
-   * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
-   *
-   * <p>与菜单"操作审计"一致，只对平台管理员、租户管理员和审计员开放；普通租户用户不能读到管理员的操作记录。
-   */
-  @GetMapping("/operation-audits")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<PageResponse<ConsoleOperationAuditResponse>> operationAudits(
-      @Valid @ModelAttribute OperationAuditQueryRequest request) {
-    return responseFactory.success(operationAuditQueryService.query(request));
-  }
+    /**
+     * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 写入数据库)。 跟 /audits 不同:这是
+     * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
+     *
+     * <p>与菜单"操作审计"一致，只对平台管理员、租户管理员和审计员开放；普通租户用户不能读到管理员的操作记录。
+     */
+    @GetMapping("/operation-audits")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<PageResponse<ConsoleOperationAuditResponse>> operationAudits(
+            @Valid @ModelAttribute OperationAuditQueryRequest request) {
+        return responseFactory.success(operationAuditQueryService.query(request));
+    }
 
-  /** GET /execution-logs — 执行日志列表（审计日志别名）。 */
-  @GetMapping("/execution-logs")
-  public CommonResponse<PageResponse<ConsoleAuditLogResponse>> executionLogs(
-      @Valid @ModelAttribute AuditLogQueryRequest request) {
-    return responseFactory.success(applicationService.executionLogs(request));
-  }
+    /** GET /execution-logs — 执行日志列表（审计日志别名）。 */
+    @GetMapping("/execution-logs")
+    public CommonResponse<PageResponse<ConsoleAuditLogResponse>> executionLogs(
+            @Valid @ModelAttribute AuditLogQueryRequest request) {
+        return responseFactory.success(applicationService.executionLogs(request));
+    }
 
-  /** GET /trace-snapshot — 按完整 traceId 精确聚合查询排障快照。 */
-  @GetMapping("/trace-snapshot")
-  public CommonResponse<ConsoleTraceSnapshotResponse> traceSnapshot(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("traceId") @NotBlank @Size(max = CorrelationIds.MAX_HEADER_ID_LENGTH)
-          String traceId) {
-    return responseFactory.success(applicationService.traceSnapshot(tenantId, traceId));
-  }
+    /** GET /trace-snapshot — 按完整 traceId 精确聚合查询排障快照。 */
+    @GetMapping("/trace-snapshot")
+    public CommonResponse<ConsoleTraceSnapshotResponse> traceSnapshot(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("traceId") @NotBlank @Size(max = CorrelationIds.MAX_HEADER_ID_LENGTH) String traceId) {
+        return responseFactory.success(applicationService.traceSnapshot(tenantId, traceId));
+    }
 
-  /** GET /alerts — 告警事件列表。 */
-  @GetMapping("/alerts")
-  public CommonResponse<PageResponse<ConsoleAlertEventResponse>> alerts(
-      @Valid @ModelAttribute AlertEventQueryRequest request) {
-    return responseFactory.success(applicationService.alertEvents(request));
-  }
+    /** GET /alerts — 告警事件列表。 */
+    @GetMapping("/alerts")
+    public CommonResponse<PageResponse<ConsoleAlertEventResponse>> alerts(
+            @Valid @ModelAttribute AlertEventQueryRequest request) {
+        return responseFactory.success(applicationService.alertEvents(request));
+    }
 
-  /** GET /batch-days — 批量日列表。 */
-  @GetMapping("/batch-days")
-  public CommonResponse<PageResponse<ConsoleBatchDayResponse>> batchDays(
-      @Valid @ModelAttribute BatchDayQueryRequest request) {
-    return responseFactory.success(applicationService.batchDays(request));
-  }
+    /** GET /batch-days — 批量日列表。 */
+    @GetMapping("/batch-days")
+    public CommonResponse<PageResponse<ConsoleBatchDayResponse>> batchDays(
+            @Valid @ModelAttribute BatchDayQueryRequest request) {
+        return responseFactory.success(applicationService.batchDays(request));
+    }
 
-  /** GET /approvals — 审批指令列表。 */
-  @GetMapping("/approvals")
-  public CommonResponse<PageResponse<ConsoleApprovalCommandResponse>> approvals(
-      @Valid @ModelAttribute ApprovalCommandQueryRequest request) {
-    return responseFactory.success(applicationService.approvals(request));
-  }
+    /** GET /approvals — 审批指令列表。 */
+    @GetMapping("/approvals")
+    public CommonResponse<PageResponse<ConsoleApprovalCommandResponse>> approvals(
+            @Valid @ModelAttribute ApprovalCommandQueryRequest request) {
+        return responseFactory.success(applicationService.approvals(request));
+    }
 
-  /** GET /batch-days/{bizDate}/window — 批量日窗口状态。 */
-  @GetMapping("/batch-days/{bizDate}/window")
-  public CommonResponse<ConsoleBatchDayWindowResponse> batchDayWindow(
-      @PathVariable String bizDate, @Valid @ModelAttribute BatchDayWindowQueryRequest request) {
-    return responseFactory.success(applicationService.batchDayWindow(bizDate, request));
-  }
+    /** GET /batch-days/{bizDate}/window — 批量日窗口状态。 */
+    @GetMapping("/batch-days/{bizDate}/window")
+    public CommonResponse<ConsoleBatchDayWindowResponse> batchDayWindow(
+            @PathVariable String bizDate, @Valid @ModelAttribute BatchDayWindowQueryRequest request) {
+        return responseFactory.success(applicationService.batchDayWindow(bizDate, request));
+    }
 
-  /** GET /files — 文件链路记录。 */
-  @GetMapping("/files")
-  public CommonResponse<PageResponse<ConsoleFileRecordResponse>> files(
-      @Valid @ModelAttribute FileChainQueryRequest request) {
-    return responseFactory.success(applicationService.fileChains(request));
-  }
+    /** GET /files — 文件链路记录。 */
+    @GetMapping("/files")
+    public CommonResponse<PageResponse<ConsoleFileRecordResponse>> files(
+            @Valid @ModelAttribute FileChainQueryRequest request) {
+        return responseFactory.success(applicationService.fileChains(request));
+    }
 
-  /** GET /files/summary — 文件列表页领域汇总卡(今日到达 / 待处理 / 已处理 / 失败)。 */
-  @GetMapping("/files/summary")
-  public CommonResponse<ConsoleFileSummaryResponse> fileSummary(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(applicationService.fileSummary(tenantId));
-  }
+    /** GET /files/summary — 文件列表页领域汇总卡(今日到达 / 待处理 / 已处理 / 失败)。 */
+    @GetMapping("/files/summary")
+    public CommonResponse<ConsoleFileSummaryResponse> fileSummary(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.success(applicationService.fileSummary(tenantId));
+    }
 
-  /** GET /job-definitions — 作业定义。 */
-  @GetMapping("/job-definitions")
-  public CommonResponse<PageResponse<ConsoleJobDefinitionResponse>> jobDefinitions(
-      @Valid @ModelAttribute JobDefinitionQueryRequest request) {
-    return responseFactory.success(applicationService.jobDefinitions(request));
-  }
+    /** GET /job-definitions — 作业定义。 */
+    @GetMapping("/job-definitions")
+    public CommonResponse<PageResponse<ConsoleJobDefinitionResponse>> jobDefinitions(
+            @Valid @ModelAttribute JobDefinitionQueryRequest request) {
+        return responseFactory.success(applicationService.jobDefinitions(request));
+    }
 
-  /**
-   * GET /job-definitions/codes — workflow-dag-designer BE Spike 下拉数据源。
-   *
-   * <p>仅 ACTIVE(enabled=true),按 jobCode 升序;不分页(下拉假定 &lt; 几百条数量级)。详见
-   * docs/design/workflow-dag-designer.md。
-   */
-  @GetMapping("/job-definitions/codes")
-  public CommonResponse<List<CodeNameOption>> jobDefinitionCodes(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.jobDefinitionCodes(tenantId));
-  }
+    /**
+     * GET /job-definitions/codes — workflow-dag-designer BE Spike 下拉数据源。
+     *
+     * <p>仅 ACTIVE(enabled=true),按 jobCode 升序;不分页(下拉假定 &lt; 几百条数量级)。详见
+     * docs/design/workflow-dag-designer.md。
+     */
+    @GetMapping("/job-definitions/codes")
+    public CommonResponse<List<CodeNameOption>> jobDefinitionCodes(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.jobDefinitionCodes(tenantId));
+    }
 
-  /** GET /outbox-retries — Outbox 重试日志。 */
-  @GetMapping("/outbox-retries")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<PageResponse<ConsoleOutboxRetryLogResponse>> outboxRetries(
-      @Valid @ModelAttribute OutboxRetryLogQueryRequest request) {
-    return responseFactory.success(applicationService.outboxRetries(request));
-  }
+    /** GET /outbox-retries — Outbox 重试日志。 */
+    @GetMapping("/outbox-retries")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<PageResponse<ConsoleOutboxRetryLogResponse>> outboxRetries(
+            @Valid @ModelAttribute OutboxRetryLogQueryRequest request) {
+        return responseFactory.success(applicationService.outboxRetries(request));
+    }
 
-  /** GET /outbox-deliveries — Outbox 投递日志。 */
-  @GetMapping("/outbox-deliveries")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<PageResponse<ConsoleOutboxDeliveryLogResponse>> outboxDeliveries(
-      @Valid @ModelAttribute OutboxDeliveryLogQueryRequest request) {
-    return responseFactory.success(applicationService.outboxDeliveries(request));
-  }
+    /** GET /outbox-deliveries — Outbox 投递日志。 */
+    @GetMapping("/outbox-deliveries")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<PageResponse<ConsoleOutboxDeliveryLogResponse>> outboxDeliveries(
+            @Valid @ModelAttribute OutboxDeliveryLogQueryRequest request) {
+        return responseFactory.success(applicationService.outboxDeliveries(request));
+    }
 
-  /** GET /file-pipelines — 文件流水线。 */
-  @GetMapping("/file-pipelines")
-  public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> filePipelines(
-      @Valid @ModelAttribute FilePipelineQueryRequest request) {
-    return responseFactory.success(applicationService.filePipelines(request));
-  }
+    /** GET /file-pipelines — 文件流水线。 */
+    @GetMapping("/file-pipelines")
+    public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> filePipelines(
+            @Valid @ModelAttribute FilePipelineQueryRequest request) {
+        return responseFactory.success(applicationService.filePipelines(request));
+    }
 
-  /** GET /file-pipeline-steps — 流水线步骤运行记录。 */
-  @GetMapping("/file-pipeline-steps")
-  public CommonResponse<PageResponse<ConsoleFilePipelineStepResponse>> filePipelineSteps(
-      @Valid @ModelAttribute FilePipelineStepQueryRequest request) {
-    return responseFactory.success(applicationService.filePipelineSteps(request));
-  }
+    /** GET /file-pipeline-steps — 流水线步骤运行记录。 */
+    @GetMapping("/file-pipeline-steps")
+    public CommonResponse<PageResponse<ConsoleFilePipelineStepResponse>> filePipelineSteps(
+            @Valid @ModelAttribute FilePipelineStepQueryRequest request) {
+        return responseFactory.success(applicationService.filePipelineSteps(request));
+    }
 
-  /** GET /file-dispatches — 文件派发记录。 */
-  @GetMapping("/file-dispatches")
-  public CommonResponse<PageResponse<ConsoleFileDispatchRecordResponse>> fileDispatches(
-      @Valid @ModelAttribute FileDispatchRecordQueryRequest request) {
-    return responseFactory.success(applicationService.fileDispatchRecords(request));
-  }
+    /** GET /file-dispatches — 文件派发记录。 */
+    @GetMapping("/file-dispatches")
+    public CommonResponse<PageResponse<ConsoleFileDispatchRecordResponse>> fileDispatches(
+            @Valid @ModelAttribute FileDispatchRecordQueryRequest request) {
+        return responseFactory.success(applicationService.fileDispatchRecords(request));
+    }
 
-  /** GET /channel-receipts — 通道回执视图（file-dispatches 的 receipt 语义别名）。 */
-  @GetMapping("/channel-receipts")
-  public CommonResponse<PageResponse<ConsoleFileDispatchRecordResponse>> channelReceipts(
-      @Valid @ModelAttribute FileDispatchRecordQueryRequest request) {
-    return responseFactory.success(applicationService.fileDispatchRecords(request));
-  }
+    /** GET /channel-receipts — 通道回执视图（file-dispatches 的 receipt 语义别名）。 */
+    @GetMapping("/channel-receipts")
+    public CommonResponse<PageResponse<ConsoleFileDispatchRecordResponse>> channelReceipts(
+            @Valid @ModelAttribute FileDispatchRecordQueryRequest request) {
+        return responseFactory.success(applicationService.fileDispatchRecords(request));
+    }
 
-  /** GET /file-channels — 文件通道配置。 */
-  @GetMapping("/file-channels")
-  public CommonResponse<PageResponse<ConsoleFileChannelResponse>> fileChannels(
-      @Valid @ModelAttribute FileChannelQueryRequest request) {
-    return responseFactory.success(applicationService.fileChannels(request));
-  }
+    /** GET /file-channels — 文件通道配置。 */
+    @GetMapping("/file-channels")
+    public CommonResponse<PageResponse<ConsoleFileChannelResponse>> fileChannels(
+            @Valid @ModelAttribute FileChannelQueryRequest request) {
+        return responseFactory.success(applicationService.fileChannels(request));
+    }
 
-  /** GET /file-arrival-groups — 文件到达组。 */
-  @GetMapping("/file-arrival-groups")
-  public CommonResponse<PageResponse<ConsoleFileArrivalGroupResponse>> fileArrivalGroups(
-      @Valid @ModelAttribute FileArrivalGroupQueryRequest request) {
-    return responseFactory.success(applicationService.fileArrivalGroups(request));
-  }
+    /** GET /file-arrival-groups — 文件到达组。 */
+    @GetMapping("/file-arrival-groups")
+    public CommonResponse<PageResponse<ConsoleFileArrivalGroupResponse>> fileArrivalGroups(
+            @Valid @ModelAttribute FileArrivalGroupQueryRequest request) {
+        return responseFactory.success(applicationService.fileArrivalGroups(request));
+    }
 
-  /** GET /file-errors — 文件错误记录。 */
-  @GetMapping("/file-errors")
-  public CommonResponse<PageResponse<ConsoleFileErrorRecordResponse>> fileErrors(
-      @Valid @ModelAttribute FileErrorRecordQueryRequest request) {
-    return responseFactory.success(applicationService.fileErrorRecords(request));
-  }
+    /** GET /file-errors — 文件错误记录。 */
+    @GetMapping("/file-errors")
+    public CommonResponse<PageResponse<ConsoleFileErrorRecordResponse>> fileErrors(
+            @Valid @ModelAttribute FileErrorRecordQueryRequest request) {
+        return responseFactory.success(applicationService.fileErrorRecords(request));
+    }
 
-  /** GET /file-templates — 文件模板配置。 */
-  @GetMapping("/file-templates")
-  public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> fileTemplates(
-      @Valid @ModelAttribute FileTemplateQueryRequest request) {
-    return responseFactory.success(applicationService.fileTemplates(request));
-  }
+    /** GET /file-templates — 文件模板配置。 */
+    @GetMapping("/file-templates")
+    public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> fileTemplates(
+            @Valid @ModelAttribute FileTemplateQueryRequest request) {
+        return responseFactory.success(applicationService.fileTemplates(request));
+    }
 
-  /** GET /instances — 作业实例。 */
-  @GetMapping("/instances")
-  public CommonResponse<PageResponse<ConsoleJobInstanceResponse>> instances(
-      @Valid @ModelAttribute JobInstanceQueryRequest request) {
-    return responseFactory.success(applicationService.jobInstances(request));
-  }
+    /** GET /instances — 作业实例。 */
+    @GetMapping("/instances")
+    public CommonResponse<PageResponse<ConsoleJobInstanceResponse>> instances(
+            @Valid @ModelAttribute JobInstanceQueryRequest request) {
+        return responseFactory.success(applicationService.jobInstances(request));
+    }
 
-  /** GET /instances/{id} — 作业实例详情。 */
-  @GetMapping("/instances/{id}")
-  public CommonResponse<ConsoleJobInstanceResponse> instanceDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.jobInstance(tenantId, id));
-  }
+    /** GET /instances/{id} — 作业实例详情。 */
+    @GetMapping("/instances/{id}")
+    public CommonResponse<ConsoleJobInstanceResponse> instanceDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.jobInstance(tenantId, id));
+    }
 
-  /** GET /job-execution-logs — 任务级执行日志(锚定 jobInstanceId,支持 level/type/keyword + cursor 分页)。 */
-  @GetMapping("/job-execution-logs")
-  public CommonResponse<PageResponse<ConsoleJobExecutionLogResponse>> jobExecutionLogs(
-      @Valid @ModelAttribute JobExecutionLogQueryRequest request) {
-    return responseFactory.success(applicationService.jobExecutionLogs(request));
-  }
+    /** GET /job-execution-logs — 任务级执行日志(锚定 jobInstanceId,支持 level/type/keyword + cursor 分页)。 */
+    @GetMapping("/job-execution-logs")
+    public CommonResponse<PageResponse<ConsoleJobExecutionLogResponse>> jobExecutionLogs(
+            @Valid @ModelAttribute JobExecutionLogQueryRequest request) {
+        return responseFactory.success(applicationService.jobExecutionLogs(request));
+    }
 
-  /** GET /instances/batch-status — 批量查询作业实例状态。 */
-  @GetMapping("/instances/batch-status")
-  public CommonResponse<List<ConsoleJobInstanceResponse>> batchInstanceStatus(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("instanceNos") List<String> instanceNos) {
-    return responseFactory.success(applicationService.batchInstanceStatus(tenantId, instanceNos));
-  }
+    /** GET /instances/batch-status — 批量查询作业实例状态。 */
+    @GetMapping("/instances/batch-status")
+    public CommonResponse<List<ConsoleJobInstanceResponse>> batchInstanceStatus(
+            @RequestParam("tenantId") String tenantId, @RequestParam("instanceNos") List<String> instanceNos) {
+        return responseFactory.success(applicationService.batchInstanceStatus(tenantId, instanceNos));
+    }
 
-  /** GET /job-step-instances — 作业步骤实例。 */
-  @GetMapping("/job-step-instances")
-  public CommonResponse<PageResponse<ConsoleJobStepInstanceResponse>> jobStepInstances(
-      @Valid @ModelAttribute JobStepInstanceQueryRequest request) {
-    return responseFactory.success(applicationService.jobStepInstances(request));
-  }
+    /** GET /job-step-instances — 作业步骤实例。 */
+    @GetMapping("/job-step-instances")
+    public CommonResponse<PageResponse<ConsoleJobStepInstanceResponse>> jobStepInstances(
+            @Valid @ModelAttribute JobStepInstanceQueryRequest request) {
+        return responseFactory.success(applicationService.jobStepInstances(request));
+    }
 
-  /** GET /partitions — 按作业实例分页查询分区（{@code job_partition}）。 */
-  @GetMapping("/partitions")
-  public CommonResponse<PageResponse<ConsoleJobPartitionResponse>> jobPartitions(
-      @Valid @ModelAttribute JobPartitionQueryRequest request) {
-    return responseFactory.success(applicationService.jobPartitions(request));
-  }
+    /** GET /partitions — 按作业实例分页查询分区（{@code job_partition}）。 */
+    @GetMapping("/partitions")
+    public CommonResponse<PageResponse<ConsoleJobPartitionResponse>> jobPartitions(
+            @Valid @ModelAttribute JobPartitionQueryRequest request) {
+        return responseFactory.success(applicationService.jobPartitions(request));
+    }
 
-  /** GET /job-step-instances/{id} — 作业步骤实例详情。 */
-  @GetMapping("/job-step-instances/{id}")
-  public CommonResponse<ConsoleJobStepInstanceResponse> jobStepInstanceDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.jobStepInstance(tenantId, id));
-  }
+    /** GET /job-step-instances/{id} — 作业步骤实例详情。 */
+    @GetMapping("/job-step-instances/{id}")
+    public CommonResponse<ConsoleJobStepInstanceResponse> jobStepInstanceDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.jobStepInstance(tenantId, id));
+    }
 
-  /** GET /workflow-definitions — 工作流定义。 */
-  @GetMapping("/workflow-definitions")
-  public CommonResponse<PageResponse<ConsoleWorkflowDefinitionResponse>> workflowDefinitions(
-      @Valid @ModelAttribute WorkflowDefinitionQueryRequest request) {
-    return responseFactory.success(applicationService.workflowDefinitions(request));
-  }
+    /** GET /workflow-definitions — 工作流定义。 */
+    @GetMapping("/workflow-definitions")
+    public CommonResponse<PageResponse<ConsoleWorkflowDefinitionResponse>> workflowDefinitions(
+            @Valid @ModelAttribute WorkflowDefinitionQueryRequest request) {
+        return responseFactory.success(applicationService.workflowDefinitions(request));
+    }
 
-  /** GET /workflow-nodes — 工作流节点定义。 */
-  @GetMapping("/workflow-nodes")
-  public CommonResponse<PageResponse<ConsoleWorkflowNodeResponse>> workflowNodes(
-      @Valid @ModelAttribute WorkflowNodeQueryRequest request) {
-    return responseFactory.success(applicationService.workflowNodes(request));
-  }
+    /** GET /workflow-nodes — 工作流节点定义。 */
+    @GetMapping("/workflow-nodes")
+    public CommonResponse<PageResponse<ConsoleWorkflowNodeResponse>> workflowNodes(
+            @Valid @ModelAttribute WorkflowNodeQueryRequest request) {
+        return responseFactory.success(applicationService.workflowNodes(request));
+    }
 
-  /** GET /workflow-edges — 工作流边定义。 */
-  @GetMapping("/workflow-edges")
-  public CommonResponse<PageResponse<ConsoleWorkflowEdgeResponse>> workflowEdges(
-      @Valid @ModelAttribute WorkflowEdgeQueryRequest request) {
-    return responseFactory.success(applicationService.workflowEdges(request));
-  }
+    /** GET /workflow-edges — 工作流边定义。 */
+    @GetMapping("/workflow-edges")
+    public CommonResponse<PageResponse<ConsoleWorkflowEdgeResponse>> workflowEdges(
+            @Valid @ModelAttribute WorkflowEdgeQueryRequest request) {
+        return responseFactory.success(applicationService.workflowEdges(request));
+    }
 
-  /** GET /workflow-runs — 工作流运行实例。 */
-  @GetMapping("/workflow-runs")
-  public CommonResponse<PageResponse<ConsoleWorkflowRunResponse>> workflowRuns(
-      @Valid @ModelAttribute WorkflowRunQueryRequest request) {
-    return responseFactory.success(applicationService.workflowRuns(request));
-  }
+    /** GET /workflow-runs — 工作流运行实例。 */
+    @GetMapping("/workflow-runs")
+    public CommonResponse<PageResponse<ConsoleWorkflowRunResponse>> workflowRuns(
+            @Valid @ModelAttribute WorkflowRunQueryRequest request) {
+        return responseFactory.success(applicationService.workflowRuns(request));
+    }
 
-  /** GET /workflow-runs/{id} — 工作流运行详情。 */
-  @GetMapping("/workflow-runs/{id}")
-  public CommonResponse<ConsoleWorkflowRunResponse> workflowRunDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.workflowRun(tenantId, id));
-  }
+    /** GET /workflow-runs/{id} — 工作流运行详情。 */
+    @GetMapping("/workflow-runs/{id}")
+    public CommonResponse<ConsoleWorkflowRunResponse> workflowRunDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.workflowRun(tenantId, id));
+    }
 
-  /** GET /workflow-node-runs — 工作流节点运行记录。 */
-  @GetMapping("/workflow-node-runs")
-  public CommonResponse<PageResponse<ConsoleWorkflowNodeRunResponse>> workflowNodeRuns(
-      @Valid @ModelAttribute WorkflowNodeRunQueryRequest request) {
-    return responseFactory.success(applicationService.workflowNodeRuns(request));
-  }
+    /** GET /workflow-node-runs — 工作流节点运行记录。 */
+    @GetMapping("/workflow-node-runs")
+    public CommonResponse<PageResponse<ConsoleWorkflowNodeRunResponse>> workflowNodeRuns(
+            @Valid @ModelAttribute WorkflowNodeRunQueryRequest request) {
+        return responseFactory.success(applicationService.workflowNodeRuns(request));
+    }
 
-  /** GET /workflow-node-runs/{id} — 工作流节点运行详情。 */
-  @GetMapping("/workflow-node-runs/{id}")
-  public CommonResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRunDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.workflowNodeRun(tenantId, id));
-  }
+    /** GET /workflow-node-runs/{id} — 工作流节点运行详情。 */
+    @GetMapping("/workflow-node-runs/{id}")
+    public CommonResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRunDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.workflowNodeRun(tenantId, id));
+    }
 
-  /** GET /workflow-topology — 工作流拓扑视图。 */
-  @GetMapping("/workflow-topology")
-  public CommonResponse<ConsoleWorkflowTopologyResponse> workflowTopology(
-      @Valid @ModelAttribute WorkflowTopologyQueryRequest request) {
-    return responseFactory.success(applicationService.workflowTopology(request));
-  }
+    /** GET /workflow-topology — 工作流拓扑视图。 */
+    @GetMapping("/workflow-topology")
+    public CommonResponse<ConsoleWorkflowTopologyResponse> workflowTopology(
+            @Valid @ModelAttribute WorkflowTopologyQueryRequest request) {
+        return responseFactory.success(applicationService.workflowTopology(request));
+    }
 
-  /** GET /ai-audits — AI 对话审计日志。 */
-  @GetMapping("/ai-audits")
-  public CommonResponse<PageResponse<AiAuditLogResponse>> aiAudits(
-      @Valid @ModelAttribute ConsoleAiAuditLogQueryRequest request) {
-    return responseFactory.success(applicationService.aiAuditLogs(request));
-  }
+    /** GET /ai-audits — AI 对话审计日志。 */
+    @GetMapping("/ai-audits")
+    public CommonResponse<PageResponse<AiAuditLogResponse>> aiAudits(
+            @Valid @ModelAttribute ConsoleAiAuditLogQueryRequest request) {
+        return responseFactory.success(applicationService.aiAuditLogs(request));
+    }
 
-  /** GET /dead-letters — 死信任务。 */
-  @GetMapping("/dead-letters")
-  public CommonResponse<PageResponse<ConsoleDeadLetterTaskResponse>> deadLetters(
-      @Valid @ModelAttribute DeadLetterQueryRequest request) {
-    return responseFactory.success(applicationService.deadLetters(request));
-  }
+    /** GET /dead-letters — 死信任务。 */
+    @GetMapping("/dead-letters")
+    public CommonResponse<PageResponse<ConsoleDeadLetterTaskResponse>> deadLetters(
+            @Valid @ModelAttribute DeadLetterQueryRequest request) {
+        return responseFactory.success(applicationService.deadLetters(request));
+    }
 
-  /** GET /retries — 重试计划。 */
-  @GetMapping("/retries")
-  public CommonResponse<PageResponse<ConsoleRetryScheduleResponse>> retries(
-      @Valid @ModelAttribute RetryScheduleQueryRequest request) {
-    return responseFactory.success(applicationService.retries(request));
-  }
+    /** GET /retries — 重试计划。 */
+    @GetMapping("/retries")
+    public CommonResponse<PageResponse<ConsoleRetryScheduleResponse>> retries(
+            @Valid @ModelAttribute RetryScheduleQueryRequest request) {
+        return responseFactory.success(applicationService.retries(request));
+    }
 
-  /** GET /catch-up-approvals — 待审批 Catch-Up。 */
-  @GetMapping("/catch-up-approvals")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<PageResponse<ConsolePendingCatchUpResponse>> catchUpApprovals(
-      @Valid @ModelAttribute PendingCatchUpQueryRequest request) {
-    return responseFactory.success(applicationService.pendingCatchUps(request));
-  }
+    /** GET /catch-up-approvals — 待审批 Catch-Up。 */
+    @GetMapping("/catch-up-approvals")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<PageResponse<ConsolePendingCatchUpResponse>> catchUpApprovals(
+            @Valid @ModelAttribute PendingCatchUpQueryRequest request) {
+        return responseFactory.success(applicationService.pendingCatchUps(request));
+    }
 
-  /** GET /workers — Worker 注册信息。 */
-  @GetMapping("/workers")
-  public CommonResponse<PageResponse<ConsoleWorkerRegistryResponse>> workers(
-      @Valid @ModelAttribute WorkerRegistryQueryRequest request) {
-    return responseFactory.success(applicationService.workers(request));
-  }
+    /** GET /workers — Worker 注册信息。 */
+    @GetMapping("/workers")
+    public CommonResponse<PageResponse<ConsoleWorkerRegistryResponse>> workers(
+            @Valid @ModelAttribute WorkerRegistryQueryRequest request) {
+        return responseFactory.success(applicationService.workers(request));
+    }
 
-  @GetMapping("/file-channels/{channelCode}")
-  public CommonResponse<ConsoleFileChannelResponse> fileChannelDetail(
-      @PathVariable String channelCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.fileChannelDetail(tenantId, channelCode));
-  }
+    @GetMapping("/file-channels/{channelCode}")
+    public CommonResponse<ConsoleFileChannelResponse> fileChannelDetail(
+            @PathVariable String channelCode, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.fileChannelDetail(tenantId, channelCode));
+    }
 
-  @GetMapping("/file-templates/{templateCode}")
-  public CommonResponse<ConsoleFileTemplateResponse> fileTemplateDetail(
-      @PathVariable String templateCode,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "version", required = false) Integer version) {
-    return responseFactory.success(
-        applicationService.fileTemplateDetail(tenantId, templateCode, version));
-  }
+    @GetMapping("/file-templates/{templateCode}")
+    public CommonResponse<ConsoleFileTemplateResponse> fileTemplateDetail(
+            @PathVariable String templateCode,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "version", required = false) Integer version) {
+        return responseFactory.success(applicationService.fileTemplateDetail(tenantId, templateCode, version));
+    }
 
-  @GetMapping("/files/{id}")
-  public CommonResponse<ConsoleFileRecordDetailResponse> fileRecordDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.fileRecordDetail(tenantId, id));
-  }
+    @GetMapping("/files/{id}")
+    public CommonResponse<ConsoleFileRecordDetailResponse> fileRecordDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.fileRecordDetail(tenantId, id));
+    }
 
-  @GetMapping("/file-pipelines/{id}")
-  public CommonResponse<ConsoleFilePipelineResponse> filePipelineDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
-  }
+    @GetMapping("/file-pipelines/{id}")
+    public CommonResponse<ConsoleFilePipelineResponse> filePipelineDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
+    }
 }

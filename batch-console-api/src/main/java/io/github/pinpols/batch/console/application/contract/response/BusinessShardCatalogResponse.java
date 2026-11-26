@@ -7,29 +7,29 @@ import lombok.Builder;
 /** 公开分片目录视图；凭据不会包含在目录中。 */
 @Builder
 public record BusinessShardCatalogResponse(
-    String placementKey,
-    String host,
-    int port,
-    String dbName,
-    String secretRef,
-    Integer poolMaxSize,
-    boolean enabled,
-    String description,
-    Instant updatedAt,
-    String updatedBy) {
+        String placementKey,
+        String host,
+        int port,
+        String dbName,
+        String secretRef,
+        Integer poolMaxSize,
+        boolean enabled,
+        String description,
+        Instant updatedAt,
+        String updatedBy) {
 
-  public static BusinessShardCatalogResponse from(BusinessShardCatalogEntity entity) {
-    return BusinessShardCatalogResponse.builder()
-        .placementKey(entity.getPlacementKey())
-        .host(entity.getHost())
-        .port(entity.getPort())
-        .dbName(entity.getDbName())
-        .secretRef(entity.getSecretRef())
-        .poolMaxSize(entity.getPoolMaxSize())
-        .enabled(entity.isEnabled())
-        .description(entity.getDescription())
-        .updatedAt(entity.getUpdatedAt())
-        .updatedBy(entity.getUpdatedBy())
-        .build();
-  }
+    public static BusinessShardCatalogResponse from(BusinessShardCatalogEntity entity) {
+        return BusinessShardCatalogResponse.builder()
+                .placementKey(entity.getPlacementKey())
+                .host(entity.getHost())
+                .port(entity.getPort())
+                .dbName(entity.getDbName())
+                .secretRef(entity.getSecretRef())
+                .poolMaxSize(entity.getPoolMaxSize())
+                .enabled(entity.isEnabled())
+                .description(entity.getDescription())
+                .updatedAt(entity.getUpdatedAt())
+                .updatedBy(entity.getUpdatedBy())
+                .build();
+    }
 }

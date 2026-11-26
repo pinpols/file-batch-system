@@ -51,464 +51,458 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultLaunchValidationServiceTest {
 
-  @Mock
-  private TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    private TriggerRequestMapper triggerRequestMapper;
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  private DefaultLaunchValidationService service;
+    private DefaultLaunchValidationService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultLaunchValidationService(
-        triggerRequestMapper, configCacheService, workflowRunMapper, jobInstanceMapper);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultLaunchValidationService(
+                triggerRequestMapper, configCacheService, workflowRunMapper, jobInstanceMapper);
+    }
 
-  private LaunchRequest validRequest() {
-    return new LaunchRequest(
-        "ta",
-        "job_ok",
-        LocalDate.of(2026, Month.MAY, 20),
-        TriggerType.SCHEDULED,
-        "req-001",
-        "trace-001",
-        Map.of());
-  }
+    private LaunchRequest validRequest() {
+        return new LaunchRequest(
+                "ta",
+                "job_ok",
+                LocalDate.of(2026, Month.MAY, 20),
+                TriggerType.SCHEDULED,
+                "req-001",
+                "trace-001",
+                Map.of());
+    }
 
-  @Test
-  @DisplayName("缺 tenantId → INVALID_ARGUMENT")
-  void rejects_missing_tenantId() {
-    LaunchRequest bad = new LaunchRequest(
-        null, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
-    assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
-    verify(triggerRequestMapper, never()).selectLaunchPersistenceContext(anyString(), anyString());
-  }
+    @Test
+    @DisplayName("缺 tenantId → INVALID_ARGUMENT")
+    void rejects_missing_tenantId() {
+        LaunchRequest bad =
+                new LaunchRequest(null, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
+        assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
+        verify(triggerRequestMapper, never()).selectLaunchPersistenceContext(anyString(), anyString());
+    }
 
-  @Test
-  @DisplayName("缺 jobCode → INVALID_ARGUMENT")
-  void rejects_missing_jobCode() {
-    LaunchRequest bad = new LaunchRequest(
-        "ta", "  ", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
-    assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("缺 jobCode → INVALID_ARGUMENT")
+    void rejects_missing_jobCode() {
+        LaunchRequest bad =
+                new LaunchRequest("ta", "  ", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
+        assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("缺 bizDate → INVALID_ARGUMENT")
-  void rejects_missing_bizDate() {
-    LaunchRequest bad =
-        new LaunchRequest("ta", "j", null, TriggerType.SCHEDULED, "req", "trace", Map.of());
-    assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("缺 bizDate → INVALID_ARGUMENT")
+    void rejects_missing_bizDate() {
+        LaunchRequest bad = new LaunchRequest("ta", "j", null, TriggerType.SCHEDULED, "req", "trace", Map.of());
+        assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("缺 triggerType → INVALID_ARGUMENT")
-  void rejects_missing_triggerType() {
-    LaunchRequest bad =
-        new LaunchRequest("ta", "j", LocalDate.now(), null, "req", "trace", Map.of());
-    assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("缺 triggerType → INVALID_ARGUMENT")
+    void rejects_missing_triggerType() {
+        LaunchRequest bad = new LaunchRequest("ta", "j", LocalDate.now(), null, "req", "trace", Map.of());
+        assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
-  void shouldReject_whenTriggerRequestMissing() {
-    LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001")).thenReturn(null);
+    @Test
+    @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
+    void shouldReject_whenTriggerRequestMissing() {
+        LaunchRequest req = validRequest();
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(null);
 
-    assertThatThrownBy(() -> service.load(req))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.trigger.request_not_found");
-    verify(triggerRequestMapper, never())
-        .updateAcceptance(anyString(), anyString(), anyString(), any());
-  }
+        assertThatThrownBy(() -> service.load(req))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.trigger.request_not_found");
+        verify(triggerRequestMapper, never()).updateAcceptance(anyString(), anyString(), anyString(), any());
+    }
 
-  @Test
-  @DisplayName("job_definition 缺失 → trigger_request 打 REJECTED + 抛 NOT_FOUND")
-  void rejects_when_jobDefinition_missing_and_marks_rejected() {
-    LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(triggerRequestEntity(), null));
-    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(null);
+    @Test
+    @DisplayName("job_definition 缺失 → trigger_request 打 REJECTED + 抛 NOT_FOUND")
+    void rejects_when_jobDefinition_missing_and_marks_rejected() {
+        LaunchRequest req = validRequest();
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(triggerRequestEntity(), null));
+        when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(null);
 
-    assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
+        assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
 
-  @Test
-  @DisplayName("新 Job 缺少显式关联 Workflow → trigger_request 打 REJECTED + 抛 NOT_FOUND")
-  void shouldReject_whenLinkedWorkflowDefinitionMissing() {
-    LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(triggerRequestEntity(), null));
-    when(configCacheService.findEnabledJobDefinition("ta", "job_ok"))
-        .thenReturn(jobDefinitionEntity(JobType.GENERAL.code()));
+    @Test
+    @DisplayName("新 Job 缺少显式关联 Workflow → trigger_request 打 REJECTED + 抛 NOT_FOUND")
+    void shouldReject_whenLinkedWorkflowDefinitionMissing() {
+        LaunchRequest req = validRequest();
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(triggerRequestEntity(), null));
+        when(configCacheService.findEnabledJobDefinition("ta", "job_ok"))
+                .thenReturn(jobDefinitionEntity(JobType.GENERAL.code()));
 
-    assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
+        assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
 
-  @Test
-  @DisplayName("拒绝缺少父 Workflow 上下文的 Job 根启动")
-  void shouldRejectJobRootLaunchWithoutParentWorkflowContext() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trig = triggerRequestEntity();
-    JobDefinitionView jobDef = jobDefinitionEntity(JobType.GENERAL.code());
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trig, null));
-    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
+    @Test
+    @DisplayName("拒绝缺少父 Workflow 上下文的 Job 根启动")
+    void shouldRejectJobRootLaunchWithoutParentWorkflowContext() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trig = triggerRequestEntity();
+        JobDefinitionView jobDef = jobDefinitionEntity(JobType.GENERAL.code());
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trig, null));
+        when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
 
-    assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
-    verify(configCacheService, never()).findEnabledSingleJobWorkflowDefinition(anyString(), any());
-    verify(configCacheService, never()).findEnabledWorkflowDefinition(anyString(), anyString());
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
+        assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
+        verify(configCacheService, never()).findEnabledSingleJobWorkflowDefinition(anyString(), any());
+        verify(configCacheService, never()).findEnabledWorkflowDefinition(anyString(), anyString());
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
 
-  @Test
-  @DisplayName("拒绝旧 WORKFLOW Job wrapper，并终结其请求")
-  void shouldRejectRetiredWorkflowJobWrapper() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trig = triggerRequestEntity();
-    JobDefinitionView jobDef = jobDefinitionEntity("WORKFLOW");
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trig, null));
-    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
+    @Test
+    @DisplayName("拒绝旧 WORKFLOW Job wrapper，并终结其请求")
+    void shouldRejectRetiredWorkflowJobWrapper() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trig = triggerRequestEntity();
+        JobDefinitionView jobDef = jobDefinitionEntity("WORKFLOW");
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trig, null));
+        when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
 
-    assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
-    verify(configCacheService, never()).findEnabledWorkflowDefinition(anyString(), anyString());
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
+        assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
+        verify(configCacheService, never()).findEnabledWorkflowDefinition(anyString(), anyString());
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
 
-  @Test
-  @DisplayName("内部节点启动缺少冻结快照时拒绝，不回退到当前 Job 配置")
-  void shouldRejectParentNodeLaunchWithoutFrozenSnapshot() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
+    @Test
+    @DisplayName("内部节点启动缺少冻结快照时拒绝，不回退到当前 Job 配置")
+    void shouldRejectParentNodeLaunchWithoutFrozenSnapshot() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
 
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    assertThatThrownBy(() -> service.load(req))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.execution_snapshot_invalid");
-    verify(configCacheService, never()).findEnabledJobDefinition(anyString(), anyString());
-  }
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        assertThatThrownBy(() -> service.load(req))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.workflow.execution_snapshot_invalid");
+        verify(configCacheService, never()).findEnabledJobDefinition(anyString(), anyString());
+    }
 
-  @Test
-  @DisplayName("内部节点启动不能只凭 Workflow 和节点编号绕过运行快照校验")
-  void shouldRejectRootlessWorkflowNodeJobLaunchWithoutSnapshot() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
+    @Test
+    @DisplayName("内部节点启动不能只凭 Workflow 和节点编号绕过运行快照校验")
+    void shouldRejectRootlessWorkflowNodeJobLaunchWithoutSnapshot() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
 
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    assertThatThrownBy(() -> service.load(req))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.execution_snapshot_invalid");
-  }
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        assertThatThrownBy(() -> service.load(req))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.workflow.execution_snapshot_invalid");
+    }
 
-  @Test
-  @DisplayName("新快照运行的 Job 节点从运行快照加载定义，不受后续 Job 编辑影响")
-  void shouldLoadJobDefinitionFromImmutableWorkflowRunSnapshot() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
-    WorkflowRunEntity run = parentNodeSnapshotRun();
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
-            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-                .tenantId("ta")
-                .parentWorkflowRunId(50L)
-                .parentNodeCode("IMPORT_NODE")
-                .existingChildJobInstanceId(null)
-                .frozenWorkflowSnapshot(true)
-                .build()))
-        .thenReturn(true);
+    @Test
+    @DisplayName("新快照运行的 Job 节点从运行快照加载定义，不受后续 Job 编辑影响")
+    void shouldLoadJobDefinitionFromImmutableWorkflowRunSnapshot() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
+        WorkflowRunEntity run = parentNodeSnapshotRun();
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
+        when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
+                        TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                                .tenantId("ta")
+                                .parentWorkflowRunId(50L)
+                                .parentNodeCode("IMPORT_NODE")
+                                .existingChildJobInstanceId(null)
+                                .frozenWorkflowSnapshot(true)
+                                .build()))
+                .thenReturn(true);
 
-    LaunchValidationService.LaunchLoadResult result = service.load(req);
+        LaunchValidationService.LaunchLoadResult result = service.load(req);
 
-    assertThat(result.jobDefinition().defaultParams()).containsEntry("pinned", true);
-    assertThat(result.jobDefinition().version()).isEqualTo(1);
-    assertThat(result.workflowDefinition()).isNull();
-    verify(configCacheService, never()).findEnabledJobDefinition("ta", "job_ok");
-    verify(triggerRequestMapper)
-        .isValidParentWorkflowNodeLaunch(
-            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-                .tenantId("ta")
-                .parentWorkflowRunId(50L)
-                .parentNodeCode("IMPORT_NODE")
-                .existingChildJobInstanceId(null)
-                .frozenWorkflowSnapshot(true)
-                .build());
-  }
+        assertThat(result.jobDefinition().defaultParams()).containsEntry("pinned", true);
+        assertThat(result.jobDefinition().version()).isEqualTo(1);
+        assertThat(result.workflowDefinition()).isNull();
+        verify(configCacheService, never()).findEnabledJobDefinition("ta", "job_ok");
+        verify(triggerRequestMapper)
+                .isValidParentWorkflowNodeLaunch(TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                        .tenantId("ta")
+                        .parentWorkflowRunId(50L)
+                        .parentNodeCode("IMPORT_NODE")
+                        .existingChildJobInstanceId(null)
+                        .frozenWorkflowSnapshot(true)
+                        .build());
+    }
 
-  @Test
-  @DisplayName("审批回放子 Job 加载节点绑定的模板密文与 Replay Operation 身份")
-  void shouldLoadApprovedReplayTemplateBindingFromParentSnapshot() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
-    Map<String, Object> replayGuard = Map.of(
-        "replayOperationId",
-        701L,
-        "declaration",
-        Map.of(
-            "pluginId",
-            "jdbc_mapped",
-            "pluginVersion",
-            "1",
-            "externalEffectCategories",
-            List.of("BUSINESS_DATABASE"),
-            "idempotencyCapability",
-            "IDEMPOTENT_BY_PLUGIN_LOGIC",
-            "idempotencyKeyScope",
-            "tenant+business-key",
-            "recoveryProtocolId",
-            "IMPORT_SQL_V1",
-            "contractVersion",
-            1));
-    Map<String, Object> executionDefinition = Map.of(
-        "id", 1,
-        "tenantId", "ta",
-        "jobCode", "job_ok",
-        "jobType", "IMPORT",
-        "version", 1);
-    Map<String, Object> jobSnapshot = Map.of(
-        "jobDefinitionId",
-        1,
-        "jobCode",
-        "job_ok",
-        "jobType",
-        "IMPORT",
-        "jobDefinitionVersion",
-        1,
-        "systemPipelineCode",
-        "IMPORT",
-        "systemPipelineVersion",
-        1,
-        "executionDefinition",
-        executionDefinition,
-        "replayExecutionGuard",
-        replayGuard,
-        "frozenFileTemplateSnapshots",
-        Map.of("TPL_A", "sealed-template-a"));
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setTenantId("ta");
-    run.setId(50L);
-    run.setWorkflowDefinitionId(90L);
-    run.setWorkflowVersionSnapshot(7);
-    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        90,
-        "workflowVersion",
-        7,
-        "workflowCalendarCode",
-        "WF_CALENDAR",
-        "replayOperationId",
-        701,
-        "nodes",
-        List.of(Map.of(
-            "nodeCode", "IMPORT_NODE",
-            "nodeType", "JOB",
-            "tenantId", "ta",
-            "workflowDefinitionId", 90,
-            "relatedJobCode", "job_ok")),
-        "edges",
-        List.of(),
-        "jobDefinitions",
-        Map.of("IMPORT_NODE", jobSnapshot))));
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
-            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-                .tenantId("ta")
-                .parentWorkflowRunId(50L)
-                .parentNodeCode("IMPORT_NODE")
-                .existingChildJobInstanceId(null)
-                .frozenWorkflowSnapshot(true)
-                .build()))
-        .thenReturn(true);
-
-    LaunchValidationService.LaunchLoadResult result = service.load(req);
-
-    assertThat(result.workflowReplayExecutionBinding().replayOperationId()).isEqualTo(701L);
-    assertThat(result.workflowReplayExecutionBinding().workflowRunId()).isEqualTo(50L);
-    assertThat(result.workflowReplayExecutionBinding().nodeCode()).isEqualTo("IMPORT_NODE");
-    assertThat(result.workflowReplayExecutionBinding().protectedFileTemplateSnapshots())
-        .containsEntry("TPL_A", "sealed-template-a");
-  }
-
-  @Test
-  @DisplayName("没有冻结运行快照的节点上下文拒绝启动，不回退为顶层运行")
-  void shouldRejectInvalidParentJobNodeLaunch() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
-
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    assertThatThrownBy(() -> service.load(req))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.execution_snapshot_invalid");
-    verify(configCacheService, never()).findEnabledSingleJobWorkflowDefinition(anyString(), any());
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
-
-  @Test
-  @DisplayName("并发恢复器已用同一请求落库实例时按重复请求短路，不覆盖请求状态")
-  void shouldTreatConcurrentLaunchAsDuplicateWhenParentNodeAlreadyBound() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setId(77L);
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
-    JobInstanceEntity concurrentInstance = new JobInstanceEntity();
-    concurrentInstance.setId(501L);
-    concurrentInstance.setTenantId("ta");
-    concurrentInstance.setTriggerRequestId(77L);
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
-    when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1"))
-        .thenReturn(concurrentInstance);
-
-    LaunchValidationService.LaunchLoadResult result = service.load(req);
-
-    assertThat(result.existingInstance()).isSameAs(concurrentInstance);
-    assertThat(result.jobDefinition().jobCode()).isEqualTo("job_ok");
-    verify(triggerRequestMapper, never())
-        .updateAcceptance(
-            anyString(), anyString(), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
-
-  @Test
-  @DisplayName("节点校验失败且实例归属其它请求时仍拒绝启动并终结请求")
-  void shouldRejectParentNodeLaunchWhenInstanceBelongsToAnotherRequest() {
-    LaunchRequest req = validRequest();
-    TriggerRequestEntity trigger = triggerRequestEntity();
-    trigger.setId(77L);
-    trigger.setParentWorkflowRunId(50L);
-    trigger.setParentNodeCode("IMPORT_NODE");
-    JobInstanceEntity otherRequestInstance = new JobInstanceEntity();
-    otherRequestInstance.setId(502L);
-    otherRequestInstance.setTenantId("ta");
-    otherRequestInstance.setTriggerRequestId(999L);
-    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
-        .thenReturn(persistenceContext(trigger, null));
-    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
-    when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1"))
-        .thenReturn(otherRequestInstance);
-
-    assertThatThrownBy(() -> service.load(req))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.parent_node_launch_invalid");
-    verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
-  }
-
-  private WorkflowRunEntity parentNodeSnapshotRun() {
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setTenantId("ta");
-    run.setId(50L);
-    run.setWorkflowDefinitionId(90L);
-    run.setWorkflowVersionSnapshot(7);
-    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        90,
-        "workflowVersion",
-        7,
-        "nodes",
-        List.of(Map.of(
-            "nodeCode", "IMPORT_NODE",
-            "nodeType", "JOB",
-            "tenantId", "ta",
-            "workflowDefinitionId", 90,
-            "relatedJobCode", "job_ok")),
-        "edges",
-        List.of(),
-        "jobDefinitions",
-        Map.of(
-            "IMPORT_NODE",
-            Map.of(
+    @Test
+    @DisplayName("审批回放子 Job 加载节点绑定的模板密文与 Replay Operation 身份")
+    void shouldLoadApprovedReplayTemplateBindingFromParentSnapshot() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
+        Map<String, Object> replayGuard = Map.of(
+                "replayOperationId",
+                701L,
+                "declaration",
+                Map.of(
+                        "pluginId",
+                        "jdbc_mapped",
+                        "pluginVersion",
+                        "1",
+                        "externalEffectCategories",
+                        List.of("BUSINESS_DATABASE"),
+                        "idempotencyCapability",
+                        "IDEMPOTENT_BY_PLUGIN_LOGIC",
+                        "idempotencyKeyScope",
+                        "tenant+business-key",
+                        "recoveryProtocolId",
+                        "IMPORT_SQL_V1",
+                        "contractVersion",
+                        1));
+        Map<String, Object> executionDefinition = Map.of(
+                "id", 1,
+                "tenantId", "ta",
+                "jobCode", "job_ok",
+                "jobType", "IMPORT",
+                "version", 1);
+        Map<String, Object> jobSnapshot = Map.of(
                 "jobDefinitionId",
                 1,
                 "jobCode",
                 "job_ok",
                 "jobType",
-                "GENERAL",
+                "IMPORT",
                 "jobDefinitionVersion",
                 1,
+                "systemPipelineCode",
+                "IMPORT",
+                "systemPipelineVersion",
+                1,
                 "executionDefinition",
+                executionDefinition,
+                "replayExecutionGuard",
+                replayGuard,
+                "frozenFileTemplateSnapshots",
+                Map.of("TPL_A", "sealed-template-a"));
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setTenantId("ta");
+        run.setId(50L);
+        run.setWorkflowDefinitionId(90L);
+        run.setWorkflowVersionSnapshot(7);
+        run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+                "schemaVersion",
+                2,
+                "workflowDefinitionId",
+                90,
+                "workflowVersion",
+                7,
+                "workflowCalendarCode",
+                "WF_CALENDAR",
+                "replayOperationId",
+                701,
+                "nodes",
+                List.of(Map.of(
+                        "nodeCode", "IMPORT_NODE",
+                        "nodeType", "JOB",
+                        "tenantId", "ta",
+                        "workflowDefinitionId", 90,
+                        "relatedJobCode", "job_ok")),
+                "edges",
+                List.of(),
+                "jobDefinitions",
+                Map.of("IMPORT_NODE", jobSnapshot))));
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
+        when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
+                        TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                                .tenantId("ta")
+                                .parentWorkflowRunId(50L)
+                                .parentNodeCode("IMPORT_NODE")
+                                .existingChildJobInstanceId(null)
+                                .frozenWorkflowSnapshot(true)
+                                .build()))
+                .thenReturn(true);
+
+        LaunchValidationService.LaunchLoadResult result = service.load(req);
+
+        assertThat(result.workflowReplayExecutionBinding().replayOperationId()).isEqualTo(701L);
+        assertThat(result.workflowReplayExecutionBinding().workflowRunId()).isEqualTo(50L);
+        assertThat(result.workflowReplayExecutionBinding().nodeCode()).isEqualTo("IMPORT_NODE");
+        assertThat(result.workflowReplayExecutionBinding().protectedFileTemplateSnapshots())
+                .containsEntry("TPL_A", "sealed-template-a");
+    }
+
+    @Test
+    @DisplayName("没有冻结运行快照的节点上下文拒绝启动，不回退为顶层运行")
+    void shouldRejectInvalidParentJobNodeLaunch() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
+
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        assertThatThrownBy(() -> service.load(req))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.workflow.execution_snapshot_invalid");
+        verify(configCacheService, never()).findEnabledSingleJobWorkflowDefinition(anyString(), any());
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
+
+    @Test
+    @DisplayName("并发恢复器已用同一请求落库实例时按重复请求短路，不覆盖请求状态")
+    void shouldTreatConcurrentLaunchAsDuplicateWhenParentNodeAlreadyBound() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setId(77L);
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
+        JobInstanceEntity concurrentInstance = new JobInstanceEntity();
+        concurrentInstance.setId(501L);
+        concurrentInstance.setTenantId("ta");
+        concurrentInstance.setTriggerRequestId(77L);
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
+        when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
+        when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1")).thenReturn(concurrentInstance);
+
+        LaunchValidationService.LaunchLoadResult result = service.load(req);
+
+        assertThat(result.existingInstance()).isSameAs(concurrentInstance);
+        assertThat(result.jobDefinition().jobCode()).isEqualTo("job_ok");
+        verify(triggerRequestMapper, never())
+                .updateAcceptance(anyString(), anyString(), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
+
+    @Test
+    @DisplayName("节点校验失败且实例归属其它请求时仍拒绝启动并终结请求")
+    void shouldRejectParentNodeLaunchWhenInstanceBelongsToAnotherRequest() {
+        LaunchRequest req = validRequest();
+        TriggerRequestEntity trigger = triggerRequestEntity();
+        trigger.setId(77L);
+        trigger.setParentWorkflowRunId(50L);
+        trigger.setParentNodeCode("IMPORT_NODE");
+        JobInstanceEntity otherRequestInstance = new JobInstanceEntity();
+        otherRequestInstance.setId(502L);
+        otherRequestInstance.setTenantId("ta");
+        otherRequestInstance.setTriggerRequestId(999L);
+        when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+                .thenReturn(persistenceContext(trigger, null));
+        when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
+        when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
+        when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1")).thenReturn(otherRequestInstance);
+
+        assertThatThrownBy(() -> service.load(req))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.workflow.parent_node_launch_invalid");
+        verify(triggerRequestMapper)
+                .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+    }
+
+    private WorkflowRunEntity parentNodeSnapshotRun() {
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setTenantId("ta");
+        run.setId(50L);
+        run.setWorkflowDefinitionId(90L);
+        run.setWorkflowVersionSnapshot(7);
+        run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+                "schemaVersion",
+                2,
+                "workflowDefinitionId",
+                90,
+                "workflowVersion",
+                7,
+                "nodes",
+                List.of(Map.of(
+                        "nodeCode", "IMPORT_NODE",
+                        "nodeType", "JOB",
+                        "tenantId", "ta",
+                        "workflowDefinitionId", 90,
+                        "relatedJobCode", "job_ok")),
+                "edges",
+                List.of(),
+                "jobDefinitions",
                 Map.of(
-                    "id",
-                    1,
-                    "tenantId",
-                    "ta",
-                    "jobCode",
-                    "job_ok",
-                    "jobType",
-                    "GENERAL",
-                    "version",
-                    1,
-                    "defaultParams",
-                    Map.of("pinned", true)))))));
-    return run;
-  }
+                        "IMPORT_NODE",
+                        Map.of(
+                                "jobDefinitionId",
+                                1,
+                                "jobCode",
+                                "job_ok",
+                                "jobType",
+                                "GENERAL",
+                                "jobDefinitionVersion",
+                                1,
+                                "executionDefinition",
+                                Map.of(
+                                        "id",
+                                        1,
+                                        "tenantId",
+                                        "ta",
+                                        "jobCode",
+                                        "job_ok",
+                                        "jobType",
+                                        "GENERAL",
+                                        "version",
+                                        1,
+                                        "defaultParams",
+                                        Map.of("pinned", true)))))));
+        return run;
+    }
 
-  private TriggerRequestEntity triggerRequestEntity() {
-    TriggerRequestEntity entity = new TriggerRequestEntity();
-    entity.setTenantId("ta");
-    entity.setRequestId("req-001");
-    entity.setJobCode("job_ok");
-    entity.setBizDate(LocalDate.of(2026, Month.MAY, 20));
-    entity.setDedupKey("dedup-1");
-    return entity;
-  }
+    private TriggerRequestEntity triggerRequestEntity() {
+        TriggerRequestEntity entity = new TriggerRequestEntity();
+        entity.setTenantId("ta");
+        entity.setRequestId("req-001");
+        entity.setJobCode("job_ok");
+        entity.setBizDate(LocalDate.of(2026, Month.MAY, 20));
+        entity.setDedupKey("dedup-1");
+        return entity;
+    }
 
-  private TriggerLaunchPersistenceContext persistenceContext(
-      TriggerRequestEntity triggerRequest, JobInstanceEntity existingInstance) {
-    TriggerLaunchPersistenceContext context = new TriggerLaunchPersistenceContext();
-    context.setTriggerRequest(triggerRequest);
-    context.setExistingInstance(existingInstance);
-    return context;
-  }
+    private TriggerLaunchPersistenceContext persistenceContext(
+            TriggerRequestEntity triggerRequest, JobInstanceEntity existingInstance) {
+        TriggerLaunchPersistenceContext context = new TriggerLaunchPersistenceContext();
+        context.setTriggerRequest(triggerRequest);
+        context.setExistingInstance(existingInstance);
+        return context;
+    }
 
-  private JobDefinitionView jobDefinitionEntity(String jobType) {
-    return JobDefinitionView.builder()
-        .id(1L)
-        .tenantId("ta")
-        .jobCode("job_ok")
-        .jobType(jobType)
-        .build();
-  }
+    private JobDefinitionView jobDefinitionEntity(String jobType) {
+        return JobDefinitionView.builder()
+                .id(1L)
+                .tenantId("ta")
+                .jobCode("job_ok")
+                .jobType(jobType)
+                .build();
+    }
 }

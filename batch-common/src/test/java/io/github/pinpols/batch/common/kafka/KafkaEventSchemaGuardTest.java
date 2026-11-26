@@ -30,59 +30,61 @@ import org.junit.jupiter.api.Test;
 @DisplayName("跨服务事件结构守护:线上契约字段签名与金标准快照比对")
 class KafkaEventSchemaGuardTest {
 
-  /** 受守护的跨服务 wire 契约类(新增 Kafka payload 类型时在此登记)。 */
-  private static final List<Class<?>> WIRE_CONTRACTS = List.of(
-      BatchEventMessage.class,
-      BatchRetryMessage.class,
-      TaskDispatchMessage.class,
-      BatchDeadLetterMessage.class,
-      SchedulingContext.class,
-      LaunchEnvelope.class);
+    /** 受守护的跨服务 wire 契约类(新增 Kafka payload 类型时在此登记)。 */
+    private static final List<Class<?>> WIRE_CONTRACTS = List.of(
+            BatchEventMessage.class,
+            BatchRetryMessage.class,
+            TaskDispatchMessage.class,
+            BatchDeadLetterMessage.class,
+            SchedulingContext.class,
+            LaunchEnvelope.class);
 
-  private static final String GOLDEN = "/kafka-event-schema.golden";
+    private static final String GOLDEN = "/kafka-event-schema.golden";
 
-  @Test
-  @DisplayName("登记的全部线上契约类型字段签名与金标准快照一致")
-  void shouldMatchGolden_whenInspectingWireSchema() {
-    String actual = WIRE_CONTRACTS.stream()
-            .map(KafkaEventSchemaGuardTest::signature)
-            .collect(Collectors.joining("\n"))
-        + "\n";
+    @Test
+    @DisplayName("登记的全部线上契约类型字段签名与金标准快照一致")
+    void shouldMatchGolden_whenInspectingWireSchema() {
+        String actual = WIRE_CONTRACTS.stream()
+                        .map(KafkaEventSchemaGuardTest::signature)
+                        .collect(Collectors.joining("\n"))
+                + "\n";
 
-    String golden = readGolden();
-    assertThat(actual)
-        .as("Kafka 事件 wire schema 变了。若为纯新增字段(向后兼容),用以下实际签名更新 "
-            + "batch-common/src/test/resources/kafka-event-schema.golden;"
-            + "若删/改名/改类型(破坏消费者),禁直接改 —— 走版本化 topic(.v2)+ 双写迁移。\n实际签名:\n"
-            + actual)
-        .isEqualTo(golden);
-  }
+        String golden = readGolden();
+        assertThat(actual)
+                .as("Kafka 事件 wire schema 变了。若为纯新增字段(向后兼容),用以下实际签名更新 "
+                        + "batch-common/src/test/resources/kafka-event-schema.golden;"
+                        + "若删/改名/改类型(破坏消费者),禁直接改 —— 走版本化 topic(.v2)+ 双写迁移。\n实际签名:\n"
+                        + actual)
+                .isEqualTo(golden);
+    }
 
-  /** 生成 {@code FQN{field:Type,...}} 签名;record 用 components,普通类用 declared fields,按字段名排序。 */
-  private static String signature(Class<?> type) {
-    List<String> fields = new ArrayList<>();
-    if (type.isRecord()) {
-      for (RecordComponent rc : type.getRecordComponents()) {
-        fields.add(rc.getName() + ":" + rc.getType().getSimpleName());
-      }
-    } else {
-      for (Field f : type.getDeclaredFields()) {
-        if (f.isSynthetic() || Modifier.isStatic(f.getModifiers())) {
-          continue;
+    /** 生成 {@code FQN{field:Type,...}} 签名;record 用 components,普通类用 declared fields,按字段名排序。 */
+    private static String signature(Class<?> type) {
+        List<String> fields = new ArrayList<>();
+        if (type.isRecord()) {
+            for (RecordComponent rc : type.getRecordComponents()) {
+                fields.add(rc.getName() + ":" + rc.getType().getSimpleName());
+            }
+        } else {
+            for (Field f : type.getDeclaredFields()) {
+                if (f.isSynthetic() || Modifier.isStatic(f.getModifiers())) {
+                    continue;
+                }
+                fields.add(f.getName() + ":" + f.getType().getSimpleName());
+            }
         }
-        fields.add(f.getName() + ":" + f.getType().getSimpleName());
-      }
+        fields.sort(String::compareTo);
+        return type.getName() + "{" + String.join(",", fields) + "}";
     }
-    fields.sort(String::compareTo);
-    return type.getName() + "{" + String.join(",", fields) + "}";
-  }
 
-  private static String readGolden() {
-    try (InputStream in = KafkaEventSchemaGuardTest.class.getResourceAsStream(GOLDEN)) {
-      assertThat(in).as("缺少 golden 资源 %s —— 首次启用请用测试失败提示里的实际签名创建它", GOLDEN).isNotNull();
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      throw new IllegalStateException("读取 golden 失败", e);
+    private static String readGolden() {
+        try (InputStream in = KafkaEventSchemaGuardTest.class.getResourceAsStream(GOLDEN)) {
+            assertThat(in)
+                    .as("缺少 golden 资源 %s —— 首次启用请用测试失败提示里的实际签名创建它", GOLDEN)
+                    .isNotNull();
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取 golden 失败", e);
+        }
     }
-  }
 }

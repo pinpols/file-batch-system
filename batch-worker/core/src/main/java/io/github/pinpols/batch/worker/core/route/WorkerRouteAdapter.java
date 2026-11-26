@@ -9,6 +9,6 @@ import io.github.pinpols.batch.common.model.WorkerRouteModel;
  */
 public interface WorkerRouteAdapter {
 
-  /** 构建本 worker 模块的默认路由模型。 */
-  WorkerRouteModel buildDefaultRoute();
+    /** 构建本 worker 模块的默认路由模型。 */
+    WorkerRouteModel buildDefaultRoute();
 }

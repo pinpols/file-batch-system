@@ -15,17 +15,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ImportEventArrivalController {
 
-  private final ImportEventArrivalService arrivalService;
+    private final ImportEventArrivalService arrivalService;
 
-  @PostMapping("/object-arrival")
-  public CommonResponse<ImportEventArrivalResponse> objectArrival(
-      @RequestBody(required = false) ObjectArrivalNotification notification) {
-    ImportEventArrivalService.Result result = arrivalService.onArrival(
-        EmptyChecks.isNull(notification) ? null : notification.getTenantId(),
-        EmptyChecks.isNull(notification) ? null : notification.getBucket(),
-        EmptyChecks.isNull(notification) ? null : notification.getObjectKey());
-    ImportEventArrivalResponse response =
-        new ImportEventArrivalResponse(result.triggered(), result.reason());
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/object-arrival")
+    public CommonResponse<ImportEventArrivalResponse> objectArrival(
+            @RequestBody(required = false) ObjectArrivalNotification notification) {
+        ImportEventArrivalService.Result result = arrivalService.onArrival(
+                EmptyChecks.isNull(notification) ? null : notification.getTenantId(),
+                EmptyChecks.isNull(notification) ? null : notification.getBucket(),
+                EmptyChecks.isNull(notification) ? null : notification.getObjectKey());
+        ImportEventArrivalResponse response = new ImportEventArrivalResponse(result.triggered(), result.reason());
+        return CommonResponse.success(response);
+    }
 }

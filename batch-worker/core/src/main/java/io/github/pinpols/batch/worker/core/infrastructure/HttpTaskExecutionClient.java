@@ -55,863 +55,838 @@ import org.springframework.web.client.RestClientException;
 /** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
 @Slf4j
-public class HttpTaskExecutionClient
-    implements TaskExecutionClient, OrchestratorReportHttpSubmitter {
+public class HttpTaskExecutionClient implements TaskExecutionClient, OrchestratorReportHttpSubmitter {
 
-  private final OrchestratorTaskClientProperties properties;
-  private final BatchSecurityProperties securityProperties;
-  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
-  private final Environment environment;
-  private final Optional<MeterRegistry> meterRegistry;
-  private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
-  private final int renewBatchMaxItems;
-  private final int claimBatchMaxItems;
-  private final TaskReportBatcher reportBatcher;
-  // L-2: AtomicReference 保证多端点客户端列表的懒初始化发布安全，避免其他线程读到半构造状态。
-  private final AtomicReference<List<RestClient>> restClients = new AtomicReference<>();
-  private final AtomicInteger endpointCursor = new AtomicInteger();
+    private final OrchestratorTaskClientProperties properties;
+    private final BatchSecurityProperties securityProperties;
+    private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+    private final Environment environment;
+    private final Optional<MeterRegistry> meterRegistry;
+    private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
+    private final int renewBatchMaxItems;
+    private final int claimBatchMaxItems;
+    private final TaskReportBatcher reportBatcher;
+    // L-2: AtomicReference 保证多端点客户端列表的懒初始化发布安全，避免其他线程读到半构造状态。
+    private final AtomicReference<List<RestClient>> restClients = new AtomicReference<>();
+    private final AtomicInteger endpointCursor = new AtomicInteger();
 
-  // 构造器注入(docs/agent-baseline.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
-  // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
-  // PMD ExcessiveParameterList 抑制:Spring DI 构造器(docs/agent-baseline.md §Java #2 对 Spring DI
-  // 构造器豁免参数上限),
-  // 8 个均为注入依赖;ruleset 本身将该 @SuppressWarnings 列为既定逃生门。
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public HttpTaskExecutionClient(
-      OrchestratorTaskClientProperties properties,
-      BatchSecurityProperties securityProperties,
-      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
-      Environment environment,
-      @Autowired(required = false) MeterRegistry meterRegistry,
-      ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
-      WorkerLeaseProperties leaseProperties,
-      WorkerBatchClaimProperties batchClaimProperties) {
-    this.properties = properties;
-    this.securityProperties = securityProperties;
-    this.restClientBuilderProvider = restClientBuilderProvider;
-    this.environment = environment;
-    this.meterRegistry = Optional.ofNullable(meterRegistry);
-    this.reportOutboxCoordinator = reportOutboxCoordinator;
-    this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
-    this.claimBatchMaxItems = batchClaimProperties.effectiveBatchSize();
-    this.reportBatcher = properties.isReportBatchEnabled()
-        ? new TaskReportBatcher(
-            claimBatchMaxItems,
-            properties.getReportBatchWaitMillis(),
-            this::submitReportBatchOverHttp)
-        : null;
-  }
-
-  /**
-   * 旧 orchestrator(P1-2.1 之前)claim 返空 body 时回的占位:fields 全 null,worker 走 fallback 到
-   * TaskDispatchMessage 旧字段。语义上等价于"claim 成功但无 fresh config"。
-   */
-  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG = EffectiveTaskConfig.empty();
-
-  @Override
-  public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
-    String traceId = currentTraceId();
-    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    ClaimOutcome<EffectiveTaskConfig> outcome = executeClaimLike(
-        "claim",
-        () -> client()
-            .post()
-            .uri("/internal/tasks/{taskId}/claim", taskId)
-            .contentType(MediaType.APPLICATION_JSON)
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-            .body(new ClaimRequest(tenantId, workerId, null))
-            .retrieve()
-            .body(EffectiveTaskConfig.class));
-    if (!outcome.success()) {
-      return Optional.empty();
+    // 构造器注入(docs/agent-baseline.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
+    // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
+    // PMD ExcessiveParameterList 抑制:Spring DI 构造器(docs/agent-baseline.md §Java #2 对 Spring DI
+    // 构造器豁免参数上限),
+    // 8 个均为注入依赖;ruleset 本身将该 @SuppressWarnings 列为既定逃生门。
+    @SuppressWarnings("PMD.ExcessiveParameterList")
+    public HttpTaskExecutionClient(
+            OrchestratorTaskClientProperties properties,
+            BatchSecurityProperties securityProperties,
+            ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+            Environment environment,
+            @Autowired(required = false) MeterRegistry meterRegistry,
+            ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
+            WorkerLeaseProperties leaseProperties,
+            WorkerBatchClaimProperties batchClaimProperties) {
+        this.properties = properties;
+        this.securityProperties = securityProperties;
+        this.restClientBuilderProvider = restClientBuilderProvider;
+        this.environment = environment;
+        this.meterRegistry = Optional.ofNullable(meterRegistry);
+        this.reportOutboxCoordinator = reportOutboxCoordinator;
+        this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
+        this.claimBatchMaxItems = batchClaimProperties.effectiveBatchSize();
+        this.reportBatcher = properties.isReportBatchEnabled()
+                ? new TaskReportBatcher(
+                        claimBatchMaxItems, properties.getReportBatchWaitMillis(), this::submitReportBatchOverHttp)
+                : null;
     }
-    return Optional.of(outcome.body() != null ? outcome.body() : EMPTY_EFFECTIVE_CONFIG);
-  }
 
-  @Override
-  public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
-    if (items == null || items.isEmpty()) {
-      return List.of();
-    }
-    List<TaskClaimResult> out = new ArrayList<>(items.size());
-    for (int i = 0; i < items.size(); i += claimBatchMaxItems) {
-      int end = Math.min(i + claimBatchMaxItems, items.size());
-      List<TaskClaimItem> chunk = items.subList(i, end);
-      out.addAll(claimBatchChunkHttpOrFallback(chunk));
-    }
-    return out;
-  }
+    /**
+     * 旧 orchestrator(P1-2.1 之前)claim 返空 body 时回的占位:fields 全 null,worker 走 fallback 到
+     * TaskDispatchMessage 旧字段。语义上等价于"claim 成功但无 fresh config"。
+     */
+    private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG = EffectiveTaskConfig.empty();
 
-  /** 单 chunk:优先 {@code POST /claim-batch};404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #claim}。 */
-  private List<TaskClaimResult> claimBatchChunkHttpOrFallback(List<TaskClaimItem> chunk) {
-    RetryState state = RetryState.initial(
-        properties.getClaimMaxAttempts(),
-        properties.getClaimInitialBackoffMillis(),
-        properties.getClaimMaxBackoffMillis());
-    while (state.canAttempt()) {
-      try {
-        List<ClaimBatchHttpItem> payload = chunk.stream()
-            .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
-            .toList();
+    @Override
+    public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
         String traceId = currentTraceId();
         String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        ClaimBatchHttpResponse response = client()
-            .post()
-            .uri("/internal/tasks/claim-batch")
-            .contentType(MediaType.APPLICATION_JSON)
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-            .body(new ClaimBatchHttpRequest(payload))
-            .retrieve()
-            .body(ClaimBatchHttpResponse.class);
-        return mapClaimChunkOrFallback(chunk, response);
-      } catch (HttpClientErrorException ex) {
-        if (ex.getStatusCode() == HttpStatus.NOT_FOUND
-            || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
-          log.debug(
-              "claim-batch not supported or bad request ({}), falling back to single claim",
-              ex.getStatusCode());
-          return fallbackClaimChunk(chunk);
+        ClaimOutcome<EffectiveTaskConfig> outcome = executeClaimLike(
+                "claim",
+                () -> client().post()
+                        .uri("/internal/tasks/{taskId}/claim", taskId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                        .body(new ClaimRequest(tenantId, workerId, null))
+                        .retrieve()
+                        .body(EffectiveTaskConfig.class));
+        if (!outcome.success()) {
+            return Optional.empty();
         }
-        throw ex;
-      } catch (HttpServerErrorException | ResourceAccessException ex) {
-        if (state.isLastAttempt()) {
-          log.warn(
-              "claim-batch transient failure after {} attempts, falling back to single claim: {}",
-              state.max(),
-              SwallowedExceptionLogger.summary(ex));
-          return fallbackClaimChunk(chunk);
+        return Optional.of(outcome.body() != null ? outcome.body() : EMPTY_EFFECTIVE_CONFIG);
+    }
+
+    @Override
+    public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
         }
-        log.warn(
-            "claim-batch transient, retrying: attempt={}/{}, message={}",
-            state.attempt(),
-            state.max(),
-            SwallowedExceptionLogger.summary(ex));
-        sleepBackoff(state.backoff());
-        state = state.advance();
-      } catch (RestClientException ex) {
-        // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
-        String exceptionType = ex.getClass().getSimpleName();
-        log.debug(
-            "claim-batch response could not be decoded, using single claim: exceptionType={}",
-            exceptionType);
+        List<TaskClaimResult> out = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i += claimBatchMaxItems) {
+            int end = Math.min(i + claimBatchMaxItems, items.size());
+            List<TaskClaimItem> chunk = items.subList(i, end);
+            out.addAll(claimBatchChunkHttpOrFallback(chunk));
+        }
+        return out;
+    }
+
+    /** 单 chunk:优先 {@code POST /claim-batch};404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #claim}。 */
+    private List<TaskClaimResult> claimBatchChunkHttpOrFallback(List<TaskClaimItem> chunk) {
+        RetryState state = RetryState.initial(
+                properties.getClaimMaxAttempts(),
+                properties.getClaimInitialBackoffMillis(),
+                properties.getClaimMaxBackoffMillis());
+        while (state.canAttempt()) {
+            try {
+                List<ClaimBatchHttpItem> payload = chunk.stream()
+                        .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
+                        .toList();
+                String traceId = currentTraceId();
+                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                ClaimBatchHttpResponse response = client().post()
+                        .uri("/internal/tasks/claim-batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(
+                                CommonConstants.DEFAULT_TENANT_ID_HEADER,
+                                chunk.get(0).tenantId())
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                        .body(new ClaimBatchHttpRequest(payload))
+                        .retrieve()
+                        .body(ClaimBatchHttpResponse.class);
+                return mapClaimChunkOrFallback(chunk, response);
+            } catch (HttpClientErrorException ex) {
+                if (ex.getStatusCode() == HttpStatus.NOT_FOUND || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                    log.debug(
+                            "claim-batch not supported or bad request ({}), falling back to single claim",
+                            ex.getStatusCode());
+                    return fallbackClaimChunk(chunk);
+                }
+                throw ex;
+            } catch (HttpServerErrorException | ResourceAccessException ex) {
+                if (state.isLastAttempt()) {
+                    log.warn(
+                            "claim-batch transient failure after {} attempts, falling back to single claim: {}",
+                            state.max(),
+                            SwallowedExceptionLogger.summary(ex));
+                    return fallbackClaimChunk(chunk);
+                }
+                log.warn(
+                        "claim-batch transient, retrying: attempt={}/{}, message={}",
+                        state.attempt(),
+                        state.max(),
+                        SwallowedExceptionLogger.summary(ex));
+                sleepBackoff(state.backoff());
+                state = state.advance();
+            } catch (RestClientException ex) {
+                // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
+                String exceptionType = ex.getClass().getSimpleName();
+                log.debug(
+                        "claim-batch response could not be decoded, using single claim: exceptionType={}",
+                        exceptionType);
+                return fallbackClaimChunk(chunk);
+            }
+        }
         return fallbackClaimChunk(chunk);
-      }
     }
-    return fallbackClaimChunk(chunk);
-  }
 
-  private List<TaskClaimResult> mapClaimChunkOrFallback(
-      List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
-    List<ClaimBatchHttpResult> responseResults =
-        EmptyChecks.isNull(response) ? null : response.results();
-    if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
-      log.warn(
-          "claim-batch response mismatch: chunk size {}, response results {}",
-          chunk.size(),
-          EmptyChecks.isNull(responseResults) ? null : responseResults.size());
-      return fallbackClaimChunk(chunk);
+    private List<TaskClaimResult> mapClaimChunkOrFallback(List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
+        List<ClaimBatchHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+            log.warn(
+                    "claim-batch response mismatch: chunk size {}, response results {}",
+                    chunk.size(),
+                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+            return fallbackClaimChunk(chunk);
+        }
+        Map<Long, ClaimBatchHttpResult> resultsByTaskId = new LinkedHashMap<>();
+        for (ClaimBatchHttpResult row : responseResults) {
+            boolean responseIdentityIsInvalid = EmptyChecks.isNull(row)
+                    || EmptyChecks.isNull(row.taskId())
+                    || EmptyChecks.isNull(row.claimed())
+                    || resultsByTaskId.containsKey(row.taskId());
+            if (responseIdentityIsInvalid) {
+                return fallbackClaimChunk(chunk);
+            }
+            Long returnedTaskId = row.taskId();
+            resultsByTaskId.put(returnedTaskId, row);
+        }
+        List<TaskClaimResult> out = new ArrayList<>(chunk.size());
+        for (TaskClaimItem requested : chunk) {
+            ClaimBatchHttpResult row = resultsByTaskId.get(requested.taskId());
+            if (EmptyChecks.isNull(row) || !claimConfigMatchesRequest(requested, row)) {
+                return fallbackClaimChunk(chunk);
+            }
+            EffectiveTaskConfig claimedConfig = row.claimed() ? row.config() : null;
+            out.add(new TaskClaimResult(requested.taskId(), row.claimed(), claimedConfig));
+        }
+        return out;
     }
-    Map<Long, ClaimBatchHttpResult> resultsByTaskId = new LinkedHashMap<>();
-    for (ClaimBatchHttpResult row : responseResults) {
-      boolean responseIdentityIsInvalid = EmptyChecks.isNull(row)
-          || EmptyChecks.isNull(row.taskId())
-          || EmptyChecks.isNull(row.claimed())
-          || resultsByTaskId.containsKey(row.taskId());
-      if (responseIdentityIsInvalid) {
-        return fallbackClaimChunk(chunk);
-      }
-      Long returnedTaskId = row.taskId();
-      resultsByTaskId.put(returnedTaskId, row);
-    }
-    List<TaskClaimResult> out = new ArrayList<>(chunk.size());
-    for (TaskClaimItem requested : chunk) {
-      ClaimBatchHttpResult row = resultsByTaskId.get(requested.taskId());
-      if (EmptyChecks.isNull(row) || !claimConfigMatchesRequest(requested, row)) {
-        return fallbackClaimChunk(chunk);
-      }
-      EffectiveTaskConfig claimedConfig = row.claimed() ? row.config() : null;
-      out.add(new TaskClaimResult(requested.taskId(), row.claimed(), claimedConfig));
-    }
-    return out;
-  }
 
-  private boolean claimConfigMatchesRequest(TaskClaimItem requested, ClaimBatchHttpResult result) {
-    EffectiveTaskConfig config = result.config();
-    if (EmptyChecks.isNull(config)) {
-      return !Boolean.TRUE.equals(result.claimed());
+    private boolean claimConfigMatchesRequest(TaskClaimItem requested, ClaimBatchHttpResult result) {
+        EffectiveTaskConfig config = result.config();
+        if (EmptyChecks.isNull(config)) {
+            return !Boolean.TRUE.equals(result.claimed());
+        }
+        boolean taskIdentityMatches =
+                EmptyChecks.isNull(config.taskId()) || Objects.equals(requested.taskId(), config.taskId());
+        boolean tenantIdentityMatches =
+                EmptyChecks.isNull(config.tenantId()) || Objects.equals(requested.tenantId(), config.tenantId());
+        return taskIdentityMatches && tenantIdentityMatches;
     }
-    boolean taskIdentityMatches =
-        EmptyChecks.isNull(config.taskId()) || Objects.equals(requested.taskId(), config.taskId());
-    boolean tenantIdentityMatches = EmptyChecks.isNull(config.tenantId())
-        || Objects.equals(requested.tenantId(), config.tenantId());
-    return taskIdentityMatches && tenantIdentityMatches;
-  }
 
-  /** 降级:逐条 {@link #claim},结果语义与批量一致。 */
-  private List<TaskClaimResult> fallbackClaimChunk(List<TaskClaimItem> chunk) {
-    List<TaskClaimResult> out = new ArrayList<>(chunk.size());
-    for (TaskClaimItem it : chunk) {
-      Optional<EffectiveTaskConfig> cfg = claim(it.tenantId(), it.taskId(), it.workerId());
-      out.add(new TaskClaimResult(it.taskId(), cfg.isPresent(), cfg.orElse(null)));
+    /** 降级:逐条 {@link #claim},结果语义与批量一致。 */
+    private List<TaskClaimResult> fallbackClaimChunk(List<TaskClaimItem> chunk) {
+        List<TaskClaimResult> out = new ArrayList<>(chunk.size());
+        for (TaskClaimItem it : chunk) {
+            Optional<EffectiveTaskConfig> cfg = claim(it.tenantId(), it.taskId(), it.workerId());
+            out.add(new TaskClaimResult(it.taskId(), cfg.isPresent(), cfg.orElse(null)));
+        }
+        return out;
     }
-    return out;
-  }
 
-  @Override
-  public boolean renewLease(
-      String tenantId, Long taskId, String workerId, String partitionInvocationId) {
-    TaskLeaseRenewItem renewItem =
-        new TaskLeaseRenewItem(tenantId, taskId, workerId, partitionInvocationId);
-    TaskLeaseRenewResult renewResult = renewLeaseWithResult(renewItem);
-    return renewResult.renewed();
-  }
+    @Override
+    public boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId) {
+        TaskLeaseRenewItem renewItem = new TaskLeaseRenewItem(tenantId, taskId, workerId, partitionInvocationId);
+        TaskLeaseRenewResult renewResult = renewLeaseWithResult(renewItem);
+        return renewResult.renewed();
+    }
 
-  @Override
-  public boolean markNonIdempotentExecutionStarted(
-      String tenantId, Long taskId, String workerId, String partitionInvocationId) {
-    String traceId = currentTraceId();
-    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    try {
-      client()
-          .post()
-          .uri("/internal/tasks/{taskId}/non-idempotent-started", taskId)
-          .contentType(MediaType.APPLICATION_JSON)
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-          .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-          .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
-          .retrieve()
-          .toBodilessEntity();
-      return true;
-    } catch (HttpClientErrorException ex) {
-      log.warn(
-          "non-idempotent execution start rejected: tenantId={}, taskId={}, status={}",
-          tenantId,
-          taskId,
-          ex.getStatusCode());
-      return false;
-    }
-  }
-
-  private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
-    String traceId = currentTraceId();
-    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    Object request;
-    if (item.executionStarted()) {
-      // 一次业务执行生成一次身份；下面的 HTTP 重试复用同一个 request。
-      ExecutionStartedDetails details =
-          new ExecutionStartedDetails(true, IdGenerator.newInvocationId());
-      request = new ExecutionStartHttpRequest(
-          item.tenantId(), item.workerId(), item.partitionInvocationId(), details);
-    } else {
-      request = new ClaimRequest(item.tenantId(), item.workerId(), item.partitionInvocationId());
-    }
-    ClaimOutcome<TaskHeartbeatHttpResponse> outcome = executeClaimLike(
-        "renew",
-        () -> client()
-            .post()
-            .uri("/internal/tasks/{taskId}/renew", item.taskId())
-            .contentType(MediaType.APPLICATION_JSON)
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, item.tenantId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-            .body(request)
-            .retrieve()
-            .body(TaskHeartbeatHttpResponse.class));
-    TaskHeartbeatHttpResponse heartbeat = outcome.body();
-    boolean cancelRequested = EmptyChecks.isNotNull(heartbeat) && heartbeat.cancelRequested();
-    return new TaskLeaseRenewResult(item.taskId(), outcome.success(), cancelRequested);
-  }
-
-  @Override
-  public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
-    if (items == null || items.isEmpty()) {
-      return Map.of();
-    }
-    Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
-    List<TaskLeaseRenewItem> ordinaryItems = new ArrayList<>();
-    for (TaskLeaseRenewItem item : items) {
-      if (item.executionStarted()) {
-        // 执行起点需要携带详情并独立确认，不能降级成丢失标记的普通批量续租。
-        TaskLeaseRenewResult result = renewLeaseWithResult(item);
-        out.put(item.taskId(), result);
-      } else {
-        ordinaryItems.add(item);
-      }
-    }
-    for (int i = 0; i < ordinaryItems.size(); i += renewBatchMaxItems) {
-      int end = Math.min(i + renewBatchMaxItems, ordinaryItems.size());
-      List<TaskLeaseRenewItem> chunk = ordinaryItems.subList(i, end);
-      out.putAll(renewBatchChunkHttpOrFallback(chunk));
-    }
-    return out;
-  }
-
-  /**
-   * 单 chunk：优先 {@code POST /leases/renew-batch}；404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #renewLease}。
-   */
-  private Map<Long, TaskLeaseRenewResult> renewBatchChunkHttpOrFallback(
-      List<TaskLeaseRenewItem> chunk) {
-    RetryState state = RetryState.initial(
-        properties.getClaimMaxAttempts(),
-        properties.getClaimInitialBackoffMillis(),
-        properties.getClaimMaxBackoffMillis());
-    while (state.canAttempt()) {
-      try {
-        List<BatchRenewHttpItem> payload = chunk.stream().map(this::toHttpItem).toList();
+    @Override
+    public boolean markNonIdempotentExecutionStarted(
+            String tenantId, Long taskId, String workerId, String partitionInvocationId) {
         String traceId = currentTraceId();
         String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        BatchRenewHttpResponse response = client()
-            .post()
-            .uri("/internal/tasks/leases/renew-batch")
-            .contentType(MediaType.APPLICATION_JSON)
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-            .body(new BatchRenewHttpRequest(payload))
-            .retrieve()
-            .body(BatchRenewHttpResponse.class);
-        return mapChunkOrFallback(chunk, response);
-      } catch (HttpClientErrorException ex) {
-        if (ex.getStatusCode() == HttpStatus.NOT_FOUND
-            || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
-          log.debug(
-              "renew-batch not supported or bad request ({}), falling back to single renew",
-              ex.getStatusCode());
-          return fallbackRenewChunk(chunk);
+        try {
+            client().post()
+                    .uri("/internal/tasks/{taskId}/non-idempotent-started", taskId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                    .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (HttpClientErrorException ex) {
+            log.warn(
+                    "non-idempotent execution start rejected: tenantId={}, taskId={}, status={}",
+                    tenantId,
+                    taskId,
+                    ex.getStatusCode());
+            return false;
         }
-        throw ex;
-      } catch (HttpServerErrorException | ResourceAccessException ex) {
+    }
+
+    private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
+        String traceId = currentTraceId();
+        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        Object request;
+        if (item.executionStarted()) {
+            // 一次业务执行生成一次身份；下面的 HTTP 重试复用同一个 request。
+            ExecutionStartedDetails details = new ExecutionStartedDetails(true, IdGenerator.newInvocationId());
+            request = new ExecutionStartHttpRequest(
+                    item.tenantId(), item.workerId(), item.partitionInvocationId(), details);
+        } else {
+            request = new ClaimRequest(item.tenantId(), item.workerId(), item.partitionInvocationId());
+        }
+        ClaimOutcome<TaskHeartbeatHttpResponse> outcome = executeClaimLike(
+                "renew",
+                () -> client().post()
+                        .uri("/internal/tasks/{taskId}/renew", item.taskId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, item.tenantId())
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                        .body(request)
+                        .retrieve()
+                        .body(TaskHeartbeatHttpResponse.class));
+        TaskHeartbeatHttpResponse heartbeat = outcome.body();
+        boolean cancelRequested = EmptyChecks.isNotNull(heartbeat) && heartbeat.cancelRequested();
+        return new TaskLeaseRenewResult(item.taskId(), outcome.success(), cancelRequested);
+    }
+
+    @Override
+    public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
+        if (items == null || items.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
+        List<TaskLeaseRenewItem> ordinaryItems = new ArrayList<>();
+        for (TaskLeaseRenewItem item : items) {
+            if (item.executionStarted()) {
+                // 执行起点需要携带详情并独立确认，不能降级成丢失标记的普通批量续租。
+                TaskLeaseRenewResult result = renewLeaseWithResult(item);
+                out.put(item.taskId(), result);
+            } else {
+                ordinaryItems.add(item);
+            }
+        }
+        for (int i = 0; i < ordinaryItems.size(); i += renewBatchMaxItems) {
+            int end = Math.min(i + renewBatchMaxItems, ordinaryItems.size());
+            List<TaskLeaseRenewItem> chunk = ordinaryItems.subList(i, end);
+            out.putAll(renewBatchChunkHttpOrFallback(chunk));
+        }
+        return out;
+    }
+
+    /**
+     * 单 chunk：优先 {@code POST /leases/renew-batch}；404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #renewLease}。
+     */
+    private Map<Long, TaskLeaseRenewResult> renewBatchChunkHttpOrFallback(List<TaskLeaseRenewItem> chunk) {
+        RetryState state = RetryState.initial(
+                properties.getClaimMaxAttempts(),
+                properties.getClaimInitialBackoffMillis(),
+                properties.getClaimMaxBackoffMillis());
+        while (state.canAttempt()) {
+            try {
+                List<BatchRenewHttpItem> payload =
+                        chunk.stream().map(this::toHttpItem).toList();
+                String traceId = currentTraceId();
+                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                BatchRenewHttpResponse response = client().post()
+                        .uri("/internal/tasks/leases/renew-batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(
+                                CommonConstants.DEFAULT_TENANT_ID_HEADER,
+                                chunk.get(0).tenantId())
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                        .body(new BatchRenewHttpRequest(payload))
+                        .retrieve()
+                        .body(BatchRenewHttpResponse.class);
+                return mapChunkOrFallback(chunk, response);
+            } catch (HttpClientErrorException ex) {
+                if (ex.getStatusCode() == HttpStatus.NOT_FOUND || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                    log.debug(
+                            "renew-batch not supported or bad request ({}), falling back to single renew",
+                            ex.getStatusCode());
+                    return fallbackRenewChunk(chunk);
+                }
+                throw ex;
+            } catch (HttpServerErrorException | ResourceAccessException ex) {
+                if (state.isLastAttempt()) {
+                    log.warn(
+                            "renew-batch transient failure after {} attempts, falling back to single renew: {}",
+                            state.max(),
+                            SwallowedExceptionLogger.summary(ex));
+                    return fallbackRenewChunk(chunk);
+                }
+                log.warn(
+                        "renew-batch transient, retrying: attempt={}/{}, message={}",
+                        state.attempt(),
+                        state.max(),
+                        SwallowedExceptionLogger.summary(ex));
+                sleepBackoff(state.backoff());
+                state = state.advance();
+            } catch (RestClientException ex) {
+                // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
+                String exceptionType = ex.getClass().getSimpleName();
+                log.debug(
+                        "renew-batch response could not be decoded, using single renew: exceptionType={}",
+                        exceptionType);
+                return fallbackRenewChunk(chunk);
+            }
+        }
+        return fallbackRenewChunk(chunk);
+    }
+
+    private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
+            List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
+        List<BatchRenewHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+            log.warn(
+                    "renew-batch response mismatch: chunk size {}, response results {}",
+                    chunk.size(),
+                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+            return fallbackRenewChunk(chunk);
+        }
+        Map<Long, BatchRenewHttpResult> resultsByTaskId = new LinkedHashMap<>();
+        for (BatchRenewHttpResult row : responseResults) {
+            boolean responseIdentityOrOutcomeIsInvalid = EmptyChecks.isNull(row)
+                    || EmptyChecks.isNull(row.taskId())
+                    || EmptyChecks.isNull(row.renewed())
+                    || resultsByTaskId.containsKey(row.taskId());
+            if (responseIdentityOrOutcomeIsInvalid) {
+                return fallbackRenewChunk(chunk);
+            }
+            Long returnedTaskId = row.taskId();
+            resultsByTaskId.put(returnedTaskId, row);
+        }
+        Map<Long, TaskLeaseRenewResult> results = new LinkedHashMap<>();
+        for (TaskLeaseRenewItem requested : chunk) {
+            Long taskId = requested.taskId();
+            BatchRenewHttpResult row = resultsByTaskId.get(taskId);
+            if (EmptyChecks.isNull(row)) {
+                return fallbackRenewChunk(chunk);
+            }
+            boolean renewed = Boolean.TRUE.equals(row.renewed());
+            boolean cancelRequested = Boolean.TRUE.equals(row.cancelRequested());
+            results.put(taskId, new TaskLeaseRenewResult(taskId, renewed, cancelRequested));
+        }
+        return results;
+    }
+
+    private Map<Long, TaskLeaseRenewResult> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
+        Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
+        for (TaskLeaseRenewItem item : chunk) {
+            m.put(item.taskId(), renewLeaseWithResult(item));
+        }
+        return m;
+    }
+
+    private BatchRenewHttpItem toHttpItem(TaskLeaseRenewItem item) {
+        return new BatchRenewHttpItem(item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+    }
+
+    @Override
+    public void report(TaskExecutionReport report) {
+        // A-3.6 a: REPORT 不入 pipeline_step_run（保留 step_run 纯业务语义），但需要可观测性。
+        // 用 micrometer Timer 记录 REPORT 调用耗时 + 结果 tag，运维可通过
+        //   batch.worker.report.duration{outcome=success|failure}
+        // （tenantId 高基数，不作 tag；见 recordReportDuration）的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
+        //
+        // P0 #16 (2026-05-23): 三段式失败链。
+        //   1) HTTP 重试耗尽 → 尝试 outbox.enqueue（ADR-015），由 pollDeferredReports 后台重投。
+        //   2) outbox 不可用（未启用 / 持久化失败）→ **不再** 把异常抛回 listener。
+        //      之前抛 RuntimeException → AbstractTaskConsumer 识别为 transient → return false → Kafka
+        //      不提交 offset → 重投 dispatch 消息 → 同 task 在 finally 块清完 lease 后立即被重新 CLAIM,
+        //      task 业务 body 被双执行（已写入数据库数据被覆盖 / 重做）。
+        //      改为捕获并抑制异常 + ERROR 日志 + worker.report.dropped.total 计数：让 Kafka 正常 ack offset,
+        //      丢失的 REPORT 由 orchestrator lease 过期自动 reclaim 回退（reclaim 是 lease-timeout 后的
+        //      延迟重派,不是即时重派,且 orchestrator 视角看到的是 CLAIM 状态超时,可走它自己的
+        //      去重/状态机校验,而不是 Kafka 重投绕过状态机）。
+        //   双执行从"必然零延迟"降级为"可能延迟 reclaim",配合 outbox 启用时基本消除。
+        long reportStartNanos = System.nanoTime();
+        String outcome = "success";
+        try {
+            boolean reportCanBeBatched = EmptyChecks.isNotNull(reportBatcher)
+                    && EmptyChecks.isNotNull(report)
+                    && EmptyChecks.isNotNull(report.getTaskId());
+            TaskReportBatcher.SubmissionResult batchResult = reportCanBeBatched
+                    ? reportBatcher.submit(report)
+                    : TaskReportBatcher.SubmissionResult.NOT_SUBMITTED;
+            if (batchResult != TaskReportBatcher.SubmissionResult.CONFIRMED) {
+                boolean batchAttempted = batchResult == TaskReportBatcher.SubmissionResult.UNCONFIRMED;
+                reportInternal(report, batchAttempted);
+            }
+        } catch (RuntimeException rex) {
+            WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
+            boolean reportWasDeferredToOutbox = EmptyChecks.isNotNull(coordinator) && coordinator.enqueue(report);
+            if (reportWasDeferredToOutbox) {
+                outcome = "deferred_outbox";
+            } else {
+                outcome = "dropped";
+                recordReportDropped(coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed");
+                log.error(
+                        "REPORT dropped after HTTP + outbox failure — relying on orchestrator lease reclaim to"
+                                + " avoid Kafka-redelivery double-execution: tenantId={}, taskId={}, workerId={},"
+                                + " reason={}, httpError={}",
+                        report == null ? null : report.getTenantId(),
+                        report == null ? null : report.getTaskId(),
+                        report == null ? null : report.getWorkerId(),
+                        coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed",
+                        SwallowedExceptionLogger.summary(rex));
+            }
+        } finally {
+            recordReportDuration(outcome, System.nanoTime() - reportStartNanos);
+        }
+    }
+
+    /** 关闭微批接纳，唤醒尚未提交的调用者，使其继续走单条交付而非丢弃内存结果。 */
+    @PreDestroy
+    void closeReportBatcher() {
+        if (EmptyChecks.isNotNull(reportBatcher)) {
+            reportBatcher.close();
+        }
+    }
+
+    /**
+     * 只确认具有唯一 taskId 且 ok=true 的响应项。未确认项由各自 report 调用走原单条有限重试，
+     * 不重试已确认项，更不重新执行业务。批响应不提供 invocation，因此批内已按租户和唯一 taskId 隔离。
+     */
+    private Set<Long> submitReportBatchOverHttp(List<TaskExecutionReport> reports) {
+        TaskExecutionReport first = reports.getFirst();
+        String traceId = firstNonBlank(first.getTraceId(), currentTraceId());
+        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        try {
+            ReportBatchHttpRequest request = new ReportBatchHttpRequest(reports);
+            ReportBatchHttpResponse response = client().post()
+                    .uri("/internal/tasks/report-batch")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, first.getTenantId())
+                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                    .body(request)
+                    .retrieve()
+                    .body(ReportBatchHttpResponse.class);
+            return confirmedReportTaskIds(reports, response);
+        } catch (RestClientException ex) {
+            // 批传输尚未确认不代表业务失败；调用者仍会逐项重试及持久化，最终失败沿用现有 ERROR/指标。
+            log.debug(
+                    "report-batch not confirmed, using per-item report: items={}, error={}",
+                    reports.size(),
+                    SwallowedExceptionLogger.summary(ex));
+            return Set.of();
+        }
+    }
+
+    private Set<Long> confirmedReportTaskIds(List<TaskExecutionReport> reports, ReportBatchHttpResponse response) {
+        if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.results())) {
+            return Set.of();
+        }
+        Set<Long> requestedIds = new HashSet<>();
+        for (TaskExecutionReport report : reports) {
+            requestedIds.add(report.getTaskId());
+        }
+        Set<Long> seenIds = new HashSet<>();
+        Set<Long> duplicateIds = new HashSet<>();
+        Set<Long> acceptedIds = new HashSet<>();
+        for (ReportBatchHttpResult item : response.results()) {
+            if (EmptyChecks.isNull(item) || !requestedIds.contains(item.taskId())) {
+                continue;
+            }
+            if (!seenIds.add(item.taskId())) {
+                duplicateIds.add(item.taskId());
+            }
+            if (Boolean.TRUE.equals(item.ok())) {
+                acceptedIds.add(item.taskId());
+            }
+        }
+        acceptedIds.removeAll(duplicateIds);
+        return acceptedIds;
+    }
+
+    private void recordReportDropped(String reason) {
+        meterRegistry.ifPresent(registry -> registry.counter("worker.report.dropped.total", "reason", reason)
+                .increment());
+    }
+
+    @Override
+    public void submitReportOverHttp(TaskExecutionReport report) {
+        reportInternal(report, false);
+    }
+
+    private void recordReportDuration(String outcome, long durationNanos) {
+        // tenantId 不作 metric tag(高基数,随租户线性膨胀);只保留 outcome(枚举型,低基数)
+        meterRegistry.ifPresent(registry -> Timer.builder("batch.worker.report.duration")
+                .tags(Tags.of("outcome", outcome))
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(registry)
+                .record(durationNanos, TimeUnit.NANOSECONDS));
+    }
+
+    private void reportInternal(TaskExecutionReport report, boolean batchAttempted) {
+        RetryState state = reportRetryState(batchAttempted);
+        String traceFallback = currentTraceId();
+        while (state.canAttempt()) {
+            String traceId = firstNonBlank(report.getTraceId(), traceFallback);
+            if (!Texts.hasText(traceId)) {
+                traceId = IdGenerator.newTraceId();
+            }
+            try {
+                client().post()
+                        .uri("/internal/tasks/{taskId}/report", report.getTaskId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, report.getTenantId())
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+                        .body(report)
+                        .retrieve()
+                        .toBodilessEntity();
+                return;
+            } catch (HttpClientErrorException ex) {
+                SwallowedExceptionLogger.info(HttpTaskExecutionClient.class, "catch:HttpClientErrorException", ex);
+
+                if (ex.getStatusCode() == HttpStatus.CONFLICT) {
+                    // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
+                    state = handleRetryableReportFailure("STATE_CONFLICT", "state conflict", state, ex);
+                    continue;
+                }
+                if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                    // R6 P0-7：429 是 orchestrator 端 sliding-window 限流的瞬时拒绝，绝不是终态错误。
+                    // 之前直接 failReportImmediately 等于把 worker 的 REPORT 数据扔掉，task 在 orchestrator
+                    // 视角永远卡 RUNNING — 只能靠 lease 过期 + 重 CLAIM 回退，rolling 高峰会导致整批 task 丢失处理窗口。
+                    // 改为按可重试路径走退避：与 503 / IO 超时一致，让 worker 退避后重投 REPORT。
+                    state = handleRetryableReportFailure("RATE_LIMITED", "rate limited", state, ex);
+                    continue;
+                }
+                failReportImmediately("CLIENT_ERROR", state, ex);
+            } catch (HttpServerErrorException ex) {
+                state = handleRetryableReportFailure("SERVER_ERROR", "transient failure", state, ex);
+            } catch (ResourceAccessException ex) {
+                SwallowedExceptionLogger.info(HttpTaskExecutionClient.class, "catch:ResourceAccessException", ex);
+
+                state = handleRetryableReportFailure("IO_TIMEOUT", "I/O failure", state, ex);
+            }
+        }
+    }
+
+    /** 批请求也是该项的一次真实 HTTP 尝试，不能在回退单条时重置总预算。 */
+    private RetryState reportRetryState(boolean batchAttempted) {
+        RetryState state = RetryState.initial(
+                properties.getReportMaxAttempts(),
+                properties.getReportInitialBackoffMillis(),
+                properties.getReportMaxBackoffMillis());
+        if (!batchAttempted) {
+            return state;
+        }
+        recordReportFailure("BATCH_UNCONFIRMED");
         if (state.isLastAttempt()) {
-          log.warn(
-              "renew-batch transient failure after {} attempts, falling back to single renew: {}",
-              state.max(),
-              SwallowedExceptionLogger.summary(ex));
-          return fallbackRenewChunk(chunk);
+            throw new IllegalStateException("report batch not confirmed; report HTTP attempt budget exhausted");
+        }
+        sleepBackoff(state.backoff());
+        return state.advance();
+    }
+
+    /**
+     * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode} 进 metrics，{@code retryHint}
+     * 进 log。
+     */
+    private RetryState handleRetryableReportFailure(
+            String reasonCode, String retryHint, RetryState state, RuntimeException ex) {
+        recordReportFailure(reasonCode);
+        if (state.isLastAttempt()) {
+            logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
+            throw ex;
         }
         log.warn(
-            "renew-batch transient, retrying: attempt={}/{}, message={}",
-            state.attempt(),
-            state.max(),
-            SwallowedExceptionLogger.summary(ex));
+                "orchestrator report {}, will retry: attempt={}/{}, error={}",
+                retryHint,
+                state.attempt(),
+                state.max(),
+                SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
-        state = state.advance();
-      } catch (RestClientException ex) {
-        // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
-        String exceptionType = ex.getClass().getSimpleName();
-        log.debug(
-            "renew-batch response could not be decoded, using single renew: exceptionType={}",
-            exceptionType);
-        return fallbackRenewChunk(chunk);
-      }
+        return state.advance();
     }
-    return fallbackRenewChunk(chunk);
-  }
 
-  private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
-      List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
-    List<BatchRenewHttpResult> responseResults =
-        EmptyChecks.isNull(response) ? null : response.results();
-    if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
-      log.warn(
-          "renew-batch response mismatch: chunk size {}, response results {}",
-          chunk.size(),
-          EmptyChecks.isNull(responseResults) ? null : responseResults.size());
-      return fallbackRenewChunk(chunk);
-    }
-    Map<Long, BatchRenewHttpResult> resultsByTaskId = new LinkedHashMap<>();
-    for (BatchRenewHttpResult row : responseResults) {
-      boolean responseIdentityOrOutcomeIsInvalid = EmptyChecks.isNull(row)
-          || EmptyChecks.isNull(row.taskId())
-          || EmptyChecks.isNull(row.renewed())
-          || resultsByTaskId.containsKey(row.taskId());
-      if (responseIdentityOrOutcomeIsInvalid) {
-        return fallbackRenewChunk(chunk);
-      }
-      Long returnedTaskId = row.taskId();
-      resultsByTaskId.put(returnedTaskId, row);
-    }
-    Map<Long, TaskLeaseRenewResult> results = new LinkedHashMap<>();
-    for (TaskLeaseRenewItem requested : chunk) {
-      Long taskId = requested.taskId();
-      BatchRenewHttpResult row = resultsByTaskId.get(taskId);
-      if (EmptyChecks.isNull(row)) {
-        return fallbackRenewChunk(chunk);
-      }
-      boolean renewed = Boolean.TRUE.equals(row.renewed());
-      boolean cancelRequested = Boolean.TRUE.equals(row.cancelRequested());
-      results.put(taskId, new TaskLeaseRenewResult(taskId, renewed, cancelRequested));
-    }
-    return results;
-  }
-
-  private Map<Long, TaskLeaseRenewResult> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
-    Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
-    for (TaskLeaseRenewItem item : chunk) {
-      m.put(item.taskId(), renewLeaseWithResult(item));
-    }
-    return m;
-  }
-
-  private BatchRenewHttpItem toHttpItem(TaskLeaseRenewItem item) {
-    return new BatchRenewHttpItem(
-        item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
-  }
-
-  @Override
-  public void report(TaskExecutionReport report) {
-    // A-3.6 a: REPORT 不入 pipeline_step_run（保留 step_run 纯业务语义），但需要可观测性。
-    // 用 micrometer Timer 记录 REPORT 调用耗时 + 结果 tag，运维可通过
-    //   batch.worker.report.duration{outcome=success|failure}
-    // （tenantId 高基数，不作 tag；见 recordReportDuration）的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
-    //
-    // P0 #16 (2026-05-23): 三段式失败链。
-    //   1) HTTP 重试耗尽 → 尝试 outbox.enqueue（ADR-015），由 pollDeferredReports 后台重投。
-    //   2) outbox 不可用（未启用 / 持久化失败）→ **不再** 把异常抛回 listener。
-    //      之前抛 RuntimeException → AbstractTaskConsumer 识别为 transient → return false → Kafka
-    //      不提交 offset → 重投 dispatch 消息 → 同 task 在 finally 块清完 lease 后立即被重新 CLAIM,
-    //      task 业务 body 被双执行（已写入数据库数据被覆盖 / 重做）。
-    //      改为捕获并抑制异常 + ERROR 日志 + worker.report.dropped.total 计数：让 Kafka 正常 ack offset,
-    //      丢失的 REPORT 由 orchestrator lease 过期自动 reclaim 回退（reclaim 是 lease-timeout 后的
-    //      延迟重派,不是即时重派,且 orchestrator 视角看到的是 CLAIM 状态超时,可走它自己的
-    //      去重/状态机校验,而不是 Kafka 重投绕过状态机）。
-    //   双执行从"必然零延迟"降级为"可能延迟 reclaim",配合 outbox 启用时基本消除。
-    long reportStartNanos = System.nanoTime();
-    String outcome = "success";
-    try {
-      boolean reportCanBeBatched = EmptyChecks.isNotNull(reportBatcher)
-          && EmptyChecks.isNotNull(report)
-          && EmptyChecks.isNotNull(report.getTaskId());
-      TaskReportBatcher.SubmissionResult batchResult = reportCanBeBatched
-          ? reportBatcher.submit(report)
-          : TaskReportBatcher.SubmissionResult.NOT_SUBMITTED;
-      if (batchResult != TaskReportBatcher.SubmissionResult.CONFIRMED) {
-        boolean batchAttempted = batchResult == TaskReportBatcher.SubmissionResult.UNCONFIRMED;
-        reportInternal(report, batchAttempted);
-      }
-    } catch (RuntimeException rex) {
-      WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
-      boolean reportWasDeferredToOutbox =
-          EmptyChecks.isNotNull(coordinator) && coordinator.enqueue(report);
-      if (reportWasDeferredToOutbox) {
-        outcome = "deferred_outbox";
-      } else {
-        outcome = "dropped";
-        recordReportDropped(coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed");
-        log.error(
-            "REPORT dropped after HTTP + outbox failure — relying on orchestrator lease reclaim to"
-                + " avoid Kafka-redelivery double-execution: tenantId={}, taskId={}, workerId={},"
-                + " reason={}, httpError={}",
-            report == null ? null : report.getTenantId(),
-            report == null ? null : report.getTaskId(),
-            report == null ? null : report.getWorkerId(),
-            coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed",
-            SwallowedExceptionLogger.summary(rex));
-      }
-    } finally {
-      recordReportDuration(outcome, System.nanoTime() - reportStartNanos);
-    }
-  }
-
-  /** 关闭微批接纳，唤醒尚未提交的调用者，使其继续走单条交付而非丢弃内存结果。 */
-  @PreDestroy
-  void closeReportBatcher() {
-    if (EmptyChecks.isNotNull(reportBatcher)) {
-      reportBatcher.close();
-    }
-  }
-
-  /**
-   * 只确认具有唯一 taskId 且 ok=true 的响应项。未确认项由各自 report 调用走原单条有限重试，
-   * 不重试已确认项，更不重新执行业务。批响应不提供 invocation，因此批内已按租户和唯一 taskId 隔离。
-   */
-  private Set<Long> submitReportBatchOverHttp(List<TaskExecutionReport> reports) {
-    TaskExecutionReport first = reports.getFirst();
-    String traceId = firstNonBlank(first.getTraceId(), currentTraceId());
-    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    try {
-      ReportBatchHttpRequest request = new ReportBatchHttpRequest(reports);
-      ReportBatchHttpResponse response = client()
-          .post()
-          .uri("/internal/tasks/report-batch")
-          .contentType(MediaType.APPLICATION_JSON)
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, first.getTenantId())
-          .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-          .body(request)
-          .retrieve()
-          .body(ReportBatchHttpResponse.class);
-      return confirmedReportTaskIds(reports, response);
-    } catch (RestClientException ex) {
-      // 批传输尚未确认不代表业务失败；调用者仍会逐项重试及持久化，最终失败沿用现有 ERROR/指标。
-      log.debug(
-          "report-batch not confirmed, using per-item report: items={}, error={}",
-          reports.size(),
-          SwallowedExceptionLogger.summary(ex));
-      return Set.of();
-    }
-  }
-
-  private Set<Long> confirmedReportTaskIds(
-      List<TaskExecutionReport> reports, ReportBatchHttpResponse response) {
-    if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.results())) {
-      return Set.of();
-    }
-    Set<Long> requestedIds = new HashSet<>();
-    for (TaskExecutionReport report : reports) {
-      requestedIds.add(report.getTaskId());
-    }
-    Set<Long> seenIds = new HashSet<>();
-    Set<Long> duplicateIds = new HashSet<>();
-    Set<Long> acceptedIds = new HashSet<>();
-    for (ReportBatchHttpResult item : response.results()) {
-      if (EmptyChecks.isNull(item) || !requestedIds.contains(item.taskId())) {
-        continue;
-      }
-      if (!seenIds.add(item.taskId())) {
-        duplicateIds.add(item.taskId());
-      }
-      if (Boolean.TRUE.equals(item.ok())) {
-        acceptedIds.add(item.taskId());
-      }
-    }
-    acceptedIds.removeAll(duplicateIds);
-    return acceptedIds;
-  }
-
-  private void recordReportDropped(String reason) {
-    meterRegistry.ifPresent(registry ->
-        registry.counter("worker.report.dropped.total", "reason", reason).increment());
-  }
-
-  @Override
-  public void submitReportOverHttp(TaskExecutionReport report) {
-    reportInternal(report, false);
-  }
-
-  private void recordReportDuration(String outcome, long durationNanos) {
-    // tenantId 不作 metric tag(高基数,随租户线性膨胀);只保留 outcome(枚举型,低基数)
-    meterRegistry.ifPresent(registry -> Timer.builder("batch.worker.report.duration")
-        .tags(Tags.of("outcome", outcome))
-        .publishPercentiles(0.5, 0.95, 0.99)
-        .register(registry)
-        .record(durationNanos, TimeUnit.NANOSECONDS));
-  }
-
-  private void reportInternal(TaskExecutionReport report, boolean batchAttempted) {
-    RetryState state = reportRetryState(batchAttempted);
-    String traceFallback = currentTraceId();
-    while (state.canAttempt()) {
-      String traceId = firstNonBlank(report.getTraceId(), traceFallback);
-      if (!Texts.hasText(traceId)) {
-        traceId = IdGenerator.newTraceId();
-      }
-      try {
-        client()
-            .post()
-            .uri("/internal/tasks/{taskId}/report", report.getTaskId())
-            .contentType(MediaType.APPLICATION_JSON)
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, report.getTenantId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
-            .body(report)
-            .retrieve()
-            .toBodilessEntity();
-        return;
-      } catch (HttpClientErrorException ex) {
-        SwallowedExceptionLogger.info(
-            HttpTaskExecutionClient.class, "catch:HttpClientErrorException", ex);
-
-        if (ex.getStatusCode() == HttpStatus.CONFLICT) {
-          // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
-          state = handleRetryableReportFailure("STATE_CONFLICT", "state conflict", state, ex);
-          continue;
-        }
-        if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-          // R6 P0-7：429 是 orchestrator 端 sliding-window 限流的瞬时拒绝，绝不是终态错误。
-          // 之前直接 failReportImmediately 等于把 worker 的 REPORT 数据扔掉，task 在 orchestrator
-          // 视角永远卡 RUNNING — 只能靠 lease 过期 + 重 CLAIM 回退，rolling 高峰会导致整批 task 丢失处理窗口。
-          // 改为按可重试路径走退避：与 503 / IO 超时一致，让 worker 退避后重投 REPORT。
-          state = handleRetryableReportFailure("RATE_LIMITED", "rate limited", state, ex);
-          continue;
-        }
-        failReportImmediately("CLIENT_ERROR", state, ex);
-      } catch (HttpServerErrorException ex) {
-        state = handleRetryableReportFailure("SERVER_ERROR", "transient failure", state, ex);
-      } catch (ResourceAccessException ex) {
-        SwallowedExceptionLogger.info(
-            HttpTaskExecutionClient.class, "catch:ResourceAccessException", ex);
-
-        state = handleRetryableReportFailure("IO_TIMEOUT", "I/O failure", state, ex);
-      }
-    }
-  }
-
-  /** 批请求也是该项的一次真实 HTTP 尝试，不能在回退单条时重置总预算。 */
-  private RetryState reportRetryState(boolean batchAttempted) {
-    RetryState state = RetryState.initial(
-        properties.getReportMaxAttempts(),
-        properties.getReportInitialBackoffMillis(),
-        properties.getReportMaxBackoffMillis());
-    if (!batchAttempted) {
-      return state;
-    }
-    recordReportFailure("BATCH_UNCONFIRMED");
-    if (state.isLastAttempt()) {
-      throw new IllegalStateException(
-          "report batch not confirmed; report HTTP attempt budget exhausted");
-    }
-    sleepBackoff(state.backoff());
-    return state.advance();
-  }
-
-  /**
-   * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode} 进 metrics，{@code retryHint}
-   * 进 log。
-   */
-  private RetryState handleRetryableReportFailure(
-      String reasonCode, String retryHint, RetryState state, RuntimeException ex) {
-    recordReportFailure(reasonCode);
-    if (state.isLastAttempt()) {
-      logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
-      throw ex;
-    }
-    log.warn(
-        "orchestrator report {}, will retry: attempt={}/{}, error={}",
-        retryHint,
-        state.attempt(),
-        state.max(),
-        SwallowedExceptionLogger.summary(ex));
-    sleepBackoff(state.backoff());
-    return state.advance();
-  }
-
-  private void failReportImmediately(String reasonCode, RetryState state, RuntimeException ex) {
-    recordReportFailure(reasonCode);
-    logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
-    throw ex;
-  }
-
-  private <T> ClaimOutcome<T> executeClaimLike(String operation, Supplier<T> call) {
-    RetryState state = RetryState.initial(
-        properties.getClaimMaxAttempts(),
-        properties.getClaimInitialBackoffMillis(),
-        properties.getClaimMaxBackoffMillis());
-    while (state.canAttempt()) {
-      try {
-        // body 可能为 null(旧 orchestrator 返 bodyless;或 renew 路径用 toBodilessEntity)。
-        // 仅404/409是明确业务拒绝；其他HTTP错误向上传播，成功响应体由调用方处理。
-        return ClaimOutcome.success(call.get());
-      } catch (HttpClientErrorException ex) {
-        if (ex.getStatusCode() == HttpStatus.CONFLICT
-            || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
-          return ClaimOutcome.failed();
-        }
+    private void failReportImmediately(String reasonCode, RetryState state, RuntimeException ex) {
+        recordReportFailure(reasonCode);
+        logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
         throw ex;
-      } catch (HttpServerErrorException | ResourceAccessException ex) {
-        if (state.isLastAttempt()) {
-          log.warn(
-              "{} failed after {} attempts: {}",
-              operation,
-              state.max(),
-              SwallowedExceptionLogger.summary(ex));
-          throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
+    }
+
+    private <T> ClaimOutcome<T> executeClaimLike(String operation, Supplier<T> call) {
+        RetryState state = RetryState.initial(
+                properties.getClaimMaxAttempts(),
+                properties.getClaimInitialBackoffMillis(),
+                properties.getClaimMaxBackoffMillis());
+        while (state.canAttempt()) {
+            try {
+                // body 可能为 null(旧 orchestrator 返 bodyless;或 renew 路径用 toBodilessEntity)。
+                // 仅404/409是明确业务拒绝；其他HTTP错误向上传播，成功响应体由调用方处理。
+                return ClaimOutcome.success(call.get());
+            } catch (HttpClientErrorException ex) {
+                if (ex.getStatusCode() == HttpStatus.CONFLICT || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                    return ClaimOutcome.failed();
+                }
+                throw ex;
+            } catch (HttpServerErrorException | ResourceAccessException ex) {
+                if (state.isLastAttempt()) {
+                    log.warn(
+                            "{} failed after {} attempts: {}",
+                            operation,
+                            state.max(),
+                            SwallowedExceptionLogger.summary(ex));
+                    throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
+                }
+                log.warn(
+                        "{} transient failure, retrying: attempt={}/{}, message={}",
+                        operation,
+                        state.attempt(),
+                        state.max(),
+                        SwallowedExceptionLogger.summary(ex));
+                sleepBackoff(state.backoff());
+                state = state.advance();
+            }
         }
+        throw new IllegalStateException(operation + " exhausted retries without outcome");
+    }
+
+    /** claim/renew调用结果：success=false只表示HTTP 404/409；成功响应的body仍可能为空。 */
+    private record ClaimOutcome<T>(boolean success, T body) {
+        static <T> ClaimOutcome<T> failed() {
+            return new ClaimOutcome<>(false, null);
+        }
+
+        static <T> ClaimOutcome<T> success(T body) {
+            return new ClaimOutcome<>(true, body);
+        }
+    }
+
+    /** 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。 */
+    record RetryState(int attempt, int max, long backoff, long cap) {
+        static RetryState initial(int configuredMax, long initialBackoff, long maxBackoff) {
+            int normalizedMax = Math.max(1, configuredMax);
+            long normalizedBackoff = Math.max(1L, initialBackoff);
+            long normalizedCap = Math.max(normalizedBackoff, maxBackoff);
+            return new RetryState(1, normalizedMax, normalizedBackoff, normalizedCap);
+        }
+
+        boolean canAttempt() {
+            return attempt <= max;
+        }
+
+        boolean isLastAttempt() {
+            return attempt >= max;
+        }
+
+        RetryState advance() {
+            int nextAttempt = attempt + 1;
+            long doubledBackoff = backoff * 2;
+            long nextBackoff = Math.min(cap, doubledBackoff);
+            return new RetryState(nextAttempt, max, nextBackoff, cap);
+        }
+    }
+
+    private void recordReportFailure(String reason) {
+        meterRegistry.ifPresent(reg ->
+                reg.counter("worker.report.failed.total", "reason", reason).increment());
+    }
+
+    private void logStructuredReportFailure(String reasonCode, int attempt, int max, Exception ex) {
         log.warn(
-            "{} transient failure, retrying: attempt={}/{}, message={}",
-            operation,
-            state.attempt(),
-            state.max(),
-            SwallowedExceptionLogger.summary(ex));
-        sleepBackoff(state.backoff());
-        state = state.advance();
-      }
-    }
-    throw new IllegalStateException(operation + " exhausted retries without outcome");
-  }
-
-  /** claim/renew调用结果：success=false只表示HTTP 404/409；成功响应的body仍可能为空。 */
-  private record ClaimOutcome<T>(boolean success, T body) {
-    static <T> ClaimOutcome<T> failed() {
-      return new ClaimOutcome<>(false, null);
+                "orchestrator report aborted: reasonCode={}, attempt={}/{}, error={}",
+                reasonCode,
+                attempt,
+                max,
+                SwallowedExceptionLogger.summary(ex));
     }
 
-    static <T> ClaimOutcome<T> success(T body) {
-      return new ClaimOutcome<>(true, body);
-    }
-  }
-
-  /** 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。 */
-  record RetryState(int attempt, int max, long backoff, long cap) {
-    static RetryState initial(int configuredMax, long initialBackoff, long maxBackoff) {
-      int normalizedMax = Math.max(1, configuredMax);
-      long normalizedBackoff = Math.max(1L, initialBackoff);
-      long normalizedCap = Math.max(normalizedBackoff, maxBackoff);
-      return new RetryState(1, normalizedMax, normalizedBackoff, normalizedCap);
+    private static void sleepBackoff(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted during orchestrator client backoff", ie);
+        }
     }
 
-    boolean canAttempt() {
-      return attempt <= max;
+    private String currentTraceId() {
+        String value = MDC.get(StructuredLogField.TRACE_ID);
+        return Texts.hasText(value) ? value : null;
     }
 
-    boolean isLastAttempt() {
-      return attempt >= max;
+    private static String firstNonBlank(String value, String fallback) {
+        if (Texts.hasText(value)) {
+            return value;
+        }
+        return Texts.hasText(fallback) ? fallback : null;
     }
 
-    RetryState advance() {
-      int nextAttempt = attempt + 1;
-      long doubledBackoff = backoff * 2;
-      long nextBackoff = Math.min(cap, doubledBackoff);
-      return new RetryState(nextAttempt, max, nextBackoff, cap);
+    private RestClient client() {
+        List<RestClient> clients = clients();
+        int selectedIndex = Math.floorMod(endpointCursor.getAndIncrement(), clients.size());
+        return clients.get(selectedIndex);
     }
-  }
 
-  private void recordReportFailure(String reason) {
-    meterRegistry.ifPresent(
-        reg -> reg.counter("worker.report.failed.total", "reason", reason).increment());
-  }
-
-  private void logStructuredReportFailure(String reasonCode, int attempt, int max, Exception ex) {
-    log.warn(
-        "orchestrator report aborted: reasonCode={}, attempt={}/{}, error={}",
-        reasonCode,
-        attempt,
-        max,
-        SwallowedExceptionLogger.summary(ex));
-  }
-
-  private static void sleepBackoff(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("interrupted during orchestrator client backoff", ie);
+    private List<RestClient> clients() {
+        List<RestClient> current = this.restClients.get();
+        if (current != null) {
+            return current;
+        }
+        synchronized (this) {
+            current = this.restClients.get();
+            if (current == null) {
+                HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+                long connectTimeoutMillis = properties.getConnectTimeoutMillis();
+                Duration connectTimeout = Duration.ofMillis(connectTimeoutMillis);
+                HttpClient httpClient =
+                        httpClientBuilder.connectTimeout(connectTimeout).build();
+                current = resolveBaseUrls().stream()
+                        .map(baseUrl -> buildClient(baseUrl, httpClient))
+                        .toList();
+                this.restClients.set(current);
+                log.info("orchestrator task client initialized: endpointCount={}", current.size());
+            }
+            return current;
+        }
     }
-  }
 
-  private String currentTraceId() {
-    String value = MDC.get(StructuredLogField.TRACE_ID);
-    return Texts.hasText(value) ? value : null;
-  }
-
-  private static String firstNonBlank(String value, String fallback) {
-    if (Texts.hasText(value)) {
-      return value;
+    private RestClient buildClient(String baseUrl, HttpClient httpClient) {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        long readTimeoutMillis = properties.getReadTimeoutMillis();
+        Duration readTimeout = Duration.ofMillis(readTimeoutMillis);
+        factory.setReadTimeout(readTimeout);
+        return restClientBuilderProvider
+                .getObject()
+                .baseUrl(baseUrl)
+                .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+                .requestFactory(factory)
+                .build();
     }
-    return Texts.hasText(fallback) ? fallback : null;
-  }
 
-  private RestClient client() {
-    List<RestClient> clients = clients();
-    int selectedIndex = Math.floorMod(endpointCursor.getAndIncrement(), clients.size());
-    return clients.get(selectedIndex);
-  }
-
-  private List<RestClient> clients() {
-    List<RestClient> current = this.restClients.get();
-    if (current != null) {
-      return current;
+    private List<String> resolveBaseUrls() {
+        LinkedHashSet<String> resolved = new LinkedHashSet<>();
+        if (properties.getBaseUrls() != null) {
+            properties.getBaseUrls().stream()
+                    .map(HttpTaskExecutionClient::normalizeBaseUrl)
+                    .filter(Texts::hasText)
+                    .forEach(resolved::add);
+        }
+        String configuredBaseUrl = properties.getBaseUrl();
+        if (EmptyChecks.isEmpty(resolved)) {
+            String normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);
+            if (Texts.hasText(normalizedBaseUrl)) {
+                resolved.add(normalizedBaseUrl);
+            }
+        }
+        if (EmptyChecks.isEmpty(resolved)) {
+            String localPort = environment.getProperty("local.server.port");
+            if (Texts.hasText(localPort)) {
+                resolved.add("http://127.0.0.1:" + localPort);
+            }
+        }
+        if (EmptyChecks.isEmpty(resolved)) {
+            throw new IllegalStateException(
+                    "Unable to resolve batch.worker.task-client.base-url/base-urls for task execution client");
+        }
+        return List.copyOf(resolved);
     }
-    synchronized (this) {
-      current = this.restClients.get();
-      if (current == null) {
-        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-        long connectTimeoutMillis = properties.getConnectTimeoutMillis();
-        Duration connectTimeout = Duration.ofMillis(connectTimeoutMillis);
-        HttpClient httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
-        current = resolveBaseUrls().stream()
-            .map(baseUrl -> buildClient(baseUrl, httpClient))
-            .toList();
-        this.restClients.set(current);
-        log.info("orchestrator task client initialized: endpointCount={}", current.size());
-      }
-      return current;
+
+    private static String normalizeBaseUrl(String value) {
+        if (!Texts.hasText(value) || value.contains("${")) {
+            return null;
+        }
+        String normalized = value.trim();
+        while (normalized.endsWith("/") && !normalized.endsWith("://")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
-  }
 
-  private RestClient buildClient(String baseUrl, HttpClient httpClient) {
-    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-    long readTimeoutMillis = properties.getReadTimeoutMillis();
-    Duration readTimeout = Duration.ofMillis(readTimeoutMillis);
-    factory.setReadTimeout(readTimeout);
-    return restClientBuilderProvider
-        .getObject()
-        .baseUrl(baseUrl)
-        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-        .requestFactory(factory)
-        .build();
-  }
+    private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
 
-  private List<String> resolveBaseUrls() {
-    LinkedHashSet<String> resolved = new LinkedHashSet<>();
-    if (properties.getBaseUrls() != null) {
-      properties.getBaseUrls().stream()
-          .map(HttpTaskExecutionClient::normalizeBaseUrl)
-          .filter(Texts::hasText)
-          .forEach(resolved::add);
-    }
-    String configuredBaseUrl = properties.getBaseUrl();
-    if (EmptyChecks.isEmpty(resolved)) {
-      String normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);
-      if (Texts.hasText(normalizedBaseUrl)) {
-        resolved.add(normalizedBaseUrl);
-      }
-    }
-    if (EmptyChecks.isEmpty(resolved)) {
-      String localPort = environment.getProperty("local.server.port");
-      if (Texts.hasText(localPort)) {
-        resolved.add("http://127.0.0.1:" + localPort);
-      }
-    }
-    if (EmptyChecks.isEmpty(resolved)) {
-      throw new IllegalStateException(
-          "Unable to resolve batch.worker.task-client.base-url/base-urls for task execution client");
-    }
-    return List.copyOf(resolved);
-  }
+    private record ExecutionStartHttpRequest(
+            String tenantId, String workerId, String partitionInvocationId, ExecutionStartedDetails details) {}
 
-  private static String normalizeBaseUrl(String value) {
-    if (!Texts.hasText(value) || value.contains("${")) {
-      return null;
-    }
-    String normalized = value.trim();
-    while (normalized.endsWith("/") && !normalized.endsWith("://")) {
-      normalized = normalized.substring(0, normalized.length() - 1);
-    }
-    return normalized;
-  }
+    private record ExecutionStartedDetails(boolean executionStarted, String executionAttemptId) {}
 
-  private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
+    private record BatchRenewHttpRequest(List<BatchRenewHttpItem> items) {}
 
-  private record ExecutionStartHttpRequest(
-      String tenantId,
-      String workerId,
-      String partitionInvocationId,
-      ExecutionStartedDetails details) {}
+    private record BatchRenewHttpItem(String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
 
-  private record ExecutionStartedDetails(boolean executionStarted, String executionAttemptId) {}
+    private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
 
-  private record BatchRenewHttpRequest(List<BatchRenewHttpItem> items) {}
+    private record BatchRenewHttpResult(Long taskId, Boolean renewed, Boolean cancelRequested) {}
 
-  private record BatchRenewHttpItem(
-      String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+    private record TaskHeartbeatHttpResponse(boolean cancelRequested) {}
 
-  private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
+    // ── ADR-046 P2 切片 2.3:claim-batch 线上报文(worker-local,与 orchestrator 端点契约对齐)──
+    private record ClaimBatchHttpRequest(List<ClaimBatchHttpItem> items) {}
 
-  private record BatchRenewHttpResult(Long taskId, Boolean renewed, Boolean cancelRequested) {}
+    private record ClaimBatchHttpItem(String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
 
-  private record TaskHeartbeatHttpResponse(boolean cancelRequested) {}
+    private record ClaimBatchHttpResponse(List<ClaimBatchHttpResult> results) {}
 
-  // ── ADR-046 P2 切片 2.3:claim-batch 线上报文(worker-local,与 orchestrator 端点契约对齐)──
-  private record ClaimBatchHttpRequest(List<ClaimBatchHttpItem> items) {}
+    private record ClaimBatchHttpResult(Long taskId, Boolean claimed, EffectiveTaskConfig config) {}
 
-  private record ClaimBatchHttpItem(
-      String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+    private record ReportBatchHttpRequest(List<TaskExecutionReport> items) {}
 
-  private record ClaimBatchHttpResponse(List<ClaimBatchHttpResult> results) {}
+    private record ReportBatchHttpResponse(List<ReportBatchHttpResult> results) {}
 
-  private record ClaimBatchHttpResult(Long taskId, Boolean claimed, EffectiveTaskConfig config) {}
-
-  private record ReportBatchHttpRequest(List<TaskExecutionReport> items) {}
-
-  private record ReportBatchHttpResponse(List<ReportBatchHttpResult> results) {}
-
-  private record ReportBatchHttpResult(Long taskId, Boolean ok, String error) {}
+    private record ReportBatchHttpResult(Long taskId, Boolean ok, String error) {}
 }

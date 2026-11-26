@@ -23,23 +23,23 @@ package io.github.pinpols.batch.console.domain.ops.dto;
  * @param platformSdkMajor 平台当前 SDK 主版本(用于 FE 展示"建议升级到")
  */
 public record WorkerCompatibility(
-    Status status, String reasonCode, String reportedSdkVersion, String platformSdkMajor) {
+        Status status, String reasonCode, String reportedSdkVersion, String platformSdkMajor) {
 
-  /** 兼容状态枚举(对外稳定,FE 据此着色/排序)。 */
-  public enum Status {
-    OK,
-    SDK_OUTDATED,
-    PROTOCOL_UNSUPPORTED,
-    UNKNOWN
-  }
+    /** 兼容状态枚举(对外稳定,FE 据此着色/排序)。 */
+    public enum Status {
+        OK,
+        SDK_OUTDATED,
+        PROTOCOL_UNSUPPORTED,
+        UNKNOWN
+    }
 
-  /** 稳定原因码常量(FE i18n key 前缀 {@code worker.compatibility.reason.*})。 */
-  public static final class ReasonCode {
-    public static final String COMPATIBLE = "COMPATIBLE";
-    public static final String SDK_VERSION_BEHIND = "SDK_VERSION_BEHIND";
-    public static final String SDK_VERSION_AHEAD = "SDK_VERSION_AHEAD";
-    public static final String SDK_VERSION_UNKNOWN = "SDK_VERSION_UNKNOWN";
+    /** 稳定原因码常量(FE i18n key 前缀 {@code worker.compatibility.reason.*})。 */
+    public static final class ReasonCode {
+        public static final String COMPATIBLE = "COMPATIBLE";
+        public static final String SDK_VERSION_BEHIND = "SDK_VERSION_BEHIND";
+        public static final String SDK_VERSION_AHEAD = "SDK_VERSION_AHEAD";
+        public static final String SDK_VERSION_UNKNOWN = "SDK_VERSION_UNKNOWN";
 
-    private ReasonCode() {}
-  }
+        private ReasonCode() {}
+    }
 }

@@ -28,92 +28,91 @@ import org.junit.jupiter.api.Test;
 @DisplayName("处理提交阶段:委托插件提交、插件返回空与未解析插件时的成功回退,以及试运行不触碰插件")
 class CommitStepTest {
 
-  @Test
-  @DisplayName("阶段标识为处理提交阶段")
-  void shouldReturnStageCommit_whenStageAccessed() {
-    assertThat(new CommitStep().stage()).isEqualTo(ProcessStage.COMMIT);
-  }
+    @Test
+    @DisplayName("阶段标识为处理提交阶段")
+    void shouldReturnStageCommit_whenStageAccessed() {
+        assertThat(new CommitStep().stage()).isEqualTo(ProcessStage.COMMIT);
+    }
 
-  @Test
-  @DisplayName("happy path: 委托 plugin.commit()，返回插件的结果")
-  void shouldDelegateToResolvedPlugin_whenPluginPresent() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    ProcessStageResult expected = ProcessStageResult.success(ProcessStage.COMMIT);
-    when(plugin.commit(any())).thenReturn(expected);
+    @Test
+    @DisplayName("happy path: 委托 plugin.commit()，返回插件的结果")
+    void shouldDelegateToResolvedPlugin_whenPluginPresent() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        ProcessStageResult expected = ProcessStageResult.success(ProcessStage.COMMIT);
+        when(plugin.commit(any())).thenReturn(expected);
 
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
 
-    ProcessStageResult result = new CommitStep().execute(ctx);
+        ProcessStageResult result = new CommitStep().execute(ctx);
 
-    assertThat(result).isSameAs(expected);
-    verify(plugin).commit(ctx);
-  }
+        assertThat(result).isSameAs(expected);
+        verify(plugin).commit(ctx);
+    }
 
-  @Test
-  @DisplayName("plugin.commit() 返回 null → 回退成 success(COMMIT)")
-  void shouldReturnSuccess_whenPluginReturnsNull() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.commit(any())).thenReturn(null);
+    @Test
+    @DisplayName("plugin.commit() 返回 null → 回退成 success(COMMIT)")
+    void shouldReturnSuccess_whenPluginReturnsNull() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.commit(any())).thenReturn(null);
 
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
 
-    ProcessStageResult result = new CommitStep().execute(ctx);
+        ProcessStageResult result = new CommitStep().execute(ctx);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.stage()).isEqualTo(ProcessStage.COMMIT);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(result.stage()).isEqualTo(ProcessStage.COMMIT);
+    }
 
-  @Test
-  @DisplayName("无 resolvedPlugin → success no-op")
-  void shouldReturnSuccessNoOp_whenPluginNotResolved() {
-    ProcessJobContext ctx = new ProcessJobContext();
+    @Test
+    @DisplayName("无 resolvedPlugin → success no-op")
+    void shouldReturnSuccessNoOp_whenPluginNotResolved() {
+        ProcessJobContext ctx = new ProcessJobContext();
 
-    ProcessStageResult result = new CommitStep().execute(ctx);
+        ProcessStageResult result = new CommitStep().execute(ctx);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.stage()).isEqualTo(ProcessStage.COMMIT);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(result.stage()).isEqualTo(ProcessStage.COMMIT);
+    }
 
-  @Test
-  @DisplayName("dry-run 模式：直接 success，不调 plugin（COMMIT 不能写业务表）")
-  void shouldSkipPlugin_whenDryRun() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
-    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
+    @Test
+    @DisplayName("dry-run 模式：直接 success，不调 plugin（COMMIT 不能写业务表）")
+    void shouldSkipPlugin_whenDryRun() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
+        ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
-    ProcessStageResult result = new CommitStep().execute(ctx);
+        ProcessStageResult result = new CommitStep().execute(ctx);
 
-    assertThat(result.success()).isTrue();
-    verifyNoInteractions(plugin);
-  }
+        assertThat(result.success()).isTrue();
+        verifyNoInteractions(plugin);
+    }
 
-  @Test
-  @DisplayName(
-      "null context → 视为 dry-run（DryRunGuard.fromAttributes(null) passThrough）走 plugin null 路径")
-  void shouldReturnSuccess_whenContextIsNull() {
-    // DryRunGuard.fromAttributes(null) returns passThrough (not dry-run).
-    // CommitStep then dereferences context.getResolvedPlugin() which NPEs.
-    // 守护实际语义：CommitStep 不容忍 null context（与 ComputeStep 不同）。
-    // 本用例不调用 execute(null)，改为放空 attributes 验证 plugin-null 分支 success。
-    ProcessJobContext ctx = new ProcessJobContext();
-    ProcessStageResult result = new CommitStep().execute(ctx);
-    assertThat(result.success()).isTrue();
-  }
+    @Test
+    @DisplayName("null context → 视为 dry-run（DryRunGuard.fromAttributes(null) passThrough）走 plugin null 路径")
+    void shouldReturnSuccess_whenContextIsNull() {
+        // DryRunGuard.fromAttributes(null) returns passThrough (not dry-run).
+        // CommitStep then dereferences context.getResolvedPlugin() which NPEs.
+        // 守护实际语义：CommitStep 不容忍 null context（与 ComputeStep 不同）。
+        // 本用例不调用 execute(null)，改为放空 attributes 验证 plugin-null 分支 success。
+        ProcessJobContext ctx = new ProcessJobContext();
+        ProcessStageResult result = new CommitStep().execute(ctx);
+        assertThat(result.success()).isTrue();
+    }
 
-  @Test
-  @DisplayName("plugin 抛 RuntimeException → 透传出去（事务回滚由框架处理）")
-  void shouldPropagateException_whenPluginThrows() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.commit(any())).thenThrow(new IllegalStateException("conflict"));
+    @Test
+    @DisplayName("plugin 抛 RuntimeException → 透传出去（事务回滚由框架处理）")
+    void shouldPropagateException_whenPluginThrows() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.commit(any())).thenThrow(new IllegalStateException("conflict"));
 
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
 
-    Assertions.assertThatThrownBy(() -> new CommitStep().execute(ctx))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("conflict");
-  }
+        Assertions.assertThatThrownBy(() -> new CommitStep().execute(ctx))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conflict");
+    }
 }

@@ -25,9 +25,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SecretPayloadFlywayCallback implements Callback {
 
-  private static final int BATCH_SIZE = 100;
-  private static final Set<String> TARGET_VERSIONS = Set.of("210", "211");
-  private static final String SELECT_CANDIDATES_SQL = """
+    private static final int BATCH_SIZE = 100;
+    private static final Set<String> TARGET_VERSIONS = Set.of("210", "211");
+    private static final String SELECT_CANDIDATES_SQL = """
       select id, tenant_id, secret_payload::text
         from batch.secret_version
        where secret_payload is not null
@@ -35,7 +35,7 @@ public class SecretPayloadFlywayCallback implements Callback {
        order by id
        limit ?
       """;
-  private static final String UPDATE_PAYLOAD_SQL = """
+    private static final String UPDATE_PAYLOAD_SQL = """
       update batch.secret_version
          set secret_payload = ?::jsonb,
              updated_by = 'secret-payload-migration',
@@ -46,99 +46,96 @@ public class SecretPayloadFlywayCallback implements Callback {
          and coalesce(secret_payload ->> 'format', '') <> ?
       """;
 
-  private final SecretPayloadProtector secretPayloadProtector;
+    private final SecretPayloadProtector secretPayloadProtector;
 
-  @Override
-  public boolean supports(Event event, Context context) {
-    return event == Event.BEFORE_EACH_MIGRATE && isTargetMigration(context.getMigrationInfo());
-  }
-
-  @Override
-  public boolean canHandleInTransaction(Event event, Context context) {
-    return true;
-  }
-
-  @Override
-  public void handle(Event event, Context context) {
-    try {
-      int migrated = migrateLegacyPayloads(context.getConnection());
-      if (migrated > 0) {
-        log.info(
-            "legacy secret payload encryption completed before Flyway V{}: migratedCount={}",
-            context.getMigrationInfo().getVersion(),
-            migrated);
-      }
-    } catch (SQLException exception) {
-      throw new FlywayException(
-          "failed to encrypt legacy secret payloads before migration", exception);
+    @Override
+    public boolean supports(Event event, Context context) {
+        return event == Event.BEFORE_EACH_MIGRATE && isTargetMigration(context.getMigrationInfo());
     }
-  }
 
-  @Override
-  public String getCallbackName() {
-    return "secret-payload-protection";
-  }
+    @Override
+    public boolean canHandleInTransaction(Event event, Context context) {
+        return true;
+    }
 
-  private int migrateLegacyPayloads(Connection connection) throws SQLException {
-    int migrated = 0;
-    while (true) {
-      List<LegacySecretPayload> candidates = selectCandidates(connection);
-      if (EmptyChecks.isEmpty(candidates)) {
+    @Override
+    public void handle(Event event, Context context) {
+        try {
+            int migrated = migrateLegacyPayloads(context.getConnection());
+            if (migrated > 0) {
+                log.info(
+                        "legacy secret payload encryption completed before Flyway V{}: migratedCount={}",
+                        context.getMigrationInfo().getVersion(),
+                        migrated);
+            }
+        } catch (SQLException exception) {
+            throw new FlywayException("failed to encrypt legacy secret payloads before migration", exception);
+        }
+    }
+
+    @Override
+    public String getCallbackName() {
+        return "secret-payload-protection";
+    }
+
+    private int migrateLegacyPayloads(Connection connection) throws SQLException {
+        int migrated = 0;
+        while (true) {
+            List<LegacySecretPayload> candidates = selectCandidates(connection);
+            if (EmptyChecks.isEmpty(candidates)) {
+                return migrated;
+            }
+            int migratedInBatch = updateCandidates(connection, candidates);
+            if (migratedInBatch == 0) {
+                List<LegacySecretPayload> remainingCandidates = selectCandidates(connection);
+                if (EmptyChecks.isEmpty(remainingCandidates)) {
+                    return migrated;
+                }
+                throw new FlywayException("legacy secret payload encryption made no progress");
+            }
+            migrated += migratedInBatch;
+        }
+    }
+
+    private List<LegacySecretPayload> selectCandidates(Connection connection) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(SELECT_CANDIDATES_SQL)) {
+            statement.setString(1, SecretPayloadProtector.FORMAT);
+            statement.setInt(2, BATCH_SIZE);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<LegacySecretPayload> candidates = new ArrayList<>();
+                while (resultSet.next()) {
+                    candidates.add(new LegacySecretPayload(
+                            resultSet.getLong("id"),
+                            resultSet.getString("tenant_id"),
+                            resultSet.getString("secret_payload")));
+                }
+                return candidates;
+            }
+        }
+    }
+
+    private int updateCandidates(Connection connection, List<LegacySecretPayload> candidates) throws SQLException {
+        int migrated = 0;
+        try (PreparedStatement statement = connection.prepareStatement(UPDATE_PAYLOAD_SQL)) {
+            for (LegacySecretPayload candidate : candidates) {
+                String protectedPayload = secretPayloadProtector.protect(candidate.payload());
+                statement.setString(1, protectedPayload);
+                statement.setLong(2, candidate.id());
+                statement.setString(3, candidate.tenantId());
+                statement.setString(4, SecretPayloadProtector.FORMAT);
+                migrated += statement.executeUpdate();
+            }
+        }
         return migrated;
-      }
-      int migratedInBatch = updateCandidates(connection, candidates);
-      if (migratedInBatch == 0) {
-        List<LegacySecretPayload> remainingCandidates = selectCandidates(connection);
-        if (EmptyChecks.isEmpty(remainingCandidates)) {
-          return migrated;
+    }
+
+    private boolean isTargetMigration(MigrationInfo migrationInfo) {
+        if (EmptyChecks.isNull(migrationInfo)) {
+            return false;
         }
-        throw new FlywayException("legacy secret payload encryption made no progress");
-      }
-      migrated += migratedInBatch;
+        MigrationVersion migrationVersion = migrationInfo.getVersion();
+        return !EmptyChecks.isNull(migrationVersion) && TARGET_VERSIONS.contains(migrationVersion.toString());
     }
-  }
 
-  private List<LegacySecretPayload> selectCandidates(Connection connection) throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement(SELECT_CANDIDATES_SQL)) {
-      statement.setString(1, SecretPayloadProtector.FORMAT);
-      statement.setInt(2, BATCH_SIZE);
-      try (ResultSet resultSet = statement.executeQuery()) {
-        List<LegacySecretPayload> candidates = new ArrayList<>();
-        while (resultSet.next()) {
-          candidates.add(new LegacySecretPayload(
-              resultSet.getLong("id"),
-              resultSet.getString("tenant_id"),
-              resultSet.getString("secret_payload")));
-        }
-        return candidates;
-      }
-    }
-  }
-
-  private int updateCandidates(Connection connection, List<LegacySecretPayload> candidates)
-      throws SQLException {
-    int migrated = 0;
-    try (PreparedStatement statement = connection.prepareStatement(UPDATE_PAYLOAD_SQL)) {
-      for (LegacySecretPayload candidate : candidates) {
-        String protectedPayload = secretPayloadProtector.protect(candidate.payload());
-        statement.setString(1, protectedPayload);
-        statement.setLong(2, candidate.id());
-        statement.setString(3, candidate.tenantId());
-        statement.setString(4, SecretPayloadProtector.FORMAT);
-        migrated += statement.executeUpdate();
-      }
-    }
-    return migrated;
-  }
-
-  private boolean isTargetMigration(MigrationInfo migrationInfo) {
-    if (EmptyChecks.isNull(migrationInfo)) {
-      return false;
-    }
-    MigrationVersion migrationVersion = migrationInfo.getVersion();
-    return !EmptyChecks.isNull(migrationVersion)
-        && TARGET_VERSIONS.contains(migrationVersion.toString());
-  }
-
-  private record LegacySecretPayload(long id, String tenantId, String payload) {}
+    private record LegacySecretPayload(long id, String tenantId, String payload) {}
 }

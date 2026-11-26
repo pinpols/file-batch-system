@@ -9,48 +9,48 @@ import lombok.Data;
 @Data
 public class WorkerRegistration {
 
-  /**
-   * 注册中心侧的 worker 标识。
-   *
-   * <p>将此值作为心跳和租约归属的稳定运行时实例键。
-   */
-  private String workerId;
+    /**
+     * 注册中心侧的 worker 标识。
+     *
+     * <p>将此值作为心跳和租约归属的稳定运行时实例键。
+     */
+    private String workerId;
 
-  /** 稳定的路由池代码；同一 Deployment 的多个实例共享此值。 */
-  private String workerCode;
+    /** 稳定的路由池代码；同一 Deployment 的多个实例共享此值。 */
+    private String workerCode;
 
-  private String tenantId;
-  private String workerType;
+    private String tenantId;
+    private String workerType;
 
-  /** Orchestrator 调度 / 消费者分组键。 */
-  private String workerGroup;
+    /** Orchestrator 调度 / 消费者分组键。 */
+    private String workerGroup;
 
-  private String status;
-  private String host;
-  private Integer port;
-  private OffsetDateTime registeredAt;
-  private OffsetDateTime lastHeartbeatAt;
+    private String status;
+    private String host;
+    private Integer port;
+    private OffsetDateTime registeredAt;
+    private OffsetDateTime lastHeartbeatAt;
 
-  /**
-   * 平台指令要求停止认领（DRAINING / DECOMMISSIONED）。
-   *
-   * <p>与 {@link #status} 分开：DECOMMISSIONED 只要求停止认领，不应改写上报的注册状态，否则重新注册会把终止态
-   * 固化成可持续的 DRAINING。
-   */
-  private boolean platformDraining;
+    /**
+     * 平台指令要求停止认领（DRAINING / DECOMMISSIONED）。
+     *
+     * <p>与 {@link #status} 分开：DECOMMISSIONED 只要求停止认领，不应改写上报的注册状态，否则重新注册会把终止态
+     * 固化成可持续的 DRAINING。
+     */
+    private boolean platformDraining;
 
-  /** 进行中的任务数 / 已认领工作量；用于 Orchestrator worker 选择（值越低越优先）。 */
-  private Integer currentLoad;
+    /** 进行中的任务数 / 已认领工作量；用于 Orchestrator worker 选择（值越低越优先）。 */
+    private Integer currentLoad;
 
-  /** Worker 进程实际执行许可上限；注册时上报，避免控制面使用固定默认值误判满载。 */
-  private Integer maxConcurrent;
+    /** Worker 进程实际执行许可上限；注册时上报，避免控制面使用固定默认值误判满载。 */
+    private Integer maxConcurrent;
 
-  /** 能力标签；心跳上报后写入 {@code worker_registry.capability_tags} JSONB，参与 selector 路由匹配。 */
-  private List<String> capabilityTags;
+    /** 能力标签；心跳上报后写入 {@code worker_registry.capability_tags} JSONB，参与 selector 路由匹配。 */
+    private List<String> capabilityTags;
 
-  /** 执行器能力摘要，仅用于运维查询展示。 */
-  private List<WorkerTaskCapabilityDto> taskCapabilities;
+    /** 执行器能力摘要，仅用于运维查询展示。 */
+    private List<WorkerTaskCapabilityDto> taskCapabilities;
 
-  /** 实际安装执行器的 Replay 能力声明；仅注册时上报。 */
-  private List<ReplayCapabilityDeclaration> replayCapabilities;
+    /** 实际安装执行器的 Replay 能力声明；仅注册时上报。 */
+    private List<ReplayCapabilityDeclaration> replayCapabilities;
 }

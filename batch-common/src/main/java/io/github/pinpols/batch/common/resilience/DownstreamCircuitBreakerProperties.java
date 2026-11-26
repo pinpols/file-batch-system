@@ -14,21 +14,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.resilience.downstream")
 public class DownstreamCircuitBreakerProperties {
 
-  /** 总开关。关闭时退回旧的 try/catch 降级(无熔断状态机),用于紧急回退。 */
-  private boolean enabled = true;
+    /** 总开关。关闭时退回旧的 try/catch 降级(无熔断状态机),用于紧急回退。 */
+    private boolean enabled = true;
 
-  /** 失败率阈值(百分比),窗口内失败率达到即 CLOSED→OPEN。 */
-  private float failureRateThreshold = 50.0f;
+    /** 失败率阈值(百分比),窗口内失败率达到即 CLOSED→OPEN。 */
+    private float failureRateThreshold = 50.0f;
 
-  /** COUNT_BASED 滑动窗口大小(最近 N 次调用)。 */
-  private int slidingWindowSize = 20;
+    /** COUNT_BASED 滑动窗口大小(最近 N 次调用)。 */
+    private int slidingWindowSize = 20;
 
-  /** 触发失败率计算所需的最小调用数(未达则不熔断,避免冷启动误判)。 */
-  private int minimumNumberOfCalls = 10;
+    /** 触发失败率计算所需的最小调用数(未达则不熔断,避免冷启动误判)。 */
+    private int minimumNumberOfCalls = 10;
 
-  /** OPEN 停留时长(毫秒,默认 30s),到期后下一次调用转入 HALF_OPEN 试探。 */
-  private long waitDurationInOpenStateMillis = 30_000L;
+    /** OPEN 停留时长(毫秒,默认 30s),到期后下一次调用转入 HALF_OPEN 试探。 */
+    private long waitDurationInOpenStateMillis = 30_000L;
 
-  /** HALF_OPEN 允许的受限试探调用数。 */
-  private int permittedCallsInHalfOpen = 5;
+    /** HALF_OPEN 允许的受限试探调用数。 */
+    private int permittedCallsInHalfOpen = 5;
 }

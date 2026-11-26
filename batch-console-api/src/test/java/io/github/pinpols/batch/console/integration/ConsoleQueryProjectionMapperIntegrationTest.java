@@ -35,20 +35,20 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("Console 查询投影：真实 PostgreSQL 映射和租户范围")
 class ConsoleQueryProjectionMapperIntegrationTest {
-  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
-  private static final UUID OPERATION_ID = UUID.fromString("6a320000-0000-4000-8000-000000000001");
-  private static final UUID REQUEST_ID = UUID.fromString("6a320000-0000-4000-8000-000000000002");
-  private static SqlSessionFactory sessionFactory;
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
+    private static final UUID OPERATION_ID = UUID.fromString("6a320000-0000-4000-8000-000000000001");
+    private static final UUID REQUEST_ID = UUID.fromString("6a320000-0000-4000-8000-000000000002");
+    private static SqlSessionFactory sessionFactory;
 
-  @BeforeAll
-  static void initialize() throws Exception {
-    POSTGRES.start();
-    PGSimpleDataSource dataSource = new PGSimpleDataSource();
-    dataSource.setURL(POSTGRES.getJdbcUrl());
-    dataSource.setUser(POSTGRES.getUsername());
-    dataSource.setPassword(POSTGRES.getPassword());
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-    String schema = """
+    @BeforeAll
+    static void initialize() throws Exception {
+        POSTGRES.start();
+        PGSimpleDataSource dataSource = new PGSimpleDataSource();
+        dataSource.setURL(POSTGRES.getJdbcUrl());
+        dataSource.setUser(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        String schema = """
         CREATE SCHEMA batch;
         CREATE TABLE batch.job_task (
           id bigint, tenant_id text, task_status text, heartbeat_details jsonb,
@@ -67,8 +67,8 @@ class ConsoleQueryProjectionMapperIntegrationTest {
           operation_id uuid, request_id uuid, actor_username text, source_digest text,
           account_count integer, tenant_ids text, created_at timestamptz);
         """;
-    jdbc.execute(schema);
-    String fixture = """
+        jdbc.execute(schema);
+        String fixture = """
         INSERT INTO batch.job_task VALUES
           (1, 'tenant-a', 'RUNNING', '{"processed":12}', now(), true),
           (2, 'tenant-b', 'RUNNING', '{"processed":99}', now(), false);
@@ -88,115 +88,114 @@ class ConsoleQueryProjectionMapperIntegrationTest {
           (12, 'tenant-b', 'PAYROLL', 'other.csv', 'RECEIVED', DATE '2026-11-01', 'trace-c',
            '{"fileGroupCode":"GROUP_A","arrivalState":"WAITING_ARRIVAL"}', now(), now());
         """;
-    jdbc.execute(fixture);
-    String insertOperation = """
+        jdbc.execute(fixture);
+        String insertOperation = """
         INSERT INTO batch.console_user_batch_operation
           (operation_id, request_id, actor_username, source_digest, account_count, tenant_ids, created_at)
         VALUES (?, ?, 'operator-a', 'digest', 2, 'tenant-a,tenant-b', now())
         """;
-    jdbc.update(insertOperation, OPERATION_ID, REQUEST_ID);
+        jdbc.update(insertOperation, OPERATION_ID, REQUEST_ID);
 
-    Configuration configuration = new Configuration(
-        new Environment("console-projections", new JdbcTransactionFactory(), dataSource));
-    configuration.setMapUnderscoreToCamelCase(false);
-    for (String resource : List.of(
-        "mapper/CommonFragments.xml",
-        "mapper/JobTaskMapper.xml",
-        "mapper/CustomTaskTypeMapper.xml",
-        "mapper/ConsoleAiMonthlyUsageMapper.xml",
-        "mapper/FileArrivalGroupMapper.xml",
-        "mapper/FileRecordMapper.xml",
-        "mapper/ConsoleUserBatchOperationMapper.xml")) {
-      try (InputStream input = Resources.getResourceAsStream(resource)) {
-        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments())
-            .parse();
-      }
+        Configuration configuration =
+                new Configuration(new Environment("console-projections", new JdbcTransactionFactory(), dataSource));
+        configuration.setMapUnderscoreToCamelCase(false);
+        for (String resource : List.of(
+                "mapper/CommonFragments.xml",
+                "mapper/JobTaskMapper.xml",
+                "mapper/CustomTaskTypeMapper.xml",
+                "mapper/ConsoleAiMonthlyUsageMapper.xml",
+                "mapper/FileArrivalGroupMapper.xml",
+                "mapper/FileRecordMapper.xml",
+                "mapper/ConsoleUserBatchOperationMapper.xml")) {
+            try (InputStream input = Resources.getResourceAsStream(resource)) {
+                new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+            }
+        }
+        sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     }
-    sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
-  }
 
-  @AfterAll
-  static void stop() {
-    POSTGRES.stop();
-  }
-
-  @Test
-  @DisplayName("任务心跳只读取本租户并保留 JSON 和取消标记")
-  void shouldMapHeartbeatWithinTenant() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      JobTaskMapper mapper = session.getMapper(JobTaskMapper.class);
-      var row = mapper.selectHeartbeatByTenantAndId("tenant-a", 1L);
-      assertThat(row.getTaskStatus()).isEqualTo("RUNNING");
-      assertThat(row.getHeartbeatDetails()).contains("12");
-      assertThat(row.getCancelRequested()).isTrue();
-      assertThat(mapper.selectHeartbeatByTenantAndId("tenant-b", 1L)).isNull();
+    @AfterAll
+    static void stop() {
+        POSTGRES.stop();
     }
-  }
 
-  @Test
-  @DisplayName("自定义任务类型映射描述符并按租户过滤")
-  void shouldMapTaskTypeWithinTenant() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      CustomTaskTypeMapper mapper = session.getMapper(CustomTaskTypeMapper.class);
-      var rows = mapper.selectActiveByTenant("tenant-a");
-      assertThat(rows).hasSize(1);
-      assertThat(rows.getFirst().getTaskTypeCode()).isEqualTo("tenant_a_load");
-      assertThat(rows.getFirst().getDescriptor()).contains("\"version\": 2");
-      assertThat(mapper.selectByTenantAndCode("tenant-b", "tenant_a_load")).isNull();
+    @Test
+    @DisplayName("任务心跳只读取本租户并保留 JSON 和取消标记")
+    void shouldMapHeartbeatWithinTenant() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            JobTaskMapper mapper = session.getMapper(JobTaskMapper.class);
+            var row = mapper.selectHeartbeatByTenantAndId("tenant-a", 1L);
+            assertThat(row.getTaskStatus()).isEqualTo("RUNNING");
+            assertThat(row.getHeartbeatDetails()).contains("12");
+            assertThat(row.getCancelRequested()).isTrue();
+            assertThat(mapper.selectHeartbeatByTenantAndId("tenant-b", 1L)).isNull();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("AI 月度用量按租户和月份映射计数与金额")
-  void shouldMapMonthlyUsageWithinTenant() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      ConsoleAiMonthlyUsageMapper mapper = session.getMapper(ConsoleAiMonthlyUsageMapper.class);
-      var usage = mapper.find("tenant-a", LocalDate.of(2026, 11, 1));
-      assertThat(usage.getRequestCount()).isEqualTo(3);
-      assertThat(usage.getPromptTokens()).isEqualTo(100);
-      assertThat(usage.getEstimatedCostUsd()).isEqualByComparingTo(new BigDecimal("1.25"));
-      assertThat(mapper.find("tenant-a", LocalDate.of(2026, 10, 1))).isNull();
+    @Test
+    @DisplayName("自定义任务类型映射描述符并按租户过滤")
+    void shouldMapTaskTypeWithinTenant() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            CustomTaskTypeMapper mapper = session.getMapper(CustomTaskTypeMapper.class);
+            var rows = mapper.selectActiveByTenant("tenant-a");
+            assertThat(rows).hasSize(1);
+            assertThat(rows.getFirst().getTaskTypeCode()).isEqualTo("tenant_a_load");
+            assertThat(rows.getFirst().getDescriptor()).contains("\"version\": 2");
+            assertThat(mapper.selectByTenantAndCode("tenant-b", "tenant_a_load"))
+                    .isNull();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("文件组聚合和文件列表都只返回本租户数据")
-  void shouldMapArrivalGroupAndFileListWithinTenant() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      FileArrivalGroupMapper groups = session.getMapper(FileArrivalGroupMapper.class);
-      var query =
-          FileArrivalGroupQuery.ofState("tenant-a", "GROUP_A", null, new PageRequest(1, 10));
-      var rows = groups.selectByQuery(query);
-      assertThat(rows).hasSize(1);
-      assertThat(rows.getFirst().getArrivedCount()).isEqualTo(2L);
-      assertThat(rows.getFirst().getWaitingCount()).isEqualTo(2L);
-
-      FileRecordMapper files = session.getMapper(FileRecordMapper.class);
-      var fileQuery = FileRecordQuery.builder()
-          .tenantId("tenant-a")
-          .pageRequest(new PageRequest(1, 10))
-          .build();
-      var records = files.selectByQuery(fileQuery);
-      assertThat(records).extracting(row -> row.getFileName()).containsExactly("b.csv", "a.csv");
-      assertThat(records).extracting(row -> row.getTenantId()).containsOnly("tenant-a");
+    @Test
+    @DisplayName("AI 月度用量按租户和月份映射计数与金额")
+    void shouldMapMonthlyUsageWithinTenant() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            ConsoleAiMonthlyUsageMapper mapper = session.getMapper(ConsoleAiMonthlyUsageMapper.class);
+            var usage = mapper.find("tenant-a", LocalDate.of(2026, 11, 1));
+            assertThat(usage.getRequestCount()).isEqualTo(3);
+            assertThat(usage.getPromptTokens()).isEqualTo(100);
+            assertThat(usage.getEstimatedCostUsd()).isEqualByComparingTo(new BigDecimal("1.25"));
+            assertThat(mapper.find("tenant-a", LocalDate.of(2026, 10, 1))).isNull();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("开户批次投影仅供原操作人和目标租户查询")
-  void shouldMapProvisioningOperationWithActorAndTenantScope() {
-    try (SqlSession session = sessionFactory.openSession()) {
-      ConsoleUserBatchOperationMapper mapper =
-          session.getMapper(ConsoleUserBatchOperationMapper.class);
-      var row = mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-a");
-      assertThat(row.getRequestId()).isEqualTo(REQUEST_ID);
-      assertThat(row.getAccountCount()).isEqualTo(2);
-      assertThat(mapper.selectByRequestId(REQUEST_ID, "operator-a", "tenant-b").getOperationId())
-          .isEqualTo(OPERATION_ID);
-      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-b", "tenant-a"))
-          .isNull();
-      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-c"))
-          .isNull();
+    @Test
+    @DisplayName("文件组聚合和文件列表都只返回本租户数据")
+    void shouldMapArrivalGroupAndFileListWithinTenant() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            FileArrivalGroupMapper groups = session.getMapper(FileArrivalGroupMapper.class);
+            var query = FileArrivalGroupQuery.ofState("tenant-a", "GROUP_A", null, new PageRequest(1, 10));
+            var rows = groups.selectByQuery(query);
+            assertThat(rows).hasSize(1);
+            assertThat(rows.getFirst().getArrivedCount()).isEqualTo(2L);
+            assertThat(rows.getFirst().getWaitingCount()).isEqualTo(2L);
+
+            FileRecordMapper files = session.getMapper(FileRecordMapper.class);
+            var fileQuery = FileRecordQuery.builder()
+                    .tenantId("tenant-a")
+                    .pageRequest(new PageRequest(1, 10))
+                    .build();
+            var records = files.selectByQuery(fileQuery);
+            assertThat(records).extracting(row -> row.getFileName()).containsExactly("b.csv", "a.csv");
+            assertThat(records).extracting(row -> row.getTenantId()).containsOnly("tenant-a");
+        }
     }
-  }
+
+    @Test
+    @DisplayName("开户批次投影仅供原操作人和目标租户查询")
+    void shouldMapProvisioningOperationWithActorAndTenantScope() {
+        try (SqlSession session = sessionFactory.openSession()) {
+            ConsoleUserBatchOperationMapper mapper = session.getMapper(ConsoleUserBatchOperationMapper.class);
+            var row = mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-a");
+            assertThat(row.getRequestId()).isEqualTo(REQUEST_ID);
+            assertThat(row.getAccountCount()).isEqualTo(2);
+            assertThat(mapper.selectByRequestId(REQUEST_ID, "operator-a", "tenant-b")
+                            .getOperationId())
+                    .isEqualTo(OPERATION_ID);
+            assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-b", "tenant-a"))
+                    .isNull();
+            assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-c"))
+                    .isNull();
+        }
+    }
 }

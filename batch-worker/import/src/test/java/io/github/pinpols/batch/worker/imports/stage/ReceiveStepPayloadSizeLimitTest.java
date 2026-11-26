@@ -32,138 +32,137 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DisplayName("导入接收阶段载荷限制单测:体积上限,入参校验与存储路径唯一性语义")
 class ReceiveStepPayloadSizeLimitTest {
 
-  @Mock
-  private PlatformFileRecordRepository runtimeRepository;
+    @Mock
+    private PlatformFileRecordRepository runtimeRepository;
 
-  @Mock
-  private PlatformFileTemplateRepository pipelineDefinitions;
+    @Mock
+    private PlatformFileTemplateRepository pipelineDefinitions;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private BatchSecurityProperties batchSecurityProperties;
+    @Mock
+    private BatchSecurityProperties batchSecurityProperties;
 
-  @Mock
-  private SecretPayloadProtector secretPayloadProtector;
+    @Mock
+    private SecretPayloadProtector secretPayloadProtector;
 
-  private ReceiveStep receiveStep;
+    private ReceiveStep receiveStep;
 
-  @BeforeEach
-  void setUp() {
-    WorkerImportPayloadProperties payloadProps = new WorkerImportPayloadProperties();
-    payloadProps.setMaxPayloadSizeMb(1);
-    FrozenFileTemplateResolver templateResolver =
-        new FrozenFileTemplateResolver(pipelineDefinitions, secretPayloadProtector);
-    receiveStep = new ReceiveStep(
-        runtimeRepository,
-        templateResolver,
-        pipelineRuns,
-        batchSecurityProperties,
-        new ObjectMapper(),
-        payloadProps);
-    // 强制 1 MB（绕开 heap-ratio 计算结果可能更小的情况）
-    ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeBytes", 1L * 1024 * 1024);
-  }
+    @BeforeEach
+    void setUp() {
+        WorkerImportPayloadProperties payloadProps = new WorkerImportPayloadProperties();
+        payloadProps.setMaxPayloadSizeMb(1);
+        FrozenFileTemplateResolver templateResolver =
+                new FrozenFileTemplateResolver(pipelineDefinitions, secretPayloadProtector);
+        receiveStep = new ReceiveStep(
+                runtimeRepository,
+                templateResolver,
+                pipelineRuns,
+                batchSecurityProperties,
+                new ObjectMapper(),
+                payloadProps);
+        // 强制 1 MB（绕开 heap-ratio 计算结果可能更小的情况）
+        ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeBytes", 1L * 1024 * 1024);
+    }
 
-  @Test
-  @DisplayName("载荷未超限时不会因体积被拒,错误码不是超限")
-  void execute_payloadWithinLimit_doesNotFailOnSizeCheck() {
-    String payload = "{\"templateCode\":\"T1\",\"content\":\"small\"}";
-    ImportJobContext ctx = buildContext("t1", payload);
+    @Test
+    @DisplayName("载荷未超限时不会因体积被拒,错误码不是超限")
+    void execute_payloadWithinLimit_doesNotFailOnSizeCheck() {
+        String payload = "{\"templateCode\":\"T1\",\"content\":\"small\"}";
+        ImportJobContext ctx = buildContext("t1", payload);
 
-    // 仅检查不因 size 报错（可能因为其他原因失败，但不是 TOO_LARGE）
-    ImportStageResult result = receiveStep.execute(ctx);
-    assertThat(result.code()).isNotEqualTo("IMPORT_RECEIVE_TOO_LARGE");
-  }
+        // 仅检查不因 size 报错（可能因为其他原因失败，但不是 TOO_LARGE）
+        ImportStageResult result = receiveStep.execute(ctx);
+        assertThat(result.code()).isNotEqualTo("IMPORT_RECEIVE_TOO_LARGE");
+    }
 
-  @Test
-  @DisplayName("载荷超过上限时失败,返回超限错误并说明原因")
-  void execute_payloadExceedsLimit_returnsTooLargeFailure() {
-    // 2 MB payload
-    String payload = "x".repeat(2 * 1024 * 1024);
-    ImportJobContext ctx = buildContext("t1", payload);
+    @Test
+    @DisplayName("载荷超过上限时失败,返回超限错误并说明原因")
+    void execute_payloadExceedsLimit_returnsTooLargeFailure() {
+        // 2 MB payload
+        String payload = "x".repeat(2 * 1024 * 1024);
+        ImportJobContext ctx = buildContext("t1", payload);
 
-    ImportStageResult result = receiveStep.execute(ctx);
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_TOO_LARGE");
-    assertThat(result.message()).contains("exceeds limit");
-  }
+        ImportStageResult result = receiveStep.execute(ctx);
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_TOO_LARGE");
+        assertThat(result.message()).contains("exceeds limit");
+    }
 
-  @Test
-  @DisplayName("上下文为空时失败,返回接收阶段非法")
-  void execute_nullContext_returnsInvalidFailure() {
-    ImportStageResult result = receiveStep.execute(null);
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
-  }
+    @Test
+    @DisplayName("上下文为空时失败,返回接收阶段非法")
+    void execute_nullContext_returnsInvalidFailure() {
+        ImportStageResult result = receiveStep.execute(null);
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
+    }
 
-  @Test
-  @DisplayName("租户标识为空时失败,返回接收阶段非法")
-  void execute_blankTenantId_returnsInvalidFailure() {
-    ImportJobContext ctx = buildContext("", "{\"content\":\"x\"}");
-    ImportStageResult result = receiveStep.execute(ctx);
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
-  }
+    @Test
+    @DisplayName("租户标识为空时失败,返回接收阶段非法")
+    void execute_blankTenantId_returnsInvalidFailure() {
+        ImportJobContext ctx = buildContext("", "{\"content\":\"x\"}");
+        ImportStageResult result = receiveStep.execute(ctx);
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
+    }
 
-  @Test
-  @DisplayName("原始载荷为空时失败,返回接收阶段非法")
-  void execute_blankPayload_returnsInvalidFailure() {
-    ImportJobContext ctx = buildContext("t1", "");
-    ImportStageResult result = receiveStep.execute(ctx);
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
-  }
+    @Test
+    @DisplayName("原始载荷为空时失败,返回接收阶段非法")
+    void execute_blankPayload_returnsInvalidFailure() {
+        ImportJobContext ctx = buildContext("t1", "");
+        ImportStageResult result = receiveStep.execute(ctx);
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
+    }
 
-  @Test
-  @DisplayName("同一链路下不同任务生成各自存储路径,互不覆盖")
-  void execute_sameTraceUsesTaskIdToKeepGeneratedStoragePathUnique() {
-    when(runtimeRepository.createFileRecord(any())).thenReturn(101L, 102L);
-    ImportJobContext first = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"a\"}");
-    first.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
-    first.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 11L);
-    ImportJobContext second = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"b\"}");
-    second.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
-    second.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 12L);
+    @Test
+    @DisplayName("同一链路下不同任务生成各自存储路径,互不覆盖")
+    void execute_sameTraceUsesTaskIdToKeepGeneratedStoragePathUnique() {
+        when(runtimeRepository.createFileRecord(any())).thenReturn(101L, 102L);
+        ImportJobContext first = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"a\"}");
+        first.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
+        first.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 11L);
+        ImportJobContext second = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"b\"}");
+        second.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
+        second.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 12L);
 
-    assertThat(receiveStep.execute(first).success()).isTrue();
-    assertThat(receiveStep.execute(second).success()).isTrue();
+        assertThat(receiveStep.execute(first).success()).isTrue();
+        assertThat(receiveStep.execute(second).success()).isTrue();
 
-    ArgumentCaptor<FileRecordParam> records = ArgumentCaptor.forClass(FileRecordParam.class);
-    Mockito.verify(runtimeRepository, Mockito.times(2)).createFileRecord(records.capture());
-    assertThat(records.getAllValues())
-        .extracting(FileRecordParam::getStoragePath)
-        .containsExactly(
-            "ingress/t1/shared-trace-11/import-shared-trace.json",
-            "ingress/t1/shared-trace-12/import-shared-trace.json");
-  }
+        ArgumentCaptor<FileRecordParam> records = ArgumentCaptor.forClass(FileRecordParam.class);
+        Mockito.verify(runtimeRepository, Mockito.times(2)).createFileRecord(records.capture());
+        assertThat(records.getAllValues())
+                .extracting(FileRecordParam::getStoragePath)
+                .containsExactly(
+                        "ingress/t1/shared-trace-11/import-shared-trace.json",
+                        "ingress/t1/shared-trace-12/import-shared-trace.json");
+    }
 
-  @Test
-  @DisplayName("接收阶段读取并绑定模板配置供本次流水线后续阶段复用")
-  void execute_bindsTemplateConfigToPipelineContext() {
-    Map<String, Object> template = Map.of(
-        "template_code", "T1",
-        "file_format_type", "DELIMITED",
-        "charset", "GBK");
-    when(pipelineDefinitions.loadLatestTemplateConfig("t1", "T1", "IMPORT")).thenReturn(template);
-    when(runtimeRepository.createFileRecord(any())).thenReturn(101L);
-    when(runtimeRepository.loadFileRecord("t1", 101L)).thenReturn(Map.of());
-    ImportJobContext context =
-        buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"name\\nAlice\"}");
+    @Test
+    @DisplayName("接收阶段读取并绑定模板配置供本次流水线后续阶段复用")
+    void execute_bindsTemplateConfigToPipelineContext() {
+        Map<String, Object> template = Map.of(
+                "template_code", "T1",
+                "file_format_type", "DELIMITED",
+                "charset", "GBK");
+        when(pipelineDefinitions.loadLatestTemplateConfig("t1", "T1", "IMPORT")).thenReturn(template);
+        when(runtimeRepository.createFileRecord(any())).thenReturn(101L);
+        when(runtimeRepository.loadFileRecord("t1", 101L)).thenReturn(Map.of());
+        ImportJobContext context = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"name\\nAlice\"}");
 
-    ImportStageResult result = receiveStep.execute(context);
+        ImportStageResult result = receiveStep.execute(context);
 
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG))
-        .isEqualTo(template);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG))
+                .isEqualTo(template);
+    }
 
-  private ImportJobContext buildContext(String tenantId, String payload) {
-    ImportJobContext ctx = new ImportJobContext();
-    ctx.setTenantId(tenantId);
-    ctx.setRawPayload(payload);
-    ctx.setAttributes(new HashMap<>());
-    return ctx;
-  }
+    private ImportJobContext buildContext(String tenantId, String payload) {
+        ImportJobContext ctx = new ImportJobContext();
+        ctx.setTenantId(tenantId);
+        ctx.setRawPayload(payload);
+        ctx.setAttributes(new HashMap<>());
+        return ctx;
+    }
 }

@@ -9,11 +9,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultProcessWorkerRouteAdapter implements WorkerRouteAdapter {
 
-  @Override
-  public WorkerRouteModel buildDefaultRoute() {
-    WorkerRouteModel model = new WorkerRouteModel();
-    model.setWorkerType(ProcessWorkerType.PROCESS);
-    model.setAvailable(Boolean.TRUE);
-    return model;
-  }
+    @Override
+    public WorkerRouteModel buildDefaultRoute() {
+        WorkerRouteModel model = new WorkerRouteModel();
+        model.setWorkerType(ProcessWorkerType.PROCESS);
+        model.setAvailable(Boolean.TRUE);
+        return model;
+    }
 }

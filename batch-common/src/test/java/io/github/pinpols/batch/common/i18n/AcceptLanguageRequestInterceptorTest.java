@@ -18,53 +18,52 @@ import org.springframework.http.client.ClientHttpResponse;
 @DisplayName("请求语言头的显式值与上下文传播")
 class AcceptLanguageRequestInterceptorTest {
 
-  private final AcceptLanguageRequestInterceptor interceptor =
-      new AcceptLanguageRequestInterceptor();
+    private final AcceptLanguageRequestInterceptor interceptor = new AcceptLanguageRequestInterceptor();
 
-  @DisplayName("缺少语言头时传播当前语言环境")
-  @Test
-  void shouldPropagateCurrentLocaleWhenAcceptLanguageIsMissing() throws IOException {
-    HttpRequest request = mock(HttpRequest.class);
-    HttpHeaders headers = new HttpHeaders();
-    when(request.getHeaders()).thenReturn(headers);
-    ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
-    ClientHttpResponse expectedResponse = mock(ClientHttpResponse.class);
-    byte[] body = new byte[0];
-    when(execution.execute(request, body)).thenReturn(expectedResponse);
+    @DisplayName("缺少语言头时传播当前语言环境")
+    @Test
+    void shouldPropagateCurrentLocaleWhenAcceptLanguageIsMissing() throws IOException {
+        HttpRequest request = mock(HttpRequest.class);
+        HttpHeaders headers = new HttpHeaders();
+        when(request.getHeaders()).thenReturn(headers);
+        ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
+        ClientHttpResponse expectedResponse = mock(ClientHttpResponse.class);
+        byte[] body = new byte[0];
+        when(execution.execute(request, body)).thenReturn(expectedResponse);
 
-    LocaleContext previousContext = LocaleContextHolder.getLocaleContext();
-    LocaleContextHolder.setLocale(Locale.JAPAN);
-    try {
-      ClientHttpResponse response = interceptor.intercept(request, body, execution);
+        LocaleContext previousContext = LocaleContextHolder.getLocaleContext();
+        LocaleContextHolder.setLocale(Locale.JAPAN);
+        try {
+            ClientHttpResponse response = interceptor.intercept(request, body, execution);
 
-      assertThat(headers.getAcceptLanguageAsLocales()).contains(Locale.JAPAN);
-      assertThat(response).isSameAs(expectedResponse);
-    } finally {
-      LocaleContextHolder.setLocaleContext(previousContext);
+            assertThat(headers.getAcceptLanguageAsLocales()).contains(Locale.JAPAN);
+            assertThat(response).isSameAs(expectedResponse);
+        } finally {
+            LocaleContextHolder.setLocaleContext(previousContext);
+        }
     }
-  }
 
-  @DisplayName("保留调用方显式指定的语言头")
-  @Test
-  void shouldPreserveExplicitAcceptLanguageHeader() throws IOException {
-    HttpRequest request = mock(HttpRequest.class);
-    HttpHeaders headers = new HttpHeaders();
-    headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en-US");
-    when(request.getHeaders()).thenReturn(headers);
-    ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
-    ClientHttpResponse expectedResponse = mock(ClientHttpResponse.class);
-    byte[] body = new byte[0];
-    when(execution.execute(request, body)).thenReturn(expectedResponse);
+    @DisplayName("保留调用方显式指定的语言头")
+    @Test
+    void shouldPreserveExplicitAcceptLanguageHeader() throws IOException {
+        HttpRequest request = mock(HttpRequest.class);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en-US");
+        when(request.getHeaders()).thenReturn(headers);
+        ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
+        ClientHttpResponse expectedResponse = mock(ClientHttpResponse.class);
+        byte[] body = new byte[0];
+        when(execution.execute(request, body)).thenReturn(expectedResponse);
 
-    LocaleContext previousContext = LocaleContextHolder.getLocaleContext();
-    LocaleContextHolder.setLocale(Locale.JAPAN);
-    try {
-      ClientHttpResponse response = interceptor.intercept(request, body, execution);
+        LocaleContext previousContext = LocaleContextHolder.getLocaleContext();
+        LocaleContextHolder.setLocale(Locale.JAPAN);
+        try {
+            ClientHttpResponse response = interceptor.intercept(request, body, execution);
 
-      assertThat(headers.getFirst(HttpHeaders.ACCEPT_LANGUAGE)).isEqualTo("en-US");
-      assertThat(response).isSameAs(expectedResponse);
-    } finally {
-      LocaleContextHolder.setLocaleContext(previousContext);
+            assertThat(headers.getFirst(HttpHeaders.ACCEPT_LANGUAGE)).isEqualTo("en-US");
+            assertThat(response).isSameAs(expectedResponse);
+        } finally {
+            LocaleContextHolder.setLocaleContext(previousContext);
+        }
     }
-  }
 }

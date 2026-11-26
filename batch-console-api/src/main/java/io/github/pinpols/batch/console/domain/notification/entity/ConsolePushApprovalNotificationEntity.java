@@ -12,8 +12,8 @@ import lombok.Data;
 @Data
 public class ConsolePushApprovalNotificationEntity {
 
-  private Long id;
-  private String tenantId;
-  private String approvalNo;
-  private Instant notifiedAt;
+    private Long id;
+    private String tenantId;
+    private String approvalNo;
+    private Instant notifiedAt;
 }

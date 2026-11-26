@@ -15,13 +15,13 @@ package io.github.pinpols.batch.sdk.dispatcher;
  * <p>{@code PAUSED} / {@code DRAINING} 都不接新任务,区别在语义:PAUSED 期望可恢复,DRAINING 期望终态。
  */
 public enum WorkerRuntimeState {
-  NORMAL,
-  DEGRADED,
-  PAUSED,
-  DRAINING;
+    NORMAL,
+    DEGRADED,
+    PAUSED,
+    DRAINING;
 
-  /** 是否允许认领 / 提交新任务。PAUSED / DRAINING 一律拒新,NORMAL / DEGRADED 接单。 */
-  public boolean acceptsNewTasks() {
-    return this == NORMAL || this == DEGRADED;
-  }
+    /** 是否允许认领 / 提交新任务。PAUSED / DRAINING 一律拒新,NORMAL / DEGRADED 接单。 */
+    public boolean acceptsNewTasks() {
+        return this == NORMAL || this == DEGRADED;
+    }
 }

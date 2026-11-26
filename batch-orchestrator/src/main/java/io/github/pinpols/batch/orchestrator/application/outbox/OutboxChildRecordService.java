@@ -17,50 +17,50 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxChildRecordService {
 
-  private final EventDeliveryLogMapper eventDeliveryLogMapper;
-  private final EventOutboxRetryMapper eventOutboxRetryMapper;
+    private final EventDeliveryLogMapper eventDeliveryLogMapper;
+    private final EventOutboxRetryMapper eventOutboxRetryMapper;
 
-  @Transactional
-  public void recordDelivery(EventDeliveryLogEntity entity) {
-    if (eventDeliveryLogMapper.insert(entity) == 1) {
-      return;
+    @Transactional
+    public void recordDelivery(EventDeliveryLogEntity entity) {
+        if (eventDeliveryLogMapper.insert(entity) == 1) {
+            return;
+        }
+        if (eventDeliveryLogMapper.insertIntoArchive(entity) == 1) {
+            log.warn(
+                    "late outbox delivery result recorded against archived event: tenant={}, eventId={},"
+                            + " eventCreatedAt={}, deliveryAttempt={}, status={}",
+                    entity.getTenantId(),
+                    entity.getOutboxEventId(),
+                    entity.getOutboxEventCreatedAt(),
+                    entity.getDeliveryAttempt(),
+                    entity.getDeliveryStatus());
+            return;
+        }
+        throw missingParent(entity.getTenantId(), entity.getOutboxEventId());
     }
-    if (eventDeliveryLogMapper.insertIntoArchive(entity) == 1) {
-      log.warn(
-          "late outbox delivery result recorded against archived event: tenant={}, eventId={},"
-              + " eventCreatedAt={}, deliveryAttempt={}, status={}",
-          entity.getTenantId(),
-          entity.getOutboxEventId(),
-          entity.getOutboxEventCreatedAt(),
-          entity.getDeliveryAttempt(),
-          entity.getDeliveryStatus());
-      return;
-    }
-    throw missingParent(entity.getTenantId(), entity.getOutboxEventId());
-  }
 
-  @Transactional
-  public void recordRetry(EventOutboxRetryEntity entity) {
-    if (eventOutboxRetryMapper.insert(entity) == 1) {
-      return;
+    @Transactional
+    public void recordRetry(EventOutboxRetryEntity entity) {
+        if (eventOutboxRetryMapper.insert(entity) == 1) {
+            return;
+        }
+        if (eventOutboxRetryMapper.insertIntoArchive(entity) == 1) {
+            log.warn(
+                    "late outbox retry audit recorded against archived event: tenant={}, eventId={},"
+                            + " eventCreatedAt={}, retryAttempt={}, status={}",
+                    entity.getTenantId(),
+                    entity.getOutboxEventId(),
+                    entity.getOutboxEventCreatedAt(),
+                    entity.getPublishAttempt(),
+                    entity.getRetryStatus());
+            return;
+        }
+        throw missingParent(entity.getTenantId(), entity.getOutboxEventId());
     }
-    if (eventOutboxRetryMapper.insertIntoArchive(entity) == 1) {
-      log.warn(
-          "late outbox retry audit recorded against archived event: tenant={}, eventId={},"
-              + " eventCreatedAt={}, retryAttempt={}, status={}",
-          entity.getTenantId(),
-          entity.getOutboxEventId(),
-          entity.getOutboxEventCreatedAt(),
-          entity.getPublishAttempt(),
-          entity.getRetryStatus());
-      return;
-    }
-    throw missingParent(entity.getTenantId(), entity.getOutboxEventId());
-  }
 
-  private static DataIntegrityViolationException missingParent(String tenantId, Long eventId) {
-    return JdbcExceptionSupport.missingReferenceViolation(
-        "Outbox event reference is unavailable for tenant " + tenantId + " and event " + eventId,
-        "Outbox child reference does not match a hot or archived parent");
-  }
+    private static DataIntegrityViolationException missingParent(String tenantId, Long eventId) {
+        return JdbcExceptionSupport.missingReferenceViolation(
+                "Outbox event reference is unavailable for tenant " + tenantId + " and event " + eventId,
+                "Outbox child reference does not match a hot or archived parent");
+    }
 }

@@ -19,46 +19,46 @@ import org.springframework.stereotype.Service;
 @Service
 public class ProcessWorkerLoop extends AbstractWorkerLoop {
 
-  private final ProcessWorkerConfiguration configuration;
-  private final DefaultProcessStageExecutor processStageExecutor;
+    private final ProcessWorkerConfiguration configuration;
+    private final DefaultProcessStageExecutor processStageExecutor;
 
-  public ProcessWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      ProcessWorkerConfiguration configuration,
-      WorkerIdentityProperties identityProperties,
-      WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties,
-      DefaultProcessStageExecutor processStageExecutor) {
-    super(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        concurrencyProperties.getMaxConcurrentTasks(),
-        identityProperties,
-        workerRegistryStartupProperties);
-    this.configuration = configuration;
-    this.processStageExecutor = processStageExecutor;
-  }
+    public ProcessWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            ProcessWorkerConfiguration configuration,
+            WorkerIdentityProperties identityProperties,
+            WorkerRegistryStartupProperties workerRegistryStartupProperties,
+            WorkerConcurrencyProperties concurrencyProperties,
+            DefaultProcessStageExecutor processStageExecutor) {
+        super(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                concurrencyProperties.getMaxConcurrentTasks(),
+                identityProperties,
+                workerRegistryStartupProperties);
+        this.configuration = configuration;
+        this.processStageExecutor = processStageExecutor;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected String workerGroup() {
-    return "process";
-  }
+    @Override
+    protected String workerGroup() {
+        return "process";
+    }
 
-  @Override
-  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
-    return processStageExecutor.replayCapabilityCatalog();
-  }
+    @Override
+    protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+        return processStageExecutor.replayCapabilityCatalog();
+    }
 
-  @Scheduled(fixedDelayString = "${batch.worker.process.heartbeat-interval-millis:15000}")
-  public void heartbeat() {
-    doHeartbeat();
-  }
+    @Scheduled(fixedDelayString = "${batch.worker.process.heartbeat-interval-millis:15000}")
+    public void heartbeat() {
+        doHeartbeat();
+    }
 }

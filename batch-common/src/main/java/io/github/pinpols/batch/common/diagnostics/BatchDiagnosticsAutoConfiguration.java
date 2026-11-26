@@ -18,21 +18,16 @@ import org.springframework.core.env.Environment;
 /** 装配诊断端点所需的运行时信息采集能力。 */
 public class BatchDiagnosticsAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  BatchRuntimeStatusEndpoint batchRuntimeStatusEndpoint(
-      Environment environment,
-      ObjectProvider<BatchSecurityProperties> securityProvider,
-      ObjectProvider<S3StorageProperties> s3Provider,
-      ObjectProvider<FilesystemStorageProperties> filesystemProvider,
-      ObjectProvider<StorageBackendGuardProperties> guardProvider,
-      StorageBackendProperties backendProperties) {
-    return new BatchRuntimeStatusEndpoint(
-        environment,
-        securityProvider,
-        s3Provider,
-        filesystemProvider,
-        guardProvider,
-        backendProperties);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    BatchRuntimeStatusEndpoint batchRuntimeStatusEndpoint(
+            Environment environment,
+            ObjectProvider<BatchSecurityProperties> securityProvider,
+            ObjectProvider<S3StorageProperties> s3Provider,
+            ObjectProvider<FilesystemStorageProperties> filesystemProvider,
+            ObjectProvider<StorageBackendGuardProperties> guardProvider,
+            StorageBackendProperties backendProperties) {
+        return new BatchRuntimeStatusEndpoint(
+                environment, securityProvider, s3Provider, filesystemProvider, guardProvider, backendProperties);
+    }
 }

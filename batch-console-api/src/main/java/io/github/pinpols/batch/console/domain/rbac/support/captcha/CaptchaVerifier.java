@@ -9,15 +9,15 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
  */
 public interface CaptchaVerifier {
 
-  /**
-   * 校验前端提交的验证码凭据。
-   *
-   * @param token 前端通过第三方验证码后获得的凭据;可能为 null/空(视为未提交,直接失败)
-   * @param clientIp 客户端 IP,部分 provider 校验时需带上做风控关联
-   * @return 校验结果
-   */
-  CaptchaResult verify(String token, String clientIp);
+    /**
+     * 校验前端提交的验证码凭据。
+     *
+     * @param token 前端通过第三方验证码后获得的凭据;可能为 null/空(视为未提交,直接失败)
+     * @param clientIp 客户端 IP,部分 provider 校验时需带上做风控关联
+     * @return 校验结果
+     */
+    CaptchaResult verify(String token, String clientIp);
 
-  /** provider 标识(none/cloudflare/tencent/aliyun),用于 /captcha/config 下发与日志。 */
-  String provider();
+    /** provider 标识(none/cloudflare/tencent/aliyun),用于 /captcha/config 下发与日志。 */
+    String provider();
 }

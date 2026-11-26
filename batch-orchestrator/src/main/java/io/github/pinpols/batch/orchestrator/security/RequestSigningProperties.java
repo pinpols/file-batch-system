@@ -13,9 +13,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.request-signing")
 public class RequestSigningProperties {
 
-  /** 总开关，默认关闭。{@code BATCH_REQUEST_SIGNING_ENABLED=true} 开启。 */
-  private boolean enabled = false;
+    /** 总开关，默认关闭。{@code BATCH_REQUEST_SIGNING_ENABLED=true} 开启。 */
+    private boolean enabled = false;
 
-  /** 时钟偏移容忍窗口（秒）；|now - timestamp| 超出即拒。默认 300s。nonce TTL 取其 2 倍。 */
-  private int clockSkewSeconds = 300;
+    /** 时钟偏移容忍窗口（秒）；|now - timestamp| 超出即拒。默认 300s。nonce TTL 取其 2 倍。 */
+    private int clockSkewSeconds = 300;
 }

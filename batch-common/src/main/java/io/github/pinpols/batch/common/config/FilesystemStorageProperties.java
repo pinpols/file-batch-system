@@ -20,29 +20,29 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.storage.filesystem")
 public class FilesystemStorageProperties {
 
-  /** FS 后端的根目录，绝对路径。bucket 映射为 {@code root/<bucket>/}。 */
-  private String root;
+    /** FS 后端的根目录，绝对路径。bucket 映射为 {@code root/<bucket>/}。 */
+    private String root;
 
-  /**
-   * FS 模式 presign 返回的应用下载端点 URL 前缀，例如 {@code
-   * https://console.internal/api/console/files/fs-download}。 presign 生成的 URL 形如 {@code
-   * <downloadBaseUrl>?b=<bucket>&k=<key>&e=<expEpochSec>&s=<sig>}。
-   */
-  private String downloadBaseUrl;
+    /**
+     * FS 模式 presign 返回的应用下载端点 URL 前缀，例如 {@code
+     * https://console.internal/api/console/files/fs-download}。 presign 生成的 URL 形如 {@code
+     * <downloadBaseUrl>?b=<bucket>&k=<key>&e=<expEpochSec>&s=<sig>}。
+     */
+    private String downloadBaseUrl;
 
-  /**
-   * presign HMAC 密钥。留空时回落到 {@link
-   * BatchSecurityProperties#getInternalSecret()}（复用平台现有内部密钥，不引入新密钥体系）。
-   */
-  private String presignSecret;
+    /**
+     * presign HMAC 密钥。留空时回落到 {@link
+     * BatchSecurityProperties#getInternalSecret()}（复用平台现有内部密钥，不引入新密钥体系）。
+     */
+    private String presignSecret;
 
-  /**
-   * presign URL 默认 TTL。FS 端点是能力令牌（不绑 IP / 不含内容哈希），TTL 短为佳；默认 5 分钟。 仅作为回退参考，接口 {@code
-   * presign(bucket, key, ttl)} 仍优先用入参。
-   */
-  private Duration defaultPresignTtl = Duration.ofMinutes(5);
+    /**
+     * presign URL 默认 TTL。FS 端点是能力令牌（不绑 IP / 不含内容哈希），TTL 短为佳；默认 5 分钟。 仅作为回退参考，接口 {@code
+     * presign(bucket, key, ttl)} 仍优先用入参。
+     */
+    private Duration defaultPresignTtl = Duration.ofMinutes(5);
 
-  /** list 单次最多扫描的文件数。避免宽 prefix / bucket 根目录在本地盘或 NAS 上变成无界 IO。 */
-  @Min(value = 0, message = "batch.storage.filesystem.max-list-scan-entries must not be negative")
-  private long maxListScanEntries = 200_000L;
+    /** list 单次最多扫描的文件数。避免宽 prefix / bucket 根目录在本地盘或 NAS 上变成无界 IO。 */
+    @Min(value = 0, message = "batch.storage.filesystem.max-list-scan-entries must not be negative")
+    private long maxListScanEntries = 200_000L;
 }

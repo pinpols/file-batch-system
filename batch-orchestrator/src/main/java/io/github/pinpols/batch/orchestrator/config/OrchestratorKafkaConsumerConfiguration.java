@@ -57,148 +57,142 @@ import org.springframework.util.backoff.FixedBackOff;
 @RequiredArgsConstructor
 public class OrchestratorKafkaConsumerConfiguration {
 
-  /** Listener factory bean 名称 — 给 @KafkaListener(containerFactory=...) 引用。 */
-  public static final String TRIGGER_LISTENER_FACTORY =
-      "triggerLaunchKafkaListenerContainerFactory";
+    /** Listener factory bean 名称 — 给 @KafkaListener(containerFactory=...) 引用。 */
+    public static final String TRIGGER_LISTENER_FACTORY = "triggerLaunchKafkaListenerContainerFactory";
 
-  public static final String TRIGGER_LAUNCH_LISTENER_ID = "orchestratorTriggerLaunchListener";
+    public static final String TRIGGER_LAUNCH_LISTENER_ID = "orchestratorTriggerLaunchListener";
 
-  // R-audit-p0: 与 TriggerLaunchConsumer#METRIC_FAILED 同名同 tag 风格,
-  // 让"重试耗尽跳过"与消费失败其它原因(deserialize/business/runtime)汇入同一 metric 便于统一告警。
-  private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
+    // R-audit-p0: 与 TriggerLaunchConsumer#METRIC_FAILED 同名同 tag 风格,
+    // 让"重试耗尽跳过"与消费失败其它原因(deserialize/business/runtime)汇入同一 metric 便于统一告警。
+    private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
 
-  private final TriggerConsumerProperties consumerProperties;
-  private final MeterRegistry meterRegistry;
-  private final ObjectProvider<TriggerLaunchRecoveryService> launchRecoveryServiceProvider;
+    private final TriggerConsumerProperties consumerProperties;
+    private final MeterRegistry meterRegistry;
+    private final ObjectProvider<TriggerLaunchRecoveryService> launchRecoveryServiceProvider;
 
-  @Bean
-  public ConsumerFactory<String, String> triggerLaunchConsumerFactory(
-      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
-    Map<String, Object> properties = new HashMap<>();
-    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    properties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerProperties.getGroupId());
-    // earliest 回退:首次起服 / 重置时不丢消息;正常运行靠 commit offset
-    properties.put(
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, consumerProperties.getAutoOffsetReset());
-    // 关 auto-commit,走 MANUAL_IMMEDIATE
-    properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, consumerProperties.getMaxPollRecords());
-    properties.put(
-        ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, consumerProperties.getMaxPollIntervalMs());
-    return new DefaultKafkaConsumerFactory<>(properties);
-  }
-
-  @Bean(name = TRIGGER_LISTENER_FACTORY)
-  public ConcurrentKafkaListenerContainerFactory<String, String>
-      triggerLaunchKafkaListenerContainerFactory(
-          ConsumerFactory<String, String> triggerLaunchConsumerFactory,
-          ObservationRegistry observationRegistry) {
-    ConcurrentKafkaListenerContainerFactory<String, String> factory =
-        new ConcurrentKafkaListenerContainerFactory<>();
-    factory.setConsumerFactory(triggerLaunchConsumerFactory);
-    // launch→实例创建吞吐受此并发约束(旧默认 1 单线程封顶多租峰值流量);与 launch topic 分区数对齐
-    factory.setConcurrency(consumerProperties.getConcurrency());
-    factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-    factory.getContainerProperties().setObservationEnabled(true);
-    factory.getContainerProperties().setObservationRegistry(observationRegistry);
-    factory.setCommonErrorHandler(triggerLaunchErrorHandler());
-    return factory;
-  }
-
-  /**
-   * 瞬时错误重试耗尽时登记持久恢复锚点：该记录随后会被跳过(offset 提交)，若请求尚未落任何持久等待/prepare
-   * 记录，这里是唯一能阻止"永久失去执行机会"的位置。登记失败必须抛回 error handler，禁止跳过未持久化的请求。
-   */
-  private void parkForRecovery(ConsumerRecord<?, ?> consumerRecord) {
-    TriggerLaunchRecoveryService recoveryService = launchRecoveryServiceProvider.getIfAvailable();
-    if (EmptyChecks.isNull(recoveryService)) {
-      throw new IllegalStateException(
-          "trigger launch recovery is unavailable; cannot safely skip exhausted record");
+    @Bean
+    public ConsumerFactory<String, String> triggerLaunchConsumerFactory(
+            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerProperties.getGroupId());
+        // earliest 回退:首次起服 / 重置时不丢消息;正常运行靠 commit offset
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, consumerProperties.getAutoOffsetReset());
+        // 关 auto-commit,走 MANUAL_IMMEDIATE
+        properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, consumerProperties.getMaxPollRecords());
+        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, consumerProperties.getMaxPollIntervalMs());
+        return new DefaultKafkaConsumerFactory<>(properties);
     }
-    try {
-      boolean parked = recoveryService.park(String.valueOf(consumerRecord.value()), null);
-      if (!parked) {
-        throw new IllegalStateException(
-            "trigger launch recovery did not persist an anchor for exhausted record");
-      }
-    } catch (RuntimeException ex) {
-      log.warn(
-          "trigger launch recovery park failed; exhausted record must not be skipped: topic={}"
-              + " partition={} offset={} cause={}",
-          consumerRecord.topic(),
-          consumerRecord.partition(),
-          consumerRecord.offset(),
-          SwallowedExceptionLogger.summary(ex));
-      throw ex;
-    }
-  }
 
-  /**
-   * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
-   * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
-   */
-  private DefaultErrorHandler triggerLaunchErrorHandler() {
-    TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
-    ConsumerRecordRecoverer recoverer = (consumerRecord, exception) -> {
-      // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
-      // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
-      Throwable cause = unwrap(exception);
-      boolean businessLevel =
-          cause instanceof BizException || cause instanceof IllegalArgumentException;
-      if (businessLevel) {
-        log.warn(
-            "TriggerLaunchConsumer skipped a business error: topic={} partition={} offset={} key={} cause={}",
-            consumerRecord.topic(),
-            consumerRecord.partition(),
-            consumerRecord.offset(),
-            consumerRecord.key(),
-            SwallowedExceptionLogger.summary(cause));
-      } else {
-        log.error(
-            "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
-                + " key={} cause={}",
-            consumerRecord.topic(),
-            consumerRecord.partition(),
-            consumerRecord.offset(),
-            consumerRecord.key(),
-            SwallowedExceptionLogger.summary(exception));
-        Counter.builder(METRIC_FAILED)
-            .tags(Tags.of("reason", "retries_exhausted"))
-            .register(meterRegistry)
-            .increment();
-        // 重试耗尽即将跳过 offset：若请求尚未落任何持久等待/prepare 记录，这是最后能留下恢复锚点的位置
-        parkForRecovery(consumerRecord);
-      }
-    };
-    long retryBackoffMillis = eh.getRetryBackoffMs();
-    int configuredRetryAttempts = eh.getRetryAttempts();
-    int retriesAfterFirstAttempt = configuredRetryAttempts - 1;
-    int nonnegativeRetryCount = Math.max(0, retriesAfterFirstAttempt);
-    FixedBackOff retryBackOff = new FixedBackOff(retryBackoffMillis, nonnegativeRetryCount);
-    DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, retryBackOff);
-    // MANUAL_IMMEDIATE 下，仅在恢复器成功处理后提交该记录的位置。
-    handler.setCommitRecovered(true);
-    // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
-    handler.addNotRetryableExceptions(BizException.class);
-    handler.addNotRetryableExceptions(IllegalArgumentException.class);
-    // 用例失败的内部 cause 不能把它降级为不可重试的参数错误。
-    handler.addRetryableExceptions(OperationFailure.class);
-    return handler;
-  }
-
-  /** Spring Kafka listener 异常会被包成 ListenerExecutionFailedException;剥到真实 cause 判定业务级。 */
-  private static Throwable unwrap(Throwable t) {
-    Throwable current = t;
-    while (current != null
-        && current.getCause() != null
-        && current.getCause() != current
-        && !(current instanceof OperationFailure)
-        && !(current instanceof BizException)
-        && !(current instanceof IllegalArgumentException)) {
-      current = current.getCause();
+    @Bean(name = TRIGGER_LISTENER_FACTORY)
+    public ConcurrentKafkaListenerContainerFactory<String, String> triggerLaunchKafkaListenerContainerFactory(
+            ConsumerFactory<String, String> triggerLaunchConsumerFactory, ObservationRegistry observationRegistry) {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(triggerLaunchConsumerFactory);
+        // launch→实例创建吞吐受此并发约束(旧默认 1 单线程封顶多租峰值流量);与 launch topic 分区数对齐
+        factory.setConcurrency(consumerProperties.getConcurrency());
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        factory.getContainerProperties().setObservationEnabled(true);
+        factory.getContainerProperties().setObservationRegistry(observationRegistry);
+        factory.setCommonErrorHandler(triggerLaunchErrorHandler());
+        return factory;
     }
-    return current == null ? t : current;
-  }
+
+    /**
+     * 瞬时错误重试耗尽时登记持久恢复锚点：该记录随后会被跳过(offset 提交)，若请求尚未落任何持久等待/prepare
+     * 记录，这里是唯一能阻止"永久失去执行机会"的位置。登记失败必须抛回 error handler，禁止跳过未持久化的请求。
+     */
+    private void parkForRecovery(ConsumerRecord<?, ?> consumerRecord) {
+        TriggerLaunchRecoveryService recoveryService = launchRecoveryServiceProvider.getIfAvailable();
+        if (EmptyChecks.isNull(recoveryService)) {
+            throw new IllegalStateException(
+                    "trigger launch recovery is unavailable; cannot safely skip exhausted record");
+        }
+        try {
+            boolean parked = recoveryService.park(String.valueOf(consumerRecord.value()), null);
+            if (!parked) {
+                throw new IllegalStateException(
+                        "trigger launch recovery did not persist an anchor for exhausted record");
+            }
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "trigger launch recovery park failed; exhausted record must not be skipped: topic={}"
+                            + " partition={} offset={} cause={}",
+                    consumerRecord.topic(),
+                    consumerRecord.partition(),
+                    consumerRecord.offset(),
+                    SwallowedExceptionLogger.summary(ex));
+            throw ex;
+        }
+    }
+
+    /**
+     * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
+     * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
+     */
+    private DefaultErrorHandler triggerLaunchErrorHandler() {
+        TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
+        ConsumerRecordRecoverer recoverer = (consumerRecord, exception) -> {
+            // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
+            // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
+            Throwable cause = unwrap(exception);
+            boolean businessLevel = cause instanceof BizException || cause instanceof IllegalArgumentException;
+            if (businessLevel) {
+                log.warn(
+                        "TriggerLaunchConsumer skipped a business error: topic={} partition={} offset={} key={} cause={}",
+                        consumerRecord.topic(),
+                        consumerRecord.partition(),
+                        consumerRecord.offset(),
+                        consumerRecord.key(),
+                        SwallowedExceptionLogger.summary(cause));
+            } else {
+                log.error(
+                        "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
+                                + " key={} cause={}",
+                        consumerRecord.topic(),
+                        consumerRecord.partition(),
+                        consumerRecord.offset(),
+                        consumerRecord.key(),
+                        SwallowedExceptionLogger.summary(exception));
+                Counter.builder(METRIC_FAILED)
+                        .tags(Tags.of("reason", "retries_exhausted"))
+                        .register(meterRegistry)
+                        .increment();
+                // 重试耗尽即将跳过 offset：若请求尚未落任何持久等待/prepare 记录，这是最后能留下恢复锚点的位置
+                parkForRecovery(consumerRecord);
+            }
+        };
+        long retryBackoffMillis = eh.getRetryBackoffMs();
+        int configuredRetryAttempts = eh.getRetryAttempts();
+        int retriesAfterFirstAttempt = configuredRetryAttempts - 1;
+        int nonnegativeRetryCount = Math.max(0, retriesAfterFirstAttempt);
+        FixedBackOff retryBackOff = new FixedBackOff(retryBackoffMillis, nonnegativeRetryCount);
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, retryBackOff);
+        // MANUAL_IMMEDIATE 下，仅在恢复器成功处理后提交该记录的位置。
+        handler.setCommitRecovered(true);
+        // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
+        handler.addNotRetryableExceptions(BizException.class);
+        handler.addNotRetryableExceptions(IllegalArgumentException.class);
+        // 用例失败的内部 cause 不能把它降级为不可重试的参数错误。
+        handler.addRetryableExceptions(OperationFailure.class);
+        return handler;
+    }
+
+    /** Spring Kafka listener 异常会被包成 ListenerExecutionFailedException;剥到真实 cause 判定业务级。 */
+    private static Throwable unwrap(Throwable t) {
+        Throwable current = t;
+        while (current != null
+                && current.getCause() != null
+                && current.getCause() != current
+                && !(current instanceof OperationFailure)
+                && !(current instanceof BizException)
+                && !(current instanceof IllegalArgumentException)) {
+            current = current.getCause();
+        }
+        return current == null ? t : current;
+    }
 }

@@ -22,170 +22,163 @@ import org.springframework.scheduling.support.CronExpression;
 
 @Data
 public class JobDefinitionCreateRequest {
-  private static final Set<String> SUPPORTED_JOB_TYPES =
-      DictEnum.codes(JobType.class).stream().collect(Collectors.toUnmodifiableSet());
-  private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
+    private static final Set<String> SUPPORTED_JOB_TYPES =
+            DictEnum.codes(JobType.class).stream().collect(Collectors.toUnmodifiableSet());
+    private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @ValidResourceCode
-  private String jobCode;
+    @ValidResourceCode
+    private String jobCode;
 
-  @Size(max = 64)
-  @Pattern(
-      regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-      message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
-          + " underscore or hyphen")
-  private String dependsOnJobCode;
+    @Size(max = 64)
+    @Pattern(
+            regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+                    + " underscore or hyphen")
+    private String dependsOnJobCode;
 
-  /** 兼容上游列表：所有声明的上游都使用 SAME_DAY，且结果必须为 EFFECTIVE。 */
-  @Size(max = 32)
-  private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String>
-      dependsOnJobCodes;
+    /** 兼容上游列表：所有声明的上游都使用 SAME_DAY，且结果必须为 EFFECTIVE。 */
+    @Size(max = 32)
+    private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String> dependsOnJobCodes;
 
-  /** 指定后，定义每个上游的日期对齐方式，并优先于仅提供代码的字段。 */
-  @Size(max = 32)
-  private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
+    /** 指定后，定义每个上游的日期对齐方式，并优先于仅提供代码的字段。 */
+    @Size(max = 32)
+    private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
 
-  @Size(max = 256)
-  private String jobName;
+    @Size(max = 256)
+    private String jobName;
 
-  // 具体取值由 isJobTypeSupported() 直接跟随 JobType，避免复制正则后新增 worker 时漏同步。
-  @NotBlank
-  private String jobType;
+    // 具体取值由 isJobTypeSupported() 直接跟随 JobType，避免复制正则后新增 worker 时漏同步。
+    @NotBlank
+    private String jobType;
 
-  private String bizType;
+    private String bizType;
 
-  // 与 ScheduleType enum (CRON/FIXED_RATE/MANUAL) + DB CHECK 对齐
-  @NotBlank
-  @Pattern(
-      regexp = "^(CRON|FIXED_RATE|MANUAL)$",
-      message = "scheduleType must be one of: CRON/FIXED_RATE/MANUAL")
-  private String scheduleType;
+    // 与 ScheduleType enum (CRON/FIXED_RATE/MANUAL) + DB CHECK 对齐
+    @NotBlank
+    @Pattern(regexp = "^(CRON|FIXED_RATE|MANUAL)$", message = "scheduleType must be one of: CRON/FIXED_RATE/MANUAL")
+    private String scheduleType;
 
-  private String scheduleExpr;
-  private String timezone;
-  private String triggerMode;
-  private String workerGroup;
-  private String queueCode;
-  private String calendarCode;
-  private String windowCode;
-  private Boolean dagEnabled;
-  private String shardStrategy;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String workerGroup;
+    private String queueCode;
+    private String calendarCode;
+    private String windowCode;
+    private Boolean dagEnabled;
+    private String shardStrategy;
 
-  /**
-   * 执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。
-   *
-   * <p>INCREMENTAL 必须配合 watermarkField 才生效;CDC 当前是占位,worker 暂不实现。
-   */
-  @Size(max = 16)
-  private String executionMode;
+    /**
+     * 执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。
+     *
+     * <p>INCREMENTAL 必须配合 watermarkField 才生效;CDC 当前是占位,worker 暂不实现。
+     */
+    @Size(max = 16)
+    private String executionMode;
 
-  /** 增量模式下的水位字段名(例:update_time / id);FULL 模式下应为空。 */
-  @Size(max = 64)
-  private String watermarkField;
+    /** 增量模式下的水位字段名(例:update_time / id);FULL 模式下应为空。 */
+    @Size(max = 64)
+    private String watermarkField;
 
-  private String retryPolicy;
+    private String retryPolicy;
 
-  @Min(value = 0, message = "retryMaxCount must be >= 0")
-  private Integer retryMaxCount;
+    @Min(value = 0, message = "retryMaxCount must be >= 0")
+    private Integer retryMaxCount;
 
-  @Min(value = 0, message = "timeoutSeconds must be >= 0")
-  private Integer timeoutSeconds;
+    @Min(value = 0, message = "timeoutSeconds must be >= 0")
+    private Integer timeoutSeconds;
 
-  /** 软运行时告警阈值；0 表示关闭，不影响硬超时。 */
-  @Min(value = 0, message = "softRuntimeSeconds must be >= 0")
-  private Integer softRuntimeSeconds;
+    /** 软运行时告警阈值；0 表示关闭，不影响硬超时。 */
+    @Min(value = 0, message = "softRuntimeSeconds must be >= 0")
+    private Integer softRuntimeSeconds;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String softRuntimeSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String softRuntimeSeverity;
 
-  /** 计划触发后允许的启动延迟秒数；0 表示关闭。 */
-  @Min(value = 0, message = "startGraceSeconds must be >= 0")
-  private Integer startGraceSeconds;
+    /** 计划触发后允许的启动延迟秒数；0 表示关闭。 */
+    @Min(value = 0, message = "startGraceSeconds must be >= 0")
+    private Integer startGraceSeconds;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String startGraceSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String startGraceSeverity;
 
-  private Boolean completionDeadlineEnabled;
+    private Boolean completionDeadlineEnabled;
 
-  /** 定时作业最晚完成的本地时间；时区沿用作业定义，留空表示关闭。 */
-  private LocalTime completionDeadlineLocalTime;
+    /** 定时作业最晚完成的本地时间；时区沿用作业定义，留空表示关闭。 */
+    private LocalTime completionDeadlineLocalTime;
 
-  /** 最晚完成日期相对计划触发日的偏移：0 当日，1 次日。 */
-  @Min(value = 0, message = "completionDeadlineDayOffset must be 0 or 1")
-  @Max(value = 1, message = "completionDeadlineDayOffset must be 0 or 1")
-  private Integer completionDeadlineDayOffset;
+    /** 最晚完成日期相对计划触发日的偏移：0 当日，1 次日。 */
+    @Min(value = 0, message = "completionDeadlineDayOffset must be 0 or 1")
+    @Max(value = 1, message = "completionDeadlineDayOffset must be 0 or 1")
+    private Integer completionDeadlineDayOffset;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String completionDeadlineSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String completionDeadlineSeverity;
 
-  /** 依赖满足后允许下游完成的时长；0 表示关闭。 */
-  @Min(value = 0, message = "dependencyCompletionWindowSeconds must be >= 0")
-  private Integer dependencyCompletionWindowSeconds;
+    /** 依赖满足后允许下游完成的时长；0 表示关闭。 */
+    @Min(value = 0, message = "dependencyCompletionWindowSeconds must be >= 0")
+    private Integer dependencyCompletionWindowSeconds;
 
-  private String executionHandler;
-  private String paramSchema;
-  private String defaultParams;
+    private String executionHandler;
+    private String paramSchema;
+    private String defaultParams;
 
-  @Min(value = 1, message = "priority must be between 1 and 9")
-  @Max(value = 9, message = "priority must be between 1 and 9")
-  private Integer priority;
+    @Min(value = 1, message = "priority must be between 1 and 9")
+    @Max(value = 9, message = "priority must be between 1 and 9")
+    private Integer priority;
 
-  private Boolean enabled;
-  private String description;
+    private Boolean enabled;
+    private String description;
 
-  /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止非法表达式入库后在运行期失败。 */
-  @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
-  public boolean isScheduleExprValidForCron() {
-    boolean cronValidationIsNotApplicable =
-        !"CRON".equals(scheduleType) || EmptyChecks.isBlank(scheduleExpr);
-    if (cronValidationIsNotApplicable) {
-      return true;
+    /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止非法表达式入库后在运行期失败。 */
+    @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
+    public boolean isScheduleExprValidForCron() {
+        boolean cronValidationIsNotApplicable = !"CRON".equals(scheduleType) || EmptyChecks.isBlank(scheduleExpr);
+        if (cronValidationIsNotApplicable) {
+            return true;
+        }
+        try {
+            String value = scheduleExpr.trim();
+            CronExpression.parse(value.split("\\s+").length == 5 ? "0 " + value : value);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
-    try {
-      String value = scheduleExpr.trim();
-      CronExpression.parse(value.split("\\s+").length == 5 ? "0 " + value : value);
-      return true;
-    } catch (RuntimeException e) {
-      return false;
+
+    /** executionMode=INCREMENTAL 时 watermarkField 必填,否则增量作业无水位跑不起来。 */
+    @AssertTrue(message = "watermarkField is required when executionMode=INCREMENTAL")
+    public boolean isWatermarkPresentForIncremental() {
+        return !"INCREMENTAL".equals(executionMode) || (watermarkField != null && !watermarkField.isBlank());
     }
-  }
 
-  /** executionMode=INCREMENTAL 时 watermarkField 必填,否则增量作业无水位跑不起来。 */
-  @AssertTrue(message = "watermarkField is required when executionMode=INCREMENTAL")
-  public boolean isWatermarkPresentForIncremental() {
-    return !"INCREMENTAL".equals(executionMode)
-        || (watermarkField != null && !watermarkField.isBlank());
-  }
+    /** jobType 必须与公共枚举及数据库 CHECK 使用同一词表。空值交由 {@link NotBlank} 报错。 */
+    @AssertTrue(message = "jobType must be an executable JobType")
+    public boolean isJobTypeSupported() {
+        return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
+    }
 
-  /** jobType 必须与公共枚举及数据库 CHECK 使用同一词表。空值交由 {@link NotBlank} 报错。 */
-  @AssertTrue(message = "jobType must be an executable JobType")
-  public boolean isJobTypeSupported() {
-    return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
-  }
+    @AssertTrue(message = "triggerMode must be a supported TriggerMode")
+    public boolean isTriggerModeSupported() {
+        return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+    }
 
-  @AssertTrue(message = "triggerMode must be a supported TriggerMode")
-  public boolean isTriggerModeSupported() {
-    return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
-  }
+    /** 策略可预先配置给 Workflow 子作业；是否具备执行资格由运行事实决定。 */
+    @AssertTrue(message = "{error.job.monitoring_completion_modes_exclusive}")
+    public boolean isScheduledMonitoringConfiguredCorrectly() {
+        boolean localDeadlineEnabled = !Boolean.FALSE.equals(completionDeadlineEnabled)
+                && (Boolean.TRUE.equals(completionDeadlineEnabled)
+                        || EmptyChecks.isNotNull(completionDeadlineLocalTime));
+        boolean dependencyWindowEnabled =
+                EmptyChecks.isNotNull(dependencyCompletionWindowSeconds) && dependencyCompletionWindowSeconds > 0;
+        return !(localDeadlineEnabled && dependencyWindowEnabled);
+    }
 
-  /** 策略可预先配置给 Workflow 子作业；是否具备执行资格由运行事实决定。 */
-  @AssertTrue(message = "{error.job.monitoring_completion_modes_exclusive}")
-  public boolean isScheduledMonitoringConfiguredCorrectly() {
-    boolean localDeadlineEnabled = !Boolean.FALSE.equals(completionDeadlineEnabled)
-        && (Boolean.TRUE.equals(completionDeadlineEnabled)
-            || EmptyChecks.isNotNull(completionDeadlineLocalTime));
-    boolean dependencyWindowEnabled = EmptyChecks.isNotNull(dependencyCompletionWindowSeconds)
-        && dependencyCompletionWindowSeconds > 0;
-    return !(localDeadlineEnabled && dependencyWindowEnabled);
-  }
-
-  @AssertTrue(
-      message = "completionDeadlineLocalTime is required when completionDeadlineEnabled=true")
-  public boolean isCompletionDeadlineTimePresentWhenEnabled() {
-    return !Boolean.TRUE.equals(completionDeadlineEnabled)
-        || EmptyChecks.isNotNull(completionDeadlineLocalTime);
-  }
+    @AssertTrue(message = "completionDeadlineLocalTime is required when completionDeadlineEnabled=true")
+    public boolean isCompletionDeadlineTimePresentWhenEnabled() {
+        return !Boolean.TRUE.equals(completionDeadlineEnabled) || EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    }
 }

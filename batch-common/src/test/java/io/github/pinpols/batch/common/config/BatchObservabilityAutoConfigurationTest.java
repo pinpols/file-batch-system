@@ -20,55 +20,55 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 @DisplayName("可观测性自动配置:日志桥接的装配前提,以及与框架自带可观测自动配置并存时的加载顺序")
 class BatchObservabilityAutoConfigurationTest {
 
-  private static final String OTEL_APPENDER_NAME = "OTEL";
+    private static final String OTEL_APPENDER_NAME = "OTEL";
 
-  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(BatchObservabilityAutoConfiguration.class))
-      .withBean(ObservationRegistry.class, ObservationRegistry::create);
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(BatchObservabilityAutoConfiguration.class))
+            .withBean(ObservationRegistry.class, ObservationRegistry::create);
 
-  @Test
-  @DisplayName("无论是否具备链路追踪实现都注册被观测切面,仅在追踪组件就绪时才注册日志桥接")
-  void shouldCreateLogbackBridge_whenTracingImplementationPresent() {
-    contextRunner.run(context -> {
-      assertThat(context).hasSingleBean(ObservedAspect.class);
-      assertThat(context).doesNotHaveBean(OpenTelemetryLogbackBridge.class);
-    });
-
-    contextRunner
-        .withBean(OpenTelemetry.class, OpenTelemetry::noop)
-        .run(context -> assertThat(context).hasSingleBean(OpenTelemetryLogbackBridge.class));
-  }
-
-  @Test
-  @DisplayName("与框架自带可观测自动配置同时启用时,注册表、切面与日志桥接三者均可正常装配")
-  void shouldLoadAfterFrameworkObservationAutoConfiguration() {
-    new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(
-            ObservationAutoConfiguration.class, BatchObservabilityAutoConfiguration.class))
-        .withBean(OpenTelemetry.class, OpenTelemetry::noop)
-        .run(context -> {
-          assertThat(context).hasSingleBean(ObservationRegistry.class);
-          assertThat(context).hasSingleBean(ObservedAspect.class);
-          assertThat(context).hasSingleBean(OpenTelemetryLogbackBridge.class);
-        });
-  }
-
-  @Test
-  @DisplayName("全局懒加载开启时仍立即挂载日志追加器")
-  void shouldEagerlyAttachLogbackBridge_whenGlobalLazyInitializationIsEnabled() {
-    LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-    Logger rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
-
-    contextRunner
-        .withBean(OpenTelemetry.class, OpenTelemetry::noop)
-        .withInitializer(context ->
-            context.addBeanFactoryPostProcessor(new LazyInitializationBeanFactoryPostProcessor()))
-        .run(context -> {
-          assertThat(context.getBeanFactory().containsSingleton("openTelemetryLogbackBridge"))
-              .isTrue();
-          assertThat(rootLogger.getAppender(OTEL_APPENDER_NAME)).isNotNull();
+    @Test
+    @DisplayName("无论是否具备链路追踪实现都注册被观测切面,仅在追踪组件就绪时才注册日志桥接")
+    void shouldCreateLogbackBridge_whenTracingImplementationPresent() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(ObservedAspect.class);
+            assertThat(context).doesNotHaveBean(OpenTelemetryLogbackBridge.class);
         });
 
-    assertThat(rootLogger.getAppender(OTEL_APPENDER_NAME)).isNull();
-  }
+        contextRunner
+                .withBean(OpenTelemetry.class, OpenTelemetry::noop)
+                .run(context -> assertThat(context).hasSingleBean(OpenTelemetryLogbackBridge.class));
+    }
+
+    @Test
+    @DisplayName("与框架自带可观测自动配置同时启用时,注册表、切面与日志桥接三者均可正常装配")
+    void shouldLoadAfterFrameworkObservationAutoConfiguration() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        ObservationAutoConfiguration.class, BatchObservabilityAutoConfiguration.class))
+                .withBean(OpenTelemetry.class, OpenTelemetry::noop)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ObservationRegistry.class);
+                    assertThat(context).hasSingleBean(ObservedAspect.class);
+                    assertThat(context).hasSingleBean(OpenTelemetryLogbackBridge.class);
+                });
+    }
+
+    @Test
+    @DisplayName("全局懒加载开启时仍立即挂载日志追加器")
+    void shouldEagerlyAttachLogbackBridge_whenGlobalLazyInitializationIsEnabled() {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
+
+        contextRunner
+                .withBean(OpenTelemetry.class, OpenTelemetry::noop)
+                .withInitializer(context ->
+                        context.addBeanFactoryPostProcessor(new LazyInitializationBeanFactoryPostProcessor()))
+                .run(context -> {
+                    assertThat(context.getBeanFactory().containsSingleton("openTelemetryLogbackBridge"))
+                            .isTrue();
+                    assertThat(rootLogger.getAppender(OTEL_APPENDER_NAME)).isNotNull();
+                });
+
+        assertThat(rootLogger.getAppender(OTEL_APPENDER_NAME)).isNull();
+    }
 }

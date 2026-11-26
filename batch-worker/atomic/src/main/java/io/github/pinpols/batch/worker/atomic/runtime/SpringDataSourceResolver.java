@@ -9,19 +9,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class SpringDataSourceResolver implements DataSourceResolver {
 
-  private final BeanFactory beanFactory;
-  private final DataSource defaultDataSource;
+    private final BeanFactory beanFactory;
+    private final DataSource defaultDataSource;
 
-  public SpringDataSourceResolver(BeanFactory beanFactory, DataSource defaultDataSource) {
-    this.beanFactory = beanFactory;
-    this.defaultDataSource = defaultDataSource;
-  }
-
-  @Override
-  public DataSource resolve(String beanName) {
-    if (beanName == null) {
-      return Objects.requireNonNull(defaultDataSource, "defaultDataSource required");
+    public SpringDataSourceResolver(BeanFactory beanFactory, DataSource defaultDataSource) {
+        this.beanFactory = beanFactory;
+        this.defaultDataSource = defaultDataSource;
     }
-    return beanFactory.getBean(beanName, DataSource.class);
-  }
+
+    @Override
+    public DataSource resolve(String beanName) {
+        if (beanName == null) {
+            return Objects.requireNonNull(defaultDataSource, "defaultDataSource required");
+        }
+        return beanFactory.getBean(beanName, DataSource.class);
+    }
 }

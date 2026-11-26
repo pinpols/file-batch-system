@@ -9,19 +9,17 @@ import org.apache.ibatis.annotations.Param;
 
 public interface AlertRoutingConfigMapper {
 
-  List<AlertRoutingConfigRow> selectByQuery(AlertRoutingConfigQuery parameters);
+    List<AlertRoutingConfigRow> selectByQuery(AlertRoutingConfigQuery parameters);
 
-  long countByQuery(AlertRoutingConfigCountQuery parameters);
+    long countByQuery(AlertRoutingConfigCountQuery parameters);
 
-  AlertRoutingConfigRow selectByUniqueKey(
-      @Param("tenantId") String tenantId, @Param("routeCode") String routeCode);
+    AlertRoutingConfigRow selectByUniqueKey(@Param("tenantId") String tenantId, @Param("routeCode") String routeCode);
 
-  AlertRoutingConfigRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    AlertRoutingConfigRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int upsertAlertRoutingConfig(@Param("p") AlertRoutingConfigUpsertParam param);
+    int upsertAlertRoutingConfig(@Param("p") AlertRoutingConfigUpsertParam param);
 
-  int updateById(@Param("p") AlertRoutingConfigUpsertParam param);
+    int updateById(@Param("p") AlertRoutingConfigUpsertParam param);
 
-  int toggleEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    int toggleEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 }

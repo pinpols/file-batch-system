@@ -8,37 +8,34 @@ import org.apache.ibatis.annotations.Param;
 
 public interface AlertEventMapper {
 
-  List<AlertEventEntity> selectByQuery(AlertEventQuery query);
+    List<AlertEventEntity> selectByQuery(AlertEventQuery query);
 
-  AlertEventEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    AlertEventEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  long countByQuery(AlertEventQuery query);
+    long countByQuery(AlertEventQuery query);
 
-  long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
+    long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
 
-  long countBySeverityAndStatus(
-      @Param("tenantId") String tenantId,
-      @Param("severity") String severity,
-      @Param("status") String status);
+    long countBySeverityAndStatus(
+            @Param("tenantId") String tenantId, @Param("severity") String severity, @Param("status") String status);
 
-  long countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery parameters);
+    long countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery parameters);
 
-  int updateStatus(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
+    int updateStatus(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
 
-  /**
-   * 选出「已升级但还没通知过」的 OPEN 告警(status='OPEN' AND escalation_tier &gt; escalation_notified_tier),跨租户、按
-   * escalated_at 升序,供升级通知 notifier 逐条抢占并写入通知 outbox。
-   */
-  List<AlertEventEntity> selectEscalatedPendingNotify(@Param("limit") int limit);
+    /**
+     * 选出「已升级但还没通知过」的 OPEN 告警(status='OPEN' AND escalation_tier &gt; escalation_notified_tier),跨租户、按
+     * escalated_at 升序,供升级通知 notifier 逐条抢占并写入通知 outbox。
+     */
+    List<AlertEventEntity> selectEscalatedPendingNotify(@Param("limit") int limit);
 
-  /**
-   * CAS 推进通知水位线:仅当当前 escalation_notified_tier 仍等于 {@code expectedNotifiedTier} 且告警仍 OPEN 时, 把它抬到
-   * {@code newNotifiedTier}。被并发 ack / 其它实例抢先入队时返回 0(本轮跳过,避免重复推送)。
-   */
-  int markEscalationNotified(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("expectedNotifiedTier") int expectedNotifiedTier,
-      @Param("newNotifiedTier") int newNotifiedTier);
+    /**
+     * CAS 推进通知水位线:仅当当前 escalation_notified_tier 仍等于 {@code expectedNotifiedTier} 且告警仍 OPEN 时, 把它抬到
+     * {@code newNotifiedTier}。被并发 ack / 其它实例抢先入队时返回 0(本轮跳过,避免重复推送)。
+     */
+    int markEscalationNotified(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("expectedNotifiedTier") int expectedNotifiedTier,
+            @Param("newNotifiedTier") int newNotifiedTier);
 }

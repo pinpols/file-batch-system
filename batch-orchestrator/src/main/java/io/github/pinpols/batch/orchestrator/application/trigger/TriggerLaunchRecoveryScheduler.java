@@ -18,28 +18,28 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TriggerLaunchRecoveryScheduler {
 
-  private final TriggerLaunchRecoveryService recoveryService;
-  private final TriggerLaunchRecoveryProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AtomicBoolean warnedOnFailure = new AtomicBoolean(false);
+    private final TriggerLaunchRecoveryService recoveryService;
+    private final TriggerLaunchRecoveryProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AtomicBoolean warnedOnFailure = new AtomicBoolean(false);
 
-  @Scheduled(fixedDelayString = "${batch.trigger.launch-recovery.poll-interval-millis:30000}")
-  @SchedulerLock(name = "trigger_launch_recovery", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
-  public void recover() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.trigger.launch-recovery.poll-interval-millis:30000}")
+    @SchedulerLock(name = "trigger_launch_recovery", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void recover() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        try {
+            int recovered = recoveryService.recoverDue(properties.getBatchSize());
+            if (recovered > 0) {
+                log.info("trigger launch recovery processed {} record(s)", recovered);
+            }
+            warnedOnFailure.set(false);
+        } catch (RuntimeException ex) {
+            // 扫描失败不能影响下一轮；首个失败告警一次，避免持续打爆日志。
+            if (warnedOnFailure.compareAndSet(false, true)) {
+                log.warn("trigger launch recovery scan failed; will retry next round", ex);
+            }
+        }
     }
-    try {
-      int recovered = recoveryService.recoverDue(properties.getBatchSize());
-      if (recovered > 0) {
-        log.info("trigger launch recovery processed {} record(s)", recovered);
-      }
-      warnedOnFailure.set(false);
-    } catch (RuntimeException ex) {
-      // 扫描失败不能影响下一轮；首个失败告警一次，避免持续打爆日志。
-      if (warnedOnFailure.compareAndSet(false, true)) {
-        log.warn("trigger launch recovery scan failed; will retry next round", ex);
-      }
-    }
-  }
 }

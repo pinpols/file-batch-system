@@ -27,83 +27,82 @@ import org.springframework.boot.ApplicationRunner;
 @Slf4j
 public class ObjectStoreStartupCheck implements ApplicationRunner {
 
-  /** 启动探针 list 一次最多取回的对象数；探针前缀下只有本次写入的少量对象，100 足够命中。 */
-  private static final int PROBE_LIST_MAX_KEYS = 100;
+    /** 启动探针 list 一次最多取回的对象数；探针前缀下只有本次写入的少量对象，100 足够命中。 */
+    private static final int PROBE_LIST_MAX_KEYS = 100;
 
-  private static final String PROBE_PREFIX = "__batch-startup-probe__/";
+    private static final String PROBE_PREFIX = "__batch-startup-probe__/";
 
-  private final BatchObjectStore objectStore;
-  private final String bucket;
+    private final BatchObjectStore objectStore;
+    private final String bucket;
 
-  public ObjectStoreStartupCheck(BatchObjectStore objectStore, String bucket) {
-    this.objectStore = objectStore;
-    this.bucket = bucket;
-  }
-
-  @Override
-  public void run(ApplicationArguments args) {
-    if (bucket == null || bucket.isBlank()) {
-      throw new IllegalStateException(
-          "object store startup check: bucket is not configured (batch.storage.s3.bucket)");
+    public ObjectStoreStartupCheck(BatchObjectStore objectStore, String bucket) {
+        this.objectStore = objectStore;
+        this.bucket = bucket;
     }
-    String key = PROBE_PREFIX + UUID.randomUUID();
-    byte[] payload = ("batch-startup-probe-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-    try {
-      try (InputStream probe = new ByteArrayInputStream(payload)) {
-        objectStore.put(bucket, key, probe, payload.length, "text/plain");
-      }
 
-      if (!objectStore.exists(bucket, key)) {
-        throw fail("put 后 exists 返回 false", key, null);
-      }
-      long size = objectStore.statSize(bucket, key);
-      // 用 >= 而非 ==:加密装饰层(EncryptingObjectStore)的 statSize 返回密文字节数(含 magic+header+GCM tag),
-      // 严格大于明文长度;这里只兜底「截断/空写」这类粗粒度故障,内容正确性由下面 get 解密后全等兜底。
-      if (size < payload.length) {
-        throw fail("statSize 偏小(明文 " + payload.length + " 字节,实得 " + size + ")疑似截断", key, null);
-      }
-      try (InputStream in = objectStore.get(bucket, key)) {
-        byte[] got = in.readAllBytes();
-        if (!Arrays.equals(got, payload)) {
-          throw fail("get 取回内容与写入不一致", key, null);
+    @Override
+    public void run(ApplicationArguments args) {
+        if (bucket == null || bucket.isBlank()) {
+            throw new IllegalStateException(
+                    "object store startup check: bucket is not configured (batch.storage.s3.bucket)");
         }
-      }
-      ObjectListing listing = objectStore.list(bucket, PROBE_PREFIX, null, PROBE_LIST_MAX_KEYS);
-      boolean listed = listing.objects().stream().anyMatch(o -> key.equals(o.key()));
-      if (!listed) {
-        throw fail("list 未列出刚写入的探针对象", key, null);
-      }
-      String presignedUrl = objectStore.presign(bucket, key, Duration.ofMinutes(1));
-      if (presignedUrl == null || presignedUrl.isBlank()) {
-        throw fail("presign 返回空 URL", key, null);
-      }
-      log.info(
-          "object store startup check passed: bucket={}, backend reachable +"
-              + " put/get/list/presign/delete OK",
-          bucket);
-    } catch (IllegalStateException ex) {
-      throw ex;
-    } catch (Exception ex) {
-      throw fail("探针 I/O 失败:" + ex.getMessage(), key, ex);
-    } finally {
-      // 尽力清理探针对象(即便上面失败)。
-      try {
-        objectStore.deleteMany(bucket, List.of(key));
-      } catch (RuntimeException cleanupEx) {
-        log.warn(
-            "object store startup probe cleanup failed: bucket={}, key={}", bucket, key, cleanupEx);
-      }
-    }
-  }
+        String key = PROBE_PREFIX + UUID.randomUUID();
+        byte[] payload = ("batch-startup-probe-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        try {
+            try (InputStream probe = new ByteArrayInputStream(payload)) {
+                objectStore.put(bucket, key, probe, payload.length, "text/plain");
+            }
 
-  private IllegalStateException fail(String reason, String key, Exception cause) {
-    String msg = "object store startup check failed("
-        + reason
-        + "):bucket="
-        + bucket
-        + ", probeKey="
-        + key
-        + ". Check the endpoint, credentials, and bucket permissions, and whether this S3-compatible backend requires path-style or checksum configuration.";
-    return cause == null ? new IllegalStateException(msg) : new IllegalStateException(msg, cause);
-  }
+            if (!objectStore.exists(bucket, key)) {
+                throw fail("put 后 exists 返回 false", key, null);
+            }
+            long size = objectStore.statSize(bucket, key);
+            // 用 >= 而非 ==:加密装饰层(EncryptingObjectStore)的 statSize 返回密文字节数(含 magic+header+GCM tag),
+            // 严格大于明文长度;这里只兜底「截断/空写」这类粗粒度故障,内容正确性由下面 get 解密后全等兜底。
+            if (size < payload.length) {
+                throw fail("statSize 偏小(明文 " + payload.length + " 字节,实得 " + size + ")疑似截断", key, null);
+            }
+            try (InputStream in = objectStore.get(bucket, key)) {
+                byte[] got = in.readAllBytes();
+                if (!Arrays.equals(got, payload)) {
+                    throw fail("get 取回内容与写入不一致", key, null);
+                }
+            }
+            ObjectListing listing = objectStore.list(bucket, PROBE_PREFIX, null, PROBE_LIST_MAX_KEYS);
+            boolean listed = listing.objects().stream().anyMatch(o -> key.equals(o.key()));
+            if (!listed) {
+                throw fail("list 未列出刚写入的探针对象", key, null);
+            }
+            String presignedUrl = objectStore.presign(bucket, key, Duration.ofMinutes(1));
+            if (presignedUrl == null || presignedUrl.isBlank()) {
+                throw fail("presign 返回空 URL", key, null);
+            }
+            log.info(
+                    "object store startup check passed: bucket={}, backend reachable +"
+                            + " put/get/list/presign/delete OK",
+                    bucket);
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw fail("探针 I/O 失败:" + ex.getMessage(), key, ex);
+        } finally {
+            // 尽力清理探针对象(即便上面失败)。
+            try {
+                objectStore.deleteMany(bucket, List.of(key));
+            } catch (RuntimeException cleanupEx) {
+                log.warn("object store startup probe cleanup failed: bucket={}, key={}", bucket, key, cleanupEx);
+            }
+        }
+    }
+
+    private IllegalStateException fail(String reason, String key, Exception cause) {
+        String msg = "object store startup check failed("
+                + reason
+                + "):bucket="
+                + bucket
+                + ", probeKey="
+                + key
+                + ". Check the endpoint, credentials, and bucket permissions, and whether this S3-compatible backend requires path-style or checksum configuration.";
+        return cause == null ? new IllegalStateException(msg) : new IllegalStateException(msg, cause);
+    }
 }

@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleRealtimeCursorFactory {
 
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  public String nextCursor() {
-    return dateTimeSupport.currentEpochMillis() + "-" + UUID.randomUUID();
-  }
+    public String nextCursor() {
+        return dateTimeSupport.currentEpochMillis() + "-" + UUID.randomUUID();
+    }
 }

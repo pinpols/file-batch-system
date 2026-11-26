@@ -32,132 +32,128 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConsoleMenuRegistry {
 
-  // 菜单项 minRole 字段值;层级:VIEWER < TENANT_ADMIN < ADMIN。
-  private static final String ACCESS_VIEWER = "VIEWER";
-  private static final String ACCESS_TENANT_ADMIN = "TENANT_ADMIN";
-  private static final String ACCESS_ADMIN = "ADMIN";
+    // 菜单项 minRole 字段值;层级:VIEWER < TENANT_ADMIN < ADMIN。
+    private static final String ACCESS_VIEWER = "VIEWER";
+    private static final String ACCESS_TENANT_ADMIN = "TENANT_ADMIN";
+    private static final String ACCESS_ADMIN = "ADMIN";
 
-  public record MenuItem(String title, String path, String icon, String minRole) {}
+    public record MenuItem(String title, String path, String icon, String minRole) {}
 
-  public record MenuGroup(
-      String key, String title, String icon, String minRole, List<MenuItem> children) {}
+    public record MenuGroup(String key, String title, String icon, String minRole, List<MenuItem> children) {}
 
-  private final List<MenuGroup> allGroups;
-  private final Map<String, Set<String>> groupAuthorities;
-  private final Map<String, Set<String>> itemAuthorities;
+    private final List<MenuGroup> allGroups;
+    private final Map<String, Set<String>> groupAuthorities;
+    private final Map<String, Set<String>> itemAuthorities;
 
-  public ConsoleMenuRegistry(ConsoleMenuProperties props) {
-    List<MenuGroup> groups = new ArrayList<>();
-    Map<String, Set<String>> configuredGroupAuthorities = new HashMap<>();
-    Map<String, Set<String>> configuredItemAuthorities = new HashMap<>();
-    for (ConsoleMenuProperties.GroupDef g : props.getGroups()) {
-      String groupAuthorityKey = g.getKey();
-      List<String> groupAuthorityConfig = g.getAuthorities();
-      Set<String> normalizedGroupAuthorities = normalizeAuthorities(groupAuthorityConfig);
-      configuredGroupAuthorities.put(groupAuthorityKey, normalizedGroupAuthorities);
-      List<MenuItem> items = new ArrayList<>();
-      for (ConsoleMenuProperties.ItemDef i : g.getChildren()) {
-        String itemAuthorityKey = i.getPath();
-        List<String> itemAuthorityConfig = i.getAuthorities();
-        Set<String> normalizedItemAuthorities = normalizeAuthorities(itemAuthorityConfig);
-        configuredItemAuthorities.put(itemAuthorityKey, normalizedItemAuthorities);
-        String itemTitle = i.getTitle();
-        String itemPath = i.getPath();
-        String itemIcon = i.getIcon();
-        String itemMinRole = normalizeRole(i.getMinRole());
-        items.add(new MenuItem(itemTitle, itemPath, itemIcon, itemMinRole));
-      }
-      String groupKey = g.getKey();
-      String groupTitle = g.getTitle();
-      String groupIcon = g.getIcon();
-      String groupMinRole = normalizeRole(g.getMinRole());
-      List<MenuItem> groupItems = List.copyOf(items);
-      groups.add(new MenuGroup(groupKey, groupTitle, groupIcon, groupMinRole, groupItems));
+    public ConsoleMenuRegistry(ConsoleMenuProperties props) {
+        List<MenuGroup> groups = new ArrayList<>();
+        Map<String, Set<String>> configuredGroupAuthorities = new HashMap<>();
+        Map<String, Set<String>> configuredItemAuthorities = new HashMap<>();
+        for (ConsoleMenuProperties.GroupDef g : props.getGroups()) {
+            String groupAuthorityKey = g.getKey();
+            List<String> groupAuthorityConfig = g.getAuthorities();
+            Set<String> normalizedGroupAuthorities = normalizeAuthorities(groupAuthorityConfig);
+            configuredGroupAuthorities.put(groupAuthorityKey, normalizedGroupAuthorities);
+            List<MenuItem> items = new ArrayList<>();
+            for (ConsoleMenuProperties.ItemDef i : g.getChildren()) {
+                String itemAuthorityKey = i.getPath();
+                List<String> itemAuthorityConfig = i.getAuthorities();
+                Set<String> normalizedItemAuthorities = normalizeAuthorities(itemAuthorityConfig);
+                configuredItemAuthorities.put(itemAuthorityKey, normalizedItemAuthorities);
+                String itemTitle = i.getTitle();
+                String itemPath = i.getPath();
+                String itemIcon = i.getIcon();
+                String itemMinRole = normalizeRole(i.getMinRole());
+                items.add(new MenuItem(itemTitle, itemPath, itemIcon, itemMinRole));
+            }
+            String groupKey = g.getKey();
+            String groupTitle = g.getTitle();
+            String groupIcon = g.getIcon();
+            String groupMinRole = normalizeRole(g.getMinRole());
+            List<MenuItem> groupItems = List.copyOf(items);
+            groups.add(new MenuGroup(groupKey, groupTitle, groupIcon, groupMinRole, groupItems));
+        }
+        this.allGroups = List.copyOf(groups);
+        this.groupAuthorities = Map.copyOf(configuredGroupAuthorities);
+        this.itemAuthorities = Map.copyOf(configuredItemAuthorities);
     }
-    this.allGroups = List.copyOf(groups);
-    this.groupAuthorities = Map.copyOf(configuredGroupAuthorities);
-    this.itemAuthorities = Map.copyOf(configuredItemAuthorities);
-  }
 
-  /** 根据用户 authorities 过滤可见菜单。 */
-  public List<MenuGroup> filterByAuthorities(Set<String> authorities) {
-    int roleLevel = roleLevel(resolveRole(authorities));
-    List<MenuGroup> result = new ArrayList<>();
-    for (MenuGroup group : allGroups) {
-      Set<String> requiredGroupAuthorities = groupAuthorities.get(group.key());
-      if (EmptyChecks.isNotEmpty(requiredGroupAuthorities)
-          && !hasAnyAuthority(authorities, requiredGroupAuthorities)) {
-        continue;
-      }
-      List<MenuItem> visibleItems = group.children().stream()
-          .filter(item ->
-              isAllowed(authorities, roleLevel, item.minRole(), itemAuthorities.get(item.path())))
-          .toList();
-      if (EmptyChecks.isNotEmpty(visibleItems)) {
-        result.add(
-            new MenuGroup(group.key(), group.title(), group.icon(), group.minRole(), visibleItems));
-      }
+    /** 根据用户 authorities 过滤可见菜单。 */
+    public List<MenuGroup> filterByAuthorities(Set<String> authorities) {
+        int roleLevel = roleLevel(resolveRole(authorities));
+        List<MenuGroup> result = new ArrayList<>();
+        for (MenuGroup group : allGroups) {
+            Set<String> requiredGroupAuthorities = groupAuthorities.get(group.key());
+            if (EmptyChecks.isNotEmpty(requiredGroupAuthorities)
+                    && !hasAnyAuthority(authorities, requiredGroupAuthorities)) {
+                continue;
+            }
+            List<MenuItem> visibleItems = group.children().stream()
+                    .filter(item -> isAllowed(authorities, roleLevel, item.minRole(), itemAuthorities.get(item.path())))
+                    .toList();
+            if (EmptyChecks.isNotEmpty(visibleItems)) {
+                result.add(new MenuGroup(group.key(), group.title(), group.icon(), group.minRole(), visibleItems));
+            }
+        }
+        return result;
     }
-    return result;
-  }
 
-  private static String normalizeRole(String role) {
-    if (EmptyChecks.isNull(role)) {
-      return ACCESS_ADMIN;
+    private static String normalizeRole(String role) {
+        if (EmptyChecks.isNull(role)) {
+            return ACCESS_ADMIN;
+        }
+        String trimmedRole = role.trim();
+        return trimmedRole.toUpperCase(Locale.ROOT);
     }
-    String trimmedRole = role.trim();
-    return trimmedRole.toUpperCase(Locale.ROOT);
-  }
 
-  private static Set<String> normalizeAuthorities(List<String> authorities) {
-    if (EmptyChecks.isEmpty(authorities)) {
-      return Set.of();
+    private static Set<String> normalizeAuthorities(List<String> authorities) {
+        if (EmptyChecks.isEmpty(authorities)) {
+            return Set.of();
+        }
+        Set<String> normalized = authorities.stream()
+                .filter(EmptyChecks::isNotBlank)
+                .map(authority -> {
+                    String trimmedAuthority = authority.trim();
+                    return trimmedAuthority.toUpperCase(Locale.ROOT);
+                })
+                .collect(Collectors.toUnmodifiableSet());
+        if (!ConsoleRoles.ALL.containsAll(normalized)) {
+            throw new IllegalArgumentException("menu authorities contain unsupported console roles");
+        }
+        return normalized;
     }
-    Set<String> normalized = authorities.stream()
-        .filter(EmptyChecks::isNotBlank)
-        .map(authority -> {
-          String trimmedAuthority = authority.trim();
-          return trimmedAuthority.toUpperCase(Locale.ROOT);
-        })
-        .collect(Collectors.toUnmodifiableSet());
-    if (!ConsoleRoles.ALL.containsAll(normalized)) {
-      throw new IllegalArgumentException("menu authorities contain unsupported console roles");
-    }
-    return normalized;
-  }
 
-  private static boolean isAllowed(
-      Set<String> userAuthorities, int roleLevel, String minRole, Set<String> requiredAuthorities) {
-    if (EmptyChecks.isNotEmpty(requiredAuthorities)) {
-      return hasAnyAuthority(userAuthorities, requiredAuthorities);
+    private static boolean isAllowed(
+            Set<String> userAuthorities, int roleLevel, String minRole, Set<String> requiredAuthorities) {
+        if (EmptyChecks.isNotEmpty(requiredAuthorities)) {
+            return hasAnyAuthority(userAuthorities, requiredAuthorities);
+        }
+        return roleLevel >= roleLevel(minRole);
     }
-    return roleLevel >= roleLevel(minRole);
-  }
 
-  private static boolean hasAnyAuthority(
-      Set<String> userAuthorities, Set<String> requiredAuthorities) {
-    return userAuthorities.stream()
-        .map(authority -> authority.toUpperCase(Locale.ROOT))
-        .anyMatch(requiredAuthorities::contains);
-  }
-
-  private static String resolveRole(Set<String> authorities) {
-    if (authorities.contains("ROLE_ADMIN")) {
-      return ACCESS_ADMIN;
+    private static boolean hasAnyAuthority(Set<String> userAuthorities, Set<String> requiredAuthorities) {
+        return userAuthorities.stream()
+                .map(authority -> authority.toUpperCase(Locale.ROOT))
+                .anyMatch(requiredAuthorities::contains);
     }
-    if (authorities.contains("ROLE_TENANT_ADMIN")) {
-      return ACCESS_TENANT_ADMIN;
-    }
-    return ACCESS_VIEWER;
-  }
 
-  private static int roleLevel(String role) {
-    return switch (role) {
-      case ACCESS_ADMIN -> 2;
-      case ACCESS_TENANT_ADMIN -> 1;
-      case ACCESS_VIEWER -> 0;
-      // 未知 minRole(yml 笔误)fail-secure:按 ADMIN 处理,只对 admin 可见,不误放开低权角色。
-      default -> 2;
-    };
-  }
+    private static String resolveRole(Set<String> authorities) {
+        if (authorities.contains("ROLE_ADMIN")) {
+            return ACCESS_ADMIN;
+        }
+        if (authorities.contains("ROLE_TENANT_ADMIN")) {
+            return ACCESS_TENANT_ADMIN;
+        }
+        return ACCESS_VIEWER;
+    }
+
+    private static int roleLevel(String role) {
+        return switch (role) {
+            case ACCESS_ADMIN -> 2;
+            case ACCESS_TENANT_ADMIN -> 1;
+            case ACCESS_VIEWER -> 0;
+            // 未知 minRole(yml 笔误)fail-secure:按 ADMIN 处理,只对 admin 可见,不误放开低权角色。
+            default -> 2;
+        };
+    }
 }

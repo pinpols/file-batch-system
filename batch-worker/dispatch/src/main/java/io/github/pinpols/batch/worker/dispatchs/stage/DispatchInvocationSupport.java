@@ -22,66 +22,64 @@ import java.util.Map;
  */
 final class DispatchInvocationSupport {
 
-  private DispatchInvocationSupport() {}
+    private DispatchInvocationSupport() {}
 
-  /** 派发结果状态机：根据 ACK / 待回执 / 未确认推导出 receiptStatus 字符串。 */
-  static String receiptStatusOf(DispatchResult dispatchResult) {
-    if (dispatchResult.acknowledged()) {
-      return FileReceiptStatus.SUCCESS.code();
+    /** 派发结果状态机：根据 ACK / 待回执 / 未确认推导出 receiptStatus 字符串。 */
+    static String receiptStatusOf(DispatchResult dispatchResult) {
+        if (dispatchResult.acknowledged()) {
+            return FileReceiptStatus.SUCCESS.code();
+        }
+        return dispatchResult.receiptPending() ? FileReceiptStatus.PENDING.code() : FileReceiptStatus.NONE.code();
     }
-    return dispatchResult.receiptPending()
-        ? FileReceiptStatus.PENDING.code()
-        : FileReceiptStatus.NONE.code();
-  }
 
-  /**
-   * 执行真实派发：构造 DispatchCommand 调 gateway，把 externalRequestId / receiptCode / receiptStatus 写回
-   * context。dry-run 场景由调用方在任何持久化之前短路，不进入本方法。
-   *
-   * @return gateway 返回的派发结果
-   */
-  static DispatchResult invokeAndRecordIdentifiers(
-      DispatchChannelGateway gateway,
-      DispatchJobContext context,
-      Map<String, Object> fileRecord,
-      Map<String, Object> channelConfig,
-      DispatchPayload dispatchPayload) {
-    String tenantId = context.getTenantId();
-    Object traceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
-    String traceIdText = String.valueOf(traceId);
-    DispatchCommand dispatchCommand =
-        new DispatchCommand(tenantId, traceIdText, fileRecord, channelConfig, dispatchPayload);
-    DispatchResult dispatchResult = gateway.dispatch(dispatchCommand);
-    propagateIdentifiers(context, dispatchResult);
-    return dispatchResult;
-  }
-
-  /** 把 DispatchResult 内的识别码与状态写到 context.attributes，供后续 step 与 receipt watcher 使用。 */
-  static void propagateIdentifiers(DispatchJobContext context, DispatchResult dispatchResult) {
-    Map<String, Object> attrs = context.getAttributes();
-    attrs.put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
-    attrs.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, dispatchResult.externalRequestId());
-    attrs.put(DispatchRuntimeKeys.RECEIPT_CODE, dispatchResult.receiptCode());
-    attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatusOf(dispatchResult));
-    DispatchManifestRef manifestRef = dispatchResult.manifestRef();
-    if (manifestRef != null) {
-      manifestRef.putAttributes(attrs);
+    /**
+     * 执行真实派发：构造 DispatchCommand 调 gateway，把 externalRequestId / receiptCode / receiptStatus 写回
+     * context。dry-run 场景由调用方在任何持久化之前短路，不进入本方法。
+     *
+     * @return gateway 返回的派发结果
+     */
+    static DispatchResult invokeAndRecordIdentifiers(
+            DispatchChannelGateway gateway,
+            DispatchJobContext context,
+            Map<String, Object> fileRecord,
+            Map<String, Object> channelConfig,
+            DispatchPayload dispatchPayload) {
+        String tenantId = context.getTenantId();
+        Object traceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
+        String traceIdText = String.valueOf(traceId);
+        DispatchCommand dispatchCommand =
+                new DispatchCommand(tenantId, traceIdText, fileRecord, channelConfig, dispatchPayload);
+        DispatchResult dispatchResult = gateway.dispatch(dispatchCommand);
+        propagateIdentifiers(context, dispatchResult);
+        return dispatchResult;
     }
-  }
 
-  /** 投递成功时统一 markSent；返回受影响行数（≤0 表示无对应 dispatch 记录，调用方需当作失败处理）。 */
-  static int markSent(
-      FileDispatchRepository repository,
-      DispatchJobContext context,
-      Long fileId,
-      DispatchPayload dispatchPayload,
-      DispatchResult dispatchResult) {
-    return repository.markSent(
-        context.getTenantId(),
-        fileId,
-        dispatchPayload.channelCode(),
-        dispatchResult.externalRequestId(),
-        dispatchResult.receiptCode(),
-        receiptStatusOf(dispatchResult));
-  }
+    /** 把 DispatchResult 内的识别码与状态写到 context.attributes，供后续 step 与 receipt watcher 使用。 */
+    static void propagateIdentifiers(DispatchJobContext context, DispatchResult dispatchResult) {
+        Map<String, Object> attrs = context.getAttributes();
+        attrs.put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
+        attrs.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, dispatchResult.externalRequestId());
+        attrs.put(DispatchRuntimeKeys.RECEIPT_CODE, dispatchResult.receiptCode());
+        attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatusOf(dispatchResult));
+        DispatchManifestRef manifestRef = dispatchResult.manifestRef();
+        if (manifestRef != null) {
+            manifestRef.putAttributes(attrs);
+        }
+    }
+
+    /** 投递成功时统一 markSent；返回受影响行数（≤0 表示无对应 dispatch 记录，调用方需当作失败处理）。 */
+    static int markSent(
+            FileDispatchRepository repository,
+            DispatchJobContext context,
+            Long fileId,
+            DispatchPayload dispatchPayload,
+            DispatchResult dispatchResult) {
+        return repository.markSent(
+                context.getTenantId(),
+                fileId,
+                dispatchPayload.channelCode(),
+                dispatchResult.externalRequestId(),
+                dispatchResult.receiptCode(),
+                receiptStatusOf(dispatchResult));
+    }
 }

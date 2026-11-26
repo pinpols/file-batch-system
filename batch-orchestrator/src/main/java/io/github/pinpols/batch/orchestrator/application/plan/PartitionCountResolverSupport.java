@@ -5,59 +5,59 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 /** 分区数解析器共用的数值规范化逻辑。 */
 final class PartitionCountResolverSupport {
 
-  private PartitionCountResolverSupport() {}
+    private PartitionCountResolverSupport() {}
 
-  static int firstPositiveInt(Class<?> owner, Object... values) {
-    for (Object value : values) {
-      int candidate = toInt(owner, value);
-      if (candidate > 0) {
-        return candidate;
-      }
+    static int firstPositiveInt(Class<?> owner, Object... values) {
+        for (Object value : values) {
+            int candidate = toInt(owner, value);
+            if (candidate > 0) {
+                return candidate;
+            }
+        }
+        return 0;
     }
-    return 0;
-  }
 
-  static long firstPositiveLong(Class<?> owner, Object... values) {
-    for (Object value : values) {
-      long candidate = toLong(owner, value);
-      if (candidate > 0) {
-        return candidate;
-      }
+    static long firstPositiveLong(Class<?> owner, Object... values) {
+        for (Object value : values) {
+            long candidate = toLong(owner, value);
+            if (candidate > 0) {
+                return candidate;
+            }
+        }
+        return 0L;
     }
-    return 0L;
-  }
 
-  private static int toInt(Class<?> owner, Object value) {
-    if (value == null) {
-      return 0;
+    private static int toInt(Class<?> owner, Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            String rawValue = String.valueOf(value);
+            String normalizedValue = rawValue.trim();
+            return Integer.parseInt(normalizedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
+            return 0;
+        }
     }
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    try {
-      String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
-      return Integer.parseInt(normalizedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
-      return 0;
-    }
-  }
 
-  private static long toLong(Class<?> owner, Object value) {
-    if (value == null) {
-      return 0L;
+    private static long toLong(Class<?> owner, Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            String rawValue = String.valueOf(value);
+            String normalizedValue = rawValue.trim();
+            return Long.parseLong(normalizedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
+            return 0L;
+        }
     }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    try {
-      String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
-      return Long.parseLong(normalizedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
-      return 0L;
-    }
-  }
 }

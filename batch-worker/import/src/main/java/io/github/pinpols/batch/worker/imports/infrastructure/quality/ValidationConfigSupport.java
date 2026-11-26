@@ -15,41 +15,41 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidationConfigSupport {
 
-  private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
-  public Map<String, Object> toMap(Object value) {
-    if (value instanceof Map<?, ?> map) {
-      return map.entrySet().stream()
-          .collect(
-              LinkedHashMap::new,
-              (out, entry) -> out.put(String.valueOf(entry.getKey()), entry.getValue()),
-              Map::putAll);
-    }
-    if (value == null) {
-      return Map.of();
-    }
-    try {
-      String jsonText = String.valueOf(value);
-      Map<String, Object> parsedConfig = objectMapper.readValue(jsonText, new TypeReference<>() {});
-      return parsedConfig;
-    } catch (Exception ignored) {
-      SwallowedExceptionLogger.warn(ValidationConfigSupport.class, "catch:Exception", ignored);
+    public Map<String, Object> toMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return map.entrySet().stream()
+                    .collect(
+                            LinkedHashMap::new,
+                            (out, entry) -> out.put(String.valueOf(entry.getKey()), entry.getValue()),
+                            Map::putAll);
+        }
+        if (value == null) {
+            return Map.of();
+        }
+        try {
+            String jsonText = String.valueOf(value);
+            Map<String, Object> parsedConfig = objectMapper.readValue(jsonText, new TypeReference<>() {});
+            return parsedConfig;
+        } catch (Exception ignored) {
+            SwallowedExceptionLogger.warn(ValidationConfigSupport.class, "catch:Exception", ignored);
 
-      return Map.of();
+            return Map.of();
+        }
     }
-  }
 
-  public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
-    for (String key : keys) {
-      Map<String, Object> candidate = toMap(container.get(key));
-      if (EmptyChecks.isNotEmpty(candidate)) {
-        return candidate;
-      }
+    public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
+        for (String key : keys) {
+            Map<String, Object> candidate = toMap(container.get(key));
+            if (EmptyChecks.isNotEmpty(candidate)) {
+                return candidate;
+            }
+        }
+        return Map.of();
     }
-    return Map.of();
-  }
 
-  public Map<String, Object> payloadToMap(CustomerImportPayload payload) {
-    return objectMapper.convertValue(payload, new TypeReference<>() {});
-  }
+    public Map<String, Object> payloadToMap(CustomerImportPayload payload) {
+        return objectMapper.convertValue(payload, new TypeReference<>() {});
+    }
 }

@@ -10,31 +10,29 @@ import org.apache.ibatis.annotations.Param;
 /** 启动恢复锚点：消费端重试耗尽时落原始 envelope 密文，周期扫描幂等重投。 */
 public interface TriggerLaunchRecoveryMapper {
 
-  /** 首次登记，不覆盖已有请求的冻结载荷。 */
-  int insertPending(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("envelopeCiphertext") String envelopeCiphertext,
-      @Param("traceId") String traceId);
+    /** 首次登记，不覆盖已有请求的冻结载荷。 */
+    int insertPending(
+            @Param("tenantId") String tenantId,
+            @Param("requestId") String requestId,
+            @Param("envelopeCiphertext") String envelopeCiphertext,
+            @Param("traceId") String traceId);
 
-  TriggerLaunchRecoveryView selectByIdentityForUpdate(
-      @Param("tenantId") String tenantId, @Param("requestId") String requestId);
+    TriggerLaunchRecoveryView selectByIdentityForUpdate(
+            @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
-  int requeueDead(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("nextStatus") String nextStatus);
+    int requeueDead(
+            @Param("tenantId") String tenantId,
+            @Param("requestId") String requestId,
+            @Param("nextStatus") String nextStatus);
 
-  List<TriggerLaunchRecoveryView> selectDue(@Param("now") Instant now, @Param("limit") int limit);
+    List<TriggerLaunchRecoveryView> selectDue(@Param("now") Instant now, @Param("limit") int limit);
 
-  int markDone(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("status") String status);
+    int markDone(
+            @Param("tenantId") String tenantId, @Param("requestId") String requestId, @Param("status") String status);
 
-  /** 推进一次尝试：attempts+1、写状态/下一次时间/最后错误码；仅对 PENDING 生效（CAS）。 */
-  int markAttempt(TriggerLaunchRecoveryAttemptParam parameters);
+    /** 推进一次尝试：attempts+1、写状态/下一次时间/最后错误码；仅对 PENDING 生效（CAS）。 */
+    int markAttempt(TriggerLaunchRecoveryAttemptParam parameters);
 
-  /** 原子累计失败并返回实际状态；已终态时返回 null。 */
-  String markRetryOrDead(TriggerLaunchRecoveryRetryParam parameters);
+    /** 原子累计失败并返回实际状态；已终态时返回 null。 */
+    String markRetryOrDead(TriggerLaunchRecoveryRetryParam parameters);
 }

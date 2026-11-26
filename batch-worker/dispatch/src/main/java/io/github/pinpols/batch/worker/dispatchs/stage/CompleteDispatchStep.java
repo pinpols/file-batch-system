@@ -27,78 +27,71 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompleteDispatchStep implements DispatchStageStep {
 
-  private final PlatformFileRecordRepository fileRecords;
-  private final PlatformFileAuditRepository fileAudits;
+    private final PlatformFileRecordRepository fileRecords;
+    private final PlatformFileAuditRepository fileAudits;
 
-  public CompleteDispatchStep(
-      PlatformFileRecordRepository fileRecords, PlatformFileAuditRepository fileAudits) {
-    this.fileRecords = fileRecords;
-    this.fileAudits = fileAudits;
-  }
+    public CompleteDispatchStep(PlatformFileRecordRepository fileRecords, PlatformFileAuditRepository fileAudits) {
+        this.fileRecords = fileRecords;
+        this.fileAudits = fileAudits;
+    }
 
-  @Override
-  public DispatchStage stage() {
-    return DispatchStage.COMPLETE;
-  }
+    @Override
+    public DispatchStage stage() {
+        return DispatchStage.COMPLETE;
+    }
 
-  @Override
-  public DispatchStageResult execute(DispatchJobContext context) {
-    // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    Map<String, Object> dryRunAttributes =
-        EmptyChecks.isNull(context) ? null : context.getAttributes();
-    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
-      return DispatchStageResult.success(stage());
+    @Override
+    public DispatchStageResult execute(DispatchJobContext context) {
+        // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
+        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
+            return DispatchStageResult.success(stage());
+        }
+        Object payload =
+                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        if (!(payload instanceof DispatchPayload dispatchPayload)) {
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_COMPLETE_NO_PAYLOAD",
+                    "error.dispatch.payload_missing",
+                    new Object[0],
+                    "dispatch payload missing",
+                    ERROR_OBJECT_MAPPER);
+        }
+        Map<String, Object> attrs = context.getAttributes();
+        Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+        Object receiptStatusValue =
+                attrs.getOrDefault(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.NONE.code());
+        String receiptStatus = String.valueOf(receiptStatusValue);
+        if (FileReceiptStatus.SUCCESS.code().equalsIgnoreCase(receiptStatus)) {
+            Map<String, Object> fileMetadata = new LinkedHashMap<>();
+            fileMetadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+            if (EmptyChecks.isNotNull(attrs.get(DispatchRuntimeKeys.RECEIPT_CODE))) {
+                fileMetadata.put(DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
+            }
+            fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHED.code(), fileMetadata);
+        }
+        Map<String, Object> detailSummary = new LinkedHashMap<>();
+        detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+        detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
+        detailSummary.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+        detailSummary.put(DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
+        detailSummary.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatus);
+        FileAuditParam.FileAuditParamBuilder audit = FileAuditParam.builder()
+                .fileId(fileId)
+                .tenantId(context.getTenantId())
+                .operationType(FileAuditOperationType.DISPATCH_COMPLETE.code())
+                .operationResult(OperationResult.SUCCESS.code())
+                .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+                .operatorId(context.getWorkerId());
+        Object traceIdValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+        String traceId = String.valueOf(traceIdValue);
+        audit.traceId(traceId);
+        Object externalRequestIdValue = attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "");
+        String evidenceReference = String.valueOf(externalRequestIdValue);
+        audit.evidenceRef(evidenceReference);
+        audit.detailSummary(detailSummary);
+        fileAudits.appendAudit(audit.build());
+        return DispatchStageResult.success(stage());
     }
-    Object payload = EmptyChecks.isNull(context)
-        ? null
-        : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-    if (!(payload instanceof DispatchPayload dispatchPayload)) {
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_COMPLETE_NO_PAYLOAD",
-          "error.dispatch.payload_missing",
-          new Object[0],
-          "dispatch payload missing",
-          ERROR_OBJECT_MAPPER);
-    }
-    Map<String, Object> attrs = context.getAttributes();
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    Object receiptStatusValue =
-        attrs.getOrDefault(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.NONE.code());
-    String receiptStatus = String.valueOf(receiptStatusValue);
-    if (FileReceiptStatus.SUCCESS.code().equalsIgnoreCase(receiptStatus)) {
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
-      if (EmptyChecks.isNotNull(attrs.get(DispatchRuntimeKeys.RECEIPT_CODE))) {
-        fileMetadata.put(
-            DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
-      }
-      fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHED.code(), fileMetadata);
-    }
-    Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
-    detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
-    detailSummary.put(
-        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
-        attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-    detailSummary.put(
-        DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
-    detailSummary.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatus);
-    FileAuditParam.FileAuditParamBuilder audit = FileAuditParam.builder()
-        .fileId(fileId)
-        .tenantId(context.getTenantId())
-        .operationType(FileAuditOperationType.DISPATCH_COMPLETE.code())
-        .operationResult(OperationResult.SUCCESS.code())
-        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId());
-    Object traceIdValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
-    String traceId = String.valueOf(traceIdValue);
-    audit.traceId(traceId);
-    Object externalRequestIdValue = attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "");
-    String evidenceReference = String.valueOf(externalRequestIdValue);
-    audit.evidenceRef(evidenceReference);
-    audit.detailSummary(detailSummary);
-    fileAudits.appendAudit(audit.build());
-    return DispatchStageResult.success(stage());
-  }
 }

@@ -24,116 +24,116 @@ import javax.annotation.Nullable;
  */
 public final class AlertLabels {
 
-  /** AM 分组用的告警类别枚举（对齐 route matcher 与 inhibit equal 集合）。 */
-  public static final String GROUP_DISPATCH = "dispatch";
+    /** AM 分组用的告警类别枚举（对齐 route matcher 与 inhibit equal 集合）。 */
+    public static final String GROUP_DISPATCH = "dispatch";
 
-  public static final String GROUP_SLA = "sla";
-  public static final String GROUP_FRESHNESS = "freshness";
-  public static final String GROUP_CAPACITY = "capacity";
-  public static final String GROUP_DEFAULT = "ops";
+    public static final String GROUP_SLA = "sla";
+    public static final String GROUP_FRESHNESS = "freshness";
+    public static final String GROUP_CAPACITY = "capacity";
+    public static final String GROUP_DEFAULT = "ops";
 
-  /** alert_group → team 收敛映射（v1 一一对应，供 route 二次分流/展示）；未知 group 回落 batch-ops。 */
-  private static final Map<String, String> TEAM_BY_GROUP = Map.of(
-      GROUP_DISPATCH, "batch-dispatch",
-      GROUP_SLA, "batch-sla",
-      GROUP_FRESHNESS, "batch-data",
-      GROUP_CAPACITY, "batch-sre");
+    /** alert_group → team 收敛映射（v1 一一对应，供 route 二次分流/展示）；未知 group 回落 batch-ops。 */
+    private static final Map<String, String> TEAM_BY_GROUP = Map.of(
+            GROUP_DISPATCH, "batch-dispatch",
+            GROUP_SLA, "batch-sla",
+            GROUP_FRESHNESS, "batch-data",
+            GROUP_CAPACITY, "batch-sre");
 
-  private AlertLabels() {}
+    private AlertLabels() {}
 
-  /** fbs severity 枚举 → AM severity 小写词形。未知值兜底 lowercase（并把 {@code warn} 归一到 {@code warning}）。 */
-  public static String amSeverity(@Nullable String severity) {
-    if (severity == null || severity.isBlank()) {
-      return "warning";
+    /** fbs severity 枚举 → AM severity 小写词形。未知值兜底 lowercase（并把 {@code warn} 归一到 {@code warning}）。 */
+    public static String amSeverity(@Nullable String severity) {
+        if (severity == null || severity.isBlank()) {
+            return "warning";
+        }
+        String trimmedSeverity = severity.trim();
+        String normalizedSeverity = trimmedSeverity.toUpperCase(Locale.ROOT);
+        return switch (normalizedSeverity) {
+            case "INFO" -> "info";
+            case "WARN", "WARNING" -> "warning";
+            case "ERROR" -> "error";
+            case "CRITICAL" -> "critical";
+            default -> {
+                String trimmedFallbackSeverity = severity.trim();
+                String lower = trimmedFallbackSeverity.toLowerCase(Locale.ROOT);
+                yield "warn".equals(lower) ? "warning" : lower;
+            }
+        };
     }
-    String trimmedSeverity = severity.trim();
-    String normalizedSeverity = trimmedSeverity.toUpperCase(Locale.ROOT);
-    return switch (normalizedSeverity) {
-      case "INFO" -> "info";
-      case "WARN", "WARNING" -> "warning";
-      case "ERROR" -> "error";
-      case "CRITICAL" -> "critical";
-      default -> {
-        String trimmedFallbackSeverity = severity.trim();
-        String lower = trimmedFallbackSeverity.toLowerCase(Locale.ROOT);
-        yield "warn".equals(lower) ? "warning" : lower;
-      }
-    };
-  }
 
-  /** alert_type 关键字 → AM alert_group（route 分类主键之一）。 */
-  public static String alertGroup(@Nullable String alertType) {
-    if (alertType == null || alertType.isBlank()) {
-      return GROUP_DEFAULT;
+    /** alert_type 关键字 → AM alert_group（route 分类主键之一）。 */
+    public static String alertGroup(@Nullable String alertType) {
+        if (alertType == null || alertType.isBlank()) {
+            return GROUP_DEFAULT;
+        }
+        String lower = alertType.toLowerCase(Locale.ROOT);
+        if (lower.contains(GROUP_DISPATCH)) {
+            return GROUP_DISPATCH;
+        }
+        if (lower.contains("sla") || isRuntimeMonitoringAlert(lower)) {
+            return GROUP_SLA;
+        }
+        boolean isFreshnessAlert =
+                lower.contains(GROUP_FRESHNESS) || lower.contains("asset") || lower.contains("stale");
+        if (isFreshnessAlert) {
+            return GROUP_FRESHNESS;
+        }
+        boolean isCapacityAlert =
+                lower.contains(GROUP_CAPACITY) || lower.contains("drain") || lower.contains("backpressure");
+        if (isCapacityAlert) {
+            return GROUP_CAPACITY;
+        }
+        return GROUP_DEFAULT;
     }
-    String lower = alertType.toLowerCase(Locale.ROOT);
-    if (lower.contains(GROUP_DISPATCH)) {
-      return GROUP_DISPATCH;
-    }
-    if (lower.contains("sla") || isRuntimeMonitoringAlert(lower)) {
-      return GROUP_SLA;
-    }
-    boolean isFreshnessAlert =
-        lower.contains(GROUP_FRESHNESS) || lower.contains("asset") || lower.contains("stale");
-    if (isFreshnessAlert) {
-      return GROUP_FRESHNESS;
-    }
-    boolean isCapacityAlert =
-        lower.contains(GROUP_CAPACITY) || lower.contains("drain") || lower.contains("backpressure");
-    if (isCapacityAlert) {
-      return GROUP_CAPACITY;
-    }
-    return GROUP_DEFAULT;
-  }
 
-  private static boolean isRuntimeMonitoringAlert(String normalizedAlertType) {
-    return normalizedAlertType.equals("job_running_too_long")
-        || normalizedAlertType.equals("workflow_running_too_long")
-        || normalizedAlertType.equals("workflow_not_started_by_deadline")
-        || normalizedAlertType.equals("workflow_not_completed_by_deadline")
-        || normalizedAlertType.equals("job_not_started_by_deadline")
-        || normalizedAlertType.equals("job_completed_late")
-        || normalizedAlertType.equals("job_not_completed_by_deadline")
-        || normalizedAlertType.equals("job_final_partition_failure");
-  }
-
-  /**
-   * 由 {@code alert_event} 行构造 AM 告警的**规范 label 集**（firing / resolved 共用同一套逻辑）。
-   *
-   * <p>关键不变量(见迁移方案 §6.1):AM 以**完整 label 集**为告警指纹。firing(emit publisher)与 resolved(close
-   * 桥接)必须产出<b>严格一致</b>的 label 集,否则 resolved 匹配不到原 firing —— 只新建一条幽灵"已 resolved"告警, 原告警仍要等 {@code
-   * resolve_timeout}(5m),废掉"console close 立即消解"的目的。故两侧一律经此方法构造。
-   *
-   * <p>fingerprint 保留数据库中租户、类型和资源的去重身份，避免不同 Job 的同类告警合并。
-   * group_by 仅选择低基数枚举；fingerprint 不参与通知分组。trace_id/alert_id 不参与身份。
-   */
-  public static Map<String, String> canonicalLabels(AlertEventEntity entity) {
-    Map<String, String> labels = new LinkedHashMap<>();
-    labels.put("alertname", entity.getAlertType());
-    if (hasText(entity.getTenantId())) {
-      labels.put("tenant", entity.getTenantId());
+    private static boolean isRuntimeMonitoringAlert(String normalizedAlertType) {
+        return normalizedAlertType.equals("job_running_too_long")
+                || normalizedAlertType.equals("workflow_running_too_long")
+                || normalizedAlertType.equals("workflow_not_started_by_deadline")
+                || normalizedAlertType.equals("workflow_not_completed_by_deadline")
+                || normalizedAlertType.equals("job_not_started_by_deadline")
+                || normalizedAlertType.equals("job_completed_late")
+                || normalizedAlertType.equals("job_not_completed_by_deadline")
+                || normalizedAlertType.equals("job_final_partition_failure");
     }
-    String severityLabel = amSeverity(entity.getSeverity());
-    labels.put("severity", severityLabel);
-    if (hasText(entity.getServiceName())) {
-      labels.put("service", entity.getServiceName());
-    }
-    String alertGroupLabel = alertGroup(entity.getAlertType());
-    labels.put("alert_group", alertGroupLabel);
-    String teamLabel = team(entity.getAlertType());
-    labels.put("team", teamLabel);
-    if (hasText(entity.getDedupFingerprint())) {
-      labels.put("fingerprint", entity.getDedupFingerprint());
-    }
-    return labels;
-  }
 
-  private static boolean hasText(@Nullable String value) {
-    return value != null && !value.isBlank();
-  }
+    /**
+     * 由 {@code alert_event} 行构造 AM 告警的**规范 label 集**（firing / resolved 共用同一套逻辑）。
+     *
+     * <p>关键不变量(见迁移方案 §6.1):AM 以**完整 label 集**为告警指纹。firing(emit publisher)与 resolved(close
+     * 桥接)必须产出<b>严格一致</b>的 label 集,否则 resolved 匹配不到原 firing —— 只新建一条幽灵"已 resolved"告警, 原告警仍要等 {@code
+     * resolve_timeout}(5m),废掉"console close 立即消解"的目的。故两侧一律经此方法构造。
+     *
+     * <p>fingerprint 保留数据库中租户、类型和资源的去重身份，避免不同 Job 的同类告警合并。
+     * group_by 仅选择低基数枚举；fingerprint 不参与通知分组。trace_id/alert_id 不参与身份。
+     */
+    public static Map<String, String> canonicalLabels(AlertEventEntity entity) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        labels.put("alertname", entity.getAlertType());
+        if (hasText(entity.getTenantId())) {
+            labels.put("tenant", entity.getTenantId());
+        }
+        String severityLabel = amSeverity(entity.getSeverity());
+        labels.put("severity", severityLabel);
+        if (hasText(entity.getServiceName())) {
+            labels.put("service", entity.getServiceName());
+        }
+        String alertGroupLabel = alertGroup(entity.getAlertType());
+        labels.put("alert_group", alertGroupLabel);
+        String teamLabel = team(entity.getAlertType());
+        labels.put("team", teamLabel);
+        if (hasText(entity.getDedupFingerprint())) {
+            labels.put("fingerprint", entity.getDedupFingerprint());
+        }
+        return labels;
+    }
 
-  /** 由 alert_group 派生 team（v1 收敛：group→team 一一对应，供 route 二次分流/展示）。 */
-  public static String team(String alertType) {
-    return TEAM_BY_GROUP.getOrDefault(alertGroup(alertType), "batch-ops");
-  }
+    private static boolean hasText(@Nullable String value) {
+        return value != null && !value.isBlank();
+    }
+
+    /** 由 alert_group 派生 team（v1 收敛：group→team 一一对应，供 route 二次分流/展示）。 */
+    public static String team(String alertType) {
+        return TEAM_BY_GROUP.getOrDefault(alertGroup(alertType), "batch-ops");
+    }
 }

@@ -13,20 +13,20 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegis
  */
 public final class WorkerRegistryCacheTestSupport {
 
-  /** 集成测试常用 worker_group 集合,与原 {@code evictTenantWorkerSelectors} 行为一致。 */
-  private static final String[] COMMON_GROUPS = {"IMPORT", "DEFAULT", "IT", "_"};
+    /** 集成测试常用 worker_group 集合,与原 {@code evictTenantWorkerSelectors} 行为一致。 */
+    private static final String[] COMMON_GROUPS = {"IMPORT", "DEFAULT", "IT", "_"};
 
-  private WorkerRegistryCacheTestSupport() {}
+    private WorkerRegistryCacheTestSupport() {}
 
-  /**
-   * 按租户驱逐集成夹具常用的 worker_group 键位,降低长套件跨用例 Redis 快照干扰。
-   *
-   * <p>覆盖 {@code IMPORT} / {@code DEFAULT} / {@code IT} 以及空白 worker_group 对应的 {@code _} 占位键(与
-   * {@code WorkerRegistryCache#key} 的空组规范化一致)。
-   */
-  public static void evictTenantWorkerSelectors(WorkerRegistryCache cache, String tenantId) {
-    for (String group : COMMON_GROUPS) {
-      cache.evict(tenantId, group);
+    /**
+     * 按租户驱逐集成夹具常用的 worker_group 键位,降低长套件跨用例 Redis 快照干扰。
+     *
+     * <p>覆盖 {@code IMPORT} / {@code DEFAULT} / {@code IT} 以及空白 worker_group 对应的 {@code _} 占位键(与
+     * {@code WorkerRegistryCache#key} 的空组规范化一致)。
+     */
+    public static void evictTenantWorkerSelectors(WorkerRegistryCache cache, String tenantId) {
+        for (String group : COMMON_GROUPS) {
+            cache.evict(tenantId, group);
+        }
     }
-  }
 }

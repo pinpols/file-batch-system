@@ -8,96 +8,96 @@ import lombok.Data;
 
 @Data
 public class FileTemplateCreateRequest {
-  // CPD-OFF: 创建和更新请求有意保持与公开文件模板契约一致。
-  @ValidTenantId
-  private String tenantId;
+    // CPD-OFF: 创建和更新请求有意保持与公开文件模板契约一致。
+    @ValidTenantId
+    private String tenantId;
 
-  @ValidResourceCode
-  private String templateCode;
+    @ValidResourceCode
+    private String templateCode;
 
-  @Size(max = 256)
-  private String templateName;
+    @Size(max = 256)
+    private String templateName;
 
-  @NotBlank
-  @Size(max = 32)
-  private String templateType;
+    @NotBlank
+    @Size(max = 32)
+    private String templateType;
 
-  @Size(max = 64)
-  private String bizType;
+    @Size(max = 64)
+    private String bizType;
 
-  @Size(max = 32)
-  private String fileFormatType;
+    @Size(max = 32)
+    private String fileFormatType;
 
-  @Size(max = 32)
-  private String charset;
+    @Size(max = 32)
+    private String charset;
 
-  @Size(max = 32)
-  private String targetCharset;
+    @Size(max = 32)
+    private String targetCharset;
 
-  private Boolean withBom;
+    private Boolean withBom;
 
-  @Size(max = 16)
-  private String lineSeparator;
+    @Size(max = 16)
+    private String lineSeparator;
 
-  @Size(max = 8)
-  private String delimiter;
+    @Size(max = 8)
+    private String delimiter;
 
-  @Size(max = 8)
-  private String quoteChar;
+    @Size(max = 8)
+    private String quoteChar;
 
-  @Size(max = 8)
-  private String escapeChar;
+    @Size(max = 8)
+    private String escapeChar;
 
-  private Integer recordLength;
-  private Integer headerRows;
-  private Integer footerRows;
-  private String headerTemplateJson;
-  private String trailerTemplateJson;
+    private Integer recordLength;
+    private Integer headerRows;
+    private Integer footerRows;
+    private String headerTemplateJson;
+    private String trailerTemplateJson;
 
-  @Size(max = 32)
-  private String checksumType;
+    @Size(max = 32)
+    private String checksumType;
 
-  @Size(max = 32)
-  private String compressType;
+    @Size(max = 32)
+    private String compressType;
 
-  @Size(max = 32)
-  private String encryptType;
+    @Size(max = 32)
+    private String encryptType;
 
-  @Size(max = 512)
-  private String namingRule;
+    @Size(max = 512)
+    private String namingRule;
 
-  private String fieldMappingsJson;
-  private String validationRuleSetJson;
+    private String fieldMappingsJson;
+    private String validationRuleSetJson;
 
-  @Size(max = 128)
-  private String defaultQueryCode;
+    @Size(max = 128)
+    private String defaultQueryCode;
 
-  private String defaultQuerySql;
-  private String queryParamSchemaJson;
-  private Boolean streamingEnabled;
-  private Integer pageSize;
-  private Integer fetchSize;
-  private Integer chunkSize;
-  private Boolean previewMaskingEnabled;
-  private Boolean errorLineMaskingEnabled;
-  private Boolean logMaskingEnabled;
-  private Boolean contentEncryptionEnabled;
+    private String defaultQuerySql;
+    private String queryParamSchemaJson;
+    private Boolean streamingEnabled;
+    private Integer pageSize;
+    private Integer fetchSize;
+    private Integer chunkSize;
+    private Boolean previewMaskingEnabled;
+    private Boolean errorLineMaskingEnabled;
+    private Boolean logMaskingEnabled;
+    private Boolean contentEncryptionEnabled;
 
-  @Size(max = 256)
-  private String encryptionKeyRef;
+    @Size(max = 256)
+    private String encryptionKeyRef;
 
-  private Boolean downloadRequiresApproval;
-  private String maskingRuleSet;
-  private Boolean enabled;
-  private Integer version;
+    private Boolean downloadRequiresApproval;
+    private String maskingRuleSet;
+    private Boolean enabled;
+    private Integer version;
 
-  @Size(max = 512)
-  private String description;
+    @Size(max = 512)
+    private String description;
 
-  @Size(max = 128)
-  private String loadTargetRef;
+    @Size(max = 128)
+    private String loadTargetRef;
 
-  @Size(max = 128)
-  private String exportDataRef;
-  // CPD-ON
+    @Size(max = 128)
+    private String exportDataRef;
+    // CPD-ON
 }

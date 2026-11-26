@@ -16,37 +16,35 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
 /** ADR-028 S5：ta/tb/tc 多租户 seed 至少覆盖一个 WAIT Sensor workflow。 */
-@E2eSpringBootTest(
-    classes = E2eOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@E2eSpringBootTest(classes = E2eOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Sql(scripts = {E2eTestSql.MULTI_TENANT_SEED})
 @DisplayName("多租户种子夹具端到端:ta 租户的种子必须包含可用的等待文件到达工作流,并通过工作流图校验")
 class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private WorkflowGraphValidator workflowGraphValidator;
+    @Autowired
+    private WorkflowGraphValidator workflowGraphValidator;
 
-  @Test
-  @DisplayName("ta 租户种子里的等待文件到达工作流合法:等待节点参数与前后两条连线齐备,图校验无错误")
-  void shouldContainValidWaitFileArrivalWorkflow_whenTaTenantSeedLoaded() {
-    final String selectIdSql = """
+    @Test
+    @DisplayName("ta 租户种子里的等待文件到达工作流合法:等待节点参数与前后两条连线齐备,图校验无错误")
+    void shouldContainValidWaitFileArrivalWorkflow_whenTaTenantSeedLoaded() {
+        final String selectIdSql = """
             select id
               from batch.workflow_definition
              where tenant_id = 'ta'
                and workflow_code = 'TA_WF_WAIT_FILE'
                and version = 1
             """;
-    final String selectNodeTypeSql = """
+        final String selectNodeTypeSql = """
             select node_type, node_params
               from batch.workflow_node
              where tenant_id = 'ta'
                and workflow_definition_id = ?
                and node_code = 'WAIT_BANK_FILE'
             """;
-    final String selectCountSql = """
+        final String selectCountSql = """
             select count(*)
               from batch.workflow_edge
              where tenant_id = 'ta'
@@ -55,22 +53,20 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
                  or (from_node_code = 'WAIT_BANK_FILE' and to_node_code = 'END'))
             """;
 
-    Long workflowDefinitionId = jdbcTemplate.queryForObject(selectIdSql, Long.class);
+        Long workflowDefinitionId = jdbcTemplate.queryForObject(selectIdSql, Long.class);
 
-    Map<String, Object> waitNode =
-        jdbcTemplate.queryForMap(selectNodeTypeSql, workflowDefinitionId);
+        Map<String, Object> waitNode = jdbcTemplate.queryForMap(selectNodeTypeSql, workflowDefinitionId);
 
-    assertThat(waitNode.get("node_type")).isEqualTo("WAIT");
-    assertThat(String.valueOf(waitNode.get("node_params")))
-        .contains("\"sensor_type\": \"FILE_ARRIVAL\"")
-        .contains("\"pattern\": \"settle-*.csv\"")
-        .contains("\"timeout_seconds\": 3600");
+        assertThat(waitNode.get("node_type")).isEqualTo("WAIT");
+        assertThat(String.valueOf(waitNode.get("node_params")))
+                .contains("\"sensor_type\": \"FILE_ARRIVAL\"")
+                .contains("\"pattern\": \"settle-*.csv\"")
+                .contains("\"timeout_seconds\": 3600");
 
-    Integer edgeCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowDefinitionId);
-    assertThat(edgeCount).isEqualTo(2);
+        Integer edgeCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowDefinitionId);
+        assertThat(edgeCount).isEqualTo(2);
 
-    WorkflowValidationResult result = workflowGraphValidator.validate(workflowDefinitionId);
-    assertThat(result.errors()).isEmpty();
-  }
+        WorkflowValidationResult result = workflowGraphValidator.validate(workflowDefinitionId);
+        assertThat(result.errors()).isEmpty();
+    }
 }

@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.batch-day")
 public class BatchDayScanProperties {
 
-  private long dependencyWaitTimeoutSeconds = 86_400L;
-  private int catchupDaysPerScan = 14;
+    private long dependencyWaitTimeoutSeconds = 86_400L;
+    private int catchupDaysPerScan = 14;
 }

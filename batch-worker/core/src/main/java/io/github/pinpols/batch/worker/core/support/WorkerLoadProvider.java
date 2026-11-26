@@ -13,6 +13,6 @@ package io.github.pinpols.batch.worker.core.support;
  */
 public interface WorkerLoadProvider {
 
-  /** 当前正在执行的 task 数; 实现保证非负. */
-  int currentLoad();
+    /** 当前正在执行的 task 数; 实现保证非负. */
+    int currentLoad();
 }

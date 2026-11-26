@@ -10,12 +10,9 @@ import java.util.Map;
  * {@code Map<String,Object>} + OpenAPI {@code additionalProperties}，不强行 schema 化。
  */
 public record ConsoleDryRunPlanResponse(
-    String level,
-    boolean success,
-    List<ConsoleDryRunFindingResponse> findings,
-    Map<String, Object> summary) {
+        String level, boolean success, List<ConsoleDryRunFindingResponse> findings, Map<String, Object> summary) {
 
-  /** 单条 finding；{@code detail} 为任意结构的附加上下文，保持 Object 透传。 */
-  public record ConsoleDryRunFindingResponse(
-      String code, String severity, String scope, String message, Object detail) {}
+    /** 单条 finding；{@code detail} 为任意结构的附加上下文，保持 Object 透传。 */
+    public record ConsoleDryRunFindingResponse(
+            String code, String severity, String scope, String message, Object detail) {}
 }

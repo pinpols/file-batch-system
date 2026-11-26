@@ -26,60 +26,60 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleTelemetryController {
 
-  private static final int MAX_PROPS_BYTES_PER_EVENT = 8 * 1024;
-  private static final int MAX_PROPS_KEYS_PER_EVENT = 50;
-  private static final int MAX_PROPS_DEPTH = 5;
-  private static final int MAX_PROPS_LIST_ITEMS = 100;
+    private static final int MAX_PROPS_BYTES_PER_EVENT = 8 * 1024;
+    private static final int MAX_PROPS_KEYS_PER_EVENT = 50;
+    private static final int MAX_PROPS_DEPTH = 5;
+    private static final int MAX_PROPS_LIST_ITEMS = 100;
 
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleTelemetryService telemetryService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTelemetryService telemetryService;
 
-  @PostMapping("/events")
-  public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
-    validateProps(request);
-    telemetryService.receive(request);
-    return responseFactory.success(null);
-  }
-
-  private void validateProps(FrontendTelemetryRequest request) {
-    for (Event event : request.events()) {
-      Map<String, Object> props = event.props();
-      if (props == null || props.isEmpty()) {
-        continue;
-      }
-      if (props.size() > MAX_PROPS_KEYS_PER_EVENT) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
-      }
-      if (depth(props, 1) > MAX_PROPS_DEPTH) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_deep");
-      }
-      String serializedProps = JsonUtils.toJson(props);
-      byte[] serializedPropsBytes = serializedProps.getBytes(StandardCharsets.UTF_8);
-      int bytes = serializedPropsBytes.length;
-      if (bytes > MAX_PROPS_BYTES_PER_EVENT) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
-      }
+    @PostMapping("/events")
+    public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
+        validateProps(request);
+        telemetryService.receive(request);
+        return responseFactory.success(null);
     }
-  }
 
-  private int depth(Object value, int currentDepth) {
-    if (value instanceof Map<?, ?> map) {
-      int max = currentDepth;
-      for (Object child : map.values()) {
-        max = Math.max(max, depth(child, currentDepth + 1));
-      }
-      return max;
+    private void validateProps(FrontendTelemetryRequest request) {
+        for (Event event : request.events()) {
+            Map<String, Object> props = event.props();
+            if (props == null || props.isEmpty()) {
+                continue;
+            }
+            if (props.size() > MAX_PROPS_KEYS_PER_EVENT) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
+            }
+            if (depth(props, 1) > MAX_PROPS_DEPTH) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_deep");
+            }
+            String serializedProps = JsonUtils.toJson(props);
+            byte[] serializedPropsBytes = serializedProps.getBytes(StandardCharsets.UTF_8);
+            int bytes = serializedPropsBytes.length;
+            if (bytes > MAX_PROPS_BYTES_PER_EVENT) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
+            }
+        }
     }
-    if (value instanceof List<?> list) {
-      if (list.size() > MAX_PROPS_LIST_ITEMS) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
-      }
-      int max = currentDepth;
-      for (Object child : list) {
-        max = Math.max(max, depth(child, currentDepth + 1));
-      }
-      return max;
+
+    private int depth(Object value, int currentDepth) {
+        if (value instanceof Map<?, ?> map) {
+            int max = currentDepth;
+            for (Object child : map.values()) {
+                max = Math.max(max, depth(child, currentDepth + 1));
+            }
+            return max;
+        }
+        if (value instanceof List<?> list) {
+            if (list.size() > MAX_PROPS_LIST_ITEMS) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
+            }
+            int max = currentDepth;
+            for (Object child : list) {
+                max = Math.max(max, depth(child, currentDepth + 1));
+            }
+            return max;
+        }
+        return currentDepth;
     }
-    return currentDepth;
-  }
 }

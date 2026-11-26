@@ -12,39 +12,39 @@ import org.slf4j.LoggerFactory;
 /** 将 Logback 事件桥接到 Spring Boot 管理的 OpenTelemetry LoggerProvider。 */
 public final class OpenTelemetryLogbackBridge implements AutoCloseable {
 
-  static final String APPENDER_NAME = "OTEL";
-  private static final String CAPTURED_MDC_ATTRIBUTES =
-      "service,tenantId,traceId,requestId,jobInstanceId,workflowRunId,partitionId,taskId,"
-          + "batchDay,attempt,topic,workerId,workerType,runMode,stage,fileId";
+    static final String APPENDER_NAME = "OTEL";
+    private static final String CAPTURED_MDC_ATTRIBUTES =
+            "service,tenantId,traceId,requestId,jobInstanceId,workflowRunId,partitionId,taskId,"
+                    + "batchDay,attempt,topic,workerId,workerType,runMode,stage,fileId";
 
-  private final Logger rootLogger;
-  private final OpenTelemetryAppender appender;
+    private final Logger rootLogger;
+    private final OpenTelemetryAppender appender;
 
-  public OpenTelemetryLogbackBridge(OpenTelemetry openTelemetry) {
-    if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
-      rootLogger = null;
-      appender = null;
-      return;
+    public OpenTelemetryLogbackBridge(OpenTelemetry openTelemetry) {
+        if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
+            rootLogger = null;
+            appender = null;
+            return;
+        }
+        rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
+        OpenTelemetryAppender otelAppender = new OpenTelemetryAppender();
+        otelAppender.setName(APPENDER_NAME);
+        otelAppender.setContext(loggerContext);
+        otelAppender.setMdcAttributesIncluded(CAPTURED_MDC_ATTRIBUTES);
+        // 2.34 起布尔开关废弃，空 IncludeExclude 等价于不采集 key-value pair 属性。
+        otelAppender.setKeyValuePairAttributes(IncludeExclude.builder().build());
+        otelAppender.setOpenTelemetry(openTelemetry);
+        otelAppender.start();
+        rootLogger.addAppender(otelAppender);
+        appender = otelAppender;
     }
-    rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
-    OpenTelemetryAppender otelAppender = new OpenTelemetryAppender();
-    otelAppender.setName(APPENDER_NAME);
-    otelAppender.setContext(loggerContext);
-    otelAppender.setMdcAttributesIncluded(CAPTURED_MDC_ATTRIBUTES);
-    // 2.34 起布尔开关废弃，空 IncludeExclude 等价于不采集 key-value pair 属性。
-    otelAppender.setKeyValuePairAttributes(IncludeExclude.builder().build());
-    otelAppender.setOpenTelemetry(openTelemetry);
-    otelAppender.start();
-    rootLogger.addAppender(otelAppender);
-    appender = otelAppender;
-  }
 
-  @Override
-  public void close() {
-    if (rootLogger == null || appender == null) {
-      return;
+    @Override
+    public void close() {
+        if (rootLogger == null || appender == null) {
+            return;
+        }
+        rootLogger.detachAppender(appender);
+        appender.stop();
     }
-    rootLogger.detachAppender(appender);
-    appender.stop();
-  }
 }

@@ -24,15 +24,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.kafka")
 public class WorkerKafkaSubscribeProperties {
 
-  public enum Mode {
-    PATTERN,
-    FIXED,
-    TENANT_SCOPED,
-    DIRECT_ONLY
-  }
+    public enum Mode {
+        PATTERN,
+        FIXED,
+        TENANT_SCOPED,
+        DIRECT_ONLY
+    }
 
-  private Mode subscribeMode = Mode.PATTERN;
+    private Mode subscribeMode = Mode.PATTERN;
 
-  /** TENANT_SCOPED 模式生效；其他模式忽略。空列表等价于不订阅任何 tenant 后缀 topic。 */
-  private List<String> tenantAllowlist = List.of();
+    /** TENANT_SCOPED 模式生效；其他模式忽略。空列表等价于不订阅任何 tenant 后缀 topic。 */
+    private List<String> tenantAllowlist = List.of();
 }

@@ -11,38 +11,37 @@ import org.testcontainers.utility.DockerImageName;
 @SuppressWarnings({"java:S2095", "java:S2068"})
 public final class TestPostgresContainers {
 
-  public static final String PLATFORM_DATABASE = "batch_platform";
-  public static final String BUSINESS_DATABASE = "batch_business";
+    public static final String PLATFORM_DATABASE = "batch_platform";
+    public static final String BUSINESS_DATABASE = "batch_business";
 
-  private static final String DEFAULT_DATABASE = "batch_test";
-  private static final String DEFAULT_USERNAME = "batch_user";
-  private static final String DEFAULT_TEST_SECRET = "batch_pass_123";
+    private static final String DEFAULT_DATABASE = "batch_test";
+    private static final String DEFAULT_USERNAME = "batch_user";
+    private static final String DEFAULT_TEST_SECRET = "batch_pass_123";
 
-  private TestPostgresContainers() {}
+    private TestPostgresContainers() {}
 
-  public static PostgreSQLContainer create() {
-    return create(DEFAULT_DATABASE);
-  }
+    public static PostgreSQLContainer create() {
+        return create(DEFAULT_DATABASE);
+    }
 
-  public static PostgreSQLContainer create(String databaseName) {
-    PostgreSQLContainer container = new PostgreSQLContainer(
-            DockerImageName.parse(TestContainerImages.POSTGRES))
-        .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
-        .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
-        .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8")
-        .withDatabaseName(databaseName)
-        .withUsername(DEFAULT_USERNAME)
-        .withPassword(DEFAULT_TEST_SECRET)
-        .withUrlParam("sslmode", "disable");
-    TestContainerLabels.markOwned(container);
-    return container;
-  }
+    public static PostgreSQLContainer create(String databaseName) {
+        PostgreSQLContainer container = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+                .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
+                .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
+                .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8")
+                .withDatabaseName(databaseName)
+                .withUsername(DEFAULT_USERNAME)
+                .withPassword(DEFAULT_TEST_SECRET)
+                .withUrlParam("sslmode", "disable");
+        TestContainerLabels.markOwned(container);
+        return container;
+    }
 
-  public static PostgreSQLContainer platform() {
-    return create(PLATFORM_DATABASE);
-  }
+    public static PostgreSQLContainer platform() {
+        return create(PLATFORM_DATABASE);
+    }
 
-  public static PostgreSQLContainer business() {
-    return create(BUSINESS_DATABASE);
-  }
+    public static PostgreSQLContainer business() {
+        return create(BUSINESS_DATABASE);
+    }
 }

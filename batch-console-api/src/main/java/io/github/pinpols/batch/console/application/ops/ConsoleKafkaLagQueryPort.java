@@ -6,5 +6,5 @@ import java.util.List;
 /** Console 查询 Kafka consumer group 积压的基础设施端口。 */
 public interface ConsoleKafkaLagQueryPort {
 
-  List<ConsoleKafkaConsumerLagResponse> consumerGroupLags(String groupIdFilter);
+    List<ConsoleKafkaConsumerLagResponse> consumerGroupLags(String groupIdFilter);
 }

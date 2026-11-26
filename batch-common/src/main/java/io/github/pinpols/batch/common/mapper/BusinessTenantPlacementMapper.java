@@ -12,6 +12,6 @@ import java.util.List;
  */
 public interface BusinessTenantPlacementMapper {
 
-  /** 全量读 placement 映射(表行数 = 显式登记的租户数,通常远小于总租户数)。 */
-  List<BusinessTenantPlacementEntity> selectAll();
+    /** 全量读 placement 映射(表行数 = 显式登记的租户数,通常远小于总租户数)。 */
+    List<BusinessTenantPlacementEntity> selectAll();
 }

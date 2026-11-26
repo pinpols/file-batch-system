@@ -10,14 +10,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchChannelHealthScheduler {
 
-  private final DispatchChannelHealthService healthService;
-  private final DispatchChannelHealthProperties properties;
+    private final DispatchChannelHealthService healthService;
+    private final DispatchChannelHealthProperties properties;
 
-  @Scheduled(fixedDelayString = "${batch.worker.dispatch.health.probe-interval-millis:60000}")
-  public void probe() {
-    if (!properties.isEnabled()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.worker.dispatch.health.probe-interval-millis:60000}")
+    public void probe() {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        healthService.probeConfiguredChannels();
     }
-    healthService.probeConfiguredChannels();
-  }
 }

@@ -8,5 +8,5 @@ import lombok.Data;
 @AllArgsConstructor
 public class AiSourceResponse {
 
-  private String source;
+    private String source;
 }

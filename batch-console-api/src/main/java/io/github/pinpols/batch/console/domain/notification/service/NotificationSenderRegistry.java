@@ -14,36 +14,36 @@ import org.springframework.stereotype.Component;
 @Component
 public class NotificationSenderRegistry {
 
-  private final Map<String, NotificationSender> sendersByType;
+    private final Map<String, NotificationSender> sendersByType;
 
-  public NotificationSenderRegistry(List<NotificationSender> senders) {
-    Map<String, NotificationSender> registered = new LinkedHashMap<>();
-    for (NotificationSender sender : senders) {
-      String channelType = normalize(sender.channelType());
-      if (EmptyChecks.isNull(channelType)) {
-        throw new IllegalStateException("NotificationSender channelType must not be blank: "
-            + sender.getClass().getName());
-      }
-      NotificationSender duplicate = registered.putIfAbsent(channelType, sender);
-      if (EmptyChecks.isNotNull(duplicate)) {
-        throw new IllegalStateException("duplicate NotificationSender channelType: " + channelType);
-      }
+    public NotificationSenderRegistry(List<NotificationSender> senders) {
+        Map<String, NotificationSender> registered = new LinkedHashMap<>();
+        for (NotificationSender sender : senders) {
+            String channelType = normalize(sender.channelType());
+            if (EmptyChecks.isNull(channelType)) {
+                throw new IllegalStateException("NotificationSender channelType must not be blank: "
+                        + sender.getClass().getName());
+            }
+            NotificationSender duplicate = registered.putIfAbsent(channelType, sender);
+            if (EmptyChecks.isNotNull(duplicate)) {
+                throw new IllegalStateException("duplicate NotificationSender channelType: " + channelType);
+            }
+        }
+        this.sendersByType = Map.copyOf(registered);
     }
-    this.sendersByType = Map.copyOf(registered);
-  }
 
-  /** 解析能处理 channelType 的 sender；无则 null。 */
-  public NotificationSender resolve(String channelType) {
-    String normalized = normalize(channelType);
-    return EmptyChecks.isNull(normalized) ? null : sendersByType.get(normalized);
-  }
-
-  private static String normalize(String value) {
-    if (EmptyChecks.isBlank(value)) {
-      return null;
+    /** 解析能处理 channelType 的 sender；无则 null。 */
+    public NotificationSender resolve(String channelType) {
+        String normalized = normalize(channelType);
+        return EmptyChecks.isNull(normalized) ? null : sendersByType.get(normalized);
     }
-    String trimmedValue = value.trim();
-    String normalizedValue = trimmedValue.toUpperCase(Locale.ROOT);
-    return normalizedValue;
-  }
+
+    private static String normalize(String value) {
+        if (EmptyChecks.isBlank(value)) {
+            return null;
+        }
+        String trimmedValue = value.trim();
+        String normalizedValue = trimmedValue.toUpperCase(Locale.ROOT);
+        return normalizedValue;
+    }
 }

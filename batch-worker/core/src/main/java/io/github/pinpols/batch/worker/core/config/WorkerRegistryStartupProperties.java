@@ -18,6 +18,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @SuppressWarnings("ConfigurationProperties") // 与 WorkerRegistryProperties 共享前缀，子键互不重叠。
 public class WorkerRegistryStartupProperties {
 
-  /** worker 启动期自注册失败时是否快速失败；false 时降级为告警并继续启动。 */
-  private boolean failFastOnStartup = true;
+    /** worker 启动期自注册失败时是否快速失败；false 时降级为告警并继续启动。 */
+    private boolean failFastOnStartup = true;
 }

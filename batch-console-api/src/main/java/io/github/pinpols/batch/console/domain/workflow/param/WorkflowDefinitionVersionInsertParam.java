@@ -12,23 +12,23 @@ import lombok.Data;
 @Data
 public class WorkflowDefinitionVersionInsertParam {
 
-  private Long id;
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private String workflowCode;
-  private Integer version;
-  private String workflowName;
-  private String workflowType;
-  private Boolean enabled;
-  private Boolean scheduleEnabled;
-  private String scheduleType;
-  private String scheduleExpr;
-  private String timezone;
-  private String triggerMode;
-  private String calendarCode;
-  private String dependsOnJobCode;
-  private String nodesJson;
-  private String edgesJson;
-  private String savedBy;
-  private String summary;
+    private Long id;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private String workflowCode;
+    private Integer version;
+    private String workflowName;
+    private String workflowType;
+    private Boolean enabled;
+    private Boolean scheduleEnabled;
+    private String scheduleType;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String calendarCode;
+    private String dependsOnJobCode;
+    private String nodesJson;
+    private String edgesJson;
+    private String savedBy;
+    private String summary;
 }

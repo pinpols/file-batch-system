@@ -16,8 +16,8 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ProcessPayload(
-    String bizDate,
-    String batchKey,
-    String processImplCode,
-    @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
-    Map<String, Object> metadata) {}
+        String bizDate,
+        String batchKey,
+        String processImplCode,
+        @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
+        Map<String, Object> metadata) {}

@@ -25,17 +25,16 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsolePipelineProgressRealtimeController {
 
-  private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
-  private final TenantIdResolver tenantGuard;
+    private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
+    private final TenantIdResolver tenantGuard;
 
-  @GetMapping(path = "/pipeline-progress/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter pipelineProgress(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "eventType", required = false) String eventType,
-      @RequestParam(value = "cursor", required = false) String cursor,
-      @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    return realtimeEventHub.subscribe(
-        resolvedTenantId, "pipeline-progress", eventType, cursor, heartbeatMillis);
-  }
+    @GetMapping(path = "/pipeline-progress/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter pipelineProgress(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "eventType", required = false) String eventType,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        return realtimeEventHub.subscribe(resolvedTenantId, "pipeline-progress", eventType, cursor, heartbeatMillis);
+    }
 }

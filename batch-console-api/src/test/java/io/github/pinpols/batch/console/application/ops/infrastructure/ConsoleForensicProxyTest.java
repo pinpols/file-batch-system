@@ -24,34 +24,32 @@ import org.springframework.web.client.RestClient;
 
 @DisplayName("取证代理：缺省格式的内部请求契约")
 class ConsoleForensicProxyTest {
-  @Test
-  @DisplayName("格式缺省时下游仍收到 BUNDLE 和已解析的租户与操作人")
-  void shouldSendBundleWhenFormatIsMissing() {
-    RestClient.Builder builder = RestClient.builder().baseUrl("http://orchestrator.test");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    OrchestratorInternalRestClient internal = mock(OrchestratorInternalRestClient.class);
-    when(internal.client()).thenReturn(builder.build());
-    TenantIdResolver tenantGuard = mock(TenantIdResolver.class);
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    DownstreamFallback fallback = mock(DownstreamFallback.class);
-    when(fallback.callOrThrow(eq("orchestrator"), eq("forensic-export-request"), any()))
-        .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(2)).get());
-    DefaultConsoleOrchestratorProxyService service = new DefaultConsoleOrchestratorProxyService(
-        internal,
-        tenantGuard,
-        mock(ConsoleRealtimeEventPort.class),
-        fallback,
-        mock(ConsoleQueryCacheService.class));
-    server
-        .expect(requestTo("http://orchestrator.test/internal/forensic/export"))
-        .andExpect(content().json("""
+    @Test
+    @DisplayName("格式缺省时下游仍收到 BUNDLE 和已解析的租户与操作人")
+    void shouldSendBundleWhenFormatIsMissing() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://orchestrator.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OrchestratorInternalRestClient internal = mock(OrchestratorInternalRestClient.class);
+        when(internal.client()).thenReturn(builder.build());
+        TenantIdResolver tenantGuard = mock(TenantIdResolver.class);
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        DownstreamFallback fallback = mock(DownstreamFallback.class);
+        when(fallback.callOrThrow(eq("orchestrator"), eq("forensic-export-request"), any()))
+                .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(2)).get());
+        DefaultConsoleOrchestratorProxyService service = new DefaultConsoleOrchestratorProxyService(
+                internal,
+                tenantGuard,
+                mock(ConsoleRealtimeEventPort.class),
+                fallback,
+                mock(ConsoleQueryCacheService.class));
+        server.expect(requestTo("http://orchestrator.test/internal/forensic/export"))
+                .andExpect(content().json("""
             {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19",
              "jobCodes":null,"exportFormat":"BUNDLE","requestedBy":"admin"}
             """))
-        .andRespond(withSuccess(
-            "{\"exportId\":\"fx-001\",\"status\":\"READY\"}", MediaType.APPLICATION_JSON));
-    LocalDate date = LocalDate.parse("2026-05-19");
-    service.requestForensicExport(new ForensicExportCommand("t1", date, date, null, null, "admin"));
-    server.verify();
-  }
+                .andRespond(withSuccess("{\"exportId\":\"fx-001\",\"status\":\"READY\"}", MediaType.APPLICATION_JSON));
+        LocalDate date = LocalDate.parse("2026-05-19");
+        service.requestForensicExport(new ForensicExportCommand("t1", date, date, null, null, "admin"));
+        server.verify();
+    }
 }

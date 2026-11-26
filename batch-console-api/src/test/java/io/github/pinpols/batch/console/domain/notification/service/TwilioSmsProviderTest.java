@@ -26,211 +26,204 @@ import org.slf4j.LoggerFactory;
 @DisplayName("Twilio 短信通道: 凭据校验, 状态码判定与日志脱敏")
 class TwilioSmsProviderTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  private static final String ACCOUNT_SID = "ACtestsid";
-  private static final String AUTH_TOKEN = "secret-token-xyz";
-  private static final String FROM_NUMBER = "+15005550006";
-  private static final String PLAIN_PHONE = "+13800138000";
-  private static final String PLAIN_PHONE_2 = "+13800138001";
+    private static final String ACCOUNT_SID = "ACtestsid";
+    private static final String AUTH_TOKEN = "secret-token-xyz";
+    private static final String FROM_NUMBER = "+15005550006";
+    private static final String PLAIN_PHONE = "+13800138000";
+    private static final String PLAIN_PHONE_2 = "+13800138001";
 
-  private SmsProperties properties() {
-    SmsProperties props = new SmsProperties();
-    props.setProvider("twilio");
-    props.setTwilioAccountSid(ACCOUNT_SID);
-    props.setTwilioAuthToken(AUTH_TOKEN);
-    props.setTwilioFromNumber(FROM_NUMBER);
-    props.setTwilioApiBase("https://api.twilio.com");
-    return props;
-  }
+    private SmsProperties properties() {
+        SmsProperties props = new SmsProperties();
+        props.setProvider("twilio");
+        props.setTwilioAccountSid(ACCOUNT_SID);
+        props.setTwilioAuthToken(AUTH_TOKEN);
+        props.setTwilioFromNumber(FROM_NUMBER);
+        props.setTwilioApiBase("https://api.twilio.com");
+        return props;
+    }
 
-  private NotificationMessage message() {
-    WebhookEventPayload payload =
-        new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
-    return new NotificationMessage(
-        "tenant-a", "ch-sms", "SMS", "{}", payload, "{\"jobId\":\"J1\"}");
-  }
+    private NotificationMessage message() {
+        WebhookEventPayload payload =
+                new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
+        return new NotificationMessage("tenant-a", "ch-sms", "SMS", "{}", payload, "{\"jobId\":\"J1\"}");
+    }
 
-  @Test
-  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
-  void shouldSupportTwilioCaseInsensitively() {
-    TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest());
-    assertThat(provider.supports("twilio")).isTrue();
-    assertThat(provider.supports("TWILIO")).isTrue();
-    assertThat(provider.supports("Twilio")).isTrue();
-    assertThat(provider.supports("aliyun")).isFalse();
-    assertThat(provider.supports(null)).isFalse();
-  }
+    @Test
+    @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+    void shouldSupportTwilioCaseInsensitively() {
+        TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest());
+        assertThat(provider.supports("twilio")).isTrue();
+        assertThat(provider.supports("TWILIO")).isTrue();
+        assertThat(provider.supports("Twilio")).isTrue();
+        assertThat(provider.supports("aliyun")).isFalse();
+        assertThat(provider.supports(null)).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少账户标识时直接失败, 不发起任何网络请求")
-  void shouldFailWithoutNetworkCall_whenAccountSidMissing() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    SmsProperties props = properties();
-    props.setTwilioAccountSid("");
-    TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
+    @Test
+    @DisplayName("缺少账户标识时直接失败, 不发起任何网络请求")
+    void shouldFailWithoutNetworkCall_whenAccountSidMissing() {
+        AtomicBoolean called = new AtomicBoolean(false);
+        SmsProperties props = properties();
+        props.setTwilioAccountSid("");
+        TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
 
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isNull();
-    assertThat(result.errorSummary()).isEqualTo("missing twilio accountSid");
-    assertThat(called.get()).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isNull();
+        assertThat(result.errorSummary()).isEqualTo("missing twilio accountSid");
+        assertThat(called.get()).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少鉴权令牌时直接失败, 不发起任何网络请求")
-  void shouldFailWithoutNetworkCall_whenAuthTokenMissing() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    SmsProperties props = properties();
-    props.setTwilioAuthToken("");
-    TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
+    @Test
+    @DisplayName("缺少鉴权令牌时直接失败, 不发起任何网络请求")
+    void shouldFailWithoutNetworkCall_whenAuthTokenMissing() {
+        AtomicBoolean called = new AtomicBoolean(false);
+        SmsProperties props = properties();
+        props.setTwilioAuthToken("");
+        TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
 
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).isEqualTo("missing twilio authToken");
-    assertThat(called.get()).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).isEqualTo("missing twilio authToken");
+        assertThat(called.get()).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少发送号码时直接失败, 不发起任何网络请求")
-  void shouldFailWithoutNetworkCall_whenFromNumberMissing() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    SmsProperties props = properties();
-    props.setTwilioFromNumber("");
-    TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
+    @Test
+    @DisplayName("缺少发送号码时直接失败, 不发起任何网络请求")
+    void shouldFailWithoutNetworkCall_whenFromNumberMissing() {
+        AtomicBoolean called = new AtomicBoolean(false);
+        SmsProperties props = properties();
+        props.setTwilioFromNumber("");
+        TwilioSmsProvider provider = recording(props, called, 201, "{\"sid\":\"SM1\"}");
 
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).isEqualTo("missing twilio fromNumber");
-    assertThat(called.get()).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).isEqualTo("missing twilio fromNumber");
+        assertThat(called.get()).isFalse();
+    }
 
-  @Test
-  @DisplayName("状态码为已创建时判定成功, 请求按基本鉴权构造且表单参数经地址编码")
-  void shouldSucceedWithBasicAuth_whenStatusCreated() {
-    AtomicReference<String> sentUrl = new AtomicReference<>();
-    AtomicReference<String> sentAuth = new AtomicReference<>();
-    AtomicReference<String> sentBody = new AtomicReference<>();
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            sentUrl.set(url);
-            sentAuth.set(authHeader);
-            sentBody.set(body);
-            return new TwilioResponse(201, "{\"sid\":\"SM123\",\"status\":\"queued\"}");
-          }
-        };
-
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
-
-    assertThat(result.success()).isTrue();
-    assertThat(sentUrl.get())
-        .isEqualTo("https://api.twilio.com/2010-04-01/Accounts/" + ACCOUNT_SID + "/Messages.json");
-    // Basic 鉴权 = base64(AccountSid:AuthToken),且头里不含 token 明文。
-    assertThat(sentAuth.get()).startsWith("Basic ");
-    assertThat(sentAuth.get()).doesNotContain(AUTH_TOKEN);
-    String expected = "Basic "
-        + Base64.getEncoder()
-            .encodeToString((ACCOUNT_SID + ":" + AUTH_TOKEN).getBytes(StandardCharsets.UTF_8));
-    assertThat(sentAuth.get()).isEqualTo(expected);
-    // form body 含 To / From / Body 且 URL 编码(+ 变 %2B)。
-    assertThat(sentBody.get()).contains("To=%2B13800138000");
-    assertThat(sentBody.get()).contains("From=%2B15005550006");
-    assertThat(sentBody.get()).contains("Body=");
-  }
-
-  @Test
-  @DisplayName("状态码为客户端错误时判定失败, 错误摘要带状态码")
-  void shouldFail_whenStatusClientError() {
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            return new TwilioResponse(400, "{\"code\":21211,\"message\":\"invalid To\"}");
-          }
-        };
-
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isEqualTo(400);
-    assertThat(result.errorSummary()).isEqualTo("twilio http status=400");
-  }
-
-  @Test
-  @DisplayName("多个号码中任一失败则整体失败, 保留首个失败状态")
-  void shouldFailWhole_whenAnyNumberFails() {
-    AtomicReference<Integer> calls = new AtomicReference<>(0);
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            int n = calls.get() + 1;
-            calls.set(n);
-            // 第一个号成功,第二个号 422 失败 → 整体失败,带首个失败状态。
-            return n == 1
-                ? new TwilioResponse(201, "{\"sid\":\"SM1\"}")
-                : new TwilioResponse(422, "{\"code\":21610}");
-          }
-        };
-
-    WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE, PLAIN_PHONE_2), message());
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isEqualTo(422);
-    assertThat(calls.get()).isEqualTo(2);
-  }
-
-  @Test
-  @DisplayName("日志既不出现鉴权令牌与账户标识, 也不出现手机号明文")
-  void shouldNotLeakCredentialOrPhoneInLogs() {
-    Logger logger = (Logger) LoggerFactory.getLogger(TwilioSmsProvider.class);
-    ListAppender appender = new ListAppender();
-    appender.start();
-    logger.addAppender(appender);
-    try {
-      TwilioSmsProvider provider =
-          new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
+    @Test
+    @DisplayName("状态码为已创建时判定成功, 请求按基本鉴权构造且表单参数经地址编码")
+    void shouldSucceedWithBasicAuth_whenStatusCreated() {
+        AtomicReference<String> sentUrl = new AtomicReference<>();
+        AtomicReference<String> sentAuth = new AtomicReference<>();
+        AtomicReference<String> sentBody = new AtomicReference<>();
+        TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
             @Override
             protected TwilioResponse postForm(String url, String authHeader, String body) {
-              return new TwilioResponse(401, "{\"code\":20003}");
+                sentUrl.set(url);
+                sentAuth.set(authHeader);
+                sentBody.set(body);
+                return new TwilioResponse(201, "{\"sid\":\"SM123\",\"status\":\"queued\"}");
             }
-          };
-      WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
-      assertThat(result.success()).isFalse();
-      assertThat(appender.messages).isNotEmpty();
-      for (String msg : appender.messages) {
-        assertThat(msg).doesNotContain(AUTH_TOKEN);
-        assertThat(msg).doesNotContain(ACCOUNT_SID);
-        assertThat(msg).doesNotContain(PLAIN_PHONE);
-      }
-    } finally {
-      logger.detachAppender(appender);
+        };
+
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
+
+        assertThat(result.success()).isTrue();
+        assertThat(sentUrl.get())
+                .isEqualTo("https://api.twilio.com/2010-04-01/Accounts/" + ACCOUNT_SID + "/Messages.json");
+        // Basic 鉴权 = base64(AccountSid:AuthToken),且头里不含 token 明文。
+        assertThat(sentAuth.get()).startsWith("Basic ");
+        assertThat(sentAuth.get()).doesNotContain(AUTH_TOKEN);
+        String expected = "Basic "
+                + Base64.getEncoder().encodeToString((ACCOUNT_SID + ":" + AUTH_TOKEN).getBytes(StandardCharsets.UTF_8));
+        assertThat(sentAuth.get()).isEqualTo(expected);
+        // form body 含 To / From / Body 且 URL 编码(+ 变 %2B)。
+        assertThat(sentBody.get()).contains("To=%2B13800138000");
+        assertThat(sentBody.get()).contains("From=%2B15005550006");
+        assertThat(sentBody.get()).contains("Body=");
     }
-  }
 
-  private TwilioSmsProvider recording(
-      SmsProperties props, AtomicBoolean called, int status, String response) {
-    return new TwilioSmsProvider(props, objectMapper, failOnRequest()) {
-      @Override
-      protected TwilioResponse postForm(String url, String authHeader, String body) {
-        called.set(true);
-        return new TwilioResponse(status, response);
-      }
-    };
-  }
+    @Test
+    @DisplayName("状态码为客户端错误时判定失败, 错误摘要带状态码")
+    void shouldFail_whenStatusClientError() {
+        TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected TwilioResponse postForm(String url, String authHeader, String body) {
+                return new TwilioResponse(400, "{\"code\":21211,\"message\":\"invalid To\"}");
+            }
+        };
 
-  /** 捕获 logback 渲染后消息(含 arguments),供净化断言。 */
-  private static final class ListAppender extends AppenderBase<ILoggingEvent> {
-    private final List<String> messages = new ArrayList<>();
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
-    @Override
-    protected void append(ILoggingEvent event) {
-      messages.add(event.getFormattedMessage());
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isEqualTo(400);
+        assertThat(result.errorSummary()).isEqualTo("twilio http status=400");
     }
-  }
+
+    @Test
+    @DisplayName("多个号码中任一失败则整体失败, 保留首个失败状态")
+    void shouldFailWhole_whenAnyNumberFails() {
+        AtomicReference<Integer> calls = new AtomicReference<>(0);
+        TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected TwilioResponse postForm(String url, String authHeader, String body) {
+                int n = calls.get() + 1;
+                calls.set(n);
+                // 第一个号成功,第二个号 422 失败 → 整体失败,带首个失败状态。
+                return n == 1
+                        ? new TwilioResponse(201, "{\"sid\":\"SM1\"}")
+                        : new TwilioResponse(422, "{\"code\":21610}");
+            }
+        };
+
+        WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE, PLAIN_PHONE_2), message());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isEqualTo(422);
+        assertThat(calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("日志既不出现鉴权令牌与账户标识, 也不出现手机号明文")
+    void shouldNotLeakCredentialOrPhoneInLogs() {
+        Logger logger = (Logger) LoggerFactory.getLogger(TwilioSmsProvider.class);
+        ListAppender appender = new ListAppender();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
+                @Override
+                protected TwilioResponse postForm(String url, String authHeader, String body) {
+                    return new TwilioResponse(401, "{\"code\":20003}");
+                }
+            };
+            WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
+            assertThat(result.success()).isFalse();
+            assertThat(appender.messages).isNotEmpty();
+            for (String msg : appender.messages) {
+                assertThat(msg).doesNotContain(AUTH_TOKEN);
+                assertThat(msg).doesNotContain(ACCOUNT_SID);
+                assertThat(msg).doesNotContain(PLAIN_PHONE);
+            }
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    private TwilioSmsProvider recording(SmsProperties props, AtomicBoolean called, int status, String response) {
+        return new TwilioSmsProvider(props, objectMapper, failOnRequest()) {
+            @Override
+            protected TwilioResponse postForm(String url, String authHeader, String body) {
+                called.set(true);
+                return new TwilioResponse(status, response);
+            }
+        };
+    }
+
+    /** 捕获 logback 渲染后消息(含 arguments),供净化断言。 */
+    private static final class ListAppender extends AppenderBase<ILoggingEvent> {
+        private final List<String> messages = new ArrayList<>();
+
+        @Override
+        protected void append(ILoggingEvent event) {
+            messages.add(event.getFormattedMessage());
+        }
+    }
 }

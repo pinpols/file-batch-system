@@ -26,84 +26,82 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleJobDefinitionController {
 
-  private final ConsoleJobDefinitionApplicationService jobDefinitionApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleJobDefinitionApplicationService jobDefinitionApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<ConsoleJobDefinitionResponse> detail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(jobDefinitionApplicationService.detail(id, tenantId));
-  }
+    @GetMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<ConsoleJobDefinitionResponse> detail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(jobDefinitionApplicationService.detail(id, tenantId));
+    }
 
-  @PostMapping
-  @AuditAction(
-      action = "jobDefinition.create",
-      aggregateType = "job_definition",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleJobDefinitionResponse> create(
-      @Valid @RequestBody JobDefinitionCreateRequest request) {
-    return responseFactory.success(jobDefinitionApplicationService.create(request));
-  }
+    @PostMapping
+    @AuditAction(
+            action = "jobDefinition.create",
+            aggregateType = "job_definition",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleJobDefinitionResponse> create(@Valid @RequestBody JobDefinitionCreateRequest request) {
+        return responseFactory.success(jobDefinitionApplicationService.create(request));
+    }
 
-  @PutMapping("/{id}")
-  @AuditAction(
-      action = "jobDefinition.update",
-      aggregateType = "job_definition",
-      aggregateId = "#id",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleJobDefinitionResponse> update(
-      @PathVariable Long id, @Valid @RequestBody JobDefinitionUpdateRequest request) {
-    return responseFactory.success(jobDefinitionApplicationService.update(id, request));
-  }
+    @PutMapping("/{id}")
+    @AuditAction(
+            action = "jobDefinition.update",
+            aggregateType = "job_definition",
+            aggregateId = "#id",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleJobDefinitionResponse> update(
+            @PathVariable Long id, @Valid @RequestBody JobDefinitionUpdateRequest request) {
+        return responseFactory.success(jobDefinitionApplicationService.update(id, request));
+    }
 
-  /** 启用/禁用作业定义。 */
-  @PatchMapping("/{id}")
-  @AuditAction(
-      action = "jobDefinition.patch",
-      aggregateType = "job_definition",
-      aggregateId = "#id",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<Void> patch(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    jobDefinitionApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    /** 启用/禁用作业定义。 */
+    @PatchMapping("/{id}")
+    @AuditAction(
+            action = "jobDefinition.patch",
+            aggregateType = "job_definition",
+            aggregateId = "#id",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<Void> patch(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        jobDefinitionApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 
-  /** 批量启用/禁用作业定义。 */
-  @PatchMapping("/batch")
-  @AuditAction(
-      action = "jobDefinition.batchPatch",
-      aggregateType = "job_definition",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<Integer> batchPatch(@Valid @RequestBody BatchEnabledPatchRequest request) {
-    int updatedCount = jobDefinitionApplicationService.batchToggle(
-        request.getTenantId(), request.getIds(), request.getEnabled());
-    return responseFactory.success(updatedCount);
-  }
+    /** 批量启用/禁用作业定义。 */
+    @PatchMapping("/batch")
+    @AuditAction(
+            action = "jobDefinition.batchPatch",
+            aggregateType = "job_definition",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<Integer> batchPatch(@Valid @RequestBody BatchEnabledPatchRequest request) {
+        int updatedCount = jobDefinitionApplicationService.batchToggle(
+                request.getTenantId(), request.getIds(), request.getEnabled());
+        return responseFactory.success(updatedCount);
+    }
 
-  @PostMapping("/{id}/copy")
-  @AuditAction(
-      action = "jobDefinition.copy",
-      aggregateType = "job_definition",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleJobDefinitionResponse> copy(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("newJobCode") String newJobCode) {
-    return responseFactory.success(jobDefinitionApplicationService.copy(id, tenantId, newJobCode));
-  }
+    @PostMapping("/{id}/copy")
+    @AuditAction(
+            action = "jobDefinition.copy",
+            aggregateType = "job_definition",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleJobDefinitionResponse> copy(
+            @PathVariable Long id,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("newJobCode") String newJobCode) {
+        return responseFactory.success(jobDefinitionApplicationService.copy(id, tenantId, newJobCode));
+    }
 
-  /** 克隆作业定义并可选覆盖字段（脚手架模式）。 */
-  @PostMapping("/{id}/clone")
-  @AuditAction(
-      action = "jobDefinition.clone",
-      aggregateType = "job_definition",
-      aggregateId = "#id",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleJobDefinitionResponse> clone(
-      @PathVariable Long id, @Valid @RequestBody JobDefinitionCopyRequest request) {
-    return responseFactory.success(jobDefinitionApplicationService.copyWithOverrides(id, request));
-  }
+    /** 克隆作业定义并可选覆盖字段（脚手架模式）。 */
+    @PostMapping("/{id}/clone")
+    @AuditAction(
+            action = "jobDefinition.clone",
+            aggregateType = "job_definition",
+            aggregateId = "#id",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleJobDefinitionResponse> clone(
+            @PathVariable Long id, @Valid @RequestBody JobDefinitionCopyRequest request) {
+        return responseFactory.success(jobDefinitionApplicationService.copyWithOverrides(id, request));
+    }
 }

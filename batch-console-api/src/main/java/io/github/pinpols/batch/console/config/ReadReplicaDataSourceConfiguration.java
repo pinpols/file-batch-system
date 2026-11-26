@@ -38,94 +38,91 @@ import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 @RequiredArgsConstructor
 public class ReadReplicaDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  /** 单独暴露 primary HikariPool：让 {@link ReplicaLagMonitor} 等需要"显式走主库"的组件直接注入。 */
-  @Bean(name = "consolePrimaryDataSource")
-  public DataSource consolePrimaryDataSource(ReadReplicaProperties props) {
-    if (props.getPrimary().getUrl() == null) {
-      throw new IllegalStateException(
-          "batch.console.read-replica.enabled=true requires primary.url");
+    /** 单独暴露 primary HikariPool：让 {@link ReplicaLagMonitor} 等需要"显式走主库"的组件直接注入。 */
+    @Bean(name = "consolePrimaryDataSource")
+    public DataSource consolePrimaryDataSource(ReadReplicaProperties props) {
+        if (props.getPrimary().getUrl() == null) {
+            throw new IllegalStateException("batch.console.read-replica.enabled=true requires primary.url");
+        }
+        return buildPool(props.getPrimary(), "console-primary", pgApplicationName("-primary"));
     }
-    return buildPool(props.getPrimary(), "console-primary", pgApplicationName("-primary"));
-  }
 
-  @Bean(name = "consoleReplicaDataSource")
-  public DataSource consoleReplicaDataSource(ReadReplicaProperties props) {
-    if (props.getReplica().getUrl() == null) {
-      throw new IllegalStateException(
-          "batch.console.read-replica.enabled=true requires replica.url");
+    @Bean(name = "consoleReplicaDataSource")
+    public DataSource consoleReplicaDataSource(ReadReplicaProperties props) {
+        if (props.getReplica().getUrl() == null) {
+            throw new IllegalStateException("batch.console.read-replica.enabled=true requires replica.url");
+        }
+        return buildPool(props.getReplica(), "console-replica", pgApplicationName("-replica"));
     }
-    return buildPool(props.getReplica(), "console-replica", pgApplicationName("-replica"));
-  }
 
-  @Bean
-  @Primary
-  public DataSource consoleRoutingDataSource(
-      ReadReplicaProperties props,
-      @Qualifier("consolePrimaryDataSource") DataSource primary,
-      @Qualifier("consoleReplicaDataSource") DataSource replica,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ReplicaLagMonitor lagMonitor) {
-    Map<Object, Object> routes = new HashMap<>();
-    routes.put(ReadReplicaRoutingDataSource.Route.PRIMARY, primary);
-    routes.put(ReadReplicaRoutingDataSource.Route.REPLICA, replica);
+    @Bean
+    @Primary
+    public DataSource consoleRoutingDataSource(
+            ReadReplicaProperties props,
+            @Qualifier("consolePrimaryDataSource") DataSource primary,
+            @Qualifier("consoleReplicaDataSource") DataSource replica,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ReplicaLagMonitor lagMonitor) {
+        Map<Object, Object> routes = new HashMap<>();
+        routes.put(ReadReplicaRoutingDataSource.Route.PRIMARY, primary);
+        routes.put(ReadReplicaRoutingDataSource.Route.REPLICA, replica);
 
-    int failureThreshold = props.getFailureThreshold();
-    long quarantineMillis = props.getQuarantineSeconds() * 1_000L;
-    ReadReplicaRoutingDataSource routing = new ReadReplicaRoutingDataSource(
-        primary, failureThreshold, quarantineMillis, meterRegistryProvider);
-    routing.setTargetDataSources(routes);
-    routing.setDefaultTargetDataSource(primary);
-    routing.afterPropertiesSet();
+        int failureThreshold = props.getFailureThreshold();
+        long quarantineMillis = props.getQuarantineSeconds() * 1_000L;
+        ReadReplicaRoutingDataSource routing =
+                new ReadReplicaRoutingDataSource(primary, failureThreshold, quarantineMillis, meterRegistryProvider);
+        routing.setTargetDataSources(routes);
+        routing.setDefaultTargetDataSource(primary);
+        routing.afterPropertiesSet();
 
-    // 接通 lag-aware quarantine:lagMonitor 采到的 lag > 阈值 或 streaming replica = 0 时
-    // 主动触发 quarantine。补 SQLException-only 的旧 fail-open 检测漏洞。
-    lagMonitor.enableLagAwareQuarantine(routing, props.getLagThresholdSeconds());
+        // 接通 lag-aware quarantine:lagMonitor 采到的 lag > 阈值 或 streaming replica = 0 时
+        // 主动触发 quarantine。补 SQLException-only 的旧 fail-open 检测漏洞。
+        lagMonitor.enableLagAwareQuarantine(routing, props.getLagThresholdSeconds());
 
-    log.info(
-        "console read-replica enabled: primary={}, replica={}, failureThreshold={},"
-            + " quarantineSeconds={}, lagThresholdSeconds={}",
-        props.getPrimary().getUrl(),
-        props.getReplica().getUrl(),
-        props.getFailureThreshold(),
-        props.getQuarantineSeconds(),
-        props.getLagThresholdSeconds());
-    return new LazyConnectionDataSourceProxy(routing);
-  }
-
-  @Bean
-  public ReplicaLagMonitor replicaLagMonitor(
-      @Qualifier("consolePrimaryDataSource") DataSource primary,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ReplicaLagMonitorProperties lagMonitorProperties) {
-    return new ReplicaLagMonitor(primary, meterRegistryProvider, lagMonitorProperties);
-  }
-
-  /** 共用 buildPool（DRY 之前 Primary/Replica 两份重复方法）。 */
-  private HikariDataSource buildPool(
-      ReadReplicaProperties.Pool cfg, String poolName, String pgApplicationName) {
-    HikariDataSource ds = new HikariDataSource();
-    ds.setJdbcUrl(cfg.getUrl());
-    ds.setUsername(cfg.getUsername());
-    ds.setPassword(cfg.getPassword());
-    ds.setDriverClassName(cfg.getDriverClassName());
-    ds.setMaximumPoolSize(cfg.getMaximumPoolSize());
-    ds.setMinimumIdle(cfg.getMinimumIdle());
-    ds.setConnectionTimeout(cfg.getConnectionTimeoutMillis());
-    ds.setValidationTimeout(cfg.getValidationTimeoutMillis());
-    ds.setIdleTimeout(cfg.getIdleTimeoutMillis());
-    ds.setMaxLifetime(cfg.getMaxLifetimeMillis());
-    if (cfg.getLeakDetectionThresholdMillis() > 0) {
-      ds.setLeakDetectionThreshold(cfg.getLeakDetectionThresholdMillis());
+        log.info(
+                "console read-replica enabled: primary={}, replica={}, failureThreshold={},"
+                        + " quarantineSeconds={}, lagThresholdSeconds={}",
+                props.getPrimary().getUrl(),
+                props.getReplica().getUrl(),
+                props.getFailureThreshold(),
+                props.getQuarantineSeconds(),
+                props.getLagThresholdSeconds());
+        return new LazyConnectionDataSourceProxy(routing);
     }
-    ds.setPoolName(poolName);
-    HikariPgSessionSupport.applyPlatform(ds, pgSessionProperties, pgApplicationName);
-    return ds;
-  }
 
-  private String pgApplicationName(String suffix) {
-    return ApplicationNameProvider.resolve(environment, "batch-console-api") + suffix;
-  }
+    @Bean
+    public ReplicaLagMonitor replicaLagMonitor(
+            @Qualifier("consolePrimaryDataSource") DataSource primary,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ReplicaLagMonitorProperties lagMonitorProperties) {
+        return new ReplicaLagMonitor(primary, meterRegistryProvider, lagMonitorProperties);
+    }
+
+    /** 共用 buildPool（DRY 之前 Primary/Replica 两份重复方法）。 */
+    private HikariDataSource buildPool(ReadReplicaProperties.Pool cfg, String poolName, String pgApplicationName) {
+        HikariDataSource ds = new HikariDataSource();
+        ds.setJdbcUrl(cfg.getUrl());
+        ds.setUsername(cfg.getUsername());
+        ds.setPassword(cfg.getPassword());
+        ds.setDriverClassName(cfg.getDriverClassName());
+        ds.setMaximumPoolSize(cfg.getMaximumPoolSize());
+        ds.setMinimumIdle(cfg.getMinimumIdle());
+        ds.setConnectionTimeout(cfg.getConnectionTimeoutMillis());
+        ds.setValidationTimeout(cfg.getValidationTimeoutMillis());
+        ds.setIdleTimeout(cfg.getIdleTimeoutMillis());
+        ds.setMaxLifetime(cfg.getMaxLifetimeMillis());
+        if (cfg.getLeakDetectionThresholdMillis() > 0) {
+            ds.setLeakDetectionThreshold(cfg.getLeakDetectionThresholdMillis());
+        }
+        ds.setPoolName(poolName);
+        HikariPgSessionSupport.applyPlatform(ds, pgSessionProperties, pgApplicationName);
+        return ds;
+    }
+
+    private String pgApplicationName(String suffix) {
+        return ApplicationNameProvider.resolve(environment, "batch-console-api") + suffix;
+    }
 }

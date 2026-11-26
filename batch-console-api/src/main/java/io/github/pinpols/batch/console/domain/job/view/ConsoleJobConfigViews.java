@@ -19,93 +19,93 @@ import java.util.Map;
  */
 public final class ConsoleJobConfigViews {
 
-  private ConsoleJobConfigViews() {}
+    private ConsoleJobConfigViews() {}
 
-  /** batch_window 行（BatchWindowMapper，snake_case 键）。参数顺序即 XML constructor 映射顺序。 */
-  public record BatchWindowRow(
-      Long id,
-      String tenantId,
-      String windowCode,
-      String windowName,
-      String timezone,
-      String startTime,
-      String endTime,
-      String endStrategy,
-      String outOfWindowAction,
-      Boolean allowCrossDay,
-      Boolean enabled,
-      String description,
-      Instant createdAt,
-      Instant updatedAt) {
+    /** batch_window 行（BatchWindowMapper，snake_case 键）。参数顺序即 XML constructor 映射顺序。 */
+    public record BatchWindowRow(
+            Long id,
+            String tenantId,
+            String windowCode,
+            String windowName,
+            String timezone,
+            String startTime,
+            String endTime,
+            String endStrategy,
+            String outOfWindowAction,
+            Boolean allowCrossDay,
+            Boolean enabled,
+            String description,
+            Instant createdAt,
+            Instant updatedAt) {
 
-    /** 复刻 resultType="map" 键集：snake_case、null 值不出键。仅用于 Excel 导出等 Map 边界。 */
-    public Map<String, Object> toMap() {
-      Map<String, Object> map = new LinkedHashMap<>();
-      put(map, "id", id);
-      put(map, "tenant_id", tenantId);
-      put(map, "window_code", windowCode);
-      put(map, "window_name", windowName);
-      put(map, "timezone", timezone);
-      put(map, "start_time", startTime);
-      put(map, "end_time", endTime);
-      put(map, "end_strategy", endStrategy);
-      put(map, "out_of_window_action", outOfWindowAction);
-      put(map, "allow_cross_day", allowCrossDay);
-      put(map, "enabled", enabled);
-      put(map, "description", description);
-      put(map, "created_at", createdAt);
-      put(map, "updated_at", updatedAt);
-      return map;
+        /** 复刻 resultType="map" 键集：snake_case、null 值不出键。仅用于 Excel 导出等 Map 边界。 */
+        public Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            put(map, "id", id);
+            put(map, "tenant_id", tenantId);
+            put(map, "window_code", windowCode);
+            put(map, "window_name", windowName);
+            put(map, "timezone", timezone);
+            put(map, "start_time", startTime);
+            put(map, "end_time", endTime);
+            put(map, "end_strategy", endStrategy);
+            put(map, "out_of_window_action", outOfWindowAction);
+            put(map, "allow_cross_day", allowCrossDay);
+            put(map, "enabled", enabled);
+            put(map, "description", description);
+            put(map, "created_at", createdAt);
+            put(map, "updated_at", updatedAt);
+            return map;
+        }
     }
-  }
 
-  /**
-   * business_calendar 启用行（selectActiveByTenantAndCalendarCode，camelCase 键）。
-   * 只投影调用方实际消费的 9 列；cutoffTime 为 TIME 列按字符串承载。
-   */
-  public record ActiveCalendarRow(
-      Long id,
-      String tenantId,
-      String calendarCode,
-      String description,
-      String timezone,
-      String catchUpPolicy,
-      String cutoffTime,
-      Integer lateArrivalToleranceMin,
-      Integer slaOffsetMin) {}
+    /**
+     * business_calendar 启用行（selectActiveByTenantAndCalendarCode，camelCase 键）。
+     * 只投影调用方实际消费的 9 列；cutoffTime 为 TIME 列按字符串承载。
+     */
+    public record ActiveCalendarRow(
+            Long id,
+            String tenantId,
+            String calendarCode,
+            String description,
+            String timezone,
+            String catchUpPolicy,
+            String cutoffTime,
+            Integer lateArrivalToleranceMin,
+            Integer slaOffsetMin) {}
 
-  /**
-   * business_calendar 完整配置行（selectByTenantAndCalendarCode / selectByQuery / selectById，
-   * camelCase 键）。selectByQuery 与 selectById 带 createdAt/updatedAt；单键查询时两者为 null。
-   */
-  public record CalendarQueryRow(
-      Long id,
-      String tenantId,
-      String calendarCode,
-      String calendarName,
-      String timezone,
-      String holidayRollRule,
-      String catchUpPolicy,
-      Integer catchUpMaxDays,
-      Boolean enabled,
-      String description,
-      Instant createdAt,
-      Instant updatedAt) {}
+    /**
+     * business_calendar 完整配置行（selectByTenantAndCalendarCode / selectByQuery / selectById，
+     * camelCase 键）。selectByQuery 与 selectById 带 createdAt/updatedAt；单键查询时两者为 null。
+     */
+    public record CalendarQueryRow(
+            Long id,
+            String tenantId,
+            String calendarCode,
+            String calendarName,
+            String timezone,
+            String holidayRollRule,
+            String catchUpPolicy,
+            Integer catchUpMaxDays,
+            Boolean enabled,
+            String description,
+            Instant createdAt,
+            Instant updatedAt) {}
 
-  /** calendar_holiday 行（CalendarHolidayMapper，camelCase 键）。 */
-  public record CalendarHolidayRow(
-      Long id,
-      Long calendarId,
-      LocalDate bizDate,
-      String dayType,
-      String holidayName,
-      String description,
-      Instant createdAt,
-      Instant updatedAt) {}
+    /** calendar_holiday 行（CalendarHolidayMapper，camelCase 键）。 */
+    public record CalendarHolidayRow(
+            Long id,
+            Long calendarId,
+            LocalDate bizDate,
+            String dayType,
+            String holidayName,
+            String description,
+            Instant createdAt,
+            Instant updatedAt) {}
 
-  private static void put(Map<String, Object> map, String key, Object value) {
-    if (EmptyChecks.isNotNull(value)) {
-      map.put(key, value);
+    private static void put(Map<String, Object> map, String key, Object value) {
+        if (EmptyChecks.isNotNull(value)) {
+            map.put(key, value);
+        }
     }
-  }
 }

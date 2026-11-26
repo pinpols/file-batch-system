@@ -35,33 +35,33 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    prefix = "batch.worker.drain",
-    name = "heartbeat-timeout-scheduler-enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.worker.drain",
+        name = "heartbeat-timeout-scheduler-enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class WorkerHeartbeatTimeoutScheduler {
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final WorkerDrainProperties workerDrainProperties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final WorkerDrainProperties workerDrainProperties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.worker.drain.heartbeat-check-interval-millis:30000}")
-  @SchedulerLock(name = "worker_heartbeat_timeout", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
-  public void markStaleWorkersOffline() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.worker.drain.heartbeat-check-interval-millis:30000}")
+    @SchedulerLock(name = "worker_heartbeat_timeout", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void markStaleWorkersOffline() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        long effectiveSeconds = (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+                + workerDrainProperties.getHeartbeatGraceSeconds();
+        int updated = workerRegistryMapper.markStaleHeartbeatsOffline(effectiveSeconds);
+        if (updated > 0) {
+            log.info(
+                    "worker heartbeat timeout: marked {} workers OFFLINE"
+                            + " (timeoutSeconds={}, graceSeconds={}, effectiveSeconds={})",
+                    updated,
+                    workerDrainProperties.getHeartbeatTimeoutSeconds(),
+                    workerDrainProperties.getHeartbeatGraceSeconds(),
+                    effectiveSeconds);
+        }
     }
-    long effectiveSeconds = (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
-        + workerDrainProperties.getHeartbeatGraceSeconds();
-    int updated = workerRegistryMapper.markStaleHeartbeatsOffline(effectiveSeconds);
-    if (updated > 0) {
-      log.info(
-          "worker heartbeat timeout: marked {} workers OFFLINE"
-              + " (timeoutSeconds={}, graceSeconds={}, effectiveSeconds={})",
-          updated,
-          workerDrainProperties.getHeartbeatTimeoutSeconds(),
-          workerDrainProperties.getHeartbeatGraceSeconds(),
-          effectiveSeconds);
-    }
-  }
 }

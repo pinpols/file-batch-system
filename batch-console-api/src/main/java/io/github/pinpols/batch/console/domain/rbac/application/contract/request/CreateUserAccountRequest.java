@@ -13,35 +13,34 @@ import lombok.Data;
 @Data
 public class CreateUserAccountRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(min = 2, max = 128)
-  @Pattern(
-      regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
-      message =
-          "username must start with alphanumeric and contain only letters, digits, '.', '_', '-'")
-  private String username;
+    @NotBlank
+    @Size(min = 2, max = 128)
+    @Pattern(
+            regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
+            message = "username must start with alphanumeric and contain only letters, digits, '.', '_', '-'")
+    private String username;
 
-  @NotBlank
-  @Size(min = 8, max = 256)
-  @Pattern(
-      regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$",
-      message = "password must contain at least one letter and one digit")
-  private String password;
+    @NotBlank
+    @Size(min = 8, max = 256)
+    @Pattern(
+            regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$",
+            message = "password must contain at least one letter and one digit")
+    private String password;
 
-  @Size(max = 256)
-  private String displayName;
+    @Size(max = 256)
+    private String displayName;
 
-  /**
-   * CSV (e.g. "ROLE_ADMIN,ROLE_TENANT_USER")。为空时 service 落 USER 默认权限。 仅允许已知 ROLE_*
-   * 白名单值，防止写入任意/畸形权限串。
-   */
-  @Size(max = 512)
-  @Pattern(
-      regexp = "^$|^ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER)"
-          + "(,ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER))*$",
-      message = "authoritiesCsv must be comma-separated known ROLE_* values")
-  private String authoritiesCsv;
+    /**
+     * CSV (e.g. "ROLE_ADMIN,ROLE_TENANT_USER")。为空时 service 落 USER 默认权限。 仅允许已知 ROLE_*
+     * 白名单值，防止写入任意/畸形权限串。
+     */
+    @Size(max = 512)
+    @Pattern(
+            regexp = "^$|^ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER)"
+                    + "(,ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER))*$",
+            message = "authoritiesCsv must be comma-separated known ROLE_* values")
+    private String authoritiesCsv;
 }

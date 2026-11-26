@@ -27,55 +27,54 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/jobs/batch-days/catchup/requests")
 @RequiredArgsConstructor
 public class ConsoleBatchDayCatchUpRecoveryController {
-  private final BatchDayCatchUpRecoveryService recoveryService;
-  private final ConsoleResponseFactory responseFactory;
+    private final BatchDayCatchUpRecoveryService recoveryService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/abandon")
-  @AuditAction(
-      action = "batch_day.catch_up_abandon_unprepared",
-      aggregateType = "batch_day_catch_up",
-      targetTenantParam = "#request.tenantId",
-      recordParams = false)
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<BatchDayCatchUpRequestStatusResponse> abandonUnprepared(
-      @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
-      @Valid @RequestBody BatchDayCatchUpAbandonRequest request) {
-    BatchDayCatchUpRequestStatusResponse result = recoveryService.abandonUnprepared(
-        request.tenantId(), originalKey, request.bizDate(), request.calendarCode());
-    return responseFactory.success(result);
-  }
+    @PostMapping("/abandon")
+    @AuditAction(
+            action = "batch_day.catch_up_abandon_unprepared",
+            aggregateType = "batch_day_catch_up",
+            targetTenantParam = "#request.tenantId",
+            recordParams = false)
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<BatchDayCatchUpRequestStatusResponse> abandonUnprepared(
+            @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
+            @Valid @RequestBody BatchDayCatchUpAbandonRequest request) {
+        BatchDayCatchUpRequestStatusResponse result = recoveryService.abandonUnprepared(
+                request.tenantId(), originalKey, request.bizDate(), request.calendarCode());
+        return responseFactory.success(result);
+    }
 
-  @PostMapping("/continue")
-  @AuditAction(
-      action = "batch_day.catch_up_continue",
-      aggregateType = "batch_day_catch_up",
-      targetTenantParam = "#request.tenantId",
-      recordParams = false)
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<BatchDayCatchUpRequestStatusResponse> continueRequest(
-      @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
-      @Valid @RequestBody BatchDayCatchUpContinueRequest request) {
-    BatchDayCatchUpRequestStatusResponse result =
-        recoveryService.continueRequest(request.tenantId(), originalKey);
-    return responseFactory.success(result);
-  }
+    @PostMapping("/continue")
+    @AuditAction(
+            action = "batch_day.catch_up_continue",
+            aggregateType = "batch_day_catch_up",
+            targetTenantParam = "#request.tenantId",
+            recordParams = false)
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<BatchDayCatchUpRequestStatusResponse> continueRequest(
+            @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
+            @Valid @RequestBody BatchDayCatchUpContinueRequest request) {
+        BatchDayCatchUpRequestStatusResponse result = recoveryService.continueRequest(request.tenantId(), originalKey);
+        return responseFactory.success(result);
+    }
 
-  @PostMapping("/reconcile")
-  @AuditAction(
-      action = "batch_day.catch_up_reconcile",
-      aggregateType = "batch_day_catch_up",
-      aggregateId = "#request.jobCode",
-      targetTenantParam = "#request.tenantId",
-      recordParams = false)
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<BatchDayCatchUpRequestStatusResponse> reconcile(
-      @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
-      @Valid @RequestBody BatchDayCatchUpReconcileRequest request) {
-    BatchDayCatchUpRequestStatusResponse result =
-        recoveryService.reconcile(request.tenantId(), originalKey, request.jobCode());
-    return responseFactory.success(result);
-  }
+    @PostMapping("/reconcile")
+    @AuditAction(
+            action = "batch_day.catch_up_reconcile",
+            aggregateType = "batch_day_catch_up",
+            aggregateId = "#request.jobCode",
+            targetTenantParam = "#request.tenantId",
+            recordParams = false)
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<BatchDayCatchUpRequestStatusResponse> reconcile(
+            @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
+            @Valid @RequestBody BatchDayCatchUpReconcileRequest request) {
+        BatchDayCatchUpRequestStatusResponse result =
+                recoveryService.reconcile(request.tenantId(), originalKey, request.jobCode());
+        return responseFactory.success(result);
+    }
 }

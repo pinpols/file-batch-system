@@ -17,40 +17,39 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
 
-  private final DownstreamAdmissionMapper downstreamAdmissionMapper;
+    private final DownstreamAdmissionMapper downstreamAdmissionMapper;
 
-  @Override
-  public ResourceCheck check(ResourceSchedulingRequest request) {
-    boolean dispatchAdmissionIsNotApplicable = EmptyChecks.isNull(request)
-        || !"DISPATCH".equalsIgnoreCase(request.getWorkerType())
-        || !Texts.hasText(request.getTenantId());
-    if (dispatchAdmissionIsNotApplicable) {
-      return ResourceCheck.allow();
+    @Override
+    public ResourceCheck check(ResourceSchedulingRequest request) {
+        boolean dispatchAdmissionIsNotApplicable = EmptyChecks.isNull(request)
+                || !"DISPATCH".equalsIgnoreCase(request.getWorkerType())
+                || !Texts.hasText(request.getTenantId());
+        if (dispatchAdmissionIsNotApplicable) {
+            return ResourceCheck.allow();
+        }
+        List<String> channelCodes = resolveChannelCodes(request);
+        if (EmptyChecks.isEmpty(channelCodes)) {
+            return ResourceCheck.allow();
+        }
+        if (downstreamAdmissionMapper.isAnyDispatchChannelBlocked(request.getTenantId(), channelCodes)) {
+            return ResourceCheck.waitForCapacity(
+                    "DOWNSTREAM_CHANNEL_UNAVAILABLE",
+                    "dispatch channel is unhealthy and waiting for a successful health probe");
+        }
+        return ResourceCheck.allow();
     }
-    List<String> channelCodes = resolveChannelCodes(request);
-    if (EmptyChecks.isEmpty(channelCodes)) {
-      return ResourceCheck.allow();
-    }
-    if (downstreamAdmissionMapper.isAnyDispatchChannelBlocked(
-        request.getTenantId(), channelCodes)) {
-      return ResourceCheck.waitForCapacity(
-          "DOWNSTREAM_CHANNEL_UNAVAILABLE",
-          "dispatch channel is unhealthy and waiting for a successful health probe");
-    }
-    return ResourceCheck.allow();
-  }
 
-  private List<String> resolveChannelCodes(ResourceSchedulingRequest request) {
-    Set<String> channelCodes = new LinkedHashSet<>();
-    if (Texts.hasText(request.getDownstreamChannelCode())) {
-      channelCodes.add(request.getDownstreamChannelCode());
+    private List<String> resolveChannelCodes(ResourceSchedulingRequest request) {
+        Set<String> channelCodes = new LinkedHashSet<>();
+        if (Texts.hasText(request.getDownstreamChannelCode())) {
+            channelCodes.add(request.getDownstreamChannelCode());
+        }
+        if (EmptyChecks.isNotNull(request.getDownstreamChannelCodes())) {
+            request.getDownstreamChannelCodes().stream()
+                    .filter(Texts::hasText)
+                    .map(String::trim)
+                    .forEach(channelCodes::add);
+        }
+        return List.copyOf(channelCodes);
     }
-    if (EmptyChecks.isNotNull(request.getDownstreamChannelCodes())) {
-      request.getDownstreamChannelCodes().stream()
-          .filter(Texts::hasText)
-          .map(String::trim)
-          .forEach(channelCodes::add);
-    }
-    return List.copyOf(channelCodes);
-  }
 }

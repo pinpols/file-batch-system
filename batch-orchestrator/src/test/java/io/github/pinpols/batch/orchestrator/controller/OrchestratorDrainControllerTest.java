@@ -22,51 +22,48 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("排空控制接口的状态查询与人工启停,验证响应结果,状态标记与对排空流程的委托")
 class OrchestratorDrainControllerTest {
 
-  @Mock
-  private OrchestratorDrainService drainService;
+    @Mock
+    private OrchestratorDrainService drainService;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(drainService))
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(drainService))
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询排空状态时返回成功,并透出当前未排空的状态标记")
-  void shouldReturnDrainStatus() throws Exception {
-    when(drainService.status()).thenReturn(new DrainStatus(false, null, "none"));
+    @Test
+    @DisplayName("查询排空状态时返回成功,并透出当前未排空的状态标记")
+    void shouldReturnDrainStatus() throws Exception {
+        when(drainService.status()).thenReturn(new DrainStatus(false, null, "none"));
 
-    mockMvc
-        .perform(get("/internal/orchestrator/drain/status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.draining").value(false));
-  }
+        mockMvc.perform(get("/internal/orchestrator/drain/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draining").value(false));
+    }
 
-  @Test
-  @DisplayName("开启排空时返回成功并透出已排空标记,同时以人工原因启动排空流程")
-  void shouldEnableDrain() throws Exception {
-    when(drainService.enable()).thenReturn(new DrainStatus(true, null, "manual-enable"));
+    @Test
+    @DisplayName("开启排空时返回成功并透出已排空标记,同时以人工原因启动排空流程")
+    void shouldEnableDrain() throws Exception {
+        when(drainService.enable()).thenReturn(new DrainStatus(true, null, "manual-enable"));
 
-    mockMvc
-        .perform(post("/internal/orchestrator/drain/enable"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.draining").value(true));
+        mockMvc.perform(post("/internal/orchestrator/drain/enable"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draining").value(true));
 
-    verify(drainService).enable();
-  }
+        verify(drainService).enable();
+    }
 
-  @Test
-  @DisplayName("关闭排空时返回成功并透出未排空标记,同时以人工原因停止排空流程")
-  void shouldDisableDrain() throws Exception {
-    when(drainService.disable()).thenReturn(new DrainStatus(false, null, "manual-disable"));
+    @Test
+    @DisplayName("关闭排空时返回成功并透出未排空标记,同时以人工原因停止排空流程")
+    void shouldDisableDrain() throws Exception {
+        when(drainService.disable()).thenReturn(new DrainStatus(false, null, "manual-disable"));
 
-    mockMvc
-        .perform(post("/internal/orchestrator/drain/disable"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.draining").value(false));
+        mockMvc.perform(post("/internal/orchestrator/drain/disable"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draining").value(false));
 
-    verify(drainService).disable();
-  }
+        verify(drainService).disable();
+    }
 }

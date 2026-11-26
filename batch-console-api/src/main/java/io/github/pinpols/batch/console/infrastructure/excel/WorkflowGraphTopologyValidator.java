@@ -42,276 +42,269 @@ import java.util.Set;
  */
 final class WorkflowGraphTopologyValidator {
 
-  private WorkflowGraphTopologyValidator() {}
+    private WorkflowGraphTopologyValidator() {}
 
-  static List<WorkbookIssue> validate(
-      List<Map<String, String>> validWfNodes, List<Map<String, String>> validWfEdges) {
-    Map<String, WfGraphCtx> graphs = new LinkedHashMap<>();
-    for (Map<String, String> n : validWfNodes) {
-      String key = wfTopoKey(n);
-      graphs.computeIfAbsent(key, k -> new WfGraphCtx()).nodes.add(n);
-    }
-    for (Map<String, String> e : validWfEdges) {
-      String key = wfTopoKey(e);
-      WfGraphCtx g = graphs.get(key);
-      if (g != null) {
-        g.edges.add(e);
-      }
-      // 找不到 workflow 的 edge 已在 validateWfEdgeRow 中以 FK 失败标出,这里不重复
-    }
-    List<WorkbookIssue> issues = new ArrayList<>();
-    for (WfGraphCtx g : graphs.values()) {
-      validateWorkflowGraph(g, issues);
-    }
-    return issues;
-  }
-
-  private static String wfTopoKey(Map<String, String> row) {
-    String v = Texts.hasText(row.get(COL_WORKFLOW_VERSION))
-        ? normalize(row.get(COL_WORKFLOW_VERSION))
-        : normalize(row.get(COL_VERSION));
-    return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
-  }
-
-  // workflow graph 校验是一个完整 transaction:索引节点 -> 邻接表 -> 环/可达/终止 一气呵成,
-  // 拆方法会让中间状态(byCode/incoming/outgoing/startCodes/endCodes)散落到字段,牺牲可读性。
-  @SuppressWarnings("PMD.NcssCount")
-  private static void validateWorkflowGraph(WfGraphCtx g, List<WorkbookIssue> issues) {
-    // 索引:nodeCode -> row(取首个,duplicate 已在 validateWfNodeRow 报过)
-    Map<String, Map<String, String>> byCode = new LinkedHashMap<>();
-    for (Map<String, String> n : g.nodes) {
-      String code = normalize(n.get(COL_NODE_CODE));
-      if (Texts.hasText(code)) {
-        byCode.putIfAbsent(code, n);
-      }
-    }
-    // 邻接表
-    Map<String, List<String>> outgoing = new HashMap<>();
-    Map<String, List<String>> incoming = new HashMap<>();
-    for (Map<String, String> e : g.edges) {
-      String f = normalize(e.get(COL_FROM_NODE_CODE));
-      String t = normalize(e.get(COL_TO_NODE_CODE));
-      if (!Texts.hasText(f) || !Texts.hasText(t)) {
-        continue;
-      }
-      outgoing.computeIfAbsent(f, k -> new ArrayList<>()).add(t);
-      incoming.computeIfAbsent(t, k -> new ArrayList<>()).add(f);
-    }
-    // START / END 集合
-    Set<String> startCodes = new LinkedHashSet<>();
-    Set<String> endCodes = new LinkedHashSet<>();
-    for (Map.Entry<String, Map<String, String>> e : byCode.entrySet()) {
-      String type = normalizeEnum(e.getValue().get(COL_NODE_TYPE));
-      if ("START".equals(type)) {
-        startCodes.add(e.getKey());
-      } else if ("END".equals(type)) {
-        endCodes.add(e.getKey());
-      }
-    }
-    int fallbackRowNo = 2;
-    // V11 — START 数量、END 数量、START 入边、END 出边
-    if (EmptyChecks.isEmpty(startCodes) && EmptyChecks.isNotEmpty(byCode)) {
-      // 没有 START 节点,挑首节点定位
-      Map<String, String> first = byCode.values().iterator().next();
-      int issueRowNo = excelRowNo(first, fallbackRowNo);
-      issues.add(new WorkbookIssue(
-          WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph missing START node"));
-    }
-    if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
-      Map<String, String> first = byCode.values().iterator().next();
-      int issueRowNo = excelRowNo(first, fallbackRowNo);
-      issues.add(new WorkbookIssue(
-          WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph requires at least 1 END node"));
-    }
-    if (startCodes.size() > 1) {
-      for (String s : startCodes) {
-        Map<String, String> n = byCode.get(s);
-        int issueRowNo = excelRowNo(n, fallbackRowNo);
-        issues.add(new WorkbookIssue(
-            WF_NODE_SHEET,
-            issueRowNo,
-            COL_NODE_TYPE,
-            "workflow graph has multiple START nodes: " + startCodes));
-      }
-    }
-    for (String s : startCodes) {
-      if (EmptyChecks.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
-        Map<String, String> n = byCode.get(s);
-        int issueRowNo = excelRowNo(n, fallbackRowNo);
-        issues.add(new WorkbookIssue(
-            WF_NODE_SHEET,
-            issueRowNo,
-            COL_NODE_TYPE,
-            "START node cannot have incoming edges: " + s));
-      }
-    }
-    for (String e : endCodes) {
-      if (EmptyChecks.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
-        Map<String, String> n = byCode.get(e);
-        int issueRowNo = excelRowNo(n, fallbackRowNo);
-        issues.add(new WorkbookIssue(
-            WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "END node cannot have outgoing edges: " + e));
-      }
-    }
-    // V1 — self-loop + cycle
-    int fallbackEdgeRow = 2;
-    for (Map<String, String> e : g.edges) {
-      String f = normalize(e.get(COL_FROM_NODE_CODE));
-      String t = normalize(e.get(COL_TO_NODE_CODE));
-      if (Texts.hasText(f) && f.equals(t)) {
-        int issueRowNo = excelRowNo(e, fallbackEdgeRow);
-        issues.add(new WorkbookIssue(
-            WF_EDGE_SHEET, issueRowNo, COL_TO_NODE_CODE, "self-loop edge on node: " + f));
-      }
-      fallbackEdgeRow++;
-    }
-    Map<String, Integer> color = new HashMap<>();
-    for (String n : byCode.keySet()) {
-      if (color.getOrDefault(n, 0) == 0) {
-        dfsCycle(n, outgoing, color, byCode, fallbackRowNo, issues);
-      }
-    }
-    // V2——从 START 状态不可达。
-    Set<String> reachFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
-    if (EmptyChecks.isNotEmpty(startCodes)) {
-      for (String code : byCode.keySet()) {
-        if (!reachFromStart.contains(code)) {
-          Map<String, String> n = byCode.get(code);
-          int issueRowNo = excelRowNo(n, fallbackRowNo);
-          issues.add(new WorkbookIssue(
-              WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node unreachable from START: " + code));
+    static List<WorkbookIssue> validate(
+            List<Map<String, String>> validWfNodes, List<Map<String, String>> validWfEdges) {
+        Map<String, WfGraphCtx> graphs = new LinkedHashMap<>();
+        for (Map<String, String> n : validWfNodes) {
+            String key = wfTopoKey(n);
+            graphs.computeIfAbsent(key, k -> new WfGraphCtx()).nodes.add(n);
         }
-      }
-    }
-    // V3 — cannot reach END
-    Set<String> reachToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
-    if (EmptyChecks.isNotEmpty(endCodes)) {
-      for (String code : byCode.keySet()) {
-        boolean nonEndNodeCannotReachAnyEnd =
-            !reachToEnd.contains(code) && !endCodes.contains(code);
-        if (nonEndNodeCannotReachAnyEnd) {
-          Map<String, String> n = byCode.get(code);
-          int issueRowNo = excelRowNo(n, fallbackRowNo);
-          issues.add(new WorkbookIssue(
-              WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node cannot reach any END: " + code));
+        for (Map<String, String> e : validWfEdges) {
+            String key = wfTopoKey(e);
+            WfGraphCtx g = graphs.get(key);
+            if (g != null) {
+                g.edges.add(e);
+            }
+            // 找不到 workflow 的 edge 已在 validateWfEdgeRow 中以 FK 失败标出,这里不重复
         }
-      }
-    }
-    // V17 — CONDITION edge 必填 conditionExpr
-    int rowNo = 2;
-    for (Map<String, String> e : g.edges) {
-      String type = normalizeEnum(e.get(COL_EDGE_TYPE));
-      String expr = normalize(e.get(COL_CONDITION_EXPR));
-      if ("CONDITION".equals(type) && !Texts.hasText(expr)) {
-        int issueRowNo = excelRowNo(e, rowNo);
-        issues.add(new WorkbookIssue(
-            WF_EDGE_SHEET,
-            issueRowNo,
-            COL_CONDITION_EXPR,
-            "CONDITION edge requires non-empty condition_expr"));
-      }
-      rowNo++;
-    }
-    // V4 / V18 — DSL refs 必须存在 & 必须是拓扑序前(ancestor)
-    Map<String, Set<String>> ancestors = computeAncestors(byCode.keySet(), outgoing, startCodes);
-    for (Map.Entry<String, Map<String, String>> e : byCode.entrySet()) {
-      Map<String, String> n = e.getValue();
-      String params = n.get(COL_NODE_PARAMS);
-      if (!Texts.hasText(params)) {
-        continue;
-      }
-      for (String ref : WorkflowGraphs.dslNodeReferences(params)) {
-        if (!byCode.containsKey(ref)) {
-          int issueRowNo = excelRowNo(n, fallbackRowNo);
-          issues.add(new WorkbookIssue(
-              WF_NODE_SHEET,
-              issueRowNo,
-              COL_NODE_PARAMS,
-              "node_params DSL references missing node: " + ref));
-          continue;
+        List<WorkbookIssue> issues = new ArrayList<>();
+        for (WfGraphCtx g : graphs.values()) {
+            validateWorkflowGraph(g, issues);
         }
-        Set<String> ancSet = ancestors.getOrDefault(e.getKey(), Set.of());
-        if (!ancSet.contains(ref)) {
-          int issueRowNo = excelRowNo(n, fallbackRowNo);
-          issues.add(new WorkbookIssue(
-              WF_NODE_SHEET,
-              issueRowNo,
-              COL_NODE_PARAMS,
-              "node_params DSL can only reference upstream nodes; '"
-                  + ref
-                  + "' is not an ancestor of '"
-                  + e.getKey()
-                  + "'"));
+        return issues;
+    }
+
+    private static String wfTopoKey(Map<String, String> row) {
+        String v = Texts.hasText(row.get(COL_WORKFLOW_VERSION))
+                ? normalize(row.get(COL_WORKFLOW_VERSION))
+                : normalize(row.get(COL_VERSION));
+        return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
+    }
+
+    // workflow graph 校验是一个完整 transaction:索引节点 -> 邻接表 -> 环/可达/终止 一气呵成,
+    // 拆方法会让中间状态(byCode/incoming/outgoing/startCodes/endCodes)散落到字段,牺牲可读性。
+    @SuppressWarnings("PMD.NcssCount")
+    private static void validateWorkflowGraph(WfGraphCtx g, List<WorkbookIssue> issues) {
+        // 索引:nodeCode -> row(取首个,duplicate 已在 validateWfNodeRow 报过)
+        Map<String, Map<String, String>> byCode = new LinkedHashMap<>();
+        for (Map<String, String> n : g.nodes) {
+            String code = normalize(n.get(COL_NODE_CODE));
+            if (Texts.hasText(code)) {
+                byCode.putIfAbsent(code, n);
+            }
         }
-      }
-    }
-  }
-
-  // 环检测不与编排器共享：这里发现环后继续检查其余节点，可能在多处上报；编排器遇到第一个环就停止。
-  private static void dfsCycle(
-      String node,
-      Map<String, List<String>> outgoing,
-      Map<String, Integer> color,
-      Map<String, Map<String, String>> byCode,
-      int fallback,
-      List<WorkbookIssue> issues) {
-    color.put(node, 1);
-    for (String next : outgoing.getOrDefault(node, List.of())) {
-      Integer c = color.getOrDefault(next, 0);
-      if (c == 1) {
-        Map<String, String> n = byCode.get(node);
-        int issueRowNo = EmptyChecks.isNull(n) ? fallback : excelRowNo(n, fallback);
-        issues.add(new WorkbookIssue(
-            WF_EDGE_SHEET,
-            issueRowNo,
-            COL_TO_NODE_CODE,
-            "topology cycle detected through edge: " + node + " -> " + next));
-        return;
-      }
-      if (c == 0) {
-        dfsCycle(next, outgoing, color, byCode, fallback, issues);
-      }
-    }
-    color.put(node, 2);
-  }
-
-  // 祖先计算不与编排器共享：它只服务于 Excel 校验的 V18（DSL 只能引用上游节点），遍历语义专属于该检查。
-  /** 给每个节点算出可达的祖先集合。从每个 START 出发,沿 outgoing 边游走,把 source + source 的祖先并入 target 的祖先。 */
-  private static Map<String, Set<String>> computeAncestors(
-      Set<String> allCodes, Map<String, List<String>> outgoing, Set<String> startCodes) {
-    Map<String, Set<String>> ancestors = new HashMap<>();
-    for (String code : allCodes) {
-      ancestors.put(code, new HashSet<>());
-    }
-    for (String s : startCodes) {
-      walkAncestors(s, outgoing, ancestors, new HashSet<>());
-    }
-    return ancestors;
-  }
-
-  private static void walkAncestors(
-      String node,
-      Map<String, List<String>> outgoing,
-      Map<String, Set<String>> ancestors,
-      Set<String> visited) {
-    if (!visited.add(node)) {
-      return;
-    }
-    for (String next : outgoing.getOrDefault(node, List.of())) {
-      Set<String> nextAnc = ancestors.get(next);
-      if (nextAnc != null) {
-        nextAnc.add(node);
-        Set<String> nodeAnc = ancestors.get(node);
-        if (nodeAnc != null) {
-          nextAnc.addAll(nodeAnc);
+        // 邻接表
+        Map<String, List<String>> outgoing = new HashMap<>();
+        Map<String, List<String>> incoming = new HashMap<>();
+        for (Map<String, String> e : g.edges) {
+            String f = normalize(e.get(COL_FROM_NODE_CODE));
+            String t = normalize(e.get(COL_TO_NODE_CODE));
+            if (!Texts.hasText(f) || !Texts.hasText(t)) {
+                continue;
+            }
+            outgoing.computeIfAbsent(f, k -> new ArrayList<>()).add(t);
+            incoming.computeIfAbsent(t, k -> new ArrayList<>()).add(f);
         }
-      }
-      walkAncestors(next, outgoing, ancestors, visited);
+        // START / END 集合
+        Set<String> startCodes = new LinkedHashSet<>();
+        Set<String> endCodes = new LinkedHashSet<>();
+        for (Map.Entry<String, Map<String, String>> e : byCode.entrySet()) {
+            String type = normalizeEnum(e.getValue().get(COL_NODE_TYPE));
+            if ("START".equals(type)) {
+                startCodes.add(e.getKey());
+            } else if ("END".equals(type)) {
+                endCodes.add(e.getKey());
+            }
+        }
+        int fallbackRowNo = 2;
+        // V11 — START 数量、END 数量、START 入边、END 出边
+        if (EmptyChecks.isEmpty(startCodes) && EmptyChecks.isNotEmpty(byCode)) {
+            // 没有 START 节点,挑首节点定位
+            Map<String, String> first = byCode.values().iterator().next();
+            int issueRowNo = excelRowNo(first, fallbackRowNo);
+            issues.add(
+                    new WorkbookIssue(WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph missing START node"));
+        }
+        if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
+            Map<String, String> first = byCode.values().iterator().next();
+            int issueRowNo = excelRowNo(first, fallbackRowNo);
+            issues.add(new WorkbookIssue(
+                    WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph requires at least 1 END node"));
+        }
+        if (startCodes.size() > 1) {
+            for (String s : startCodes) {
+                Map<String, String> n = byCode.get(s);
+                int issueRowNo = excelRowNo(n, fallbackRowNo);
+                issues.add(new WorkbookIssue(
+                        WF_NODE_SHEET,
+                        issueRowNo,
+                        COL_NODE_TYPE,
+                        "workflow graph has multiple START nodes: " + startCodes));
+            }
+        }
+        for (String s : startCodes) {
+            if (EmptyChecks.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
+                Map<String, String> n = byCode.get(s);
+                int issueRowNo = excelRowNo(n, fallbackRowNo);
+                issues.add(new WorkbookIssue(
+                        WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "START node cannot have incoming edges: " + s));
+            }
+        }
+        for (String e : endCodes) {
+            if (EmptyChecks.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
+                Map<String, String> n = byCode.get(e);
+                int issueRowNo = excelRowNo(n, fallbackRowNo);
+                issues.add(new WorkbookIssue(
+                        WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "END node cannot have outgoing edges: " + e));
+            }
+        }
+        // V1 — self-loop + cycle
+        int fallbackEdgeRow = 2;
+        for (Map<String, String> e : g.edges) {
+            String f = normalize(e.get(COL_FROM_NODE_CODE));
+            String t = normalize(e.get(COL_TO_NODE_CODE));
+            if (Texts.hasText(f) && f.equals(t)) {
+                int issueRowNo = excelRowNo(e, fallbackEdgeRow);
+                issues.add(
+                        new WorkbookIssue(WF_EDGE_SHEET, issueRowNo, COL_TO_NODE_CODE, "self-loop edge on node: " + f));
+            }
+            fallbackEdgeRow++;
+        }
+        Map<String, Integer> color = new HashMap<>();
+        for (String n : byCode.keySet()) {
+            if (color.getOrDefault(n, 0) == 0) {
+                dfsCycle(n, outgoing, color, byCode, fallbackRowNo, issues);
+            }
+        }
+        // V2——从 START 状态不可达。
+        Set<String> reachFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
+        if (EmptyChecks.isNotEmpty(startCodes)) {
+            for (String code : byCode.keySet()) {
+                if (!reachFromStart.contains(code)) {
+                    Map<String, String> n = byCode.get(code);
+                    int issueRowNo = excelRowNo(n, fallbackRowNo);
+                    issues.add(new WorkbookIssue(
+                            WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node unreachable from START: " + code));
+                }
+            }
+        }
+        // V3 — cannot reach END
+        Set<String> reachToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
+        if (EmptyChecks.isNotEmpty(endCodes)) {
+            for (String code : byCode.keySet()) {
+                boolean nonEndNodeCannotReachAnyEnd = !reachToEnd.contains(code) && !endCodes.contains(code);
+                if (nonEndNodeCannotReachAnyEnd) {
+                    Map<String, String> n = byCode.get(code);
+                    int issueRowNo = excelRowNo(n, fallbackRowNo);
+                    issues.add(new WorkbookIssue(
+                            WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node cannot reach any END: " + code));
+                }
+            }
+        }
+        // V17 — CONDITION edge 必填 conditionExpr
+        int rowNo = 2;
+        for (Map<String, String> e : g.edges) {
+            String type = normalizeEnum(e.get(COL_EDGE_TYPE));
+            String expr = normalize(e.get(COL_CONDITION_EXPR));
+            if ("CONDITION".equals(type) && !Texts.hasText(expr)) {
+                int issueRowNo = excelRowNo(e, rowNo);
+                issues.add(new WorkbookIssue(
+                        WF_EDGE_SHEET,
+                        issueRowNo,
+                        COL_CONDITION_EXPR,
+                        "CONDITION edge requires non-empty condition_expr"));
+            }
+            rowNo++;
+        }
+        // V4 / V18 — DSL refs 必须存在 & 必须是拓扑序前(ancestor)
+        Map<String, Set<String>> ancestors = computeAncestors(byCode.keySet(), outgoing, startCodes);
+        for (Map.Entry<String, Map<String, String>> e : byCode.entrySet()) {
+            Map<String, String> n = e.getValue();
+            String params = n.get(COL_NODE_PARAMS);
+            if (!Texts.hasText(params)) {
+                continue;
+            }
+            for (String ref : WorkflowGraphs.dslNodeReferences(params)) {
+                if (!byCode.containsKey(ref)) {
+                    int issueRowNo = excelRowNo(n, fallbackRowNo);
+                    issues.add(new WorkbookIssue(
+                            WF_NODE_SHEET,
+                            issueRowNo,
+                            COL_NODE_PARAMS,
+                            "node_params DSL references missing node: " + ref));
+                    continue;
+                }
+                Set<String> ancSet = ancestors.getOrDefault(e.getKey(), Set.of());
+                if (!ancSet.contains(ref)) {
+                    int issueRowNo = excelRowNo(n, fallbackRowNo);
+                    issues.add(new WorkbookIssue(
+                            WF_NODE_SHEET,
+                            issueRowNo,
+                            COL_NODE_PARAMS,
+                            "node_params DSL can only reference upstream nodes; '"
+                                    + ref
+                                    + "' is not an ancestor of '"
+                                    + e.getKey()
+                                    + "'"));
+                }
+            }
+        }
     }
-  }
 
-  private static final class WfGraphCtx {
-    final List<Map<String, String>> nodes = new ArrayList<>();
-    final List<Map<String, String>> edges = new ArrayList<>();
-  }
+    // 环检测不与编排器共享：这里发现环后继续检查其余节点，可能在多处上报；编排器遇到第一个环就停止。
+    private static void dfsCycle(
+            String node,
+            Map<String, List<String>> outgoing,
+            Map<String, Integer> color,
+            Map<String, Map<String, String>> byCode,
+            int fallback,
+            List<WorkbookIssue> issues) {
+        color.put(node, 1);
+        for (String next : outgoing.getOrDefault(node, List.of())) {
+            Integer c = color.getOrDefault(next, 0);
+            if (c == 1) {
+                Map<String, String> n = byCode.get(node);
+                int issueRowNo = EmptyChecks.isNull(n) ? fallback : excelRowNo(n, fallback);
+                issues.add(new WorkbookIssue(
+                        WF_EDGE_SHEET,
+                        issueRowNo,
+                        COL_TO_NODE_CODE,
+                        "topology cycle detected through edge: " + node + " -> " + next));
+                return;
+            }
+            if (c == 0) {
+                dfsCycle(next, outgoing, color, byCode, fallback, issues);
+            }
+        }
+        color.put(node, 2);
+    }
+
+    // 祖先计算不与编排器共享：它只服务于 Excel 校验的 V18（DSL 只能引用上游节点），遍历语义专属于该检查。
+    /** 给每个节点算出可达的祖先集合。从每个 START 出发,沿 outgoing 边游走,把 source + source 的祖先并入 target 的祖先。 */
+    private static Map<String, Set<String>> computeAncestors(
+            Set<String> allCodes, Map<String, List<String>> outgoing, Set<String> startCodes) {
+        Map<String, Set<String>> ancestors = new HashMap<>();
+        for (String code : allCodes) {
+            ancestors.put(code, new HashSet<>());
+        }
+        for (String s : startCodes) {
+            walkAncestors(s, outgoing, ancestors, new HashSet<>());
+        }
+        return ancestors;
+    }
+
+    private static void walkAncestors(
+            String node, Map<String, List<String>> outgoing, Map<String, Set<String>> ancestors, Set<String> visited) {
+        if (!visited.add(node)) {
+            return;
+        }
+        for (String next : outgoing.getOrDefault(node, List.of())) {
+            Set<String> nextAnc = ancestors.get(next);
+            if (nextAnc != null) {
+                nextAnc.add(node);
+                Set<String> nodeAnc = ancestors.get(node);
+                if (nodeAnc != null) {
+                    nextAnc.addAll(nodeAnc);
+                }
+            }
+            walkAncestors(next, outgoing, ancestors, visited);
+        }
+    }
+
+    private static final class WfGraphCtx {
+        final List<Map<String, String>> nodes = new ArrayList<>();
+        final List<Map<String, String>> edges = new ArrayList<>();
+    }
 }

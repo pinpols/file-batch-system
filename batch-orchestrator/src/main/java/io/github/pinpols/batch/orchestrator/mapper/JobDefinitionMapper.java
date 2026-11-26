@@ -10,13 +10,11 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface JobDefinitionMapper {
 
-  JobDefinitionView selectFirstByTenantAndCodeAndEnabled(
-      @Param("tenantId") String tenantId,
-      @Param("jobCode") String jobCode,
-      @Param("enabled") Boolean enabled);
+    JobDefinitionView selectFirstByTenantAndCodeAndEnabled(
+            @Param("tenantId") String tenantId, @Param("jobCode") String jobCode, @Param("enabled") Boolean enabled);
 
-  List<JobDefinitionView> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    List<JobDefinitionView> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  JobDefinitionView selectById(@Param("id") Long id);
+    JobDefinitionView selectById(@Param("id") Long id);
 }

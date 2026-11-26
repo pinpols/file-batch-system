@@ -26,156 +26,153 @@ import org.apache.ibatis.annotations.Param;
 
 public interface JobPartitionMapper {
 
-  List<JobPartitionEntity> selectByQuery(JobPartitionQuery query);
+    List<JobPartitionEntity> selectByQuery(JobPartitionQuery query);
 
-  /**
-   * perf(#5): 只投影 (id, partition_status) 的轻量列,用于 REPORT 路径的分区计数/按节点计分区,避免 {@link
-   * #selectByQuery(JobPartitionQuery)} 的 {@code select *} 每次 REPORT 把 N 个分区(含 {@code
-   * output_summary} jsonb 大列)全量拉进内存 —— 那是单 instance 万级 fan-out 下 O(N)/REPORT × N REPORT = O(N²) 的
-   * report choke。
-   */
-  List<PartitionStatusRef> selectStatusRefsByInstance(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    /**
+     * perf(#5): 只投影 (id, partition_status) 的轻量列,用于 REPORT 路径的分区计数/按节点计分区,避免 {@link
+     * #selectByQuery(JobPartitionQuery)} 的 {@code select *} 每次 REPORT 把 N 个分区(含 {@code
+     * output_summary} jsonb 大列)全量拉进内存 —— 那是单 instance 万级 fan-out 下 O(N)/REPORT × N REPORT = O(N²) 的
+     * report choke。
+     */
+    List<PartitionStatusRef> selectStatusRefsByInstance(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  /**
-   * 普通实例达到预期终态计数后的事实校验：数据库返回单行聚合，防止漂移计数推动错误终态。
-   * 中间 report 直接读取实例增量计数；DAG 实例仍须使用 {@link #selectStatusRefsByInstance(String, Long)} 做节点级推进。
-   */
-  PartitionStatusSummary selectStatusSummaryByInstance(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    /**
+     * 普通实例达到预期终态计数后的事实校验：数据库返回单行聚合，防止漂移计数推动错误终态。
+     * 中间 report 直接读取实例增量计数；DAG 实例仍须使用 {@link #selectStatusRefsByInstance(String, Long)} 做节点级推进。
+     */
+    PartitionStatusSummary selectStatusSummaryByInstance(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  // C-2：使用行级锁串行化任务结果处理期间的并发分区计数。
-  List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);
+    // C-2：使用行级锁串行化任务结果处理期间的并发分区计数。
+    List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);
 
-  int insert(JobPartitionEntity entity);
+    int insert(JobPartitionEntity entity);
 
-  /**
-   * PERF(5.1): launch fan-out 多行 INSERT；PG getGeneratedKeys 按序回填每个元素的 {@code id}。 参数保持裸
-   * List（MyBatis Jdbc3KeyGenerator 对 collection 参数回填 key 的标准形态）。
-   */
-  int insertBatch(List<JobPartitionEntity> entities);
+    /**
+     * PERF(5.1): launch fan-out 多行 INSERT；PG getGeneratedKeys 按序回填每个元素的 {@code id}。 参数保持裸
+     * List（MyBatis Jdbc3KeyGenerator 对 collection 参数回填 key 的标准形态）。
+     */
+    int insertBatch(List<JobPartitionEntity> entities);
 
-  /**
-   * PERF(5.3): 批量续租 — 单条 UPDATE ... FROM VALUES JOIN job_task ... RETURNING。 返回续租成功的 (tenantId,
-   * taskId, cancelRequested) 行；缺席行=该项续租失败（语义同单条链路各前置/CAS 未命中）。
-   */
-  List<RenewLeaseBatchRow> renewLeaseBatch(
-      @Param("items") List<RenewLeaseBatchItem> items,
-      @Param("leaseExpireAt") Instant leaseExpireAt,
-      @Param("runningStatus") String runningStatus);
+    /**
+     * PERF(5.3): 批量续租 — 单条 UPDATE ... FROM VALUES JOIN job_task ... RETURNING。 返回续租成功的 (tenantId,
+     * taskId, cancelRequested) 行；缺席行=该项续租失败（语义同单条链路各前置/CAS 未命中）。
+     */
+    List<RenewLeaseBatchRow> renewLeaseBatch(
+            @Param("items") List<RenewLeaseBatchItem> items,
+            @Param("leaseExpireAt") Instant leaseExpireAt,
+            @Param("runningStatus") String runningStatus);
 
-  JobPartitionEntity selectByTenantAndJobInstanceIdAndPartitionNo(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("partitionNo") Integer partitionNo);
+    JobPartitionEntity selectByTenantAndJobInstanceIdAndPartitionNo(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("partitionNo") Integer partitionNo);
 
-  JobPartitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    JobPartitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  /** 以版本 CAS 认领分区并返回更新后的行；返回 {@code null} 表示 CAS 未命中。 */
-  JobPartitionEntity claimPartition(ClaimPartitionParam param);
+    /** 以版本 CAS 认领分区并返回更新后的行；返回 {@code null} 表示 CAS 未命中。 */
+    JobPartitionEntity claimPartition(ClaimPartitionParam param);
 
-  int renewLease(RenewLeaseParam param);
+    int renewLease(RenewLeaseParam param);
 
-  int markRetrying(JobPartitionMarkRetryingParam parameters);
+    int markRetrying(JobPartitionMarkRetryingParam parameters);
 
-  int updateOutputSummary(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("outputSummary") String outputSummary,
-      @Param("expectedInvocationId") String expectedInvocationId);
+    int updateOutputSummary(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("outputSummary") String outputSummary,
+            @Param("expectedInvocationId") String expectedInvocationId);
 
-  int updateInputSnapshot(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("inputSnapshot") String inputSnapshot,
-      @Param("expectedInvocationId") String expectedInvocationId);
+    int updateInputSnapshot(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("inputSnapshot") String inputSnapshot,
+            @Param("expectedInvocationId") String expectedInvocationId);
 
-  int markStatus(MarkPartitionStatusParam param);
+    int markStatus(MarkPartitionStatusParam param);
 
-  /**
-   * REPORT 终态专用：原子推进 partition 与 instance 计数，并返回更新后的 instance 快照。
-   *
-   * <p>返回 {@code null} 表示 partition CAS 未命中。调用方可回读 instance 保持原并发兜底语义。
-   */
-  JobInstanceEntity markTerminalStatusAndLoadInstance(MarkPartitionStatusParam param);
+    /**
+     * REPORT 终态专用：原子推进 partition 与 instance 计数，并返回更新后的 instance 快照。
+     *
+     * <p>返回 {@code null} 表示 partition CAS 未命中。调用方可回读 instance 保持原并发兜底语义。
+     */
+    JobInstanceEntity markTerminalStatusAndLoadInstance(MarkPartitionStatusParam param);
 
-  List<JobPartitionEntity> selectExpiredLeases(
-      @Param("tenantId") String tenantId,
-      @Param("readyStatus") String readyStatus,
-      @Param("runningStatus") String runningStatus);
+    List<JobPartitionEntity> selectExpiredLeases(
+            @Param("tenantId") String tenantId,
+            @Param("readyStatus") String readyStatus,
+            @Param("runningStatus") String runningStatus);
 
-  List<JobPartitionEntity> selectExpiredLeasesGlobal(
-      @Param("readyStatus") String readyStatus,
-      @Param("runningStatus") String runningStatus,
-      @Param("batchSize") Integer batchSize);
+    List<JobPartitionEntity> selectExpiredLeasesGlobal(
+            @Param("readyStatus") String readyStatus,
+            @Param("runningStatus") String runningStatus,
+            @Param("batchSize") Integer batchSize);
 
-  /**
-   * 回退扫描：partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task 的死态。 仅用于升级前历史残留清理；新代码已通过
-   * REQUIRES_NEW + 抛异常回滚消除产生路径。
-   */
-  List<JobPartitionEntity> selectOrphanReadyPartitionsWithRunningTask(
-      @Param("readyStatus") String readyStatus,
-      @Param("runningTaskStatus") String runningTaskStatus,
-      @Param("olderThan") Instant olderThan,
-      @Param("batchSize") int batchSize);
+    /**
+     * 回退扫描：partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task 的死态。 仅用于升级前历史残留清理；新代码已通过
+     * REQUIRES_NEW + 抛异常回滚消除产生路径。
+     */
+    List<JobPartitionEntity> selectOrphanReadyPartitionsWithRunningTask(
+            @Param("readyStatus") String readyStatus,
+            @Param("runningTaskStatus") String runningTaskStatus,
+            @Param("olderThan") Instant olderThan,
+            @Param("batchSize") int batchSize);
 
-  WaitingPartitionScanCursor selectWaitingPartitionScanCursor();
+    WaitingPartitionScanCursor selectWaitingPartitionScanCursor();
 
-  int advanceWaitingPartitionScanCursor(
-      @Param("lastPartitionId") long lastPartitionId,
-      @Param("cycleUpperId") long cycleUpperId,
-      @Param("dryRunPhase") boolean dryRunPhase,
-      @Param("expectedVersion") long expectedVersion);
+    int advanceWaitingPartitionScanCursor(
+            @Param("lastPartitionId") long lastPartitionId,
+            @Param("cycleUpperId") long cycleUpperId,
+            @Param("dryRunPhase") boolean dryRunPhase,
+            @Param("expectedVersion") long expectedVersion);
 
-  long selectLatestPartitionId();
+    long selectLatestPartitionId();
 
-  List<JobPartitionEntity> selectWaitingPartitionsGlobal(
-      @Param("batchSize") int batchSize, @Param("waitingStatus") String waitingStatus);
+    List<JobPartitionEntity> selectWaitingPartitionsGlobal(
+            @Param("batchSize") int batchSize, @Param("waitingStatus") String waitingStatus);
 
-  List<JobPartitionEntity> selectWaitingPartitionsGlobalInCycle(WaitingPartitionScanQuery query);
+    List<JobPartitionEntity> selectWaitingPartitionsGlobalInCycle(WaitingPartitionScanQuery query);
 
-  int resetForDispatch(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("readyStatus") String readyStatus,
-      @Param("expectedVersion") Long expectedVersion);
+    int resetForDispatch(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("readyStatus") String readyStatus,
+            @Param("expectedVersion") Long expectedVersion);
 
-  /**
-   * 租约回收专用复位：只恢复暂停前已派发但租约已过期的分区；普通重试/文件重派继续使用
-   * {@link #resetForDispatch}，其父 Job 或 Workflow 暂停时不会放行。
-   */
-  int resetForLeaseReclaim(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("readyStatus") String readyStatus,
-      @Param("expectedVersion") Long expectedVersion);
+    /**
+     * 租约回收专用复位：只恢复暂停前已派发但租约已过期的分区；普通重试/文件重派继续使用
+     * {@link #resetForDispatch}，其父 Job 或 Workflow 暂停时不会放行。
+     */
+    int resetForLeaseReclaim(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("readyStatus") String readyStatus,
+            @Param("expectedVersion") Long expectedVersion);
 
-  int promoteStatus(JobPartitionPromoteStatusParam parameters);
+    int promoteStatus(JobPartitionPromoteStatusParam parameters);
 
-  long countActiveByTenant(JobPartitionActiveByTenantCountQuery parameters);
+    long countActiveByTenant(JobPartitionActiveByTenantCountQuery parameters);
 
-  long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
+    long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
 
-  List<QueuePartitionBacklogStats> summarizeQueueBacklogByTenantAndQueueCodes(
-      QueueBacklogQueryParam param);
+    List<QueuePartitionBacklogStats> summarizeQueueBacklogByTenantAndQueueCodes(QueueBacklogQueryParam param);
 
-  QueuePartitionBacklogStats summarizeGlobalQueueBacklog(
-      JobPartitionGlobalQueueBacklogSummaryQuery parameters);
+    QueuePartitionBacklogStats summarizeGlobalQueueBacklog(JobPartitionGlobalQueueBacklogSummaryQuery parameters);
 
-  /**
-   * 启动审计：统计 {@link PartitionStatus#READY}/{@link PartitionStatus#RUNNING} 且 lease 已过期、与 {@link
-   * io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler}
-   * 扫描口径一致的行数。 终态分区残留的 {@code lease_expire_at} 不计入。
-   */
-  long countLeaseExpired(
-      @Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
+    /**
+     * 启动审计：统计 {@link PartitionStatus#READY}/{@link PartitionStatus#RUNNING} 且 lease 已过期、与 {@link
+     * io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler}
+     * 扫描口径一致的行数。 终态分区残留的 {@code lease_expire_at} 不计入。
+     */
+    long countLeaseExpired(@Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
 
-  /**
-   * 当 {@code job_instance} 已进入终态但子分区仍为非终态（历史并发/缺陷残留）时，批量收敛分区状态并清空 lease， 避免 {@code
-   * DefaultPartitionThrottle} 把 READY/RUNNING/RETRYING 计入活跃配额导致泄漏。
-   */
-  int closeNonTerminalPartitionsForTerminalInstance(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("targetPartitionStatus") String targetPartitionStatus);
+    /**
+     * 当 {@code job_instance} 已进入终态但子分区仍为非终态（历史并发/缺陷残留）时，批量收敛分区状态并清空 lease， 避免 {@code
+     * DefaultPartitionThrottle} 把 READY/RUNNING/RETRYING 计入活跃配额导致泄漏。
+     */
+    int closeNonTerminalPartitionsForTerminalInstance(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("targetPartitionStatus") String targetPartitionStatus);
 }

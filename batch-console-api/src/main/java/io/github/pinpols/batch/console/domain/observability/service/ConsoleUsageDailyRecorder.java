@@ -23,52 +23,52 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
 
-  /** console_usage_daily.metric_code VARCHAR(96)（V216__create_console_usage_daily.sql）。 */
-  private static final int METRIC_CODE_MAX_LENGTH = 96;
+    /** console_usage_daily.metric_code VARCHAR(96)（V216__create_console_usage_daily.sql）。 */
+    private static final int METRIC_CODE_MAX_LENGTH = 96;
 
-  private static final String SOURCE = "OPERATION_AUDIT";
-  private static final String OTHER_METRIC = "operation.other";
-  private static final Pattern ACTION_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,80}$");
+    private static final String SOURCE = "OPERATION_AUDIT";
+    private static final String OTHER_METRIC = "operation.other";
+    private static final Pattern ACTION_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,80}$");
 
-  private final ConsoleUsageDailyMapper mapper;
-  private final BatchTimezoneProvider timezoneProvider;
+    private final ConsoleUsageDailyMapper mapper;
+    private final BatchTimezoneProvider timezoneProvider;
 
-  /** 使用独立事务，避免聚合写失败把外层业务或审计事务标记为回滚。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void record(String tenantId, String action, boolean success, Instant createdAt) {
-    if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(createdAt)) {
-      return;
+    /** 使用独立事务，避免聚合写失败把外层业务或审计事务标记为回滚。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void record(String tenantId, String action, boolean success, Instant createdAt) {
+        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(createdAt)) {
+            return;
+        }
+        mapper.setTenantContext(tenantId);
+        ZoneId zone = timezoneProvider.defaultZone();
+        String metricCode = metricCode(action);
+        ZonedDateTime statDateTime = createdAt.atZone(zone);
+        LocalDate statDate = statDateTime.toLocalDate();
+        long successfulOperations = success ? 1L : 0L;
+        long failedOperations = success ? 0L : 1L;
+        ZonedDateTime createdDateTime = createdAt.atZone(zone);
+        OffsetDateTime zonedCreatedAt = createdDateTime.toOffsetDateTime();
+        DailyUsageRow usage = new DailyUsageRow(
+                statDate,
+                tenantId,
+                SOURCE,
+                metricCode,
+                "",
+                "",
+                1L,
+                successfulOperations,
+                failedOperations,
+                zonedCreatedAt);
+        mapper.insertDaily(usage);
     }
-    mapper.setTenantContext(tenantId);
-    ZoneId zone = timezoneProvider.defaultZone();
-    String metricCode = metricCode(action);
-    ZonedDateTime statDateTime = createdAt.atZone(zone);
-    LocalDate statDate = statDateTime.toLocalDate();
-    long successfulOperations = success ? 1L : 0L;
-    long failedOperations = success ? 0L : 1L;
-    ZonedDateTime createdDateTime = createdAt.atZone(zone);
-    OffsetDateTime zonedCreatedAt = createdDateTime.toOffsetDateTime();
-    DailyUsageRow usage = new DailyUsageRow(
-        statDate,
-        tenantId,
-        SOURCE,
-        metricCode,
-        "",
-        "",
-        1L,
-        successfulOperations,
-        failedOperations,
-        zonedCreatedAt);
-    mapper.insertDaily(usage);
-  }
 
-  private String metricCode(String action) {
-    if (!Texts.hasText(action) || !ACTION_PATTERN.matcher(action).matches()) {
-      return OTHER_METRIC;
+    private String metricCode(String action) {
+        if (!Texts.hasText(action) || !ACTION_PATTERN.matcher(action).matches()) {
+            return OTHER_METRIC;
+        }
+        String normalized = action.toLowerCase(Locale.ROOT);
+        String metric = "operation." + normalized;
+        int maxMetricEndIndex = Math.min(METRIC_CODE_MAX_LENGTH, metric.length());
+        return metric.substring(0, maxMetricEndIndex);
     }
-    String normalized = action.toLowerCase(Locale.ROOT);
-    String metric = "operation." + normalized;
-    int maxMetricEndIndex = Math.min(METRIC_CODE_MAX_LENGTH, metric.length());
-    return metric.substring(0, maxMetricEndIndex);
-  }
 }

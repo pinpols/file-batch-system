@@ -30,69 +30,65 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TriggerOutboxDomainEventPublisherTest {
 
-  @Mock
-  private TriggerOutboxEventMapper triggerOutboxEventMapper;
+    @Mock
+    private TriggerOutboxEventMapper triggerOutboxEventMapper;
 
-  private TriggerOutboxDomainEventPublisher publisher;
+    private TriggerOutboxDomainEventPublisher publisher;
 
-  @BeforeEach
-  void setUp() {
-    publisher = new TriggerOutboxDomainEventPublisher(
-        triggerOutboxEventMapper, new BatchKafkaTopicNamespace(""));
-  }
+    @BeforeEach
+    void setUp() {
+        publisher = new TriggerOutboxDomainEventPublisher(triggerOutboxEventMapper, new BatchKafkaTopicNamespace(""));
+    }
 
-  @Test
-  @DisplayName("DomainEvent 字段适配落 trigger_outbox_event 行 — 全字段对齐")
-  void domainEvent_mapsToEntity() {
-    when(triggerOutboxEventMapper.insert(any())).thenAnswer(inv -> {
-      ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
-      return 1;
-    });
+    @Test
+    @DisplayName("DomainEvent 字段适配落 trigger_outbox_event 行 — 全字段对齐")
+    void domainEvent_mapsToEntity() {
+        when(triggerOutboxEventMapper.insert(any())).thenAnswer(inv -> {
+            ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
+            return 1;
+        });
 
-    DomainEvent event = DomainEvent.builder("tenant-A")
-        .aggregate("TRIGGER_REQUEST", 100L)
-        .type("trigger.launch.v1")
-        .key("req-abc-123")
-        .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
-        .traceId("trace-xyz")
-        .build();
+        DomainEvent event = DomainEvent.builder("tenant-A")
+                .aggregate("TRIGGER_REQUEST", 100L)
+                .type("trigger.launch.v1")
+                .key("req-abc-123")
+                .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
+                .traceId("trace-xyz")
+                .build();
 
-    Long id = publisher.publish(event);
+        Long id = publisher.publish(event);
 
-    ArgumentCaptor<TriggerOutboxEventEntity> captor =
-        ArgumentCaptor.forClass(TriggerOutboxEventEntity.class);
-    verify(triggerOutboxEventMapper).insert(captor.capture());
-    TriggerOutboxEventEntity row = captor.getValue();
+        ArgumentCaptor<TriggerOutboxEventEntity> captor = ArgumentCaptor.forClass(TriggerOutboxEventEntity.class);
+        verify(triggerOutboxEventMapper).insert(captor.capture());
+        TriggerOutboxEventEntity row = captor.getValue();
 
-    assertThat(id).isEqualTo(42L);
-    assertThat(row.getTenantId()).isEqualTo("tenant-A");
-    assertThat(row.getRequestId()).isEqualTo("req-abc-123");
-    assertThat(row.getTopic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
-    assertThat(row.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
-    assertThat(row.getPublishAttempt()).isZero();
-    assertThat(row.getTraceId()).isEqualTo("trace-xyz");
-    assertThat(row.getNextPublishAt()).isNotNull();
-    assertThat(row.getPayload()).contains("launchRequest").contains("JOB_X");
-  }
+        assertThat(id).isEqualTo(42L);
+        assertThat(row.getTenantId()).isEqualTo("tenant-A");
+        assertThat(row.getRequestId()).isEqualTo("req-abc-123");
+        assertThat(row.getTopic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
+        assertThat(row.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
+        assertThat(row.getPublishAttempt()).isZero();
+        assertThat(row.getTraceId()).isEqualTo("trace-xyz");
+        assertThat(row.getNextPublishAt()).isNotNull();
+        assertThat(row.getPayload()).contains("launchRequest").contains("JOB_X");
+    }
 
-  @Test
-  @DisplayName("Trigger outbox 持久化部署命名空间下的 launch topic")
-  void publish_usesDeploymentNamespacedTopic() {
-    publisher = new TriggerOutboxDomainEventPublisher(
-        triggerOutboxEventMapper, new BatchKafkaTopicNamespace("workflow-east-1"));
+    @Test
+    @DisplayName("Trigger outbox 持久化部署命名空间下的 launch topic")
+    void publish_usesDeploymentNamespacedTopic() {
+        publisher = new TriggerOutboxDomainEventPublisher(
+                triggerOutboxEventMapper, new BatchKafkaTopicNamespace("workflow-east-1"));
 
-    publisher.publish(DomainEvent.builder("tenant-A")
-        .aggregate("TRIGGER_REQUEST", 101L)
-        .type("trigger.launch.v1")
-        .key("req-namespaced")
-        .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
-        .traceId("trace-namespaced")
-        .build());
+        publisher.publish(DomainEvent.builder("tenant-A")
+                .aggregate("TRIGGER_REQUEST", 101L)
+                .type("trigger.launch.v1")
+                .key("req-namespaced")
+                .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
+                .traceId("trace-namespaced")
+                .build());
 
-    ArgumentCaptor<TriggerOutboxEventEntity> captor =
-        ArgumentCaptor.forClass(TriggerOutboxEventEntity.class);
-    verify(triggerOutboxEventMapper).insert(captor.capture());
-    assertThat(captor.getValue().getTopic())
-        .isEqualTo("workflow-east-1." + BatchTopics.TRIGGER_LAUNCH_V1);
-  }
+        ArgumentCaptor<TriggerOutboxEventEntity> captor = ArgumentCaptor.forClass(TriggerOutboxEventEntity.class);
+        verify(triggerOutboxEventMapper).insert(captor.capture());
+        assertThat(captor.getValue().getTopic()).isEqualTo("workflow-east-1." + BatchTopics.TRIGGER_LAUNCH_V1);
+    }
 }

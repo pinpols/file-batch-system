@@ -27,28 +27,28 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchLifecycleStatus implements DictEnum {
-  /** 已写入数据库但未参与调度。 */
-  CREATED("CREATED", "已创建"),
-  /** 等待依赖 / 资源（DAG 上游、批次窗口、配额释放等）。 */
-  WAITING("WAITING", "等待中"),
-  /** 准备就绪，可被 worker 领取或调度器派发。 */
-  READY("READY", "待执行"),
-  /** 真正在跑（包含 RETRYING 等"还在推进中"的中间态）。 */
-  RUNNING("RUNNING", "执行中"),
-  /** 成功结束。 */
-  SUCCESS("SUCCESS", "成功"),
-  /** 失败结束（含 PARTIAL_FAILED 这类"部分失败但视为整体失败"的终态）。 */
-  FAILED("FAILED", "失败"),
-  /** 用户/系统取消。 */
-  CANCELLED("CANCELLED", "已取消"),
-  /** 强制终止（与 CANCELLED 区分语义：终止是不可恢复的 hard stop）。 */
-  TERMINATED("TERMINATED", "已终止");
+    /** 已写入数据库但未参与调度。 */
+    CREATED("CREATED", "已创建"),
+    /** 等待依赖 / 资源（DAG 上游、批次窗口、配额释放等）。 */
+    WAITING("WAITING", "等待中"),
+    /** 准备就绪，可被 worker 领取或调度器派发。 */
+    READY("READY", "待执行"),
+    /** 真正在跑（包含 RETRYING 等"还在推进中"的中间态）。 */
+    RUNNING("RUNNING", "执行中"),
+    /** 成功结束。 */
+    SUCCESS("SUCCESS", "成功"),
+    /** 失败结束（含 PARTIAL_FAILED 这类"部分失败但视为整体失败"的终态）。 */
+    FAILED("FAILED", "失败"),
+    /** 用户/系统取消。 */
+    CANCELLED("CANCELLED", "已取消"),
+    /** 强制终止（与 CANCELLED 区分语义：终止是不可恢复的 hard stop）。 */
+    TERMINATED("TERMINATED", "已终止");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  /** 是否处于终态（不会再变化）。 */
-  public boolean terminal() {
-    return this == SUCCESS || this == FAILED || this == CANCELLED || this == TERMINATED;
-  }
+    /** 是否处于终态（不会再变化）。 */
+    public boolean terminal() {
+        return this == SUCCESS || this == FAILED || this == CANCELLED || this == TERMINATED;
+    }
 }

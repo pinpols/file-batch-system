@@ -31,57 +31,57 @@ import org.junit.jupiter.api.Test;
 @DisplayName("持久化选型守护: 九个业务模块主源码不得再引入关系式查询类型")
 class NoSpringDataJdbcQueryGuardTest {
 
-  private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
+    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
 
-  private static final List<String> SCAN_MODULES = List.of(
-      "batch-common",
-      "batch-trigger",
-      "batch-orchestrator",
-      "batch-worker-core",
-      "batch-worker-import",
-      "batch-worker-export",
-      "batch-worker-process",
-      "batch-worker-dispatch",
-      "batch-console-api");
+    private static final List<String> SCAN_MODULES = List.of(
+            "batch-common",
+            "batch-trigger",
+            "batch-orchestrator",
+            "batch-worker-core",
+            "batch-worker-import",
+            "batch-worker-export",
+            "batch-worker-process",
+            "batch-worker-dispatch",
+            "batch-console-api");
 
-  private static final List<String> FORBIDDEN_TOKENS = List.of(
-      "org.springframework.data.jdbc.repository.query.Query",
-      "org.springframework.data.jdbc.repository.config.EnableJdbcRepositories",
-      "org.springframework.data.repository.Repository",
-      "org.springframework.data.repository.CrudRepository",
-      "org.springframework.data.relational.core.mapping.Column");
+    private static final List<String> FORBIDDEN_TOKENS = List.of(
+            "org.springframework.data.jdbc.repository.query.Query",
+            "org.springframework.data.jdbc.repository.config.EnableJdbcRepositories",
+            "org.springframework.data.repository.Repository",
+            "org.springframework.data.repository.CrudRepository",
+            "org.springframework.data.relational.core.mapping.Column");
 
-  @Test
-  @DisplayName("遍历受管模块主源码时, 不出现被禁的查询注解与仓储类型")
-  void shouldNotFindSpringDataJdbcTypes_whenScanningMainSources() throws IOException {
-    List<String> violations = new ArrayList<>();
-    for (String module : SCAN_MODULES) {
-      Path mainJava = REPO_ROOT.resolve(module).resolve("src/main/java");
-      if (!Files.isDirectory(mainJava)) {
-        continue;
-      }
-      try (Stream<Path> stream = Files.walk(mainJava)) {
-        stream.filter(p -> p.toString().endsWith(".java")).forEach(p -> scanFile(p, violations));
-      }
+    @Test
+    @DisplayName("遍历受管模块主源码时, 不出现被禁的查询注解与仓储类型")
+    void shouldNotFindSpringDataJdbcTypes_whenScanningMainSources() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (String module : SCAN_MODULES) {
+            Path mainJava = REPO_ROOT.resolve(module).resolve("src/main/java");
+            if (!Files.isDirectory(mainJava)) {
+                continue;
+            }
+            try (Stream<Path> stream = Files.walk(mainJava)) {
+                stream.filter(p -> p.toString().endsWith(".java")).forEach(p -> scanFile(p, violations));
+            }
+        }
+        assertThat(violations)
+                .as("全 reactor 已统一走 MyBatis(ADR-001);新增查询请走 mapper,不要再引入 Spring Data JDBC @Query /"
+                        + " Repository / @Column / EnableJdbcRepositories。详见 commit 7870f06e + Phase 0-4"
+                        + " 迁移历史。")
+                .isEmpty();
     }
-    assertThat(violations)
-        .as("全 reactor 已统一走 MyBatis(ADR-001);新增查询请走 mapper,不要再引入 Spring Data JDBC @Query /"
-            + " Repository / @Column / EnableJdbcRepositories。详见 commit 7870f06e + Phase 0-4"
-            + " 迁移历史。")
-        .isEmpty();
-  }
 
-  private static void scanFile(Path file, List<String> sink) {
-    String content;
-    try {
-      content = Files.readString(file, StandardCharsets.UTF_8);
-    } catch (IOException ignored) {
-      return;
+    private static void scanFile(Path file, List<String> sink) {
+        String content;
+        try {
+            content = Files.readString(file, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+            return;
+        }
+        for (String token : FORBIDDEN_TOKENS) {
+            if (content.contains(token)) {
+                sink.add(file + " -> " + token);
+            }
+        }
     }
-    for (String token : FORBIDDEN_TOKENS) {
-      if (content.contains(token)) {
-        sink.add(file + " -> " + token);
-      }
-    }
-  }
 }

@@ -13,6 +13,6 @@ package io.github.pinpols.batch.e2e.support.verifier;
 @FunctionalInterface
 public interface E2eVerifier {
 
-  /** Executes all configured assertions. Throws {@link AssertionError} on failure. */
-  void verify();
+    /** Executes all configured assertions. Throws {@link AssertionError} on failure. */
+    void verify();
 }

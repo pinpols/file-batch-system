@@ -30,26 +30,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleWorkerFingerprintController {
 
-  private final ConsoleWorkerFingerprintQueryService queryService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleWorkerFingerprintQueryService queryService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /**
-   * GET /api/console/workers/fingerprints?tenantId=xxx — 列租户「ONLINE + DRAINING」worker
-   * 指纹,heartbeat_at 倒序,上限 200 行。
-   */
-  @GetMapping
-  public CommonResponse<List<WorkerFingerprintResponse>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.list(tenantId));
-  }
+    /**
+     * GET /api/console/workers/fingerprints?tenantId=xxx — 列租户「ONLINE + DRAINING」worker
+     * 指纹,heartbeat_at 倒序,上限 200 行。
+     */
+    @GetMapping
+    public CommonResponse<List<WorkerFingerprintResponse>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.success(queryService.list(tenantId));
+    }
 
-  /**
-   * GET /api/console/workers/fingerprints/summary?tenantId=xxx — 按 (buildId, sdkVersion) 聚合 ONLINE
-   * worker 数,count desc。空值在 SQL 层 COALESCE 为 "(unknown)"。
-   */
-  @GetMapping("/summary")
-  public CommonResponse<List<WorkerFingerprintSummaryResponse>> summary(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.summary(tenantId));
-  }
+    /**
+     * GET /api/console/workers/fingerprints/summary?tenantId=xxx — 按 (buildId, sdkVersion) 聚合 ONLINE
+     * worker 数,count desc。空值在 SQL 层 COALESCE 为 "(unknown)"。
+     */
+    @GetMapping("/summary")
+    public CommonResponse<List<WorkerFingerprintSummaryResponse>> summary(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.success(queryService.summary(tenantId));
+    }
 }

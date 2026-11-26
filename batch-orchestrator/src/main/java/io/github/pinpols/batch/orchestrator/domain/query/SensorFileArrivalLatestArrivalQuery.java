@@ -7,13 +7,13 @@ import lombok.Builder;
 /** 绑定一次selectLatestArrival操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
 @Builder
 public record SensorFileArrivalLatestArrivalQuery(
-    String tenantId,
-    String namePattern,
-    String sourceType,
-    String channelCode,
-    OffsetDateTime since,
-    LocalDate bizDate,
-    String fileGroupCode,
-    Long workflowDefinitionId,
-    String storageId,
-    boolean requireCompleteGroup) {}
+        String tenantId,
+        String namePattern,
+        String sourceType,
+        String channelCode,
+        OffsetDateTime since,
+        LocalDate bizDate,
+        String fileGroupCode,
+        Long workflowDefinitionId,
+        String storageId,
+        boolean requireCompleteGroup) {}

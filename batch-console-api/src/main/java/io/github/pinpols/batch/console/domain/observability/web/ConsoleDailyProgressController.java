@@ -23,28 +23,28 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/console/dashboard/daily-progress")
 @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 public class ConsoleDailyProgressController {
-  private final DailyProgressQueryService queries;
-  private final ConsoleProgressSnapshotPublisher push;
-  private final ConsoleResponseFactory responses;
+    private final DailyProgressQueryService queries;
+    private final ConsoleProgressSnapshotPublisher push;
+    private final ConsoleResponseFactory responses;
 
-  @GetMapping
-  public CommonResponse<DailyProgressResponse> query(
-      @RequestParam String tenantId,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
-    return responses.success(queries.query(tenantId, bizDate));
-  }
+    @GetMapping
+    public CommonResponse<DailyProgressResponse> query(
+            @RequestParam String tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
+        return responses.success(queries.query(tenantId, bizDate));
+    }
 
-  @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter events(
-      @RequestParam String tenantId,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
-    DailyProgressResponse initial = queries.query(tenantId, bizDate);
-    return push.subscribe(
-        initial.tenantId(),
-        "daily-progress-" + bizDate,
-        "daily-progress",
-        initial,
-        () -> queries.queryAuthorized(initial.tenantId(), bizDate),
-        snapshot -> List.of(snapshot.counts(), snapshot.coverage()));
-  }
+    @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter events(
+            @RequestParam String tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
+        DailyProgressResponse initial = queries.query(tenantId, bizDate);
+        return push.subscribe(
+                initial.tenantId(),
+                "daily-progress-" + bizDate,
+                "daily-progress",
+                initial,
+                () -> queries.queryAuthorized(initial.tenantId(), bizDate),
+                snapshot -> List.of(snapshot.counts(), snapshot.coverage()));
+    }
 }

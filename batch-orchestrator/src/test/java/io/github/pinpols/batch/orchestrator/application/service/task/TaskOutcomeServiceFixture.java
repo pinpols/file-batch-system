@@ -26,75 +26,72 @@ import org.springframework.context.ApplicationEventPublisher;
 /** 将真实状态推进协作者的纯测试装配集中于此，不在生产入口保留另一套创建路径。 */
 public final class TaskOutcomeServiceFixture {
 
-  private TaskOutcomeServiceFixture() {}
+    private TaskOutcomeServiceFixture() {}
 
-  /** 测试依赖集合不参与 Spring 注册，也不作为生产服务的依赖容器。 */
-  public record Dependencies(
-      RetryGovernanceService retryGovernanceService,
-      LifecycleEventMapper<Object> lifecycleEventMapper,
-      WorkflowDagService workflowDagService,
-      ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
-      WorkflowTerminalOutboxService workflowTerminalOutboxService,
-      VerifierFailureOutboxService verifierFailureOutboxService,
-      MeterRegistry meterRegistry,
-      JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
-      ResultVersionWriter resultVersionWriter,
-      BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
-      FailureClassifier failureClassifier,
-      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
-      CountContinuityOutboxService countContinuityOutboxService,
-      ApplicationEventPublisher applicationEventPublisher,
-      SecretPayloadProtector secretPayloadProtector) {}
+    /** 测试依赖集合不参与 Spring 注册，也不作为生产服务的依赖容器。 */
+    public record Dependencies(
+            RetryGovernanceService retryGovernanceService,
+            LifecycleEventMapper<Object> lifecycleEventMapper,
+            WorkflowDagService workflowDagService,
+            ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
+            WorkflowTerminalOutboxService workflowTerminalOutboxService,
+            VerifierFailureOutboxService verifierFailureOutboxService,
+            MeterRegistry meterRegistry,
+            JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
+            ResultVersionWriter resultVersionWriter,
+            BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
+            FailureClassifier failureClassifier,
+            JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
+            CountContinuityOutboxService countContinuityOutboxService,
+            ApplicationEventPublisher applicationEventPublisher,
+            SecretPayloadProtector secretPayloadProtector) {}
 
-  public static DefaultTaskOutcomeService create(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
-      Dependencies dependencies) {
-    TaskOutcomeNodeRunRecorder recorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
-    TaskOutcomeTerminalFinalizer finalizer = new TaskOutcomeTerminalFinalizer(
-        dependencies.jobLifecycleMetricsRecorder(),
-        dependencies.meterRegistry(),
-        dependencies.jobInstanceTerminalChildStateReconciler(),
-        dependencies.resultVersionWriter(),
-        dependencies.batchDayReplayTerminalReconciler(),
-        Mockito.mock(JobTerminalOutboxService.class));
-    TaskOutcomeDagProgressor dag = new TaskOutcomeDagProgressor(
-        workflowMappers,
-        dependencies.workflowDagService(),
-        dependencies.workflowNodeDispatchServiceProvider(),
-        recorder,
-        dependencies.countContinuityOutboxService(),
-        dependencies.secretPayloadProtector());
-    TaskOutcomeWorkflowFinalizer workflow = new TaskOutcomeWorkflowFinalizer(
-        workflowMappers,
-        dependencies.lifecycleEventMapper(),
-        dependencies.workflowTerminalOutboxService(),
-        new WorkflowNodeTerminalFinalizer(
-            workflowMappers, dependencies.workflowTerminalOutboxService()));
-    TaskOutcomeInstanceProgressor progressor = new TaskOutcomeInstanceProgressor(
-        jobMappers,
-        workflowMappers,
-        dependencies.lifecycleEventMapper(),
-        dependencies.failureClassifier(),
-        finalizer,
-        dag,
-        workflow);
-    DefaultTaskOutcomeService service = new DefaultTaskOutcomeService(
-        jobMappers,
-        dependencies.retryGovernanceService(),
-        dependencies.verifierFailureOutboxService(),
-        dependencies.failureClassifier(),
-        dependencies.countContinuityOutboxService(),
-        dependencies.applicationEventPublisher(),
-        dependencies.workflowNodeDispatchServiceProvider(),
-        dependencies.meterRegistry(),
-        recorder,
-        progressor,
-        new WorkflowRunReportLock(
-            workflowMappers,
-            Mockito.mock(WorkflowDefinitionMapper.class),
-            Mockito.mock(BatchDayInstanceMapper.class)));
-    service.initialize();
-    return service;
-  }
+    public static DefaultTaskOutcomeService create(
+            OrchestratorJobMappers jobMappers, OrchestratorWorkflowMappers workflowMappers, Dependencies dependencies) {
+        TaskOutcomeNodeRunRecorder recorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
+        TaskOutcomeTerminalFinalizer finalizer = new TaskOutcomeTerminalFinalizer(
+                dependencies.jobLifecycleMetricsRecorder(),
+                dependencies.meterRegistry(),
+                dependencies.jobInstanceTerminalChildStateReconciler(),
+                dependencies.resultVersionWriter(),
+                dependencies.batchDayReplayTerminalReconciler(),
+                Mockito.mock(JobTerminalOutboxService.class));
+        TaskOutcomeDagProgressor dag = new TaskOutcomeDagProgressor(
+                workflowMappers,
+                dependencies.workflowDagService(),
+                dependencies.workflowNodeDispatchServiceProvider(),
+                recorder,
+                dependencies.countContinuityOutboxService(),
+                dependencies.secretPayloadProtector());
+        TaskOutcomeWorkflowFinalizer workflow = new TaskOutcomeWorkflowFinalizer(
+                workflowMappers,
+                dependencies.lifecycleEventMapper(),
+                dependencies.workflowTerminalOutboxService(),
+                new WorkflowNodeTerminalFinalizer(workflowMappers, dependencies.workflowTerminalOutboxService()));
+        TaskOutcomeInstanceProgressor progressor = new TaskOutcomeInstanceProgressor(
+                jobMappers,
+                workflowMappers,
+                dependencies.lifecycleEventMapper(),
+                dependencies.failureClassifier(),
+                finalizer,
+                dag,
+                workflow);
+        DefaultTaskOutcomeService service = new DefaultTaskOutcomeService(
+                jobMappers,
+                dependencies.retryGovernanceService(),
+                dependencies.verifierFailureOutboxService(),
+                dependencies.failureClassifier(),
+                dependencies.countContinuityOutboxService(),
+                dependencies.applicationEventPublisher(),
+                dependencies.workflowNodeDispatchServiceProvider(),
+                dependencies.meterRegistry(),
+                recorder,
+                progressor,
+                new WorkflowRunReportLock(
+                        workflowMappers,
+                        Mockito.mock(WorkflowDefinitionMapper.class),
+                        Mockito.mock(BatchDayInstanceMapper.class)));
+        service.initialize();
+        return service;
+    }
 }

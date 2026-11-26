@@ -32,233 +32,230 @@ import org.springframework.ai.tool.annotation.ToolParam;
  */
 public class ConsoleAiTools {
 
-  /** AI 工具输出中告警标题的截断长度，控制交给模型的上下文篇幅；不对应数据库列。 */
-  private static final int ALERT_TITLE_MAX_LENGTH = 200;
+    /** AI 工具输出中告警标题的截断长度，控制交给模型的上下文篇幅；不对应数据库列。 */
+    private static final int ALERT_TITLE_MAX_LENGTH = 200;
 
-  /** AI 工具输出中作业实例结果摘要的截断长度；不对应数据库列。 */
-  private static final int RESULT_SUMMARY_MAX_LENGTH = 500;
+    /** AI 工具输出中作业实例结果摘要的截断长度；不对应数据库列。 */
+    private static final int RESULT_SUMMARY_MAX_LENGTH = 500;
 
-  /** AI 工具输出中单条日志消息的截断长度；不对应数据库列。 */
-  private static final int LOG_MESSAGE_MAX_LENGTH = 500;
+    /** AI 工具输出中单条日志消息的截断长度；不对应数据库列。 */
+    private static final int LOG_MESSAGE_MAX_LENGTH = 500;
 
-  private final String tenantId;
-  private final ConsoleQueryApplicationService queryService;
-  private final ConsoleClusterDiagnosticService diagnosticService;
-  private final int maxRows;
+    private final String tenantId;
+    private final ConsoleQueryApplicationService queryService;
+    private final ConsoleClusterDiagnosticService diagnosticService;
+    private final int maxRows;
 
-  public ConsoleAiTools(
-      String tenantId,
-      ConsoleQueryApplicationService queryService,
-      ConsoleClusterDiagnosticService diagnosticService,
-      int maxRows) {
-    this.tenantId = tenantId;
-    this.queryService = queryService;
-    this.diagnosticService = diagnosticService;
-    this.maxRows = Math.max(maxRows, 1);
-  }
-
-  @Tool(
-      description = "查询指定 job 实例的当前状态、jobCode、失败分类(failureClass)、起止时间与结果摘要。"
-          + "用户提到某个具体实例 id 或问「某次执行为什么失败」时调用。")
-  public String getJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
-    ConsoleJobInstanceResponse instance = queryService.jobInstance(tenantId, jobInstanceId);
-    if (instance == null) {
-      return "未找到 job 实例:id=" + jobInstanceId + "(当前租户内不存在)";
+    public ConsoleAiTools(
+            String tenantId,
+            ConsoleQueryApplicationService queryService,
+            ConsoleClusterDiagnosticService diagnosticService,
+            int maxRows) {
+        this.tenantId = tenantId;
+        this.queryService = queryService;
+        this.diagnosticService = diagnosticService;
+        this.maxRows = Math.max(maxRows, 1);
     }
-    return renderInstance(instance);
-  }
 
-  @Tool(description = "查询指定 job 实例的执行日志(按时间倒序、最多若干条),用于定位失败的具体原因 / 报错信息。")
-  public String getJobExecutionLogs(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
-    JobExecutionLogQueryRequest request = new JobExecutionLogQueryRequest();
-    request.setTenantId(tenantId);
-    request.setJobInstanceId(jobInstanceId);
-    request.setPageNo(1);
-    request.setPageSize(maxRows);
-    PageResponse<ConsoleJobExecutionLogResponse> page = queryService.jobExecutionLogs(request);
-    if (page.items().isEmpty()) {
-      return "无执行日志:jobInstanceId=" + jobInstanceId;
+    @Tool(description = "查询指定 job 实例的当前状态、jobCode、失败分类(failureClass)、起止时间与结果摘要。" + "用户提到某个具体实例 id 或问「某次执行为什么失败」时调用。")
+    public String getJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
+        ConsoleJobInstanceResponse instance = queryService.jobInstance(tenantId, jobInstanceId);
+        if (instance == null) {
+            return "未找到 job 实例:id=" + jobInstanceId + "(当前租户内不存在)";
+        }
+        return renderInstance(instance);
     }
-    return page.items().stream().map(this::renderLog).collect(Collectors.joining("\n"));
-  }
 
-  @Tool(description = "列出当前租户最近的失败(FAILED)job 实例,用于发现近期问题或找出要进一步排查的实例 id。")
-  public String listRecentFailedJobInstances() {
-    JobInstanceQueryRequest request = new JobInstanceQueryRequest();
-    request.setTenantId(tenantId);
-    request.setInstanceStatus(JobInstanceStatus.FAILED.code());
-    request.setPageNo(1);
-    request.setPageSize(maxRows);
-    PageResponse<ConsoleJobInstanceResponse> page = queryService.jobInstances(request);
-    if (page.items().isEmpty()) {
-      return "当前租户近期无 FAILED 实例。";
+    @Tool(description = "查询指定 job 实例的执行日志(按时间倒序、最多若干条),用于定位失败的具体原因 / 报错信息。")
+    public String getJobExecutionLogs(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
+        JobExecutionLogQueryRequest request = new JobExecutionLogQueryRequest();
+        request.setTenantId(tenantId);
+        request.setJobInstanceId(jobInstanceId);
+        request.setPageNo(1);
+        request.setPageSize(maxRows);
+        PageResponse<ConsoleJobExecutionLogResponse> page = queryService.jobExecutionLogs(request);
+        if (page.items().isEmpty()) {
+            return "无执行日志:jobInstanceId=" + jobInstanceId;
+        }
+        return page.items().stream().map(this::renderLog).collect(Collectors.joining("\n"));
     }
-    return page.items().stream()
-        .map(instance -> "id="
-            + instance.id()
-            + " jobCode="
-            + instance.jobCode()
-            + " failureClass="
-            + nullToDash(instance.failureClass())
-            + " finishedAt="
-            + instance.finishedAt())
-        .collect(Collectors.joining("\n"));
-  }
 
-  @Tool(
-      description = "返回当前租户的集群健康诊断快照(只读,固定阈值):ShedLock 定时任务租约、Worker 注册一致性、"
-          + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
-          + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
-  public String getClusterDiagnostics() {
-    if (EmptyChecks.isNull(diagnosticService)) {
-      return "集群诊断服务当前不可用(诊断能力未装配)。";
+    @Tool(description = "列出当前租户最近的失败(FAILED)job 实例,用于发现近期问题或找出要进一步排查的实例 id。")
+    public String listRecentFailedJobInstances() {
+        JobInstanceQueryRequest request = new JobInstanceQueryRequest();
+        request.setTenantId(tenantId);
+        request.setInstanceStatus(JobInstanceStatus.FAILED.code());
+        request.setPageNo(1);
+        request.setPageSize(maxRows);
+        PageResponse<ConsoleJobInstanceResponse> page = queryService.jobInstances(request);
+        if (page.items().isEmpty()) {
+            return "当前租户近期无 FAILED 实例。";
+        }
+        return page.items().stream()
+                .map(instance -> "id="
+                        + instance.id()
+                        + " jobCode="
+                        + instance.jobCode()
+                        + " failureClass="
+                        + nullToDash(instance.failureClass())
+                        + " finishedAt="
+                        + instance.finishedAt())
+                .collect(Collectors.joining("\n"));
     }
-    ConsoleClusterDiagnosticResponse diagnostics = diagnosticService.diagnose(tenantId);
-    if (diagnostics == null) {
-      return "集群诊断当前无数据(可能诊断服务未就绪或该租户无相关记录)。";
+
+    @Tool(
+            description = "返回当前租户的集群健康诊断快照(只读,固定阈值):ShedLock 定时任务租约、Worker 注册一致性、"
+                    + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
+                    + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
+    public String getClusterDiagnostics() {
+        if (EmptyChecks.isNull(diagnosticService)) {
+            return "集群诊断服务当前不可用(诊断能力未装配)。";
+        }
+        ConsoleClusterDiagnosticResponse diagnostics = diagnosticService.diagnose(tenantId);
+        if (diagnostics == null) {
+            return "集群诊断当前无数据(可能诊断服务未就绪或该租户无相关记录)。";
+        }
+        ConsoleShedLockStatusResponse shedLock = diagnostics.shedLock();
+        ConsoleWorkerConsistencyResponse workers = diagnostics.workers();
+        ConsoleOutboxHealthResponse outbox = diagnostics.outbox();
+        ConsoleTerminalChildrenHealthResponse terminal = diagnostics.terminalChildren();
+        return "[集群诊断] 当前租户只读快照(固定阈值,超阈即判不健康)\n"
+                + "ShedLock 定时任务租约: totalLocks="
+                + value(shedLock.totalLocks())
+                + " activeLocks="
+                + value(shedLock.activeLocks())
+                + "\nWorker 一致性: healthy="
+                + value(workers.healthy())
+                + " onlineWorkers="
+                + value(workers.onlineWorkers())
+                + " drainingWorkers="
+                + value(workers.drainingWorkers())
+                + " offlineWorkers="
+                + value(workers.offlineWorkers())
+                + " staleOnlineWorkers="
+                + value(workers.staleOnlineWorkers())
+                + " drainingPastDeadlineWorkers="
+                + value(workers.drainingPastDeadlineWorkers())
+                + " decommissionedWorkersWithActiveTasks="
+                + value(workers.decommissionedWorkersWithActiveTasks())
+                + " invalidCapabilityTags="
+                + value(workers.invalidCapabilityTags())
+                + " runningInstances="
+                + value(workers.runningInstances())
+                + "\nOutbox 投递: healthy="
+                + value(outbox.healthy())
+                + " pendingEvents="
+                + value(outbox.pendingEvents())
+                + " activeEvents="
+                + value(outbox.activeEvents())
+                + " stalePublishingEvents="
+                + value(outbox.stalePublishingEvents())
+                + "\n终态子项 (terminalChildren): healthy="
+                + value(terminal.healthy())
+                + " terminalInstancesWithActiveChildren="
+                + value(terminal.terminalInstancesWithActiveChildren());
     }
-    ConsoleShedLockStatusResponse shedLock = diagnostics.shedLock();
-    ConsoleWorkerConsistencyResponse workers = diagnostics.workers();
-    ConsoleOutboxHealthResponse outbox = diagnostics.outbox();
-    ConsoleTerminalChildrenHealthResponse terminal = diagnostics.terminalChildren();
-    return "[集群诊断] 当前租户只读快照(固定阈值,超阈即判不健康)\n"
-        + "ShedLock 定时任务租约: totalLocks="
-        + value(shedLock.totalLocks())
-        + " activeLocks="
-        + value(shedLock.activeLocks())
-        + "\nWorker 一致性: healthy="
-        + value(workers.healthy())
-        + " onlineWorkers="
-        + value(workers.onlineWorkers())
-        + " drainingWorkers="
-        + value(workers.drainingWorkers())
-        + " offlineWorkers="
-        + value(workers.offlineWorkers())
-        + " staleOnlineWorkers="
-        + value(workers.staleOnlineWorkers())
-        + " drainingPastDeadlineWorkers="
-        + value(workers.drainingPastDeadlineWorkers())
-        + " decommissionedWorkersWithActiveTasks="
-        + value(workers.decommissionedWorkersWithActiveTasks())
-        + " invalidCapabilityTags="
-        + value(workers.invalidCapabilityTags())
-        + " runningInstances="
-        + value(workers.runningInstances())
-        + "\nOutbox 投递: healthy="
-        + value(outbox.healthy())
-        + " pendingEvents="
-        + value(outbox.pendingEvents())
-        + " activeEvents="
-        + value(outbox.activeEvents())
-        + " stalePublishingEvents="
-        + value(outbox.stalePublishingEvents())
-        + "\n终态子项 (terminalChildren): healthy="
-        + value(terminal.healthy())
-        + " terminalInstancesWithActiveChildren="
-        + value(terminal.terminalInstancesWithActiveChildren());
-  }
 
-  @Tool(
-      description =
-          "深度诊断指定 job 实例的分区、任务、Outbox、Worker 容量和异常发现项。" + "用户询问某个实例卡住、长时间运行或失败根因时调用；只读，不执行重跑或修复。")
-  public String diagnoseJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
-    if (EmptyChecks.isNull(diagnosticService)) {
-      return "实例诊断服务当前不可用。";
+    @Tool(description = "深度诊断指定 job 实例的分区、任务、Outbox、Worker 容量和异常发现项。" + "用户询问某个实例卡住、长时间运行或失败根因时调用；只读，不执行重跑或修复。")
+    public String diagnoseJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
+        if (EmptyChecks.isNull(diagnosticService)) {
+            return "实例诊断服务当前不可用。";
+        }
+        ConsoleInstanceDiagnosisResponse diagnosis = diagnosticService.instanceDiagnosis(tenantId, jobInstanceId);
+        if (EmptyChecks.isNull(diagnosis)) {
+            return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
+        }
+        String findings = EmptyChecks.isEmpty(diagnosis.findings())
+                ? "无异常发现"
+                : diagnosis.findings().stream()
+                        .map(finding -> finding.severity()
+                                + ":"
+                                + finding.reasonCode()
+                                + " "
+                                + finding.message()
+                                + " 建议="
+                                + String.join(";", finding.suggestedActions()))
+                        .collect(Collectors.joining("\n"));
+        return "[实例诊断] jobInstanceId="
+                + diagnosis.jobInstanceId()
+                + " healthy="
+                + diagnosis.healthy()
+                + " status="
+                + (EmptyChecks.isNull(diagnosis.instance())
+                        ? "-"
+                        : diagnosis.instance().instanceStatus())
+                + " onlineWorkersForGroup="
+                + (EmptyChecks.isNull(diagnosis.summary())
+                        ? "-"
+                        : diagnosis.summary().onlineWorkersForGroup())
+                + "\n"
+                + findings;
     }
-    ConsoleInstanceDiagnosisResponse diagnosis =
-        diagnosticService.instanceDiagnosis(tenantId, jobInstanceId);
-    if (EmptyChecks.isNull(diagnosis)) {
-      return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
+
+    @Tool(
+            description = "列出当前租户当前未决(status=OPEN)的告警事件,用于告警分诊:按 severity(CRITICAL/ERROR/WARN/INFO)与"
+                    + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
+                    + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
+    public String getOpenAlerts() {
+        List<ConsoleAlertEventResponse> alerts = queryAlerts("OPEN");
+        return renderAlerts(alerts, "当前租户暂无未决(OPEN)告警。");
     }
-    String findings = EmptyChecks.isEmpty(diagnosis.findings())
-        ? "无异常发现"
-        : diagnosis.findings().stream()
-            .map(finding -> finding.severity()
-                + ":"
-                + finding.reasonCode()
-                + " "
-                + finding.message()
-                + " 建议="
-                + String.join(";", finding.suggestedActions()))
-            .collect(Collectors.joining("\n"));
-    return "[实例诊断] jobInstanceId="
-        + diagnosis.jobInstanceId()
-        + " healthy="
-        + diagnosis.healthy()
-        + " status="
-        + (EmptyChecks.isNull(diagnosis.instance()) ? "-" : diagnosis.instance().instanceStatus())
-        + " onlineWorkersForGroup="
-        + (EmptyChecks.isNull(diagnosis.summary())
-            ? "-"
-            : diagnosis.summary().onlineWorkersForGroup())
-        + "\n"
-        + findings;
-  }
 
-  @Tool(
-      description = "列出当前租户当前未决(status=OPEN)的告警事件,用于告警分诊:按 severity(CRITICAL/ERROR/WARN/INFO)与"
-          + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
-          + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
-  public String getOpenAlerts() {
-    List<ConsoleAlertEventResponse> alerts = queryAlerts("OPEN");
-    return renderAlerts(alerts, "当前租户暂无未决(OPEN)告警。");
-  }
-
-  @Tool(
-      description = "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
-          + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
-  public String getRecentAlerts() {
-    List<ConsoleAlertEventResponse> alerts = queryAlerts(null);
-    return renderAlerts(alerts, "当前租户近期无告警记录。");
-  }
-
-  private List<ConsoleAlertEventResponse> queryAlerts(String status) {
-    AlertEventQueryRequest request = new AlertEventQueryRequest();
-    request.setTenantId(tenantId);
-    request.setStatus(status);
-    request.setPageNo(1);
-    request.setPageSize(maxRows);
-    PageResponse<ConsoleAlertEventResponse> page = queryService.alertEvents(request);
-    return page.items();
-  }
-
-  private String renderAlerts(List<ConsoleAlertEventResponse> alerts, String emptyMessage) {
-    if (alerts.isEmpty()) {
-      return emptyMessage;
+    @Tool(
+            description = "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
+                    + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
+    public String getRecentAlerts() {
+        List<ConsoleAlertEventResponse> alerts = queryAlerts(null);
+        return renderAlerts(alerts, "当前租户近期无告警记录。");
     }
-    return alerts.stream().map(this::renderAlert).collect(Collectors.joining("\n"));
-  }
 
-  private String renderAlert(ConsoleAlertEventResponse alert) {
-    return "id="
-        + alert.id()
-        + " alertType="
-        + nullToDash(alert.alertType())
-        + " severity="
-        + nullToDash(alert.severity())
-        + " status="
-        + nullToDash(alert.status())
-        + " occurrenceCount="
-        + (alert.occurrenceCount() == null ? "-" : alert.occurrenceCount())
-        + " firstSeenAt="
-        + alert.firstSeenAt()
-        + " lastSeenAt="
-        + alert.lastSeenAt()
-        + " traceId="
-        + nullToDash(alert.traceId())
-        + " | "
-        + truncate(alert.title(), ALERT_TITLE_MAX_LENGTH);
-  }
+    private List<ConsoleAlertEventResponse> queryAlerts(String status) {
+        AlertEventQueryRequest request = new AlertEventQueryRequest();
+        request.setTenantId(tenantId);
+        request.setStatus(status);
+        request.setPageNo(1);
+        request.setPageSize(maxRows);
+        PageResponse<ConsoleAlertEventResponse> page = queryService.alertEvents(request);
+        return page.items();
+    }
 
-  private static String value(Object value) {
-    return value == null ? "-" : value.toString();
-  }
+    private String renderAlerts(List<ConsoleAlertEventResponse> alerts, String emptyMessage) {
+        if (alerts.isEmpty()) {
+            return emptyMessage;
+        }
+        return alerts.stream().map(this::renderAlert).collect(Collectors.joining("\n"));
+    }
 
-  private String renderInstance(ConsoleJobInstanceResponse instance) {
-    String displayFailureClass = nullToDash(instance.failureClass());
-    String displayTraceId = nullToDash(instance.traceId());
-    String displayResultSummary = truncate(instance.resultSummary(), RESULT_SUMMARY_MAX_LENGTH);
-    String formattedInstance = """
+    private String renderAlert(ConsoleAlertEventResponse alert) {
+        return "id="
+                + alert.id()
+                + " alertType="
+                + nullToDash(alert.alertType())
+                + " severity="
+                + nullToDash(alert.severity())
+                + " status="
+                + nullToDash(alert.status())
+                + " occurrenceCount="
+                + (alert.occurrenceCount() == null ? "-" : alert.occurrenceCount())
+                + " firstSeenAt="
+                + alert.firstSeenAt()
+                + " lastSeenAt="
+                + alert.lastSeenAt()
+                + " traceId="
+                + nullToDash(alert.traceId())
+                + " | "
+                + truncate(alert.title(), ALERT_TITLE_MAX_LENGTH);
+    }
+
+    private static String value(Object value) {
+        return value == null ? "-" : value.toString();
+    }
+
+    private String renderInstance(ConsoleJobInstanceResponse instance) {
+        String displayFailureClass = nullToDash(instance.failureClass());
+        String displayTraceId = nullToDash(instance.traceId());
+        String displayResultSummary = truncate(instance.resultSummary(), RESULT_SUMMARY_MAX_LENGTH);
+        String formattedInstance = """
         id=%s
         jobCode=%s
         instanceNo=%s
@@ -272,47 +269,47 @@ public class ConsoleAiTools {
         traceId=%s
         resultSummary=%s
         """.formatted(
-            instance.id(),
-            instance.jobCode(),
-            instance.instanceNo(),
-            instance.instanceStatus(),
-            displayFailureClass,
-            instance.bizDate(),
-            instance.startedAt(),
-            instance.finishedAt(),
-            instance.retryFlag(),
-            instance.rerunFlag(),
-            displayTraceId,
-            displayResultSummary);
-    return formattedInstance.stripTrailing();
-  }
-
-  private String renderLog(ConsoleJobExecutionLogResponse log) {
-    return "["
-        + log.createdAt()
-        + "] "
-        + nullToDash(log.logLevel())
-        + " "
-        + nullToDash(log.logType())
-        + " partition="
-        + log.jobPartitionId()
-        + " | "
-        + truncate(log.message(), LOG_MESSAGE_MAX_LENGTH);
-  }
-
-  private static String nullToDash(String value) {
-    return value == null || value.isBlank() ? "-" : value;
-  }
-
-  private static String truncate(String value, int maxLength) {
-    if (value == null) {
-      return "-";
+                        instance.id(),
+                        instance.jobCode(),
+                        instance.instanceNo(),
+                        instance.instanceStatus(),
+                        displayFailureClass,
+                        instance.bizDate(),
+                        instance.startedAt(),
+                        instance.finishedAt(),
+                        instance.retryFlag(),
+                        instance.rerunFlag(),
+                        displayTraceId,
+                        displayResultSummary);
+        return formattedInstance.stripTrailing();
     }
-    return value.length() <= maxLength ? value : value.substring(0, maxLength) + "…";
-  }
 
-  /** 暴露给上层的工具实例(列表形态便于 {@code ChatClient.tools(Object...)} 传入)。 */
-  public List<Object> asToolObjects() {
-    return List.of(this);
-  }
+    private String renderLog(ConsoleJobExecutionLogResponse log) {
+        return "["
+                + log.createdAt()
+                + "] "
+                + nullToDash(log.logLevel())
+                + " "
+                + nullToDash(log.logType())
+                + " partition="
+                + log.jobPartitionId()
+                + " | "
+                + truncate(log.message(), LOG_MESSAGE_MAX_LENGTH);
+    }
+
+    private static String nullToDash(String value) {
+        return value == null || value.isBlank() ? "-" : value;
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null) {
+            return "-";
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength) + "…";
+    }
+
+    /** 暴露给上层的工具实例(列表形态便于 {@code ChatClient.tools(Object...)} 传入)。 */
+    public List<Object> asToolObjects() {
+        return List.of(this);
+    }
 }

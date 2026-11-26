@@ -33,134 +33,133 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProcessMetrics {
 
-  static final String STAGED_ROWS = "process_compute_staged_rows";
-  static final String PUBLISHED_ROWS = "process_commit_published_rows";
-  static final String VALIDATION_FAILED = "process_validation_failed_total";
-  static final String STAGE_DURATION = "process_stage_duration_seconds";
-  static final String FEEDBACK_SWALLOWED = "process_feedback_swallowed_total";
+    static final String STAGED_ROWS = "process_compute_staged_rows";
+    static final String PUBLISHED_ROWS = "process_commit_published_rows";
+    static final String VALIDATION_FAILED = "process_validation_failed_total";
+    static final String STAGE_DURATION = "process_stage_duration_seconds";
+    static final String FEEDBACK_SWALLOWED = "process_feedback_swallowed_total";
 
-  private static final String UNKNOWN_TAG = "unknown";
+    private static final String UNKNOWN_TAG = "unknown";
 
-  private final MeterRegistry registry;
-  // 单例 meter(不再按租户拆 — tenantId 已从 tag 去掉)
-  private final AtomicReference<DistributionSummary> stagedSummary = new AtomicReference<>();
-  private final AtomicReference<DistributionSummary> publishedSummary = new AtomicReference<>();
-  private final AtomicReference<Counter> feedbackSwallowedCounter = new AtomicReference<>();
-  // ruleName 是 低基数(规则定义有限,通常 <100),保留为 tag
-  private final ConcurrentMap<String, Counter> validationFailedByRule = new ConcurrentHashMap<>();
-  // stage + success 都是 低基数,组合 < 12 种
-  private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
+    private final MeterRegistry registry;
+    // 单例 meter(不再按租户拆 — tenantId 已从 tag 去掉)
+    private final AtomicReference<DistributionSummary> stagedSummary = new AtomicReference<>();
+    private final AtomicReference<DistributionSummary> publishedSummary = new AtomicReference<>();
+    private final AtomicReference<Counter> feedbackSwallowedCounter = new AtomicReference<>();
+    // ruleName 是 低基数(规则定义有限,通常 <100),保留为 tag
+    private final ConcurrentMap<String, Counter> validationFailedByRule = new ConcurrentHashMap<>();
+    // stage + success 都是 低基数,组合 < 12 种
+    private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
 
-  // 显式 @Autowired:类内有 2 个构造器(public + private),Spring 4.3+ "exactly
-  // one constructor" 自动推断不成立,必须显式标主装配 ctor;docs/agent-baseline.md §Java #3 豁免
-  // 构造器上的 @Autowired(只禁 field/setter)。
-  @Autowired
-  public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.registry = meterRegistryProvider.getIfAvailable();
-  }
-
-  private ProcessMetrics(MeterRegistry registry) {
-    this.registry = registry;
-  }
-
-  /** 测试 / 单测组装用:无 MeterRegistry,所有 record 调用都是 no-op。 */
-  public static ProcessMetrics noop() {
-    return new ProcessMetrics((MeterRegistry) null);
-  }
-
-  public void recordComputeStagedRows(String tenantId, long stagedRows) {
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    // 显式 @Autowired:类内有 2 个构造器(public + private),Spring 4.3+ "exactly
+    // one constructor" 自动推断不成立,必须显式标主装配 ctor;docs/agent-baseline.md §Java #3 豁免
+    // 构造器上的 @Autowired(只禁 field/setter)。
+    @Autowired
+    public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this.registry = meterRegistryProvider.getIfAvailable();
     }
-    DistributionSummary summary = stagedSummary.get();
-    if (EmptyChecks.isNull(summary)) {
-      synchronized (this) {
-        summary = stagedSummary.get();
-        if (EmptyChecks.isNull(summary)) {
-          summary = DistributionSummary.builder(STAGED_ROWS)
-              .description("PROCESS COMPUTE 写 staging 的行数")
-              .register(registry);
-          stagedSummary.set(summary);
+
+    private ProcessMetrics(MeterRegistry registry) {
+        this.registry = registry;
+    }
+
+    /** 测试 / 单测组装用:无 MeterRegistry,所有 record 调用都是 no-op。 */
+    public static ProcessMetrics noop() {
+        return new ProcessMetrics((MeterRegistry) null);
+    }
+
+    public void recordComputeStagedRows(String tenantId, long stagedRows) {
+        if (EmptyChecks.isNull(registry)) {
+            return;
         }
-      }
-    }
-    summary.record(stagedRows);
-  }
-
-  public void recordCommitPublishedRows(String tenantId, long publishedRows) {
-    if (EmptyChecks.isNull(registry)) {
-      return;
-    }
-    DistributionSummary summary = publishedSummary.get();
-    if (EmptyChecks.isNull(summary)) {
-      synchronized (this) {
-        summary = publishedSummary.get();
+        DistributionSummary summary = stagedSummary.get();
         if (EmptyChecks.isNull(summary)) {
-          summary = DistributionSummary.builder(PUBLISHED_ROWS)
-              .description("PROCESS COMMIT 落 target 表的行数")
-              .register(registry);
-          publishedSummary.set(summary);
+            synchronized (this) {
+                summary = stagedSummary.get();
+                if (EmptyChecks.isNull(summary)) {
+                    summary = DistributionSummary.builder(STAGED_ROWS)
+                            .description("PROCESS COMPUTE 写 staging 的行数")
+                            .register(registry);
+                    stagedSummary.set(summary);
+                }
+            }
         }
-      }
+        summary.record(stagedRows);
     }
-    summary.record(publishedRows);
-  }
 
-  public void incrementValidationFailed(String tenantId, String ruleName) {
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    public void recordCommitPublishedRows(String tenantId, long publishedRows) {
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        DistributionSummary summary = publishedSummary.get();
+        if (EmptyChecks.isNull(summary)) {
+            synchronized (this) {
+                summary = publishedSummary.get();
+                if (EmptyChecks.isNull(summary)) {
+                    summary = DistributionSummary.builder(PUBLISHED_ROWS)
+                            .description("PROCESS COMMIT 落 target 表的行数")
+                            .register(registry);
+                    publishedSummary.set(summary);
+                }
+            }
+        }
+        summary.record(publishedRows);
     }
-    String ruleTag = normalize(ruleName);
-    Counter counter = validationFailedByRule.computeIfAbsent(
-        ruleTag,
-        tag -> Counter.builder(VALIDATION_FAILED)
-            .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
-            .tags(Tags.of("ruleName", tag))
-            .register(registry));
-    counter.increment();
-  }
 
-  /**
-   * FEEDBACK 阶段捕获并抑制的异常计数。按设计,FEEDBACK 失败不应让整个 task 失败(target 已落 / staging 已清),但 完全静默会让 staging 残留
-   * / 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
-   */
-  public void incrementFeedbackSwallowed(String tenantId) {
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    public void incrementValidationFailed(String tenantId, String ruleName) {
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        String ruleTag = normalize(ruleName);
+        Counter counter = validationFailedByRule.computeIfAbsent(
+                ruleTag,
+                tag -> Counter.builder(VALIDATION_FAILED)
+                        .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
+                        .tags(Tags.of("ruleName", tag))
+                        .register(registry));
+        counter.increment();
     }
-    Counter counter = feedbackSwallowedCounter.get();
-    if (EmptyChecks.isNull(counter)) {
-      synchronized (this) {
-        counter = feedbackSwallowedCounter.get();
+
+    /**
+     * FEEDBACK 阶段捕获并抑制的异常计数。按设计,FEEDBACK 失败不应让整个 task 失败(target 已落 / staging 已清),但 完全静默会让 staging 残留
+     * / 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
+     */
+    public void incrementFeedbackSwallowed(String tenantId) {
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        Counter counter = feedbackSwallowedCounter.get();
         if (EmptyChecks.isNull(counter)) {
-          counter = Counter.builder(FEEDBACK_SWALLOWED)
-              .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
-              .register(registry);
-          feedbackSwallowedCounter.set(counter);
+            synchronized (this) {
+                counter = feedbackSwallowedCounter.get();
+                if (EmptyChecks.isNull(counter)) {
+                    counter = Counter.builder(FEEDBACK_SWALLOWED)
+                            .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
+                            .register(registry);
+                    feedbackSwallowedCounter.set(counter);
+                }
+            }
         }
-      }
+        counter.increment();
     }
-    counter.increment();
-  }
 
-  public void recordStageDuration(
-      String stage, String tenantId, boolean success, long durationNanos) {
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    public void recordStageDuration(String stage, String tenantId, boolean success, long durationNanos) {
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        String stageTag = normalize(stage);
+        String successTag = success ? "true" : "false";
+        String key = stageTag + "|" + successTag;
+        Timer timer = stageTimerByKey.computeIfAbsent(
+                key,
+                k -> Timer.builder(STAGE_DURATION)
+                        .description("PROCESS 五段每段耗时")
+                        .tags(Tags.of("stage", stageTag, "success", successTag))
+                        .register(registry));
+        timer.record(durationNanos, TimeUnit.NANOSECONDS);
     }
-    String stageTag = normalize(stage);
-    String successTag = success ? "true" : "false";
-    String key = stageTag + "|" + successTag;
-    Timer timer = stageTimerByKey.computeIfAbsent(
-        key,
-        k -> Timer.builder(STAGE_DURATION)
-            .description("PROCESS 五段每段耗时")
-            .tags(Tags.of("stage", stageTag, "success", successTag))
-            .register(registry));
-    timer.record(durationNanos, TimeUnit.NANOSECONDS);
-  }
 
-  private static String normalize(String value) {
-    return EmptyChecks.isBlank(value) ? UNKNOWN_TAG : value;
-  }
+    private static String normalize(String value) {
+        return EmptyChecks.isBlank(value) ? UNKNOWN_TAG : value;
+    }
 }

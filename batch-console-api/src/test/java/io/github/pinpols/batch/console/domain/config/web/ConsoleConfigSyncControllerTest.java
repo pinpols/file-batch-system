@@ -47,89 +47,82 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @DisplayName("配置同步控制器: 导出、预检、导入与日志查询的入参委托")
 class ConsoleConfigSyncControllerTest {
 
-  @Mock
-  private ConsoleConfigSyncApplicationService service;
+    @Mock
+    private ConsoleConfigSyncApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleConfigSyncController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleConfigSyncController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("响应丢失后按原幂等键查询，未找到保持未知")
-  void shouldQueryOriginalRequestIdentityWithoutApplyingAgain() throws Exception {
-    when(service.requestStatus("ta", "original-key"))
-        .thenReturn(new ConfigSyncRequestStatusResponse(false, null));
+    @Test
+    @DisplayName("响应丢失后按原幂等键查询，未找到保持未知")
+    void shouldQueryOriginalRequestIdentityWithoutApplyingAgain() throws Exception {
+        when(service.requestStatus("ta", "original-key")).thenReturn(new ConfigSyncRequestStatusResponse(false, null));
 
-    mockMvc
-        .perform(get("/api/console/config/sync/requests/status")
-            .param("tenantId", "ta")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "original-key"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.found").value(false));
+        mockMvc.perform(get("/api/console/config/sync/requests/status")
+                        .param("tenantId", "ta")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "original-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.found").value(false));
 
-    verify(service).requestStatus("ta", "original-key");
-  }
+        verify(service).requestStatus("ta", "original-key");
+    }
 
-  @Test
-  @DisplayName("导出配置时, 请求体组装成入参并带幂等键, 响应返回来源租户与汇总")
-  void shouldDelegateExportWithIdempotencyHeader_whenExporting() throws Exception {
-    when(service.export(any(ConfigSyncExportRequest.class)))
-        .thenReturn(new ConfigSyncExportResponse("ta", "dev", "prod", summary(), null));
-    mockMvc
-        .perform(post("/api/console/config/sync/export")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"sourceTenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.sourceTenantId").value("ta"))
-        .andExpect(jsonPath("$.data.summary.jobDefinitions").value(1));
-    verify(service).export(any(ConfigSyncExportRequest.class));
-  }
+    @Test
+    @DisplayName("导出配置时, 请求体组装成入参并带幂等键, 响应返回来源租户与汇总")
+    void shouldDelegateExportWithIdempotencyHeader_whenExporting() throws Exception {
+        when(service.export(any(ConfigSyncExportRequest.class)))
+                .thenReturn(new ConfigSyncExportResponse("ta", "dev", "prod", summary(), null));
+        mockMvc.perform(post("/api/console/config/sync/export")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"sourceTenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sourceTenantId").value("ta"))
+                .andExpect(jsonPath("$.data.summary.jobDefinitions").value(1));
+        verify(service).export(any(ConfigSyncExportRequest.class));
+    }
 
-  @Test
-  @DisplayName("预检配置同步时, 请求体组装成入参并带幂等键")
-  void shouldDelegatePreviewWithIdempotencyHeader_whenPreviewing() throws Exception {
-    when(service.preview(any(ConfigSyncPreviewRequest.class)))
-        .thenReturn(new ConfigSyncPreviewResponse("tb", "ta", "dev", "prod", summary()));
-    mockMvc
-        .perform(
-            post("/api/console/config/sync/preview")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"sourceTenantId\":\"ta\",\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
-        .andExpect(status().isOk());
-    verify(service).preview(any(ConfigSyncPreviewRequest.class));
-  }
+    @Test
+    @DisplayName("预检配置同步时, 请求体组装成入参并带幂等键")
+    void shouldDelegatePreviewWithIdempotencyHeader_whenPreviewing() throws Exception {
+        when(service.preview(any(ConfigSyncPreviewRequest.class)))
+                .thenReturn(new ConfigSyncPreviewResponse("tb", "ta", "dev", "prod", summary()));
+        mockMvc.perform(
+                        post("/api/console/config/sync/preview")
+                                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                                .contentType(APPLICATION_JSON)
+                                .content(
+                                        "{\"sourceTenantId\":\"ta\",\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
+                .andExpect(status().isOk());
+        verify(service).preview(any(ConfigSyncPreviewRequest.class));
+    }
 
-  @Test
-  @DisplayName("导入配置包时, 包内容与试运行开关组装成入参, 响应返回同步日志标识")
-  void shouldDelegateImportWithBundleAndDryRun_whenImporting() throws Exception {
-    when(service.importBundle(any(ConfigSyncImportRequest.class)))
-        .thenReturn(new ConfigSyncImportResponse(7L, summary(), null));
-    mockMvc
-        .perform(post("/api/console/config/sync/import")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("导入配置包时, 包内容与试运行开关组装成入参, 响应返回同步日志标识")
+    void shouldDelegateImportWithBundleAndDryRun_whenImporting() throws Exception {
+        when(service.importBundle(any(ConfigSyncImportRequest.class)))
+                .thenReturn(new ConfigSyncImportResponse(7L, summary(), null));
+        mockMvc.perform(post("/api/console/config/sync/import")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {
                   "tenantId": "ta",
                   "sourceEnv": "dev",
@@ -139,67 +132,65 @@ class ConsoleConfigSyncControllerTest {
                   "bundle": {}
                 }
                 """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.syncLogId").value(7));
-    verify(service).importBundle(any(ConfigSyncImportRequest.class));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.syncLogId").value(7));
+        verify(service).importBundle(any(ConfigSyncImportRequest.class));
+    }
 
-  @Test
-  @DisplayName("内部审计失败返回系统错误且不向用户透出SQL路径或伪装成参数错误")
-  void shouldReturnSystemErrorWhenAuditPersistenceFails() throws Exception {
-    when(service.importBundle(any(ConfigSyncImportRequest.class)))
-        .thenThrow(BizException.of(
-            ResultCode.SYSTEM_ERROR,
-            "error.common.system_error",
-            new IllegalStateException("SQL /private/Mapper.xml")));
+    @Test
+    @DisplayName("内部审计失败返回系统错误且不向用户透出SQL路径或伪装成参数错误")
+    void shouldReturnSystemErrorWhenAuditPersistenceFails() throws Exception {
+        when(service.importBundle(any(ConfigSyncImportRequest.class)))
+                .thenThrow(BizException.of(
+                        ResultCode.SYSTEM_ERROR,
+                        "error.common.system_error",
+                        new IllegalStateException("SQL /private/Mapper.xml")));
 
-    mockMvc
-        .perform(post("/api/console/config/sync/import")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "audit-failure")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/config/sync/import")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "audit-failure")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"ta","sourceEnv":"dev","targetEnv":"prod",
                  "targetTenantIds":["tb"],"bundle":{}}
                 """))
-        .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value("SYSTEM_ERROR"))
-        .andExpect(jsonPath("$.message").value("系统错误"))
-        .andExpect(jsonPath("$.message").value(not(containsString("SQL"))))
-        .andExpect(jsonPath("$.message").value(not(containsString("Mapper.xml"))));
-  }
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("SYSTEM_ERROR"))
+                .andExpect(jsonPath("$.message").value("系统错误"))
+                .andExpect(jsonPath("$.message").value(not(containsString("SQL"))))
+                .andExpect(jsonPath("$.message").value(not(containsString("Mapper.xml"))));
+    }
 
-  @Test
-  @DisplayName("查询同步日志时, 租户与分页参数传给服务, 未指定时取缺省值")
-  void shouldPassTenantAndPagination_whenQueryingLogs() throws Exception {
-    when(service.logs("ta", 1, 15))
-        .thenReturn(new PageResponse<>(
-            1L,
-            1,
-            15,
-            List.of(new ConfigSyncLogResponse(
-                1L,
-                "ta",
-                "IMPORT",
-                "dev",
-                "prod",
-                "jobDefinitions",
-                1,
-                1,
-                0,
-                0,
-                "SUCCESS",
-                null,
-                "admin",
-                Instant.parse("2026-05-20T10:00:00Z")))));
-    mockMvc
-        .perform(get("/api/console/config/sync/logs").param("tenantId", "ta"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.items[0].id").value(1))
-        .andExpect(jsonPath("$.data.total").value(1));
-    verify(service).logs("ta", 1, 15);
-  }
+    @Test
+    @DisplayName("查询同步日志时, 租户与分页参数传给服务, 未指定时取缺省值")
+    void shouldPassTenantAndPagination_whenQueryingLogs() throws Exception {
+        when(service.logs("ta", 1, 15))
+                .thenReturn(new PageResponse<>(
+                        1L,
+                        1,
+                        15,
+                        List.of(new ConfigSyncLogResponse(
+                                1L,
+                                "ta",
+                                "IMPORT",
+                                "dev",
+                                "prod",
+                                "jobDefinitions",
+                                1,
+                                1,
+                                0,
+                                0,
+                                "SUCCESS",
+                                null,
+                                "admin",
+                                Instant.parse("2026-05-20T10:00:00Z")))));
+        mockMvc.perform(get("/api/console/config/sync/logs").param("tenantId", "ta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value(1))
+                .andExpect(jsonPath("$.data.total").value(1));
+        verify(service).logs("ta", 1, 15);
+    }
 
-  private static ConfigSyncSummaryResponse summary() {
-    return new ConfigSyncSummaryResponse(1, 2, 4, 5, 6, 7, 8, 9, 10);
-  }
+    private static ConfigSyncSummaryResponse summary() {
+        return new ConfigSyncSummaryResponse(1, 2, 4, 5, 6, 7, 8, 9, 10);
+    }
 }

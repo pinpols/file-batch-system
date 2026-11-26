@@ -10,19 +10,19 @@ import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
  */
 public final class StaticShardAssignmentProvider implements ShardAssignmentProvider {
 
-  private final OutboxProperties properties;
+    private final OutboxProperties properties;
 
-  public StaticShardAssignmentProvider(OutboxProperties properties) {
-    this.properties = properties;
-  }
-
-  @Override
-  public ShardAssignment current() {
-    int total = Math.max(1, properties.getShardTotal());
-    int index = properties.getShardIndex();
-    if (total == 1) {
-      return ShardAssignment.single();
+    public StaticShardAssignmentProvider(OutboxProperties properties) {
+        this.properties = properties;
     }
-    return new ShardAssignment(total, index);
-  }
+
+    @Override
+    public ShardAssignment current() {
+        int total = Math.max(1, properties.getShardTotal());
+        int index = properties.getShardIndex();
+        if (total == 1) {
+            return ShardAssignment.single();
+        }
+        return new ShardAssignment(total, index);
+    }
 }

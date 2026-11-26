@@ -15,27 +15,28 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(
-    classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerDispatchApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("分发 Worker 应用启动集成:在真实基础设施上完整装配 Spring 上下文")
 class BatchWorkerDispatchApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  ApplicationContext applicationContext;
+    @Autowired
+    ApplicationContext applicationContext;
 
-  @Test
-  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
-  void shouldRegisterActualBoundPort() {
-    Integer boundPort =
-        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
-    assertThat(boundPort).isNotNull().isPositive();
-    assertThat(
-            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
-        .isEqualTo(boundPort);
-  }
+    @Test
+    @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+    void shouldRegisterActualBoundPort() {
+        Integer boundPort = applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+        assertThat(boundPort).isNotNull().isPositive();
+        assertThat(applicationContext
+                        .getBean(AbstractWorkerLoop.class)
+                        .ensureStarted()
+                        .getPort())
+                .isEqualTo(boundPort);
+    }
 }

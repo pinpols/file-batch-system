@@ -16,25 +16,22 @@ import java.util.Set;
  * @param recommendedTimeout 建议超时,用户未配置时的回退值
  */
 public record TaskCapability(
-    Set<ResourceKind> resourceKinds,
-    boolean idempotent,
-    boolean cancellable,
-    Duration recommendedTimeout) {
+        Set<ResourceKind> resourceKinds, boolean idempotent, boolean cancellable, Duration recommendedTimeout) {
 
-  public TaskCapability {
-    Objects.requireNonNull(resourceKinds, "resourceKinds");
-    Objects.requireNonNull(recommendedTimeout, "recommendedTimeout");
-    if (resourceKinds.isEmpty()) {
-      throw new IllegalArgumentException("resourceKinds must not be empty");
+    public TaskCapability {
+        Objects.requireNonNull(resourceKinds, "resourceKinds");
+        Objects.requireNonNull(recommendedTimeout, "recommendedTimeout");
+        if (resourceKinds.isEmpty()) {
+            throw new IllegalArgumentException("resourceKinds must not be empty");
+        }
+        if (recommendedTimeout.isNegative() || recommendedTimeout.isZero()) {
+            throw new IllegalArgumentException("recommendedTimeout must be positive");
+        }
+        resourceKinds = Set.copyOf(resourceKinds);
     }
-    if (recommendedTimeout.isNegative() || recommendedTimeout.isZero()) {
-      throw new IllegalArgumentException("recommendedTimeout must be positive");
-    }
-    resourceKinds = Set.copyOf(resourceKinds);
-  }
 
-  /** 便捷构造:idempotent=true, cancellable=true, recommendedTimeout=5min。 */
-  public static TaskCapability of(ResourceKind... kinds) {
-    return new TaskCapability(Set.of(kinds), true, true, Duration.ofMinutes(5));
-  }
+    /** 便捷构造:idempotent=true, cancellable=true, recommendedTimeout=5min。 */
+    public static TaskCapability of(ResourceKind... kinds) {
+        return new TaskCapability(Set.of(kinds), true, true, Duration.ofMinutes(5));
+    }
 }

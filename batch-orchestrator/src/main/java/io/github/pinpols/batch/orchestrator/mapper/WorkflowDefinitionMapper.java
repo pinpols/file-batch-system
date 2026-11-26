@@ -13,30 +13,30 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface WorkflowDefinitionMapper {
 
-  /** ADR-050：同一业务日允许的活跃根运行上限；定义为空时按 1 处理。 */
-  Integer selectMaxActiveRunsPerBizDate(@Param("tenantId") String tenantId, @Param("id") Long id);
+    /** ADR-050：同一业务日允许的活跃根运行上限；定义为空时按 1 处理。 */
+    Integer selectMaxActiveRunsPerBizDate(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  /** 按 (tenantId, workflowCode, enabled) 取首条；用于 cache 服务回源。 */
-  WorkflowDefinitionView selectFirstByTenantAndCodeAndEnabled(
-      @Param("tenantId") String tenantId,
-      @Param("workflowCode") String workflowCode,
-      @Param("enabled") Boolean enabled);
+    /** 按 (tenantId, workflowCode, enabled) 取首条；用于 cache 服务回源。 */
+    WorkflowDefinitionView selectFirstByTenantAndCodeAndEnabled(
+            @Param("tenantId") String tenantId,
+            @Param("workflowCode") String workflowCode,
+            @Param("enabled") Boolean enabled);
 
-  /** 解析显式配置的受管单作业 Workflow 关联；不得按相同代码推断。 */
-  WorkflowDefinitionView selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
-      @Param("tenantId") String tenantId,
-      @Param("singleJobDefinitionId") Long singleJobDefinitionId,
-      @Param("enabled") Boolean enabled);
+    /** 解析显式配置的受管单作业 Workflow 关联；不得按相同代码推断。 */
+    WorkflowDefinitionView selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            @Param("tenantId") String tenantId,
+            @Param("singleJobDefinitionId") Long singleJobDefinitionId,
+            @Param("enabled") Boolean enabled);
 
-  /** 列出指定 tenant 下指定启用状态的全部 workflow 定义；console 列表 / 缓存预热用。 */
-  List<WorkflowDefinitionView> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    /** 列出指定 tenant 下指定启用状态的全部 workflow 定义；console 列表 / 缓存预热用。 */
+    List<WorkflowDefinitionView> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  WorkflowDefinitionView selectById(@Param("id") Long id);
+    WorkflowDefinitionView selectById(@Param("id") Long id);
 
-  WorkflowDefinitionView selectByTenantAndIdAndEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    WorkflowDefinitionView selectByTenantAndIdAndEnabled(
+            @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 
-  /** ADR-025 reconciler：跨租户列出 enabled=true 全量。 */
-  List<WorkflowDefinitionView> selectAllEnabled(@Param("limit") int limit);
+    /** ADR-025 reconciler：跨租户列出 enabled=true 全量。 */
+    List<WorkflowDefinitionView> selectAllEnabled(@Param("limit") int limit);
 }

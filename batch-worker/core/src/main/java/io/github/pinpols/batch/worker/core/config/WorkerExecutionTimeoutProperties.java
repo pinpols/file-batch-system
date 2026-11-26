@@ -14,39 +14,39 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.execution")
 public class WorkerExecutionTimeoutProperties {
 
-  /**
-   * 执行 pool 线程数。必须不小于 {@link WorkerRuntimeConfiguration#DEFAULT_MAX_CONCURRENT_TASKS}
-   * 对应配置的实际值，否则 listener 可能拿到许可却抢不到 pool 线程。
-   */
-  private int poolSize = 16;
+    /**
+     * 执行 pool 线程数。必须不小于 {@link WorkerRuntimeConfiguration#DEFAULT_MAX_CONCURRENT_TASKS}
+     * 对应配置的实际值，否则 listener 可能拿到许可却抢不到 pool 线程。
+     */
+    private int poolSize = 16;
 
-  /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时回退. 默认 30 分钟. */
-  private long defaultTimeoutSeconds = 1800L;
+    /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时回退. 默认 30 分钟. */
+    private long defaultTimeoutSeconds = 1800L;
 
-  /**
-   * SPI 能力声明中的建议超时 (秒)。它只影响路由/元数据中的 recommendedTimeout，不覆盖任务自身的 timeoutSeconds。 各 worker 可在
-   * application.yml 中按模块覆盖，默认 30 分钟。
-   */
-  private long capabilityTimeoutSeconds = 1800L;
+    /**
+     * SPI 能力声明中的建议超时 (秒)。它只影响路由/元数据中的 recommendedTimeout，不覆盖任务自身的 timeoutSeconds。 各 worker 可在
+     * application.yml 中按模块覆盖，默认 30 分钟。
+     */
+    private long capabilityTimeoutSeconds = 1800L;
 
-  /** 上限 (秒). 超过此值即截断 (防配置错误: timeout=999999 会长期占用 worker 执行线程). */
-  private long maxTimeoutSeconds = 7200L;
+    /** 上限 (秒). 超过此值即截断 (防配置错误: timeout=999999 会长期占用 worker 执行线程). */
+    private long maxTimeoutSeconds = 7200L;
 
-  /**
-   * future.cancel(true) 后宽限时间 (秒). 协作式 cancel: Thread.interrupt 后给业务线程 N 秒主动退出; 超过即放弃跟踪 (线程泄漏入
-   * metric worker.task.execution.thread.leaked.total).
-   */
-  private long cancelGraceSeconds = 30L;
+    /**
+     * future.cancel(true) 后宽限时间 (秒). 协作式 cancel: Thread.interrupt 后给业务线程 N 秒主动退出; 超过即放弃跟踪 (线程泄漏入
+     * metric worker.task.execution.thread.leaked.total).
+     */
+    private long cancelGraceSeconds = 30L;
 
-  /**
-   * Spring 容器销毁时执行池的 graceful 等待时间 (秒). Worker graceful shutdown 会先等待活跃任务 drain, 这里仅处理残留任务
-   * 和不响应中断的业务线程, 默认保持短等待以避免进程退出被阻塞过久.
-   */
-  private long shutdownGraceSeconds = 5L;
+    /**
+     * Spring 容器销毁时执行池的 graceful 等待时间 (秒). Worker graceful shutdown 会先等待活跃任务 drain, 这里仅处理残留任务
+     * 和不响应中断的业务线程, 默认保持短等待以避免进程退出被阻塞过久.
+     */
+    private long shutdownGraceSeconds = 5L;
 
-  /**
-   * 执行线程是否使用 daemon 线程. 生产默认 false, 避免 JVM 退出时直接丢弃仍在执行的业务任务; E2E/测试可设为 true, 防止测试 fork
-   * 退出阶段被残留执行线程拖住.
-   */
-  private boolean daemonThreads = false;
+    /**
+     * 执行线程是否使用 daemon 线程. 生产默认 false, 避免 JVM 退出时直接丢弃仍在执行的业务任务; E2E/测试可设为 true, 防止测试 fork
+     * 退出阶段被残留执行线程拖住.
+     */
+    private boolean daemonThreads = false;
 }

@@ -11,14 +11,14 @@ import lombok.Data;
 @Data
 public class BusinessShardCatalogEntity {
 
-  private String placementKey;
-  private String host;
-  private int port;
-  private String dbName;
-  private String secretRef;
-  private Integer poolMaxSize;
-  private boolean enabled;
-  private String description;
-  private Instant updatedAt;
-  private String updatedBy;
+    private String placementKey;
+    private String host;
+    private int port;
+    private String dbName;
+    private String secretRef;
+    private Integer poolMaxSize;
+    private boolean enabled;
+    private String description;
+    private Instant updatedAt;
+    private String updatedBy;
 }

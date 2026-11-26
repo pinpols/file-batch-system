@@ -12,15 +12,15 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 
 public interface ConsoleConfigSyncApplicationService {
 
-  ConfigSyncExportResponse export(ConfigSyncExportRequest request);
+    ConfigSyncExportResponse export(ConfigSyncExportRequest request);
 
-  ConfigSyncPreviewResponse preview(ConfigSyncPreviewRequest request);
+    ConfigSyncPreviewResponse preview(ConfigSyncPreviewRequest request);
 
-  ConfigSyncImportResponse importBundle(ConfigSyncImportRequest request);
+    ConfigSyncImportResponse importBundle(ConfigSyncImportRequest request);
 
-  ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey);
+    ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey);
 
-  ConfigSyncLogResponse reconcile(String tenantId, Long logId);
+    ConfigSyncLogResponse reconcile(String tenantId, Long logId);
 
-  PageResponse<ConfigSyncLogResponse> logs(String tenantId, int pageNo, int pageSize);
+    PageResponse<ConfigSyncLogResponse> logs(String tenantId, int pageNo, int pageSize);
 }

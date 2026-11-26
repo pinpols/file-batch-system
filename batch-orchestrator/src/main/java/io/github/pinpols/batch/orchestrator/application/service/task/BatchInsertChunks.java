@@ -21,27 +21,27 @@ import java.util.function.Consumer;
  */
 final class BatchInsertChunks {
 
-  /** 默认 chunk 大小。500 行 × 最宽表 19 列 = 9500 参数,距 65535 上限有 ~7 倍余量; 即便未来加列或放开 partition cap 也安全。 */
-  static final int DEFAULT_CHUNK_SIZE = 500;
+    /** 默认 chunk 大小。500 行 × 最宽表 19 列 = 9500 参数,距 65535 上限有 ~7 倍余量; 即便未来加列或放开 partition cap 也安全。 */
+    static final int DEFAULT_CHUNK_SIZE = 500;
 
-  private BatchInsertChunks() {}
+    private BatchInsertChunks() {}
 
-  /**
-   * 把 {@code items} 按 {@code chunkSize} 切成连续子 list,逐批喂给 {@code insert}。
-   *
-   * <p>空/单批直接一次调用;{@code insert} 接收的是原 list 的视图(见类 javadoc 的回填顺序保证)。
-   */
-  static <T> void insertInChunks(List<T> items, int chunkSize, Consumer<List<T>> insert) {
-    if (EmptyChecks.isEmpty(items)) {
-      return;
+    /**
+     * 把 {@code items} 按 {@code chunkSize} 切成连续子 list,逐批喂给 {@code insert}。
+     *
+     * <p>空/单批直接一次调用;{@code insert} 接收的是原 list 的视图(见类 javadoc 的回填顺序保证)。
+     */
+    static <T> void insertInChunks(List<T> items, int chunkSize, Consumer<List<T>> insert) {
+        if (EmptyChecks.isEmpty(items)) {
+            return;
+        }
+        if (chunkSize <= 0) {
+            throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
+        }
+        int size = items.size();
+        for (int start = 0; start < size; start += chunkSize) {
+            int end = Math.min(start + chunkSize, size);
+            insert.accept(items.subList(start, end));
+        }
     }
-    if (chunkSize <= 0) {
-      throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
-    }
-    int size = items.size();
-    for (int start = 0; start < size; start += chunkSize) {
-      int end = Math.min(start + chunkSize, size);
-      insert.accept(items.subList(start, end));
-    }
-  }
 }

@@ -23,13 +23,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum ExecutionMode implements DictEnum {
-  /** 每次全量,典型:维度小表全量重算、初始化、定期对账。 */
-  FULL("FULL", "全量"),
-  /** 增量,按 watermark_field 推进;首次跑 IN=NULL 表示从头。 */
-  INCREMENTAL("INCREMENTAL", "增量"),
-  /** CDC / 流式占位;首期仅保留枚举值,worker 暂不实现。 */
-  CDC("CDC", "流式 / CDC");
+    /** 每次全量,典型:维度小表全量重算、初始化、定期对账。 */
+    FULL("FULL", "全量"),
+    /** 增量,按 watermark_field 推进;首次跑 IN=NULL 表示从头。 */
+    INCREMENTAL("INCREMENTAL", "增量"),
+    /** CDC / 流式占位;首期仅保留枚举值,worker 暂不实现。 */
+    CDC("CDC", "流式 / CDC");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

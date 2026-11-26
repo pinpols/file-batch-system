@@ -47,92 +47,92 @@ import org.springframework.kafka.support.Acknowledgment;
 @ExtendWith(MockitoExtension.class)
 class LaunchApplicationServiceTest {
 
-  @Mock
-  private LaunchService launchService;
+    @Mock
+    private LaunchService launchService;
 
-  @Mock
-  private TenantActionRateLimiter rateLimiter;
+    @Mock
+    private TenantActionRateLimiter rateLimiter;
 
-  @Mock
-  private WorkflowRunLaunchService workflowRunLaunchService;
+    @Mock
+    private WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private Acknowledgment acknowledgment;
+    @Mock
+    private Acknowledgment acknowledgment;
 
-  private LaunchApplicationService service;
+    private LaunchApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new LaunchApplicationService(rateLimiter, workflowRunLaunchService);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new LaunchApplicationService(rateLimiter, workflowRunLaunchService);
+    }
 
-  private LaunchRequest request(String tenantId) {
-    return LaunchRequest.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(71L)
-        .bizDate(LocalDate.now())
-        .triggerType(TriggerType.SCHEDULED)
-        .requestId("req")
-        .traceId("trace")
-        .params(Map.of())
-        .build();
-  }
+    private LaunchRequest request(String tenantId) {
+        return LaunchRequest.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(71L)
+                .bizDate(LocalDate.now())
+                .triggerType(TriggerType.SCHEDULED)
+                .requestId("req")
+                .traceId("trace")
+                .params(Map.of())
+                .build();
+    }
 
-  @Test
-  @DisplayName("限流失败 → 抛 429,LaunchService 不被调用")
-  void shouldThrowRateLimited_whenPermitDenied() {
-    LaunchRequest req = request("ta");
-    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(false);
+    @Test
+    @DisplayName("限流失败 → 抛 429,LaunchService 不被调用")
+    void shouldThrowRateLimited_whenPermitDenied() {
+        LaunchRequest req = request("ta");
+        when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.launch(req))
-        .isInstanceOf(OperationFailure.class)
-        .extracting(error -> ((OperationFailure) error).kind())
-        .isEqualTo(Kind.RATE_LIMITED);
+        assertThatThrownBy(() -> service.launch(req))
+                .isInstanceOf(OperationFailure.class)
+                .extracting(error -> ((OperationFailure) error).kind())
+                .isEqualTo(Kind.RATE_LIMITED);
 
-    verify(launchService, never()).launch(any());
-  }
+        verify(launchService, never()).launch(any());
+    }
 
-  @Test
-  @DisplayName("限流通过 → 透传到根 Workflow Launch 服务,返回其结果")
-  void shouldDelegateToLaunchService_whenPermitGranted() {
-    LaunchRequest req = request("ta");
-    LaunchResponse expected = new LaunchResponse("inst-001", "trace");
-    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
-    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
+    @Test
+    @DisplayName("限流通过 → 透传到根 Workflow Launch 服务,返回其结果")
+    void shouldDelegateToLaunchService_whenPermitGranted() {
+        LaunchRequest req = request("ta");
+        LaunchResponse expected = new LaunchResponse("inst-001", "trace");
+        when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
+        when(workflowRunLaunchService.launch(req)).thenReturn(expected);
 
-    LaunchResponse result = service.launch(req);
-    assertThat(result).isSameAs(expected);
-  }
+        LaunchResponse result = service.launch(req);
+        assertThat(result).isSameAs(expected);
+    }
 
-  @Test
-  @DisplayName("可信队列入口 → 不重复执行 HTTP 限流,直接透传到 LaunchService")
-  void shouldSkipRateLimit_whenLaunchingFromTrustedQueue() {
-    LaunchRequest req = request("ta");
-    LaunchResponse expected = new LaunchResponse("inst-queue", "trace-queue");
-    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
+    @Test
+    @DisplayName("可信队列入口 → 不重复执行 HTTP 限流,直接透传到 LaunchService")
+    void shouldSkipRateLimit_whenLaunchingFromTrustedQueue() {
+        LaunchRequest req = request("ta");
+        LaunchResponse expected = new LaunchResponse("inst-queue", "trace-queue");
+        when(workflowRunLaunchService.launch(req)).thenReturn(expected);
 
-    LaunchResponse result = service.launchFromTrustedQueue(req);
+        LaunchResponse result = service.launchFromTrustedQueue(req);
 
-    assertThat(result).isSameAs(expected);
-    verify(rateLimiter, never()).tryConsume(anyString(), any());
-    verify(workflowRunLaunchService).launch(req);
-    verify(launchService, never()).launch(any());
-  }
+        assertThat(result).isSameAs(expected);
+        verify(rateLimiter, never()).tryConsume(anyString(), any());
+        verify(workflowRunLaunchService).launch(req);
+        verify(launchService, never()).launch(any());
+    }
 
-  @Test
-  @DisplayName("旧版 Job 根启动消息只确认并拒绝，不回退创建 JobInstance")
-  void shouldDropLegacyJobRootMessageFromTrustedQueue() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    TriggerLaunchConsumer consumer = new TriggerLaunchConsumer(
-        service,
-        gracefulShutdown,
-        new SimpleMeterRegistry(),
-        new TriggerConsumerProperties(),
-        new BatchKafkaTopicNamespace(""));
-    String legacyEnvelope = """
+    @Test
+    @DisplayName("旧版 Job 根启动消息只确认并拒绝，不回退创建 JobInstance")
+    void shouldDropLegacyJobRootMessageFromTrustedQueue() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        TriggerLaunchConsumer consumer = new TriggerLaunchConsumer(
+                service,
+                gracefulShutdown,
+                new SimpleMeterRegistry(),
+                new TriggerConsumerProperties(),
+                new BatchKafkaTopicNamespace(""));
+        String legacyEnvelope = """
         {
           "launchRequest": {
             "tenantId": "ta",
@@ -148,60 +148,60 @@ class LaunchApplicationServiceTest {
           "envelopeVersion": 2
         }
         """;
-    ConsumerRecord<String, String> record = new ConsumerRecord<>(
-        BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "legacy-job-root-request", legacyEnvelope);
+        ConsumerRecord<String, String> record =
+                new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "legacy-job-root-request", legacyEnvelope);
 
-    consumer.consume(record, acknowledgment);
+        consumer.consume(record, acknowledgment);
 
-    verify(acknowledgment).acknowledge();
-    verify(launchService, never()).launch(any());
-    verify(workflowRunLaunchService, never()).launch(any());
-  }
+        verify(acknowledgment).acknowledge();
+        verify(launchService, never()).launch(any());
+        verify(workflowRunLaunchService, never()).launch(any());
+    }
 
-  @Test
-  @DisplayName("HTTP 入口拒绝 Job-only 根启动")
-  void shouldRejectJobOnlyTopLevelLaunch() {
-    LaunchRequest jobTarget = new LaunchRequest(
-        "ta", "j", LocalDate.now(), TriggerType.API, "req-job", "trace-job", Map.of());
+    @Test
+    @DisplayName("HTTP 入口拒绝 Job-only 根启动")
+    void shouldRejectJobOnlyTopLevelLaunch() {
+        LaunchRequest jobTarget =
+                new LaunchRequest("ta", "j", LocalDate.now(), TriggerType.API, "req-job", "trace-job", Map.of());
 
-    assertThatThrownBy(() -> service.launch(jobTarget))
-        .isInstanceOf(OperationFailure.class)
-        .extracting(error -> ((OperationFailure) error).kind())
-        .isEqualTo(Kind.INVALID_INPUT);
+        assertThatThrownBy(() -> service.launch(jobTarget))
+                .isInstanceOf(OperationFailure.class)
+                .extracting(error -> ((OperationFailure) error).kind())
+                .isEqualTo(Kind.INVALID_INPUT);
 
-    verify(rateLimiter, never()).tryConsume(anyString(), any());
-    verify(launchService, never()).launch(any());
-    verify(workflowRunLaunchService, never()).launch(any());
-  }
+        verify(rateLimiter, never()).tryConsume(anyString(), any());
+        verify(launchService, never()).launch(any());
+        verify(workflowRunLaunchService, never()).launch(any());
+    }
 
-  @Test
-  @DisplayName("Workflow ID 目标进入唯一根 Workflow Launch 服务，不伪装成 Job Launch")
-  void shouldRouteWorkflowTargetToRootWorkflowLauncher() {
-    LaunchRequest req = LaunchRequest.builder()
-        .tenantId("ta")
-        .workflowDefinitionId(71L)
-        .bizDate(LocalDate.now())
-        .triggerType(TriggerType.API)
-        .requestId("req-wf")
-        .traceId("trace-wf")
-        .params(Map.of())
-        .build();
-    LaunchResponse expected = new LaunchResponse("workflow-71", "trace-wf");
-    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
-    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
+    @Test
+    @DisplayName("Workflow ID 目标进入唯一根 Workflow Launch 服务，不伪装成 Job Launch")
+    void shouldRouteWorkflowTargetToRootWorkflowLauncher() {
+        LaunchRequest req = LaunchRequest.builder()
+                .tenantId("ta")
+                .workflowDefinitionId(71L)
+                .bizDate(LocalDate.now())
+                .triggerType(TriggerType.API)
+                .requestId("req-wf")
+                .traceId("trace-wf")
+                .params(Map.of())
+                .build();
+        LaunchResponse expected = new LaunchResponse("workflow-71", "trace-wf");
+        when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
+        when(workflowRunLaunchService.launch(req)).thenReturn(expected);
 
-    assertThat(service.launch(req)).isSameAs(expected);
-    verify(workflowRunLaunchService).launch(req);
-    verify(launchService, never()).launch(any());
-  }
+        assertThat(service.launch(req)).isSameAs(expected);
+        verify(workflowRunLaunchService).launch(req);
+        verify(launchService, never()).launch(any());
+    }
 
-  @Test
-  @DisplayName("限流 key 使用 request.tenantId(不漂移到其他租户)")
-  void shouldUseRequestTenant_whenRateLimiting() {
-    LaunchRequest req = request("tenant-X");
-    when(rateLimiter.tryConsume("tenant-X", RateLimitAction.LAUNCH)).thenReturn(false);
+    @Test
+    @DisplayName("限流 key 使用 request.tenantId(不漂移到其他租户)")
+    void shouldUseRequestTenant_whenRateLimiting() {
+        LaunchRequest req = request("tenant-X");
+        when(rateLimiter.tryConsume("tenant-X", RateLimitAction.LAUNCH)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.launch(req)).isInstanceOf(OperationFailure.class);
-    verify(rateLimiter).tryConsume("tenant-X", RateLimitAction.LAUNCH);
-  }
+        assertThatThrownBy(() -> service.launch(req)).isInstanceOf(OperationFailure.class);
+        verify(rateLimiter).tryConsume("tenant-X", RateLimitAction.LAUNCH);
+    }
 }

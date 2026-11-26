@@ -25,221 +25,221 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DisplayName("安全属性校验:生产类环境的旁路模式与弱密钥快速失败,以及非生产环境与缺失环境的放行边界")
 class BatchSecurityPropertiesTest {
 
-  private static BatchSecurityProperties newProps(String activeProfile, boolean bypassMode) {
-    BatchSecurityProperties props = new BatchSecurityProperties();
-    props.setBypassMode(bypassMode);
-    MockEnvironment env = new MockEnvironment();
-    if (activeProfile != null) {
-      env.setActiveProfiles(activeProfile);
+    private static BatchSecurityProperties newProps(String activeProfile, boolean bypassMode) {
+        BatchSecurityProperties props = new BatchSecurityProperties();
+        props.setBypassMode(bypassMode);
+        MockEnvironment env = new MockEnvironment();
+        if (activeProfile != null) {
+            env.setActiveProfiles(activeProfile);
+        }
+        ReflectionTestUtils.setField(props, "environment", env);
+        return props;
     }
-    ReflectionTestUtils.setField(props, "environment", env);
-    return props;
-  }
 
-  // ─── bypass-mode 守护 ─────────────────────────────────────────────────
+    // ─── bypass-mode 守护 ─────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("生产环境开启旁路模式时校验直接失败,并明确提示生产环境禁止该设置")
-  void prodProfile_bypassModeTrue_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", true);
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
-  }
+    @Test
+    @DisplayName("生产环境开启旁路模式时校验直接失败,并明确提示生产环境禁止该设置")
+    void prodProfile_bypassModeTrue_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", true);
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
+    }
 
-  @Test
-  @DisplayName("预发布环境开启旁路模式时同样校验失败,提示语与生产环境一致")
-  void stagingProfile_bypassModeTrue_throwsFatal() {
-    BatchSecurityProperties props = newProps("staging", true);
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
-  }
+    @Test
+    @DisplayName("预发布环境开启旁路模式时同样校验失败,提示语与生产环境一致")
+    void stagingProfile_bypassModeTrue_throwsFatal() {
+        BatchSecurityProperties props = newProps("staging", true);
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
+    }
 
-  @Test
-  @DisplayName("验收环境开启旁路模式时按生产类环境处理并抛出异常")
-  void uatProfile_bypassModeTrue_throwsFatal() {
-    BatchSecurityProperties props = newProps("uat", true);
-    assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("验收环境开启旁路模式时按生产类环境处理并抛出异常")
+    void uatProfile_bypassModeTrue_throwsFatal() {
+        BatchSecurityProperties props = newProps("uat", true);
+        assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("预生产环境开启旁路模式时按生产类环境处理并抛出异常")
-  void preprodProfile_bypassModeTrue_throwsFatal() {
-    BatchSecurityProperties props = newProps("preprod", true);
-    assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("预生产环境开启旁路模式时按生产类环境处理并抛出异常")
+    void preprodProfile_bypassModeTrue_throwsFatal() {
+        BatchSecurityProperties props = newProps("preprod", true);
+        assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("本地环境开启旁路模式且密钥长度充足时校验通过")
-  void localProfile_bypassModeTrue_allowed() {
-    BatchSecurityProperties props = newProps("local", true);
-    props.setInternalSecret("strong-secret-at-least-16-chars-long");
-    // 不在 prod-like 名单里，bypass=true 应该被允许
-    props.validateSecuritySettings();
-  }
+    @Test
+    @DisplayName("本地环境开启旁路模式且密钥长度充足时校验通过")
+    void localProfile_bypassModeTrue_allowed() {
+        BatchSecurityProperties props = newProps("local", true);
+        props.setInternalSecret("strong-secret-at-least-16-chars-long");
+        // 不在 prod-like 名单里，bypass=true 应该被允许
+        props.validateSecuritySettings();
+    }
 
-  // ─── 占位符密钥校验 ──────────────────────────────────────────────────
+    // ─── 占位符密钥校验 ──────────────────────────────────────────────────
 
-  // 说明：console 主 / 从库密码（batch.console.read-replica.*.password）的 prod 弱口令 fail-fast 与
-  // 非 prod WARN 已迁移到 ReadReplicaCredentialGuard，由 ReadReplicaCredentialGuardTest 覆盖。
+    // 说明：console 主 / 从库密码（batch.console.read-replica.*.password）的 prod 弱口令 fail-fast 与
+    // 非 prod WARN 已迁移到 ReadReplicaCredentialGuard，由 ReadReplicaCredentialGuardTest 覆盖。
 
-  @Test
-  @DisplayName("生产环境未配置内部密钥时以配置为空失败,不依赖任何内置凭据")
-  void prodProfile_defaultInternalSecret_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    // 生产默认值为空时必须先以“未配置”失败，避免依赖任何内置凭据。
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("is empty");
-  }
+    @Test
+    @DisplayName("生产环境未配置内部密钥时以配置为空失败,不依赖任何内置凭据")
+    void prodProfile_defaultInternalSecret_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        // 生产默认值为空时必须先以“未配置”失败，避免依赖任何内置凭据。
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("is empty");
+    }
 
-  @Test
-  @DisplayName("生产环境内部密钥为大写占位符文本时提示仍为占位值并失败")
-  void prodProfile_placeholderCHANGE_ME_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("CHANGE_ME_STRONG_INTERNAL_SECRET");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("is still a placeholder");
-  }
+    @Test
+    @DisplayName("生产环境内部密钥为大写占位符文本时提示仍为占位值并失败")
+    void prodProfile_placeholderCHANGE_ME_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("CHANGE_ME_STRONG_INTERNAL_SECRET");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("is still a placeholder");
+    }
 
-  @Test
-  @DisplayName("占位符写为小写连字符形式时仍被识别并提示占位值")
-  void prodProfile_placeholderChangeMeLowercase_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("change-me-something");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("placeholder");
-  }
+    @Test
+    @DisplayName("占位符写为小写连字符形式时仍被识别并提示占位值")
+    void prodProfile_placeholderChangeMeLowercase_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("change-me-something");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("placeholder");
+    }
 
-  @Test
-  @DisplayName("占位符写为无分隔符的紧凑形式时仍被识别并失败")
-  void prodProfile_placeholderChangeme_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("changeme123456789");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("placeholder");
-  }
+    @Test
+    @DisplayName("占位符写为无分隔符的紧凑形式时仍被识别并失败")
+    void prodProfile_placeholderChangeme_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("changeme123456789");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("placeholder");
+    }
 
-  @Test
-  @DisplayName("密钥中带有待替换语义的占位文本时被识别并失败")
-  void prodProfile_placeholderTODO_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("todo-replace-with-real");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("placeholder");
-  }
+    @Test
+    @DisplayName("密钥中带有待替换语义的占位文本时被识别并失败")
+    void prodProfile_placeholderTODO_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("todo-replace-with-real");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("placeholder");
+    }
 
-  // ─── 长度强度校验 ────────────────────────────────────────────────────
+    // ─── 长度强度校验 ────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("内部密钥仅十五个字符未达最小长度时提示密钥强度不足")
-  void prodProfile_secretTooShort_throwsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("short15-chars-x"); // 15 chars < MIN_SECRET_LENGTH=16
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("secret is too weak");
-  }
+    @Test
+    @DisplayName("内部密钥仅十五个字符未达最小长度时提示密钥强度不足")
+    void prodProfile_secretTooShort_throwsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("short15-chars-x"); // 15 chars < MIN_SECRET_LENGTH=16
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("secret is too weak");
+    }
 
-  @Test
-  @DisplayName("内部密钥为空白字符串时按配置为空处理并失败")
-  void prodProfile_secretBlankThrowsFatal() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret(""); // blank
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("is empty");
-  }
+    @Test
+    @DisplayName("内部密钥为空白字符串时按配置为空处理并失败")
+    void prodProfile_secretBlankThrowsFatal() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret(""); // blank
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("is empty");
+    }
 
-  // ─── 通过场景 ────────────────────────────────────────────────────────
+    // ─── 通过场景 ────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("生产环境内部密钥与数据库口令均为强随机值时校验通过")
-  void prodProfile_strongSecret_passes() {
-    BatchSecurityProperties props = newProps("prod", false);
-    props.setInternalSecret("a-strong-random-secret-from-vault-32-bytes");
-    // postgres password 在 environment 里未设置 → "" → 抛"为空"，所以单独验证 internalSecret 这条路径
-    // 设置 spring.datasource.password 避免下游校验报错
-    MockEnvironment env = (MockEnvironment) ReflectionTestUtils.getField(props, "environment");
-    env.setProperty("spring.datasource.password", "real-strong-pg-password-2026");
-    props.validateSecuritySettings(); // no throw
-  }
+    @Test
+    @DisplayName("生产环境内部密钥与数据库口令均为强随机值时校验通过")
+    void prodProfile_strongSecret_passes() {
+        BatchSecurityProperties props = newProps("prod", false);
+        props.setInternalSecret("a-strong-random-secret-from-vault-32-bytes");
+        // postgres password 在 environment 里未设置 → "" → 抛"为空"，所以单独验证 internalSecret 这条路径
+        // 设置 spring.datasource.password 避免下游校验报错
+        MockEnvironment env = (MockEnvironment) ReflectionTestUtils.getField(props, "environment");
+        env.setProperty("spring.datasource.password", "real-strong-pg-password-2026");
+        props.validateSecuritySettings(); // no throw
+    }
 
-  @Test
-  @DisplayName("未注入运行环境时跳过全部校验,即使旁路模式开启也不抛异常")
-  void noEnvironment_safeEarlyReturn() {
-    BatchSecurityProperties props = new BatchSecurityProperties();
-    props.setBypassMode(true);
-    // environment=null → 跳过所有校验
-    props.validateSecuritySettings();
-  }
+    @Test
+    @DisplayName("未注入运行环境时跳过全部校验,即使旁路模式开启也不抛异常")
+    void noEnvironment_safeEarlyReturn() {
+        BatchSecurityProperties props = new BatchSecurityProperties();
+        props.setBypassMode(true);
+        // environment=null → 跳过所有校验
+        props.validateSecuritySettings();
+    }
 
-  @Test
-  @DisplayName("测试环境不在生产类名单内,旁路模式与默认密钥均可通过校验")
-  void nonProdTestProfile_completelyRelaxed_isAccepted() {
-    BatchSecurityProperties props = newProps("test", true);
-    // test profile 不在 prod-like 名单，bypass + 默认密钥都不报错
-    props.validateSecuritySettings();
-  }
+    @Test
+    @DisplayName("测试环境不在生产类名单内,旁路模式与默认密钥均可通过校验")
+    void nonProdTestProfile_completelyRelaxed_isAccepted() {
+        BatchSecurityProperties props = newProps("test", true);
+        // test profile 不在 prod-like 名单，bypass + 默认密钥都不报错
+        props.validateSecuritySettings();
+    }
 
-  // ─── isProductionProfile 大小写归一化 ────────────────────────────────
+    // ─── isProductionProfile 大小写归一化 ────────────────────────────────
 
-  @Test
-  @DisplayName("生产标识为全大写时仍被识别为生产环境并拒绝旁路模式")
-  void prodProfile_caseInsensitive_PROD() {
-    BatchSecurityProperties props = newProps("PROD", true);
-    assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("生产标识为全大写时仍被识别为生产环境并拒绝旁路模式")
+    void prodProfile_caseInsensitive_PROD() {
+        BatchSecurityProperties props = newProps("PROD", true);
+        assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("生产标识为混大小写时仍被识别为生产环境并拒绝旁路模式")
-  void prodProfile_caseInsensitive_Production() {
-    BatchSecurityProperties props = newProps("Production", true);
-    assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("生产标识为混大小写时仍被识别为生产环境并拒绝旁路模式")
+    void prodProfile_caseInsensitive_Production() {
+        BatchSecurityProperties props = newProps("Production", true);
+        assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("带前缀连字符的生产标识按生产环境处理并拒绝旁路模式")
-  void prodLike_preDashProd_isProductionProfile() {
-    BatchSecurityProperties props = newProps("pre-prod", true);
-    assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("带前缀连字符的生产标识按生产环境处理并拒绝旁路模式")
+    void prodLike_preDashProd_isProductionProfile() {
+        BatchSecurityProperties props = newProps("pre-prod", true);
+        assertThatThrownBy(props::validateSecuritySettings).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("未登记的自定义环境按生产环境对待,旁路模式被拒绝以保证失败安全")
-  void unknownProfile_failSecure_treatedAsProduction() {
-    // audit fix(fail-open → fail-secure):未知 / 未登记的 profile 不再被当作非生产放行。
-    // 既无 prod-like 也无已识别的非生产 profile → 按生产对待 → bypass=true 必须被拒。
-    BatchSecurityProperties props = newProps("custom-env", true);
-    props.setInternalSecret("strong-non-default-secret-2026");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
-  }
+    @Test
+    @DisplayName("未登记的自定义环境按生产环境对待,旁路模式被拒绝以保证失败安全")
+    void unknownProfile_failSecure_treatedAsProduction() {
+        // audit fix(fail-open → fail-secure):未知 / 未登记的 profile 不再被当作非生产放行。
+        // 既无 prod-like 也无已识别的非生产 profile → 按生产对待 → bypass=true 必须被拒。
+        BatchSecurityProperties props = newProps("custom-env", true);
+        props.setInternalSecret("strong-non-default-secret-2026");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
+    }
 
-  @Test
-  @DisplayName("未配置任何激活环境时按生产环境对待,旁路模式被拒绝以保证失败安全")
-  void emptyProfile_failSecure_treatedAsProduction() {
-    // 空激活集(部署忘配 SPRING_PROFILES_ACTIVE)同样 fail-secure 当生产。
-    BatchSecurityProperties props = newProps(null, true);
-    props.setInternalSecret("strong-non-default-secret-2026");
-    assertThatThrownBy(props::validateSecuritySettings)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
-  }
+    @Test
+    @DisplayName("未配置任何激活环境时按生产环境对待,旁路模式被拒绝以保证失败安全")
+    void emptyProfile_failSecure_treatedAsProduction() {
+        // 空激活集(部署忘配 SPRING_PROFILES_ACTIVE)同样 fail-secure 当生产。
+        BatchSecurityProperties props = newProps(null, true);
+        props.setInternalSecret("strong-non-default-secret-2026");
+        assertThatThrownBy(props::validateSecuritySettings)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
+    }
 
-  @Test
-  @DisplayName("端到端测试环境属已登记的非生产环境,密钥充足时旁路模式放行且状态保持开启")
-  void e2eProfile_recognizedNonProd_allowsBypass() {
-    // 集成测常用 {"test","e2e"};e2e 已登记为非生产,bypass=true 应放行。
-    BatchSecurityProperties props = newProps("e2e", true);
-    props.setInternalSecret("strong-secret-at-least-16-chars-long");
-    props.validateSecuritySettings();
-    assertThat(props.isBypassMode()).isTrue();
-  }
+    @Test
+    @DisplayName("端到端测试环境属已登记的非生产环境,密钥充足时旁路模式放行且状态保持开启")
+    void e2eProfile_recognizedNonProd_allowsBypass() {
+        // 集成测常用 {"test","e2e"};e2e 已登记为非生产,bypass=true 应放行。
+        BatchSecurityProperties props = newProps("e2e", true);
+        props.setInternalSecret("strong-secret-at-least-16-chars-long");
+        props.validateSecuritySettings();
+        assertThat(props.isBypassMode()).isTrue();
+    }
 }

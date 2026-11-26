@@ -6,15 +6,15 @@ import java.util.UUID;
 import org.apache.ibatis.annotations.Param;
 
 public interface ConsoleUserBatchOperationMapper {
-  int insertOperation(ConsoleUserBatchOperationInsertOperationParam parameters);
+    int insertOperation(ConsoleUserBatchOperationInsertOperationParam parameters);
 
-  ConsoleUserBatchOperationView selectByOperationId(
-      @Param("operationId") UUID operationId,
-      @Param("actor") String actor,
-      @Param("targetTenantId") String targetTenantId);
+    ConsoleUserBatchOperationView selectByOperationId(
+            @Param("operationId") UUID operationId,
+            @Param("actor") String actor,
+            @Param("targetTenantId") String targetTenantId);
 
-  ConsoleUserBatchOperationView selectByRequestId(
-      @Param("requestId") UUID requestId,
-      @Param("actor") String actor,
-      @Param("targetTenantId") String targetTenantId);
+    ConsoleUserBatchOperationView selectByRequestId(
+            @Param("requestId") UUID requestId,
+            @Param("actor") String actor,
+            @Param("targetTenantId") String targetTenantId);
 }

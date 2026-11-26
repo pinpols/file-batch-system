@@ -14,14 +14,12 @@ import org.springframework.http.MediaType;
  *
  * <p>守护 policyCode 字段校验 + 写入 + 唯一约束 + 数字字段 @Min 边界。
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("配额策略写路径: 编码格式与数值边界校验,落库与唯一约束")
 class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code, int maxJobs) {
-    return """
+    private String body(String code, int maxJobs) {
+        return """
         {
           "tenantId": "int-qp-ta",
           "policyCode": "%s",
@@ -32,110 +30,104 @@ class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrat
           "enabled": false
         }
         """.formatted(code, maxJobs).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建配额策略: 返回成功,落库的租户,编码与并发作业上限与请求一致")
-  void shouldCreateQuotaPolicyWithValidCode() {
-    String code = "int_qp_create_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建配额策略: 返回成功,落库的租户,编码与并发作业上限与请求一致")
+    void shouldCreateQuotaPolicyWithValidCode() {
+        String code = "int_qp_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code, 10))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code, 10))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String quotaPolicySnapshotSql = """
+        String quotaPolicySnapshotSql = """
         select tenant_id, policy_code, max_running_jobs_per_tenant
         from batch.tenant_quota_policy where policy_code = ?
         """;
-    var row = jdbcTemplate.queryForMap(quotaPolicySnapshotSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-qp-ta");
-    assertThat(row).containsEntry("policy_code", code);
-    assertThat(((Number) row.get("max_running_jobs_per_tenant")).intValue()).isEqualTo(10);
+        var row = jdbcTemplate.queryForMap(quotaPolicySnapshotSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-qp-ta");
+        assertThat(row).containsEntry("policy_code", code);
+        assertThat(((Number) row.get("max_running_jobs_per_tenant")).intValue()).isEqualTo(10);
 
-    String deleteQuotaPolicySql = """
+        String deleteQuotaPolicySql = """
         delete from batch.tenant_quota_policy where policy_code = ?
     """;
-    jdbcTemplate.update(deleteQuotaPolicySql, code);
-  }
+        jdbcTemplate.update(deleteQuotaPolicySql, code);
+    }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误")
-  void shouldRejectInvalidPolicyCodeWithSpaces() {
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q", 10))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("编码含空格: 返回校验错误")
+    void shouldRejectInvalidPolicyCodeWithSpaces() {
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q", 10))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChinesePolicyCode() {
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("中文配额", 10))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChinesePolicyCode() {
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("中文配额", 10))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("并发作业上限为负数: 返回请求不合法")
-  void shouldRejectNegativeMaxJobs() {
-    // @Min(0) 拦截
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-3")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("int_qp_neg", -5))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("并发作业上限为负数: 返回请求不合法")
+    void shouldRejectNegativeMaxJobs() {
+        // @Min(0) 拦截
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-bad-3")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("int_qp_neg", -5))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复策略")
-  void shouldRejectDuplicatePolicyCode() {
-    String code = "int_qp_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code, 10))
-        .exchange()
-        .expectStatus()
-        .isOk();
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复策略")
+    void shouldRejectDuplicatePolicyCode() {
+        String code = "int_qp_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code, 10))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/quota-policies")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code, 10))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/quota-policies")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-qp-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code, 10))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    String deleteQuotaPolicySql = """
+        String deleteQuotaPolicySql = """
         delete from batch.tenant_quota_policy where policy_code = ?
     """;
-    jdbcTemplate.update(deleteQuotaPolicySql, code);
-  }
+        jdbcTemplate.update(deleteQuotaPolicySql, code);
+    }
 }

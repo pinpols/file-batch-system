@@ -14,6 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.metrics.backlog")
 public class BacklogMetricsProperties {
 
-  /** outbox 重复投递检测窗口（小时）；实际按不小于 1 小时生效。 */
-  private long outboxDuplicateWindowHours = 24;
+    /** outbox 重复投递检测窗口（小时）；实际按不小于 1 小时生效。 */
+    private long outboxDuplicateWindowHours = 24;
 }

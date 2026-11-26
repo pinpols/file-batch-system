@@ -8,22 +8,22 @@ import lombok.Data;
 
 @Data
 public class CalendarSaveRequest {
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @ValidResourceCode
-  private String calendarCode;
+    @ValidResourceCode
+    private String calendarCode;
 
-  @NotBlank
-  @Size(max = 256)
-  private String calendarName;
+    @NotBlank
+    @Size(max = 256)
+    private String calendarName;
 
-  @NotBlank
-  @Size(max = 64)
-  private String timezone;
+    @NotBlank
+    @Size(max = 64)
+    private String timezone;
 
-  private String holidayRollRule;
-  private String catchUpPolicy;
-  private Integer catchUpMaxDays;
-  private Boolean enabled;
+    private String holidayRollRule;
+    private String catchUpPolicy;
+    private Integer catchUpMaxDays;
+    private Boolean enabled;
 }

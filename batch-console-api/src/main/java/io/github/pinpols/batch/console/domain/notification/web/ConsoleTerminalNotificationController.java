@@ -29,26 +29,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/notifications/terminal-deliveries")
 @RequiredArgsConstructor
 public class ConsoleTerminalNotificationController {
-  private final TerminalNotificationRecoveryService recovery;
-  private final ConsoleResponseFactory responses;
-  private final ConsoleRequestMetadataResolver metadata;
+    private final TerminalNotificationRecoveryService recovery;
+    private final ConsoleResponseFactory responses;
+    private final ConsoleRequestMetadataResolver metadata;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<TerminalDeliveryRecoveryResponse>> list(
-      @RequestParam @NotBlank String tenantId,
-      @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
-    return responses.success(recovery.list(tenantId, limit));
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<TerminalDeliveryRecoveryResponse>> list(
+            @RequestParam @NotBlank String tenantId,
+            @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
+        return responses.success(recovery.list(tenantId, limit));
+    }
 
-  @PostMapping("/{source}/{id}/retry")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> retry(
-      @RequestParam @NotBlank String tenantId,
-      @PathVariable Source source,
-      @PathVariable @Positive Long id,
-      @Valid @RequestBody TerminalDeliveryRetryRequest request) {
-    recovery.retry(tenantId, source, id, request, metadata.current());
-    return responses.success(null);
-  }
+    @PostMapping("/{source}/{id}/retry")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> retry(
+            @RequestParam @NotBlank String tenantId,
+            @PathVariable Source source,
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody TerminalDeliveryRetryRequest request) {
+        recovery.retry(tenantId, source, id, request, metadata.current());
+        return responses.success(null);
+    }
 }

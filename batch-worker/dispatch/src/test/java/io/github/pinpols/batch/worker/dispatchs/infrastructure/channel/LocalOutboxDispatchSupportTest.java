@@ -17,151 +17,139 @@ import org.junit.jupiter.api.io.TempDir;
 @DisplayName("本地出箱分发:沙箱内写出信封与旁挂清单,以及目标目录越出沙箱根时的拒绝")
 class LocalOutboxDispatchSupportTest {
 
-  @Test
-  @DisplayName("默认临时出箱目录及信封文件均私有,正常分发仍返回成功")
-  void shouldCreatePrivateOutbox_whenEndpointIsMissing(@TempDir Path tempDir) throws Exception {
-    String previous = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
-    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
-    try {
-      var base = command(tempDir);
-      var command = new DispatchCommand(
-          base.tenantId(),
-          base.traceId(),
-          base.fileRecord(),
-          Map.of("channel_type", "LOCAL", "channel_code", "default"),
-          base.payload());
-      DispatchResult result =
-          LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, false, null);
-      assertThat(result.success()).isTrue();
-      Path directory = tempDir.resolve("batch-dispatch-outbox");
-      assertThat(Files.getPosixFilePermissions(directory))
-          .isEqualTo(PosixFilePermissions.fromString("rwx------"));
-      try (Stream<Path> files = Files.list(directory)) {
-        for (Path file : files.toList()) {
-          assertThat(Files.getPosixFilePermissions(file))
-              .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+    @Test
+    @DisplayName("默认临时出箱目录及信封文件均私有,正常分发仍返回成功")
+    void shouldCreatePrivateOutbox_whenEndpointIsMissing(@TempDir Path tempDir) throws Exception {
+        String previous = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
+        try {
+            var base = command(tempDir);
+            var command = new DispatchCommand(
+                    base.tenantId(),
+                    base.traceId(),
+                    base.fileRecord(),
+                    Map.of("channel_type", "LOCAL", "channel_code", "default"),
+                    base.payload());
+            DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, false, null);
+            assertThat(result.success()).isTrue();
+            Path directory = tempDir.resolve("batch-dispatch-outbox");
+            assertThat(Files.getPosixFilePermissions(directory))
+                    .isEqualTo(PosixFilePermissions.fromString("rwx------"));
+            try (Stream<Path> files = Files.list(directory)) {
+                for (Path file : files.toList()) {
+                    assertThat(Files.getPosixFilePermissions(file))
+                            .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+                }
+            }
+        } finally {
+            if (previous == null) {
+                System.clearProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+            } else {
+                System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, previous);
+            }
         }
-      }
-    } finally {
-      if (previous == null) {
-        System.clearProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
-      } else {
-        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, previous);
-      }
     }
-  }
 
-  @Test
-  @DisplayName("在沙箱内写出信封与旁挂校验文件,清单引用带校验和并落在目标目录")
-  void shouldWriteEnvelopeAndSidecarManifestInsideSandbox(@TempDir Path tempDir) throws Exception {
-    Path sandbox = tempDir.resolve("sandbox");
-    Path target = sandbox.resolve("outbox");
-    Files.createDirectories(sandbox);
-    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
+    @Test
+    @DisplayName("在沙箱内写出信封与旁挂校验文件,清单引用带校验和并落在目标目录")
+    void shouldWriteEnvelopeAndSidecarManifestInsideSandbox(@TempDir Path tempDir) throws Exception {
+        Path sandbox = tempDir.resolve("sandbox");
+        Path target = sandbox.resolve("outbox");
+        Files.createDirectories(sandbox);
+        DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
-    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-        command(target), false, null, properties);
+        DispatchResult result =
+                LocalOutboxDispatchSupport.writeFilesystemEnvelope(command(target), false, null, properties);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.manifestRef()).isNotNull();
-    assertThat(result.manifestRef().ref()).endsWith(".json.chk");
-    assertThat(result.manifestRef().checksum()).isNotBlank();
-    assertThat(result.manifestRef().sizeBytes()).isPositive();
-    try (Stream<Path> files = Files.list(target)) {
-      assertThat(files).anyMatch(path -> path.getFileName().toString().endsWith(".json"));
+        assertThat(result.success()).isTrue();
+        assertThat(result.manifestRef()).isNotNull();
+        assertThat(result.manifestRef().ref()).endsWith(".json.chk");
+        assertThat(result.manifestRef().checksum()).isNotBlank();
+        assertThat(result.manifestRef().sizeBytes()).isPositive();
+        try (Stream<Path> files = Files.list(target)) {
+            assertThat(files).anyMatch(path -> path.getFileName().toString().endsWith(".json"));
+        }
+        try (Stream<Path> files = Files.list(target)) {
+            assertThat(files).anyMatch(path -> path.getFileName().toString().endsWith(".json.chk"));
+        }
     }
-    try (Stream<Path> files = Files.list(target)) {
-      assertThat(files).anyMatch(path -> path.getFileName().toString().endsWith(".json.chk"));
+
+    @Test
+    @DisplayName("信封已发布但旁挂清单失败时保留未知结果,禁止将其当作无副作用失败重发")
+    void shouldReportUnknown_whenEnvelopeWasPublishedButManifestFailed(@TempDir Path tempDir) throws Exception {
+        Path sandbox = tempDir.resolve("sandbox");
+        Path target = sandbox.resolve("token=probe-secret");
+        Files.createDirectories(target);
+        Path envelope = target.resolve("LOCAL_TEST-req-1.json");
+        Path manifest = target.resolve("LOCAL_TEST-req-1.json.chk");
+        Files.createDirectory(manifest);
+        Path existingManifestEntry = manifest.resolve("occupied");
+        Files.writeString(existingManifestEntry, "keep");
+        DispatchCommand base = command(target);
+        DispatchCommand dispatch = new DispatchCommand(
+                base.tenantId(),
+                base.traceId(),
+                base.fileRecord(),
+                Map.of(
+                        "channel_type",
+                        "LOCAL",
+                        "channel_code",
+                        "LOCAL_TEST",
+                        "target_endpoint",
+                        target.toString(),
+                        "dispatch_manifest_enabled",
+                        true),
+                base.payload());
+        DispatchRuntimeProperties properties = runtimeProperties(sandbox);
+
+        DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(dispatch, false, null, properties);
+
+        assertThat(envelope).isRegularFile();
+        String publishedEnvelope = Files.readString(envelope);
+        assertThat(publishedEnvelope).contains("req-1", "rcpt-1");
+        assertThat(result.success()).isFalse();
+        assertThat(result.externalOutcomeUnknown()).isTrue();
+        assertThat(result.externalRequestId()).isEqualTo("req-1");
+        assertThat(result.receiptCode()).isEqualTo("rcpt-1");
+        assertThat(result.message()).doesNotContain("probe-secret");
+        assertThat(existingManifestEntry).hasContent("keep");
     }
-  }
 
-  @Test
-  @DisplayName("信封已发布但旁挂清单失败时保留未知结果,禁止将其当作无副作用失败重发")
-  void shouldReportUnknown_whenEnvelopeWasPublishedButManifestFailed(@TempDir Path tempDir)
-      throws Exception {
-    Path sandbox = tempDir.resolve("sandbox");
-    Path target = sandbox.resolve("token=probe-secret");
-    Files.createDirectories(target);
-    Path envelope = target.resolve("LOCAL_TEST-req-1.json");
-    Path manifest = target.resolve("LOCAL_TEST-req-1.json.chk");
-    Files.createDirectory(manifest);
-    Path existingManifestEntry = manifest.resolve("occupied");
-    Files.writeString(existingManifestEntry, "keep");
-    DispatchCommand base = command(target);
-    DispatchCommand dispatch = new DispatchCommand(
-        base.tenantId(),
-        base.traceId(),
-        base.fileRecord(),
-        Map.of(
-            "channel_type",
-            "LOCAL",
-            "channel_code",
-            "LOCAL_TEST",
-            "target_endpoint",
-            target.toString(),
-            "dispatch_manifest_enabled",
-            true),
-        base.payload());
-    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
+    @Test
+    @DisplayName("目标目录越出沙箱根时拒绝写入,并说明路径逃逸沙箱根")
+    void shouldRejectTargetEndpointEscapingSandbox(@TempDir Path tempDir) throws Exception {
+        Path sandbox = tempDir.resolve("sandbox");
+        Path outside = tempDir.resolve("token=probe-secret");
+        Files.createDirectories(sandbox);
+        Files.createDirectories(outside);
+        DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
-    DispatchResult result =
-        LocalOutboxDispatchSupport.writeFilesystemEnvelope(dispatch, false, null, properties);
+        DispatchResult result =
+                LocalOutboxDispatchSupport.writeFilesystemEnvelope(command(outside), false, null, properties);
 
-    assertThat(envelope).isRegularFile();
-    String publishedEnvelope = Files.readString(envelope);
-    assertThat(publishedEnvelope).contains("req-1", "rcpt-1");
-    assertThat(result.success()).isFalse();
-    assertThat(result.externalOutcomeUnknown()).isTrue();
-    assertThat(result.externalRequestId()).isEqualTo("req-1");
-    assertThat(result.receiptCode()).isEqualTo("rcpt-1");
-    assertThat(result.message()).doesNotContain("probe-secret");
-    assertThat(existingManifestEntry).hasContent("keep");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.externalOutcomeUnknown()).isFalse();
+        assertThat(result.message()).contains("escapes sandbox root");
+        assertThat(result.message()).doesNotContain("probe-secret");
+    }
 
-  @Test
-  @DisplayName("目标目录越出沙箱根时拒绝写入,并说明路径逃逸沙箱根")
-  void shouldRejectTargetEndpointEscapingSandbox(@TempDir Path tempDir) throws Exception {
-    Path sandbox = tempDir.resolve("sandbox");
-    Path outside = tempDir.resolve("token=probe-secret");
-    Files.createDirectories(sandbox);
-    Files.createDirectories(outside);
-    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
+    private static DispatchRuntimeProperties runtimeProperties(Path sandbox) {
+        DispatchRuntimeProperties properties = new DispatchRuntimeProperties();
+        properties.setLocalSandboxRoot(sandbox.toString());
+        return properties;
+    }
 
-    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-        command(outside), false, null, properties);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.externalOutcomeUnknown()).isFalse();
-    assertThat(result.message()).contains("escapes sandbox root");
-    assertThat(result.message()).doesNotContain("probe-secret");
-  }
-
-  private static DispatchRuntimeProperties runtimeProperties(Path sandbox) {
-    DispatchRuntimeProperties properties = new DispatchRuntimeProperties();
-    properties.setLocalSandboxRoot(sandbox.toString());
-    return properties;
-  }
-
-  private static DispatchCommand command(Path target) {
-    DispatchPayload payload = new DispatchPayload(
-        "file-1",
-        "FILE_A",
-        "LOCAL_CH",
-        "target",
-        "req-1",
-        "rcpt-1",
-        true,
-        false,
-        "NORMAL",
-        Map.of());
-    return new DispatchCommand(
-        "t1",
-        "trace-1",
-        Map.of("id", 1L, "file_name", "a.csv", "mime_type", "text/csv"),
-        Map.of(
-            "channel_type", "LOCAL",
-            "channel_code", "../local channel",
-            "target_endpoint", target.toString()),
-        payload);
-  }
+    private static DispatchCommand command(Path target) {
+        DispatchPayload payload = new DispatchPayload(
+                "file-1", "FILE_A", "LOCAL_CH", "target", "req-1", "rcpt-1", true, false, "NORMAL", Map.of());
+        return new DispatchCommand(
+                "t1",
+                "trace-1",
+                Map.of("id", 1L, "file_name", "a.csv", "mime_type", "text/csv"),
+                Map.of(
+                        "channel_type", "LOCAL",
+                        "channel_code", "../local channel",
+                        "target_endpoint", target.toString()),
+                payload);
+    }
 }

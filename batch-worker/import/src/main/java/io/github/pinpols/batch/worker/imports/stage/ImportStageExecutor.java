@@ -10,13 +10,13 @@ import java.util.List;
 
 public interface ImportStageExecutor extends PipelineStepTemplateProvider {
 
-  List<ImportStageResult> execute(ImportJobContext context);
+    List<ImportStageResult> execute(ImportJobContext context);
 
-  /** 使用 RECEIVE 阶段选定的同一冻结模板解析 LOAD 重放安全性。 */
-  default ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
-    return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
-  }
+    /** 使用 RECEIVE 阶段选定的同一冻结模板解析 LOAD 重放安全性。 */
+    default ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
+        return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    }
 
-  @Override
-  List<PipelineStepTemplate> defaultStepDefinitions();
+    @Override
+    List<PipelineStepTemplate> defaultStepDefinitions();
 }

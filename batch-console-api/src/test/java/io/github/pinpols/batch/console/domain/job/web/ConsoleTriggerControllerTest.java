@@ -32,63 +32,58 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTriggerControllerTest {
 
-  @Mock
-  private ConsoleTriggerProxyService proxy;
+    @Mock
+    private ConsoleTriggerProxyService proxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTriggerController(proxy, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTriggerController(proxy, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询 Workflow 调度列表, 回包保留下游返回的 Workflow 编码")
-  void shouldDelegateTriggerList_whenListRequested() throws Exception {
-    when(proxy.triggerList())
-        .thenReturn(List.of(new ConsoleTriggerStatusResponse(
-            null, "J1", null, null, null, null, null, null, null)));
-    mockMvc
-        .perform(get("/api/console/ops/triggers"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].workflowCode").value("J1"));
-  }
+    @Test
+    @DisplayName("查询 Workflow 调度列表, 回包保留下游返回的 Workflow 编码")
+    void shouldDelegateTriggerList_whenListRequested() throws Exception {
+        when(proxy.triggerList())
+                .thenReturn(List.of(
+                        new ConsoleTriggerStatusResponse(null, "J1", null, null, null, null, null, null, null)));
+        mockMvc.perform(get("/api/console/ops/triggers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].workflowCode").value("J1"));
+    }
 
-  @Test
-  @DisplayName("注册动作下发的租户与 Workflow 编码与请求一致")
-  void shouldPassTenantAndJobCode_whenRegisterRequested() throws Exception {
-    when(proxy.triggerAction("ta", "WF_A", "register"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "ok"));
-    mockMvc
-        .perform(post("/api/console/ops/triggers/WF_A/register").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(proxy).triggerAction("ta", "WF_A", "register");
-  }
+    @Test
+    @DisplayName("注册动作下发的租户与 Workflow 编码与请求一致")
+    void shouldPassTenantAndJobCode_whenRegisterRequested() throws Exception {
+        when(proxy.triggerAction("ta", "WF_A", "register"))
+                .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "ok"));
+        mockMvc.perform(post("/api/console/ops/triggers/WF_A/register").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(proxy).triggerAction("ta", "WF_A", "register");
+    }
 
-  @Test
-  @DisplayName("暂停与恢复分别按各自动作下发, 两次调用互不串用")
-  void shouldUseDistinctActions_whenPauseAndResumeRequested() throws Exception {
-    when(proxy.triggerAction("ta", "WF_A", "pause"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "paused"));
-    when(proxy.triggerAction("ta", "WF_A", "resume"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "resumed"));
-    mockMvc
-        .perform(post("/api/console/ops/triggers/WF_A/pause").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(post("/api/console/ops/triggers/WF_A/resume").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(proxy).triggerAction("ta", "WF_A", "pause");
-    verify(proxy).triggerAction("ta", "WF_A", "resume");
-  }
+    @Test
+    @DisplayName("暂停与恢复分别按各自动作下发, 两次调用互不串用")
+    void shouldUseDistinctActions_whenPauseAndResumeRequested() throws Exception {
+        when(proxy.triggerAction("ta", "WF_A", "pause"))
+                .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "paused"));
+        when(proxy.triggerAction("ta", "WF_A", "resume"))
+                .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "resumed"));
+        mockMvc.perform(post("/api/console/ops/triggers/WF_A/pause").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/console/ops/triggers/WF_A/resume").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(proxy).triggerAction("ta", "WF_A", "pause");
+        verify(proxy).triggerAction("ta", "WF_A", "resume");
+    }
 }

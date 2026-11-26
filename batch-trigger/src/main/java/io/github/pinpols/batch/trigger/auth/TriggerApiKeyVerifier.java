@@ -21,126 +21,119 @@ import org.springframework.stereotype.Component;
 @Component
 public class TriggerApiKeyVerifier {
 
-  public static final String EVENT_SCOPE = "trigger.event";
-  public static final int KEY_PREFIX_LENGTH = 8;
+    public static final String EVENT_SCOPE = "trigger.event";
+    public static final int KEY_PREFIX_LENGTH = 8;
 
-  private static final Duration CACHE_TTL = Duration.ofMinutes(1);
+    private static final Duration CACHE_TTL = Duration.ofMinutes(1);
 
-  /** 已验证 API Key 缓存最多保留的条目数。 */
-  private static final int VERIFIED_KEY_CACHE_MAX_ENTRIES = 10_000;
+    /** 已验证 API Key 缓存最多保留的条目数。 */
+    private static final int VERIFIED_KEY_CACHE_MAX_ENTRIES = 10_000;
 
-  private static final Duration TOUCH_INTERVAL = Duration.ofSeconds(60);
-  private static final long TOUCH_INTERVAL_NANOS = TOUCH_INTERVAL.toNanos();
+    private static final Duration TOUCH_INTERVAL = Duration.ofSeconds(60);
+    private static final long TOUCH_INTERVAL_NANOS = TOUCH_INTERVAL.toNanos();
 
-  /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
-  private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
+    /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
+    private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
 
-  private final TriggerApiKeyAuthMapper mapper;
-  private final InstantSource instantSource;
-  private final Cache<String, TriggerApiKeyPrincipal> verifiedKeys = Caffeine.newBuilder()
-      .maximumSize(VERIFIED_KEY_CACHE_MAX_ENTRIES)
-      .expireAfterWrite(CACHE_TTL)
-      .build();
-  private final Cache<Long, AtomicLong> lastTouchNanos = Caffeine.newBuilder()
-      .maximumSize(TOUCH_STATE_MAX_ENTRIES)
-      .expireAfterWrite(TOUCH_INTERVAL)
-      .build();
+    private final TriggerApiKeyAuthMapper mapper;
+    private final InstantSource instantSource;
+    private final Cache<String, TriggerApiKeyPrincipal> verifiedKeys = Caffeine.newBuilder()
+            .maximumSize(VERIFIED_KEY_CACHE_MAX_ENTRIES)
+            .expireAfterWrite(CACHE_TTL)
+            .build();
+    private final Cache<Long, AtomicLong> lastTouchNanos = Caffeine.newBuilder()
+            .maximumSize(TOUCH_STATE_MAX_ENTRIES)
+            .expireAfterWrite(TOUCH_INTERVAL)
+            .build();
 
-  @Autowired
-  public TriggerApiKeyVerifier(TriggerApiKeyAuthMapper mapper) {
-    this(mapper, InstantSource.system());
-  }
-
-  TriggerApiKeyVerifier(TriggerApiKeyAuthMapper mapper, InstantSource instantSource) {
-    this.mapper = mapper;
-    this.instantSource = instantSource;
-  }
-
-  public Optional<TriggerApiKeyPrincipal> authenticate(String rawKey, String tenantId) {
-    boolean apiKeyCredentialsAreIncomplete = EmptyChecks.isNull(rawKey)
-        || rawKey.length() < KEY_PREFIX_LENGTH
-        || EmptyChecks.isBlank(tenantId);
-    if (apiKeyCredentialsAreIncomplete) {
-      return Optional.empty();
+    @Autowired
+    public TriggerApiKeyVerifier(TriggerApiKeyAuthMapper mapper) {
+        this(mapper, InstantSource.system());
     }
-    String cacheKey = ApiKeyHasher.legacySha256Hex(rawKey + "|" + tenantId);
-    TriggerApiKeyPrincipal cached = verifiedKeys.getIfPresent(cacheKey);
-    boolean cachedPrincipalIsValid =
-        EmptyChecks.isNotNull(cached) && !isExpired(cached.expiresAt());
-    if (cachedPrincipalIsValid) {
-      touch(cached.id(), cached.tenantId());
-      return Optional.of(cached);
-    }
-    verifiedKeys.invalidate(cacheKey);
 
-    String prefix = rawKey.substring(0, KEY_PREFIX_LENGTH);
-    List<TriggerApiKeyCredential> candidates =
-        mapper.findActiveCandidatesByPrefixAndTenant(prefix, tenantId);
-    if (EmptyChecks.isNull(candidates)) {
-      return Optional.empty();
+    TriggerApiKeyVerifier(TriggerApiKeyAuthMapper mapper, InstantSource instantSource) {
+        this.mapper = mapper;
+        this.instantSource = instantSource;
     }
-    for (TriggerApiKeyCredential candidate : candidates) {
-      boolean candidateIsInvalid = !Boolean.TRUE.equals(candidate.enabled())
-          || isExpired(candidate.expiresAt())
-          || !tenantId.equals(candidate.tenantId())
-          || !ApiKeyHasher.verify(
-              rawKey, candidate.keyHash(), candidate.salt(), candidate.keyHashAlgo());
-      if (candidateIsInvalid) {
-        continue;
-      }
-      TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(
-          candidate.id(),
-          candidate.tenantId(),
-          candidate.keyName(),
-          candidate.scopes(),
-          candidate.expiresAt());
-      verifiedKeys.put(cacheKey, principal);
-      touch(principal.id(), principal.tenantId());
-      return Optional.of(principal);
-    }
-    return Optional.empty();
-  }
 
-  public boolean authorizesExternalEvent(
-      TriggerApiKeyPrincipal principal, String tenantId, String externalEventSource) {
-    boolean principalCanAuthorizeExternalEvent = EmptyChecks.isNotNull(principal)
-        && EmptyChecks.isNotNull(tenantId)
-        && EmptyChecks.isNotNull(externalEventSource)
-        && tenantId.equals(principal.tenantId())
-        && externalEventSource.equals(principal.keyName())
-        && !isExpired(principal.expiresAt());
-    if (!principalCanAuthorizeExternalEvent) {
-      return false;
-    }
-    String serializedScopes = Objects.requireNonNullElse(principal.scopes(), "");
-    String[] scopeTokens = serializedScopes.split("[,\\s]+");
-    Stream<String> nonBlankScopes =
-        Arrays.stream(scopeTokens).filter(scope -> EmptyChecks.isNotBlank(scope));
-    return nonBlankScopes.anyMatch(EVENT_SCOPE::equals);
-  }
+    public Optional<TriggerApiKeyPrincipal> authenticate(String rawKey, String tenantId) {
+        boolean apiKeyCredentialsAreIncomplete =
+                EmptyChecks.isNull(rawKey) || rawKey.length() < KEY_PREFIX_LENGTH || EmptyChecks.isBlank(tenantId);
+        if (apiKeyCredentialsAreIncomplete) {
+            return Optional.empty();
+        }
+        String cacheKey = ApiKeyHasher.legacySha256Hex(rawKey + "|" + tenantId);
+        TriggerApiKeyPrincipal cached = verifiedKeys.getIfPresent(cacheKey);
+        boolean cachedPrincipalIsValid = EmptyChecks.isNotNull(cached) && !isExpired(cached.expiresAt());
+        if (cachedPrincipalIsValid) {
+            touch(cached.id(), cached.tenantId());
+            return Optional.of(cached);
+        }
+        verifiedKeys.invalidate(cacheKey);
 
-  private boolean isExpired(Instant expiresAt) {
-    return EmptyChecks.isNotNull(expiresAt) && !instantSource.instant().isBefore(expiresAt);
-  }
-
-  private void touch(Long id, String tenantId) {
-    if (EmptyChecks.isNull(id) || EmptyChecks.isNull(tenantId)) {
-      return;
+        String prefix = rawKey.substring(0, KEY_PREFIX_LENGTH);
+        List<TriggerApiKeyCredential> candidates = mapper.findActiveCandidatesByPrefixAndTenant(prefix, tenantId);
+        if (EmptyChecks.isNull(candidates)) {
+            return Optional.empty();
+        }
+        for (TriggerApiKeyCredential candidate : candidates) {
+            boolean candidateIsInvalid = !Boolean.TRUE.equals(candidate.enabled())
+                    || isExpired(candidate.expiresAt())
+                    || !tenantId.equals(candidate.tenantId())
+                    || !ApiKeyHasher.verify(rawKey, candidate.keyHash(), candidate.salt(), candidate.keyHashAlgo());
+            if (candidateIsInvalid) {
+                continue;
+            }
+            TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(
+                    candidate.id(),
+                    candidate.tenantId(),
+                    candidate.keyName(),
+                    candidate.scopes(),
+                    candidate.expiresAt());
+            verifiedKeys.put(cacheKey, principal);
+            touch(principal.id(), principal.tenantId());
+            return Optional.of(principal);
+        }
+        return Optional.empty();
     }
-    long now = System.nanoTime();
-    AtomicLong last =
-        lastTouchNanos.asMap().computeIfAbsent(id, ignored -> new AtomicLong(Long.MIN_VALUE));
-    long previous = last.get();
-    boolean apiKeyTouchIntervalWasAcquired =
-        (previous == Long.MIN_VALUE || now - previous >= TOUCH_INTERVAL_NANOS)
-            && last.compareAndSet(previous, now);
-    if (apiKeyTouchIntervalWasAcquired) {
-      mapper.touchLastUsedAt(id, tenantId);
-    }
-  }
 
-  void clearCacheForTests() {
-    verifiedKeys.invalidateAll();
-    lastTouchNanos.invalidateAll();
-  }
+    public boolean authorizesExternalEvent(
+            TriggerApiKeyPrincipal principal, String tenantId, String externalEventSource) {
+        boolean principalCanAuthorizeExternalEvent = EmptyChecks.isNotNull(principal)
+                && EmptyChecks.isNotNull(tenantId)
+                && EmptyChecks.isNotNull(externalEventSource)
+                && tenantId.equals(principal.tenantId())
+                && externalEventSource.equals(principal.keyName())
+                && !isExpired(principal.expiresAt());
+        if (!principalCanAuthorizeExternalEvent) {
+            return false;
+        }
+        String serializedScopes = Objects.requireNonNullElse(principal.scopes(), "");
+        String[] scopeTokens = serializedScopes.split("[,\\s]+");
+        Stream<String> nonBlankScopes = Arrays.stream(scopeTokens).filter(scope -> EmptyChecks.isNotBlank(scope));
+        return nonBlankScopes.anyMatch(EVENT_SCOPE::equals);
+    }
+
+    private boolean isExpired(Instant expiresAt) {
+        return EmptyChecks.isNotNull(expiresAt) && !instantSource.instant().isBefore(expiresAt);
+    }
+
+    private void touch(Long id, String tenantId) {
+        if (EmptyChecks.isNull(id) || EmptyChecks.isNull(tenantId)) {
+            return;
+        }
+        long now = System.nanoTime();
+        AtomicLong last = lastTouchNanos.asMap().computeIfAbsent(id, ignored -> new AtomicLong(Long.MIN_VALUE));
+        long previous = last.get();
+        boolean apiKeyTouchIntervalWasAcquired = (previous == Long.MIN_VALUE || now - previous >= TOUCH_INTERVAL_NANOS)
+                && last.compareAndSet(previous, now);
+        if (apiKeyTouchIntervalWasAcquired) {
+            mapper.touchLastUsedAt(id, tenantId);
+        }
+    }
+
+    void clearCacheForTests() {
+        verifiedKeys.invalidateAll();
+        lastTouchNanos.invalidateAll();
+    }
 }

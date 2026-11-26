@@ -18,16 +18,13 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration
 @AutoConfigureAfter(BatchShedLockAutoConfiguration.class)
 @ConditionalOnClass({LockingTaskExecutor.class, Aspect.class})
-@ConditionalOnProperty(
-    name = "batch.lock.distributed.enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.lock.distributed.enabled", havingValue = "true", matchIfMissing = true)
 public class BatchDistributedLockAutoConfiguration {
 
-  @Bean
-  @ConditionalOnBean(LockingTaskExecutor.class)
-  @ConditionalOnMissingBean
-  public DistributedLockAspect distributedLockAspect(LockingTaskExecutor lockingTaskExecutor) {
-    return new DistributedLockAspect(lockingTaskExecutor);
-  }
+    @Bean
+    @ConditionalOnBean(LockingTaskExecutor.class)
+    @ConditionalOnMissingBean
+    public DistributedLockAspect distributedLockAspect(LockingTaskExecutor lockingTaskExecutor) {
+        return new DistributedLockAspect(lockingTaskExecutor);
+    }
 }

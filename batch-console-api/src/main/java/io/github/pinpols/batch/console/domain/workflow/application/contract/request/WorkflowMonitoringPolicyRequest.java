@@ -11,30 +11,30 @@ import lombok.Data;
 /** 完整替换根级软时限策略；零阈值及空截止钟点分别关闭对应规则。 */
 @Data
 public class WorkflowMonitoringPolicyRequest {
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Min(0)
-  private int softRuntimeSeconds;
+    @Min(0)
+    private int softRuntimeSeconds;
 
-  @NotNull
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String softRuntimeSeverity = "WARN";
+    @NotNull
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String softRuntimeSeverity = "WARN";
 
-  @Min(0)
-  private int startGraceSeconds;
+    @Min(0)
+    private int startGraceSeconds;
 
-  @NotNull
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String startGraceSeverity = "WARN";
+    @NotNull
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String startGraceSeverity = "WARN";
 
-  private LocalTime completionDeadlineLocalTime;
+    private LocalTime completionDeadlineLocalTime;
 
-  @Min(0)
-  @Max(1)
-  private int completionDeadlineDayOffset;
+    @Min(0)
+    @Max(1)
+    private int completionDeadlineDayOffset;
 
-  @NotNull
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String completionDeadlineSeverity = "WARN";
+    @NotNull
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String completionDeadlineSeverity = "WARN";
 }

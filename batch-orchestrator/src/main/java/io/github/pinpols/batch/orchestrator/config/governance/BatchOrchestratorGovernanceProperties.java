@@ -19,59 +19,59 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchOrchestratorGovernanceProperties {
 
-  private final OutboxProperties outbox;
-  private final ResourceSchedulerProperties resourceScheduler;
-  private final RateLimitProperties rateLimit;
-  private final SlaGovernanceProperties sla;
-  private final RetryGovernanceProperties retry;
-  private final PartitionLeaseProperties partitionLease;
-  private final WorkerDrainProperties workerDrain;
-  private final FileGovernanceProperties fileGovernance;
-  private final BatchMqTopicsProperties mqTopics;
-  private final MqRoutingProperties mqRouting;
-  private final TimeoutEnforcerProperties timeout;
+    private final OutboxProperties outbox;
+    private final ResourceSchedulerProperties resourceScheduler;
+    private final RateLimitProperties rateLimit;
+    private final SlaGovernanceProperties sla;
+    private final RetryGovernanceProperties retry;
+    private final PartitionLeaseProperties partitionLease;
+    private final WorkerDrainProperties workerDrain;
+    private final FileGovernanceProperties fileGovernance;
+    private final BatchMqTopicsProperties mqTopics;
+    private final MqRoutingProperties mqRouting;
+    private final TimeoutEnforcerProperties timeout;
 
-  public OutboxProperties outbox() {
-    return outbox;
-  }
+    public OutboxProperties outbox() {
+        return outbox;
+    }
 
-  public ResourceSchedulerProperties resourceScheduler() {
-    return resourceScheduler;
-  }
+    public ResourceSchedulerProperties resourceScheduler() {
+        return resourceScheduler;
+    }
 
-  public RateLimitProperties rateLimit() {
-    return rateLimit;
-  }
+    public RateLimitProperties rateLimit() {
+        return rateLimit;
+    }
 
-  public SlaGovernanceProperties sla() {
-    return sla;
-  }
+    public SlaGovernanceProperties sla() {
+        return sla;
+    }
 
-  public RetryGovernanceProperties retry() {
-    return retry;
-  }
+    public RetryGovernanceProperties retry() {
+        return retry;
+    }
 
-  public PartitionLeaseProperties partitionLease() {
-    return partitionLease;
-  }
+    public PartitionLeaseProperties partitionLease() {
+        return partitionLease;
+    }
 
-  public WorkerDrainProperties workerDrain() {
-    return workerDrain;
-  }
+    public WorkerDrainProperties workerDrain() {
+        return workerDrain;
+    }
 
-  public FileGovernanceProperties fileGovernance() {
-    return fileGovernance;
-  }
+    public FileGovernanceProperties fileGovernance() {
+        return fileGovernance;
+    }
 
-  public BatchMqTopicsProperties mqTopics() {
-    return mqTopics;
-  }
+    public BatchMqTopicsProperties mqTopics() {
+        return mqTopics;
+    }
 
-  public MqRoutingProperties mqRouting() {
-    return mqRouting;
-  }
+    public MqRoutingProperties mqRouting() {
+        return mqRouting;
+    }
 
-  public TimeoutEnforcerProperties timeout() {
-    return timeout;
-  }
+    public TimeoutEnforcerProperties timeout() {
+        return timeout;
+    }
 }

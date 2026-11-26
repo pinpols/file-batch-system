@@ -20,18 +20,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class NasDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  private final DispatchFileContentResolver contentResolver;
-  private final DispatchRuntimeProperties runtimeProperties;
-  private final NasCopyExecutor copyExecutor;
+    private final DispatchFileContentResolver contentResolver;
+    private final DispatchRuntimeProperties runtimeProperties;
+    private final NasCopyExecutor copyExecutor;
 
-  @Override
-  public boolean supports(String channelType) {
-    return FileChannelType.NAS.code().equalsIgnoreCase(channelType);
-  }
+    @Override
+    public boolean supports(String channelType) {
+        return FileChannelType.NAS.code().equalsIgnoreCase(channelType);
+    }
 
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    return RemoteFilesystemDispatchSupport.dispatchNas(
-        command, contentResolver, runtimeProperties, copyExecutor);
-  }
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        return RemoteFilesystemDispatchSupport.dispatchNas(command, contentResolver, runtimeProperties, copyExecutor);
+    }
 }

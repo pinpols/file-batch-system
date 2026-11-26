@@ -12,26 +12,24 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class E2eSettlementProcessConfiguration {
 
-  @Bean
-  static BeanDefinitionRegistryPostProcessor disableAutomaticBatchDayOpen() {
-    return new BeanDefinitionRegistryPostProcessor() {
-      @Override
-      public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry)
-          throws BeansException {
-        for (String beanName : registry.getBeanDefinitionNames()) {
-          if (BatchDayOpenScheduler.class
-              .getName()
-              .equals(registry.getBeanDefinition(beanName).getBeanClassName())) {
-            registry.removeBeanDefinition(beanName);
-          }
-        }
-      }
+    @Bean
+    static BeanDefinitionRegistryPostProcessor disableAutomaticBatchDayOpen() {
+        return new BeanDefinitionRegistryPostProcessor() {
+            @Override
+            public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+                for (String beanName : registry.getBeanDefinitionNames()) {
+                    if (BatchDayOpenScheduler.class
+                            .getName()
+                            .equals(registry.getBeanDefinition(beanName).getBeanClassName())) {
+                        registry.removeBeanDefinition(beanName);
+                    }
+                }
+            }
 
-      @Override
-      public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory)
-          throws BeansException {
-        // 无需修改任何 Bean 实例；上文已移除调度器定义。
-      }
-    };
-  }
+            @Override
+            public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+                // 无需修改任何 Bean 实例；上文已移除调度器定义。
+            }
+        };
+    }
 }

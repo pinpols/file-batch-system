@@ -18,31 +18,30 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 @DisplayName("S3 Bucket 初始化:托管后端跳过探测,自建后端兼容通用 404 并创建 Bucket")
 class S3BucketSupportTest {
 
-  @Test
-  @DisplayName("关闭自动创建时不调用需要额外权限的 HeadBucket 和 CreateBucket")
-  void shouldSkipBucketProbe_whenAutoCreateDisabled() {
-    S3Client s3Client = mock(S3Client.class);
+    @Test
+    @DisplayName("关闭自动创建时不调用需要额外权限的 HeadBucket 和 CreateBucket")
+    void shouldSkipBucketProbe_whenAutoCreateDisabled() {
+        S3Client s3Client = mock(S3Client.class);
 
-    boolean ready =
-        S3BucketSupport.ensureBucket(s3Client, "managed-bucket", mock(Logger.class), "test", false);
+        boolean ready = S3BucketSupport.ensureBucket(s3Client, "managed-bucket", mock(Logger.class), "test", false);
 
-    assertThat(ready).isTrue();
-    verify(s3Client, never()).headBucket(any(HeadBucketRequest.class));
-    verify(s3Client, never()).createBucket(any(CreateBucketRequest.class));
-  }
+        assertThat(ready).isTrue();
+        verify(s3Client, never()).headBucket(any(HeadBucketRequest.class));
+        verify(s3Client, never()).createBucket(any(CreateBucketRequest.class));
+    }
 
-  @Test
-  @DisplayName("兼容后端用通用 S3 404 表示 Bucket 不存在时自动创建")
-  void shouldCreateBucket_whenHeadBucketReturnsGenericNotFound() {
-    S3Client s3Client = mock(S3Client.class);
-    when(s3Client.headBucket(any(HeadBucketRequest.class)))
-        .thenThrow(S3Exception.builder().statusCode(404).message("missing").build());
+    @Test
+    @DisplayName("兼容后端用通用 S3 404 表示 Bucket 不存在时自动创建")
+    void shouldCreateBucket_whenHeadBucketReturnsGenericNotFound() {
+        S3Client s3Client = mock(S3Client.class);
+        when(s3Client.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow(
+                        S3Exception.builder().statusCode(404).message("missing").build());
 
-    boolean ready =
-        S3BucketSupport.ensureBucket(s3Client, "batch-data", mock(Logger.class), "test", true);
+        boolean ready = S3BucketSupport.ensureBucket(s3Client, "batch-data", mock(Logger.class), "test", true);
 
-    assertThat(ready).isTrue();
-    verify(s3Client)
-        .createBucket(CreateBucketRequest.builder().bucket("batch-data").build());
-  }
+        assertThat(ready).isTrue();
+        verify(s3Client)
+                .createBucket(CreateBucketRequest.builder().bucket("batch-data").build());
+    }
 }

@@ -8,14 +8,14 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowEdgeMapper {
 
-  List<WorkflowEdgeEntity> selectByQuery(WorkflowEdgeQuery query);
+    List<WorkflowEdgeEntity> selectByQuery(WorkflowEdgeQuery query);
 
-  long countByQuery(WorkflowEdgeQuery query);
+    long countByQuery(WorkflowEdgeQuery query);
 
-  WorkflowEdgeEntity selectByUniqueKey(
-      Long workflowDefinitionId, String fromNodeCode, String toNodeCode, String edgeType);
+    WorkflowEdgeEntity selectByUniqueKey(
+            Long workflowDefinitionId, String fromNodeCode, String toNodeCode, String edgeType);
 
-  int deleteByWorkflowDefinitionId(@Param("workflowDefinitionId") Long workflowDefinitionId);
+    int deleteByWorkflowDefinitionId(@Param("workflowDefinitionId") Long workflowDefinitionId);
 
-  int upsertWorkflowEdge(WorkflowEdgeUpsertParam param);
+    int upsertWorkflowEdge(WorkflowEdgeUpsertParam param);
 }

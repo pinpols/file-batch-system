@@ -30,41 +30,41 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DataQualityRuleController {
 
-  private final DataQualityRuleApplicationService ruleService;
+    private final DataQualityRuleApplicationService ruleService;
 
-  /** 按 (tenantId, businessKey 前缀) 列出 enabled 规则。 */
-  @GetMapping
-  public CommonResponse<List<DataQualityRuleResponse>> list(
-      @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    List<DataQualityRuleEntity> rules = ruleService.listEnabledByBusinessKey(tenantId, businessKey);
-    List<DataQualityRuleResponse> responses =
-        rules.stream().map(DataQualityRuleResponse::from).toList();
-    return CommonResponse.success(responses);
-  }
+    /** 按 (tenantId, businessKey 前缀) 列出 enabled 规则。 */
+    @GetMapping
+    public CommonResponse<List<DataQualityRuleResponse>> list(
+            @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
+        List<DataQualityRuleEntity> rules = ruleService.listEnabledByBusinessKey(tenantId, businessKey);
+        List<DataQualityRuleResponse> responses =
+                rules.stream().map(DataQualityRuleResponse::from).toList();
+        return CommonResponse.success(responses);
+    }
 
-  @GetMapping("/{id}")
-  public CommonResponse<DataQualityRuleResponse> get(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    DataQualityRuleEntity entity = ruleService.get(tenantId, id);
-    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @GetMapping("/{id}")
+    public CommonResponse<DataQualityRuleResponse> get(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        DataQualityRuleEntity entity = ruleService.get(tenantId, id);
+        DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 
-  @PostMapping
-  public CommonResponse<DataQualityRuleResponse> create(
-      @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleRequest rule) {
-    DataQualityRuleEntity entity = ruleService.create(tenantId, rule.toCommand());
-    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @PostMapping
+    public CommonResponse<DataQualityRuleResponse> create(
+            @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleRequest rule) {
+        DataQualityRuleEntity entity = ruleService.create(tenantId, rule.toCommand());
+        DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 
-  @PutMapping("/{id}")
-  public CommonResponse<DataQualityRuleResponse> update(
-      @PathVariable("id") Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestBody DataQualityRuleRequest rule) {
-    DataQualityRuleEntity entity = ruleService.update(tenantId, id, rule.toCommand());
-    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @PutMapping("/{id}")
+    public CommonResponse<DataQualityRuleResponse> update(
+            @PathVariable("id") Long id,
+            @RequestParam("tenantId") String tenantId,
+            @RequestBody DataQualityRuleRequest rule) {
+        DataQualityRuleEntity entity = ruleService.update(tenantId, id, rule.toCommand());
+        DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 }

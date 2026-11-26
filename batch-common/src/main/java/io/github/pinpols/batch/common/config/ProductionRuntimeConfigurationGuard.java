@@ -12,90 +12,88 @@ import org.springframework.core.env.Environment;
 /** 阻止生产环境静默使用本地开发地址或不可发现的管理端口。 */
 @AutoConfiguration
 @EnableConfigurationProperties({
-  StorageBackendProperties.class,
-  ConsoleReadReplicaProperties.class,
-  KafkaNamespaceProperties.class
+    StorageBackendProperties.class,
+    ConsoleReadReplicaProperties.class,
+    KafkaNamespaceProperties.class
 })
 public class ProductionRuntimeConfigurationGuard implements SmartInitializingSingleton {
 
-  private static final Pattern LOOPBACK_ENDPOINT =
-      Pattern.compile("(^|[/:@,])(?:localhost|127(?:\\.[0-9]{1,3}){3}|\\[::1]|::1)(?=[:/? ,]|$)");
-  private static final List<String> REQUIRED_ENDPOINTS = List.of(
-      "spring.datasource.url",
-      "spring.kafka.bootstrap-servers",
-      "spring.data.redis.host",
-      "batch.orchestrator.base-url");
-  private static final List<String> OPTIONAL_ENDPOINTS = List.of(
-      "batch.console.trigger.base-url",
-      "batch.console.orchestrator.base-url",
-      "batch.console.atomic-worker.base-url",
-      "batch.console.read-replica.primary.url");
+    private static final Pattern LOOPBACK_ENDPOINT =
+            Pattern.compile("(^|[/:@,])(?:localhost|127(?:\\.[0-9]{1,3}){3}|\\[::1]|::1)(?=[:/? ,]|$)");
+    private static final List<String> REQUIRED_ENDPOINTS = List.of(
+            "spring.datasource.url",
+            "spring.kafka.bootstrap-servers",
+            "spring.data.redis.host",
+            "batch.orchestrator.base-url");
+    private static final List<String> OPTIONAL_ENDPOINTS = List.of(
+            "batch.console.trigger.base-url",
+            "batch.console.orchestrator.base-url",
+            "batch.console.atomic-worker.base-url",
+            "batch.console.read-replica.primary.url");
 
-  private final Environment environment;
-  private final StorageBackendProperties storageProperties;
-  private final ConsoleReadReplicaProperties readReplicaProperties;
-  private final KafkaNamespaceProperties kafkaNamespaceProperties;
+    private final Environment environment;
+    private final StorageBackendProperties storageProperties;
+    private final ConsoleReadReplicaProperties readReplicaProperties;
+    private final KafkaNamespaceProperties kafkaNamespaceProperties;
 
-  public ProductionRuntimeConfigurationGuard(
-      Environment environment,
-      StorageBackendProperties storageProperties,
-      ConsoleReadReplicaProperties readReplicaProperties,
-      KafkaNamespaceProperties kafkaNamespaceProperties) {
-    this.environment = environment;
-    this.storageProperties = storageProperties;
-    this.readReplicaProperties = readReplicaProperties;
-    this.kafkaNamespaceProperties = kafkaNamespaceProperties;
-  }
-
-  @Override
-  public void afterSingletonsInstantiated() {
-    if (!BatchProfileSupport.isProductionProfile(environment)) {
-      return;
+    public ProductionRuntimeConfigurationGuard(
+            Environment environment,
+            StorageBackendProperties storageProperties,
+            ConsoleReadReplicaProperties readReplicaProperties,
+            KafkaNamespaceProperties kafkaNamespaceProperties) {
+        this.environment = environment;
+        this.storageProperties = storageProperties;
+        this.readReplicaProperties = readReplicaProperties;
+        this.kafkaNamespaceProperties = kafkaNamespaceProperties;
     }
 
-    REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
+    @Override
+    public void afterSingletonsInstantiated() {
+        if (!BatchProfileSupport.isProductionProfile(environment)) {
+            return;
+        }
 
-    if (EmptyChecks.isBlank(kafkaNamespaceProperties.getNamespace())) {
-      throw new IllegalStateException(
-          "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
+        REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
+
+        if (EmptyChecks.isBlank(kafkaNamespaceProperties.getNamespace())) {
+            throw new IllegalStateException(
+                    "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
+        }
+
+        OPTIONAL_ENDPOINTS.stream().filter(environment::containsProperty).forEach(this::requireRemoteEndpoint);
+
+        if ("s3".equalsIgnoreCase(storageProperties.getBackend())) {
+            requireRemoteEndpoint("batch.storage.s3.endpoint");
+        }
+        String applicationName = ApplicationNameProvider.resolve(environment, "");
+        if (applicationName.startsWith("batch-worker-")) {
+            requireRemoteEndpoint("batch.datasource.business.url");
+        }
+        if (readReplicaProperties.isEnabled()) {
+            requireRemoteEndpoint("batch.console.read-replica.replica.url");
+        }
+
+        Integer managementPort = environment.getProperty("management.server.port", Integer.class);
+        if (managementPort == null) { // empty-check: allow - Sonar S2259
+            throw new IllegalStateException(
+                    "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
+        }
+        if (managementPort <= 0) {
+            throw new IllegalStateException(
+                    "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
+        }
     }
 
-    OPTIONAL_ENDPOINTS.stream()
-        .filter(environment::containsProperty)
-        .forEach(this::requireRemoteEndpoint);
-
-    if ("s3".equalsIgnoreCase(storageProperties.getBackend())) {
-      requireRemoteEndpoint("batch.storage.s3.endpoint");
+    private void requireRemoteEndpoint(String key) {
+        String value = environment.getProperty(key);
+        if (value == null || EmptyChecks.isBlank(value)) {
+            throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
+        }
+        String trimmedValue = value.trim();
+        String normalized = trimmedValue.toLowerCase(Locale.ROOT);
+        if (LOOPBACK_ENDPOINT.matcher(normalized).find()) {
+            throw new IllegalStateException(
+                    "FATAL: production endpoint still uses a loopback development address: " + key);
+        }
     }
-    String applicationName = ApplicationNameProvider.resolve(environment, "");
-    if (applicationName.startsWith("batch-worker-")) {
-      requireRemoteEndpoint("batch.datasource.business.url");
-    }
-    if (readReplicaProperties.isEnabled()) {
-      requireRemoteEndpoint("batch.console.read-replica.replica.url");
-    }
-
-    Integer managementPort = environment.getProperty("management.server.port", Integer.class);
-    if (managementPort == null) { // empty-check: allow - Sonar S2259
-      throw new IllegalStateException(
-          "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
-    }
-    if (managementPort <= 0) {
-      throw new IllegalStateException(
-          "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
-    }
-  }
-
-  private void requireRemoteEndpoint(String key) {
-    String value = environment.getProperty(key);
-    if (value == null || EmptyChecks.isBlank(value)) {
-      throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
-    }
-    String trimmedValue = value.trim();
-    String normalized = trimmedValue.toLowerCase(Locale.ROOT);
-    if (LOOPBACK_ENDPOINT.matcher(normalized).find()) {
-      throw new IllegalStateException(
-          "FATAL: production endpoint still uses a loopback development address: " + key);
-    }
-  }
 }

@@ -23,12 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAtomicRuntimeStatusController {
 
-  private final ConsoleAtomicRuntimeStatusService runtimeStatusService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAtomicRuntimeStatusService runtimeStatusService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** GET /api/console/ops/atomic-runtime-status — 反向拉取 atomic worker 当前 effective 安全门控快照。 */
-  @GetMapping("/atomic-runtime-status")
-  public CommonResponse<ConsoleAtomicRuntimeStatusResponse> getAtomicRuntimeStatus() {
-    return responseFactory.success(runtimeStatusService.fetch());
-  }
+    /** GET /api/console/ops/atomic-runtime-status — 反向拉取 atomic worker 当前 effective 安全门控快照。 */
+    @GetMapping("/atomic-runtime-status")
+    public CommonResponse<ConsoleAtomicRuntimeStatusResponse> getAtomicRuntimeStatus() {
+        return responseFactory.success(runtimeStatusService.fetch());
+    }
 }

@@ -5,26 +5,23 @@ import lombok.Builder;
 
 /** Same-job comparison matrix across tenants. */
 public record TenantConfigMatrixResponse(
-    String baselineTenantId,
-    List<String> tenantIds,
-    List<String> jobCodes,
-    List<JobMatrixRow> rows) {
+        String baselineTenantId, List<String> tenantIds, List<String> jobCodes, List<JobMatrixRow> rows) {
 
-  @Builder
-  public record JobMatrixRow(
-      String tenantId,
-      String jobCode,
-      boolean exists,
-      Boolean enabled,
-      String scheduleType,
-      String scheduleExpr,
-      String timezone,
-      String queueCode,
-      String calendarCode,
-      String windowCode,
-      String workerGroup,
-      List<String> workflowCodes,
-      List<String> templateCodes,
-      List<String> channelCodes,
-      List<String> driftFields) {}
+    @Builder
+    public record JobMatrixRow(
+            String tenantId,
+            String jobCode,
+            boolean exists,
+            Boolean enabled,
+            String scheduleType,
+            String scheduleExpr,
+            String timezone,
+            String queueCode,
+            String calendarCode,
+            String windowCode,
+            String workerGroup,
+            List<String> workflowCodes,
+            List<String> templateCodes,
+            List<String> channelCodes,
+            List<String> driftFields) {}
 }

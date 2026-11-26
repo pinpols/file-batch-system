@@ -62,165 +62,150 @@ import java.util.Map;
  */
 public interface ConsoleOrchestratorPort {
 
-  ConsoleInstanceActionResponse instanceAction(Long id, String tenantId, String action);
+    ConsoleInstanceActionResponse instanceAction(Long id, String tenantId, String action);
 
-  ConsolePartitionActionResponse partitionAction(Long id, String tenantId, String action);
+    ConsolePartitionActionResponse partitionAction(Long id, String tenantId, String action);
 
-  ConsoleRetryFailedPartitionsResponse retryFailedPartitions(Long instanceId, String tenantId);
+    ConsoleRetryFailedPartitionsResponse retryFailedPartitions(Long instanceId, String tenantId);
 
-  ConsoleWorkflowRunActionResponse workflowRunAction(Long id, String tenantId, String action);
+    ConsoleWorkflowRunActionResponse workflowRunAction(Long id, String tenantId, String action);
 
-  ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(
-      Long id, String tenantId, String nodeCode, String operatorId, String reason);
+    ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(
+            Long id, String tenantId, String nodeCode, String operatorId, String reason);
 
-  ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId);
+    ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId);
 
-  List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(
-      String tenantId, int limit);
+    List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(String tenantId, int limit);
 
-  /**
-   * 转发 outbox cleanup：删除指定租户中 PUBLISHED + GIVE_UP 且 updated_at 早于 retainDays 的事件。
-   *
-   * @return key=published / giveUp 的删除条数
-   */
-  OutboxCleanupProxyResponse outboxCleanup(String tenantId, int retainDays);
+    /**
+     * 转发 outbox cleanup：删除指定租户中 PUBLISHED + GIVE_UP 且 updated_at 早于 retainDays 的事件。
+     *
+     * @return key=published / giveUp 的删除条数
+     */
+    OutboxCleanupProxyResponse outboxCleanup(String tenantId, int retainDays);
 
-  /**
-   * 转发 outbox republish：把 FAILED / GIVE_UP 状态的指定 id 事件 reset 回 NEW，让 OutboxForwarder 重投递。
-   *
-   * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
-   */
-  OutboxRepublishProxyResponse outboxRepublish(String tenantId, List<Long> ids);
+    /**
+     * 转发 outbox republish：把 FAILED / GIVE_UP 状态的指定 id 事件 reset 回 NEW，让 OutboxForwarder 重投递。
+     *
+     * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
+     */
+    OutboxRepublishProxyResponse outboxRepublish(String tenantId, List<Long> ids);
 
-  /** 转发测试数据 prefix 清理：由 orchestrator 在状态主机边界内执行。 */
-  Map<String, Integer> adminTestDataCleanupByPrefix(String prefix);
+    /** 转发测试数据 prefix 清理：由 orchestrator 在状态主机边界内执行。 */
+    Map<String, Integer> adminTestDataCleanupByPrefix(String prefix);
 
-  /** 转发测试数据精确 tenantId 清理：由 orchestrator 在状态主机边界内执行。 */
-  Map<String, Integer> adminTestDataCleanupByExactTenantIds(List<String> tenantIds);
+    /** 转发测试数据精确 tenantId 清理：由 orchestrator 在状态主机边界内执行。 */
+    Map<String, Integer> adminTestDataCleanupByExactTenantIds(List<String> tenantIds);
 
-  /**
-   * 转发批量日治理动作：FREEZE / RELEASE / SKIP / REOPEN / CLOSE。 状态机由 orchestrator 的
-   * BatchDayOperationService 推进，同事务双写 `job_execution_log` + `batch_day_operation_audit`。
-   *
-   * @return key=batchDayId / dayStatus / frozen / releasedLaunchCount
-   */
-  ConsoleBatchDayOperateResponse batchDayOperate(BatchDayOperationCommand command);
+    /**
+     * 转发批量日治理动作：FREEZE / RELEASE / SKIP / REOPEN / CLOSE。 状态机由 orchestrator 的
+     * BatchDayOperationService 推进，同事务双写 `job_execution_log` + `batch_day_operation_audit`。
+     *
+     * @return key=batchDayId / dayStatus / frozen / releasedLaunchCount
+     */
+    ConsoleBatchDayOperateResponse batchDayOperate(BatchDayOperationCommand command);
 
-  ConsoleBatchDayCatchupPreviewResponse previewBatchDayCatchup(
-      String tenantId, String calendarCode);
+    ConsoleBatchDayCatchupPreviewResponse previewBatchDayCatchup(String tenantId, String calendarCode);
 
-  ConsoleBatchDayHistoricalGapInventoryResponse inventoryBatchDayHistoricalGaps(
-      String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate);
+    ConsoleBatchDayHistoricalGapInventoryResponse inventoryBatchDayHistoricalGaps(
+            String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate);
 
-  ConsoleBatchDayCatchupPreviewResponse changeBatchDayCatchupControl(
-      String tenantId, String calendarCode, String action, String operatorId, String reason);
+    ConsoleBatchDayCatchupPreviewResponse changeBatchDayCatchupControl(
+            String tenantId, String calendarCode, String action, String operatorId, String reason);
 
-  List<ConsoleCalendarDependencyWaitResponse> listCalendarDependencyWaits(
-      String tenantId, String calendarCode, String waitStatus, int limit);
+    List<ConsoleCalendarDependencyWaitResponse> listCalendarDependencyWaits(
+            String tenantId, String calendarCode, String waitStatus, int limit);
 
-  List<ConsoleJobDependencyWaitResponse> listJobDependencyWaits(
-      String tenantId, String waitStatus, String jobCode, int limit);
+    List<ConsoleJobDependencyWaitResponse> listJobDependencyWaits(
+            String tenantId, String waitStatus, String jobCode, int limit);
 
-  ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query);
+    ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query);
 
-  ConsoleWaitRelationshipPage listWaitRelationships(ConsoleWaitRelationshipQuery query);
+    ConsoleWaitRelationshipPage listWaitRelationships(ConsoleWaitRelationshipQuery query);
 
-  ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(
-      CalendarDependencyActionCommand command);
+    ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(CalendarDependencyActionCommand command);
 
-  /**
-   * ADR-022 v0.1 转发 forensic 取证导出请求 — 同步生成 bundle，返回 exportId / sha256 / size / 路径。
-   *
-   * @return key=exportId / status / storagePath / fileSizeBytes / sha256
-   */
-  ConsoleForensicExportResponse requestForensicExport(ForensicExportCommand command);
+    /**
+     * ADR-022 v0.1 转发 forensic 取证导出请求 — 同步生成 bundle，返回 exportId / sha256 / size / 路径。
+     *
+     * @return key=exportId / status / storagePath / fileSizeBytes / sha256
+     */
+    ConsoleForensicExportResponse requestForensicExport(ForensicExportCommand command);
 
-  /**
-   * ADR-022 v0.1 转发 forensic 下载请求 — 返回 zip 字节流（content-type=application/octet-stream）。
-   *
-   * <p>orchestrator 内部接口已经把 sha256 放在 `X-Forensic-Sha256` header；console 透传给前端。
-   */
-  byte[] downloadForensicExport(String tenantId, String exportId);
+    /**
+     * ADR-022 v0.1 转发 forensic 下载请求 — 返回 zip 字节流（content-type=application/octet-stream）。
+     *
+     * <p>orchestrator 内部接口已经把 sha256 放在 `X-Forensic-Sha256` header；console 透传给前端。
+     */
+    byte[] downloadForensicExport(String tenantId, String exportId);
 
-  /** 流式下载 forensic bundle，避免 console 将整个 ZIP 缓存在堆内存。 */
-  default void downloadForensicExport(String tenantId, String exportId, OutputStream outputStream)
-      throws IOException {
-    byte[] bundle = downloadForensicExport(tenantId, exportId);
-    outputStream.write(bundle);
-  }
+    /** 流式下载 forensic bundle，避免 console 将整个 ZIP 缓存在堆内存。 */
+    default void downloadForensicExport(String tenantId, String exportId, OutputStream outputStream)
+            throws IOException {
+        byte[] bundle = downloadForensicExport(tenantId, exportId);
+        outputStream.write(bundle);
+    }
 
-  /** 按 pipelineInstanceId 查询并聚合同一 stage 的并发分片进度。 */
-  List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
-      String tenantId, Long pipelineInstanceId);
+    /** 按 pipelineInstanceId 查询并聚合同一 stage 的并发分片进度。 */
+    List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(String tenantId, Long pipelineInstanceId);
 
-  /** 转发 dry-run 计划；租户解析和内部 HTTP 细节由实现层负责。 */
-  CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request);
+    /** 转发 dry-run 计划；租户解析和内部 HTTP 细节由实现层负责。 */
+    CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request);
 
-  /** 转发批次日重放 API；Controller 不直接拼接内部 URL。 */
-  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplaySubmit(
-      BatchDayReplaySubmitRequest request);
+    /** 转发批次日重放 API；Controller 不直接拼接内部 URL。 */
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplaySubmit(BatchDayReplaySubmitRequest request);
 
-  CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(
-      BatchDayReplaySubmitRequest request);
+    CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(BatchDayReplaySubmitRequest request);
 
-  CommonResponse<ConsoleReplayOperationPreviewResponse> batchDayReplayRangePreview(
-      BatchDayReplayRangeRequest request);
+    CommonResponse<ConsoleReplayOperationPreviewResponse> batchDayReplayRangePreview(
+            BatchDayReplayRangeRequest request);
 
-  CommonResponse<ConsoleReplayOperationResponse> batchDayReplayRangeSubmit(
-      BatchDayReplayRangeRequest request);
+    CommonResponse<ConsoleReplayOperationResponse> batchDayReplayRangeSubmit(BatchDayReplayRangeRequest request);
 
-  CommonResponse<List<ConsoleReplayOperationResponse>> replayOperationList(
-      String tenantId, int limit);
+    CommonResponse<List<ConsoleReplayOperationResponse>> replayOperationList(String tenantId, int limit);
 
-  CommonResponse<ConsoleReplayOperationResponse> replayOperationDetail(
-      Long operationId, String tenantId);
+    CommonResponse<ConsoleReplayOperationResponse> replayOperationDetail(Long operationId, String tenantId);
 
-  CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> replayOperationSessions(
-      Long operationId, String tenantId);
+    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> replayOperationSessions(
+            Long operationId, String tenantId);
 
-  CommonResponse<ConsoleReplayOperationResponse> replayOperationApprove(
-      Long operationId, String tenantId, String approver);
+    CommonResponse<ConsoleReplayOperationResponse> replayOperationApprove(
+            Long operationId, String tenantId, String approver);
 
-  CommonResponse<ConsoleReplayOperationResponse> replayOperationCancel(
-      Long operationId, String tenantId);
+    CommonResponse<ConsoleReplayOperationResponse> replayOperationCancel(Long operationId, String tenantId);
 
-  CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> batchDayReplayList(
-      String tenantId, String status, int limit);
+    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> batchDayReplayList(
+            String tenantId, String status, int limit);
 
-  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayApprove(
-      Long sessionId, String tenantId, String approver);
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayApprove(
+            Long sessionId, String tenantId, String approver);
 
-  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayCancel(
-      Long sessionId, String tenantId);
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayCancel(Long sessionId, String tenantId);
 
-  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayDetail(
-      Long sessionId, String tenantId);
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayDetail(Long sessionId, String tenantId);
 
-  CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> batchDayReplayEntries(
-      Long sessionId, String tenantId, String status, int limit);
+    CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> batchDayReplayEntries(
+            Long sessionId, String tenantId, String status, int limit);
 
-  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayRetryFailedSubmission(
-      Long sessionId, Long entryId, String tenantId, String operatorId, String reason);
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayRetryFailedSubmission(
+            Long sessionId, Long entryId, String tenantId, String operatorId, String reason);
 
-  CommonResponse<List<ConsoleResultVersionResponse>> resultVersions(
-      String tenantId, String businessKey, int limit);
+    CommonResponse<List<ConsoleResultVersionResponse>> resultVersions(String tenantId, String businessKey, int limit);
 
-  CommonResponse<ConsoleResultVersionResponse> effectiveResultVersion(
-      String tenantId, String businessKey);
+    CommonResponse<ConsoleResultVersionResponse> effectiveResultVersion(String tenantId, String businessKey);
 
-  CommonResponse<ConsoleResultVersionResponse> resultVersion(Long id, String tenantId);
+    CommonResponse<ConsoleResultVersionResponse> resultVersion(Long id, String tenantId);
 
-  CommonResponse<ConsoleResultVersionResponse> promoteResultVersion(Long id, String tenantId);
+    CommonResponse<ConsoleResultVersionResponse> promoteResultVersion(Long id, String tenantId);
 
-  CommonResponse<ConsoleResultVersionResponse> rejectResultVersion(Long id, String tenantId);
+    CommonResponse<ConsoleResultVersionResponse> rejectResultVersion(Long id, String tenantId);
 
-  AssetPartitionReadinessResponse assetPartitionReadiness(
-      String tenantId, String jobCode, LocalDate bizDate);
+    AssetPartitionReadinessResponse assetPartitionReadiness(String tenantId, String jobCode, LocalDate bizDate);
 
-  CommonResponse<LineageEvidenceResponse> lineageByResultVersion(Long id, String tenantId);
+    CommonResponse<LineageEvidenceResponse> lineageByResultVersion(Long id, String tenantId);
 
-  CommonResponse<LineageEvidenceResponse> lineageByEffective(String tenantId, String businessKey);
+    CommonResponse<LineageEvidenceResponse> lineageByEffective(String tenantId, String businessKey);
 
-  CommonResponse<CapacityProfileResponse> capacityProfile(
-      String tenantId, String from, String to, String groupBy, Integer limit);
+    CommonResponse<CapacityProfileResponse> capacityProfile(
+            String tenantId, String from, String to, String groupBy, Integer limit);
 }

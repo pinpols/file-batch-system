@@ -4,8 +4,8 @@ import io.github.pinpols.batch.console.application.contract.request.config.Confi
 
 /** 配置同步导出结果。 */
 public record ConfigSyncExportResponse(
-    String sourceTenantId,
-    String sourceEnv,
-    String targetEnv,
-    ConfigSyncSummaryResponse summary,
-    ConfigSyncBundlePayload bundle) {}
+        String sourceTenantId,
+        String sourceEnv,
+        String targetEnv,
+        ConfigSyncSummaryResponse summary,
+        ConfigSyncBundlePayload bundle) {}

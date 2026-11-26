@@ -34,76 +34,75 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 @DisplayName("OpenAI 自动装配约定:端到端禁用决策模型,显式凭据仍可启用")
 class OpenAiModelAutoconfigurationConventionTest {
 
-  private static final List<Class<?>> E2E_APPLICATIONS = List.of(
-      E2eAtomicApplication.class,
-      E2eConsoleImportApplication.class,
-      E2eDispatchApplication.class,
-      E2eExportApplication.class,
-      E2eImportApplication.class,
-      E2eOrchestratorApplication.class,
-      E2eProcessApplication.class,
-      E2eReportRecoveryOrchestratorApplication.class,
-      E2eTriggerApplication.class);
+    private static final List<Class<?>> E2E_APPLICATIONS = List.of(
+            E2eAtomicApplication.class,
+            E2eConsoleImportApplication.class,
+            E2eDispatchApplication.class,
+            E2eExportApplication.class,
+            E2eImportApplication.class,
+            E2eOrchestratorApplication.class,
+            E2eProcessApplication.class,
+            E2eReportRecoveryOrchestratorApplication.class,
+            E2eTriggerApplication.class);
 
-  private final ApplicationContextRunner decisionRunner = new ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(OpenAiDecisionAutoConfiguration.class));
+    private final ApplicationContextRunner decisionRunner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(OpenAiDecisionAutoConfiguration.class));
 
-  @Test
-  @DisplayName("端到端应用排除聊天模型时同时排除决策模型,因此不会在无凭据时装配决策模型")
-  void shouldExcludeDecisionModel_whenE2eApplicationDisablesOpenAiChat() {
-    for (Class<?> application : E2E_APPLICATIONS) {
-      Set<Class<?>> excluded = excludedAutoConfigurations(application);
-      assertThat(excluded)
-          .as("%s 已排除 OpenAI 聊天自动装配", application.getSimpleName())
-          .contains(OpenAiChatAutoConfiguration.class);
-      assertThat(excluded)
-          .as("%s 必须同时排除默认启用的 OpenAI 决策自动装配", application.getSimpleName())
-          .contains(OpenAiDecisionAutoConfiguration.class);
+    @Test
+    @DisplayName("端到端应用排除聊天模型时同时排除决策模型,因此不会在无凭据时装配决策模型")
+    void shouldExcludeDecisionModel_whenE2eApplicationDisablesOpenAiChat() {
+        for (Class<?> application : E2E_APPLICATIONS) {
+            Set<Class<?>> excluded = excludedAutoConfigurations(application);
+            assertThat(excluded)
+                    .as("%s 已排除 OpenAI 聊天自动装配", application.getSimpleName())
+                    .contains(OpenAiChatAutoConfiguration.class);
+            assertThat(excluded)
+                    .as("%s 必须同时排除默认启用的 OpenAI 决策自动装配", application.getSimpleName())
+                    .contains(OpenAiDecisionAutoConfiguration.class);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("真实 Console 应用入口排除未使用的 OpenAI 决策模型")
-  void shouldExcludeDecisionModel_inConsoleApplication() {
-    assertThat(excludedAutoConfigurations(BatchConsoleApiApplication.class))
-        .contains(OpenAiDecisionAutoConfiguration.class);
-  }
+    @Test
+    @DisplayName("真实 Console 应用入口排除未使用的 OpenAI 决策模型")
+    void shouldExcludeDecisionModel_inConsoleApplication() {
+        assertThat(excludedAutoConfigurations(BatchConsoleApiApplication.class))
+                .contains(OpenAiDecisionAutoConfiguration.class);
+    }
 
-  @Test
-  @DisplayName("未配置任何凭据时,默认决策模型自动装配拒绝启动")
-  void shouldFailContext_whenDecisionModelHasNoCredential() {
-    decisionRunner.run(context -> {
-      assertThat(context).hasFailed();
-      assertThat(context.getStartupFailure())
-          .hasMessageContaining("At least one credential source must be specified");
-    });
-  }
-
-  @Test
-  @DisplayName("显式提供 API key 并选择 openai 决策模型时,仍然创建决策模型")
-  void shouldCreateDecisionModel_whenCredentialAndOpenAiDecisionAreConfigured() {
-    decisionRunner
-        .withPropertyValues(
-            "spring.ai.model.decision=openai", "spring.ai.openai.api-key=test-api-key")
-        .run(context -> {
-          assertThat(context).hasNotFailed();
-          assertThat(context).hasSingleBean(OpenAiDecisionModel.class);
+    @Test
+    @DisplayName("未配置任何凭据时,默认决策模型自动装配拒绝启动")
+    void shouldFailContext_whenDecisionModelHasNoCredential() {
+        decisionRunner.run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .hasMessageContaining("At least one credential source must be specified");
         });
-  }
+    }
 
-  @Test
-  @DisplayName("API key 为空字符串时按无认证模式启动,不要求真实凭据")
-  void shouldStartWithoutCredential_whenApiKeyIsExplicitlyEmpty() {
-    decisionRunner.withPropertyValues("spring.ai.openai.api-key=").run(context -> {
-      assertThat(context).hasNotFailed();
-      assertThat(context).hasSingleBean(OpenAiDecisionModel.class);
-    });
-  }
+    @Test
+    @DisplayName("显式提供 API key 并选择 openai 决策模型时,仍然创建决策模型")
+    void shouldCreateDecisionModel_whenCredentialAndOpenAiDecisionAreConfigured() {
+        decisionRunner
+                .withPropertyValues("spring.ai.model.decision=openai", "spring.ai.openai.api-key=test-api-key")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(OpenAiDecisionModel.class);
+                });
+    }
 
-  private static Set<Class<?>> excludedAutoConfigurations(Class<?> application) {
-    EnableAutoConfiguration annotation =
-        AnnotatedElementUtils.findMergedAnnotation(application, EnableAutoConfiguration.class);
-    assertThat(annotation).as(application.getSimpleName()).isNotNull();
-    return Arrays.stream(annotation.exclude()).collect(Collectors.toSet());
-  }
+    @Test
+    @DisplayName("API key 为空字符串时按无认证模式启动,不要求真实凭据")
+    void shouldStartWithoutCredential_whenApiKeyIsExplicitlyEmpty() {
+        decisionRunner.withPropertyValues("spring.ai.openai.api-key=").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(OpenAiDecisionModel.class);
+        });
+    }
+
+    private static Set<Class<?>> excludedAutoConfigurations(Class<?> application) {
+        EnableAutoConfiguration annotation =
+                AnnotatedElementUtils.findMergedAnnotation(application, EnableAutoConfiguration.class);
+        assertThat(annotation).as(application.getSimpleName()).isNotNull();
+        return Arrays.stream(annotation.exclude()).collect(Collectors.toSet());
+    }
 }

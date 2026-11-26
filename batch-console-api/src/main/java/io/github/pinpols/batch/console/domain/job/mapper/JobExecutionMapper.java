@@ -7,12 +7,11 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface JobExecutionMapper {
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  JobExecutionView selectJob(@Param("tenantId") String tenantId, @Param("id") Long id);
+    JobExecutionView selectJob(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  List<StatusCount> selectCounts(@Param("tenantId") String tenantId, @Param("id") Long id);
+    List<StatusCount> selectCounts(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  List<Stage> selectStages(
-      @Param("tenantId") String tenantId, @Param("pipelineId") Long pipelineId);
+    List<Stage> selectStages(@Param("tenantId") String tenantId, @Param("pipelineId") Long pipelineId);
 }

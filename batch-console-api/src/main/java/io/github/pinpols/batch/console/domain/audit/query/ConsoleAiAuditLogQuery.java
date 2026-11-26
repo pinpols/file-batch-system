@@ -6,17 +6,17 @@ import lombok.Builder;
 
 @Builder
 public record ConsoleAiAuditLogQuery(
-    String tenantId,
-    String sessionId,
-    String operatorId,
-    String promptCategory,
-    String promptDecision,
-    Instant fromTime,
-    Instant toTime,
-    PageRequest pageRequest,
-    Long cursorId) {
+        String tenantId,
+        String sessionId,
+        String operatorId,
+        String promptCategory,
+        String promptDecision,
+        Instant fromTime,
+        Instant toTime,
+        PageRequest pageRequest,
+        Long cursorId) {
 
-  public static ConsoleAiAuditLogQuery ofTenant(String tenantId, PageRequest pageRequest) {
-    return builder().tenantId(tenantId).pageRequest(pageRequest).build();
-  }
+    public static ConsoleAiAuditLogQuery ofTenant(String tenantId, PageRequest pageRequest) {
+        return builder().tenantId(tenantId).pageRequest(pageRequest).build();
+    }
 }

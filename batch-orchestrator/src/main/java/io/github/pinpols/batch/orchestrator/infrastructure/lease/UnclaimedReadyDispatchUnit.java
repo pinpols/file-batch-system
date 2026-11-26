@@ -28,79 +28,76 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class UnclaimedReadyDispatchUnit {
 
-  private final JobTaskMapper jobTaskMapper;
-  private final JobPartitionMapper jobPartitionMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final TaskDispatchOutboxService taskDispatchOutboxService;
-  private final Counter redispatchCounter;
+    private final JobTaskMapper jobTaskMapper;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final TaskDispatchOutboxService taskDispatchOutboxService;
+    private final Counter redispatchCounter;
 
-  public UnclaimedReadyDispatchUnit(
-      JobTaskMapper jobTaskMapper,
-      JobPartitionMapper jobPartitionMapper,
-      JobInstanceMapper jobInstanceMapper,
-      TaskDispatchOutboxService taskDispatchOutboxService,
-      MeterRegistry meterRegistry) {
-    this.jobTaskMapper = jobTaskMapper;
-    this.jobPartitionMapper = jobPartitionMapper;
-    this.jobInstanceMapper = jobInstanceMapper;
-    this.taskDispatchOutboxService = taskDispatchOutboxService;
-    this.redispatchCounter = Counter.builder("batch.orchestrator.lease.unclaimed_dispatch.total")
-        .description("READY tasks republished after the original dispatch was not claimed")
-        .register(meterRegistry);
-  }
+    public UnclaimedReadyDispatchUnit(
+            JobTaskMapper jobTaskMapper,
+            JobPartitionMapper jobPartitionMapper,
+            JobInstanceMapper jobInstanceMapper,
+            TaskDispatchOutboxService taskDispatchOutboxService,
+            MeterRegistry meterRegistry) {
+        this.jobTaskMapper = jobTaskMapper;
+        this.jobPartitionMapper = jobPartitionMapper;
+        this.jobInstanceMapper = jobInstanceMapper;
+        this.taskDispatchOutboxService = taskDispatchOutboxService;
+        this.redispatchCounter = Counter.builder("batch.orchestrator.lease.unclaimed_dispatch.total")
+                .description("READY tasks republished after the original dispatch was not claimed")
+                .register(meterRegistry);
+    }
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void redispatch(JobTaskEntity scanned) {
-    if (EmptyChecks.isNull(scanned) || EmptyChecks.isNull(scanned.getId())) {
-      return;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void redispatch(JobTaskEntity scanned) {
+        if (EmptyChecks.isNull(scanned) || EmptyChecks.isNull(scanned.getId())) {
+            return;
+        }
+        String tenantId = scanned.getTenantId();
+        jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, scanned.getJobInstanceId());
+        JobTaskEntity task = jobTaskMapper.selectForWorkerClaim(tenantId, scanned.getId());
+        if (!isUnclaimedReady(task)) {
+            return;
+        }
+        JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
+        boolean partitionIsNotWaitingForClaim = EmptyChecks.isNull(partition)
+                || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())
+                || EmptyChecks.isNotNull(partition.getLeaseExpireAt());
+        if (partitionIsNotWaitingForClaim) {
+            return;
+        }
+        JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
+        if (EmptyChecks.isNull(jobInstance)) {
+            return;
+        }
+        int updated = jobTaskMapper.bumpVersionIfUnclaimedReady(tenantId, task.getId(), task.getVersion());
+        if (updated <= 0) {
+            return;
+        }
+        long dispatchedVersion = task.getVersion() + 1;
+        String eventKey = OutboxEventKeyGenerator.forUnclaimedRedispatch(tenantId, task.getId(), dispatchedVersion);
+        taskDispatchOutboxService.writeDispatchEvent(TaskDispatchEventCommand.builder()
+                .jobInstance(jobInstance)
+                .task(task)
+                .partition(partition)
+                .traceId(jobInstance.getTraceId())
+                .eventKey(eventKey)
+                .build());
+        redispatchCounter.increment();
+        log.warn(
+                "unclaimed READY task re-dispatched: tenantId={}, partitionId={}, taskId={},"
+                        + " fromVersion={}, graceApplied=true",
+                tenantId,
+                partition.getId(),
+                task.getId(),
+                task.getVersion());
     }
-    String tenantId = scanned.getTenantId();
-    jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, scanned.getJobInstanceId());
-    JobTaskEntity task = jobTaskMapper.selectForWorkerClaim(tenantId, scanned.getId());
-    if (!isUnclaimedReady(task)) {
-      return;
-    }
-    JobPartitionEntity partition =
-        jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-    boolean partitionIsNotWaitingForClaim = EmptyChecks.isNull(partition)
-        || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())
-        || EmptyChecks.isNotNull(partition.getLeaseExpireAt());
-    if (partitionIsNotWaitingForClaim) {
-      return;
-    }
-    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
-    if (EmptyChecks.isNull(jobInstance)) {
-      return;
-    }
-    int updated =
-        jobTaskMapper.bumpVersionIfUnclaimedReady(tenantId, task.getId(), task.getVersion());
-    if (updated <= 0) {
-      return;
-    }
-    long dispatchedVersion = task.getVersion() + 1;
-    String eventKey =
-        OutboxEventKeyGenerator.forUnclaimedRedispatch(tenantId, task.getId(), dispatchedVersion);
-    taskDispatchOutboxService.writeDispatchEvent(TaskDispatchEventCommand.builder()
-        .jobInstance(jobInstance)
-        .task(task)
-        .partition(partition)
-        .traceId(jobInstance.getTraceId())
-        .eventKey(eventKey)
-        .build());
-    redispatchCounter.increment();
-    log.warn(
-        "unclaimed READY task re-dispatched: tenantId={}, partitionId={}, taskId={},"
-            + " fromVersion={}, graceApplied=true",
-        tenantId,
-        partition.getId(),
-        task.getId(),
-        task.getVersion());
-  }
 
-  private static boolean isUnclaimedReady(JobTaskEntity task) {
-    return EmptyChecks.isNotNull(task)
-        && TaskStatus.READY.code().equals(task.getTaskStatus())
-        && EmptyChecks.isNull(task.getAssignedWorkerCode())
-        && EmptyChecks.isNull(task.getNonIdempotentStartedAt());
-  }
+    private static boolean isUnclaimedReady(JobTaskEntity task) {
+        return EmptyChecks.isNotNull(task)
+                && TaskStatus.READY.code().equals(task.getTaskStatus())
+                && EmptyChecks.isNull(task.getAssignedWorkerCode())
+                && EmptyChecks.isNull(task.getNonIdempotentStartedAt());
+    }
 }

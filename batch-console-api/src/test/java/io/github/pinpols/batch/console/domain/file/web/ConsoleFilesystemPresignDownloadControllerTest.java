@@ -31,127 +31,125 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @DisplayName("文件系统预签名下载控制器: 签名校验、过期与路径穿越防护")
 class FilesystemPresignDownloadControllerTest {
 
-  private static final String BUCKET = "test-bucket";
-  private static final String KEY = "dir/a.bin";
-  private static final String SECRET = "test-presign-secret-1234567890";
+    private static final String BUCKET = "test-bucket";
+    private static final String KEY = "dir/a.bin";
+    private static final String SECRET = "test-presign-secret-1234567890";
 
-  private ConsoleFilesystemPresignDownloadController controller;
-  private InMemoryObjectStore stubStore;
+    private ConsoleFilesystemPresignDownloadController controller;
+    private InMemoryObjectStore stubStore;
 
-  @BeforeEach
-  void setUp() {
-    FilesystemStorageProperties props = new FilesystemStorageProperties();
-    props.setPresignSecret(SECRET);
-    props.setDownloadBaseUrl("https://example.invalid/api/console/files/fs-download");
-    BatchSecurityProperties security = new BatchSecurityProperties();
-    stubStore = new InMemoryObjectStore();
-    stubStore.put(
-        BUCKET,
-        KEY,
-        new ByteArrayInputStream("payload".getBytes(StandardCharsets.UTF_8)),
-        "payload".length(),
-        "application/octet-stream");
-    controller = new ConsoleFilesystemPresignDownloadController(
-        new DefaultConsoleFilesystemPresignDownloadService(stubStore, props, security));
-  }
-
-  @Test
-  @DisplayName("签名有效时以流式响应返回文件内容")
-  void shouldStreamPayloadWhenSignatureIsValid() throws Exception {
-    long exp = Instant.now().plusSeconds(60).getEpochSecond();
-    String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
-
-    ResponseEntity<StreamingResponseBody> resp = controller.download(BUCKET, KEY, exp, sig);
-
-    assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    resp.getBody().writeTo(out);
-    assertThat(new String(out.toByteArray(), StandardCharsets.UTF_8)).isEqualTo("payload");
-    assertThat(resp.getHeaders().getFirst("Content-Disposition")).contains("a.bin");
-  }
-
-  @Test
-  @DisplayName("签名被篡改时按业务异常拒绝")
-  void shouldRejectTamperedSignature() {
-    long exp = Instant.now().plusSeconds(60).getEpochSecond();
-    assertThatThrownBy(() -> controller.download(BUCKET, KEY, exp, "tampered"))
-        .isInstanceOf(BizException.class);
-  }
-
-  @Test
-  @DisplayName("下载链接已过期时按业务异常拒绝")
-  void shouldRejectExpiredToken() {
-    long exp = Instant.now().minusSeconds(60).getEpochSecond();
-    String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
-    assertThatThrownBy(() -> controller.download(BUCKET, KEY, exp, sig))
-        .isInstanceOf(BizException.class);
-  }
-
-  @Test
-  @DisplayName("对象键含路径穿越时按业务异常拒绝")
-  void shouldRejectTraversalKey() {
-    long exp = Instant.now().plusSeconds(60).getEpochSecond();
-    String key = "../etc/passwd";
-    String sig = FilesystemPresignTokens.sign(BUCKET, key, Instant.ofEpochSecond(exp), SECRET);
-    assertThatThrownBy(() -> controller.download(BUCKET, key, exp, sig))
-        .isInstanceOf(BizException.class);
-  }
-
-  /** 极简 in-memory store，避免引入 TempDir。 */
-  private static final class InMemoryObjectStore implements BatchObjectStore {
-    private final Map<String, byte[]> store = new HashMap<>();
-
-    @Override
-    public void put(String bucket, String key, InputStream in, long size, String contentType) {
-      try {
-        store.put(bucket + "|" + key, in.readAllBytes());
-      } catch (IOException ex) {
-        throw new IllegalStateException(ex);
-      }
+    @BeforeEach
+    void setUp() {
+        FilesystemStorageProperties props = new FilesystemStorageProperties();
+        props.setPresignSecret(SECRET);
+        props.setDownloadBaseUrl("https://example.invalid/api/console/files/fs-download");
+        BatchSecurityProperties security = new BatchSecurityProperties();
+        stubStore = new InMemoryObjectStore();
+        stubStore.put(
+                BUCKET,
+                KEY,
+                new ByteArrayInputStream("payload".getBytes(StandardCharsets.UTF_8)),
+                "payload".length(),
+                "application/octet-stream");
+        controller = new ConsoleFilesystemPresignDownloadController(
+                new DefaultConsoleFilesystemPresignDownloadService(stubStore, props, security));
     }
 
-    @Override
-    public void copy(String bucket, String src, String dst) {
-      store.put(bucket + "|" + dst, store.get(bucket + "|" + src));
+    @Test
+    @DisplayName("签名有效时以流式响应返回文件内容")
+    void shouldStreamPayloadWhenSignatureIsValid() throws Exception {
+        long exp = Instant.now().plusSeconds(60).getEpochSecond();
+        String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
+
+        ResponseEntity<StreamingResponseBody> resp = controller.download(BUCKET, KEY, exp, sig);
+
+        assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        resp.getBody().writeTo(out);
+        assertThat(new String(out.toByteArray(), StandardCharsets.UTF_8)).isEqualTo("payload");
+        assertThat(resp.getHeaders().getFirst("Content-Disposition")).contains("a.bin");
     }
 
-    @Override
-    public void delete(String bucket, String key) {
-      store.remove(bucket + "|" + key);
+    @Test
+    @DisplayName("签名被篡改时按业务异常拒绝")
+    void shouldRejectTamperedSignature() {
+        long exp = Instant.now().plusSeconds(60).getEpochSecond();
+        assertThatThrownBy(() -> controller.download(BUCKET, KEY, exp, "tampered"))
+                .isInstanceOf(BizException.class);
     }
 
-    @Override
-    public InputStream get(String bucket, String key) {
-      byte[] data = store.get(bucket + "|" + key);
-      if (data == null) {
-        throw new ObjectNotFoundException("missing: " + bucket + "/" + key);
-      }
-      return new ByteArrayInputStream(data);
+    @Test
+    @DisplayName("下载链接已过期时按业务异常拒绝")
+    void shouldRejectExpiredToken() {
+        long exp = Instant.now().minusSeconds(60).getEpochSecond();
+        String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
+        assertThatThrownBy(() -> controller.download(BUCKET, KEY, exp, sig)).isInstanceOf(BizException.class);
     }
 
-    @Override
-    public InputStream getFrom(String bucket, String key, long offset) {
-      throw new UnsupportedOperationException();
+    @Test
+    @DisplayName("对象键含路径穿越时按业务异常拒绝")
+    void shouldRejectTraversalKey() {
+        long exp = Instant.now().plusSeconds(60).getEpochSecond();
+        String key = "../etc/passwd";
+        String sig = FilesystemPresignTokens.sign(BUCKET, key, Instant.ofEpochSecond(exp), SECRET);
+        assertThatThrownBy(() -> controller.download(BUCKET, key, exp, sig)).isInstanceOf(BizException.class);
     }
 
-    @Override
-    public long statSize(String bucket, String key) {
-      return store.getOrDefault(bucket + "|" + key, new byte[0]).length;
-    }
+    /** 极简 in-memory store，避免引入 TempDir。 */
+    private static final class InMemoryObjectStore implements BatchObjectStore {
+        private final Map<String, byte[]> store = new HashMap<>();
 
-    @Override
-    public boolean exists(String bucket, String key) {
-      return store.containsKey(bucket + "|" + key);
-    }
+        @Override
+        public void put(String bucket, String key, InputStream in, long size, String contentType) {
+            try {
+                store.put(bucket + "|" + key, in.readAllBytes());
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
+            }
+        }
 
-    @Override
-    public ObjectListing list(String bucket, String prefix, String marker, int max) {
-      return new ObjectListing(List.of(), null);
-    }
+        @Override
+        public void copy(String bucket, String src, String dst) {
+            store.put(bucket + "|" + dst, store.get(bucket + "|" + src));
+        }
 
-    @Override
-    public String presign(String bucket, String key, Duration ttl) {
-      return "stub";
+        @Override
+        public void delete(String bucket, String key) {
+            store.remove(bucket + "|" + key);
+        }
+
+        @Override
+        public InputStream get(String bucket, String key) {
+            byte[] data = store.get(bucket + "|" + key);
+            if (data == null) {
+                throw new ObjectNotFoundException("missing: " + bucket + "/" + key);
+            }
+            return new ByteArrayInputStream(data);
+        }
+
+        @Override
+        public InputStream getFrom(String bucket, String key, long offset) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long statSize(String bucket, String key) {
+            return store.getOrDefault(bucket + "|" + key, new byte[0]).length;
+        }
+
+        @Override
+        public boolean exists(String bucket, String key) {
+            return store.containsKey(bucket + "|" + key);
+        }
+
+        @Override
+        public ObjectListing list(String bucket, String prefix, String marker, int max) {
+            return new ObjectListing(List.of(), null);
+        }
+
+        @Override
+        public String presign(String bucket, String key, Duration ttl) {
+            return "stub";
+        }
     }
-  }
 }

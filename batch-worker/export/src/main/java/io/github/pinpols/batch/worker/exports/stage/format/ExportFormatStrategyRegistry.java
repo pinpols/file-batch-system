@@ -20,45 +20,44 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExportFormatStrategyRegistry {
 
-  private final Map<String, ExportFormatStrategy> strategiesByType;
+    private final Map<String, ExportFormatStrategy> strategiesByType;
 
-  public ExportFormatStrategyRegistry(List<ExportFormatStrategy> strategies) {
-    this.strategiesByType = strategies.stream()
-        .collect(Collectors.toUnmodifiableMap(
-            s -> s.formatType().toUpperCase(Locale.ROOT), Function.identity()));
-  }
+    public ExportFormatStrategyRegistry(List<ExportFormatStrategy> strategies) {
+        this.strategiesByType = strategies.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        s -> s.formatType().toUpperCase(Locale.ROOT), Function.identity()));
+    }
 
-  /**
-   * 按格式类型查找策略。仅空值沿用历史默认 {@code "JSON"}；显式但未知的格式必须快速失败，避免产出内容与文件契约不一致。
-   *
-   * @param fileFormatType 格式类型标识
-   * @return 对应的策略实现
-   */
-  public ExportFormatStrategy resolve(String fileFormatType) {
-    if (EmptyChecks.isBlank(fileFormatType)) {
-      return require(FileTemplateFormat.JSON.code());
+    /**
+     * 按格式类型查找策略。仅空值沿用历史默认 {@code "JSON"}；显式但未知的格式必须快速失败，避免产出内容与文件契约不一致。
+     *
+     * @param fileFormatType 格式类型标识
+     * @return 对应的策略实现
+     */
+    public ExportFormatStrategy resolve(String fileFormatType) {
+        if (EmptyChecks.isBlank(fileFormatType)) {
+            return require(FileTemplateFormat.JSON.code());
+        }
+        return require(fileFormatType);
     }
-    return require(fileFormatType);
-  }
 
-  /**
-   * 按格式类型获取策略，未注册时抛出异常。
-   *
-   * @param fileFormatType 格式类型标识
-   * @return 对应的策略实现
-   * @throws io.github.pinpols.batch.common.exception.BizException 未找到策略时抛出
-   */
-  public ExportFormatStrategy require(String fileFormatType) {
-    String normalizedFileFormatType = "";
-    if (EmptyChecks.isNotNull(fileFormatType)) {
-      String trimmedFileFormatType = fileFormatType.trim();
-      normalizedFileFormatType = trimmedFileFormatType.toUpperCase(Locale.ROOT);
+    /**
+     * 按格式类型获取策略，未注册时抛出异常。
+     *
+     * @param fileFormatType 格式类型标识
+     * @return 对应的策略实现
+     * @throws io.github.pinpols.batch.common.exception.BizException 未找到策略时抛出
+     */
+    public ExportFormatStrategy require(String fileFormatType) {
+        String normalizedFileFormatType = "";
+        if (EmptyChecks.isNotNull(fileFormatType)) {
+            String trimmedFileFormatType = fileFormatType.trim();
+            normalizedFileFormatType = trimmedFileFormatType.toUpperCase(Locale.ROOT);
+        }
+        ExportFormatStrategy strategy = strategiesByType.get(normalizedFileFormatType);
+        if (EmptyChecks.isNull(strategy)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
+        }
+        return strategy;
     }
-    ExportFormatStrategy strategy = strategiesByType.get(normalizedFileFormatType);
-    if (EmptyChecks.isNull(strategy)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
-    }
-    return strategy;
-  }
 }

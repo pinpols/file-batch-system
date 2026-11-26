@@ -28,69 +28,67 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Slf4j
 public class LocalizedErrorRenderer {
 
-  private final MessageSource messageSource;
-  private final ObjectMapper objectMapper;
+    private final MessageSource messageSource;
+    private final ObjectMapper objectMapper;
 
-  public LocalizedErrorRenderer(MessageSource messageSource, ObjectMapper objectMapper) {
-    this.messageSource = messageSource;
-    this.objectMapper = objectMapper;
-  }
-
-  /** 用当前请求的 {@link LocaleContextHolder#getLocale()} 渲染。 */
-  public String render(String errorKey, String errorArgsJson, String fallback) {
-    return render(errorKey, errorArgsJson, fallback, LocaleContextHolder.getLocale());
-  }
-
-  public String render(String errorKey, String errorArgsJson, String fallback, Locale locale) {
-    if (errorKey == null || errorKey.isBlank()) {
-      return fallback;
+    public LocalizedErrorRenderer(MessageSource messageSource, ObjectMapper objectMapper) {
+        this.messageSource = messageSource;
+        this.objectMapper = objectMapper;
     }
-    Object[] args = BizExceptionUtils.parseArgs(errorArgsJson, objectMapper);
-    try {
-      String rendered = messageSource.getMessage(errorKey, args, locale);
-      return (rendered == null || rendered.isBlank()) ? fallback : rendered;
-    } catch (NoSuchMessageException ignored) {
-      SwallowedExceptionLogger.info(
-          LocalizedErrorRenderer.class, "catch:NoSuchMessageException", ignored);
 
-      return fallback;
-    } catch (RuntimeException ex) {
-      // v6 hardening: 回退 IllegalArgumentException 等渲染异常——
-      // 当 error_args JSONB 损坏导致 parseArgs 返回空数组、message 模板含 {N} 占位符时，
-      // Spring 内部 MessageFormat 会抛 IllegalArgumentException；旧版仅 catch NoSuchMessageException
-      // 让异常透传到 5xx，影响 console 列表查询。改为 fallback + warn 让历史异常数据不影响读路径。
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "localized error render failed; falling back to raw message: errorKey={}, locale={},"
-              + " cause={}",
-          errorKey,
-          locale,
-          causeSummary);
-      return fallback;
+    /** 用当前请求的 {@link LocaleContextHolder#getLocale()} 渲染。 */
+    public String render(String errorKey, String errorArgsJson, String fallback) {
+        return render(errorKey, errorArgsJson, fallback, LocaleContextHolder.getLocale());
     }
-  }
 
-  /** 等价的 record 形态。 */
-  public String render(LocalizedError error) {
-    if (error == null) {
-      return null;
+    public String render(String errorKey, String errorArgsJson, String fallback, Locale locale) {
+        if (errorKey == null || errorKey.isBlank()) {
+            return fallback;
+        }
+        Object[] args = BizExceptionUtils.parseArgs(errorArgsJson, objectMapper);
+        try {
+            String rendered = messageSource.getMessage(errorKey, args, locale);
+            return (rendered == null || rendered.isBlank()) ? fallback : rendered;
+        } catch (NoSuchMessageException ignored) {
+            SwallowedExceptionLogger.info(LocalizedErrorRenderer.class, "catch:NoSuchMessageException", ignored);
+
+            return fallback;
+        } catch (RuntimeException ex) {
+            // v6 hardening: 回退 IllegalArgumentException 等渲染异常——
+            // 当 error_args JSONB 损坏导致 parseArgs 返回空数组、message 模板含 {N} 占位符时，
+            // Spring 内部 MessageFormat 会抛 IllegalArgumentException；旧版仅 catch NoSuchMessageException
+            // 让异常透传到 5xx，影响 console 列表查询。改为 fallback + warn 让历史异常数据不影响读路径。
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "localized error render failed; falling back to raw message: errorKey={}, locale={}," + " cause={}",
+                    errorKey,
+                    locale,
+                    causeSummary);
+            return fallback;
+        }
     }
-    return render(error.key(), error.argsJson(), error.renderedMessage());
-  }
 
-  public String render(LocalizedError error, Locale locale) {
-    if (error == null) {
-      return null;
+    /** 等价的 record 形态。 */
+    public String render(LocalizedError error) {
+        if (error == null) {
+            return null;
+        }
+        return render(error.key(), error.argsJson(), error.renderedMessage());
     }
-    return render(error.key(), error.argsJson(), error.renderedMessage(), locale);
-  }
 
-  /** carrier 直渲染:从 entity / DTO / Mapper Param 上的 errorKey/errorArgs/errorMessage 三字段直接读。 */
-  public String render(LocalizedErrorCarrier carrier) {
-    return carrier == null ? null : render(carrier.toLocalizedError());
-  }
+    public String render(LocalizedError error, Locale locale) {
+        if (error == null) {
+            return null;
+        }
+        return render(error.key(), error.argsJson(), error.renderedMessage(), locale);
+    }
 
-  public String render(LocalizedErrorCarrier carrier, Locale locale) {
-    return carrier == null ? null : render(carrier.toLocalizedError(), locale);
-  }
+    /** carrier 直渲染:从 entity / DTO / Mapper Param 上的 errorKey/errorArgs/errorMessage 三字段直接读。 */
+    public String render(LocalizedErrorCarrier carrier) {
+        return carrier == null ? null : render(carrier.toLocalizedError());
+    }
+
+    public String render(LocalizedErrorCarrier carrier, Locale locale) {
+        return carrier == null ? null : render(carrier.toLocalizedError(), locale);
+    }
 }

@@ -6,7 +6,7 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
  * 和 AI 工具重复维护字段名字符串。
  */
 public record ConsoleClusterDiagnosticResponse(
-    ConsoleShedLockStatusResponse shedLock,
-    ConsoleWorkerConsistencyResponse workers,
-    ConsoleOutboxHealthResponse outbox,
-    ConsoleTerminalChildrenHealthResponse terminalChildren) {}
+        ConsoleShedLockStatusResponse shedLock,
+        ConsoleWorkerConsistencyResponse workers,
+        ConsoleOutboxHealthResponse outbox,
+        ConsoleTerminalChildrenHealthResponse terminalChildren) {}

@@ -27,133 +27,123 @@ import java.util.Set;
  */
 public final class ExcelMapRowReader {
 
-  private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-  private static final List<String> TRUE_TOKENS = List.of("TRUE", "Y", "1", "YES");
-  private static final List<String> FALSE_TOKENS = List.of("FALSE", "N", "0", "NO");
+    private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final List<String> TRUE_TOKENS = List.of("TRUE", "Y", "1", "YES");
+    private static final List<String> FALSE_TOKENS = List.of("FALSE", "N", "0", "NO");
 
-  private ExcelMapRowReader() {}
+    private ExcelMapRowReader() {}
 
-  /** 必填文本：blank → "key is required"；超长 → 截断 + "key too long"。 */
-  public static String requireText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return null;
+    /** 必填文本：blank → "key is required"；超长 → 截断 + "key too long"。 */
+    public static String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            issues.add(key + " is required");
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            issues.add(key + " too long (max " + maxLength + ")");
+            return normalized.substring(0, maxLength);
+        }
+        return normalized;
     }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
 
-  /** 选填文本：blank → null（不报错）；超长 → 截断 + "key too long"。 */
-  public static String optionalText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return null;
+    /** 选填文本：blank → null（不报错）；超长 → 截断 + "key too long"。 */
+    public static String optionalText(Map<String, String> values, String key, int maxLength, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            issues.add(key + " too long (max " + maxLength + ")");
+            return normalized.substring(0, maxLength);
+        }
+        return normalized;
     }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
 
-  /** 必填枚举：先走 requireText，再做 UPPERCASE + allowlist 比对，命中则返回 UPPERCASE 值。 */
-  public static String requireEnum(
-      Map<String, String> values,
-      String key,
-      Set<String> allowed,
-      int maxLength,
-      List<String> issues) {
-    String normalized = requireText(values, key, maxLength, issues);
-    if (normalized == null) {
-      return null;
+    /** 必填枚举：先走 requireText，再做 UPPERCASE + allowlist 比对，命中则返回 UPPERCASE 值。 */
+    public static String requireEnum(
+            Map<String, String> values, String key, Set<String> allowed, int maxLength, List<String> issues) {
+        String normalized = requireText(values, key, maxLength, issues);
+        if (normalized == null) {
+            return null;
+        }
+        String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
+        if (!allowed.contains(normalizedUpper)) {
+            issues.add(key + " must be one of " + allowed);
+        }
+        return normalizedUpper;
     }
-    String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
-    if (!allowed.contains(normalizedUpper)) {
-      issues.add(key + " must be one of " + allowed);
-    }
-    return normalizedUpper;
-  }
 
-  /** 必填整数（带最小值回退）：blank / 非整数 → 返回 min 并报错；&lt; min → 报错但仍返回原值。 */
-  public static Integer requireInteger(
-      Map<String, String> values, String key, int min, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return min;
-    }
-    try {
-      int value = Integer.parseInt(normalized);
-      if (value < min) {
-        issues.add(key + " must be >= " + min);
-      }
-      return value;
-    } catch (NumberFormatException exception) {
-      SwallowedExceptionLogger.info(
-          ExcelMapRowReader.class, "catch:NumberFormatException", exception);
+    /** 必填整数（带最小值回退）：blank / 非整数 → 返回 min 并报错；&lt; min → 报错但仍返回原值。 */
+    public static Integer requireInteger(Map<String, String> values, String key, int min, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            issues.add(key + " is required");
+            return min;
+        }
+        try {
+            int value = Integer.parseInt(normalized);
+            if (value < min) {
+                issues.add(key + " must be >= " + min);
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            SwallowedExceptionLogger.info(ExcelMapRowReader.class, "catch:NumberFormatException", exception);
 
-      issues.add(key + " must be integer");
-      return min;
+            issues.add(key + " must be integer");
+            return min;
+        }
     }
-  }
 
-  /** 选填布尔：TRUE/Y/1/YES → true，FALSE/N/0/NO → false，其他 → 报错并默认回退值；blank → 默认值。 */
-  public static Boolean optionalBoolean(
-      Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return defaultValue;
+    /** 选填布尔：TRUE/Y/1/YES → true，FALSE/N/0/NO → false，其他 → 报错并默认回退值；blank → 默认值。 */
+    public static Boolean optionalBoolean(
+            Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            return defaultValue;
+        }
+        String upper = normalized.toUpperCase(Locale.ROOT);
+        if (TRUE_TOKENS.contains(upper)) {
+            return true;
+        }
+        if (FALSE_TOKENS.contains(upper)) {
+            return false;
+        }
+        issues.add(key + " must be boolean");
+        return defaultValue;
     }
-    String upper = normalized.toUpperCase(Locale.ROOT);
-    if (TRUE_TOKENS.contains(upper)) {
-      return true;
-    }
-    if (FALSE_TOKENS.contains(upper)) {
-      return false;
-    }
-    issues.add(key + " must be boolean");
-    return defaultValue;
-  }
 
-  /** 必填日期（yyyy-MM-dd）：blank / 解析失败 → 返回 null 并报错。 */
-  public static LocalDate requireDate(Map<String, String> values, String key, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return null;
-    }
-    try {
-      return LocalDate.parse(normalized, ISO_DATE);
-    } catch (DateTimeParseException exception) {
-      SwallowedExceptionLogger.info(
-          ExcelMapRowReader.class, "catch:DateTimeParseException", exception);
+    /** 必填日期（yyyy-MM-dd）：blank / 解析失败 → 返回 null 并报错。 */
+    public static LocalDate requireDate(Map<String, String> values, String key, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            issues.add(key + " is required");
+            return null;
+        }
+        try {
+            return LocalDate.parse(normalized, ISO_DATE);
+        } catch (DateTimeParseException exception) {
+            SwallowedExceptionLogger.info(ExcelMapRowReader.class, "catch:DateTimeParseException", exception);
 
-      issues.add(key + " must be date in yyyy-MM-dd format");
-      return null;
+            issues.add(key + " must be date in yyyy-MM-dd format");
+            return null;
+        }
     }
-  }
 
-  /** 选填 JSON 文本：blank → null；解析失败 → 报错但返回原文（保留以便上层观察）。 */
-  public static String optionalJson(Map<String, String> values, String key, List<String> issues) {
-    String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return null;
-    }
-    try {
-      JsonUtils.fromJson(normalized, Object.class);
-      return normalized;
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          ExcelMapRowReader.class, "catch:IllegalArgumentException", exception);
+    /** 选填 JSON 文本：blank → null；解析失败 → 报错但返回原文（保留以便上层观察）。 */
+    public static String optionalJson(Map<String, String> values, String key, List<String> issues) {
+        String normalized = ConsoleTextSanitizer.normalize(values.get(key));
+        if (!Texts.hasText(normalized)) {
+            return null;
+        }
+        try {
+            JsonUtils.fromJson(normalized, Object.class);
+            return normalized;
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(ExcelMapRowReader.class, "catch:IllegalArgumentException", exception);
 
-      issues.add(key + " must be valid JSON");
-      return normalized;
+            issues.add(key + " must be valid JSON");
+            return normalized;
+        }
     }
-  }
 }

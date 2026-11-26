@@ -23,44 +23,39 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("租户运营配置落地支持: 业务日历上送与节假日行重建")
 class TenantOperationalConfigApplySupportTest {
 
-  @Test
-  @DisplayName("更新业务日历后,节假日行按原顺序整体重建并写入创建人")
-  void shouldReplaceHolidayRowsInOriginalOrder_whenCalendarIsUpserted() {
-    ResourceQueueMapper resourceQueueMapper = mock(ResourceQueueMapper.class);
-    BatchWindowMapper batchWindowMapper = mock(BatchWindowMapper.class);
-    BusinessCalendarMapper calendarMapper = mock(BusinessCalendarMapper.class);
-    CalendarHolidayMapper holidayMapper = mock(CalendarHolidayMapper.class);
-    TenantQuotaPolicyMapper quotaMapper = mock(TenantQuotaPolicyMapper.class);
-    AlertRoutingConfigMapper alertMapper = mock(AlertRoutingConfigMapper.class);
-    TenantOperationalConfigApplySupport support = new TenantOperationalConfigApplySupport(
-        resourceQueueMapper,
-        batchWindowMapper,
-        calendarMapper,
-        holidayMapper,
-        quotaMapper,
-        alertMapper);
-    BusinessCalendarSpec spec = new BusinessCalendarSpec();
-    spec.setCalendarCode("cn-settlement");
-    spec.setCalendarName("CN Settlement");
-    spec.setHolidays(List.of("2026-01-01", "2026-02-17"));
-    when(calendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "cn_settlement"))
-        .thenReturn(new ActiveCalendarRow(
-            91L, "tenant-a", "cn_settlement", null, null, null, null, null, null));
+    @Test
+    @DisplayName("更新业务日历后,节假日行按原顺序整体重建并写入创建人")
+    void shouldReplaceHolidayRowsInOriginalOrder_whenCalendarIsUpserted() {
+        ResourceQueueMapper resourceQueueMapper = mock(ResourceQueueMapper.class);
+        BatchWindowMapper batchWindowMapper = mock(BatchWindowMapper.class);
+        BusinessCalendarMapper calendarMapper = mock(BusinessCalendarMapper.class);
+        CalendarHolidayMapper holidayMapper = mock(CalendarHolidayMapper.class);
+        TenantQuotaPolicyMapper quotaMapper = mock(TenantQuotaPolicyMapper.class);
+        AlertRoutingConfigMapper alertMapper = mock(AlertRoutingConfigMapper.class);
+        TenantOperationalConfigApplySupport support = new TenantOperationalConfigApplySupport(
+                resourceQueueMapper, batchWindowMapper, calendarMapper, holidayMapper, quotaMapper, alertMapper);
+        BusinessCalendarSpec spec = new BusinessCalendarSpec();
+        spec.setCalendarCode("cn-settlement");
+        spec.setCalendarName("CN Settlement");
+        spec.setHolidays(List.of("2026-01-01", "2026-02-17"));
+        when(calendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "cn_settlement"))
+                .thenReturn(
+                        new ActiveCalendarRow(91L, "tenant-a", "cn_settlement", null, null, null, null, null, null));
 
-    support.upsertBusinessCalendar("tenant-a", spec, "admin", 91L);
+        support.upsertBusinessCalendar("tenant-a", spec, "admin", 91L);
 
-    ArgumentCaptor<BusinessCalendarUpsertParam> calendar = ArgumentCaptor.captor();
-    verify(calendarMapper).upsertBusinessCalendar(calendar.capture());
-    assertThat(calendar.getValue().getCalendarCode()).isEqualTo("cn_settlement");
-    verify(holidayMapper).deleteByCalendarId(91L);
-    ArgumentCaptor<List<CalendarHolidayBatchInsertParam>> rows = ArgumentCaptor.captor();
-    verify(holidayMapper).batchInsert(rows.capture());
-    assertThat(rows.getValue())
-        .extracting(CalendarHolidayBatchInsertParam::bizDate)
-        .containsExactly("2026-01-01", "2026-02-17");
-    assertThat(rows.getValue()).allSatisfy(row -> {
-      assertThat(row.calendarId()).isEqualTo(91L);
-      assertThat(row.tenantId()).isEqualTo("tenant-a");
-    });
-  }
+        ArgumentCaptor<BusinessCalendarUpsertParam> calendar = ArgumentCaptor.captor();
+        verify(calendarMapper).upsertBusinessCalendar(calendar.capture());
+        assertThat(calendar.getValue().getCalendarCode()).isEqualTo("cn_settlement");
+        verify(holidayMapper).deleteByCalendarId(91L);
+        ArgumentCaptor<List<CalendarHolidayBatchInsertParam>> rows = ArgumentCaptor.captor();
+        verify(holidayMapper).batchInsert(rows.capture());
+        assertThat(rows.getValue())
+                .extracting(CalendarHolidayBatchInsertParam::bizDate)
+                .containsExactly("2026-01-01", "2026-02-17");
+        assertThat(rows.getValue()).allSatisfy(row -> {
+            assertThat(row.calendarId()).isEqualTo(91L);
+            assertThat(row.tenantId()).isEqualTo("tenant-a");
+        });
+    }
 }

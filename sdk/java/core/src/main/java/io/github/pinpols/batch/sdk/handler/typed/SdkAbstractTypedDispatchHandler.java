@@ -25,73 +25,70 @@ import lombok.extern.slf4j.Slf4j;
 @SuppressWarnings("java:S112")
 public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstractTaskHandler {
 
-  private final SdkTypedParameters<I> params;
+    private final SdkTypedParameters<I> params;
 
-  protected SdkAbstractTypedDispatchHandler() {
-    this(SdkTypedParameters.defaultObjectMapper());
-  }
-
-  protected SdkAbstractTypedDispatchHandler(ObjectMapper objectMapper) {
-    this.params =
-        SdkTypedParameters.forHandler(objectMapper, this, SdkAbstractTypedDispatchHandler.class, 0);
-  }
-
-  /** 选出待推送的 payload 列表。 */
-  protected abstract List<R> selectPayload(I input, SdkTaskContext ctx) throws Exception;
-
-  /** 单条 payload 构造外部请求对象。 */
-  protected abstract Object buildRequest(I input, SdkTaskContext ctx, R item) throws Exception;
-
-  /** 推送单条请求,返回响应。 */
-  protected abstract Object push(I input, SdkTaskContext ctx, Object request) throws Exception;
-
-  /** 可选:处理单条响应(记录 / 回写状态)。默认 no-op。 */
-  protected void onResponse(I input, SdkTaskContext ctx, R item, Object response)
-      throws Exception {}
-
-  /** 汇总成业务结果 {@code O};默认返 null。 */
-  protected O summarize(I input, SdkRowResult counts) {
-    return null;
-  }
-
-  @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    I input;
-    try {
-      input = params.parse(ctx);
-    } catch (IllegalArgumentException ex) {
-      return SdkTaskResult.fail(
-          "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
+    protected SdkAbstractTypedDispatchHandler() {
+        this(SdkTypedParameters.defaultObjectMapper());
     }
-    try {
-      SdkRowResult counts = new SdkRowResult();
-      List<R> items = selectPayload(input, ctx);
-      for (R item : items) {
+
+    protected SdkAbstractTypedDispatchHandler(ObjectMapper objectMapper) {
+        this.params = SdkTypedParameters.forHandler(objectMapper, this, SdkAbstractTypedDispatchHandler.class, 0);
+    }
+
+    /** 选出待推送的 payload 列表。 */
+    protected abstract List<R> selectPayload(I input, SdkTaskContext ctx) throws Exception;
+
+    /** 单条 payload 构造外部请求对象。 */
+    protected abstract Object buildRequest(I input, SdkTaskContext ctx, R item) throws Exception;
+
+    /** 推送单条请求,返回响应。 */
+    protected abstract Object push(I input, SdkTaskContext ctx, Object request) throws Exception;
+
+    /** 可选:处理单条响应(记录 / 回写状态)。默认 no-op。 */
+    protected void onResponse(I input, SdkTaskContext ctx, R item, Object response) throws Exception {}
+
+    /** 汇总成业务结果 {@code O};默认返 null。 */
+    protected O summarize(I input, SdkRowResult counts) {
+        return null;
+    }
+
+    @Override
+    protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
+        I input;
         try {
-          Object req = buildRequest(input, ctx, item);
-          Object resp = push(input, ctx, req);
-          onResponse(input, ctx, item, resp);
-          counts.incSuccess();
-        } catch (Exception itemEx) {
-          counts.incFailed();
-          log.warn("typed dispatch item failed: {}", ExceptionLogSummary.of(itemEx));
+            input = params.parse(ctx);
+        } catch (IllegalArgumentException ex) {
+            return SdkTaskResult.fail("invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
         }
-      }
-      long successfulCount = counts.success();
-      long totalCount = counts.total();
-      String defaultMessage = "dispatched " + successfulCount + "/" + totalCount;
-      return result(input, counts, defaultMessage);
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
+        try {
+            SdkRowResult counts = new SdkRowResult();
+            List<R> items = selectPayload(input, ctx);
+            for (R item : items) {
+                try {
+                    Object req = buildRequest(input, ctx, item);
+                    Object resp = push(input, ctx, req);
+                    onResponse(input, ctx, item, resp);
+                    counts.incSuccess();
+                } catch (Exception itemEx) {
+                    counts.incFailed();
+                    log.warn("typed dispatch item failed: {}", ExceptionLogSummary.of(itemEx));
+                }
+            }
+            long successfulCount = counts.success();
+            long totalCount = counts.total();
+            String defaultMessage = "dispatched " + successfulCount + "/" + totalCount;
+            return result(input, counts, defaultMessage);
+        } catch (Exception e) {
+            return SdkTaskResult.fail(e);
+        }
     }
-  }
 
-  private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
-    O output = summarize(input, counts);
-    if (output == null) {
-      return SdkTaskResult.ok(defaultMessage, counts.toOutput());
+    private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
+        O output = summarize(input, counts);
+        if (output == null) {
+            return SdkTaskResult.ok(defaultMessage, counts.toOutput());
+        }
+        Map<String, Object> outputMap = params.toOutputMap(output);
+        return SdkTaskResult.ok(defaultMessage, outputMap);
     }
-    Map<String, Object> outputMap = params.toOutputMap(output);
-    return SdkTaskResult.ok(defaultMessage, outputMap);
-  }
 }

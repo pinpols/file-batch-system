@@ -20,19 +20,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SchedulerSnapshotController {
 
-  private final TenantSchedulerSnapshotService tenantSchedulerSnapshotService;
+    private final TenantSchedulerSnapshotService tenantSchedulerSnapshotService;
 
-  @GetMapping("/snapshot")
-  public SchedulerSnapshotResponse snapshot(@RequestParam("tenantId") String tenantId) {
-    return tenantSchedulerSnapshotService.buildLive(tenantId);
-  }
+    @GetMapping("/snapshot")
+    public SchedulerSnapshotResponse snapshot(@RequestParam("tenantId") String tenantId) {
+        return tenantSchedulerSnapshotService.buildLive(tenantId);
+    }
 
-  @GetMapping("/snapshot/history")
-  public List<TenantSchedulerSnapshotResponse> history(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    List<TenantSchedulerSnapshotEntity> snapshots =
-        tenantSchedulerSnapshotService.history(tenantId, limit);
-    return snapshots.stream().map(TenantSchedulerSnapshotResponse::from).toList();
-  }
+    @GetMapping("/snapshot/history")
+    public List<TenantSchedulerSnapshotResponse> history(
+            @RequestParam("tenantId") String tenantId, @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        List<TenantSchedulerSnapshotEntity> snapshots = tenantSchedulerSnapshotService.history(tenantId, limit);
+        return snapshots.stream().map(TenantSchedulerSnapshotResponse::from).toList();
+    }
 }

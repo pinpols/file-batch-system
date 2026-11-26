@@ -46,43 +46,41 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 @Configuration(proxyBeanMethods = false)
 public class Bucket4jRateLimitConfig {
 
-  /** 每分钟配额语义：桶容量与 refill 均以 1 分钟为周期。 */
-  private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
+    /** 每分钟配额语义：桶容量与 refill 均以 1 分钟为周期。 */
+    private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
 
-  /**
-   * 限流判定请求超时：Redis 故障时快速抛错 fail-open，不阻塞热路径线程到 Lettuce 默认命令超时（~60s）。取 500ms 而非 2s， 防高并发下热路径线程被慢故障的
-   * Redis 长时间挂起而耗尽 Tomcat 线程池（见类注释「请求超时」）。
-   */
-  private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(500);
+    /**
+     * 限流判定请求超时：Redis 故障时快速抛错 fail-open，不阻塞热路径线程到 Lettuce 默认命令超时（~60s）。取 500ms 而非 2s， 防高并发下热路径线程被慢故障的
+     * Redis 长时间挂起而耗尽 Tomcat 线程池（见类注释「请求超时」）。
+     */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(500);
 
-  /**
-   * bucket4j 专用连接：与 Spring 共享底层 {@link RedisClient}，但使用 {@code String}(key)/{@code byte[]}(value)
-   * 编解码器。声明 destroyMethod=close，随容器关闭释放。
-   */
-  @Bean(destroyMethod = "close")
-  public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection(
-      RedisConnectionFactory redisConnectionFactory) {
-    if (!(redisConnectionFactory instanceof LettuceConnectionFactory lettuceConnectionFactory)) {
-      throw new IllegalStateException("rate limiter requires a LettuceConnectionFactory but found: "
-          + redisConnectionFactory.getClass().getName());
+    /**
+     * bucket4j 专用连接：与 Spring 共享底层 {@link RedisClient}，但使用 {@code String}(key)/{@code byte[]}(value)
+     * 编解码器。声明 destroyMethod=close，随容器关闭释放。
+     */
+    @Bean(destroyMethod = "close")
+    public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection(
+            RedisConnectionFactory redisConnectionFactory) {
+        if (!(redisConnectionFactory instanceof LettuceConnectionFactory lettuceConnectionFactory)) {
+            throw new IllegalStateException("rate limiter requires a LettuceConnectionFactory but found: "
+                    + redisConnectionFactory.getClass().getName());
+        }
+        AbstractRedisClient nativeClient = lettuceConnectionFactory.getNativeClient();
+        if (!(nativeClient instanceof RedisClient redisClient)) {
+            throw new IllegalStateException("rate limiter requires a standalone Lettuce RedisClient but found: "
+                    + (nativeClient == null ? "null" : nativeClient.getClass().getName()));
+        }
+        log.info("initializing bucket4j rate-limit connection over shared lettuce RedisClient");
+        return redisClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
     }
-    AbstractRedisClient nativeClient = lettuceConnectionFactory.getNativeClient();
-    if (!(nativeClient instanceof RedisClient redisClient)) {
-      throw new IllegalStateException(
-          "rate limiter requires a standalone Lettuce RedisClient but found: "
-              + (nativeClient == null ? "null" : nativeClient.getClass().getName()));
-    }
-    log.info("initializing bucket4j rate-limit connection over shared lettuce RedisClient");
-    return redisClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
-  }
 
-  @Bean
-  public LettuceBasedProxyManager<String> rateLimitProxyManager(
-      StatefulRedisConnection<String, byte[]> rateLimitRedisConnection) {
-    return Bucket4jLettuce.casBasedBuilder(rateLimitRedisConnection)
-        .requestTimeout(REQUEST_TIMEOUT)
-        .expirationAfterWrite(
-            ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(REFILL_PERIOD))
-        .build();
-  }
+    @Bean
+    public LettuceBasedProxyManager<String> rateLimitProxyManager(
+            StatefulRedisConnection<String, byte[]> rateLimitRedisConnection) {
+        return Bucket4jLettuce.casBasedBuilder(rateLimitRedisConnection)
+                .requestTimeout(REQUEST_TIMEOUT)
+                .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(REFILL_PERIOD))
+                .build();
+    }
 }

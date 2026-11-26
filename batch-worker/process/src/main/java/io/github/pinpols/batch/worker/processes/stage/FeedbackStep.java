@@ -21,37 +21,37 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FeedbackStep implements ProcessStageStep {
 
-  private final ProcessMetrics metrics;
+    private final ProcessMetrics metrics;
 
-  @Override
-  public ProcessStage stage() {
-    return ProcessStage.FEEDBACK;
-  }
+    @Override
+    public ProcessStage stage() {
+        return ProcessStage.FEEDBACK;
+    }
 
-  @Override
-  public ProcessStageResult execute(ProcessJobContext context) {
-    // ADR-026: 演练模式 plugin.feedback() 通常推水位 / 清 staging / 写审计 — 全部跳过。
-    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
-        .isDryRun()) {
-      return ProcessStageResult.success(stage());
+    @Override
+    public ProcessStageResult execute(ProcessJobContext context) {
+        // ADR-026: 演练模式 plugin.feedback() 通常推水位 / 清 staging / 写审计 — 全部跳过。
+        if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
+                .isDryRun()) {
+            return ProcessStageResult.success(stage());
+        }
+        ProcessComputePlugin plugin = context.getResolvedPlugin();
+        if (EmptyChecks.isNull(plugin)) {
+            return ProcessStageResult.success(stage());
+        }
+        try {
+            ProcessStageResult result = plugin.feedback(context);
+            return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
+        } catch (RuntimeException ex) {
+            metrics.incrementFeedbackSwallowed(context.getTenantId());
+            log.warn(
+                    "process feedback step swallowed exception (target row already published): tenantId={},"
+                            + " jobCode={}, batchKey={}",
+                    context.getTenantId(),
+                    context.getJobCode(),
+                    context.getBatchKey(),
+                    ex);
+            return ProcessStageResult.success(stage());
+        }
     }
-    ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (EmptyChecks.isNull(plugin)) {
-      return ProcessStageResult.success(stage());
-    }
-    try {
-      ProcessStageResult result = plugin.feedback(context);
-      return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
-    } catch (RuntimeException ex) {
-      metrics.incrementFeedbackSwallowed(context.getTenantId());
-      log.warn(
-          "process feedback step swallowed exception (target row already published): tenantId={},"
-              + " jobCode={}, batchKey={}",
-          context.getTenantId(),
-          context.getJobCode(),
-          context.getBatchKey(),
-          ex);
-      return ProcessStageResult.success(stage());
-    }
-  }
 }

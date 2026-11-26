@@ -30,54 +30,53 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleBusinessTenantPlacementService {
 
-  private final ConsoleBusinessTenantPlacementMapper placementMapper;
-  private final ConsoleBusinessShardCatalogMapper shardCatalogMapper;
-  private final BusinessRoutingProperties routingProperties;
+    private final ConsoleBusinessTenantPlacementMapper placementMapper;
+    private final ConsoleBusinessShardCatalogMapper shardCatalogMapper;
+    private final BusinessRoutingProperties routingProperties;
 
-  public List<BusinessTenantPlacementEntity> list() {
-    return placementMapper.findAll();
-  }
-
-  @Transactional
-  public void upsert(BusinessTenantPlacementUpsertCommand command) {
-    Set<String> configuredKeys = configuredShardKeys();
-    if (EmptyChecks.isNotEmpty(configuredKeys)
-        && !configuredKeys.contains(command.placementKey())) {
-      throw BizException.of(
-          ResultCode.VALIDATION_ERROR,
-          "error.tenant_placement.unknown_key",
-          command.placementKey(),
-          String.join(",", configuredKeys));
+    public List<BusinessTenantPlacementEntity> list() {
+        return placementMapper.findAll();
     }
-    BusinessTenantPlacementUpsertParam param = BusinessTenantPlacementUpsertParam.builder()
-        .tenantId(command.tenantId())
-        .placementKey(command.placementKey())
-        .operator(command.operator())
-        .build();
-    placementMapper.upsert(param);
-  }
 
-  /** 取消指派(回退 hash);返回是否实际删除(幂等:不存在返回 false 不报错)。 */
-  @Transactional
-  public boolean delete(String tenantId) {
-    return placementMapper.deleteByTenant(tenantId) > 0;
-  }
+    @Transactional
+    public void upsert(BusinessTenantPlacementUpsertCommand command) {
+        Set<String> configuredKeys = configuredShardKeys();
+        if (EmptyChecks.isNotEmpty(configuredKeys) && !configuredKeys.contains(command.placementKey())) {
+            throw BizException.of(
+                    ResultCode.VALIDATION_ERROR,
+                    "error.tenant_placement.unknown_key",
+                    command.placementKey(),
+                    String.join(",", configuredKeys));
+        }
+        BusinessTenantPlacementUpsertParam param = BusinessTenantPlacementUpsertParam.builder()
+                .tenantId(command.tenantId())
+                .placementKey(command.placementKey())
+                .operator(command.operator())
+                .build();
+        placementMapper.upsert(param);
+    }
 
-  /**
-   * placement 指派的合法 key 集合,优先级:shard catalog(enabled 片,权威)→ routing.shards 配置 → 空(不校验)。
-   * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 回退)。
-   */
-  private Set<String> configuredShardKeys() {
-    List<String> enabledShardKeys = shardCatalogMapper.findEnabledKeys();
-    Set<String> keys = new LinkedHashSet<>(enabledShardKeys);
-    if (!keys.isEmpty()) {
-      return keys;
+    /** 取消指派(回退 hash);返回是否实际删除(幂等:不存在返回 false 不报错)。 */
+    @Transactional
+    public boolean delete(String tenantId) {
+        return placementMapper.deleteByTenant(tenantId) > 0;
     }
-    for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
-      if (shard.getKey() != null && !shard.getKey().isBlank()) {
-        keys.add(shard.getKey());
-      }
+
+    /**
+     * placement 指派的合法 key 集合,优先级:shard catalog(enabled 片,权威)→ routing.shards 配置 → 空(不校验)。
+     * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 回退)。
+     */
+    private Set<String> configuredShardKeys() {
+        List<String> enabledShardKeys = shardCatalogMapper.findEnabledKeys();
+        Set<String> keys = new LinkedHashSet<>(enabledShardKeys);
+        if (!keys.isEmpty()) {
+            return keys;
+        }
+        for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
+            if (shard.getKey() != null && !shard.getKey().isBlank()) {
+                keys.add(shard.getKey());
+            }
+        }
+        return keys;
     }
-    return keys;
-  }
 }

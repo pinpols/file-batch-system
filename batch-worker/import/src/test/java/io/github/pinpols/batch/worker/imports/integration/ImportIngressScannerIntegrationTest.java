@@ -43,163 +43,159 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * scanner.enabled=false}。稳定窗口设为 0，文件立即被视为稳定。
  */
 @SpringBootTest(
-    classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(
-    properties = {
-      "batch.worker.import.tenant-id=t1",
-      "batch.worker.import.scanner.enabled=true",
-      "batch.worker.import.scanner.poll-interval-millis=3600000",
-      "batch.worker.import.scanner.stability-window-seconds=0",
-      "batch.worker.import.scanner.prefix=ingress/",
-      "batch.worker.import.scanner.require-done-file=false",
-      "batch.worker.import.scanner.default-biz-date=2026-05-05",
-      "batch.worker.import.scanner.batch-manifest-enabled=true"
-    })
+        properties = {
+            "batch.worker.import.tenant-id=t1",
+            "batch.worker.import.scanner.enabled=true",
+            "batch.worker.import.scanner.poll-interval-millis=3600000",
+            "batch.worker.import.scanner.stability-window-seconds=0",
+            "batch.worker.import.scanner.prefix=ingress/",
+            "batch.worker.import.scanner.require-done-file=false",
+            "batch.worker.import.scanner.default-biz-date=2026-05-05",
+            "batch.worker.import.scanner.batch-manifest-enabled=true"
+        })
 @EnabledIf("s3BackendActive")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("导入入口扫描集成测试:对象存储文件发现,登记幂等与批次清单元数据回填")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
-  private final ImportIngressScanner scanner;
-  private final PlatformFileRecordRepository runtimeRepository;
-  private final ImportScannerProperties scannerProperties;
-  private final JdbcTemplate jdbcTemplate;
-  private final S3StorageProperties storageProperties;
-  private final ImportIngressOwnershipIdentity ownershipIdentity;
-  private final ObjectMapper objectMapper;
-  private String testPrefix;
-  private String scopeId;
+    private final ImportIngressScanner scanner;
+    private final PlatformFileRecordRepository runtimeRepository;
+    private final ImportScannerProperties scannerProperties;
+    private final JdbcTemplate jdbcTemplate;
+    private final S3StorageProperties storageProperties;
+    private final ImportIngressOwnershipIdentity ownershipIdentity;
+    private final ObjectMapper objectMapper;
+    private String testPrefix;
+    private String scopeId;
 
-  ImportIngressScannerIntegrationTest(
-      ImportIngressScanner scanner,
-      PlatformFileRecordRepository runtimeRepository,
-      ImportScannerProperties scannerProperties,
-      JdbcTemplate jdbcTemplate,
-      S3StorageProperties storageProperties,
-      ImportIngressOwnershipIdentity ownershipIdentity,
-      ObjectMapper objectMapper) {
-    this.scanner = scanner;
-    this.runtimeRepository = runtimeRepository;
-    this.scannerProperties = scannerProperties;
-    this.jdbcTemplate = jdbcTemplate;
-    this.storageProperties = storageProperties;
-    this.ownershipIdentity = ownershipIdentity;
-    this.objectMapper = objectMapper;
-  }
+    ImportIngressScannerIntegrationTest(
+            ImportIngressScanner scanner,
+            PlatformFileRecordRepository runtimeRepository,
+            ImportScannerProperties scannerProperties,
+            JdbcTemplate jdbcTemplate,
+            S3StorageProperties storageProperties,
+            ImportIngressOwnershipIdentity ownershipIdentity,
+            ObjectMapper objectMapper) {
+        this.scanner = scanner;
+        this.runtimeRepository = runtimeRepository;
+        this.scannerProperties = scannerProperties;
+        this.jdbcTemplate = jdbcTemplate;
+        this.storageProperties = storageProperties;
+        this.ownershipIdentity = ownershipIdentity;
+        this.objectMapper = objectMapper;
+    }
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @BeforeEach
-  void isolateScannerScope() {
-    testPrefix = "ingress/" + UUID.randomUUID() + "/";
-    scannerProperties.setPrefix(testPrefix);
-    scannerProperties.setBatchSize(10);
-    scannerProperties.setBatchManifestEnabled(false);
-    scannerProperties.getArrival().setEnabled(false);
-    scannerProperties.setManifestBindings(List.of());
-    scannerProperties.setRequireDoneFile(false);
-    scannerProperties.setStabilityWindowSeconds(0);
-    declareCurrentScope();
-  }
+    @BeforeEach
+    void isolateScannerScope() {
+        testPrefix = "ingress/" + UUID.randomUUID() + "/";
+        scannerProperties.setPrefix(testPrefix);
+        scannerProperties.setBatchSize(10);
+        scannerProperties.setBatchManifestEnabled(false);
+        scannerProperties.getArrival().setEnabled(false);
+        scannerProperties.setManifestBindings(List.of());
+        scannerProperties.setRequireDoneFile(false);
+        scannerProperties.setStabilityWindowSeconds(0);
+        declareCurrentScope();
+    }
 
-  private void declareCurrentScope() {
-    String storageId = ownershipIdentity.storageId(storageProperties, objectMapper);
-    String currentPrefix = scannerProperties.getPrefix();
-    scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, currentPrefix, objectMapper);
-    String declareSql = """
+    private void declareCurrentScope() {
+        String storageId = ownershipIdentity.storageId(storageProperties, objectMapper);
+        String currentPrefix = scannerProperties.getPrefix();
+        scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, currentPrefix, objectMapper);
+        String declareSql = """
         INSERT INTO batch.import_ingress_ownership(scope_id, storage_id, bucket_name, object_prefix, state)
         VALUES (?, ?, ?, ?, 'ACTIVE')
         """;
-    jdbcTemplate.update(
-        declareSql, scopeId, storageId, storageProperties.getBucket(), currentPrefix);
-  }
+        jdbcTemplate.update(declareSql, scopeId, storageId, storageProperties.getBucket(), currentPrefix);
+    }
 
-  @Test
-  @DisplayName("扫描发现新文件后登记为平台文件记录,状态与字节数均正确")
-  void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
-    String objectName = testPrefix + "it-scan-test.csv";
-    String bucket = s3Bucket();
+    @Test
+    @DisplayName("扫描发现新文件后登记为平台文件记录,状态与字节数均正确")
+    void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
+        String objectName = testPrefix + "it-scan-test.csv";
+        String bucket = s3Bucket();
 
-    // 上传一个最小化的 CSV 到对象存储
-    byte[] content = """
+        // 上传一个最小化的 CSV 到对象存储
+        byte[] content = """
         id,name
         1,Alice
         """.getBytes(StandardCharsets.UTF_8);
-    S3Client client = s3Client();
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(objectName)
-            .contentType("text/csv")
-            .build(),
-        RequestBody.fromBytes(content));
+        S3Client client = s3Client();
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(objectName)
+                        .contentType("text/csv")
+                        .build(),
+                RequestBody.fromBytes(content));
 
-    // 调度器中扫描已禁用，但我们直接调用 scan()
-    scanner.scan();
+        // 调度器中扫描已禁用，但我们直接调用 scan()
+        scanner.scan();
 
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-        .isTrue();
-    Map<String, Object> row =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-    assertThat(row).isNotEmpty();
-    assertThat(row).containsEntry("tenant_id", "t1");
-    assertThat(row).containsEntry("storage_bucket", bucket);
-    assertThat(row).containsEntry("storage_path", objectName);
-    assertThat(row).containsEntry("file_status", FileStatus.RECEIVED.code());
-    assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
-  }
+        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                .isTrue();
+        Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        assertThat(row).isNotEmpty();
+        assertThat(row).containsEntry("tenant_id", "t1");
+        assertThat(row).containsEntry("storage_bucket", bucket);
+        assertThat(row).containsEntry("storage_path", objectName);
+        assertThat(row).containsEntry("file_status", FileStatus.RECEIVED.code());
+        assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
+    }
 
-  @Test
-  @DisplayName("重复扫描同一文件不产生重复记录,记录标识保持不变")
-  void shouldNotRegisterAlreadyKnownFile() throws Exception {
-    String objectName = testPrefix + "it-scan-already-known.csv";
-    String bucket = s3Bucket();
+    @Test
+    @DisplayName("重复扫描同一文件不产生重复记录,记录标识保持不变")
+    void shouldNotRegisterAlreadyKnownFile() throws Exception {
+        String objectName = testPrefix + "it-scan-already-known.csv";
+        String bucket = s3Bucket();
 
-    byte[] content = """
+        byte[] content = """
         id,name
         2,Bob
         """.getBytes(StandardCharsets.UTF_8);
-    S3Client client = s3Client();
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(objectName)
-            .contentType("text/csv")
-            .build(),
-        RequestBody.fromBytes(content));
+        S3Client client = s3Client();
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(objectName)
+                        .contentType("text/csv")
+                        .build(),
+                RequestBody.fromBytes(content));
 
-    // 第一次扫描：注册文件
-    scanner.scan();
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-        .isTrue();
-    Map<String, Object> first =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-    long firstId = ((Number) first.get("id")).longValue();
+        // 第一次扫描：注册文件
+        scanner.scan();
+        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                .isTrue();
+        Map<String, Object> first = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        long firstId = ((Number) first.get("id")).longValue();
 
-    // 第二次扫描：不应创建重复记录（幂等）
-    scanner.scan();
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-        .isTrue();
-    Map<String, Object> after =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-    assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
-  }
+        // 第二次扫描：不应创建重复记录（幂等）
+        scanner.scan();
+        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                .isTrue();
+        Map<String, Object> after = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
+    }
 
-  @Test
-  @DisplayName("新版批次清单里的按文件模板与Workflow 根目标写入文件记录元数据")
-  void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
-    String bucket = s3Bucket();
-    String dataObject = testPrefix + "order-it.csv";
-    String manifestObject = testPrefix + "bundle-2026-05-05.batch.json";
-    bindManifest("bundle-it-group", testPrefix + "bundle-{bizDate}.batch.json");
-    S3Client client = s3Client();
+    @Test
+    @DisplayName("新版批次清单里的按文件模板与Workflow 根目标写入文件记录元数据")
+    void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
+        String bucket = s3Bucket();
+        String dataObject = testPrefix + "order-it.csv";
+        String manifestObject = testPrefix + "bundle-2026-05-05.batch.json";
+        bindManifest("bundle-it-group", testPrefix + "bundle-{bizDate}.batch.json");
+        S3Client client = s3Client();
 
-    // v2 批次清单:声明 order-it.csv 用模板 TPL_ORDER
-    String manifestJson = """
+        // v2 批次清单:声明 order-it.csv 用模板 TPL_ORDER
+        String manifestJson = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-it-group",
@@ -210,49 +206,47 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           "fileMapping": [ { "fileName": "order-it.csv", "templateCode": "TPL_ORDER" } ]
         }
         """;
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(manifestObject)
-            .contentType("application/json")
-            .build(),
-        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
-    byte[] content = """
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(manifestObject)
+                        .contentType("application/json")
+                        .build(),
+                RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+        byte[] content = """
         id,name
         1,Alice
         """.getBytes(StandardCharsets.UTF_8);
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(dataObject)
-            .contentType("text/csv")
-            .build(),
-        RequestBody.fromBytes(content));
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(dataObject)
+                        .contentType("text/csv")
+                        .build(),
+                RequestBody.fromBytes(content));
 
-    scanUntilRegistered(bucket, dataObject);
+        scanUntilRegistered(bucket, dataObject);
 
-    Map<String, Object> row =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(row).isNotEmpty();
-    // ADR-046:per-file 模板从 v2 manifest 落到 file_record.metadata_json,供 launch 展异构 partition
-    assertThat(String.valueOf(row.get("metadata_json")))
-        .contains("bundleTemplateCode")
-        .contains("TPL_ORDER")
-        // 2c-2a:本束该启动的 BUNDLE_IMPORT Workflow code 也写入数据库,供 2c-2b 满足条件后发 launch
-        .contains("bundleWorkflowCode")
-        .contains("BUNDLE_IMPORT_IT");
-  }
+        Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+        assertThat(row).isNotEmpty();
+        // ADR-046:per-file 模板从 v2 manifest 落到 file_record.metadata_json,供 launch 展异构 partition
+        assertThat(String.valueOf(row.get("metadata_json")))
+                .contains("bundleTemplateCode")
+                .contains("TPL_ORDER")
+                // 2c-2a:本束该启动的 BUNDLE_IMPORT Workflow code 也写入数据库,供 2c-2b 满足条件后发 launch
+                .contains("bundleWorkflowCode")
+                .contains("BUNDLE_IMPORT_IT");
+    }
 
-  @Test
-  @DisplayName("旧 jobCode 根目标清单被扫描器拒绝,不写入文件束启动元数据")
-  void shouldRejectRetiredJobCodeManifestTarget() throws Exception {
-    String bucket = s3Bucket();
-    String dataObject = testPrefix + "retired-job-target.csv";
-    String manifestObject = testPrefix + "retired-job-target-2026-05-05.batch.json";
-    bindManifest(
-        "retired-job-target-group", testPrefix + "retired-job-target-{bizDate}.batch.json");
-    S3Client client = s3Client();
-    String manifestJson = """
+    @Test
+    @DisplayName("旧 jobCode 根目标清单被扫描器拒绝,不写入文件束启动元数据")
+    void shouldRejectRetiredJobCodeManifestTarget() throws Exception {
+        String bucket = s3Bucket();
+        String dataObject = testPrefix + "retired-job-target.csv";
+        String manifestObject = testPrefix + "retired-job-target-2026-05-05.batch.json";
+        bindManifest("retired-job-target-group", testPrefix + "retired-job-target-{bizDate}.batch.json");
+        S3Client client = s3Client();
+        String manifestJson = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "retired-job-target-group",
@@ -265,59 +259,57 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           ]
         }
         """;
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(manifestObject)
-            .contentType("application/json")
-            .build(),
-        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(dataObject)
-            .contentType("text/csv")
-            .build(),
-        RequestBody.fromBytes("id,name\n1,Retired\n".getBytes(StandardCharsets.UTF_8)));
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(manifestObject)
+                        .contentType("application/json")
+                        .build(),
+                RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(dataObject)
+                        .contentType("text/csv")
+                        .build(),
+                RequestBody.fromBytes("id,name\n1,Retired\n".getBytes(StandardCharsets.UTF_8)));
 
-    for (int tick = 0; tick < 6; tick++) {
-      scanner.scan();
+        for (int tick = 0; tick < 6; tick++) {
+            scanner.scan();
+        }
+
+        Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+        assertThat(row).isEmpty();
     }
 
-    Map<String, Object> row =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(row).isEmpty();
-  }
+    @Test
+    @DisplayName("数据先到时等待权威清单，清单到达后登记批次元数据")
+    void shouldWaitForAuthoritativeManifestWhenDataArrivesFirst() throws Exception {
+        String bucket = s3Bucket();
+        String suffix = String.valueOf(System.nanoTime());
+        String dataFileName = "order-late-manifest-it-" + suffix + ".csv";
+        String dataObject = testPrefix + dataFileName;
+        String manifestObject = testPrefix + "bundle-late-2026-05-05.batch.json";
+        bindManifest("bundle-late-it-group", testPrefix + "bundle-late-{bizDate}.batch.json");
+        S3Client client = s3Client();
 
-  @Test
-  @DisplayName("数据先到时等待权威清单，清单到达后登记批次元数据")
-  void shouldWaitForAuthoritativeManifestWhenDataArrivesFirst() throws Exception {
-    String bucket = s3Bucket();
-    String suffix = String.valueOf(System.nanoTime());
-    String dataFileName = "order-late-manifest-it-" + suffix + ".csv";
-    String dataObject = testPrefix + dataFileName;
-    String manifestObject = testPrefix + "bundle-late-2026-05-05.batch.json";
-    bindManifest("bundle-late-it-group", testPrefix + "bundle-late-{bizDate}.batch.json");
-    S3Client client = s3Client();
-
-    byte[] content = """
+        byte[] content = """
         id,name
         3,Carol
         """.getBytes(StandardCharsets.UTF_8);
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(dataObject)
-            .contentType("text/csv")
-            .build(),
-        RequestBody.fromBytes(content));
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(dataObject)
+                        .contentType("text/csv")
+                        .build(),
+                RequestBody.fromBytes(content));
 
-    scanner.scan();
-    Map<String, Object> before =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(before).isEmpty();
+        scanner.scan();
+        Map<String, Object> before = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+        assertThat(before).isEmpty();
 
-    String manifestJson = """
+        String manifestJson = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-late-it-group",
@@ -330,147 +322,137 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           ]
         }
         """.formatted(dataFileName, dataFileName);
-    client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(manifestObject)
-            .contentType("application/json")
-            .build(),
-        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(manifestObject)
+                        .contentType("application/json")
+                        .build(),
+                RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
 
-    scanUntilRegistered(bucket, dataObject);
+        scanUntilRegistered(bucket, dataObject);
 
-    Map<String, Object> after =
-        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(String.valueOf(after.get("metadata_json")))
-        .contains("requiredFileSet")
-        .contains("bundleTemplateCode")
-        .contains("TPL_ORDER_LATE")
-        .contains("bundleWorkflowCode")
-        .contains("BUNDLE_IMPORT_LATE_IT");
-  }
+        Map<String, Object> after = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+        assertThat(String.valueOf(after.get("metadata_json")))
+                .contains("requiredFileSet")
+                .contains("bundleTemplateCode")
+                .contains("TPL_ORDER_LATE")
+                .contains("bundleWorkflowCode")
+                .contains("BUNDLE_IMPORT_LATE_IT");
+    }
 
-  private void bindManifest(String group, String keyTemplate) {
-    String bindingSql = """
+    private void bindManifest(String group, String keyTemplate) {
+        String bindingSql = """
         INSERT INTO batch.import_ingress_ownership_binding
           (scope_id, binding_type, tenant_id, object_prefix, file_group_code, manifest_key_template)
         VALUES (?, 'MANIFEST', 't1', ?, ?, ?)
         """;
-    jdbcTemplate.update(bindingSql, scopeId, testPrefix, group, keyTemplate);
-    scannerProperties.setBatchManifestEnabled(true);
-    scannerProperties.getArrival().setEnabled(true);
-  }
-
-  private void scanUntilRegistered(String bucket, String objectName) {
-    for (int tick = 0;
-        tick < 30 && !runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName);
-        tick++) {
-      scanner.scan();
+        jdbcTemplate.update(bindingSql, scopeId, testPrefix, group, keyTemplate);
+        scannerProperties.setBatchManifestEnabled(true);
+        scannerProperties.getArrival().setEnabled(true);
     }
-  }
 
-  @Test
-  @DisplayName("缺少或损坏的完成清单不登记文件,清单修复后校验真实对象并标记 VERIFIED")
-  void shouldWaitForValidManifest_beforeRegisteringVerifiedFile() throws Exception {
-    String bucket = s3Bucket();
-    String suffix = UUID.randomUUID().toString();
-    String prefix = "ingress/reliability-" + suffix + "/";
-    String objectName = prefix + "t1/orders.csv";
-    String manifestName = objectName + ".done";
-    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
-    S3Client client = s3Client();
-    String originalPrefix = scannerProperties.getPrefix();
-    boolean originalRequireDoneFile = scannerProperties.isRequireDoneFile();
-    ImportScannerProperties.DoneFileFormat originalDoneFileFormat =
-        scannerProperties.getDoneFileFormat();
+    private void scanUntilRegistered(String bucket, String objectName) {
+        for (int tick = 0;
+                tick < 30 && !runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName);
+                tick++) {
+            scanner.scan();
+        }
+    }
 
-    scannerProperties.setPrefix(prefix);
-    declareCurrentScope();
-    scannerProperties.setRequireDoneFile(true);
-    scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
-    try {
-      putObject(client, bucket, objectName, content);
+    @Test
+    @DisplayName("缺少或损坏的完成清单不登记文件,清单修复后校验真实对象并标记 VERIFIED")
+    void shouldWaitForValidManifest_beforeRegisteringVerifiedFile() throws Exception {
+        String bucket = s3Bucket();
+        String suffix = UUID.randomUUID().toString();
+        String prefix = "ingress/reliability-" + suffix + "/";
+        String objectName = prefix + "t1/orders.csv";
+        String manifestName = objectName + ".done";
+        byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+        S3Client client = s3Client();
+        String originalPrefix = scannerProperties.getPrefix();
+        boolean originalRequireDoneFile = scannerProperties.isRequireDoneFile();
+        ImportScannerProperties.DoneFileFormat originalDoneFileFormat = scannerProperties.getDoneFileFormat();
 
-      scanner.scan();
-      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-          .as("数据对象单独到达时不能登记")
-          .isFalse();
+        scannerProperties.setPrefix(prefix);
+        declareCurrentScope();
+        scannerProperties.setRequireDoneFile(true);
+        scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
+        try {
+            putObject(client, bucket, objectName, content);
 
-      putObject(
-          client, bucket, manifestName, "{\"schemaVersion\":".getBytes(StandardCharsets.UTF_8));
-      scanner.scan();
-      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-          .as("截断清单不能登记")
-          .isFalse();
+            scanner.scan();
+            assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                    .as("数据对象单独到达时不能登记")
+                    .isFalse();
 
-      String checksum =
-          HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-      putManifest(client, bucket, manifestName, "orders.csv", content.length + 1L, checksum);
-      scanner.scan();
-      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-          .as("清单长度与对象不符时不能登记")
-          .isFalse();
+            putObject(client, bucket, manifestName, "{\"schemaVersion\":".getBytes(StandardCharsets.UTF_8));
+            scanner.scan();
+            assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                    .as("截断清单不能登记")
+                    .isFalse();
 
-      putManifest(client, bucket, manifestName, "orders.csv", content.length, "0".repeat(64));
-      scanner.scan();
-      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
-          .as("清单摘要与对象字节不符时不能登记")
-          .isFalse();
+            String checksum = HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+            putManifest(client, bucket, manifestName, "orders.csv", content.length + 1L, checksum);
+            scanner.scan();
+            assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                    .as("清单长度与对象不符时不能登记")
+                    .isFalse();
 
-      putManifest(client, bucket, manifestName, "orders.csv", content.length, checksum);
-      scanner.scan();
+            putManifest(client, bucket, manifestName, "orders.csv", content.length, "0".repeat(64));
+            scanner.scan();
+            assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+                    .as("清单摘要与对象字节不符时不能登记")
+                    .isFalse();
 
-      Map<String, Object> row =
-          runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-      assertThat(row).isNotEmpty();
-      assertThat(row.get("checksum_value")).isEqualTo(checksum);
-      assertThat(String.valueOf(row.get("metadata_json")))
-          .contains("\"integrityState\"")
-          .contains("\"VERIFIED\"");
-    } finally {
-      scannerProperties.setPrefix(originalPrefix);
-      scannerProperties.setRequireDoneFile(originalRequireDoneFile);
-      scannerProperties.setDoneFileFormat(originalDoneFileFormat);
-      final String deleteBatchFileAuditLogSql = """
+            putManifest(client, bucket, manifestName, "orders.csv", content.length, checksum);
+            scanner.scan();
+
+            Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+            assertThat(row).isNotEmpty();
+            assertThat(row.get("checksum_value")).isEqualTo(checksum);
+            assertThat(String.valueOf(row.get("metadata_json")))
+                    .contains("\"integrityState\"")
+                    .contains("\"VERIFIED\"");
+        } finally {
+            scannerProperties.setPrefix(originalPrefix);
+            scannerProperties.setRequireDoneFile(originalRequireDoneFile);
+            scannerProperties.setDoneFileFormat(originalDoneFileFormat);
+            final String deleteBatchFileAuditLogSql = """
           delete from batch.file_audit_log where tenant_id = ? and evidence_ref = ?
       """;
-      jdbcTemplate.update(deleteBatchFileAuditLogSql, "t1", objectName);
-      final String deleteBatchFileRecordSql = """
+            jdbcTemplate.update(deleteBatchFileAuditLogSql, "t1", objectName);
+            final String deleteBatchFileRecordSql = """
           delete from batch.file_record where tenant_id = ? and storage_bucket = ? and storage_path = ?
       """;
-      jdbcTemplate.update(deleteBatchFileRecordSql, "t1", bucket, objectName);
-      client.deleteObject(builder -> builder.bucket(bucket).key(manifestName));
-      client.deleteObject(builder -> builder.bucket(bucket).key(objectName));
-      client.close();
+            jdbcTemplate.update(deleteBatchFileRecordSql, "t1", bucket, objectName);
+            client.deleteObject(builder -> builder.bucket(bucket).key(manifestName));
+            client.deleteObject(builder -> builder.bucket(bucket).key(objectName));
+            client.close();
+        }
     }
-  }
 
-  private static void putObject(S3Client client, String bucket, String key, byte[] content) {
-    client.putObject(
-        PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
-  }
+    private static void putObject(S3Client client, String bucket, String key, byte[] content) {
+        client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
+    }
 
-  private static void putManifest(
-      S3Client client,
-      String bucket,
-      String key,
-      String fileName,
-      long sizeBytes,
-      String checksum) {
-    String manifest = """
+    private static void putManifest(
+            S3Client client, String bucket, String key, String fileName, long sizeBytes, String checksum) {
+        String manifest = """
         {"schemaVersion":"file-sidecar-manifest-v1","fileName":"%s","sizeBytes":%d,
          "checksumType":"SHA-256","checksumValue":"%s","checksumScope":"RAW_OBJECT"}
         """.formatted(fileName, sizeBytes, checksum);
-    putObject(client, bucket, key, manifest.getBytes(StandardCharsets.UTF_8));
-  }
+        putObject(client, bucket, key, manifest.getBytes(StandardCharsets.UTF_8));
+    }
 
-  private S3Client s3Client() {
-    return S3Client.builder()
-        .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
-        .forcePathStyle(s3PathStyleEnabled())
-        .region(Region.of(s3Region()))
-        .build();
-  }
+    private S3Client s3Client() {
+        return S3Client.builder()
+                .endpointOverride(URI.create(s3Endpoint()))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
+                .forcePathStyle(s3PathStyleEnabled())
+                .region(Region.of(s3Region()))
+                .build();
+    }
 }

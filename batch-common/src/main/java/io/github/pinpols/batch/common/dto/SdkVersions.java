@@ -13,34 +13,34 @@ package io.github.pinpols.batch.common.dto;
  */
 public final class SdkVersions {
 
-  /**
-   * 解析 sdkVersion 的整数主版本(如 {@code "1.1.0"} → 1;{@code "2.0.0-rc"} → 2;{@code "v1.3"} → 1)。
-   * 取首段连续数字;空 / 空白 / 无前导数字 → {@code null}(交由调用方判定 UNKNOWN / legacy 放行)。
-   */
-  public static Integer parseMajor(String sdkVersion) {
-    if (sdkVersion == null || sdkVersion.isBlank()) {
-      return null;
+    /**
+     * 解析 sdkVersion 的整数主版本(如 {@code "1.1.0"} → 1;{@code "2.0.0-rc"} → 2;{@code "v1.3"} → 1)。
+     * 取首段连续数字;空 / 空白 / 无前导数字 → {@code null}(交由调用方判定 UNKNOWN / legacy 放行)。
+     */
+    public static Integer parseMajor(String sdkVersion) {
+        if (sdkVersion == null || sdkVersion.isBlank()) {
+            return null;
+        }
+        String trimmed = sdkVersion.strip();
+        int start = 0;
+        // 容忍前缀 'v'/'V'(如 "v1.2.0")
+        if (trimmed.charAt(0) == 'v' || trimmed.charAt(0) == 'V') {
+            start = 1;
+        }
+        int end = start;
+        while (end < trimmed.length() && Character.isDigit(trimmed.charAt(end))) {
+            end++;
+        }
+        if (end == start) {
+            return null;
+        }
+        try {
+            String majorVersionText = trimmed.substring(start, end);
+            return Integer.parseInt(majorVersionText);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
-    String trimmed = sdkVersion.strip();
-    int start = 0;
-    // 容忍前缀 'v'/'V'(如 "v1.2.0")
-    if (trimmed.charAt(0) == 'v' || trimmed.charAt(0) == 'V') {
-      start = 1;
-    }
-    int end = start;
-    while (end < trimmed.length() && Character.isDigit(trimmed.charAt(end))) {
-      end++;
-    }
-    if (end == start) {
-      return null;
-    }
-    try {
-      String majorVersionText = trimmed.substring(start, end);
-      return Integer.parseInt(majorVersionText);
-    } catch (NumberFormatException ex) {
-      return null;
-    }
-  }
 
-  private SdkVersions() {}
+    private SdkVersions() {}
 }

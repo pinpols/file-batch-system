@@ -12,19 +12,19 @@ import lombok.Builder;
  */
 @Builder
 public record ImportBadRecord(
-    Long recordNo,
-    String stageCode,
-    String errorCode,
-    String errorMessage,
-    Object rawRecord,
-    boolean skipped,
-    String skipAction,
-    Instant createdAt,
-    Long sourceRowNum,
-    String sourceColumn) {
-  public ImportBadRecord {
-    if (createdAt == null) {
-      createdAt = BatchDateTimeSupport.utcNow();
+        Long recordNo,
+        String stageCode,
+        String errorCode,
+        String errorMessage,
+        Object rawRecord,
+        boolean skipped,
+        String skipAction,
+        Instant createdAt,
+        Long sourceRowNum,
+        String sourceColumn) {
+    public ImportBadRecord {
+        if (createdAt == null) {
+            createdAt = BatchDateTimeSupport.utcNow();
+        }
     }
-  }
 }

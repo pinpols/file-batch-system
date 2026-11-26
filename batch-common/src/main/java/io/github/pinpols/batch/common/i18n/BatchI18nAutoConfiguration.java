@@ -22,47 +22,46 @@ import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 @AutoConfiguration
 public class BatchI18nAutoConfiguration {
 
-  /** 消息资源缓存秒数：每 60 秒检查一次词条文件变化。 */
-  private static final int MESSAGE_CACHE_SECONDS = 60;
+    /** 消息资源缓存秒数：每 60 秒检查一次词条文件变化。 */
+    private static final int MESSAGE_CACHE_SECONDS = 60;
 
-  @Bean
-  @ConditionalOnMissingBean
-  public BizMessageResolver bizMessageResolver(MessageSource messageSource) {
-    return new BizMessageResolver(messageSource);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public BizMessageResolver bizMessageResolver(MessageSource messageSource) {
+        return new BizMessageResolver(messageSource);
+    }
 
-  @Bean
-  @ConditionalOnMissingBean
-  public LocalizedErrorRenderer localizedErrorRenderer(
-      MessageSource messageSource, ObjectMapper objectMapper) {
-    return new LocalizedErrorRenderer(messageSource, objectMapper);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalizedErrorRenderer localizedErrorRenderer(MessageSource messageSource, ObjectMapper objectMapper) {
+        return new LocalizedErrorRenderer(messageSource, objectMapper);
+    }
 
-  @Bean
-  @ConditionalOnMissingBean(name = "messageSource")
-  public MessageSource messageSource() {
-    ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
-    source.setBasename("classpath:messages");
-    // R7-A5-P2: 走 StandardCharsets 常量来源，避免字面量 "UTF-8"（docs/agent-baseline.md §字符编码）。
-    source.setDefaultEncoding(StandardCharsets.UTF_8.name());
-    source.setFallbackToSystemLocale(false);
-    // useCodeAsDefaultMessage=false:key 不存在时返回 null,让 ExceptionHandler 走 fallback 字面量,
-    // 不会把 key 字符串当 message 暴露给前端。
-    source.setUseCodeAsDefaultMessage(false);
-    source.setCacheSeconds(MESSAGE_CACHE_SECONDS);
-    return source;
-  }
+    @Bean
+    @ConditionalOnMissingBean(name = "messageSource")
+    public MessageSource messageSource() {
+        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
+        source.setBasename("classpath:messages");
+        // R7-A5-P2: 走 StandardCharsets 常量来源，避免字面量 "UTF-8"（docs/agent-baseline.md §字符编码）。
+        source.setDefaultEncoding(StandardCharsets.UTF_8.name());
+        source.setFallbackToSystemLocale(false);
+        // useCodeAsDefaultMessage=false:key 不存在时返回 null,让 ExceptionHandler 走 fallback 字面量,
+        // 不会把 key 字符串当 message 暴露给前端。
+        source.setUseCodeAsDefaultMessage(false);
+        source.setCacheSeconds(MESSAGE_CACHE_SECONDS);
+        return source;
+    }
 
-  /**
-   * 默认 Accept-Language fallback 到 zh_CN。前端发 `Accept-Language: en` / `en-US` 等时,Spring 自动按 basename
-   * 找 messages_en.properties / 默认 messages.properties。
-   */
-  @Bean
-  @ConditionalOnWebApplication
-  @ConditionalOnMissingBean(LocaleResolver.class)
-  public LocaleResolver localeResolver() {
-    AcceptHeaderLocaleResolver resolver = new AcceptHeaderLocaleResolver();
-    resolver.setDefaultLocale(Locale.SIMPLIFIED_CHINESE);
-    return resolver;
-  }
+    /**
+     * 默认 Accept-Language fallback 到 zh_CN。前端发 `Accept-Language: en` / `en-US` 等时,Spring 自动按 basename
+     * 找 messages_en.properties / 默认 messages.properties。
+     */
+    @Bean
+    @ConditionalOnWebApplication
+    @ConditionalOnMissingBean(LocaleResolver.class)
+    public LocaleResolver localeResolver() {
+        AcceptHeaderLocaleResolver resolver = new AcceptHeaderLocaleResolver();
+        resolver.setDefaultLocale(Locale.SIMPLIFIED_CHINESE);
+        return resolver;
+    }
 }

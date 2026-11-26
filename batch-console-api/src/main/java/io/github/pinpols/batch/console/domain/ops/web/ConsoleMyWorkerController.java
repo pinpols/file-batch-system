@@ -28,28 +28,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleMyWorkerController {
 
-  private final ConsoleMyWorkerQueryService queryService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleMyWorkerQueryService queryService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** GET /api/console/my-workers?tenantId=xxx — 列出本租户所有自托管 worker(无分页,通常 ≤ 几十个)。 */
-  @GetMapping
-  public CommonResponse<List<WorkerRegistryResponse>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    List<WorkerRegistryView> workers = queryService.listSelfHosted(tenantId);
-    List<WorkerRegistryResponse> responses =
-        workers.stream().map(WorkerRegistryResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /** GET /api/console/my-workers?tenantId=xxx — 列出本租户所有自托管 worker(无分页,通常 ≤ 几十个)。 */
+    @GetMapping
+    public CommonResponse<List<WorkerRegistryResponse>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        List<WorkerRegistryView> workers = queryService.listSelfHosted(tenantId);
+        List<WorkerRegistryResponse> responses =
+                workers.stream().map(WorkerRegistryResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /**
-   * GET /api/console/my-workers/count?tenantId=xxx — 保留给旧客户端的自托管 Worker 计数。
-   *
-   * @deprecated 前端已改用列表结果；待版本化弃用周期完成后移除。
-   */
-  @Deprecated(forRemoval = true)
-  @GetMapping("/count")
-  public CommonResponse<Long> count(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.countSelfHosted(tenantId));
-  }
+    /**
+     * GET /api/console/my-workers/count?tenantId=xxx — 保留给旧客户端的自托管 Worker 计数。
+     *
+     * @deprecated 前端已改用列表结果；待版本化弃用周期完成后移除。
+     */
+    @Deprecated(forRemoval = true)
+    @GetMapping("/count")
+    public CommonResponse<Long> count(@RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.success(queryService.countSelfHosted(tenantId));
+    }
 }

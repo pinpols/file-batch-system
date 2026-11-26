@@ -47,168 +47,158 @@ import org.springframework.context.event.EventListener;
 @Slf4j
 public class ReplicaLagMonitor {
 
-  private static final String METRIC_NAME = "batch.console.replica.replay_lag_seconds";
-  private static final String METRIC_REPLICAS = "batch.console.replica.streaming_count";
-  // 同时取 max(replay_lag) 和 streaming replica 数量。replay_lag NULL = 0,replica 数 = 0 视为「全断」。
-  private static final String LAG_QUERY =
-      "SELECT COALESCE(EXTRACT(EPOCH FROM MAX(replay_lag)), 0)::double precision AS lag_seconds,"
-          + " COUNT(*)::int AS replica_count"
-          + " FROM pg_stat_replication WHERE state = 'streaming'";
+    private static final String METRIC_NAME = "batch.console.replica.replay_lag_seconds";
+    private static final String METRIC_REPLICAS = "batch.console.replica.streaming_count";
+    // 同时取 max(replay_lag) 和 streaming replica 数量。replay_lag NULL = 0,replica 数 = 0 视为「全断」。
+    private static final String LAG_QUERY =
+            "SELECT COALESCE(EXTRACT(EPOCH FROM MAX(replay_lag)), 0)::double precision AS lag_seconds,"
+                    + " COUNT(*)::int AS replica_count"
+                    + " FROM pg_stat_replication WHERE state = 'streaming'";
 
-  private final DataSource primary;
-  private final long intervalMillis;
-  private final long initialDelayMillis;
-  private final AtomicReference<Double> latestLagSeconds = new AtomicReference<>(-1.0);
-  private final AtomicReference<Integer> latestReplicaCount = new AtomicReference<>(-1);
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private ScheduledExecutorService scheduler;
+    private final DataSource primary;
+    private final long intervalMillis;
+    private final long initialDelayMillis;
+    private final AtomicReference<Double> latestLagSeconds = new AtomicReference<>(-1.0);
+    private final AtomicReference<Integer> latestReplicaCount = new AtomicReference<>(-1);
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private ScheduledExecutorService scheduler;
 
-  /** lag-aware quarantine 触发器(可选注入,不存在时只采集 metric 不触发 quarantine)。 */
-  private ReadReplicaRoutingDataSource routingDataSource;
+    /** lag-aware quarantine 触发器(可选注入,不存在时只采集 metric 不触发 quarantine)。 */
+    private ReadReplicaRoutingDataSource routingDataSource;
 
-  /** lag-aware quarantine 阈值(秒);0 表示禁用。 */
-  private int lagThresholdSeconds;
+    /** lag-aware quarantine 阈值(秒);0 表示禁用。 */
+    private int lagThresholdSeconds;
 
-  public ReplicaLagMonitor(
-      DataSource primary,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ReplicaLagMonitorProperties properties) {
-    this.primary = primary;
-    this.intervalMillis = properties.getLagMonitorIntervalMillis();
-    this.initialDelayMillis = properties.getLagMonitorInitialDelayMillis();
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry != null) {
-      Gauge.builder(METRIC_NAME, latestLagSeconds, ref -> ref.get() == null ? -1.0 : ref.get())
-          .description("PostgreSQL replication replay lag in seconds, -1 if unknown")
-          .register(registry);
-      Gauge.builder(
-              METRIC_REPLICAS, latestReplicaCount, ref -> ref.get() == null ? -1.0 : ref.get())
-          .description("PostgreSQL streaming replica count, -1 if unknown")
-          .register(registry);
-    }
-  }
-
-  /** lag-aware quarantine 注入。在 {@link ReadReplicaDataSourceConfiguration} 装配后调用。 */
-  public void enableLagAwareQuarantine(
-      ReadReplicaRoutingDataSource routingDataSource, int lagThresholdSeconds) {
-    this.routingDataSource = routingDataSource;
-    this.lagThresholdSeconds = lagThresholdSeconds;
-  }
-
-  @PostConstruct
-  void start() {
-    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "replica-lag-monitor");
-      t.setDaemon(true);
-      return t;
-    });
-    scheduler.scheduleWithFixedDelay(
-        this::sampleReplayLag, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
-    log.info(
-        "replica lag monitor started: intervalMs={}, initialDelayMs={}",
-        intervalMillis,
-        initialDelayMillis);
-  }
-
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopScheduler("context-closed");
-  }
-
-  @PreDestroy
-  void stop() {
-    stopScheduler("pre-destroy");
-  }
-
-  private void stopScheduler(String source) {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
-    }
-    if (scheduler != null) {
-      log.info("replica lag monitor stopping: source={}", source);
-      scheduler.shutdownNow();
-    }
-  }
-
-  void sampleReplayLag() {
-    if (stopping.get()) {
-      return;
-    }
-    try (Connection conn = primary.getConnection();
-        PreparedStatement ps = conn.prepareStatement(LAG_QUERY);
-        ResultSet rs = ps.executeQuery()) {
-      double lag = 0.0;
-      int replicas = 0;
-      if (rs.next()) {
-        lag = rs.getDouble(1);
-        replicas = rs.getInt(2);
-      }
-      latestLagSeconds.set(lag);
-      latestReplicaCount.set(replicas);
-
-      // lag-aware quarantine 触发
-      if (routingDataSource != null) {
-        if (replicas == 0) {
-          // 主库无任何 active replica → 读从库等于读断流(本地 dev env 见过 11 天)
-          log.warn("no streaming replicas — forcing replica quarantine");
-          routingDataSource.markQuarantined("no_streaming_replicas");
-        } else if (lagThresholdSeconds > 0 && lag > lagThresholdSeconds) {
-          log.warn(
-              "replica replay lag {}s exceeds threshold {}s — quarantining",
-              lag,
-              lagThresholdSeconds);
-          routingDataSource.markQuarantined("lag_exceeded");
+    public ReplicaLagMonitor(
+            DataSource primary,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ReplicaLagMonitorProperties properties) {
+        this.primary = primary;
+        this.intervalMillis = properties.getLagMonitorIntervalMillis();
+        this.initialDelayMillis = properties.getLagMonitorInitialDelayMillis();
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry != null) {
+            Gauge.builder(METRIC_NAME, latestLagSeconds, ref -> ref.get() == null ? -1.0 : ref.get())
+                    .description("PostgreSQL replication replay lag in seconds, -1 if unknown")
+                    .register(registry);
+            Gauge.builder(METRIC_REPLICAS, latestReplicaCount, ref -> ref.get() == null ? -1.0 : ref.get())
+                    .description("PostgreSQL streaming replica count, -1 if unknown")
+                    .register(registry);
         }
-      }
-
-      if (lag > 5.0) {
-        log.warn("replica WAL replay lag is high: {}s (replicas={})", lag, replicas);
-      } else {
-        log.debug("replica WAL replay lag: {}s (replicas={})", lag, replicas);
-      }
-    } catch (SQLException ex) {
-      if (stopping.get() && isShutdownNoise(ex)) {
-        String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
-        log.info(
-            "replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
-        return;
-      }
-      latestLagSeconds.set(-1.0);
-      latestReplicaCount.set(-1);
-      String exceptionSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("failed to sample replica WAL replay lag: {}", exceptionSummary);
-    } catch (RuntimeException ex) {
-      if (stopping.get() && isShutdownNoise(ex)) {
-        String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
-        log.info(
-            "replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
-        return;
-      }
-      latestLagSeconds.set(-1.0);
-      latestReplicaCount.set(-1);
-      log.warn("unexpected error sampling replica lag", ex);
     }
-  }
 
-  /** 测试钩子：返回最近一次采集到的 lag 值。 */
-  double currentLagSeconds() {
-    Double v = latestLagSeconds.get();
-    return v == null ? -1.0 : v;
-  }
-
-  private static boolean isShutdownNoise(Throwable throwable) {
-    Throwable current = throwable;
-    while (current != null) {
-      String message = current.getMessage();
-      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
-          && (message.contains("has been closed")
-              || message.contains("Connection pool shut down")
-              || message.contains("Interrupted"));
-      if (isConnectionShutdownMessage) {
-        return true;
-      }
-      current = current.getCause();
+    /** lag-aware quarantine 注入。在 {@link ReadReplicaDataSourceConfiguration} 装配后调用。 */
+    public void enableLagAwareQuarantine(ReadReplicaRoutingDataSource routingDataSource, int lagThresholdSeconds) {
+        this.routingDataSource = routingDataSource;
+        this.lagThresholdSeconds = lagThresholdSeconds;
     }
-    return false;
-  }
+
+    @PostConstruct
+    void start() {
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "replica-lag-monitor");
+            t.setDaemon(true);
+            return t;
+        });
+        scheduler.scheduleWithFixedDelay(
+                this::sampleReplayLag, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        log.info("replica lag monitor started: intervalMs={}, initialDelayMs={}", intervalMillis, initialDelayMillis);
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopScheduler("context-closed");
+    }
+
+    @PreDestroy
+    void stop() {
+        stopScheduler("pre-destroy");
+    }
+
+    private void stopScheduler(String source) {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        if (scheduler != null) {
+            log.info("replica lag monitor stopping: source={}", source);
+            scheduler.shutdownNow();
+        }
+    }
+
+    void sampleReplayLag() {
+        if (stopping.get()) {
+            return;
+        }
+        try (Connection conn = primary.getConnection();
+                PreparedStatement ps = conn.prepareStatement(LAG_QUERY);
+                ResultSet rs = ps.executeQuery()) {
+            double lag = 0.0;
+            int replicas = 0;
+            if (rs.next()) {
+                lag = rs.getDouble(1);
+                replicas = rs.getInt(2);
+            }
+            latestLagSeconds.set(lag);
+            latestReplicaCount.set(replicas);
+
+            // lag-aware quarantine 触发
+            if (routingDataSource != null) {
+                if (replicas == 0) {
+                    // 主库无任何 active replica → 读从库等于读断流(本地 dev env 见过 11 天)
+                    log.warn("no streaming replicas — forcing replica quarantine");
+                    routingDataSource.markQuarantined("no_streaming_replicas");
+                } else if (lagThresholdSeconds > 0 && lag > lagThresholdSeconds) {
+                    log.warn("replica replay lag {}s exceeds threshold {}s — quarantining", lag, lagThresholdSeconds);
+                    routingDataSource.markQuarantined("lag_exceeded");
+                }
+            }
+
+            if (lag > 5.0) {
+                log.warn("replica WAL replay lag is high: {}s (replicas={})", lag, replicas);
+            } else {
+                log.debug("replica WAL replay lag: {}s (replicas={})", lag, replicas);
+            }
+        } catch (SQLException ex) {
+            if (stopping.get() && isShutdownNoise(ex)) {
+                String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
+                log.info("replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
+                return;
+            }
+            latestLagSeconds.set(-1.0);
+            latestReplicaCount.set(-1);
+            String exceptionSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("failed to sample replica WAL replay lag: {}", exceptionSummary);
+        } catch (RuntimeException ex) {
+            if (stopping.get() && isShutdownNoise(ex)) {
+                String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
+                log.info("replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
+                return;
+            }
+            latestLagSeconds.set(-1.0);
+            latestReplicaCount.set(-1);
+            log.warn("unexpected error sampling replica lag", ex);
+        }
+    }
+
+    /** 测试钩子：返回最近一次采集到的 lag 值。 */
+    double currentLagSeconds() {
+        Double v = latestLagSeconds.get();
+        return v == null ? -1.0 : v;
+    }
+
+    private static boolean isShutdownNoise(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+                    && (message.contains("has been closed")
+                            || message.contains("Connection pool shut down")
+                            || message.contains("Interrupted"));
+            if (isConnectionShutdownMessage) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 }

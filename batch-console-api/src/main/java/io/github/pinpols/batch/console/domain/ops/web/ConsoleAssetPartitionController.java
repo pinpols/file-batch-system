@@ -23,16 +23,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAssetPartitionController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/readiness")
-  public CommonResponse<AssetPartitionReadinessResponse> readiness(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("jobCode") String jobCode,
-      @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
-    AssetPartitionReadinessResponse resp =
-        orchestratorProxy.assetPartitionReadiness(tenantId, jobCode, bizDate);
-    return responseFactory.success(resp);
-  }
+    @GetMapping("/readiness")
+    public CommonResponse<AssetPartitionReadinessResponse> readiness(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("jobCode") String jobCode,
+            @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
+        AssetPartitionReadinessResponse resp = orchestratorProxy.assetPartitionReadiness(tenantId, jobCode, bizDate);
+        return responseFactory.success(resp);
+    }
 }

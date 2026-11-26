@@ -11,34 +11,33 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerDrainService {
 
-  private final TriggerDrainPort drainPort;
+    private final TriggerDrainPort drainPort;
 
-  public boolean isDraining() {
-    return drainPort.isDraining();
-  }
-
-  public void ensureAcceptingLaunches() {
-    if (isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
+    public boolean isDraining() {
+        return drainPort.isDraining();
     }
-  }
 
-  public TriggerDrainStatus status() {
-    TriggerDrainPort.Status status = drainPort.status();
-    return new TriggerDrainStatus(
-        status.draining(), status.drainingSince(), status.reason(), status.schedulerStatus());
-  }
+    public void ensureAcceptingLaunches() {
+        if (isDraining()) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
+        }
+    }
 
-  public TriggerDrainStatus enable() {
-    drainPort.enable();
-    return status();
-  }
+    public TriggerDrainStatus status() {
+        TriggerDrainPort.Status status = drainPort.status();
+        return new TriggerDrainStatus(
+                status.draining(), status.drainingSince(), status.reason(), status.schedulerStatus());
+    }
 
-  public TriggerDrainStatus disable() {
-    drainPort.disable();
-    return status();
-  }
+    public TriggerDrainStatus enable() {
+        drainPort.enable();
+        return status();
+    }
 
-  public record TriggerDrainStatus(
-      boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
+    public TriggerDrainStatus disable() {
+        drainPort.disable();
+        return status();
+    }
+
+    public record TriggerDrainStatus(boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
 }

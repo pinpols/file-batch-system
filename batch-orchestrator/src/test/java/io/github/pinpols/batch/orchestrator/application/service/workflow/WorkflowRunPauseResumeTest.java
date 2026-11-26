@@ -30,129 +30,128 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("Workflow 运行暂停与恢复的状态契约")
 class WorkflowRunPauseResumeTest {
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  private WorkflowNodeRunMapper workflowNodeRunMapper;
+    @Mock
+    private WorkflowNodeRunMapper workflowNodeRunMapper;
 
-  @Mock
-  private WorkflowTerminalOutboxService workflowTerminalOutboxService;
+    @Mock
+    private WorkflowTerminalOutboxService workflowTerminalOutboxService;
 
-  @Mock
-  private WorkflowDagService workflowDagService;
+    @Mock
+    private WorkflowDagService workflowDagService;
 
-  @Mock
-  private ObjectProvider<WorkflowNodeDispatchService> dispatchProvider;
+    @Mock
+    private ObjectProvider<WorkflowNodeDispatchService> dispatchProvider;
 
-  @Mock
-  private ObjectProvider<WorkflowRunResumeProgressor> resumeProgressorProvider;
+    @Mock
+    private ObjectProvider<WorkflowRunResumeProgressor> resumeProgressorProvider;
 
-  @Mock
-  private OrchestratorJobMappers jobMappers;
+    @Mock
+    private OrchestratorJobMappers jobMappers;
 
-  @Mock
-  private ObjectProvider<JobExecutionLogMapper> logProvider;
+    @Mock
+    private ObjectProvider<JobExecutionLogMapper> logProvider;
 
-  @Mock
-  private ObjectProvider<AlertEventService> alertProvider;
+    @Mock
+    private ObjectProvider<AlertEventService> alertProvider;
 
-  private WorkflowRunManagementApplicationService service() {
-    return new WorkflowRunManagementApplicationService(
-        workflowRunMapper,
-        workflowNodeRunMapper,
-        workflowTerminalOutboxService,
-        workflowDagService,
-        dispatchProvider,
-        resumeProgressorProvider,
-        jobMappers,
-        logProvider,
-        alertProvider,
-        mock(WorkflowNodeTerminalFinalizer.class));
-  }
+    private WorkflowRunManagementApplicationService service() {
+        return new WorkflowRunManagementApplicationService(
+                workflowRunMapper,
+                workflowNodeRunMapper,
+                workflowTerminalOutboxService,
+                workflowDagService,
+                dispatchProvider,
+                resumeProgressorProvider,
+                jobMappers,
+                logProvider,
+                alertProvider,
+                mock(WorkflowNodeTerminalFinalizer.class));
+    }
 
-  private static WorkflowRunEntity run(String status) {
-    WorkflowRunEntity e = new WorkflowRunEntity();
-    e.setId(7L);
-    e.setTenantId("t1");
-    e.setRunStatus(status);
-    e.setCurrentNodeCode("N2");
-    return e;
-  }
+    private static WorkflowRunEntity run(String status) {
+        WorkflowRunEntity e = new WorkflowRunEntity();
+        e.setId(7L);
+        e.setTenantId("t1");
+        e.setRunStatus(status);
+        e.setCurrentNodeCode("N2");
+        return e;
+    }
 
-  @Test
-  @DisplayName("RUNNING 可暂停 → PAUSED")
-  void shouldPause_whenRunning() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
-        .thenReturn(1);
+    @Test
+    @DisplayName("RUNNING 可暂停 → PAUSED")
+    void shouldPause_whenRunning() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
+        when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+                .thenReturn(1);
 
-    assertThat(service().pause("t1", 7L).status()).isEqualTo("PAUSED");
-    verify(workflowRunMapper).updateStatus(any(UpdateWorkflowRunStatusParam.class));
-  }
+        assertThat(service().pause("t1", 7L).status()).isEqualTo("PAUSED");
+        verify(workflowRunMapper).updateStatus(any(UpdateWorkflowRunStatusParam.class));
+    }
 
-  @Test
-  @DisplayName("非 RUNNING 暂停 → STATE_CONFLICT,不写库")
-  void shouldReject_whenPauseNonRunning() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("SUCCESS"));
+    @Test
+    @DisplayName("非 RUNNING 暂停 → STATE_CONFLICT,不写库")
+    void shouldReject_whenPauseNonRunning() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("SUCCESS"));
 
-    assertThatThrownBy(() -> service().pause("t1", 7L)).isInstanceOf(BizException.class);
-    verify(workflowRunMapper, never()).updateStatus(any(UpdateWorkflowRunStatusParam.class));
-  }
+        assertThatThrownBy(() -> service().pause("t1", 7L)).isInstanceOf(BizException.class);
+        verify(workflowRunMapper, never()).updateStatus(any(UpdateWorkflowRunStatusParam.class));
+    }
 
-  @Test
-  @DisplayName("PAUSED 可恢复 → RUNNING")
-  void shouldResume_whenPaused() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
-    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(1);
-    WorkflowRunResumeProgressor progressor = mock(WorkflowRunResumeProgressor.class);
-    when(resumeProgressorProvider.getObject()).thenReturn(progressor);
+    @Test
+    @DisplayName("PAUSED 可恢复 → RUNNING")
+    void shouldResume_whenPaused() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
+        when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(1);
+        WorkflowRunResumeProgressor progressor = mock(WorkflowRunResumeProgressor.class);
+        when(resumeProgressorProvider.getObject()).thenReturn(progressor);
 
-    assertThat(service().resume("t1", 7L).status()).isEqualTo("RUNNING");
-    verify(progressor).resume("t1", 7L);
-  }
+        assertThat(service().resume("t1", 7L).status()).isEqualTo("RUNNING");
+        verify(progressor).resume("t1", 7L);
+    }
 
-  @Test
-  @DisplayName("PAUSED 但同组无空槽 → 保持暂停并返回容量错误")
-  void shouldRejectResume_whenNoFreeSlot() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
-    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
+    @Test
+    @DisplayName("PAUSED 但同组无空槽 → 保持暂停并返回容量错误")
+    void shouldRejectResume_whenNoFreeSlot() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
+        when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
 
-    assertThatThrownBy(() -> service().resume("t1", 7L))
-        .isInstanceOfSatisfying(BizException.class, failure -> {
-          assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
-          assertThat(failure.getMessageKey()).isEqualTo("error.workflow.resume_capacity_full");
+        assertThatThrownBy(() -> service().resume("t1", 7L)).isInstanceOfSatisfying(BizException.class, failure -> {
+            assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
+            assertThat(failure.getMessageKey()).isEqualTo("error.workflow.resume_capacity_full");
         });
-  }
+    }
 
-  @Test
-  @DisplayName("恢复更新落空且状态已被并发修改 → STATE_CONFLICT")
-  void shouldRejectResume_whenConcurrentlyChanged() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"), run("RUNNING"));
-    when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
+    @Test
+    @DisplayName("恢复更新落空且状态已被并发修改 → STATE_CONFLICT")
+    void shouldRejectResume_whenConcurrentlyChanged() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"), run("RUNNING"));
+        when(workflowRunMapper.resumeIntoFreeSlot(any())).thenReturn(0);
 
-    assertThatThrownBy(() -> service().resume("t1", 7L))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            failure -> assertThat(failure.getMessageKey())
-                .isEqualTo("error.common.concurrent_modification"));
-  }
+        assertThatThrownBy(() -> service().resume("t1", 7L))
+                .isInstanceOfSatisfying(
+                        BizException.class,
+                        failure ->
+                                assertThat(failure.getMessageKey()).isEqualTo("error.common.concurrent_modification"));
+    }
 
-  @Test
-  @DisplayName("非 PAUSED 恢复 → STATE_CONFLICT")
-  void shouldReject_whenResumeNonPaused() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
+    @Test
+    @DisplayName("非 PAUSED 恢复 → STATE_CONFLICT")
+    void shouldReject_whenResumeNonPaused() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
 
-    assertThatThrownBy(() -> service().resume("t1", 7L)).isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service().resume("t1", 7L)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("CAS 落空(并发改动)→ STATE_CONFLICT")
-  void shouldThrow_whenCasMissed() {
-    when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
-        .thenReturn(0);
+    @Test
+    @DisplayName("CAS 落空(并发改动)→ STATE_CONFLICT")
+    void shouldThrow_whenCasMissed() {
+        when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
+        when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+                .thenReturn(0);
 
-    assertThatThrownBy(() -> service().pause("t1", 7L)).isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service().pause("t1", 7L)).isInstanceOf(BizException.class);
+    }
 }

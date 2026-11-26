@@ -33,13 +33,13 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Idempotent {
 
-  /** 幂等键表达式(字面量 + {@code {field}} 占位符)。必填。 */
-  String key();
+    /** 幂等键表达式(字面量 + {@code {field}} 占位符)。必填。 */
+    String key();
 
-  /**
-   * 幂等记录存活毫秒数;{@code <= 0} 表示永久(由 store 实现决定语义)。默认 0(永久)。
-   *
-   * <p>store 自行决定如何用 ttl(过期清理 / 写入带过期列);SDK core 仅透传。
-   */
-  long ttlMillis() default 0L;
+    /**
+     * 幂等记录存活毫秒数;{@code <= 0} 表示永久(由 store 实现决定语义)。默认 0(永久)。
+     *
+     * <p>store 自行决定如何用 ttl(过期清理 / 写入带过期列);SDK core 仅透传。
+     */
+    long ttlMillis() default 0L;
 }

@@ -19,23 +19,23 @@ import org.springframework.test.context.DynamicPropertySource;
  * batch.process_staging}， 须关闭孤儿清理调度，避免刷 {@code relation "batch.process_staging" does not exist}。
  */
 @SpringBootTest(
-    classes = BatchWorkerProcessApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerProcessApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DisplayName("处理暂存清理测试配置:测试档位下关闭暂存孤儿清理调度,避免暂存表缺失时刷错误")
 class ProcessStagingCleanupYamlIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  private ProcessStagingCleanupProperties processStagingCleanupProperties;
+    @Autowired
+    private ProcessStagingCleanupProperties processStagingCleanupProperties;
 
-  @Test
-  @DisplayName("测试档位下暂存孤儿清理开关为关闭,避免暂存表缺失时报错")
-  void shouldDisableStagingOrphanCleaner_whenTestProfileActive() {
-    assertThat(processStagingCleanupProperties.isEnabled()).isFalse();
-  }
+    @Test
+    @DisplayName("测试档位下暂存孤儿清理开关为关闭,避免暂存表缺失时报错")
+    void shouldDisableStagingOrphanCleaner_whenTestProfileActive() {
+        assertThat(processStagingCleanupProperties.isEnabled()).isFalse();
+    }
 }

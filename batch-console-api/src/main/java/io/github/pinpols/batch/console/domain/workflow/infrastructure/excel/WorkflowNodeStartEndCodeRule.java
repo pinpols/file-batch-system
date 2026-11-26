@@ -20,152 +20,147 @@ import java.util.Objects;
  */
 public final class WorkflowNodeStartEndCodeRule {
 
-  public static final String SHEET = ConfigPackageExcelValidator.WF_NODE_SHEET;
-  public static final String NODE_TYPE_START = "START";
-  public static final String NODE_TYPE_END = "END";
+    public static final String SHEET = ConfigPackageExcelValidator.WF_NODE_SHEET;
+    public static final String NODE_TYPE_START = "START";
+    public static final String NODE_TYPE_END = "END";
 
-  private WorkflowNodeStartEndCodeRule() {}
+    private WorkflowNodeStartEndCodeRule() {}
 
-  /**
-   * 按 (tenant_id, workflow_code, workflow_version) 分组核对 START / END 边界节点。
-   *
-   * @param rows 已 normalize 的 workflow_node 行(含 __excel_row_no)
-   * @return 不通过场景的 issue 列表(空列表表示通过)
-   */
-  public static List<WorkbookIssue> validate(List<Map<String, Object>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    if (rows == null || rows.isEmpty()) {
-      return issues;
-    }
-
-    Map<String, GroupStat> grouped = collectNodeGroups(rows, issues);
-    validateGroupCounts(grouped, issues);
-    return issues;
-  }
-
-  private static Map<String, GroupStat> collectNodeGroups(
-      List<Map<String, Object>> rows, List<WorkbookIssue> issues) {
-    Map<String, GroupStat> grouped = new LinkedHashMap<>();
-    for (Map<String, Object> row : rows) {
-      String tenant =
-          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_TENANT_ID));
-      String wfCode =
-          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_CODE));
-      String wfVer = ConsoleExcelValueSupport.asString(
-          row.get(ConfigPackageExcelValidator.COL_WORKFLOW_VERSION));
-      if (ConsoleExcelValueSupport.isBlank(tenant) || ConsoleExcelValueSupport.isBlank(wfCode)) {
-        continue;
-      }
-      String key = tenant + "::" + wfCode + "::" + (wfVer == null ? "" : wfVer);
-      GroupStat stat = grouped.computeIfAbsent(key, k -> new GroupStat(tenant, wfCode, wfVer));
-
-      String nodeCode =
-          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_CODE));
-      String nodeType = ConsoleExcelValueSupport.upper(
-          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_TYPE)));
-      int rowNo = ConsoleExcelValueSupport.parseRowNo(row.get("__excel_row_no"));
-
-      if (NODE_TYPE_START.equals(nodeType)) {
-        stat.startCount++;
-        if (!NODE_TYPE_START.equals(nodeCode)) {
-          issues.add(new WorkbookIssue(
-              SHEET,
-              rowNo,
-              ConfigPackageExcelValidator.COL_NODE_CODE,
-              "workflow_node node_type=START must use node_code='START' (found '"
-                  + nodeCode
-                  + "') for workflow "
-                  + wfCode));
+    /**
+     * 按 (tenant_id, workflow_code, workflow_version) 分组核对 START / END 边界节点。
+     *
+     * @param rows 已 normalize 的 workflow_node 行(含 __excel_row_no)
+     * @return 不通过场景的 issue 列表(空列表表示通过)
+     */
+    public static List<WorkbookIssue> validate(List<Map<String, Object>> rows) {
+        List<WorkbookIssue> issues = new ArrayList<>();
+        if (rows == null || rows.isEmpty()) {
+            return issues;
         }
-      } else if (NODE_TYPE_END.equals(nodeType)) {
-        stat.endCount++;
-        if (!NODE_TYPE_END.equals(nodeCode)) {
-          issues.add(new WorkbookIssue(
-              SHEET,
-              rowNo,
-              ConfigPackageExcelValidator.COL_NODE_CODE,
-              "workflow_node node_type=END must use node_code='END' (found '"
-                  + nodeCode
-                  + "') for workflow "
-                  + wfCode));
+
+        Map<String, GroupStat> grouped = collectNodeGroups(rows, issues);
+        validateGroupCounts(grouped, issues);
+        return issues;
+    }
+
+    private static Map<String, GroupStat> collectNodeGroups(
+            List<Map<String, Object>> rows, List<WorkbookIssue> issues) {
+        Map<String, GroupStat> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            String tenant = ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_TENANT_ID));
+            String wfCode = ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_CODE));
+            String wfVer = ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_VERSION));
+            if (ConsoleExcelValueSupport.isBlank(tenant) || ConsoleExcelValueSupport.isBlank(wfCode)) {
+                continue;
+            }
+            String key = tenant + "::" + wfCode + "::" + (wfVer == null ? "" : wfVer);
+            GroupStat stat = grouped.computeIfAbsent(key, k -> new GroupStat(tenant, wfCode, wfVer));
+
+            String nodeCode = ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_CODE));
+            String nodeType = ConsoleExcelValueSupport.upper(
+                    ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_TYPE)));
+            int rowNo = ConsoleExcelValueSupport.parseRowNo(row.get("__excel_row_no"));
+
+            if (NODE_TYPE_START.equals(nodeType)) {
+                stat.startCount++;
+                if (!NODE_TYPE_START.equals(nodeCode)) {
+                    issues.add(new WorkbookIssue(
+                            SHEET,
+                            rowNo,
+                            ConfigPackageExcelValidator.COL_NODE_CODE,
+                            "workflow_node node_type=START must use node_code='START' (found '"
+                                    + nodeCode
+                                    + "') for workflow "
+                                    + wfCode));
+                }
+            } else if (NODE_TYPE_END.equals(nodeType)) {
+                stat.endCount++;
+                if (!NODE_TYPE_END.equals(nodeCode)) {
+                    issues.add(new WorkbookIssue(
+                            SHEET,
+                            rowNo,
+                            ConfigPackageExcelValidator.COL_NODE_CODE,
+                            "workflow_node node_type=END must use node_code='END' (found '"
+                                    + nodeCode
+                                    + "') for workflow "
+                                    + wfCode));
+                }
+            } else if (NODE_TYPE_START.equals(nodeCode) || NODE_TYPE_END.equals(nodeCode)) {
+                // node_code 写了 START/END,但 node_type 没对齐
+                issues.add(new WorkbookIssue(
+                        SHEET,
+                        rowNo,
+                        ConfigPackageExcelValidator.COL_NODE_TYPE,
+                        "workflow_node node_code='"
+                                + nodeCode
+                                + "' must have node_type='"
+                                + nodeCode
+                                + "' (found '"
+                                + nodeType
+                                + "')"));
+            }
         }
-      } else if (NODE_TYPE_START.equals(nodeCode) || NODE_TYPE_END.equals(nodeCode)) {
-        // node_code 写了 START/END,但 node_type 没对齐
-        issues.add(new WorkbookIssue(
-            SHEET,
-            rowNo,
-            ConfigPackageExcelValidator.COL_NODE_TYPE,
-            "workflow_node node_code='"
-                + nodeCode
-                + "' must have node_type='"
-                + nodeCode
-                + "' (found '"
-                + nodeType
-                + "')"));
-      }
+
+        return grouped;
     }
 
-    return grouped;
-  }
-
-  private static void validateGroupCounts(
-      Map<String, GroupStat> grouped, List<WorkbookIssue> issues) {
-    for (GroupStat stat : grouped.values()) {
-      if (stat.startCount != 1) {
-        issues.add(new WorkbookIssue(
-            SHEET,
-            0,
-            ConfigPackageExcelValidator.COL_NODE_TYPE,
-            "workflow "
-                + stat.workflowCode
-                + " (tenant="
-                + stat.tenantId
-                + ", version="
-                + stat.workflowVersion
-                + ") must have exactly 1 START node, found "
-                + stat.startCount));
-      }
-      if (stat.endCount != 1) {
-        issues.add(new WorkbookIssue(
-            SHEET,
-            0,
-            ConfigPackageExcelValidator.COL_NODE_TYPE,
-            "workflow "
-                + stat.workflowCode
-                + " (tenant="
-                + stat.tenantId
-                + ", version="
-                + stat.workflowVersion
-                + ") must have exactly 1 END node, found "
-                + stat.endCount));
-      }
-    }
-  }
-
-  private static final class GroupStat {
-    final String tenantId;
-    final String workflowCode;
-    final String workflowVersion;
-    int startCount;
-    int endCount;
-
-    GroupStat(String tenantId, String workflowCode, String workflowVersion) {
-      this.tenantId = Objects.requireNonNullElse(tenantId, "");
-      this.workflowCode = Objects.requireNonNullElse(workflowCode, "");
-      this.workflowVersion = Objects.requireNonNullElse(workflowVersion, "");
+    private static void validateGroupCounts(Map<String, GroupStat> grouped, List<WorkbookIssue> issues) {
+        for (GroupStat stat : grouped.values()) {
+            if (stat.startCount != 1) {
+                issues.add(new WorkbookIssue(
+                        SHEET,
+                        0,
+                        ConfigPackageExcelValidator.COL_NODE_TYPE,
+                        "workflow "
+                                + stat.workflowCode
+                                + " (tenant="
+                                + stat.tenantId
+                                + ", version="
+                                + stat.workflowVersion
+                                + ") must have exactly 1 START node, found "
+                                + stat.startCount));
+            }
+            if (stat.endCount != 1) {
+                issues.add(new WorkbookIssue(
+                        SHEET,
+                        0,
+                        ConfigPackageExcelValidator.COL_NODE_TYPE,
+                        "workflow "
+                                + stat.workflowCode
+                                + " (tenant="
+                                + stat.tenantId
+                                + ", version="
+                                + stat.workflowVersion
+                                + ") must have exactly 1 END node, found "
+                                + stat.endCount));
+            }
+        }
     }
 
-    @Override
-    public boolean equals(Object o) {
-      if (!(o instanceof GroupStat other)) return false;
-      return tenantId.equals(other.tenantId)
-          && workflowCode.equals(other.workflowCode)
-          && workflowVersion.equals(other.workflowVersion);
-    }
+    private static final class GroupStat {
+        final String tenantId;
+        final String workflowCode;
+        final String workflowVersion;
+        int startCount;
+        int endCount;
 
-    @Override
-    public int hashCode() {
-      return tenantId.hashCode() * 31 + workflowCode.hashCode();
+        GroupStat(String tenantId, String workflowCode, String workflowVersion) {
+            this.tenantId = Objects.requireNonNullElse(tenantId, "");
+            this.workflowCode = Objects.requireNonNullElse(workflowCode, "");
+            this.workflowVersion = Objects.requireNonNullElse(workflowVersion, "");
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof GroupStat other)) return false;
+            return tenantId.equals(other.tenantId)
+                    && workflowCode.equals(other.workflowCode)
+                    && workflowVersion.equals(other.workflowVersion);
+        }
+
+        @Override
+        public int hashCode() {
+            return tenantId.hashCode() * 31 + workflowCode.hashCode();
+        }
     }
-  }
 }

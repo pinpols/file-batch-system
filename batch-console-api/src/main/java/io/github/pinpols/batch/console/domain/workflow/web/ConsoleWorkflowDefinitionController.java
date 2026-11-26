@@ -53,194 +53,187 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleWorkflowDefinitionController {
 
-  private final WorkflowDefinitionService workflowDefinitionService;
-  private final ConsoleResponseFactory responseFactory;
-  private final WorkflowDesignLockService designLockService;
-  private final ConsoleWorkflowTriggerService triggerService;
+    private final WorkflowDefinitionService workflowDefinitionService;
+    private final ConsoleResponseFactory responseFactory;
+    private final WorkflowDesignLockService designLockService;
+    private final ConsoleWorkflowTriggerService triggerService;
 
-  @GetMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<WorkflowDefinitionDetailResponse> getById(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
-  }
-
-  /** 将完整 Workflow 作为一个顶层运行触发。 */
-  @PostMapping("/{id}/trigger")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  public CommonResponse<String> trigger(
-      @PathVariable Long id,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody WorkflowTriggerRequest request) {
-    return responseFactory.success(triggerService.trigger(id, request, idempotencyKey));
-  }
-
-  /** 超时后只核对原请求，沿用正式发起的角色和租户边界。 */
-  @GetMapping("/{id}/trigger-status")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  public CommonResponse<WorkflowTriggerStatusResponse> triggerStatus(
-      @PathVariable Long id,
-      @RequestParam String tenantId,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    WorkflowTriggerStatusResponse receipt =
-        triggerService.triggerStatus(id, tenantId, idempotencyKey);
-    return responseFactory.success(receipt);
-  }
-
-  @PostMapping("/{id}/scheduled-occurrences/catch-up")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ScheduledOccurrenceCatchUpResponse> catchUpRejectedOccurrence(
-      @PathVariable Long id,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
-    ScheduledOccurrenceCatchUpResponse catchUpResponse =
-        triggerService.catchUpRejectedOccurrence(id, request, currentUsername(), idempotencyKey);
-    return responseFactory.success(catchUpResponse);
-  }
-
-  @PostMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDefinitionDetailResponse> create(
-      @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
-    return responseFactory.success(workflowDefinitionService.create(request));
-  }
-
-  /** 启用/禁用工作流定义。 */
-  @PatchMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> patch(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
-
-  /** 暂停或恢复定时触发，但不影响人工/API 启动 Workflow。 */
-  @PatchMapping("/{id}/schedule-enabled")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> patchScheduleEnabled(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    workflowDefinitionService.toggleScheduleEnabled(
-        id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
-
-  /** 更新调度字段时不替换 Workflow 图；通过定义版本进行 CAS 并发保护。 */
-  @PutMapping("/{id}/schedule")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDefinitionDetailResponse> updateSchedule(
-      @PathVariable Long id, @Valid @RequestBody WorkflowScheduleUpdateRequest request) {
-    String operator = currentUsername();
-    WorkflowDefinitionDetailResponse updated =
-        workflowDefinitionService.updateSchedule(id, request, operator);
-    return responseFactory.success(updated);
-  }
-
-  @PostMapping("/{id}/validate")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<DagValidationResult> validate(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionService.validate(id, tenantId));
-  }
-
-  /**
-   * 把 workflow 渲染为 mermaid flowchart 文本,可贴入 GitHub README / PR / 文档站。运行时 viewer 与 PR review
-   * 两种场景共享同一图形语言。
-   */
-  @GetMapping("/{id}/mermaid")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<WorkflowMermaidResponse> mermaid(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    WorkflowDefinitionDetailResponse detail = workflowDefinitionService.getById(id, tenantId);
-    String mermaid = WorkflowMermaidRenderer.render(detail);
-    WorkflowMermaidResponse response = new WorkflowMermaidResponse(mermaid);
-    return responseFactory.success(response);
-  }
-
-  // ─── Polish: 版本列表 / 版本详情(workflow-dag-designer diff 页面真实接入)───────────
-  // V167 后真实读 workflow_definition_version;历史表无数据时降级单条 current。
-  // 详见 docs/api/console-api-protocol.md Changelog 2026-06-04。
-
-  /**
-   * 列出工作流定义的所有历史版本(workflow-dag-designer Polish — 闭环 FE diff 页)。
-   *
-   * <p>真实读 {@code workflow_definition_version};历史表无数据(刚迁移后)→ 单条 current 降级兼容。
-   */
-  @GetMapping("/{id}/versions")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionService.listVersions(id, tenantId));
-  }
-
-  /**
-   * 读取指定 version 的完整 detail(当前 version → 主表 + 关联节点边;历史 version → 快照反序列化)。
-   *
-   * <p>不存在的版本 → NOT_FOUND。
-   */
-  @GetMapping("/{id}/versions/{version}")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
-      @PathVariable Long id,
-      @PathVariable Integer version,
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionService.getVersion(id, tenantId, version));
-  }
-
-  // ─── BE Spike: workflow-dag-designer 全量替换 + 单人编辑锁 ───────────────────────────
-  // 详见 docs/design/workflow-dag-designer.md
-
-  /**
-   * 画布 Save 全量替换:同事务清空 nodes/edges + 重写 + version 自增。必须先 acquire 锁。
-   *
-   * <p>失败码:CONFLICT(锁不归属/未持锁/expectedVersion 冲突)、INVALID_ARGUMENT(workflowCode 试图改)、NOT_FOUND。
-   */
-  @PutMapping("/{id}/full")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDefinitionDetailResponse> fullUpdate(
-      @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionFullUpdateRequest request) {
-    String username = currentUsername();
-    WorkflowDefinitionDetailResponse updatedDefinition =
-        workflowDefinitionService.fullUpdate(id, request, username);
-    return responseFactory.success(updatedDefinition);
-  }
-
-  /** 申请编辑锁(5min TTL)。别人持锁 → 409 CONFLICT 带 lockedBy。 */
-  @PutMapping("/{id}/lock")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDesignLockResponse> acquireLock(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    LockHolder holder = designLockService.acquire(tenantId, id, currentUsername());
-    return responseFactory.success(toResponse(holder));
-  }
-
-  /** 释放编辑锁(必须持锁人调用);非持锁人 → 403。锁已过期 → 幂等 204。 */
-  @DeleteMapping("/{id}/lock")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public ResponseEntity<Void> releaseLock(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    designLockService.release(tenantId, id, currentUsername());
-    return ResponseEntity.noContent().build();
-  }
-
-  /** 续期编辑锁(再续 5min);锁已过期 → 409(让前端重新 acquire)。 */
-  @PutMapping("/{id}/lock/renew")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDesignLockResponse> renewLock(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    LockHolder holder = designLockService.renew(tenantId, id, currentUsername());
-    return responseFactory.success(toResponse(holder));
-  }
-
-  private static WorkflowDesignLockResponse toResponse(LockHolder holder) {
-    return new WorkflowDesignLockResponse(holder.lockedBy(), holder.expiresAt());
-  }
-
-  /** 从 SecurityContext 取当前 username;未认证 / 非 ConsolePrincipal → UNAUTHORIZED。 */
-  private static String currentUsername() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth != null && auth.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+    @GetMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<WorkflowDefinitionDetailResponse> getById(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
     }
-    throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
-  }
+
+    /** 将完整 Workflow 作为一个顶层运行触发。 */
+    @PostMapping("/{id}/trigger")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    public CommonResponse<String> trigger(
+            @PathVariable Long id,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody WorkflowTriggerRequest request) {
+        return responseFactory.success(triggerService.trigger(id, request, idempotencyKey));
+    }
+
+    /** 超时后只核对原请求，沿用正式发起的角色和租户边界。 */
+    @GetMapping("/{id}/trigger-status")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    public CommonResponse<WorkflowTriggerStatusResponse> triggerStatus(
+            @PathVariable Long id,
+            @RequestParam String tenantId,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
+        WorkflowTriggerStatusResponse receipt = triggerService.triggerStatus(id, tenantId, idempotencyKey);
+        return responseFactory.success(receipt);
+    }
+
+    @PostMapping("/{id}/scheduled-occurrences/catch-up")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ScheduledOccurrenceCatchUpResponse> catchUpRejectedOccurrence(
+            @PathVariable Long id,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
+        ScheduledOccurrenceCatchUpResponse catchUpResponse =
+                triggerService.catchUpRejectedOccurrence(id, request, currentUsername(), idempotencyKey);
+        return responseFactory.success(catchUpResponse);
+    }
+
+    @PostMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowDefinitionDetailResponse> create(
+            @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
+        return responseFactory.success(workflowDefinitionService.create(request));
+    }
+
+    /** 启用/禁用工作流定义。 */
+    @PatchMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> patch(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
+
+    /** 暂停或恢复定时触发，但不影响人工/API 启动 Workflow。 */
+    @PatchMapping("/{id}/schedule-enabled")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> patchScheduleEnabled(
+            @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        workflowDefinitionService.toggleScheduleEnabled(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
+
+    /** 更新调度字段时不替换 Workflow 图；通过定义版本进行 CAS 并发保护。 */
+    @PutMapping("/{id}/schedule")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowDefinitionDetailResponse> updateSchedule(
+            @PathVariable Long id, @Valid @RequestBody WorkflowScheduleUpdateRequest request) {
+        String operator = currentUsername();
+        WorkflowDefinitionDetailResponse updated = workflowDefinitionService.updateSchedule(id, request, operator);
+        return responseFactory.success(updated);
+    }
+
+    @PostMapping("/{id}/validate")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<DagValidationResult> validate(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(workflowDefinitionService.validate(id, tenantId));
+    }
+
+    /**
+     * 把 workflow 渲染为 mermaid flowchart 文本,可贴入 GitHub README / PR / 文档站。运行时 viewer 与 PR review
+     * 两种场景共享同一图形语言。
+     */
+    @GetMapping("/{id}/mermaid")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<WorkflowMermaidResponse> mermaid(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        WorkflowDefinitionDetailResponse detail = workflowDefinitionService.getById(id, tenantId);
+        String mermaid = WorkflowMermaidRenderer.render(detail);
+        WorkflowMermaidResponse response = new WorkflowMermaidResponse(mermaid);
+        return responseFactory.success(response);
+    }
+
+    // ─── Polish: 版本列表 / 版本详情(workflow-dag-designer diff 页面真实接入)───────────
+    // V167 后真实读 workflow_definition_version;历史表无数据时降级单条 current。
+    // 详见 docs/api/console-api-protocol.md Changelog 2026-06-04。
+
+    /**
+     * 列出工作流定义的所有历史版本(workflow-dag-designer Polish — 闭环 FE diff 页)。
+     *
+     * <p>真实读 {@code workflow_definition_version};历史表无数据(刚迁移后)→ 单条 current 降级兼容。
+     */
+    @GetMapping("/{id}/versions")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(workflowDefinitionService.listVersions(id, tenantId));
+    }
+
+    /**
+     * 读取指定 version 的完整 detail(当前 version → 主表 + 关联节点边;历史 version → 快照反序列化)。
+     *
+     * <p>不存在的版本 → NOT_FOUND。
+     */
+    @GetMapping("/{id}/versions/{version}")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
+            @PathVariable Long id, @PathVariable Integer version, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(workflowDefinitionService.getVersion(id, tenantId, version));
+    }
+
+    // ─── BE Spike: workflow-dag-designer 全量替换 + 单人编辑锁 ───────────────────────────
+    // 详见 docs/design/workflow-dag-designer.md
+
+    /**
+     * 画布 Save 全量替换:同事务清空 nodes/edges + 重写 + version 自增。必须先 acquire 锁。
+     *
+     * <p>失败码:CONFLICT(锁不归属/未持锁/expectedVersion 冲突)、INVALID_ARGUMENT(workflowCode 试图改)、NOT_FOUND。
+     */
+    @PutMapping("/{id}/full")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowDefinitionDetailResponse> fullUpdate(
+            @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionFullUpdateRequest request) {
+        String username = currentUsername();
+        WorkflowDefinitionDetailResponse updatedDefinition =
+                workflowDefinitionService.fullUpdate(id, request, username);
+        return responseFactory.success(updatedDefinition);
+    }
+
+    /** 申请编辑锁(5min TTL)。别人持锁 → 409 CONFLICT 带 lockedBy。 */
+    @PutMapping("/{id}/lock")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowDesignLockResponse> acquireLock(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        LockHolder holder = designLockService.acquire(tenantId, id, currentUsername());
+        return responseFactory.success(toResponse(holder));
+    }
+
+    /** 释放编辑锁(必须持锁人调用);非持锁人 → 403。锁已过期 → 幂等 204。 */
+    @DeleteMapping("/{id}/lock")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public ResponseEntity<Void> releaseLock(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        designLockService.release(tenantId, id, currentUsername());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 续期编辑锁(再续 5min);锁已过期 → 409(让前端重新 acquire)。 */
+    @PutMapping("/{id}/lock/renew")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowDesignLockResponse> renewLock(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        LockHolder holder = designLockService.renew(tenantId, id, currentUsername());
+        return responseFactory.success(toResponse(holder));
+    }
+
+    private static WorkflowDesignLockResponse toResponse(LockHolder holder) {
+        return new WorkflowDesignLockResponse(holder.lockedBy(), holder.expiresAt());
+    }
+
+    /** 从 SecurityContext 取当前 username;未认证 / 非 ConsolePrincipal → UNAUTHORIZED。 */
+    private static String currentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
+    }
 }

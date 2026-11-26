@@ -27,67 +27,64 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidationRuleSetMerger {
 
-  private final ValidationConfigSupport configSupport;
+    private final ValidationConfigSupport configSupport;
 
-  public Map<String, Object> merge(Object templateConfigObject) {
-    Map<String, Object> templateConfig = configSupport.toMap(templateConfigObject);
-    Map<String, Object> merged = new LinkedHashMap<>();
-    Map<String, Object> derived = deriveRequiredRulesFromFieldMappings(templateConfig);
-    if (!derived.isEmpty()) {
-      Map<String, Object> fieldRules = new LinkedHashMap<>();
-      fieldRules.put("fieldRules", derived);
-      merged.putAll(fieldRules);
+    public Map<String, Object> merge(Object templateConfigObject) {
+        Map<String, Object> templateConfig = configSupport.toMap(templateConfigObject);
+        Map<String, Object> merged = new LinkedHashMap<>();
+        Map<String, Object> derived = deriveRequiredRulesFromFieldMappings(templateConfig);
+        if (!derived.isEmpty()) {
+            Map<String, Object> fieldRules = new LinkedHashMap<>();
+            fieldRules.put("fieldRules", derived);
+            merged.putAll(fieldRules);
+        }
+        Object rawValidationRuleSet =
+                firstNonNull(templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"));
+        Map<String, Object> validationRuleSet = configSupport.toMap(rawValidationRuleSet);
+        deepMerge(merged, validationRuleSet);
+        return merged;
     }
-    Object rawValidationRuleSet = firstNonNull(
-        templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"));
-    Map<String, Object> validationRuleSet = configSupport.toMap(rawValidationRuleSet);
-    deepMerge(merged, validationRuleSet);
-    return merged;
-  }
 
-  private Map<String, Object> deriveRequiredRulesFromFieldMappings(
-      Map<String, Object> templateConfig) {
-    if (templateConfig == null || templateConfig.isEmpty()) {
-      return Map.of();
+    private Map<String, Object> deriveRequiredRulesFromFieldMappings(Map<String, Object> templateConfig) {
+        if (templateConfig == null || templateConfig.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = firstNonNull(templateConfig.get("field_mappings"), templateConfig.get("fieldMappings"));
+        if (!(raw instanceof List<?> list)) {
+            return Map.of();
+        }
+        Stream<Map<String, Object>> nonEmptyFieldMappings =
+                list.stream().map(configSupport::toMap).filter(EmptyChecks::isNotEmpty);
+        Stream<Map<String, Object>> namedFieldMappings = nonEmptyFieldMappings.filter(mapping -> {
+            String fieldName = stringValue(mapping.get("name"));
+            return Texts.hasText(fieldName);
+        });
+        Stream<Map<String, Object>> requiredFieldMappings = namedFieldMappings.filter(mapping -> {
+            Object rawRequiredValue = firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
+            return booleanValue(rawRequiredValue, false);
+        });
+        return requiredFieldMappings.collect(Collectors.toMap(
+                mapping -> stringValue(mapping.get("name")),
+                mapping -> Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
+                (previous, next) -> next,
+                LinkedHashMap::new));
     }
-    Object raw =
-        firstNonNull(templateConfig.get("field_mappings"), templateConfig.get("fieldMappings"));
-    if (!(raw instanceof List<?> list)) {
-      return Map.of();
-    }
-    Stream<Map<String, Object>> nonEmptyFieldMappings =
-        list.stream().map(configSupport::toMap).filter(EmptyChecks::isNotEmpty);
-    Stream<Map<String, Object>> namedFieldMappings = nonEmptyFieldMappings.filter(mapping -> {
-      String fieldName = stringValue(mapping.get("name"));
-      return Texts.hasText(fieldName);
-    });
-    Stream<Map<String, Object>> requiredFieldMappings = namedFieldMappings.filter(mapping -> {
-      Object rawRequiredValue = firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
-      return booleanValue(rawRequiredValue, false);
-    });
-    return requiredFieldMappings.collect(Collectors.toMap(
-        mapping -> stringValue(mapping.get("name")),
-        mapping ->
-            Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
-        (previous, next) -> next,
-        LinkedHashMap::new));
-  }
 
-  @SuppressWarnings("unchecked")
-  private void deepMerge(Map<String, Object> target, Map<String, Object> source) {
-    if (source == null || source.isEmpty()) {
-      return;
+    @SuppressWarnings("unchecked")
+    private void deepMerge(Map<String, Object> target, Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            Object existing = target.get(entry.getKey());
+            Object incoming = entry.getValue();
+            if (existing instanceof Map<?, ?> existingMap && incoming instanceof Map<?, ?> incomingMap) {
+                Map<String, Object> nested = new LinkedHashMap<>((Map<String, Object>) existingMap);
+                deepMerge(nested, (Map<String, Object>) incomingMap);
+                target.put(entry.getKey(), nested);
+                continue;
+            }
+            target.put(entry.getKey(), incoming);
+        }
     }
-    for (Map.Entry<String, Object> entry : source.entrySet()) {
-      Object existing = target.get(entry.getKey());
-      Object incoming = entry.getValue();
-      if (existing instanceof Map<?, ?> existingMap && incoming instanceof Map<?, ?> incomingMap) {
-        Map<String, Object> nested = new LinkedHashMap<>((Map<String, Object>) existingMap);
-        deepMerge(nested, (Map<String, Object>) incomingMap);
-        target.put(entry.getKey(), nested);
-        continue;
-      }
-      target.put(entry.getKey(), incoming);
-    }
-  }
 }

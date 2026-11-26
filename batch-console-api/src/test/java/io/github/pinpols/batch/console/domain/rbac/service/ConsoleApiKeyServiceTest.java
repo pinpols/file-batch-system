@@ -23,118 +23,116 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("访问密钥服务: 列表、详情、创建与吊销的租户隔离与冲突校验")
 class ConsoleApiKeyServiceTest {
 
-  private ConsoleApiKeyMapper repository;
-  private ConsoleTenantGuard tenantGuard;
-  private ConsoleApiKeyService service;
+    private ConsoleApiKeyMapper repository;
+    private ConsoleTenantGuard tenantGuard;
+    private ConsoleApiKeyService service;
 
-  @BeforeEach
-  void setUp() {
-    repository = mock(ConsoleApiKeyMapper.class);
-    tenantGuard = mock(ConsoleTenantGuard.class);
-    service = new ConsoleApiKeyService(repository, tenantGuard);
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-  }
+    @BeforeEach
+    void setUp() {
+        repository = mock(ConsoleApiKeyMapper.class);
+        tenantGuard = mock(ConsoleTenantGuard.class);
+        service = new ConsoleApiKeyService(repository, tenantGuard);
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    }
 
-  @Test
-  @DisplayName("按租户查询访问密钥列表, 返回该租户下的记录")
-  void shouldListApiKeys() {
-    ApiKeyEntity entity = new ApiKeyEntity();
-    entity.setId(1L);
-    entity.setKeyName("my-key");
-    when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("按租户查询访问密钥列表, 返回该租户下的记录")
+    void shouldListApiKeys() {
+        ApiKeyEntity entity = new ApiKeyEntity();
+        entity.setId(1L);
+        entity.setKeyName("my-key");
+        when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
 
-    List<ApiKeyEntity> result = service.list("t1");
+        List<ApiKeyEntity> result = service.list("t1");
 
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).getKeyName()).isEqualTo("my-key");
-  }
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getKeyName()).isEqualTo("my-key");
+    }
 
-  @Test
-  @DisplayName("按租户与标识查询访问密钥详情, 返回对应记录")
-  void shouldReturnDetailById() {
-    ApiKeyEntity entity = new ApiKeyEntity();
-    entity.setId(1L);
-    entity.setKeyName("my-key");
-    when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
+    @Test
+    @DisplayName("按租户与标识查询访问密钥详情, 返回对应记录")
+    void shouldReturnDetailById() {
+        ApiKeyEntity entity = new ApiKeyEntity();
+        entity.setId(1L);
+        entity.setKeyName("my-key");
+        when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
 
-    ApiKeyEntity result = service.detail("t1", 1L);
+        ApiKeyEntity result = service.detail("t1", 1L);
 
-    assertThat(result.getKeyName()).isEqualTo("my-key");
-  }
+        assertThat(result.getKeyName()).isEqualTo("my-key");
+    }
 
-  @Test
-  @DisplayName("详情查询未命中时抛出资源不存在异常")
-  void shouldThrowNotFoundWhenDetailMissing() {
-    when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("详情查询未命中时抛出资源不存在异常")
+    void shouldThrowNotFoundWhenDetailMissing() {
+        when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.detail("t1", 99L))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("not_found");
-  }
+        assertThatThrownBy(() -> service.detail("t1", 99L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("not_found");
+    }
 
-  @Test
-  @DisplayName("创建访问密钥返回带固定前缀的明文密钥, 并按散列算法写库")
-  void shouldCreateApiKeyWithBkPrefix() {
-    when(repository.findByTenantAndName("t1", "new-key")).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("创建访问密钥返回带固定前缀的明文密钥, 并按散列算法写库")
+    void shouldCreateApiKeyWithBkPrefix() {
+        when(repository.findByTenantAndName("t1", "new-key")).thenReturn(Optional.empty());
 
-    ApiKeyEntity created = new ApiKeyEntity();
-    created.setId(1L);
-    created.setKeyName("new-key");
-    when(repository.findByTenantAndName("t1", "new-key"))
-        .thenReturn(Optional.empty())
-        .thenReturn(Optional.of(created));
+        ApiKeyEntity created = new ApiKeyEntity();
+        created.setId(1L);
+        created.setKeyName("new-key");
+        when(repository.findByTenantAndName("t1", "new-key"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(created));
 
-    Instant expiresAt = BatchDateTimeSupport.utcNow().plusSeconds(86400);
-    ConsoleApiKeyService.CreateResult result =
-        service.create("t1", "new-key", "read", expiresAt, "admin");
+        Instant expiresAt = BatchDateTimeSupport.utcNow().plusSeconds(86400);
+        ConsoleApiKeyService.CreateResult result = service.create("t1", "new-key", "read", expiresAt, "admin");
 
-    assertThat(result.rawKey()).startsWith("bk_");
-    assertThat(result.entity().getKeyName()).isEqualTo("new-key");
-    verify(repository)
-        .insert(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "t1")
-            && Objects.equals(parameters.keyName(), "new-key")
-            && parameters.keyPrefix() != null
-            && parameters.keyHash() != null
-            && parameters.salt() != null
-            && Objects.equals(parameters.keyHashAlgo(), "pbkdf2")
-            && Objects.equals(parameters.scopes(), "read")
-            && Objects.equals(parameters.expiresAt(), expiresAt)
-            && Objects.equals(parameters.operator(), "admin")));
-  }
+        assertThat(result.rawKey()).startsWith("bk_");
+        assertThat(result.entity().getKeyName()).isEqualTo("new-key");
+        verify(repository)
+                .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "t1")
+                        && Objects.equals(parameters.keyName(), "new-key")
+                        && parameters.keyPrefix() != null
+                        && parameters.keyHash() != null
+                        && parameters.salt() != null
+                        && Objects.equals(parameters.keyHashAlgo(), "pbkdf2")
+                        && Objects.equals(parameters.scopes(), "read")
+                        && Objects.equals(parameters.expiresAt(), expiresAt)
+                        && Objects.equals(parameters.operator(), "admin")));
+    }
 
-  @Test
-  @DisplayName("名称已存在时创建抛出冲突异常")
-  void shouldThrowConflictWhenNameExists() {
-    ApiKeyEntity existing = new ApiKeyEntity();
-    existing.setKeyName("dup-key");
-    when(repository.findByTenantAndName("t1", "dup-key")).thenReturn(Optional.of(existing));
+    @Test
+    @DisplayName("名称已存在时创建抛出冲突异常")
+    void shouldThrowConflictWhenNameExists() {
+        ApiKeyEntity existing = new ApiKeyEntity();
+        existing.setKeyName("dup-key");
+        when(repository.findByTenantAndName("t1", "dup-key")).thenReturn(Optional.of(existing));
 
-    assertThatThrownBy(
-            () -> service.create("t1", "dup-key", "read", BatchDateTimeSupport.utcNow(), "admin"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("name_exists");
-  }
+        assertThatThrownBy(() -> service.create("t1", "dup-key", "read", BatchDateTimeSupport.utcNow(), "admin"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("name_exists");
+    }
 
-  @Test
-  @DisplayName("吊销访问密钥按租户与标识下发下游")
-  void shouldRevokeApiKey() {
-    ApiKeyEntity entity = new ApiKeyEntity();
-    entity.setId(1L);
-    when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
+    @Test
+    @DisplayName("吊销访问密钥按租户与标识下发下游")
+    void shouldRevokeApiKey() {
+        ApiKeyEntity entity = new ApiKeyEntity();
+        entity.setId(1L);
+        when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
 
-    service.revoke("t1", 1L, "admin");
+        service.revoke("t1", 1L, "admin");
 
-    verify(repository).revoke("t1", 1L, "admin");
-  }
+        verify(repository).revoke("t1", 1L, "admin");
+    }
 
-  @Test
-  @DisplayName("吊销目标不存在时抛出资源不存在异常")
-  void shouldThrowNotFoundWhenRevokeIdMissing() {
-    when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("吊销目标不存在时抛出资源不存在异常")
+    void shouldThrowNotFoundWhenRevokeIdMissing() {
+        when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.revoke("t1", 99L, "admin"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("not_found");
-  }
+        assertThatThrownBy(() -> service.revoke("t1", 99L, "admin"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("not_found");
+    }
 }

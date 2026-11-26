@@ -41,107 +41,100 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsolePushControllerTest {
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableMethodSecurity
-  static class MethodSecurityTestConfiguration {}
+    @Configuration(proxyBeanMethods = false)
+    @EnableMethodSecurity
+    static class MethodSecurityTestConfiguration {}
 
-  @Mock
-  private ConsolePushSubscriptionService subscriptionService;
+    @Mock
+    private ConsolePushSubscriptionService subscriptionService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @Test
-  @DisplayName("未认证订阅在方法安全边界拒绝,合法或非法载荷均不能进入服务")
-  void shouldRejectUnauthenticatedCalls_whenPayloadVaries() {
-    SecurityContextHolder.clearContext();
-    try (var context = new AnnotationConfigApplicationContext()) {
-      context.register(MethodSecurityTestConfiguration.class);
-      context.registerBean(
-          ConsolePushController.class,
-          () -> new ConsolePushController(
-              subscriptionService,
-              new ConsoleResponseFactory(requestMetadataResolver),
-              requestMetadataResolver));
-      context.refresh();
-      var controller = context.getBean(ConsolePushController.class);
-      var valid = new ConsolePushSubscribeRequest(
-          "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
-      var request = new MockHttpServletRequest();
-      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", valid, request))
-          .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
-      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", null, request))
-          .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
-      verifyNoInteractions(subscriptionService);
-    } finally {
-      SecurityContextHolder.clearContext();
+    @Test
+    @DisplayName("未认证订阅在方法安全边界拒绝,合法或非法载荷均不能进入服务")
+    void shouldRejectUnauthenticatedCalls_whenPayloadVaries() {
+        SecurityContextHolder.clearContext();
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.register(MethodSecurityTestConfiguration.class);
+            context.registerBean(
+                    ConsolePushController.class,
+                    () -> new ConsolePushController(
+                            subscriptionService,
+                            new ConsoleResponseFactory(requestMetadataResolver),
+                            requestMetadataResolver));
+            context.refresh();
+            var controller = context.getBean(ConsolePushController.class);
+            var valid = new ConsolePushSubscribeRequest(
+                    "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
+            var request = new MockHttpServletRequest();
+            Assertions.assertThatThrownBy(() -> controller.subscribe("ta", valid, request))
+                    .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+            Assertions.assertThatThrownBy(() -> controller.subscribe("ta", null, request))
+                    .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+            verifyNoInteractions(subscriptionService);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
-  }
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsolePushController(
-            subscriptionService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsolePushController(subscriptionService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("读取推送公钥时, 返回服务端配置的密钥")
-  void shouldReturnConfiguredKey_whenReadingPublicKey() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(subscriptionService.vapidPublicKey()).thenReturn("BPK-xxx");
-    mockMvc
-        .perform(get("/api/console/push/vapid-public-key"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.publicKey").value("BPK-xxx"));
-  }
+    @Test
+    @DisplayName("读取推送公钥时, 返回服务端配置的密钥")
+    void shouldReturnConfiguredKey_whenReadingPublicKey() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(subscriptionService.vapidPublicKey()).thenReturn("BPK-xxx");
+        mockMvc.perform(get("/api/console/push/vapid-public-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.publicKey").value("BPK-xxx"));
+    }
 
-  @Test
-  @DisplayName("订阅请求以创建状态返回, 租户, 操作人与订阅体透传给服务")
-  void shouldReturnCreatedAndForward_whenSubscribing() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(
-            post("/api/console/push/subscribe")
-                .param("tenantId", "ta")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"endpoint\":\"https://push.example/x\",\"keys\":{\"p256dh\":\"P256\",\"auth\":\"AUTH\"}}"))
-        .andExpect(status().isCreated());
-    verify(subscriptionService)
-        .subscribe(eq("ta"), eq("tester"), any(ConsolePushSubscribeRequest.class), any());
-  }
+    @Test
+    @DisplayName("订阅请求以创建状态返回, 租户, 操作人与订阅体透传给服务")
+    void shouldReturnCreatedAndForward_whenSubscribing() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(
+                        post("/api/console/push/subscribe")
+                                .param("tenantId", "ta")
+                                .contentType(APPLICATION_JSON)
+                                .content(
+                                        "{\"endpoint\":\"https://push.example/x\",\"keys\":{\"p256dh\":\"P256\",\"auth\":\"AUTH\"}}"))
+                .andExpect(status().isCreated());
+        verify(subscriptionService).subscribe(eq("ta"), eq("tester"), any(ConsolePushSubscribeRequest.class), any());
+    }
 
-  @Test
-  @DisplayName("注销请求返回统一成功响应, 端点原样透传给服务")
-  void shouldForwardEndpoint_whenUnsubscribing() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
-    mockMvc
-        .perform(post("/api/console/push/unsubscribe")
-            .param("tenantId", "ta")
-            .contentType(APPLICATION_JSON)
-            .content("{\"endpoint\":\"https://push.example/x\"}"))
-        .andExpect(status().isOk());
-    verify(subscriptionService).unsubscribe("ta", "tester", "https://push.example/x");
-  }
+    @Test
+    @DisplayName("注销请求返回统一成功响应, 端点原样透传给服务")
+    void shouldForwardEndpoint_whenUnsubscribing() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
+        mockMvc.perform(post("/api/console/push/unsubscribe")
+                        .param("tenantId", "ta")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"endpoint\":\"https://push.example/x\"}"))
+                .andExpect(status().isOk());
+        verify(subscriptionService).unsubscribe("ta", "tester", "https://push.example/x");
+    }
 }

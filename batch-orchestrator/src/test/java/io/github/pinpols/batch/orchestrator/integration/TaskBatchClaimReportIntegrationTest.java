@@ -67,392 +67,384 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li><b>2.2 批内部分失败隔离</b>:report-batch 里某项失败只标记该项、不回滚整批,成功项照常落 SUCCESS。
  * </ol>
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("批量认领与批量上报的真库集成验证:逐项结果独立返回,已被并发领走的任务跳过且不影响其余任务")
 class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  private final WorkflowRunLaunchService workflowRunLaunchService;
+    private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  private final TaskControllerApplicationService taskControllerApplicationService;
+    private final TaskControllerApplicationService taskControllerApplicationService;
 
-  private final TaskAssignmentService taskAssignmentService;
+    private final TaskAssignmentService taskAssignmentService;
 
-  private final TaskOutcomeService taskOutcomeService;
+    private final TaskOutcomeService taskOutcomeService;
 
-  private final JobInstanceMapper jobInstanceMapper;
+    private final JobInstanceMapper jobInstanceMapper;
 
-  private final JobPartitionMapper jobPartitionMapper;
+    private final JobPartitionMapper jobPartitionMapper;
 
-  private final JobTaskMapper jobTaskMapper;
+    private final JobTaskMapper jobTaskMapper;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  private final WorkerRegistryCache workerRegistryCache;
+    private final WorkerRegistryCache workerRegistryCache;
 
-  private final PlatformTransactionManager transactionManager;
+    private final PlatformTransactionManager transactionManager;
 
-  private final VerifierFailureOutboxService verifierFailureOutboxService;
+    private final VerifierFailureOutboxService verifierFailureOutboxService;
 
-  TaskBatchClaimReportIntegrationTest(
-      WorkflowRunLaunchService workflowRunLaunchService,
-      TaskControllerApplicationService taskControllerApplicationService,
-      TaskAssignmentService taskAssignmentService,
-      TaskOutcomeService taskOutcomeService,
-      JobInstanceMapper jobInstanceMapper,
-      JobPartitionMapper jobPartitionMapper,
-      JobTaskMapper jobTaskMapper,
-      JdbcTemplate jdbcTemplate,
-      WorkerRegistryCache workerRegistryCache,
-      PlatformTransactionManager transactionManager,
-      VerifierFailureOutboxService verifierFailureOutboxService) {
-    this.workflowRunLaunchService = workflowRunLaunchService;
-    this.taskControllerApplicationService = taskControllerApplicationService;
-    this.taskAssignmentService = taskAssignmentService;
-    this.taskOutcomeService = taskOutcomeService;
-    this.jobInstanceMapper = jobInstanceMapper;
-    this.jobPartitionMapper = jobPartitionMapper;
-    this.jobTaskMapper = jobTaskMapper;
-    this.jdbcTemplate = jdbcTemplate;
-    this.workerRegistryCache = workerRegistryCache;
-    this.transactionManager = transactionManager;
-    this.verifierFailureOutboxService = verifierFailureOutboxService;
-  }
-
-  @BeforeEach
-  void refreshWorkers() {
-    WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-  }
-
-  /**
-   * 启动一个 IMPORT 单作业,返回其唯一 task(及其 partition)。
-   *
-   * <p>每个作业用**独立 worker_group**(group 内仅 1 个 worker)—— 多个同组 ONLINE worker 时 orchestrator 的 worker
-   * 选择会按负载挑定某一个,用别的同组 worker 去 claim 会落空(claimed=false)。 独立 group 保证每个 task 只有唯一可选 worker,claim
-   * 结果确定(本机偶发对齐、CI 必现该非确定性)。
-   */
-  private LaunchedTask launchOne(int idx) {
-    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
-        jdbcTemplate, TENANT, "IMPORT", "ITGRP_" + idx + "_" + System.nanoTime(), TriggerType.API);
-    LaunchRequest req = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(BIZ_DATE)
-        .triggerType(TriggerType.API)
-        .requestId(seed.requestId())
-        .traceId("trace-batch-" + idx + "-" + seed.requestId())
-        .params(Map.of())
-        .build();
-    var response = workflowRunLaunchService.launch(req);
-
-    Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
-        jdbcTemplate, TENANT, response.instanceNo());
-    JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, instanceId);
-    JobTaskEntity task = jobTaskMapper
-        .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
-        .get(0);
-    JobPartitionEntity partition = jobPartitionMapper
-        .selectByQuery(new JobPartitionQuery(TENANT, instance.getId(), null, null))
-        .get(0);
-    return new LaunchedTask(seed, instance.getId(), task.getId(), partition.getId());
-  }
-
-  @Test
-  @DisplayName("2.1+2.2:批量认领 K 个独立 task,report-batch 混合成功/失败逐项独立(真 PG)")
-  void claimBatch_thenReportBatch_mixedOutcome_appliesPerItemIndependently() {
-    // arrange:启动 3 个独立 IMPORT 作业 → 3 个独立 task
-    List<LaunchedTask> launched = new ArrayList<>();
-    for (int i = 0; i < 3; i++) {
-      launched.add(launchOne(i));
-    }
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-
-    // act 1:一次 claim-batch 认领全部 3 个(各用各自 worker)
-    List<TaskClaimItemCommand> claimItems = new ArrayList<>();
-    for (LaunchedTask lt : launched) {
-      claimItems.add(new TaskClaimItemCommand(TENANT, lt.taskId(), lt.seed().workerCode(), null));
-    }
-    TaskClaimBatchResult claimResp =
-        taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(claimItems));
-
-    // assert 1:逐项 claimed=true + config 非空,partition 全 RUNNING
-    assertThat(claimResp.results()).hasSize(3);
-    assertThat(claimResp.results()).allMatch(TaskClaimItemResult::claimed);
-    assertThat(claimResp.results()).allMatch(r -> r.config() != null);
-    for (LaunchedTask lt : launched) {
-      JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
-      assertThat(p.getPartitionStatus()).isEqualTo(PartitionStatus.RUNNING.code());
-      assertThat(p.getCurrentInvocationId()).isNotBlank();
+    TaskBatchClaimReportIntegrationTest(
+            WorkflowRunLaunchService workflowRunLaunchService,
+            TaskControllerApplicationService taskControllerApplicationService,
+            TaskAssignmentService taskAssignmentService,
+            TaskOutcomeService taskOutcomeService,
+            JobInstanceMapper jobInstanceMapper,
+            JobPartitionMapper jobPartitionMapper,
+            JobTaskMapper jobTaskMapper,
+            JdbcTemplate jdbcTemplate,
+            WorkerRegistryCache workerRegistryCache,
+            PlatformTransactionManager transactionManager,
+            VerifierFailureOutboxService verifierFailureOutboxService) {
+        this.workflowRunLaunchService = workflowRunLaunchService;
+        this.taskControllerApplicationService = taskControllerApplicationService;
+        this.taskAssignmentService = taskAssignmentService;
+        this.taskOutcomeService = taskOutcomeService;
+        this.jobInstanceMapper = jobInstanceMapper;
+        this.jobPartitionMapper = jobPartitionMapper;
+        this.jobTaskMapper = jobTaskMapper;
+        this.jdbcTemplate = jdbcTemplate;
+        this.workerRegistryCache = workerRegistryCache;
+        this.transactionManager = transactionManager;
+        this.verifierFailureOutboxService = verifierFailureOutboxService;
     }
 
-    // act 2:report-batch —— 前 2 个成功,第 3 个失败(测批内部分失败隔离)
-    List<TaskExecutionReportCommand> reportItems = new ArrayList<>();
-    for (int i = 0; i < launched.size(); i++) {
-      LaunchedTask lt = launched.get(i);
-      JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
-      if (i < 2) {
-        reportItems.add(TaskExecutionReportCommand.builder()
-            .taskId(lt.taskId())
-            .tenantId(TENANT)
-            .workerId(lt.seed().workerCode())
-            .success(true)
-            .code(null)
-            .message(null)
-            .resultSummary("{\"records\":" + (i + 1) + "}")
-            .errorCode(null)
-            .errorMessage(null)
-            .errorKey(null)
-            .errorArgs(null)
-            .highWaterMarkOut(null)
-            .outputs(null)
-            .partitionInvocationId(p.getCurrentInvocationId())
-            .failureClass(null)
-            .verifierFailures(null)
-            .build());
-      } else {
-        reportItems.add(TaskExecutionReportCommand.builder()
-            .taskId(lt.taskId())
-            .tenantId(TENANT)
-            .workerId(lt.seed().workerCode())
-            .success(false)
-            .code("E_IT_FAIL")
-            .message("intentional failure for per-item isolation")
-            .resultSummary(null)
-            .errorCode(null)
-            .errorMessage(null)
-            .errorKey(null)
-            .errorArgs(null)
-            .highWaterMarkOut(null)
-            .outputs(null)
-            .partitionInvocationId(p.getCurrentInvocationId())
-            .failureClass(null)
-            .verifierFailures(null)
-            .build());
-      }
+    @BeforeEach
+    void refreshWorkers() {
+        WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     }
-    TaskReportBatchResult reportResp =
-        taskControllerApplicationService.reportBatch(new TaskReportBatchCommand(reportItems));
 
-    // assert 2:三项 outcome 都成功推进(ok=true,含失败上报本身也是合法推进)
-    assertThat(reportResp.results()).hasSize(3);
-    assertThat(reportResp.results()).allMatch(TaskReportItemResult::ok);
+    /**
+     * 启动一个 IMPORT 单作业,返回其唯一 task(及其 partition)。
+     *
+     * <p>每个作业用**独立 worker_group**(group 内仅 1 个 worker)—— 多个同组 ONLINE worker 时 orchestrator 的 worker
+     * 选择会按负载挑定某一个,用别的同组 worker 去 claim 会落空(claimed=false)。 独立 group 保证每个 task 只有唯一可选 worker,claim
+     * 结果确定(本机偶发对齐、CI 必现该非确定性)。
+     */
+    private LaunchedTask launchOne(int idx) {
+        WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+                jdbcTemplate, TENANT, "IMPORT", "ITGRP_" + idx + "_" + System.nanoTime(), TriggerType.API);
+        LaunchRequest req = LaunchRequest.builder()
+                .tenantId(TENANT)
+                .workflowDefinitionId(seed.workflowDefinitionId())
+                .bizDate(BIZ_DATE)
+                .triggerType(TriggerType.API)
+                .requestId(seed.requestId())
+                .traceId("trace-batch-" + idx + "-" + seed.requestId())
+                .params(Map.of())
+                .build();
+        var response = workflowRunLaunchService.launch(req);
 
-    // assert 3:成功项 partition→SUCCESS、失败项 partition→FAILED(逐项独立、互不影响)
-    assertThat(jobPartitionMapper
-            .selectById(TENANT, launched.get(0).partitionId())
-            .getPartitionStatus())
-        .isEqualTo(PartitionStatus.SUCCESS.code());
-    assertThat(jobPartitionMapper
-            .selectById(TENANT, launched.get(1).partitionId())
-            .getPartitionStatus())
-        .isEqualTo(PartitionStatus.SUCCESS.code());
-    assertThat(jobPartitionMapper
-            .selectById(TENANT, launched.get(2).partitionId())
-            .getPartitionStatus())
-        .isEqualTo(PartitionStatus.FAILED.code());
-  }
+        Long instanceId =
+                LaunchIntegrationFixture.selectDispatchedJobInstanceId(jdbcTemplate, TENANT, response.instanceNo());
+        JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, instanceId);
+        JobTaskEntity task = jobTaskMapper
+                .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
+                .get(0);
+        JobPartitionEntity partition = jobPartitionMapper
+                .selectByQuery(new JobPartitionQuery(TENANT, instance.getId(), null, null))
+                .get(0);
+        return new LaunchedTask(seed, instance.getId(), task.getId(), partition.getId());
+    }
 
-  @Test
-  @DisplayName("2.1:已被并发对手领走的项在 claim-batch 里记 claimed=false,其余项正常认领(真 PG)")
-  void claimBatch_skipsAlreadyClaimedItem_withoutFailingOthers() {
-    LaunchedTask a = launchOne(0);
-    LaunchedTask b = launchOne(1);
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    @Test
+    @DisplayName("2.1+2.2:批量认领 K 个独立 task,report-batch 混合成功/失败逐项独立(真 PG)")
+    void claimBatch_thenReportBatch_mixedOutcome_appliesPerItemIndependently() {
+        // arrange:启动 3 个独立 IMPORT 作业 → 3 个独立 task
+        List<LaunchedTask> launched = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            launched.add(launchOne(i));
+        }
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
 
-    // 先让 a 被它自己的 worker 单条认领(模拟并发对手已领走)
-    JobTaskEntity claimedA =
-        taskAssignmentService.assignWorker(TENANT, a.taskId(), a.seed().workerCode());
-    assertThat(claimedA).isNotNull();
+        // act 1:一次 claim-batch 认领全部 3 个(各用各自 worker)
+        List<TaskClaimItemCommand> claimItems = new ArrayList<>();
+        for (LaunchedTask lt : launched) {
+            claimItems.add(
+                    new TaskClaimItemCommand(TENANT, lt.taskId(), lt.seed().workerCode(), null));
+        }
+        TaskClaimBatchResult claimResp =
+                taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(claimItems));
 
-    // claim-batch 用「另一个 worker」尝试认领 a + b:a 已被领走 → claimed=false;b 正常 → claimed=true
-    List<TaskClaimItemCommand> items = List.of(
-        new TaskClaimItemCommand(TENANT, a.taskId(), b.seed().workerCode(), null),
-        new TaskClaimItemCommand(TENANT, b.taskId(), b.seed().workerCode(), null));
-    TaskClaimBatchResult resp =
-        taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(items));
+        // assert 1:逐项 claimed=true + config 非空,partition 全 RUNNING
+        assertThat(claimResp.results()).hasSize(3);
+        assertThat(claimResp.results()).allMatch(TaskClaimItemResult::claimed);
+        assertThat(claimResp.results()).allMatch(r -> r.config() != null);
+        for (LaunchedTask lt : launched) {
+            JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
+            assertThat(p.getPartitionStatus()).isEqualTo(PartitionStatus.RUNNING.code());
+            assertThat(p.getCurrentInvocationId()).isNotBlank();
+        }
 
-    assertThat(resp.results()).hasSize(2);
-    TaskClaimItemResult ra = resp.results().stream()
-        .filter(r -> r.taskId().equals(a.taskId()))
-        .findFirst()
-        .orElseThrow();
-    TaskClaimItemResult rb = resp.results().stream()
-        .filter(r -> r.taskId().equals(b.taskId()))
-        .findFirst()
-        .orElseThrow();
-    assertThat(ra.claimed()).isFalse(); // a 被对手领走,逐项 skip 不抛异常
-    assertThat(rb.claimed()).isTrue(); // b 正常领到
-    assertThat(rb.config()).isNotNull();
-  }
+        // act 2:report-batch —— 前 2 个成功,第 3 个失败(测批内部分失败隔离)
+        List<TaskExecutionReportCommand> reportItems = new ArrayList<>();
+        for (int i = 0; i < launched.size(); i++) {
+            LaunchedTask lt = launched.get(i);
+            JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
+            if (i < 2) {
+                reportItems.add(TaskExecutionReportCommand.builder()
+                        .taskId(lt.taskId())
+                        .tenantId(TENANT)
+                        .workerId(lt.seed().workerCode())
+                        .success(true)
+                        .code(null)
+                        .message(null)
+                        .resultSummary("{\"records\":" + (i + 1) + "}")
+                        .errorCode(null)
+                        .errorMessage(null)
+                        .errorKey(null)
+                        .errorArgs(null)
+                        .highWaterMarkOut(null)
+                        .outputs(null)
+                        .partitionInvocationId(p.getCurrentInvocationId())
+                        .failureClass(null)
+                        .verifierFailures(null)
+                        .build());
+            } else {
+                reportItems.add(TaskExecutionReportCommand.builder()
+                        .taskId(lt.taskId())
+                        .tenantId(TENANT)
+                        .workerId(lt.seed().workerCode())
+                        .success(false)
+                        .code("E_IT_FAIL")
+                        .message("intentional failure for per-item isolation")
+                        .resultSummary(null)
+                        .errorCode(null)
+                        .errorMessage(null)
+                        .errorKey(null)
+                        .errorArgs(null)
+                        .highWaterMarkOut(null)
+                        .outputs(null)
+                        .partitionInvocationId(p.getCurrentInvocationId())
+                        .failureClass(null)
+                        .verifierFailures(null)
+                        .build());
+            }
+        }
+        TaskReportBatchResult reportResp =
+                taskControllerApplicationService.reportBatch(new TaskReportBatchCommand(reportItems));
 
-  @Test
-  @DisplayName("执行入口同一尝试可重试，不同尝试不能复用当前认领")
-  void shouldFenceDistinctExecutionAttemptsWithinSameClaim() {
-    LaunchedTask task = launchOne(9);
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    String worker = task.seed().workerCode();
-    JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
-    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.partitionId());
-    String invocation = partition.getCurrentInvocationId();
-    String firstDetails = """
+        // assert 2:三项 outcome 都成功推进(ok=true,含失败上报本身也是合法推进)
+        assertThat(reportResp.results()).hasSize(3);
+        assertThat(reportResp.results()).allMatch(TaskReportItemResult::ok);
+
+        // assert 3:成功项 partition→SUCCESS、失败项 partition→FAILED(逐项独立、互不影响)
+        assertThat(jobPartitionMapper
+                        .selectById(TENANT, launched.get(0).partitionId())
+                        .getPartitionStatus())
+                .isEqualTo(PartitionStatus.SUCCESS.code());
+        assertThat(jobPartitionMapper
+                        .selectById(TENANT, launched.get(1).partitionId())
+                        .getPartitionStatus())
+                .isEqualTo(PartitionStatus.SUCCESS.code());
+        assertThat(jobPartitionMapper
+                        .selectById(TENANT, launched.get(2).partitionId())
+                        .getPartitionStatus())
+                .isEqualTo(PartitionStatus.FAILED.code());
+    }
+
+    @Test
+    @DisplayName("2.1:已被并发对手领走的项在 claim-batch 里记 claimed=false,其余项正常认领(真 PG)")
+    void claimBatch_skipsAlreadyClaimedItem_withoutFailingOthers() {
+        LaunchedTask a = launchOne(0);
+        LaunchedTask b = launchOne(1);
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+
+        // 先让 a 被它自己的 worker 单条认领(模拟并发对手已领走)
+        JobTaskEntity claimedA =
+                taskAssignmentService.assignWorker(TENANT, a.taskId(), a.seed().workerCode());
+        assertThat(claimedA).isNotNull();
+
+        // claim-batch 用「另一个 worker」尝试认领 a + b:a 已被领走 → claimed=false;b 正常 → claimed=true
+        List<TaskClaimItemCommand> items = List.of(
+                new TaskClaimItemCommand(TENANT, a.taskId(), b.seed().workerCode(), null),
+                new TaskClaimItemCommand(TENANT, b.taskId(), b.seed().workerCode(), null));
+        TaskClaimBatchResult resp = taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(items));
+
+        assertThat(resp.results()).hasSize(2);
+        TaskClaimItemResult ra = resp.results().stream()
+                .filter(r -> r.taskId().equals(a.taskId()))
+                .findFirst()
+                .orElseThrow();
+        TaskClaimItemResult rb = resp.results().stream()
+                .filter(r -> r.taskId().equals(b.taskId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(ra.claimed()).isFalse(); // a 被对手领走,逐项 skip 不抛异常
+        assertThat(rb.claimed()).isTrue(); // b 正常领到
+        assertThat(rb.config()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("执行入口同一尝试可重试，不同尝试不能复用当前认领")
+    void shouldFenceDistinctExecutionAttemptsWithinSameClaim() {
+        LaunchedTask task = launchOne(9);
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+        String worker = task.seed().workerCode();
+        JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
+        assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+        JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.partitionId());
+        String invocation = partition.getCurrentInvocationId();
+        String firstDetails = """
         {"executionStarted":true,"executionAttemptId":"attempt-first"}
         """;
-    String secondDetails = """
+        String secondDetails = """
         {"executionStarted":true,"executionAttemptId":"attempt-second"}
         """;
 
-    var first = taskAssignmentService.recordHeartbeat(
-        TENANT, task.taskId(), worker, invocation, firstDetails);
-    var retry = taskAssignmentService.recordHeartbeat(
-        TENANT, task.taskId(), worker, invocation, firstDetails);
-    var duplicate = taskAssignmentService.recordHeartbeat(
-        TENANT, task.taskId(), worker, invocation, secondDetails);
+        var first = taskAssignmentService.recordHeartbeat(TENANT, task.taskId(), worker, invocation, firstDetails);
+        var retry = taskAssignmentService.recordHeartbeat(TENANT, task.taskId(), worker, invocation, firstDetails);
+        var duplicate = taskAssignmentService.recordHeartbeat(TENANT, task.taskId(), worker, invocation, secondDetails);
 
-    assertThat(first.leaseRenewed()).isTrue();
-    assertThat(retry.leaseRenewed()).isTrue();
-    assertThat(duplicate.leaseRenewed()).isFalse();
-    JobTaskEntity persisted = jobTaskMapper.selectById(TENANT, task.taskId());
-    assertThat(persisted.getExecutionAttemptId()).isEqualTo("attempt-first");
-  }
+        assertThat(first.leaseRenewed()).isTrue();
+        assertThat(retry.leaseRenewed()).isTrue();
+        assertThat(duplicate.leaseRenewed()).isFalse();
+        JobTaskEntity persisted = jobTaskMapper.selectById(TENANT, task.taskId());
+        assertThat(persisted.getExecutionAttemptId()).isEqualTo("attempt-first");
+    }
 
-  @Test
-  @DisplayName("同一认领的两个执行尝试并发确认时只能有一个获准")
-  void shouldAdmitOnlyOneConcurrentExecutionAttempt() throws Exception {
-    LaunchedTask task = launchOne(10);
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    String worker = task.seed().workerCode();
-    JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
-    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    String invocation =
-        jobPartitionMapper.selectById(TENANT, task.partitionId()).getCurrentInvocationId();
-    CountDownLatch start = new CountDownLatch(1);
-    CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
-      awaitStart(start);
-      String details = """
+    @Test
+    @DisplayName("同一认领的两个执行尝试并发确认时只能有一个获准")
+    void shouldAdmitOnlyOneConcurrentExecutionAttempt() throws Exception {
+        LaunchedTask task = launchOne(10);
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+        String worker = task.seed().workerCode();
+        JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
+        assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+        String invocation =
+                jobPartitionMapper.selectById(TENANT, task.partitionId()).getCurrentInvocationId();
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
+            awaitStart(start);
+            String details = """
           {"executionStarted":true,"executionAttemptId":"attempt-a"}
           """;
-      return taskAssignmentService
-          .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
-          .leaseRenewed();
-    });
-    CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
-      awaitStart(start);
-      String details = """
+            return taskAssignmentService
+                    .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
+                    .leaseRenewed();
+        });
+        CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
+            awaitStart(start);
+            String details = """
           {"executionStarted":true,"executionAttemptId":"attempt-b"}
           """;
-      return taskAssignmentService
-          .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
-          .leaseRenewed();
-    });
+            return taskAssignmentService
+                    .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
+                    .leaseRenewed();
+        });
 
-    start.countDown();
-    boolean firstAllowed = first.get(30, TimeUnit.SECONDS);
-    boolean secondAllowed = second.get(30, TimeUnit.SECONDS);
-    assertThat(firstAllowed).isNotEqualTo(secondAllowed);
-  }
-
-  private static void awaitStart(CountDownLatch start) {
-    try {
-      if (!start.await(10, TimeUnit.SECONDS)) {
-        throw new IllegalStateException("等待并发确认超时");
-      }
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("并发确认被中断", interrupted);
+        start.countDown();
+        boolean firstAllowed = first.get(30, TimeUnit.SECONDS);
+        boolean secondAllowed = second.get(30, TimeUnit.SECONDS);
+        assertThat(firstAllowed).isNotEqualTo(secondAllowed);
     }
-  }
 
-  private record LaunchedTask(
-      WorkflowLaunchSeed seed, Long instanceId, Long taskId, Long partitionId) {}
+    private static void awaitStart(CountDownLatch start) {
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("等待并发确认超时");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("并发确认被中断", interrupted);
+        }
+    }
 
-  @Test
-  @DisplayName("成功回报中的校验失败只写软告警，空元素不改变事件序号且重复回报不重复写入")
-  void shouldPersistSoftFailuresOnce_whenSuccessfulReportIsRepeated() {
-    LaunchedTask launched = launchOne(8);
-    TaskOutcomeCommand report = claimedReport(launched);
+    private record LaunchedTask(WorkflowLaunchSeed seed, Long instanceId, Long taskId, Long partitionId) {}
 
-    taskOutcomeService.applyTaskOutcome(report);
-    taskOutcomeService.applyTaskOutcome(report);
+    @Test
+    @DisplayName("成功回报中的校验失败只写软告警，空元素不改变事件序号且重复回报不重复写入")
+    void shouldPersistSoftFailuresOnce_whenSuccessfulReportIsRepeated() {
+        LaunchedTask launched = launchOne(8);
+        TaskOutcomeCommand report = claimedReport(launched);
 
-    assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
-        .isEqualTo(TaskStatus.SUCCESS.code());
-    assertThat(verifierEventCount(launched)).isEqualTo(2L);
-    String verifierFailureEventKeysSql = """
+        taskOutcomeService.applyTaskOutcome(report);
+        taskOutcomeService.applyTaskOutcome(report);
+
+        assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
+                .isEqualTo(TaskStatus.SUCCESS.code());
+        assertThat(verifierEventCount(launched)).isEqualTo(2L);
+        String verifierFailureEventKeysSql = """
         SELECT event_key FROM batch.outbox_event
         WHERE tenant_id = ? AND aggregate_id = ?
           AND event_type = 'verifier.failure.v1'
         ORDER BY event_key
         """;
-    List<String> keys = jdbcTemplate.queryForList(
-        verifierFailureEventKeysSql, String.class, TENANT, launched.instanceId());
-    assertThat(keys)
-        .containsExactly(
-            TENANT + ":verifier:" + launched.taskId() + ":COUNT:1",
-            TENANT + ":verifier:" + launched.taskId() + ":COUNT:2");
-  }
+        List<String> keys =
+                jdbcTemplate.queryForList(verifierFailureEventKeysSql, String.class, TENANT, launched.instanceId());
+        assertThat(keys)
+                .containsExactly(
+                        TENANT + ":verifier:" + launched.taskId() + ":COUNT:1",
+                        TENANT + ":verifier:" + launched.taskId() + ":COUNT:2");
+    }
 
-  @Test
-  @DisplayName("回报事务后续失败时真实数据库同时回滚任务终态、分区状态和校验告警")
-  void shouldRollbackTaskAndSoftFailuresTogether_whenReportTransactionFails() {
-    LaunchedTask launched = launchOne(9);
-    TaskOutcomeCommand report = claimedReport(launched);
-    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    @Test
+    @DisplayName("回报事务后续失败时真实数据库同时回滚任务终态、分区状态和校验告警")
+    void shouldRollbackTaskAndSoftFailuresTogether_whenReportTransactionFails() {
+        LaunchedTask launched = launchOne(9);
+        TaskOutcomeCommand report = claimedReport(launched);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
-    assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-          taskOutcomeService.applyTaskOutcome(report);
-          assertThat(verifierEventCount(launched)).isEqualTo(2L);
-          throw new IllegalStateException("failure after outcome writes");
-        }))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("failure after outcome writes");
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+                    taskOutcomeService.applyTaskOutcome(report);
+                    assertThat(verifierEventCount(launched)).isEqualTo(2L);
+                    throw new IllegalStateException("failure after outcome writes");
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("failure after outcome writes");
 
-    assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
-        .isEqualTo(TaskStatus.RUNNING.code());
-    assertThat(jobPartitionMapper.selectById(TENANT, launched.partitionId()).getPartitionStatus())
-        .isEqualTo(PartitionStatus.RUNNING.code());
-    assertThat(verifierEventCount(launched)).isZero();
-  }
+        assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
+                .isEqualTo(TaskStatus.RUNNING.code());
+        assertThat(jobPartitionMapper.selectById(TENANT, launched.partitionId()).getPartitionStatus())
+                .isEqualTo(PartitionStatus.RUNNING.code());
+        assertThat(verifierEventCount(launched)).isZero();
+    }
 
-  @Test
-  @DisplayName("typed verifier 入口必须持有事务")
-  void shouldRejectVerifierEntryPoint_whenTransactionIsAbsent() {
-    assertThatThrownBy(
-            () -> verifierFailureOutboxService.writeVerifierFailures(null, null, List.of()))
-        .isInstanceOf(IllegalTransactionStateException.class);
-  }
+    @Test
+    @DisplayName("typed verifier 入口必须持有事务")
+    void shouldRejectVerifierEntryPoint_whenTransactionIsAbsent() {
+        assertThatThrownBy(() -> verifierFailureOutboxService.writeVerifierFailures(null, null, List.of()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
 
-  private TaskOutcomeCommand claimedReport(LaunchedTask launched) {
-    assertThat(taskAssignmentService.assignWorker(
-            TENANT, launched.taskId(), launched.seed().workerCode()))
-        .isNotNull();
-    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, launched.partitionId());
-    return TaskOutcomeCommand.builder()
-        .tenantId(TENANT)
-        .taskId(launched.taskId())
-        .workerId(launched.seed().workerCode())
-        .success(true)
-        .partitionInvocationId(partition.getCurrentInvocationId())
-        .verifierFailures(Arrays.asList(
-            null,
-            Map.of("code", "COUNT", "evidence", Map.of("actual", 1)),
-            Map.of("code", "COUNT", "message", "second verifier")))
-        .build();
-  }
+    private TaskOutcomeCommand claimedReport(LaunchedTask launched) {
+        assertThat(taskAssignmentService.assignWorker(
+                        TENANT, launched.taskId(), launched.seed().workerCode()))
+                .isNotNull();
+        JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, launched.partitionId());
+        return TaskOutcomeCommand.builder()
+                .tenantId(TENANT)
+                .taskId(launched.taskId())
+                .workerId(launched.seed().workerCode())
+                .success(true)
+                .partitionInvocationId(partition.getCurrentInvocationId())
+                .verifierFailures(Arrays.asList(
+                        null,
+                        Map.of("code", "COUNT", "evidence", Map.of("actual", 1)),
+                        Map.of("code", "COUNT", "message", "second verifier")))
+                .build();
+    }
 
-  private long verifierEventCount(LaunchedTask launched) {
-    String verifierFailureEventCountSql = """
+    private long verifierEventCount(LaunchedTask launched) {
+        String verifierFailureEventCountSql = """
         SELECT count(*) FROM batch.outbox_event
         WHERE tenant_id = ? AND aggregate_id = ?
           AND event_type = 'verifier.failure.v1'
         """;
-    return jdbcTemplate.queryForObject(
-        verifierFailureEventCountSql, Long.class, TENANT, launched.instanceId());
-  }
+        return jdbcTemplate.queryForObject(verifierFailureEventCountSql, Long.class, TENANT, launched.instanceId());
+    }
 }

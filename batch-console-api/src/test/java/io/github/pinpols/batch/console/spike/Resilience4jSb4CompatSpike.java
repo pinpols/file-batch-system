@@ -43,79 +43,80 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest(classes = Resilience4jSb4CompatSpikeTest.SpikeApp.class)
 @ActiveProfiles("test")
 @TestPropertySource(
-    properties = {
-      "resilience4j.circuitbreaker.instances.test.failure-rate-threshold=50",
-      "resilience4j.circuitbreaker.instances.test.sliding-window-size=4",
-      "resilience4j.circuitbreaker.instances.test.minimum-number-of-calls=2",
-      "resilience4j.circuitbreaker.instances.test.wait-duration-in-open-state=10s",
-      "resilience4j.retry.instances.test.max-attempts=3",
-      "spring.main.web-application-type=none",
-    })
+        properties = {
+            "resilience4j.circuitbreaker.instances.test.failure-rate-threshold=50",
+            "resilience4j.circuitbreaker.instances.test.sliding-window-size=4",
+            "resilience4j.circuitbreaker.instances.test.minimum-number-of-calls=2",
+            "resilience4j.circuitbreaker.instances.test.wait-duration-in-open-state=10s",
+            "resilience4j.retry.instances.test.max-attempts=3",
+            "spring.main.web-application-type=none",
+        })
 @DisplayName("熔断与重试自动配置在新基线上的兼容性冒烟验证")
 class Resilience4jSb4CompatSpikeTest {
 
-  @Autowired
-  private CircuitBreakerRegistry circuitBreakerRegistry;
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
 
-  @Autowired
-  private RetryRegistry retryRegistry;
+    @Autowired
+    private RetryRegistry retryRegistry;
 
-  @Autowired
-  private MeterRegistry meterRegistry;
+    @Autowired
+    private MeterRegistry meterRegistry;
 
-  @Test
-  @DisplayName("属性中定义的熔断实例被注册, 失败率阈值与滑动窗口大小与配置一致")
-  void shouldLoadCircuitBreakerInstanceFromProperties() {
-    CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
-    assertThat(cb.getCircuitBreakerConfig().getFailureRateThreshold()).isEqualTo(50f);
-    assertThat(cb.getCircuitBreakerConfig().getSlidingWindowSize()).isEqualTo(4);
-  }
-
-  @Test
-  @DisplayName("属性中定义的重试实例被注册, 最大尝试次数与配置一致")
-  void shouldLoadRetryInstanceFromProperties() {
-    assertThat(retryRegistry.retry("test").getRetryConfig().getMaxAttempts()).isEqualTo(3);
-  }
-
-  @Test
-  @DisplayName("连续四次强制失败后熔断器状态转为打开")
-  void shouldTripCircuitBreakerOpenAfterRepeatedFailures() {
-    CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
-    for (int i = 0; i < 4; i++) {
-      try {
-        cb.executeSupplier(() -> {
-          throw new RuntimeException("forced");
-        });
-      } catch (RuntimeException ignored) {
-        // 符合预期
-      }
+    @Test
+    @DisplayName("属性中定义的熔断实例被注册, 失败率阈值与滑动窗口大小与配置一致")
+    void shouldLoadCircuitBreakerInstanceFromProperties() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
+        assertThat(cb.getCircuitBreakerConfig().getFailureRateThreshold()).isEqualTo(50f);
+        assertThat(cb.getCircuitBreakerConfig().getSlidingWindowSize()).isEqualTo(4);
     }
-    assertThat(cb.getState())
-        .as("4 forced failures with 50%% threshold + window=4 should trip OPEN")
-        .isEqualTo(CircuitBreaker.State.OPEN);
-  }
 
-  @Test
-  @DisplayName("成功调用后自动注册熔断前缀命名的指标计量器")
-  void shouldExposeMicrometerCounter() {
-    CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
-    cb.executeSupplier(() -> "ok");
-    boolean found = meterRegistry.getMeters().stream()
-        .anyMatch(m -> m.getId().getName().startsWith("resilience4j.circuitbreaker"));
-    assertThat(found).as("micrometer bridge should auto-register counters").isTrue();
-  }
-
-  @SpringBootConfiguration
-  @ImportAutoConfiguration({
-    CircuitBreakerAutoConfiguration.class,
-    CircuitBreakerMetricsAutoConfiguration.class,
-    RetryAutoConfiguration.class,
-    RetryMetricsAutoConfiguration.class,
-  })
-  static class SpikeApp {
-    @Bean
-    MeterRegistry meterRegistry() {
-      return new SimpleMeterRegistry();
+    @Test
+    @DisplayName("属性中定义的重试实例被注册, 最大尝试次数与配置一致")
+    void shouldLoadRetryInstanceFromProperties() {
+        assertThat(retryRegistry.retry("test").getRetryConfig().getMaxAttempts())
+                .isEqualTo(3);
     }
-  }
+
+    @Test
+    @DisplayName("连续四次强制失败后熔断器状态转为打开")
+    void shouldTripCircuitBreakerOpenAfterRepeatedFailures() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
+        for (int i = 0; i < 4; i++) {
+            try {
+                cb.executeSupplier(() -> {
+                    throw new RuntimeException("forced");
+                });
+            } catch (RuntimeException ignored) {
+                // 符合预期
+            }
+        }
+        assertThat(cb.getState())
+                .as("4 forced failures with 50%% threshold + window=4 should trip OPEN")
+                .isEqualTo(CircuitBreaker.State.OPEN);
+    }
+
+    @Test
+    @DisplayName("成功调用后自动注册熔断前缀命名的指标计量器")
+    void shouldExposeMicrometerCounter() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
+        cb.executeSupplier(() -> "ok");
+        boolean found = meterRegistry.getMeters().stream()
+                .anyMatch(m -> m.getId().getName().startsWith("resilience4j.circuitbreaker"));
+        assertThat(found).as("micrometer bridge should auto-register counters").isTrue();
+    }
+
+    @SpringBootConfiguration
+    @ImportAutoConfiguration({
+        CircuitBreakerAutoConfiguration.class,
+        CircuitBreakerMetricsAutoConfiguration.class,
+        RetryAutoConfiguration.class,
+        RetryMetricsAutoConfiguration.class,
+    })
+    static class SpikeApp {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
 }

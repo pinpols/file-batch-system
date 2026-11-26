@@ -41,138 +41,128 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSystemControllerTest {
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private ConsoleMaintenanceProperties properties;
-  private MaintenanceStateMapper mapper;
-  private MaintenanceStateHolder stateHolder;
-  private MockMvc mockMvc;
+    private ConsoleMaintenanceProperties properties;
+    private MaintenanceStateMapper mapper;
+    private MaintenanceStateHolder stateHolder;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    properties = new ConsoleMaintenanceProperties();
-    mapper = mock(MaintenanceStateMapper.class);
-    stateHolder = MaintenanceStateHolderTestSupport.initialized(properties, mapper);
+        properties = new ConsoleMaintenanceProperties();
+        mapper = mock(MaintenanceStateMapper.class);
+        stateHolder = MaintenanceStateHolderTestSupport.initialized(properties, mapper);
 
-    // 固定时钟:Quartz 预览的「当前时刻」来自统一入口 BatchDateTimeSupport.nowInstant(),固定后结果确定。
-    Clock fixedClock = Clock.fixed(Instant.parse("2026-05-20T15:00:00Z"), ZoneOffset.UTC);
-    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(fixedClock, timezoneProvider);
+        // 固定时钟:Quartz 预览的「当前时刻」来自统一入口 BatchDateTimeSupport.nowInstant(),固定后结果确定。
+        Clock fixedClock = Clock.fixed(Instant.parse("2026-05-20T15:00:00Z"), ZoneOffset.UTC);
+        BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(fixedClock, timezoneProvider);
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
-            new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver),
-            new QuartzCronPreviewService(timezoneProvider, dateTimeSupport)))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
+                        new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver),
+                        new QuartzCronPreviewService(timezoneProvider, dateTimeSupport)))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("维护状态:未启用时返回关闭且非只读")
-  void shouldReturnDisabled_whenMaintenanceNotConfigured() throws Exception {
-    mockMvc
-        .perform(get("/api/console/system/maintenance"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(false))
-        .andExpect(jsonPath("$.data.readOnly").value(false));
-  }
+    @Test
+    @DisplayName("维护状态:未启用时返回关闭且非只读")
+    void shouldReturnDisabled_whenMaintenanceNotConfigured() throws Exception {
+        mockMvc.perform(get("/api/console/system/maintenance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.readOnly").value(false));
+    }
 
-  @Test
-  @DisplayName("维护状态:更新后返回启用、只读、提示文案与受影响服务")
-  void shouldReflectHolderState_whenMaintenanceUpdated() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    stateHolder.update(new MaintenanceState(
-        true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
-    mockMvc
-        .perform(get("/api/console/system/maintenance"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(true))
-        .andExpect(jsonPath("$.data.readOnly").value(true))
-        .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
-        .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
-        .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
-  }
+    @Test
+    @DisplayName("维护状态:更新后返回启用、只读、提示文案与受影响服务")
+    void shouldReflectHolderState_whenMaintenanceUpdated() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        stateHolder.update(new MaintenanceState(
+                true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
+        mockMvc.perform(get("/api/console/system/maintenance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.readOnly").value(true))
+                .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
+                .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
+                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
+    }
 
-  @Test
-  @DisplayName("维护状态:计划开始前返回公告时间且尚未实际生效")
-  void shouldReturnInactiveAnnouncement_whenMaintenanceStartsInFuture() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    Instant startsAt = Instant.parse("2099-05-20T14:00:00Z");
-    stateHolder.update(
-        new MaintenanceState(true, true, "计划维护", null, startsAt, List.of("job-schedule")));
+    @Test
+    @DisplayName("维护状态:计划开始前返回公告时间且尚未实际生效")
+    void shouldReturnInactiveAnnouncement_whenMaintenanceStartsInFuture() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        Instant startsAt = Instant.parse("2099-05-20T14:00:00Z");
+        stateHolder.update(new MaintenanceState(true, true, "计划维护", null, startsAt, List.of("job-schedule")));
 
-    mockMvc
-        .perform(get("/api/console/system/maintenance"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(true))
-        .andExpect(jsonPath("$.data.active").value(false))
-        .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
-  }
+        mockMvc.perform(get("/api/console/system/maintenance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.active").value(false))
+                .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
+    }
 
-  @Test
-  @DisplayName("Cron 预览:合法表达式返回时区与最近三次触发时间")
-  void shouldReturnNextFireTimes_whenCronExpressionValid() throws Exception {
-    when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
-    mockMvc
-        .perform(get("/api/console/system/cron-preview").param("expr", "0 0 12 * * ?"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.valid").value(true))
-        .andExpect(jsonPath("$.data.expr").value("0 0 12 * * ?"))
-        .andExpect(jsonPath("$.data.timezone").value("Asia/Shanghai"))
-        .andExpect(jsonPath("$.data.nextRuns.length()").value(3));
-  }
+    @Test
+    @DisplayName("Cron 预览:合法表达式返回时区与最近三次触发时间")
+    void shouldReturnNextFireTimes_whenCronExpressionValid() throws Exception {
+        when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
+        mockMvc.perform(get("/api/console/system/cron-preview").param("expr", "0 0 12 * * ?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(true))
+                .andExpect(jsonPath("$.data.expr").value("0 0 12 * * ?"))
+                .andExpect(jsonPath("$.data.timezone").value("Asia/Shanghai"))
+                .andExpect(jsonPath("$.data.nextRuns.length()").value(3));
+    }
 
-  @Test
-  @DisplayName("Cron 预览:非法表达式返回校验失败与错误信息,不抛服务端异常")
-  void shouldReturnInvalidWithout5xx_whenCronExpressionMalformed() throws Exception {
-    // 非法 Quartz 表达式 → valid=false,error 非空,nextRuns 空 list,不抛 500
-    mockMvc
-        .perform(get("/api/console/system/cron-preview").param("expr", "not a cron"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.valid").value(false))
-        .andExpect(jsonPath("$.data.error").isNotEmpty());
-  }
+    @Test
+    @DisplayName("Cron 预览:非法表达式返回校验失败与错误信息,不抛服务端异常")
+    void shouldReturnInvalidWithout5xx_whenCronExpressionMalformed() throws Exception {
+        // 非法 Quartz 表达式 → valid=false,error 非空,nextRuns 空 list,不抛 500
+        mockMvc.perform(get("/api/console/system/cron-preview").param("expr", "not a cron"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(false))
+                .andExpect(jsonPath("$.data.error").isNotEmpty());
+    }
 
-  @Test
-  @DisplayName("Cron 预览:表达式为空时返回参数非法")
-  void shouldRejectBlankExpr_whenCronPreviewRequested() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(get("/api/console/system/cron-preview").param("expr", "   "))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
-  }
+    @Test
+    @DisplayName("Cron 预览:表达式为空时返回参数非法")
+    void shouldRejectBlankExpr_whenCronPreviewRequested() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(get("/api/console/system/cron-preview").param("expr", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
 
-  @Test
-  @DisplayName("Cron 预览:请求次数超过上限时按最大次数返回")
-  void shouldCapCountToMax_whenCountTooLarge() throws Exception {
-    when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
-    mockMvc
-        .perform(get("/api/console/system/cron-preview")
-            .param("expr", "0 0 12 * * ?")
-            .param("count", "999"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.nextRuns.length()").value(20));
-  }
+    @Test
+    @DisplayName("Cron 预览:请求次数超过上限时按最大次数返回")
+    void shouldCapCountToMax_whenCountTooLarge() throws Exception {
+        when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
+        mockMvc.perform(get("/api/console/system/cron-preview")
+                        .param("expr", "0 0 12 * * ?")
+                        .param("count", "999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nextRuns.length()").value(20));
+    }
 
-  private MaintenanceStateEntity entityFromProperties() {
-    MaintenanceStateEntity entity = new MaintenanceStateEntity();
-    entity.setEnabled(properties.isEnabled());
-    entity.setReadOnly(properties.isReadOnly());
-    entity.setMessage(properties.getMessage());
-    entity.setEtaAt(properties.getEtaAt());
-    entity.setAffectedServicesJson(new ObjectMapper()
-        .valueToTree(
-            properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
-        .toString());
-    entity.setVersion(0L);
-    return entity;
-  }
+    private MaintenanceStateEntity entityFromProperties() {
+        MaintenanceStateEntity entity = new MaintenanceStateEntity();
+        entity.setEnabled(properties.isEnabled());
+        entity.setReadOnly(properties.isReadOnly());
+        entity.setMessage(properties.getMessage());
+        entity.setEtaAt(properties.getEtaAt());
+        entity.setAffectedServicesJson(new ObjectMapper()
+                .valueToTree(properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
+                .toString());
+        entity.setVersion(0L);
+        return entity;
+    }
 }

@@ -7,11 +7,11 @@ package io.github.pinpols.batch.console.domain.rbac.view;
  * {@code String.valueOf} 的响应字符串语义。
  */
 public record TenantRow(
-    Long id,
-    String tenantId,
-    String tenantName,
-    String status,
-    String description,
-    String createdBy,
-    Object createdAt,
-    Object updatedAt) {}
+        Long id,
+        String tenantId,
+        String tenantName,
+        String status,
+        String description,
+        String createdBy,
+        Object createdAt,
+        Object updatedAt) {}

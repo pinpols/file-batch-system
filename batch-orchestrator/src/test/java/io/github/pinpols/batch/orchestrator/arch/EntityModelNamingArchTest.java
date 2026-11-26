@@ -14,22 +14,22 @@ import org.junit.jupiter.api.Test;
 @DisplayName("实体包仅包含 XxxEntity 持久化表行模型")
 class EntityModelNamingArchTest {
 
-  private static final String ENTITY_PACKAGE = "io.github.pinpols.batch.orchestrator.domain.entity";
+    private static final String ENTITY_PACKAGE = "io.github.pinpols.batch.orchestrator.domain.entity";
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.orchestrator..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.orchestrator..");
 
-  @Test
-  @DisplayName("domain.entity 中不得残留非 Entity 模型")
-  void shouldNotKeepProjectionModelsInEntityPackage() {
-    Set<String> actual = CLASSES.stream()
-        .filter(clazz -> ENTITY_PACKAGE.equals(clazz.getPackageName()))
-        .filter(clazz -> clazz.isTopLevelClass())
-        .map(clazz -> clazz.getSimpleName())
-        .filter(name -> !name.endsWith("Entity"))
-        .collect(Collectors.toSet());
+    @Test
+    @DisplayName("domain.entity 中不得残留非 Entity 模型")
+    void shouldNotKeepProjectionModelsInEntityPackage() {
+        Set<String> actual = CLASSES.stream()
+                .filter(clazz -> ENTITY_PACKAGE.equals(clazz.getPackageName()))
+                .filter(clazz -> clazz.isTopLevelClass())
+                .map(clazz -> clazz.getSimpleName())
+                .filter(name -> !name.endsWith("Entity"))
+                .collect(Collectors.toSet());
 
-    assertThat(actual).as("投影、查询、值对象和上下文应放在表达职责的包中").isEmpty();
-  }
+        assertThat(actual).as("投影、查询、值对象和上下文应放在表达职责的包中").isEmpty();
+    }
 }

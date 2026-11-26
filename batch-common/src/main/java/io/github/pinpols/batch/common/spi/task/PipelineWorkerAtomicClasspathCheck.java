@@ -34,43 +34,42 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnProperty(
-    prefix = "batch.worker.atomic.isolation-check",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = false)
+        prefix = "batch.worker.atomic.isolation-check",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = false)
 public class PipelineWorkerAtomicClasspathCheck {
 
-  /** atomic SPI canary 类全限定名 —— 命中即视为整组 dual-use executor 都在 classpath。 */
-  static final String CANARY_CLASS = "io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor";
+    /** atomic SPI canary 类全限定名 —— 命中即视为整组 dual-use executor 都在 classpath。 */
+    static final String CANARY_CLASS = "io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor";
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void verifyClasspathIsolation() {
-    if (isCanaryPresent()) {
-      throw new IllegalStateException("ADR-029 violation: atomic SPI executor ("
-          + CANARY_CLASS
-          + ") detected on pipeline worker classpath. Dual-use (shell/sql/stored-proc/http) "
-          + "executors must run only in batch-worker-atomic. Check pom.xml for stray "
-          + "batch-worker-atomic dependency. To disable this guard (atomic worker itself), set "
-          + "batch.worker.atomic.isolation-check.enabled=false.");
+    @EventListener(ApplicationReadyEvent.class)
+    public void verifyClasspathIsolation() {
+        if (isCanaryPresent()) {
+            throw new IllegalStateException("ADR-029 violation: atomic SPI executor ("
+                    + CANARY_CLASS
+                    + ") detected on pipeline worker classpath. Dual-use (shell/sql/stored-proc/http) "
+                    + "executors must run only in batch-worker-atomic. Check pom.xml for stray "
+                    + "batch-worker-atomic dependency. To disable this guard (atomic worker itself), set "
+                    + "batch.worker.atomic.isolation-check.enabled=false.");
+        }
+        log.debug("ADR-029 classpath isolation OK: no atomic SPI executor in pipeline worker classpath");
     }
-    log.debug(
-        "ADR-029 classpath isolation OK: no atomic SPI executor in pipeline worker classpath");
-  }
 
-  /**
-   * 探针 canary 类是否在 classpath。protected 便于单测以子类 override 形式注入「命中 / 未命中」两态,而无须 mockStatic {@link
-   * Class#forName(String, boolean, ClassLoader)}(后者跨 JDK / mockito-inline 版本行为不一致)。
-   */
-  protected boolean isCanaryPresent() {
-    ClassLoader cl = Thread.currentThread().getContextClassLoader();
-    if (cl == null) {
-      cl = PipelineWorkerAtomicClasspathCheck.class.getClassLoader();
+    /**
+     * 探针 canary 类是否在 classpath。protected 便于单测以子类 override 形式注入「命中 / 未命中」两态,而无须 mockStatic {@link
+     * Class#forName(String, boolean, ClassLoader)}(后者跨 JDK / mockito-inline 版本行为不一致)。
+     */
+    protected boolean isCanaryPresent() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = PipelineWorkerAtomicClasspathCheck.class.getClassLoader();
+        }
+        try {
+            Class.forName(CANARY_CLASS, false, cl);
+            return true;
+        } catch (ClassNotFoundException missing) {
+            return false;
+        }
     }
-    try {
-      Class.forName(CANARY_CLASS, false, cl);
-      return true;
-    } catch (ClassNotFoundException missing) {
-      return false;
-    }
-  }
 }

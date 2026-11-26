@@ -33,51 +33,49 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleWorkerController {
 
-  private final ConsoleWorkerApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleWorkerApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** Worker 优雅排空。 */
-  @PostMapping("/{workerCode}/drain")
-  public CommonResponse<ConsoleWorkerRegistryResponse> drain(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String workerCode,
-      @Valid @RequestBody DrainWorkerRequest request) {
-    return responseFactory.success(applicationService.drain(workerCode, request, idempotencyKey));
-  }
+    /** Worker 优雅排空。 */
+    @PostMapping("/{workerCode}/drain")
+    public CommonResponse<ConsoleWorkerRegistryResponse> drain(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @Valid @RequestBody DrainWorkerRequest request) {
+        return responseFactory.success(applicationService.drain(workerCode, request, idempotencyKey));
+    }
 
-  /** Worker 强制下线。 */
-  @PostMapping("/{workerCode}/force-offline")
-  public CommonResponse<ConsoleWorkerRegistryResponse> forceOffline(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String workerCode,
-      @Valid @RequestBody ForceOfflineWorkerRequest request) {
-    return responseFactory.success(
-        applicationService.forceOffline(workerCode, request, idempotencyKey));
-  }
+    /** Worker 强制下线。 */
+    @PostMapping("/{workerCode}/force-offline")
+    public CommonResponse<ConsoleWorkerRegistryResponse> forceOffline(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @Valid @RequestBody ForceOfflineWorkerRequest request) {
+        return responseFactory.success(applicationService.forceOffline(workerCode, request, idempotencyKey));
+    }
 
-  /** 立即接管 Worker 在途任务并退役。 */
-  @PostMapping("/{workerCode}/takeover")
-  public CommonResponse<ConsoleWorkerRegistryResponse> takeover(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String workerCode,
-      @Valid @RequestBody ForceOfflineWorkerRequest request) {
-    return responseFactory.success(
-        applicationService.takeover(workerCode, request, idempotencyKey));
-  }
+    /** 立即接管 Worker 在途任务并退役。 */
+    @PostMapping("/{workerCode}/takeover")
+    public CommonResponse<ConsoleWorkerRegistryResponse> takeover(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @Valid @RequestBody ForceOfflineWorkerRequest request) {
+        return responseFactory.success(applicationService.takeover(workerCode, request, idempotencyKey));
+    }
 
-  /** 查询 Worker 当前已认领任务。 */
-  @GetMapping("/{workerCode}/claimed-tasks")
-  public CommonResponse<List<ConsoleWorkerClaimedTaskResponse>> claimedTasks(
-      @PathVariable String workerCode, @RequestParam String tenantId) {
-    return responseFactory.success(applicationService.claimedTasks(tenantId, workerCode));
-  }
+    /** 查询 Worker 当前已认领任务。 */
+    @GetMapping("/{workerCode}/claimed-tasks")
+    public CommonResponse<List<ConsoleWorkerClaimedTaskResponse>> claimedTasks(
+            @PathVariable String workerCode, @RequestParam String tenantId) {
+        return responseFactory.success(applicationService.claimedTasks(tenantId, workerCode));
+    }
 
-  /** 预热 Worker：提前建立连接池/缓存，为接收任务做准备。 */
-  @PostMapping("/{workerCode}/warmup")
-  public CommonResponse<ConsoleWorkerRegistryResponse> warmup(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String workerCode,
-      @RequestParam String tenantId) {
-    return responseFactory.success(applicationService.warmup(workerCode, tenantId, idempotencyKey));
-  }
+    /** 预热 Worker：提前建立连接池/缓存，为接收任务做准备。 */
+    @PostMapping("/{workerCode}/warmup")
+    public CommonResponse<ConsoleWorkerRegistryResponse> warmup(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @RequestParam String tenantId) {
+        return responseFactory.success(applicationService.warmup(workerCode, tenantId, idempotencyKey));
+    }
 }

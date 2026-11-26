@@ -21,13 +21,13 @@ import java.time.OffsetDateTime;
  * @param updatedAt 最近 UPSERT 时间
  */
 public record PipelineProgressEntity(
-    Long id,
-    String tenantId,
-    Long pipelineInstanceId,
-    String stage,
-    String positionMarker,
-    Long processedCount,
-    Boolean completed,
-    OffsetDateTime completedAt,
-    OffsetDateTime createdAt,
-    OffsetDateTime updatedAt) {}
+        Long id,
+        String tenantId,
+        Long pipelineInstanceId,
+        String stage,
+        String positionMarker,
+        Long processedCount,
+        Boolean completed,
+        OffsetDateTime completedAt,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt) {}

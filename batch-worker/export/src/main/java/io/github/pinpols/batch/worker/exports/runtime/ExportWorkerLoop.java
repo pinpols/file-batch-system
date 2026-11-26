@@ -19,47 +19,47 @@ import org.springframework.stereotype.Service;
 @Service
 public class ExportWorkerLoop extends AbstractWorkerLoop {
 
-  private final ExportWorkerConfiguration configuration;
-  private final ExportDataPluginRegistry pluginRegistry;
+    private final ExportWorkerConfiguration configuration;
+    private final ExportDataPluginRegistry pluginRegistry;
 
-  public ExportWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      ExportWorkerConfiguration configuration,
-      WorkerIdentityProperties identityProperties,
-      WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties,
-      ExportDataPluginRegistry pluginRegistry) {
-    super(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        concurrencyProperties.getMaxConcurrentTasks(),
-        identityProperties,
-        workerRegistryStartupProperties);
-    this.configuration = configuration;
-    this.pluginRegistry = pluginRegistry;
-  }
+    public ExportWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            ExportWorkerConfiguration configuration,
+            WorkerIdentityProperties identityProperties,
+            WorkerRegistryStartupProperties workerRegistryStartupProperties,
+            WorkerConcurrencyProperties concurrencyProperties,
+            ExportDataPluginRegistry pluginRegistry) {
+        super(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                concurrencyProperties.getMaxConcurrentTasks(),
+                identityProperties,
+                workerRegistryStartupProperties);
+        this.configuration = configuration;
+        this.pluginRegistry = pluginRegistry;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected String workerGroup() {
-    return "export";
-  }
+    @Override
+    protected String workerGroup() {
+        return "export";
+    }
 
-  @Override
-  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
-    return pluginRegistry.replayCapabilityCatalog();
-  }
+    @Override
+    protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+        return pluginRegistry.replayCapabilityCatalog();
+    }
 
-  /** 定时心跳方法，按配置间隔向平台上报 Worker 存活。 */
-  @Scheduled(fixedDelayString = "${batch.worker.export.heartbeat-interval-millis:15000}")
-  public void heartbeat() {
-    doHeartbeat();
-  }
+    /** 定时心跳方法，按配置间隔向平台上报 Worker 存活。 */
+    @Scheduled(fixedDelayString = "${batch.worker.export.heartbeat-interval-millis:15000}")
+    public void heartbeat() {
+        doHeartbeat();
+    }
 }

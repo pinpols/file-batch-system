@@ -19,46 +19,46 @@ import org.springframework.stereotype.Service;
 @Service
 public class DispatchWorkerLoop extends AbstractWorkerLoop {
 
-  private final DispatchWorkerConfiguration configuration;
-  private final BatchTaskExecutorRegistry taskExecutorRegistry;
+    private final DispatchWorkerConfiguration configuration;
+    private final BatchTaskExecutorRegistry taskExecutorRegistry;
 
-  public DispatchWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      DispatchWorkerConfiguration configuration,
-      WorkerIdentityProperties identityProperties,
-      WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties,
-      BatchTaskExecutorRegistry taskExecutorRegistry) {
-    super(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        concurrencyProperties.getMaxConcurrentTasks(),
-        identityProperties,
-        workerRegistryStartupProperties);
-    this.configuration = configuration;
-    this.taskExecutorRegistry = taskExecutorRegistry;
-  }
+    public DispatchWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            DispatchWorkerConfiguration configuration,
+            WorkerIdentityProperties identityProperties,
+            WorkerRegistryStartupProperties workerRegistryStartupProperties,
+            WorkerConcurrencyProperties concurrencyProperties,
+            BatchTaskExecutorRegistry taskExecutorRegistry) {
+        super(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                concurrencyProperties.getMaxConcurrentTasks(),
+                identityProperties,
+                workerRegistryStartupProperties);
+        this.configuration = configuration;
+        this.taskExecutorRegistry = taskExecutorRegistry;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected String workerGroup() {
-    return "dispatch";
-  }
+    @Override
+    protected String workerGroup() {
+        return "dispatch";
+    }
 
-  @Override
-  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
-    return taskExecutorRegistry.replayCapabilityCatalog();
-  }
+    @Override
+    protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+        return taskExecutorRegistry.replayCapabilityCatalog();
+    }
 
-  @Scheduled(fixedDelayString = "${batch.worker.dispatch.heartbeat-interval-millis:15000}")
-  public void heartbeat() {
-    doHeartbeat();
-  }
+    @Scheduled(fixedDelayString = "${batch.worker.dispatch.heartbeat-interval-millis:15000}")
+    public void heartbeat() {
+        doHeartbeat();
+    }
 }

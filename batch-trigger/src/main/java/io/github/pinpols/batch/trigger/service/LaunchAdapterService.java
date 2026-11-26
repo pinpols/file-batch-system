@@ -15,12 +15,11 @@ import java.time.LocalDate;
  */
 public interface LaunchAdapterService {
 
-  LaunchRequest fromApiRequest(TriggerLaunchCommand command);
+    LaunchRequest fromApiRequest(TriggerLaunchCommand command);
 
-  LaunchRequest fromScheduledTrigger(
-      ScheduledTriggerCommand command, CalendarBizDateDefinition calendar);
+    LaunchRequest fromScheduledTrigger(ScheduledTriggerCommand command, CalendarBizDateDefinition calendar);
 
-  LaunchRequest fromObservedScheduledTrigger(ScheduledTriggerCommand command, LocalDate bizDate);
+    LaunchRequest fromObservedScheduledTrigger(ScheduledTriggerCommand command, LocalDate bizDate);
 
-  TriggerType resolveTriggerType(TriggerLaunchCommand command);
+    TriggerType resolveTriggerType(TriggerLaunchCommand command);
 }

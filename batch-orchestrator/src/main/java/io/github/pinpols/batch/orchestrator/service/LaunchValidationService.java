@@ -18,73 +18,66 @@ import java.util.Map;
  */
 public interface LaunchValidationService {
 
-  /** 校验请求字段，加载触发请求实体、Job 定义和工作流定义（未找到则置为 REJECTED 并抛异常）， 并检查是否存在重复实例。 */
-  LaunchLoadResult load(LaunchRequest request);
+    /** 校验请求字段，加载触发请求实体、Job 定义和工作流定义（未找到则置为 REJECTED 并抛异常）， 并检查是否存在重复实例。 */
+    LaunchLoadResult load(LaunchRequest request);
 
-  record LaunchLoadResult(
-      TriggerRequestEntity triggerRequest,
-      JobDefinitionView jobDefinition,
-      WorkflowDefinitionView workflowDefinition,
-      String workflowCalendarCode,
-      JobInstanceEntity existingInstance, // 非空表示重复请求
-      WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {
+    record LaunchLoadResult(
+            TriggerRequestEntity triggerRequest,
+            JobDefinitionView jobDefinition,
+            WorkflowDefinitionView workflowDefinition,
+            String workflowCalendarCode,
+            JobInstanceEntity existingInstance, // 非空表示重复请求
+            WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {
 
-    public LaunchLoadResult(
-        TriggerRequestEntity triggerRequest,
-        JobDefinitionView jobDefinition,
-        WorkflowDefinitionView workflowDefinition,
-        String workflowCalendarCode,
-        JobInstanceEntity existingInstance) {
-      this(
-          triggerRequest,
-          jobDefinition,
-          workflowDefinition,
-          workflowCalendarCode,
-          existingInstance,
-          null);
+        public LaunchLoadResult(
+                TriggerRequestEntity triggerRequest,
+                JobDefinitionView jobDefinition,
+                WorkflowDefinitionView workflowDefinition,
+                String workflowCalendarCode,
+                JobInstanceEntity existingInstance) {
+            this(triggerRequest, jobDefinition, workflowDefinition, workflowCalendarCode, existingInstance, null);
+        }
+
+        public LaunchLoadResult(
+                TriggerRequestEntity triggerRequest,
+                JobDefinitionView jobDefinition,
+                WorkflowDefinitionView workflowDefinition,
+                JobInstanceEntity existingInstance) {
+            this(
+                    triggerRequest,
+                    jobDefinition,
+                    workflowDefinition,
+                    EmptyChecks.isNull(workflowDefinition) ? null : workflowDefinition.calendarCode(),
+                    existingInstance);
+        }
+
+        public String effectiveCalendarCode() {
+            if (EmptyChecks.isNotBlank(workflowCalendarCode)) {
+                return workflowCalendarCode;
+            }
+            return EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode();
+        }
     }
 
-    public LaunchLoadResult(
-        TriggerRequestEntity triggerRequest,
-        JobDefinitionView jobDefinition,
-        WorkflowDefinitionView workflowDefinition,
-        JobInstanceEntity existingInstance) {
-      this(
-          triggerRequest,
-          jobDefinition,
-          workflowDefinition,
-          EmptyChecks.isNull(workflowDefinition) ? null : workflowDefinition.calendarCode(),
-          existingInstance);
-    }
+    /** 从父 Workflow 执行快照加载、经审批且绑定节点的输入。 */
+    record WorkflowReplayExecutionBinding(
+            Long replayOperationId,
+            Long workflowRunId,
+            String nodeCode,
+            ReplayExecutionGuard executionGuard,
+            Map<String, String> protectedFileTemplateSnapshots,
+            Map<String, String> protectedDispatchChannelSnapshots,
+            Map<String, Object> dispatchSecretBindings) {
 
-    public String effectiveCalendarCode() {
-      if (EmptyChecks.isNotBlank(workflowCalendarCode)) {
-        return workflowCalendarCode;
-      }
-      return EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode();
+        public WorkflowReplayExecutionBinding {
+            protectedFileTemplateSnapshots = EmptyChecks.isNull(protectedFileTemplateSnapshots)
+                    ? Map.of()
+                    : Map.copyOf(protectedFileTemplateSnapshots);
+            protectedDispatchChannelSnapshots = EmptyChecks.isNull(protectedDispatchChannelSnapshots)
+                    ? Map.of()
+                    : Map.copyOf(protectedDispatchChannelSnapshots);
+            dispatchSecretBindings =
+                    EmptyChecks.isNull(dispatchSecretBindings) ? Map.of() : Map.copyOf(dispatchSecretBindings);
+        }
     }
-  }
-
-  /** 从父 Workflow 执行快照加载、经审批且绑定节点的输入。 */
-  record WorkflowReplayExecutionBinding(
-      Long replayOperationId,
-      Long workflowRunId,
-      String nodeCode,
-      ReplayExecutionGuard executionGuard,
-      Map<String, String> protectedFileTemplateSnapshots,
-      Map<String, String> protectedDispatchChannelSnapshots,
-      Map<String, Object> dispatchSecretBindings) {
-
-    public WorkflowReplayExecutionBinding {
-      protectedFileTemplateSnapshots = EmptyChecks.isNull(protectedFileTemplateSnapshots)
-          ? Map.of()
-          : Map.copyOf(protectedFileTemplateSnapshots);
-      protectedDispatchChannelSnapshots = EmptyChecks.isNull(protectedDispatchChannelSnapshots)
-          ? Map.of()
-          : Map.copyOf(protectedDispatchChannelSnapshots);
-      dispatchSecretBindings = EmptyChecks.isNull(dispatchSecretBindings)
-          ? Map.of()
-          : Map.copyOf(dispatchSecretBindings);
-    }
-  }
 }

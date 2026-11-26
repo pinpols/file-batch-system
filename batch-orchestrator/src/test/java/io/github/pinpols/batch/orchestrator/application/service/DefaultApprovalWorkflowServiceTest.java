@@ -28,354 +28,347 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("审批流服务: 提交, 审批, 驳回与执行标记的状态流转口径")
 class DefaultApprovalWorkflowServiceTest {
 
-  private static final class ApprovalSubmissionSpec {
-    private String tenantId = "t1";
-    private String approvalType = "COMPENSATION";
-    private String actionType;
-    private String targetType;
-    private String targetId;
-    private String payloadJson;
-    private String requesterId = "op-001";
-    private String sourceTraceId;
-    private String sourceIdempotencyKey;
-    private String approvalReason;
+    private static final class ApprovalSubmissionSpec {
+        private String tenantId = "t1";
+        private String approvalType = "COMPENSATION";
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String requesterId = "op-001";
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
+        private String approvalReason;
 
-    private ApprovalSubmissionSpec actionType(String actionType) {
-      this.actionType = actionType;
-      return this;
+        private ApprovalSubmissionSpec actionType(String actionType) {
+            this.actionType = actionType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetType(String targetType) {
+            this.targetType = targetType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetId(String targetId) {
+            this.targetId = targetId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec payloadJson(String payloadJson) {
+            this.payloadJson = payloadJson;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec requesterId(String requesterId) {
+            this.requesterId = requesterId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceTraceId(String sourceTraceId) {
+            this.sourceTraceId = sourceTraceId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceIdempotencyKey(String sourceIdempotencyKey) {
+            this.sourceIdempotencyKey = sourceIdempotencyKey;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec approvalReason(String approvalReason) {
+            this.approvalReason = approvalReason;
+            return this;
+        }
+
+        private ApprovalWorkflowService.ApprovalSubmitCommand build() {
+            return ApprovalWorkflowService.ApprovalSubmitCommand.of(
+                    tenantId,
+                    new ApprovalWorkflowService.ApprovalTarget(
+                            approvalType, actionType, targetType, targetId, payloadJson),
+                    new ApprovalWorkflowService.ApprovalSource(
+                            requesterId, sourceTraceId, sourceIdempotencyKey, approvalReason));
+        }
     }
 
-    private ApprovalSubmissionSpec targetType(String targetType) {
-      this.targetType = targetType;
-      return this;
+    private ApprovalCommandMapper approvalCommandMapper;
+    private DefaultApprovalWorkflowService service;
+
+    @BeforeEach
+    void setUp() {
+        approvalCommandMapper = mock(ApprovalCommandMapper.class);
+        service = new DefaultApprovalWorkflowService(approvalCommandMapper);
     }
 
-    private ApprovalSubmissionSpec targetId(String targetId) {
-      this.targetId = targetId;
-      return this;
+    // ── submit ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("提交审批时落库为待审批并生成审批单号")
+    void shouldInsertApprovalWithPendingStatusOnSubmit() {
+        when(approvalCommandMapper.insert(any())).thenReturn(1);
+
+        String approvalNo = service.submit(new ApprovalSubmissionSpec()
+                .actionType("DLQ_REPLAY")
+                .targetType("DEAD_LETTER")
+                .targetId("500")
+                .payloadJson("{\"reason\":\"test\"}")
+                .requesterId("op-001")
+                .sourceTraceId("trace-001")
+                .sourceIdempotencyKey("idem-001")
+                .approvalReason("test approval")
+                .build());
+
+        assertThat(approvalNo).isNotBlank().startsWith("apr");
+        verify(approvalCommandMapper).insert(any());
     }
 
-    private ApprovalSubmissionSpec payloadJson(String payloadJson) {
-      this.payloadJson = payloadJson;
-      return this;
+    @Test
+    @DisplayName("载荷为空时以空对象落库提交")
+    void shouldUseEmptyJsonWhenPayloadIsNull() {
+        when(approvalCommandMapper.insert(any())).thenReturn(1);
+
+        service.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("1")
+                .requesterId("op")
+                .sourceTraceId("trace")
+                .sourceIdempotencyKey("idem")
+                .approvalReason("reason")
+                .build());
+
+        verify(approvalCommandMapper).insert(any());
     }
 
-    private ApprovalSubmissionSpec requesterId(String requesterId) {
-      this.requesterId = requesterId;
-      return this;
+    @Test
+    @DisplayName("相同租户和幂等键重提相同审批时复用原审批单")
+    void shouldReuseApprovalForSameIdempotentSubmission() {
+        ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
+        existing.setApprovalType("COMPENSATION");
+        existing.setActionType("RETRY");
+        existing.setTargetType("JOB");
+        existing.setTargetId("1");
+        existing.setPayloadJson("{}");
+        existing.setRequesterId("op");
+        existing.setApprovalReason("reason");
+        existing.setSourceApprovalReason("reason");
+        when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
+                .thenReturn(existing);
+
+        String approvalNo = service.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("1")
+                .requesterId("op")
+                .sourceIdempotencyKey("idem")
+                .approvalReason("reason")
+                .build());
+
+        assertThat(approvalNo).isEqualTo("apr-existing");
+        verify(approvalCommandMapper, never()).insert(any());
     }
 
-    private ApprovalSubmissionSpec sourceTraceId(String sourceTraceId) {
-      this.sourceTraceId = sourceTraceId;
-      return this;
+    @Test
+    @DisplayName("同一幂等键对应不同申请内容时拒绝提交")
+    void shouldRejectDifferentSubmissionForSameIdempotencyKey() {
+        ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
+        existing.setApprovalType("COMPENSATION");
+        existing.setActionType("RETRY");
+        existing.setTargetType("JOB");
+        existing.setTargetId("different-target");
+        existing.setPayloadJson("{}");
+        existing.setRequesterId("op");
+        existing.setApprovalReason("reason");
+        existing.setSourceApprovalReason("reason");
+        when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
+                .thenReturn(existing);
+
+        assertThatThrownBy(() -> service.submit(new ApprovalSubmissionSpec()
+                        .actionType("RETRY")
+                        .targetType("JOB")
+                        .targetId("1")
+                        .requesterId("op")
+                        .sourceIdempotencyKey("idem")
+                        .approvalReason("reason")
+                        .build()))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.idempotency_conflict");
     }
 
-    private ApprovalSubmissionSpec sourceIdempotencyKey(String sourceIdempotencyKey) {
-      this.sourceIdempotencyKey = sourceIdempotencyKey;
-      return this;
+    @Test
+    @DisplayName("空白来源幂等键按未提供处理")
+    void shouldPersistNullForBlankSourceIdempotencyKey() {
+        when(approvalCommandMapper.insert(any())).thenReturn(1);
+
+        service.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("1")
+                .sourceIdempotencyKey("  ")
+                .build());
+
+        ArgumentCaptor<ApprovalCommandEntity> entityCaptor = ArgumentCaptor.forClass(ApprovalCommandEntity.class);
+        verify(approvalCommandMapper).insert(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getSourceIdempotencyKey()).isNull();
     }
 
-    private ApprovalSubmissionSpec approvalReason(String approvalReason) {
-      this.approvalReason = approvalReason;
-      return this;
+    // ── approve ───────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("审批单不存在时审批抛出业务异常")
+    void shouldThrowWhenApprovalNotFound() {
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.approve("t1", "apr-000", "approver-001", "approved"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.not_found");
     }
 
-    private ApprovalWorkflowService.ApprovalSubmitCommand build() {
-      return ApprovalWorkflowService.ApprovalSubmitCommand.of(
-          tenantId,
-          new ApprovalWorkflowService.ApprovalTarget(
-              approvalType, actionType, targetType, targetId, payloadJson),
-          new ApprovalWorkflowService.ApprovalSource(
-              requesterId, sourceTraceId, sourceIdempotencyKey, approvalReason));
+    @Test
+    @DisplayName("审批单已通过时重复审批返回当前状态")
+    void shouldReturnCurrentStateWhenAlreadyApproved() {
+        ApprovalCommandEntity entity = pendingApproval("t1", "apr-001");
+        entity.setApprovalStatus("APPROVED");
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-001")).thenReturn(entity);
+
+        ApprovalWorkflowService.ApprovalRecord result = service.approve("t1", "apr-001", "approver-001", "ok");
+
+        assertThat(result.approvalStatus()).isEqualTo("APPROVED");
     }
-  }
 
-  private ApprovalCommandMapper approvalCommandMapper;
-  private DefaultApprovalWorkflowService service;
+    @Test
+    @DisplayName("待审批单据被审批时置为已通过并记录审批人")
+    void shouldMarkApprovedWhenPending() {
+        ApprovalCommandEntity entity = pendingApproval("t1", "apr-002");
+        ApprovalCommandEntity approved = pendingApproval("t1", "apr-002");
+        approved.setApprovalStatus("APPROVED");
+        approved.setApproverId("approver-001");
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-002"))
+                .thenReturn(entity)
+                .thenReturn(approved);
+        when(approvalCommandMapper.markApproved(ApproveCommandDecisionParam.builder()
+                        .tenantId("t1")
+                        .approvalNo("apr-002")
+                        .approverId("approver-001")
+                        .approvalReason("approved")
+                        .approvedStatus(ApprovalCommandStatus.APPROVED.code())
+                        .pendingStatus(ApprovalCommandStatus.PENDING.code())
+                        .build()))
+                .thenReturn(1);
 
-  @BeforeEach
-  void setUp() {
-    approvalCommandMapper = mock(ApprovalCommandMapper.class);
-    service = new DefaultApprovalWorkflowService(approvalCommandMapper);
-  }
+        ApprovalWorkflowService.ApprovalRecord result = service.approve("t1", "apr-002", "approver-001", "approved");
 
-  // ── submit ────────────────────────────────────────────────────────────────
+        assertThat(result.approvalStatus()).isEqualTo("APPROVED");
+        assertThat(result.approverId()).isEqualTo("approver-001");
+    }
 
-  @Test
-  @DisplayName("提交审批时落库为待审批并生成审批单号")
-  void shouldInsertApprovalWithPendingStatusOnSubmit() {
-    when(approvalCommandMapper.insert(any())).thenReturn(1);
+    // ── reject ────────────────────────────────────────────────────────────────
 
-    String approvalNo = service.submit(new ApprovalSubmissionSpec()
-        .actionType("DLQ_REPLAY")
-        .targetType("DEAD_LETTER")
-        .targetId("500")
-        .payloadJson("{\"reason\":\"test\"}")
-        .requesterId("op-001")
-        .sourceTraceId("trace-001")
-        .sourceIdempotencyKey("idem-001")
-        .approvalReason("test approval")
-        .build());
+    @Test
+    @DisplayName("驳回不存在的审批单时抛出业务异常")
+    void shouldThrowWhenRejectingNonExistentApproval() {
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-999")).thenReturn(null);
 
-    assertThat(approvalNo).isNotBlank().startsWith("apr");
-    verify(approvalCommandMapper).insert(any());
-  }
+        assertThatThrownBy(() -> service.reject("t1", "apr-999", "approver-001", "reason"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.not_found");
+    }
 
-  @Test
-  @DisplayName("载荷为空时以空对象落库提交")
-  void shouldUseEmptyJsonWhenPayloadIsNull() {
-    when(approvalCommandMapper.insert(any())).thenReturn(1);
+    @Test
+    @DisplayName("待审批单据被驳回时置为已驳回")
+    void shouldMarkRejectedWhenPending() {
+        ApprovalCommandEntity entity = pendingApproval("t1", "apr-003");
+        ApprovalCommandEntity rejected = pendingApproval("t1", "apr-003");
+        rejected.setApprovalStatus("REJECTED");
+        rejected.setRejectionReason("data incorrect");
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-003"))
+                .thenReturn(entity)
+                .thenReturn(rejected);
+        when(approvalCommandMapper.markRejected(RejectCommandDecisionParam.builder()
+                        .tenantId("t1")
+                        .approvalNo("apr-003")
+                        .approverId("approver-001")
+                        .approvalReason("data incorrect")
+                        .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
+                        .pendingStatus(ApprovalCommandStatus.PENDING.code())
+                        .build()))
+                .thenReturn(1);
 
-    service.submit(new ApprovalSubmissionSpec()
-        .actionType("RETRY")
-        .targetType("JOB")
-        .targetId("1")
-        .requesterId("op")
-        .sourceTraceId("trace")
-        .sourceIdempotencyKey("idem")
-        .approvalReason("reason")
-        .build());
+        ApprovalWorkflowService.ApprovalRecord result =
+                service.reject("t1", "apr-003", "approver-001", "data incorrect");
 
-    verify(approvalCommandMapper).insert(any());
-  }
+        assertThat(result.approvalStatus()).isEqualTo("REJECTED");
+    }
 
-  @Test
-  @DisplayName("相同租户和幂等键重提相同审批时复用原审批单")
-  void shouldReuseApprovalForSameIdempotentSubmission() {
-    ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
-    existing.setApprovalType("COMPENSATION");
-    existing.setActionType("RETRY");
-    existing.setTargetType("JOB");
-    existing.setTargetId("1");
-    existing.setPayloadJson("{}");
-    existing.setRequesterId("op");
-    existing.setApprovalReason("reason");
-    existing.setSourceApprovalReason("reason");
-    when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
-        .thenReturn(existing);
+    @Test
+    @DisplayName("审批单已驳回时重复驳回返回当前状态")
+    void shouldReturnCurrentStateWhenAlreadyRejected() {
+        ApprovalCommandEntity entity = pendingApproval("t1", "apr-004");
+        entity.setApprovalStatus("REJECTED");
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-004")).thenReturn(entity);
 
-    String approvalNo = service.submit(new ApprovalSubmissionSpec()
-        .actionType("RETRY")
-        .targetType("JOB")
-        .targetId("1")
-        .requesterId("op")
-        .sourceIdempotencyKey("idem")
-        .approvalReason("reason")
-        .build());
+        ApprovalWorkflowService.ApprovalRecord result = service.reject("t1", "apr-004", "approver-001", "rejected");
 
-    assertThat(approvalNo).isEqualTo("apr-existing");
-    verify(approvalCommandMapper, never()).insert(any());
-  }
+        assertThat(result.approvalStatus()).isEqualTo("REJECTED");
+    }
 
-  @Test
-  @DisplayName("同一幂等键对应不同申请内容时拒绝提交")
-  void shouldRejectDifferentSubmissionForSameIdempotencyKey() {
-    ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
-    existing.setApprovalType("COMPENSATION");
-    existing.setActionType("RETRY");
-    existing.setTargetType("JOB");
-    existing.setTargetId("different-target");
-    existing.setPayloadJson("{}");
-    existing.setRequesterId("op");
-    existing.setApprovalReason("reason");
-    existing.setSourceApprovalReason("reason");
-    when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
-        .thenReturn(existing);
+    // ── markExecuted ─────────────────────────────────────────────────────────
 
-    assertThatThrownBy(() -> service.submit(new ApprovalSubmissionSpec()
-            .actionType("RETRY")
-            .targetType("JOB")
-            .targetId("1")
-            .requesterId("op")
-            .sourceIdempotencyKey("idem")
-            .approvalReason("reason")
-            .build()))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.idempotency_conflict");
-  }
+    @Test
+    @DisplayName("审批通过后标记为已执行并返回最新状态")
+    void shouldMarkExecutedAfterApproval() {
+        ApprovalCommandEntity executed = pendingApproval("t1", "apr-005");
+        executed.setApprovalStatus("EXECUTED");
+        when(approvalCommandMapper.markExecuted(
+                        "t1", "apr-005", ApprovalCommandStatus.EXECUTED.code(), ApprovalCommandStatus.APPROVED.code()))
+                .thenReturn(1);
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-005")).thenReturn(executed);
 
-  @Test
-  @DisplayName("空白来源幂等键按未提供处理")
-  void shouldPersistNullForBlankSourceIdempotencyKey() {
-    when(approvalCommandMapper.insert(any())).thenReturn(1);
+        ApprovalWorkflowService.ApprovalRecord result = service.markExecuted("t1", "apr-005");
 
-    service.submit(new ApprovalSubmissionSpec()
-        .actionType("RETRY")
-        .targetType("JOB")
-        .targetId("1")
-        .sourceIdempotencyKey("  ")
-        .build());
+        assertThat(result.approvalStatus()).isEqualTo("EXECUTED");
+    }
 
-    ArgumentCaptor<ApprovalCommandEntity> entityCaptor =
-        ArgumentCaptor.forClass(ApprovalCommandEntity.class);
-    verify(approvalCommandMapper).insert(entityCaptor.capture());
-    assertThat(entityCaptor.getValue().getSourceIdempotencyKey()).isNull();
-  }
+    // ── get ───────────────────────────────────────────────────────────────────
 
-  // ── approve ───────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("查询审批单时返回租户, 单号与状态等信息")
+    void shouldReturnApprovalRecordOnGet() {
+        ApprovalCommandEntity entity = pendingApproval("t1", "apr-006");
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-006")).thenReturn(entity);
 
-  @Test
-  @DisplayName("审批单不存在时审批抛出业务异常")
-  void shouldThrowWhenApprovalNotFound() {
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
+        ApprovalWorkflowService.ApprovalRecord result = service.get("t1", "apr-006");
 
-    assertThatThrownBy(() -> service.approve("t1", "apr-000", "approver-001", "approved"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.not_found");
-  }
+        assertThat(result.tenantId()).isEqualTo("t1");
+        assertThat(result.approvalNo()).isEqualTo("apr-006");
+        assertThat(result.approvalStatus()).isEqualTo("PENDING");
+    }
 
-  @Test
-  @DisplayName("审批单已通过时重复审批返回当前状态")
-  void shouldReturnCurrentStateWhenAlreadyApproved() {
-    ApprovalCommandEntity entity = pendingApproval("t1", "apr-001");
-    entity.setApprovalStatus("APPROVED");
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-001")).thenReturn(entity);
+    @Test
+    @DisplayName("查询不存在的审批单时抛出业务异常")
+    void shouldThrowOnGetWhenNotFound() {
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
 
-    ApprovalWorkflowService.ApprovalRecord result =
-        service.approve("t1", "apr-001", "approver-001", "ok");
+        assertThatThrownBy(() -> service.get("t1", "apr-000"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.approval.not_found");
+    }
 
-    assertThat(result.approvalStatus()).isEqualTo("APPROVED");
-  }
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("待审批单据被审批时置为已通过并记录审批人")
-  void shouldMarkApprovedWhenPending() {
-    ApprovalCommandEntity entity = pendingApproval("t1", "apr-002");
-    ApprovalCommandEntity approved = pendingApproval("t1", "apr-002");
-    approved.setApprovalStatus("APPROVED");
-    approved.setApproverId("approver-001");
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-002"))
-        .thenReturn(entity)
-        .thenReturn(approved);
-    when(approvalCommandMapper.markApproved(ApproveCommandDecisionParam.builder()
-            .tenantId("t1")
-            .approvalNo("apr-002")
-            .approverId("approver-001")
-            .approvalReason("approved")
-            .approvedStatus(ApprovalCommandStatus.APPROVED.code())
-            .pendingStatus(ApprovalCommandStatus.PENDING.code())
-            .build()))
-        .thenReturn(1);
-
-    ApprovalWorkflowService.ApprovalRecord result =
-        service.approve("t1", "apr-002", "approver-001", "approved");
-
-    assertThat(result.approvalStatus()).isEqualTo("APPROVED");
-    assertThat(result.approverId()).isEqualTo("approver-001");
-  }
-
-  // ── reject ────────────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("驳回不存在的审批单时抛出业务异常")
-  void shouldThrowWhenRejectingNonExistentApproval() {
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-999")).thenReturn(null);
-
-    assertThatThrownBy(() -> service.reject("t1", "apr-999", "approver-001", "reason"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.not_found");
-  }
-
-  @Test
-  @DisplayName("待审批单据被驳回时置为已驳回")
-  void shouldMarkRejectedWhenPending() {
-    ApprovalCommandEntity entity = pendingApproval("t1", "apr-003");
-    ApprovalCommandEntity rejected = pendingApproval("t1", "apr-003");
-    rejected.setApprovalStatus("REJECTED");
-    rejected.setRejectionReason("data incorrect");
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-003"))
-        .thenReturn(entity)
-        .thenReturn(rejected);
-    when(approvalCommandMapper.markRejected(RejectCommandDecisionParam.builder()
-            .tenantId("t1")
-            .approvalNo("apr-003")
-            .approverId("approver-001")
-            .approvalReason("data incorrect")
-            .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
-            .pendingStatus(ApprovalCommandStatus.PENDING.code())
-            .build()))
-        .thenReturn(1);
-
-    ApprovalWorkflowService.ApprovalRecord result =
-        service.reject("t1", "apr-003", "approver-001", "data incorrect");
-
-    assertThat(result.approvalStatus()).isEqualTo("REJECTED");
-  }
-
-  @Test
-  @DisplayName("审批单已驳回时重复驳回返回当前状态")
-  void shouldReturnCurrentStateWhenAlreadyRejected() {
-    ApprovalCommandEntity entity = pendingApproval("t1", "apr-004");
-    entity.setApprovalStatus("REJECTED");
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-004")).thenReturn(entity);
-
-    ApprovalWorkflowService.ApprovalRecord result =
-        service.reject("t1", "apr-004", "approver-001", "rejected");
-
-    assertThat(result.approvalStatus()).isEqualTo("REJECTED");
-  }
-
-  // ── markExecuted ─────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("审批通过后标记为已执行并返回最新状态")
-  void shouldMarkExecutedAfterApproval() {
-    ApprovalCommandEntity executed = pendingApproval("t1", "apr-005");
-    executed.setApprovalStatus("EXECUTED");
-    when(approvalCommandMapper.markExecuted(
-            "t1",
-            "apr-005",
-            ApprovalCommandStatus.EXECUTED.code(),
-            ApprovalCommandStatus.APPROVED.code()))
-        .thenReturn(1);
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-005")).thenReturn(executed);
-
-    ApprovalWorkflowService.ApprovalRecord result = service.markExecuted("t1", "apr-005");
-
-    assertThat(result.approvalStatus()).isEqualTo("EXECUTED");
-  }
-
-  // ── get ───────────────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("查询审批单时返回租户, 单号与状态等信息")
-  void shouldReturnApprovalRecordOnGet() {
-    ApprovalCommandEntity entity = pendingApproval("t1", "apr-006");
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-006")).thenReturn(entity);
-
-    ApprovalWorkflowService.ApprovalRecord result = service.get("t1", "apr-006");
-
-    assertThat(result.tenantId()).isEqualTo("t1");
-    assertThat(result.approvalNo()).isEqualTo("apr-006");
-    assertThat(result.approvalStatus()).isEqualTo("PENDING");
-  }
-
-  @Test
-  @DisplayName("查询不存在的审批单时抛出业务异常")
-  void shouldThrowOnGetWhenNotFound() {
-    when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
-
-    assertThatThrownBy(() -> service.get("t1", "apr-000"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.approval.not_found");
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  private static ApprovalCommandEntity pendingApproval(String tenantId, String approvalNo) {
-    ApprovalCommandEntity e = new ApprovalCommandEntity();
-    e.setTenantId(tenantId);
-    e.setApprovalNo(approvalNo);
-    e.setApprovalType("COMPENSATION");
-    e.setActionType("DLQ_REPLAY");
-    e.setTargetType("DEAD_LETTER");
-    e.setTargetId("100");
-    e.setPayloadJson("{}");
-    e.setApprovalStatus("PENDING");
-    e.setRequesterId("op-001");
-    e.setSourceTraceId("trace-001");
-    e.setSourceIdempotencyKey("idem-001");
-    e.setApprovalReason("test approval");
-    return e;
-  }
+    private static ApprovalCommandEntity pendingApproval(String tenantId, String approvalNo) {
+        ApprovalCommandEntity e = new ApprovalCommandEntity();
+        e.setTenantId(tenantId);
+        e.setApprovalNo(approvalNo);
+        e.setApprovalType("COMPENSATION");
+        e.setActionType("DLQ_REPLAY");
+        e.setTargetType("DEAD_LETTER");
+        e.setTargetId("100");
+        e.setPayloadJson("{}");
+        e.setApprovalStatus("PENDING");
+        e.setRequesterId("op-001");
+        e.setSourceTraceId("trace-001");
+        e.setSourceIdempotencyKey("idem-001");
+        e.setApprovalReason("test approval");
+        return e;
+    }
 }

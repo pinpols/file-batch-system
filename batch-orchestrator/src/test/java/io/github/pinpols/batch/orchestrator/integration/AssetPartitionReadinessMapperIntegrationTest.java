@@ -35,115 +35,112 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>不覆盖：物化刷新 service 编排 / freshness policy（V187）/ 归档（留给上层套件）。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("资产分区就绪快照映射的真实语句回归,覆盖最新版本守卫与物化指针的版本单调性")
 class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "ta";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MAY, 4);
-  private static final String PARTITION_KEY = "2026-05-04";
-  // result_version.job_instance_id 是 NOT NULL 但 V108..V189 均无 FK；用固定桩值即可。
-  private static final long STUB_JOB_INSTANCE_ID = 1L;
+    private static final String TENANT = "ta";
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MAY, 4);
+    private static final String PARTITION_KEY = "2026-05-04";
+    // result_version.job_instance_id 是 NOT NULL 但 V108..V189 均无 FK；用固定桩值即可。
+    private static final long STUB_JOB_INSTANCE_ID = 1L;
 
-  @Autowired
-  private AssetPartitionMapper assetPartitionMapper;
+    @Autowired
+    private AssetPartitionMapper assetPartitionMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("已物化生效版本之后出现更高版本的待生效记录时查询结果为空,避免旧版本继续被下游消费")
-  void
-      selectEffectiveJobPartition_returnsEmpty_whenNewerVersionPendingSupersedesMaterializedEffective() {
-    // arrange
-    String assetCode = "READINESS_EMPTY";
-    String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
-    long assetId = ensureAsset(assetCode);
-    long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
-    // 物化指针指向 v1（首次插入无冲突，无条件写入）
-    materialize(assetId, assetCode, v1, businessKey);
-    // 出现更新的 v2（PENDING）——同 business_key，version_no 2 > 1
-    insertResultVersion(businessKey, 2, "PENDING");
+    @Test
+    @DisplayName("已物化生效版本之后出现更高版本的待生效记录时查询结果为空,避免旧版本继续被下游消费")
+    void selectEffectiveJobPartition_returnsEmpty_whenNewerVersionPendingSupersedesMaterializedEffective() {
+        // arrange
+        String assetCode = "READINESS_EMPTY";
+        String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
+        long assetId = ensureAsset(assetCode);
+        long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
+        // 物化指针指向 v1（首次插入无冲突，无条件写入）
+        materialize(assetId, assetCode, v1, businessKey);
+        // 出现更新的 v2（PENDING）——同 business_key，version_no 2 > 1
+        insertResultVersion(businessKey, 2, "PENDING");
 
-    // act
-    AssetPartitionSnapshot snapshot =
-        assetPartitionMapper.selectEffectiveJobPartition(TENANT, assetCode, PARTITION_KEY);
+        // act
+        AssetPartitionSnapshot snapshot =
+                assetPartitionMapper.selectEffectiveJobPartition(TENANT, assetCode, PARTITION_KEY);
 
-    // assert：latest-version 子查询把旧 EFFECTIVE 排除，readiness 返回空
-    // revert 掉 not-exists 子查询 → 会返回 v1 → 此断言转红
-    assertThat(snapshot).isNull();
-  }
+        // assert：latest-version 子查询把旧 EFFECTIVE 排除，readiness 返回空
+        // revert 掉 not-exists 子查询 → 会返回 v1 → 此断言转红
+        assertThat(snapshot).isNull();
+    }
 
-  @Test
-  @DisplayName("物化版本即为最新生效版本时返回完整快照,覆盖租户,资产编码,分区与新鲜度字段")
-  void selectEffectiveJobPartition_returnsPartition_whenMaterializedVersionIsLatestEffective() {
-    // arrange：只有 v1 EFFECTIVE，没有更新版本 —— 正向对照，证明本测不是恒空
-    String assetCode = "READINESS_POSITIVE";
-    String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
-    long assetId = ensureAsset(assetCode);
-    long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
-    materialize(assetId, assetCode, v1, businessKey);
+    @Test
+    @DisplayName("物化版本即为最新生效版本时返回完整快照,覆盖租户,资产编码,分区与新鲜度字段")
+    void selectEffectiveJobPartition_returnsPartition_whenMaterializedVersionIsLatestEffective() {
+        // arrange：只有 v1 EFFECTIVE，没有更新版本 —— 正向对照，证明本测不是恒空
+        String assetCode = "READINESS_POSITIVE";
+        String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
+        long assetId = ensureAsset(assetCode);
+        long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
+        materialize(assetId, assetCode, v1, businessKey);
 
-    // act
-    AssetPartitionSnapshot snapshot =
-        assetPartitionMapper.selectEffectiveJobPartition(TENANT, assetCode, PARTITION_KEY);
+        // act
+        AssetPartitionSnapshot snapshot =
+                assetPartitionMapper.selectEffectiveJobPartition(TENANT, assetCode, PARTITION_KEY);
 
-    // assert
-    assertThat(snapshot).isNotNull();
-    assertThat(snapshot.tenantId()).isEqualTo(TENANT);
-    assertThat(snapshot.assetCode()).isEqualTo(assetCode);
-    assertThat(snapshot.partitionKey()).isEqualTo(PARTITION_KEY);
-    assertThat(snapshot.businessKey()).isEqualTo(businessKey);
-    assertThat(snapshot.freshnessStatus()).isEqualTo("EFFECTIVE");
-    assertThat(snapshot.versionNo()).isEqualTo(1);
-    assertThat(snapshot.resultVersionId()).isEqualTo(v1);
-    assertThat(assetPartitionMapper.selectEffectiveJobPartition("tb", assetCode, PARTITION_KEY))
-        .isNull();
-  }
+        // assert
+        assertThat(snapshot).isNotNull();
+        assertThat(snapshot.tenantId()).isEqualTo(TENANT);
+        assertThat(snapshot.assetCode()).isEqualTo(assetCode);
+        assertThat(snapshot.partitionKey()).isEqualTo(PARTITION_KEY);
+        assertThat(snapshot.businessKey()).isEqualTo(businessKey);
+        assertThat(snapshot.freshnessStatus()).isEqualTo("EFFECTIVE");
+        assertThat(snapshot.versionNo()).isEqualTo(1);
+        assertThat(snapshot.resultVersionId()).isEqualTo(v1);
+        assertThat(assetPartitionMapper.selectEffectiveJobPartition("tb", assetCode, PARTITION_KEY))
+                .isNull();
+    }
 
-  @Test
-  @DisplayName("迟到写入引用更旧版本时版本单调守卫拦下更新,物化指针不回退")
-  void upsertEffectiveJobPartition_doesNotRegressPointer_whenNewerUpsertReferencesOlderVersion() {
-    // arrange
-    String assetCode = "READINESS_MONOTONIC";
-    String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
-    long assetId = ensureAsset(assetCode);
-    // 指针当前指向 version_no 2。注意:因 uk_result_version_effective (partial unique,
-    // 同 business_key 至多 1 EFFECTIVE) 无法让 v2 与更旧的 v1 同时 EFFECTIVE，故当前指针目标 v2
-    // 置 SUPERSEDED —— 守卫只读 current_rv 的 business_key + version_no，不读其 status，
-    // 因此这精确隔离并触发 version_no 单调分支。
-    long v2 = insertResultVersion(businessKey, 2, "SUPERSEDED");
-    materialize(assetId, assetCode, v2, businessKey);
-    assertThat(pointerVersionId(assetCode)).isEqualTo(v2);
+    @Test
+    @DisplayName("迟到写入引用更旧版本时版本单调守卫拦下更新,物化指针不回退")
+    void upsertEffectiveJobPartition_doesNotRegressPointer_whenNewerUpsertReferencesOlderVersion() {
+        // arrange
+        String assetCode = "READINESS_MONOTONIC";
+        String businessKey = "job:" + assetCode + ":" + BIZ_DATE;
+        long assetId = ensureAsset(assetCode);
+        // 指针当前指向 version_no 2。注意:因 uk_result_version_effective (partial unique,
+        // 同 business_key 至多 1 EFFECTIVE) 无法让 v2 与更旧的 v1 同时 EFFECTIVE，故当前指针目标 v2
+        // 置 SUPERSEDED —— 守卫只读 current_rv 的 business_key + version_no，不读其 status，
+        // 因此这精确隔离并触发 version_no 单调分支。
+        long v2 = insertResultVersion(businessKey, 2, "SUPERSEDED");
+        materialize(assetId, assetCode, v2, businessKey);
+        assertThat(pointerVersionId(assetCode)).isEqualTo(v2);
 
-    // act：一次引用更旧版本 v1（EFFECTIVE，version_no 1）的迟到 upsert
-    long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
-    assetPartitionMapper.upsertEffectiveJobPartition(command(assetId, assetCode, v1, businessKey));
+        // act：一次引用更旧版本 v1（EFFECTIVE，version_no 1）的迟到 upsert
+        long v1 = insertResultVersion(businessKey, 1, "EFFECTIVE");
+        assetPartitionMapper.upsertEffectiveJobPartition(command(assetId, assetCode, v1, businessKey));
 
-    // assert：单调守卫（1 >= 2 为假）拦下 do-update，指针仍指向 v2
-    // revert 掉 where-exists 守卫 → do-update 无条件执行 → 指针回退到 v1 → 此断言转红
-    assertThat(pointerVersionId(assetCode)).isEqualTo(v2);
-  }
+        // assert：单调守卫（1 >= 2 为假）拦下 do-update，指针仍指向 v2
+        // revert 掉 where-exists 守卫 → do-update 无条件执行 → 指针回退到 v1 → 此断言转红
+        assertThat(pointerVersionId(assetCode)).isEqualTo(v2);
+    }
 
-  // ---- helpers ----
+    // ---- helpers ----
 
-  private long ensureAsset(String assetCode) {
-    assetPartitionMapper.upsertDataAsset(DataAssetUpsertParam.builder()
-        .tenantId(TENANT)
-        .assetCode(assetCode)
-        .assetType("JOB")
-        .displayName(assetCode)
-        .ownerJobCode(assetCode)
-        .build());
-    Long id = assetPartitionMapper.selectDataAssetId(TENANT, assetCode, "JOB");
-    assertThat(id).isNotNull();
-    return id;
-  }
+    private long ensureAsset(String assetCode) {
+        assetPartitionMapper.upsertDataAsset(DataAssetUpsertParam.builder()
+                .tenantId(TENANT)
+                .assetCode(assetCode)
+                .assetType("JOB")
+                .displayName(assetCode)
+                .ownerJobCode(assetCode)
+                .build());
+        Long id = assetPartitionMapper.selectDataAssetId(TENANT, assetCode, "JOB");
+        assertThat(id).isNotNull();
+        return id;
+    }
 
-  private long insertResultVersion(String businessKey, int versionNo, String status) {
-    String insertResultVersionSql = """
+    private long insertResultVersion(String businessKey, int versionNo, String status) {
+        String insertResultVersionSql = """
         insert into batch.result_version (
           tenant_id, business_key, version_no, job_instance_id, status, effective_at,
           payload_storage, payload_json, generated_at, generated_by, promotion_policy
@@ -155,48 +152,45 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
         )
         returning id
         """;
-    Long id = jdbcTemplate.queryForObject(
-        insertResultVersionSql,
-        Long.class,
-        TENANT,
-        businessKey,
-        versionNo,
-        STUB_JOB_INSTANCE_ID,
-        status,
-        status);
-    assertThat(id).isNotNull();
-    return id;
-  }
+        Long id = jdbcTemplate.queryForObject(
+                insertResultVersionSql,
+                Long.class,
+                TENANT,
+                businessKey,
+                versionNo,
+                STUB_JOB_INSTANCE_ID,
+                status,
+                status);
+        assertThat(id).isNotNull();
+        return id;
+    }
 
-  private void materialize(
-      long assetId, String assetCode, long resultVersionId, String businessKey) {
-    assetPartitionMapper.upsertEffectiveJobPartition(
-        command(assetId, assetCode, resultVersionId, businessKey));
-  }
+    private void materialize(long assetId, String assetCode, long resultVersionId, String businessKey) {
+        assetPartitionMapper.upsertEffectiveJobPartition(command(assetId, assetCode, resultVersionId, businessKey));
+    }
 
-  private AssetPartitionMaterializationCommand command(
-      long assetId, String assetCode, long resultVersionId, String businessKey) {
-    return AssetPartitionMaterializationCommand.builder()
-        .tenantId(TENANT)
-        .assetId(assetId)
-        .assetCode(assetCode)
-        .partitionKey(PARTITION_KEY)
-        .bizDate(BIZ_DATE)
-        .resultVersionId(resultVersionId)
-        .businessKey(businessKey)
-        .jobInstanceId(STUB_JOB_INSTANCE_ID)
-        .effectiveAt(Instant.parse("2026-05-04T10:00:00Z"))
-        .payloadStorage("INLINE_JSON")
-        .payloadRef(null)
-        .build();
-  }
+    private AssetPartitionMaterializationCommand command(
+            long assetId, String assetCode, long resultVersionId, String businessKey) {
+        return AssetPartitionMaterializationCommand.builder()
+                .tenantId(TENANT)
+                .assetId(assetId)
+                .assetCode(assetCode)
+                .partitionKey(PARTITION_KEY)
+                .bizDate(BIZ_DATE)
+                .resultVersionId(resultVersionId)
+                .businessKey(businessKey)
+                .jobInstanceId(STUB_JOB_INSTANCE_ID)
+                .effectiveAt(Instant.parse("2026-05-04T10:00:00Z"))
+                .payloadStorage("INLINE_JSON")
+                .payloadRef(null)
+                .build();
+    }
 
-  private Long pointerVersionId(String assetCode) {
-    String pointerVersionIdSql = """
+    private Long pointerVersionId(String assetCode) {
+        String pointerVersionIdSql = """
         select result_version_id from batch.asset_partition
         where tenant_id = ? and asset_code = ? and partition_key = ?
         """;
-    return jdbcTemplate.queryForObject(
-        pointerVersionIdSql, Long.class, TENANT, assetCode, PARTITION_KEY);
-  }
+        return jdbcTemplate.queryForObject(pointerVersionIdSql, Long.class, TENANT, assetCode, PARTITION_KEY);
+    }
 }

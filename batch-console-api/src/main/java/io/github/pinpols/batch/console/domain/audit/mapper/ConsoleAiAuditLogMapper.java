@@ -8,11 +8,11 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ConsoleAiAuditLogMapper {
 
-  int insert(ConsoleAiAuditLogEntity entity);
+    int insert(ConsoleAiAuditLogEntity entity);
 
-  List<ConsoleAiAuditLogEntity> selectByQuery(ConsoleAiAuditLogQuery query);
+    List<ConsoleAiAuditLogEntity> selectByQuery(ConsoleAiAuditLogQuery query);
 
-  long countByQuery(ConsoleAiAuditLogQuery query);
+    long countByQuery(ConsoleAiAuditLogQuery query);
 
-  int deleteBefore(@Param("cutoff") OffsetDateTime cutoff);
+    int deleteBefore(@Param("cutoff") OffsetDateTime cutoff);
 }

@@ -20,19 +20,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleEventCatalogController {
 
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleEventCatalogService catalogService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleEventCatalogService catalogService;
 
-  @GetMapping("/event-types")
-  public CommonResponse<List<ConsoleEventTypeResponse>> eventTypes() {
-    List<ConsoleEventTypeResponse> eventTypes =
-        catalogService.eventTypes(LocaleContextHolder.getLocale());
-    return responseFactory.success(eventTypes);
-  }
+    @GetMapping("/event-types")
+    public CommonResponse<List<ConsoleEventTypeResponse>> eventTypes() {
+        List<ConsoleEventTypeResponse> eventTypes = catalogService.eventTypes(LocaleContextHolder.getLocale());
+        return responseFactory.success(eventTypes);
+    }
 
-  @GetMapping("/topics")
-  public CommonResponse<List<ConsoleEventTopicResponse>> topics() {
-    List<ConsoleEventTopicResponse> topics = catalogService.topics(LocaleContextHolder.getLocale());
-    return responseFactory.success(topics);
-  }
+    @GetMapping("/topics")
+    public CommonResponse<List<ConsoleEventTopicResponse>> topics() {
+        List<ConsoleEventTopicResponse> topics = catalogService.topics(LocaleContextHolder.getLocale());
+        return responseFactory.success(topics);
+    }
 }

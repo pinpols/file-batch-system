@@ -21,99 +21,96 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration(proxyBeanMethods = false)
 public class OrchestratorAsyncConfiguration {
 
-  /** outbox 轮询调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
-  private static final int OUTBOX_POLL_MAX_AWAIT_SECONDS = 30;
+    /** outbox 轮询调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
+    private static final int OUTBOX_POLL_MAX_AWAIT_SECONDS = 30;
 
-  /** 作业监控调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
-  private static final int JOB_MONITORING_MAX_AWAIT_SECONDS = 15;
+    /** 作业监控调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
+    private static final int JOB_MONITORING_MAX_AWAIT_SECONDS = 15;
 
-  // 2026-05-24:常量值从 "outboxPollScheduler" 改为 "outboxPollTaskScheduler",
-  // 避免与 OutboxPollScheduler @Component bean(默认 bean 名 outboxPollScheduler)
-  // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
-  public static final String OUTBOX_POLL_SCHEDULER = "outboxPollTaskScheduler";
-  public static final String JOB_MONITORING_SCHEDULER = "jobMonitoringTaskScheduler";
-  public static final String LAUNCH_WAIT_RESUME_EXECUTOR = "launchWaitResumeExecutor";
+    // 2026-05-24:常量值从 "outboxPollScheduler" 改为 "outboxPollTaskScheduler",
+    // 避免与 OutboxPollScheduler @Component bean(默认 bean 名 outboxPollScheduler)
+    // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
+    public static final String OUTBOX_POLL_SCHEDULER = "outboxPollTaskScheduler";
+    public static final String JOB_MONITORING_SCHEDULER = "jobMonitoringTaskScheduler";
+    public static final String LAUNCH_WAIT_RESUME_EXECUTOR = "launchWaitResumeExecutor";
 
-  /** launch-wait 恢复执行器关闭时等待的最长秒数，配置值更大时按此截断。 */
-  private static final int LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS = 30;
+    /** launch-wait 恢复执行器关闭时等待的最长秒数，配置值更大时按此截断。 */
+    private static final int LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS = 30;
 
-  /**
-   * {@code defaultCandidate = false}:Spring Boot {@code TaskExecutionAutoConfiguration} 的
-   * {@code @ConditionalOnMissingBean(Executor.class)} 按类型查 Executor,本 scheduler 实现 Executor 但语义只服务
-   * outbox 投递。设为 non-default 候选,让 autoconfig 继续按需创建 applicationTaskExecutor。 注入侧仍可通过
-   * {@code @Qualifier(OUTBOX_POLL_SCHEDULER)} 精确取本 bean。
-   */
-  @Bean(name = OUTBOX_POLL_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
-  public ThreadPoolTaskScheduler outboxPollTaskScheduler(BatchSchedulingProperties properties) {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("outbox-poll-scheduler-");
-    // 关键改动: 关闭 daemon, 让 JVM shutdown 走 Spring graceful 路径 (awaitTermination 30s 才有意义).
-    // 原 setDaemon(true) 的副作用: JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设。
-    scheduler.setDaemon(false);
-    scheduler.setRemoveOnCancelPolicy(true);
-    // outbox 事件已经落库，关闭时允许当前投递轮次完成；未投递事件会由下一副本继续扫描。
-    configureShutdown(scheduler, properties, OUTBOX_POLL_MAX_AWAIT_SECONDS);
-    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    return scheduler;
-  }
+    /**
+     * {@code defaultCandidate = false}:Spring Boot {@code TaskExecutionAutoConfiguration} 的
+     * {@code @ConditionalOnMissingBean(Executor.class)} 按类型查 Executor,本 scheduler 实现 Executor 但语义只服务
+     * outbox 投递。设为 non-default 候选,让 autoconfig 继续按需创建 applicationTaskExecutor。 注入侧仍可通过
+     * {@code @Qualifier(OUTBOX_POLL_SCHEDULER)} 精确取本 bean。
+     */
+    @Bean(name = OUTBOX_POLL_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
+    public ThreadPoolTaskScheduler outboxPollTaskScheduler(BatchSchedulingProperties properties) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("outbox-poll-scheduler-");
+        // 关键改动: 关闭 daemon, 让 JVM shutdown 走 Spring graceful 路径 (awaitTermination 30s 才有意义).
+        // 原 setDaemon(true) 的副作用: JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设。
+        scheduler.setDaemon(false);
+        scheduler.setRemoveOnCancelPolicy(true);
+        // outbox 事件已经落库，关闭时允许当前投递轮次完成；未投递事件会由下一副本继续扫描。
+        configureShutdown(scheduler, properties, OUTBOX_POLL_MAX_AWAIT_SECONDS);
+        scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return scheduler;
+    }
 
-  /** 作业监控独占调度线程，监控阻塞或过载时不挤占 Outbox 和共享定时任务。 */
-  @Bean(name = JOB_MONITORING_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
-  public ThreadPoolTaskScheduler jobMonitoringTaskScheduler(BatchSchedulingProperties properties) {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("job-monitoring-scheduler-");
-    scheduler.setDaemon(false);
-    scheduler.setRemoveOnCancelPolicy(true);
-    configureShutdown(scheduler, properties, JOB_MONITORING_MAX_AWAIT_SECONDS);
-    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-    return scheduler;
-  }
+    /** 作业监控独占调度线程，监控阻塞或过载时不挤占 Outbox 和共享定时任务。 */
+    @Bean(name = JOB_MONITORING_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
+    public ThreadPoolTaskScheduler jobMonitoringTaskScheduler(BatchSchedulingProperties properties) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("job-monitoring-scheduler-");
+        scheduler.setDaemon(false);
+        scheduler.setRemoveOnCancelPolicy(true);
+        configureShutdown(scheduler, properties, JOB_MONITORING_MAX_AWAIT_SECONDS);
+        scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        return scheduler;
+    }
 
-  /** 采用共享环境停机策略，但保留各专用池既有的生产等待上限。 */
-  private static void configureShutdown(
-      ThreadPoolTaskScheduler scheduler,
-      BatchSchedulingProperties properties,
-      int maximumAwaitSeconds) {
-    scheduler.setPhase(properties.getPhase());
-    scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
-    int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
-    scheduler.setAwaitTerminationSeconds(Math.min(maximumAwaitSeconds, configuredAwaitSeconds));
-    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(
-        properties.isContinueExistingPeriodicTasksAfterShutdown());
-    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(
-        properties.isExecuteExistingDelayedTasksAfterShutdown());
-  }
+    /** 采用共享环境停机策略，但保留各专用池既有的生产等待上限。 */
+    private static void configureShutdown(
+            ThreadPoolTaskScheduler scheduler, BatchSchedulingProperties properties, int maximumAwaitSeconds) {
+        scheduler.setPhase(properties.getPhase());
+        scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
+        int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
+        scheduler.setAwaitTerminationSeconds(Math.min(maximumAwaitSeconds, configuredAwaitSeconds));
+        scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(
+                properties.isContinueExistingPeriodicTasksAfterShutdown());
+        scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(
+                properties.isExecuteExistingDelayedTasksAfterShutdown());
+    }
 
-  /**
-   * launch-wait 恢复使用独立有界线程池：每条等待的恢复都是一次完整 launch 事务，串行执行会把单租户恢复吞吐
-   * 压在单线程水平；复用共享 {@code applicationTaskExecutor} 又会与请求线程争用。
-   *
-   * <p>核心线程数取 {@code parallelism}，队列长度取 {@code batch-size}，保证一轮扫描的全部认领都能排队而不被拒绝；
-   * 拒绝时回落到调用方线程，宁可慢也不丢恢复。
-   */
-  @Bean(name = LAUNCH_WAIT_RESUME_EXECUTOR, destroyMethod = "shutdown", defaultCandidate = false)
-  public ThreadPoolTaskExecutor launchWaitResumeExecutor(
-      WorkflowLaunchWaitProperties launchWait, BatchSchedulingProperties properties) {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(launchWait.getParallelism());
-    executor.setMaxPoolSize(launchWait.getParallelism());
-    executor.setQueueCapacity(launchWait.getBatchSize());
-    executor.setThreadNamePrefix("launch-wait-resume-");
-    executor.setDaemon(false);
-    executor.setPhase(properties.getPhase());
-    executor.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
-    int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
-    executor.setAwaitTerminationSeconds(
-        Math.min(LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS, configuredAwaitSeconds));
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    return executor;
-  }
+    /**
+     * launch-wait 恢复使用独立有界线程池：每条等待的恢复都是一次完整 launch 事务，串行执行会把单租户恢复吞吐
+     * 压在单线程水平；复用共享 {@code applicationTaskExecutor} 又会与请求线程争用。
+     *
+     * <p>核心线程数取 {@code parallelism}，队列长度取 {@code batch-size}，保证一轮扫描的全部认领都能排队而不被拒绝；
+     * 拒绝时回落到调用方线程，宁可慢也不丢恢复。
+     */
+    @Bean(name = LAUNCH_WAIT_RESUME_EXECUTOR, destroyMethod = "shutdown", defaultCandidate = false)
+    public ThreadPoolTaskExecutor launchWaitResumeExecutor(
+            WorkflowLaunchWaitProperties launchWait, BatchSchedulingProperties properties) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(launchWait.getParallelism());
+        executor.setMaxPoolSize(launchWait.getParallelism());
+        executor.setQueueCapacity(launchWait.getBatchSize());
+        executor.setThreadNamePrefix("launch-wait-resume-");
+        executor.setDaemon(false);
+        executor.setPhase(properties.getPhase());
+        executor.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
+        int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
+        executor.setAwaitTerminationSeconds(Math.min(LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS, configuredAwaitSeconds));
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return executor;
+    }
 
-  // applicationTaskExecutor 由 Spring Boot TaskExecutionAutoConfiguration 提供:
-  // 其 @ConditionalOnMissingBean 按 NAME 判断("applicationTaskExecutor"),不按 Executor 类型。
-  // outboxPollTaskScheduler 虽实现 Executor 但名字不同,不会阻止 autoconfig 创建 applicationTaskExecutor。
-  // E2E slice 测试 app(E2eConsoleImportApplication 等)在 slice 模式下 autoconfig 不触发,
-  // 各自显式补 minimal pool — slice 测试自家责任,本配置不越界声明。
+    // applicationTaskExecutor 由 Spring Boot TaskExecutionAutoConfiguration 提供:
+    // 其 @ConditionalOnMissingBean 按 NAME 判断("applicationTaskExecutor"),不按 Executor 类型。
+    // outboxPollTaskScheduler 虽实现 Executor 但名字不同,不会阻止 autoconfig 创建 applicationTaskExecutor。
+    // E2E slice 测试 app(E2eConsoleImportApplication 等)在 slice 模式下 autoconfig 不触发,
+    // 各自显式补 minimal pool — slice 测试自家责任,本配置不越界声明。
 }

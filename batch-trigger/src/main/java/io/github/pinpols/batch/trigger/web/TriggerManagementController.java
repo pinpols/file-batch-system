@@ -19,75 +19,69 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TriggerManagementController {
 
-  private static final String KEY_TENANT_ID = "tenantId";
-  private final TriggerRegistrationService triggerRegistrationService;
-  private final TriggerDrainService drainService;
+    private static final String KEY_TENANT_ID = "tenantId";
+    private final TriggerRegistrationService triggerRegistrationService;
+    private final TriggerDrainService drainService;
 
-  @PostMapping("/workflow/register")
-  public CommonResponse<TriggerActionResult> registerWorkflow(
-      @RequestParam(KEY_TENANT_ID) String tenantId,
-      @RequestParam("workflowCode") String workflowCode) {
-    triggerRegistrationService.registerByWorkflowCode(tenantId, workflowCode);
-    return CommonResponse.success(
-        new TriggerActionResult(tenantId, null, workflowCode, "REGISTERED"));
-  }
+    @PostMapping("/workflow/register")
+    public CommonResponse<TriggerActionResult> registerWorkflow(
+            @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam("workflowCode") String workflowCode) {
+        triggerRegistrationService.registerByWorkflowCode(tenantId, workflowCode);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "REGISTERED"));
+    }
 
-  @PostMapping("/workflow/unregister")
-  public CommonResponse<TriggerActionResult> unregisterWorkflow(
-      @RequestParam(KEY_TENANT_ID) String tenantId,
-      @RequestParam("workflowCode") String workflowCode) {
-    triggerRegistrationService.unregisterByWorkflowCode(tenantId, workflowCode);
-    return CommonResponse.success(
-        new TriggerActionResult(tenantId, null, workflowCode, "UNREGISTERED"));
-  }
+    @PostMapping("/workflow/unregister")
+    public CommonResponse<TriggerActionResult> unregisterWorkflow(
+            @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam("workflowCode") String workflowCode) {
+        triggerRegistrationService.unregisterByWorkflowCode(tenantId, workflowCode);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "UNREGISTERED"));
+    }
 
-  @PostMapping("/workflow/pause")
-  public CommonResponse<TriggerActionResult> pauseWorkflow(
-      @RequestParam(KEY_TENANT_ID) String tenantId,
-      @RequestParam("workflowCode") String workflowCode) {
-    triggerRegistrationService.pauseByWorkflowCode(tenantId, workflowCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "PAUSED"));
-  }
+    @PostMapping("/workflow/pause")
+    public CommonResponse<TriggerActionResult> pauseWorkflow(
+            @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam("workflowCode") String workflowCode) {
+        triggerRegistrationService.pauseByWorkflowCode(tenantId, workflowCode);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "PAUSED"));
+    }
 
-  @PostMapping("/workflow/resume")
-  public CommonResponse<TriggerActionResult> resumeWorkflow(
-      @RequestParam(KEY_TENANT_ID) String tenantId,
-      @RequestParam("workflowCode") String workflowCode) {
-    triggerRegistrationService.resumeByWorkflowCode(tenantId, workflowCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "NORMAL"));
-  }
+    @PostMapping("/workflow/resume")
+    public CommonResponse<TriggerActionResult> resumeWorkflow(
+            @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam("workflowCode") String workflowCode) {
+        triggerRegistrationService.resumeByWorkflowCode(tenantId, workflowCode);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "NORMAL"));
+    }
 
-  @PostMapping("/pause-all")
-  public CommonResponse<TriggerSchedulerStatus> pauseAll() {
-    triggerRegistrationService.pauseAll();
-    return CommonResponse.success(new TriggerSchedulerStatus("ALL_PAUSED"));
-  }
+    @PostMapping("/pause-all")
+    public CommonResponse<TriggerSchedulerStatus> pauseAll() {
+        triggerRegistrationService.pauseAll();
+        return CommonResponse.success(new TriggerSchedulerStatus("ALL_PAUSED"));
+    }
 
-  @PostMapping("/resume-all")
-  public CommonResponse<TriggerSchedulerStatus> resumeAll() {
-    triggerRegistrationService.resumeAll();
-    return CommonResponse.success(new TriggerSchedulerStatus("ALL_RESUMED"));
-  }
+    @PostMapping("/resume-all")
+    public CommonResponse<TriggerSchedulerStatus> resumeAll() {
+        triggerRegistrationService.resumeAll();
+        return CommonResponse.success(new TriggerSchedulerStatus("ALL_RESUMED"));
+    }
 
-  @PostMapping("/pause-tenant")
-  public CommonResponse<TriggerActionResult> pauseByTenant(@RequestParam String tenantId) {
-    triggerRegistrationService.pauseByTenant(tenantId);
-    return CommonResponse.success(new TriggerActionResult(tenantId, null, "TENANT_PAUSED"));
-  }
+    @PostMapping("/pause-tenant")
+    public CommonResponse<TriggerActionResult> pauseByTenant(@RequestParam String tenantId) {
+        triggerRegistrationService.pauseByTenant(tenantId);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, "TENANT_PAUSED"));
+    }
 
-  @PostMapping("/resume-tenant")
-  public CommonResponse<TriggerActionResult> resumeByTenant(@RequestParam String tenantId) {
-    triggerRegistrationService.resumeByTenant(tenantId);
-    return CommonResponse.success(new TriggerActionResult(tenantId, null, "TENANT_RESUMED"));
-  }
+    @PostMapping("/resume-tenant")
+    public CommonResponse<TriggerActionResult> resumeByTenant(@RequestParam String tenantId) {
+        triggerRegistrationService.resumeByTenant(tenantId);
+        return CommonResponse.success(new TriggerActionResult(tenantId, null, "TENANT_RESUMED"));
+    }
 
-  @PostMapping("/drain/enable")
-  public CommonResponse<TriggerDrainStatus> enableDrain() {
-    return CommonResponse.success(drainService.enable());
-  }
+    @PostMapping("/drain/enable")
+    public CommonResponse<TriggerDrainStatus> enableDrain() {
+        return CommonResponse.success(drainService.enable());
+    }
 
-  @PostMapping("/drain/disable")
-  public CommonResponse<TriggerDrainStatus> disableDrain() {
-    return CommonResponse.success(drainService.disable());
-  }
+    @PostMapping("/drain/disable")
+    public CommonResponse<TriggerDrainStatus> disableDrain() {
+        return CommonResponse.success(drainService.disable());
+    }
 }

@@ -5,15 +5,13 @@ import org.apache.ibatis.annotations.Param;
 
 /** 配置缓存失效意图的领取与确认。 */
 public interface ConfigCacheInvalidationOutboxMapper {
-  ConfigCacheInvalidationIntent lockNext();
+    ConfigCacheInvalidationIntent lockNext();
 
-  int claim(@Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
+    int claim(@Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
 
-  int acknowledge(
-      @Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
+    int acknowledge(@Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
 
-  int retry(@Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
+    int retry(@Param("id") long id, @Param("tenantId") String tenantId, @Param("token") String token);
 
-  int insert(
-      @Param("tenantId") String tenantId, @Param("type") String type, @Param("code") String code);
+    int insert(@Param("tenantId") String tenantId, @Param("type") String type, @Param("code") String code);
 }

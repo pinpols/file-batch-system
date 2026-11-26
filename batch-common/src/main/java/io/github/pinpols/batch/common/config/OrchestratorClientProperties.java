@@ -8,5 +8,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.orchestrator")
 public class OrchestratorClientProperties {
 
-  private String baseUrl;
+    private String baseUrl;
 }

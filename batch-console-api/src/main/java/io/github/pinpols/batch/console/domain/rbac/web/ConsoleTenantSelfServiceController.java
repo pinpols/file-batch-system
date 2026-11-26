@@ -31,31 +31,29 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleTenantSelfServiceController {
 
-  private final ConsoleTenantSelfServiceApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTenantSelfServiceApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 查看当前租户配额策略。 */
-  @GetMapping("/quota")
-  public CommonResponse<PageResponse<QuotaPolicyResponse>> quota(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.quota(tenantId));
-  }
+    /** 查看当前租户配额策略。 */
+    @GetMapping("/quota")
+    public CommonResponse<PageResponse<QuotaPolicyResponse>> quota(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.quota(tenantId));
+    }
 
-  /** 查看租户配额用量摘要（从系统参数读取运行时统计）。 */
-  @GetMapping("/usage")
-  public CommonResponse<ConsoleTenantUsageSummaryResponse> usage(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.usage(tenantId));
-  }
+    /** 查看租户配额用量摘要（从系统参数读取运行时统计）。 */
+    @GetMapping("/usage")
+    public CommonResponse<ConsoleTenantUsageSummaryResponse> usage(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.usage(tenantId));
+    }
 
-  /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */
-  @PostMapping("/quota/request")
-  public CommonResponse<String> requestQuotaChange(
-      @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
-          String idempotencyKey,
-      @RequestParam("tenantId") String tenantId,
-      @Valid @RequestBody QuotaChangeRequest request) {
-    String requestKey = applicationService.requestQuotaChange(tenantId, request);
-    return responseFactory.success(requestKey);
-  }
+    /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */
+    @PostMapping("/quota/request")
+    public CommonResponse<String> requestQuotaChange(
+            @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
+                    String idempotencyKey,
+            @RequestParam("tenantId") String tenantId,
+            @Valid @RequestBody QuotaChangeRequest request) {
+        String requestKey = applicationService.requestQuotaChange(tenantId, request);
+        return responseFactory.success(requestKey);
+    }
 }

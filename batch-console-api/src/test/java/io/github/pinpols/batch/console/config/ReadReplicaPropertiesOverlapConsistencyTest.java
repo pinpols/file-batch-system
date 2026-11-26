@@ -37,77 +37,77 @@ import org.springframework.beans.BeanWrapperImpl;
 @DisplayName("只读副本配置的双绑定方: 重叠键集合与默认值一致性契约守护")
 class ReadReplicaPropertiesOverlapConsistencyTest {
 
-  /** 当前已知的重叠叶子键；任何增减都必须是有意为之并同步更新类注释。 */
-  private static final Set<String> EXPECTED_OVERLAP =
-      new TreeSet<>(Set.of("enabled", "primary.password", "replica.password"));
+    /** 当前已知的重叠叶子键；任何增减都必须是有意为之并同步更新类注释。 */
+    private static final Set<String> EXPECTED_OVERLAP =
+            new TreeSet<>(Set.of("enabled", "primary.password", "replica.password"));
 
-  @Test
-  @DisplayName("收集两侧叶子键后的重叠集合,必须与文档记录的唯一集合一致")
-  void shouldMatchDocumentedSet_whenOverlappingLeafKeysAreCollected() {
-    Set<String> overlap = new TreeSet<>(leafPaths(new ConsoleReadReplicaProperties()));
-    overlap.retainAll(leafPaths(new ReadReplicaProperties()));
+    @Test
+    @DisplayName("收集两侧叶子键后的重叠集合,必须与文档记录的唯一集合一致")
+    void shouldMatchDocumentedSet_whenOverlappingLeafKeysAreCollected() {
+        Set<String> overlap = new TreeSet<>(leafPaths(new ConsoleReadReplicaProperties()));
+        overlap.retainAll(leafPaths(new ReadReplicaProperties()));
 
-    assertThat(overlap)
-        .as("重叠键集合变化必须同步更新 ConsoleReadReplicaProperties 类注释与本测试")
-        .isEqualTo(EXPECTED_OVERLAP);
-  }
-
-  @Test
-  @DisplayName("重叠键在两侧的 Java 默认值必须一致,密码类键双方都不得有默认值")
-  void shouldShareSameDefault_whenOverlappingKeysAreCompared() {
-    ConsoleReadReplicaProperties view = new ConsoleReadReplicaProperties();
-    ReadReplicaProperties full = new ReadReplicaProperties();
-
-    assertThat(view.isEnabled())
-        .as("batch.console.read-replica.enabled 的 Java 默认值必须两侧一致")
-        .isEqualTo(full.isEnabled());
-
-    // 密码在两侧都不得有 Java 默认值：留空才由 yml / Secret 提供，避免把凭据默认值写进代码。
-    assertThat(view.getPrimary().getPassword())
-        .as("只读视图 primary.password 不应有默认值")
-        .isNull();
-    assertThat(full.getPrimary().getPassword())
-        .as("完整配置 primary.password 不应有默认值")
-        .isNull();
-    assertThat(view.getReplica().getPassword())
-        .as("只读视图 replica.password 不应有默认值")
-        .isNull();
-    assertThat(full.getReplica().getPassword())
-        .as("完整配置 replica.password 不应有默认值")
-        .isNull();
-  }
-
-  /** 递归收集叶子属性路径；嵌套可绑定对象继续下钻。 */
-  private static Set<String> leafPaths(Object bean) {
-    Set<String> paths = new LinkedHashSet<>();
-    collect(new BeanWrapperImpl(bean), "", paths);
-    return paths;
-  }
-
-  private static void collect(BeanWrapper wrapper, String prefix, Set<String> out) {
-    for (PropertyDescriptor descriptor : wrapper.getPropertyDescriptors()) {
-      if (descriptor.getReadMethod() == null || "class".equals(descriptor.getName())) {
-        continue;
-      }
-      String path = prefix.isEmpty() ? descriptor.getName() : prefix + "." + descriptor.getName();
-      Object value = wrapper.getPropertyValue(descriptor.getName());
-      if (isNested(value)) {
-        collect(new BeanWrapperImpl(value), path, out);
-      } else {
-        out.add(path);
-      }
+        assertThat(overlap)
+                .as("重叠键集合变化必须同步更新 ConsoleReadReplicaProperties 类注释与本测试")
+                .isEqualTo(EXPECTED_OVERLAP);
     }
-  }
 
-  private static boolean isNested(Object value) {
-    return value != null
-        && !(value instanceof CharSequence)
-        && !(value instanceof Number)
-        && !(value instanceof Boolean)
-        && !(value instanceof Enum<?>)
-        && !(value instanceof Collection<?>)
-        && !(value instanceof Map<?, ?>)
-        && !value.getClass().isArray()
-        && !value.getClass().isPrimitive();
-  }
+    @Test
+    @DisplayName("重叠键在两侧的 Java 默认值必须一致,密码类键双方都不得有默认值")
+    void shouldShareSameDefault_whenOverlappingKeysAreCompared() {
+        ConsoleReadReplicaProperties view = new ConsoleReadReplicaProperties();
+        ReadReplicaProperties full = new ReadReplicaProperties();
+
+        assertThat(view.isEnabled())
+                .as("batch.console.read-replica.enabled 的 Java 默认值必须两侧一致")
+                .isEqualTo(full.isEnabled());
+
+        // 密码在两侧都不得有 Java 默认值：留空才由 yml / Secret 提供，避免把凭据默认值写进代码。
+        assertThat(view.getPrimary().getPassword())
+                .as("只读视图 primary.password 不应有默认值")
+                .isNull();
+        assertThat(full.getPrimary().getPassword())
+                .as("完整配置 primary.password 不应有默认值")
+                .isNull();
+        assertThat(view.getReplica().getPassword())
+                .as("只读视图 replica.password 不应有默认值")
+                .isNull();
+        assertThat(full.getReplica().getPassword())
+                .as("完整配置 replica.password 不应有默认值")
+                .isNull();
+    }
+
+    /** 递归收集叶子属性路径；嵌套可绑定对象继续下钻。 */
+    private static Set<String> leafPaths(Object bean) {
+        Set<String> paths = new LinkedHashSet<>();
+        collect(new BeanWrapperImpl(bean), "", paths);
+        return paths;
+    }
+
+    private static void collect(BeanWrapper wrapper, String prefix, Set<String> out) {
+        for (PropertyDescriptor descriptor : wrapper.getPropertyDescriptors()) {
+            if (descriptor.getReadMethod() == null || "class".equals(descriptor.getName())) {
+                continue;
+            }
+            String path = prefix.isEmpty() ? descriptor.getName() : prefix + "." + descriptor.getName();
+            Object value = wrapper.getPropertyValue(descriptor.getName());
+            if (isNested(value)) {
+                collect(new BeanWrapperImpl(value), path, out);
+            } else {
+                out.add(path);
+            }
+        }
+    }
+
+    private static boolean isNested(Object value) {
+        return value != null
+                && !(value instanceof CharSequence)
+                && !(value instanceof Number)
+                && !(value instanceof Boolean)
+                && !(value instanceof Enum<?>)
+                && !(value instanceof Collection<?>)
+                && !(value instanceof Map<?, ?>)
+                && !value.getClass().isArray()
+                && !value.getClass().isPrimitive();
+    }
 }

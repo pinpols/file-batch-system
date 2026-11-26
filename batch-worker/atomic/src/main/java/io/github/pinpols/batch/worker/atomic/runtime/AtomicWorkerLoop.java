@@ -20,52 +20,52 @@ import org.springframework.stereotype.Service;
 @Service
 public class AtomicWorkerLoop extends AbstractWorkerLoop {
 
-  private final AtomicWorkerConfiguration configuration;
-  private final BatchTaskExecutorRegistry taskExecutorRegistry;
+    private final AtomicWorkerConfiguration configuration;
+    private final BatchTaskExecutorRegistry taskExecutorRegistry;
 
-  @SuppressWarnings("PMD.ExcessiveParameterList") // Spring 构造器注入保持依赖显式，不引入聚合依赖容器。
-  public AtomicWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      AtomicWorkerConfiguration configuration,
-      WorkerIdentityProperties identityProperties,
-      WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties,
-      BatchTaskExecutorRegistry taskExecutorRegistry) {
-    super(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        concurrencyProperties.getMaxConcurrentTasks(),
-        identityProperties,
-        workerRegistryStartupProperties);
-    this.configuration = configuration;
-    this.taskExecutorRegistry = taskExecutorRegistry;
-  }
+    @SuppressWarnings("PMD.ExcessiveParameterList") // Spring 构造器注入保持依赖显式，不引入聚合依赖容器。
+    public AtomicWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            AtomicWorkerConfiguration configuration,
+            WorkerIdentityProperties identityProperties,
+            WorkerRegistryStartupProperties workerRegistryStartupProperties,
+            WorkerConcurrencyProperties concurrencyProperties,
+            BatchTaskExecutorRegistry taskExecutorRegistry) {
+        super(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                concurrencyProperties.getMaxConcurrentTasks(),
+                identityProperties,
+                workerRegistryStartupProperties);
+        this.configuration = configuration;
+        this.taskExecutorRegistry = taskExecutorRegistry;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected String workerGroup() {
-    return "atomic";
-  }
+    @Override
+    protected String workerGroup() {
+        return "atomic";
+    }
 
-  @Override
-  protected List<WorkerTaskCapabilityDto> taskCapabilities() {
-    return taskExecutorRegistry.capabilitySnapshot();
-  }
+    @Override
+    protected List<WorkerTaskCapabilityDto> taskCapabilities() {
+        return taskExecutorRegistry.capabilitySnapshot();
+    }
 
-  @Override
-  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
-    return taskExecutorRegistry.replayCapabilityCatalog();
-  }
+    @Override
+    protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+        return taskExecutorRegistry.replayCapabilityCatalog();
+    }
 
-  @Scheduled(fixedDelayString = "${batch.worker.atomic.heartbeat-interval-millis:15000}")
-  public void heartbeat() {
-    doHeartbeat();
-  }
+    @Scheduled(fixedDelayString = "${batch.worker.atomic.heartbeat-interval-millis:15000}")
+    public void heartbeat() {
+        doHeartbeat();
+    }
 }

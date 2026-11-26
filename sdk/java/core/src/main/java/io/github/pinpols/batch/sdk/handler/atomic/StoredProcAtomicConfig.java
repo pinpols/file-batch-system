@@ -37,34 +37,34 @@ import java.util.Set;
  * @param defaultAutoCommit 事务模式(默认 false = 显式事务)
  */
 public record StoredProcAtomicConfig(
-    String taskType,
-    Set<String> allowedSchemas,
-    boolean allowSecurityDefiner,
-    boolean forbidOsCapableRole,
-    boolean verifyExecutePrivilege,
-    int statementTimeoutSeconds,
-    int maxOutBytesPerParam,
-    boolean defaultAutoCommit) {
+        String taskType,
+        Set<String> allowedSchemas,
+        boolean allowSecurityDefiner,
+        boolean forbidOsCapableRole,
+        boolean verifyExecutePrivilege,
+        int statementTimeoutSeconds,
+        int maxOutBytesPerParam,
+        boolean defaultAutoCommit) {
 
-  public StoredProcAtomicConfig {
-    Objects.requireNonNull(taskType, "taskType");
-    if (taskType.isBlank()) {
-      throw new IllegalArgumentException("taskType must not be blank");
+    public StoredProcAtomicConfig {
+        Objects.requireNonNull(taskType, "taskType");
+        if (taskType.isBlank()) {
+            throw new IllegalArgumentException("taskType must not be blank");
+        }
+        if (statementTimeoutSeconds <= 0) {
+            throw new IllegalArgumentException("statementTimeoutSeconds must be positive");
+        }
+        if (maxOutBytesPerParam <= 0) {
+            throw new IllegalArgumentException("maxOutBytesPerParam must be positive");
+        }
+        allowedSchemas = allowedSchemas == null ? Set.of() : Set.copyOf(allowedSchemas);
     }
-    if (statementTimeoutSeconds <= 0) {
-      throw new IllegalArgumentException("statementTimeoutSeconds must be positive");
-    }
-    if (maxOutBytesPerParam <= 0) {
-      throw new IllegalArgumentException("maxOutBytesPerParam must be positive");
-    }
-    allowedSchemas = allowedSchemas == null ? Set.of() : Set.copyOf(allowedSchemas);
-  }
 
-  /**
-   * 安全默认值:空白名单(dev 全放行)、拒 SECURITY DEFINER、拒 OS 能力角色、不校验 EXECUTE 权限(opt-in)、60s 超时、 OUT 上限
-   * 64k、显式事务(全部对齐平台默认)。
-   */
-  public static StoredProcAtomicConfig defaults(String taskType) {
-    return new StoredProcAtomicConfig(taskType, Set.of(), false, true, false, 60, 64 * 1024, false);
-  }
+    /**
+     * 安全默认值:空白名单(dev 全放行)、拒 SECURITY DEFINER、拒 OS 能力角色、不校验 EXECUTE 权限(opt-in)、60s 超时、 OUT 上限
+     * 64k、显式事务(全部对齐平台默认)。
+     */
+    public static StoredProcAtomicConfig defaults(String taskType) {
+        return new StoredProcAtomicConfig(taskType, Set.of(), false, true, false, 60, 64 * 1024, false);
+    }
 }

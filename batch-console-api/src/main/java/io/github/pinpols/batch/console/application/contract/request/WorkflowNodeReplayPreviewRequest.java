@@ -10,16 +10,16 @@ import lombok.Data;
 @Data
 public class WorkflowNodeReplayPreviewRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  private Long workflowRunId;
+    @NotNull
+    private Long workflowRunId;
 
-  @NotNull
-  private Long workflowNodeRunId;
+    @NotNull
+    private Long workflowNodeRunId;
 
-  @NotBlank
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @NotBlank
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 }

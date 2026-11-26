@@ -77,479 +77,463 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "batch.worker.executors.shell",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "batch.worker.executors.shell", name = "enabled", havingValue = "true")
 public class ShellTaskExecutor implements BatchTaskExecutor {
 
-  /** 进程结束后等待 stdout/stderr 读取线程收尾的毫秒数。 */
-  private static final int STREAM_READER_JOIN_TIMEOUT_MILLIS = 1000;
+    /** 进程结束后等待 stdout/stderr 读取线程收尾的毫秒数。 */
+    private static final int STREAM_READER_JOIN_TIMEOUT_MILLIS = 1000;
 
-  /** 演练结果中 command 与单个 arg 的展示长度上限；不对应数据库列。 */
-  private static final int DRY_RUN_TEXT_MAX_LENGTH = 4096;
+    /** 演练结果中 command 与单个 arg 的展示长度上限；不对应数据库列。 */
+    private static final int DRY_RUN_TEXT_MAX_LENGTH = 4096;
 
-  /** 进程输出摘要的截断长度，用于错误信息；不对应数据库列。 */
-  private static final int OUTPUT_SUMMARY_MAX_LENGTH = 200;
+    /** 进程输出摘要的截断长度，用于错误信息；不对应数据库列。 */
+    private static final int OUTPUT_SUMMARY_MAX_LENGTH = 200;
 
-  static final String PARAM_COMMAND = "command";
-  static final String PARAM_ARGS = "args";
-  static final String PARAM_TIMEOUT_SECONDS = "timeoutSeconds";
-  static final String PARAM_ENV = "env";
+    static final String PARAM_COMMAND = "command";
+    static final String PARAM_ARGS = "args";
+    static final String PARAM_TIMEOUT_SECONDS = "timeoutSeconds";
+    static final String PARAM_ENV = "env";
 
-  /** 匹配真正的 {@code ..} 路径段(行首/分隔符 + ".." + 分隔符/行尾),不误伤 {@code foo..bar}。 */
-  static final Pattern PARENT_DIR_REF = Pattern.compile("(^|[/\\\\])\\.\\.([/\\\\]|$)");
+    /** 匹配真正的 {@code ..} 路径段(行首/分隔符 + ".." + 分隔符/行尾),不误伤 {@code foo..bar}。 */
+    static final Pattern PARENT_DIR_REF = Pattern.compile("(^|[/\\\\])\\.\\.([/\\\\]|$)");
 
-  private final ShellExecutorProperties props;
+    private final ShellExecutorProperties props;
 
-  /** taskInstanceId 对应正在运行的进程，用于实现协作式取消契约。 */
-  private final Map<String, Process> running = new ConcurrentHashMap<>();
+    /** taskInstanceId 对应正在运行的进程，用于实现协作式取消契约。 */
+    private final Map<String, Process> running = new ConcurrentHashMap<>();
 
-  /** 包私有测试钩子:value 是否包含真正的 {@code ..} 父目录段。 */
-  static boolean hasParentDirRef(String arg) {
-    return arg != null && PARENT_DIR_REF.matcher(arg).find();
-  }
-
-  /**
-   * 每次 invocation 唯一的 reader-map / 线程命名前缀。用 AtomicLong 自增,避免 PID 复用导致两个任务的 stdout 串台(reader map
-   * 是实例级共享单例)。
-   */
-  private static final AtomicLong INVOCATION_SEQ = new AtomicLong();
-
-  /** 包私有测试钩子:生成下一个 invocation id(单调递增,两次调用必不相同)。 */
-  static String nextInvocationId() {
-    long invocationSequence = INVOCATION_SEQ.incrementAndGet();
-    return Long.toString(invocationSequence);
-  }
-
-  @Override
-  public String taskType() {
-    return props.getTaskType();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    return new TaskCapability(
-        Set.of(ResourceKind.CPU, ResourceKind.DISK),
-        false, // shell 任务不视为幂等(side-effects 未知),失败需人工 review
-        true, // 支持 cancel(destroyForcibly)
-        props.getDefaultTimeout());
-  }
-
-  @Override
-  public void cancel(String taskInstanceId) {
-    Process process = running.get(taskInstanceId);
-    if (process != null) {
-      destroyProcessTree(process);
-      log.info("shell executor cancel requested: taskInstanceId={}", taskInstanceId);
+    /** 包私有测试钩子:value 是否包含真正的 {@code ..} 父目录段。 */
+    static boolean hasParentDirRef(String arg) {
+        return arg != null && PARENT_DIR_REF.matcher(arg).find();
     }
-  }
 
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    try {
-      // Lane C:credential 静态拒入闸门(SENSITIVE_DATA_IN_PARAMETERS)
-      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
-          ctx.parameters(), "atomic.shell.parameters");
-      ShellInvocation inv = parseInvocation(ctx);
-      if (ctx.isDryRun()) {
-        // ADR-026 §dry-run:演练不 fork 进程、不建 workdir、不透传 env 值,仅返回会执行的 command / args / env keys。
-        Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
-        planned.put("plannedAction", "shell");
-        String visibleCommand =
-            SwallowedExceptionLogger.safeMessage(inv.command, DRY_RUN_TEXT_MAX_LENGTH);
-        planned.put(PARAM_COMMAND, visibleCommand);
-        planned.put(
-            PARAM_ARGS,
-            inv.args.stream()
-                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, DRY_RUN_TEXT_MAX_LENGTH))
-                .toList());
-        planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
-        // env 只暴露 key(白名单过滤过),value 不出库以防泄密
-        planned.put("envKeys", List.copyOf(inv.env.keySet()));
-        log.info(
-            "shell executor dry-run skipped real fork: tenantId={}, jobCode={}, command={}",
-            ctx.tenantId(),
-            ctx.jobCode(),
-            visibleCommand);
-        return TaskResult.ok("dry-run: command parsed (not forked): " + visibleCommand, planned);
-      }
-      Path workdir = createIsolatedWorkdir(ctx);
-      try {
-        return runProcess(ctx, inv, workdir);
-      } finally {
-        if (props.isCleanupWorkdir()) {
-          cleanupWorkdir(workdir);
+    /**
+     * 每次 invocation 唯一的 reader-map / 线程命名前缀。用 AtomicLong 自增,避免 PID 复用导致两个任务的 stdout 串台(reader map
+     * 是实例级共享单例)。
+     */
+    private static final AtomicLong INVOCATION_SEQ = new AtomicLong();
+
+    /** 包私有测试钩子:生成下一个 invocation id(单调递增,两次调用必不相同)。 */
+    static String nextInvocationId() {
+        long invocationSequence = INVOCATION_SEQ.incrementAndGet();
+        return Long.toString(invocationSequence);
+    }
+
+    @Override
+    public String taskType() {
+        return props.getTaskType();
+    }
+
+    @Override
+    public TaskCapability capability() {
+        return new TaskCapability(
+                Set.of(ResourceKind.CPU, ResourceKind.DISK),
+                false, // shell 任务不视为幂等(side-effects 未知),失败需人工 review
+                true, // 支持 cancel(destroyForcibly)
+                props.getDefaultTimeout());
+    }
+
+    @Override
+    public void cancel(String taskInstanceId) {
+        Process process = running.get(taskInstanceId);
+        if (process != null) {
+            destroyProcessTree(process);
+            log.info("shell executor cancel requested: taskInstanceId={}", taskInstanceId);
         }
-      }
-    } catch (ShellValidationException ex) {
-      return AtomicErrorCode.fail(AtomicErrorCode.CONFIG_INVALID, ex.getMessage());
-    } catch (BizException ex) {
-      // Lane C 凭据拒入:任务直接 FAILED,error message 含 SENSITIVE_DATA_IN_PARAMETERS 标识
-      log.warn(
-          "shell executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
-              ? "?"
-              : ex.getMessageArgs()[1]);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
-    } catch (RuntimeException ex) {
-      log.error(
-          "shell executor unexpected error: tenantId={}, jobCode={}, cause={}",
-          LogSanitizer.value(ctx.tenantId()),
-          LogSanitizer.value(ctx.jobCode()),
-          SwallowedExceptionLogger.summary(ex));
-      String exceptionMessage = ex.getMessage();
-      String failureMessage =
-          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
-      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
-    }
-  }
-
-  // ─── parsing + validation ────────────────────────────────────────────────────
-
-  private ShellInvocation parseInvocation(TaskContext ctx) {
-    Map<String, Object> params = ctx.parameters();
-
-    Object cmdObj = params.get(PARAM_COMMAND);
-    if (!(cmdObj instanceof String commandString) || EmptyChecks.isBlank(commandString)) {
-      throw new ShellValidationException("parameters.command required (non-blank string)");
-    }
-    String command = commandString.trim();
-    SensitiveDataValidator.rejectIfContainsInlineCredential(command, "atomic.shell.command");
-
-    // 白名单
-    if (!props.getCommandWhitelist().isEmpty() && !props.getCommandWhitelist().contains(command)) {
-      throw new ShellValidationException(
-          "command not in whitelist: " + command + ", allowed=" + props.getCommandWhitelist());
-    }
-    validateAgainstRegex(command, PARAM_COMMAND);
-    validateNoParentDirRef(command, PARAM_COMMAND);
-
-    // args
-    List<String> args = parseArgs(params.get(PARAM_ARGS));
-    SensitiveDataValidator.rejectIfContainsInlineCredentials(args, "atomic.shell.args");
-    if (args.size() > props.getMaxArgs()) {
-      throw new ShellValidationException(
-          "too many args: " + args.size() + " > maxArgs=" + props.getMaxArgs());
-    }
-    for (int i = 0; i < args.size(); i++) {
-      validateAgainstRegex(args.get(i), "args[" + i + "]");
-      validateNoParentDirRef(args.get(i), "args[" + i + "]");
     }
 
-    // timeout(只能缩短)
-    Duration timeout = props.getDefaultTimeout();
-    Object timeoutObj = params.get(PARAM_TIMEOUT_SECONDS);
-    if (EmptyChecks.isNotNull(timeoutObj)) {
-      Long sec = AtomicParameterNumbers.positiveLong(timeoutObj);
-      if (EmptyChecks.isNull(sec)) {
-        throw new ShellValidationException("timeoutSeconds must be positive integer");
-      }
-      Duration requested = Duration.ofSeconds(sec);
-      // 只允许缩短;请求 > default → 取 default(防业务越权拉长)
-      timeout = requested.compareTo(props.getDefaultTimeout()) < 0
-          ? requested
-          : props.getDefaultTimeout();
-    }
-
-    // env
-    Map<String, String> env = parseEnv(params.get(PARAM_ENV));
-
-    return new ShellInvocation(command, args, timeout, env);
-  }
-
-  private static List<String> parseArgs(Object raw) {
-    if (raw == null) {
-      return List.of();
-    }
-    if (raw instanceof List<?> list) {
-      List<String> out = new ArrayList<>();
-      for (Object o : list) {
-        if (o == null) {
-          throw new ShellValidationException("args contains null element");
-        }
-        if (!(o instanceof String arg)) {
-          throw new ShellValidationException("parameters.args must be a list of strings");
-        }
-        out.add(arg);
-      }
-      return out;
-    }
-    throw new ShellValidationException("parameters.args must be a list of strings");
-  }
-
-  private Map<String, String> parseEnv(Object raw) {
-    if (raw == null) {
-      return Map.of();
-    }
-    if (!(raw instanceof Map<?, ?> map)) {
-      throw new ShellValidationException("parameters.env must be a map of string→string");
-    }
-    Map<String, String> out = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> e : map.entrySet()) {
-      String k = String.valueOf(e.getKey());
-      if (!props.getAllowedEnvKeys().contains(k)) {
-        throw new ShellValidationException(
-            "env key not in allowedEnvKeys: " + k + ", allowed=" + props.getAllowedEnvKeys());
-      }
-      out.put(k, e.getValue() == null ? "" : String.valueOf(e.getValue()));
-    }
-    return out;
-  }
-
-  private void validateAgainstRegex(String value, String fieldName) {
-    if (props.getArgRegexAllowlist().isEmpty()) {
-      return;
-    }
-    for (String regex : props.getArgRegexAllowlist()) {
-      if (Pattern.matches(regex, value)) {
-        return;
-      }
-    }
-    throw new ShellValidationException(
-        fieldName + " contains disallowed characters: \"" + value + "\"");
-  }
-
-  private void validateNoParentDirRef(String value, String fieldName) {
-    if (props.isRejectParentDirRefs() && hasParentDirRef(value)) {
-      throw new ShellValidationException(
-          fieldName + " contains parent-dir reference (..): \"" + value + "\"");
-    }
-  }
-
-  // ─── workdir ────────────────────────────────────────────────────────────────
-
-  private Path createIsolatedWorkdir(TaskContext ctx) {
-    try {
-      // 子进程可写业务中间数据;根和工作目录均须私有,随机目录名不能替代访问控制。
-      Path workdirBase = props.getWorkdirBase();
-      OwnerOnlyFiles.createDirectories(workdirBase);
-      String safeTenantId = safeForPath(ctx.tenantId());
-      String safeJobCode = safeForPath(ctx.jobCode());
-      UUID randomDirectoryId = UUID.randomUUID();
-      String randomDirectoryIdText = randomDirectoryId.toString();
-      String randomDirectorySuffix = randomDirectoryIdText.substring(0, 8);
-      String subdir = String.format("%s-%s-%s", safeTenantId, safeJobCode, randomDirectorySuffix);
-      Path dir = workdirBase.resolve(subdir);
-      FileAttribute<?>[] privateDirectoryAttributes = OwnerOnlyFiles.attributes(workdirBase, true);
-      Files.createDirectory(dir, privateDirectoryAttributes);
-      OwnerOnlyFiles.protectExisting(dir, true);
-      return dir;
-    } catch (IOException e) {
-      // 用 JDK 标准 UncheckedIOException 而非裸 RuntimeException(docs/agent-baseline.md #5):语义精确(IO 失败),
-      // 仍是 RuntimeException 子类 → 被 execute() 的 catch(RuntimeException) 兜住映射 EXECUTION_FAILED
-      // (不能用 BizException:会被上面 catch(BizException) 误判为 Lane C 安全拒入 SECURITY_REJECTED)。
-      throw new UncheckedIOException("create workdir failed: " + e.getMessage(), e);
-    }
-  }
-
-  private void cleanupWorkdir(Path workdir) {
-    if (workdir == null || !Files.exists(workdir)) {
-      return;
-    }
-    try (Stream<Path> paths = Files.walk(workdir)) {
-      paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+    @Override
+    public TaskResult execute(TaskContext ctx) {
         try {
-          Files.deleteIfExists(p);
-        } catch (IOException e) {
-          log.warn("cleanup workdir failed: {}", SwallowedExceptionLogger.summary(e));
-        }
-      });
-    } catch (IOException e) {
-      log.warn("cleanup workdir walk failed: {}", SwallowedExceptionLogger.summary(e));
-    }
-  }
-
-  private static String safeForPath(String s) {
-    return s == null ? "_" : s.replaceAll("[^A-Za-z0-9._\\-]", "_");
-  }
-
-  // ─── process exec ───────────────────────────────────────────────────────────
-
-  private TaskResult runProcess(TaskContext ctx, ShellInvocation inv, Path workdir) {
-    List<String> cmd = new ArrayList<>(1 + inv.args.size());
-    cmd.add(inv.command);
-    cmd.addAll(inv.args);
-
-    ProcessBuilder pb = new ProcessBuilder(cmd);
-    pb.directory(workdir.toFile());
-    Map<String, String> env = pb.environment();
-    env.clear(); // scrub:不继承父进程 env
-    env.put("BATCH_TENANT_ID", Objects.toString(ctx.tenantId(), ""));
-    env.put("BATCH_JOB_CODE", Objects.toString(ctx.jobCode(), ""));
-    env.put("BATCH_WORKER_ID", Objects.toString(ctx.workerId(), ""));
-    env.put("BATCH_WORKDIR", workdir.toString());
-    env.putAll(inv.env); // 业务 env 在白名单内才到这步
-
-    long start = System.currentTimeMillis();
-    Process proc;
-    try {
-      proc = pb.start();
-    } catch (IOException e) {
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED, "process start failed: " + e.getMessage(), e);
-    }
-
-    // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
-    String invocationId = nextInvocationId();
-    String taskInstanceId = ctx.taskInstanceId();
-    if (taskInstanceId != null && !taskInstanceId.isBlank()) {
-      running.put(taskInstanceId, proc);
-    }
-    try {
-      // 异步读 stdout / stderr,防 buffer full block
-      OutputReader stdoutReader = startReaderThread(
-          proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
-      OutputReader stderrReader = startReaderThread(
-          proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
-
-      boolean finished = proc.waitFor(inv.timeout.toMillis(), TimeUnit.MILLISECONDS);
-      if (!finished) {
-        destroyProcessTree(proc);
-      }
-      stdoutReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
-      stderrReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
-
-      ReaderResult stdout = stdoutReader.result().get();
-      ReaderResult stderr = stderrReader.result().get();
-
-      long duration = System.currentTimeMillis() - start;
-
-      if (!finished) {
-        long timeoutSeconds = inv.timeout.toSeconds();
-        return AtomicErrorCode.fail(
-            AtomicErrorCode.TIMEOUT,
-            "timed out after " + timeoutSeconds + "s",
-            new ShellTimeoutException(inv.timeout));
-      }
-
-      Map<String, Object> output = new HashMap<>();
-      output.put("exitCode", proc.exitValue());
-      output.put("stdout", stdout == null ? "" : stdout.text);
-      output.put("stderr", stderr == null ? "" : stderr.text);
-      output.put("stdoutTruncated", stdout != null && stdout.truncated);
-      output.put("stderrTruncated", stderr != null && stderr.truncated);
-      output.put("durationMillis", duration);
-      output.put("workdir", workdir.toString());
-
-      if (proc.exitValue() == 0) {
-        return TaskResult.ok("exit=0", output);
-      }
-      boolean truncated =
-          (stdout != null && stdout.truncated) || (stderr != null && stderr.truncated);
-      AtomicErrorCode code =
-          truncated ? AtomicErrorCode.RESOURCE_EXHAUSTED : AtomicErrorCode.EXECUTION_FAILED;
-      // 失败路径只带 error_code,不回写完整 output(保持与现有 TaskResult.fail 语义对齐;
-      // exitCode / stdout / stderr 仍在 log 里可追溯)
-      return AtomicErrorCode.fail(
-          code, "exit=" + proc.exitValue() + " stderr=" + summarize(stderr));
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      destroyProcessTree(proc);
-      return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
-    } finally {
-      if (taskInstanceId != null && !taskInstanceId.isBlank()) {
-        running.remove(taskInstanceId, proc);
-      }
-    }
-  }
-
-  /** 终止父进程及其后代，避免 shell wrapper 留下实际业务子进程。 */
-  private void destroyProcessTree(Process process) {
-    List<ProcessHandle> descendants = process.toHandle().descendants().toList();
-    for (int i = descendants.size() - 1; i >= 0; i--) {
-      descendants.get(i).destroyForcibly();
-    }
-    process.destroyForcibly();
-    try {
-      process.waitFor(1, TimeUnit.SECONDS);
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  // 输出只属于本次调用；取消后晚到的 reader 结果不会留在单例 Map 中。
-  private OutputReader startReaderThread(InputStream in, int maxBytes, String name) {
-    AtomicReference<ReaderResult> result = new AtomicReference<>();
-    Thread t = new Thread(
-        () -> {
-          ByteArrayOutputStream buf = new ByteArrayOutputStream();
-          boolean truncated = false;
-          byte[] tmp = new byte[4096];
-          try (in) {
-            int n;
-            while ((n = in.read(tmp)) != -1) {
-              if (buf.size() + n > maxBytes) {
-                int allowed = maxBytes - buf.size();
-                if (allowed > 0) {
-                  buf.write(tmp, 0, allowed);
-                }
-                truncated = true;
-                log.warn("{}: output truncated at {} bytes", name, maxBytes);
-                // 继续 drain 防 pipe buffer 满阻塞 child
-                while (in.read(tmp) != -1) {
-                  // discard
-                }
-                break;
-              }
-              buf.write(tmp, 0, n);
+            // Lane C:credential 静态拒入闸门(SENSITIVE_DATA_IN_PARAMETERS)
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(ctx.parameters(), "atomic.shell.parameters");
+            ShellInvocation inv = parseInvocation(ctx);
+            if (ctx.isDryRun()) {
+                // ADR-026 §dry-run:演练不 fork 进程、不建 workdir、不透传 env 值,仅返回会执行的 command / args / env keys。
+                Map<String, Object> planned = new LinkedHashMap<>();
+                planned.put(PipelineRuntimeKeys.DRY_RUN, true);
+                planned.put("plannedAction", "shell");
+                String visibleCommand = SwallowedExceptionLogger.safeMessage(inv.command, DRY_RUN_TEXT_MAX_LENGTH);
+                planned.put(PARAM_COMMAND, visibleCommand);
+                planned.put(
+                        PARAM_ARGS,
+                        inv.args.stream()
+                                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, DRY_RUN_TEXT_MAX_LENGTH))
+                                .toList());
+                planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
+                // env 只暴露 key(白名单过滤过),value 不出库以防泄密
+                planned.put("envKeys", List.copyOf(inv.env.keySet()));
+                log.info(
+                        "shell executor dry-run skipped real fork: tenantId={}, jobCode={}, command={}",
+                        ctx.tenantId(),
+                        ctx.jobCode(),
+                        visibleCommand);
+                return TaskResult.ok("dry-run: command parsed (not forked): " + visibleCommand, planned);
             }
-          } catch (IOException e) {
-            String causeSummary = SwallowedExceptionLogger.summary(e);
-            log.warn("{}: reader IO error: {}", name, causeSummary);
-          }
-          String outputText = buf.toString();
-          ReaderResult readerResult = new ReaderResult(outputText, truncated);
-          result.set(readerResult);
-        },
-        name);
-    t.setDaemon(true);
-    t.start();
-    return new OutputReader(t, result);
-  }
-
-  private record OutputReader(Thread thread, AtomicReference<ReaderResult> result) {}
-
-  private static String summarize(ReaderResult r) {
-    if (r == null || r.text == null) {
-      return "";
+            Path workdir = createIsolatedWorkdir(ctx);
+            try {
+                return runProcess(ctx, inv, workdir);
+            } finally {
+                if (props.isCleanupWorkdir()) {
+                    cleanupWorkdir(workdir);
+                }
+            }
+        } catch (ShellValidationException ex) {
+            return AtomicErrorCode.fail(AtomicErrorCode.CONFIG_INVALID, ex.getMessage());
+        } catch (BizException ex) {
+            // Lane C 凭据拒入:任务直接 FAILED,error message 含 SENSITIVE_DATA_IN_PARAMETERS 标识
+            log.warn(
+                    "shell executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+                    ctx.tenantId(),
+                    ctx.jobCode(),
+                    ex.getMessageArgs() == null || ex.getMessageArgs().length < 2 ? "?" : ex.getMessageArgs()[1]);
+            return AtomicErrorCode.fail(
+                    AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            log.error(
+                    "shell executor unexpected error: tenantId={}, jobCode={}, cause={}",
+                    LogSanitizer.value(ctx.tenantId()),
+                    LogSanitizer.value(ctx.jobCode()),
+                    SwallowedExceptionLogger.summary(ex));
+            String exceptionMessage = ex.getMessage();
+            String failureMessage =
+                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
+        }
     }
-    return r.text.length() <= OUTPUT_SUMMARY_MAX_LENGTH
-        ? r.text
-        : r.text.substring(0, OUTPUT_SUMMARY_MAX_LENGTH) + "...";
-  }
 
-  // ─── helper records / exceptions ────────────────────────────────────────────
+    // ─── parsing + validation ────────────────────────────────────────────────────
 
-  private record ShellInvocation(
-      String command, List<String> args, Duration timeout, Map<String, String> env) {}
+    private ShellInvocation parseInvocation(TaskContext ctx) {
+        Map<String, Object> params = ctx.parameters();
 
-  private record ReaderResult(String text, boolean truncated) {}
+        Object cmdObj = params.get(PARAM_COMMAND);
+        if (!(cmdObj instanceof String commandString) || EmptyChecks.isBlank(commandString)) {
+            throw new ShellValidationException("parameters.command required (non-blank string)");
+        }
+        String command = commandString.trim();
+        SensitiveDataValidator.rejectIfContainsInlineCredential(command, "atomic.shell.command");
 
-  /** 业务参数校验失败,转 TaskResult.fail 友好 message(不抛栈)。 */
-  static final class ShellValidationException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
+        // 白名单
+        if (!props.getCommandWhitelist().isEmpty()
+                && !props.getCommandWhitelist().contains(command)) {
+            throw new ShellValidationException(
+                    "command not in whitelist: " + command + ", allowed=" + props.getCommandWhitelist());
+        }
+        validateAgainstRegex(command, PARAM_COMMAND);
+        validateNoParentDirRef(command, PARAM_COMMAND);
 
-    ShellValidationException(String message) {
-      super(message);
+        // args
+        List<String> args = parseArgs(params.get(PARAM_ARGS));
+        SensitiveDataValidator.rejectIfContainsInlineCredentials(args, "atomic.shell.args");
+        if (args.size() > props.getMaxArgs()) {
+            throw new ShellValidationException("too many args: " + args.size() + " > maxArgs=" + props.getMaxArgs());
+        }
+        for (int i = 0; i < args.size(); i++) {
+            validateAgainstRegex(args.get(i), "args[" + i + "]");
+            validateNoParentDirRef(args.get(i), "args[" + i + "]");
+        }
+
+        // timeout(只能缩短)
+        Duration timeout = props.getDefaultTimeout();
+        Object timeoutObj = params.get(PARAM_TIMEOUT_SECONDS);
+        if (EmptyChecks.isNotNull(timeoutObj)) {
+            Long sec = AtomicParameterNumbers.positiveLong(timeoutObj);
+            if (EmptyChecks.isNull(sec)) {
+                throw new ShellValidationException("timeoutSeconds must be positive integer");
+            }
+            Duration requested = Duration.ofSeconds(sec);
+            // 只允许缩短;请求 > default → 取 default(防业务越权拉长)
+            timeout = requested.compareTo(props.getDefaultTimeout()) < 0 ? requested : props.getDefaultTimeout();
+        }
+
+        // env
+        Map<String, String> env = parseEnv(params.get(PARAM_ENV));
+
+        return new ShellInvocation(command, args, timeout, env);
     }
-  }
 
-  /** 进程超时,作为 error 透传到 TaskResult。 */
-  static final class ShellTimeoutException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    ShellTimeoutException(Duration timeout) {
-      super("shell process timed out after " + timeout.toSeconds() + "s");
+    private static List<String> parseArgs(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object o : list) {
+                if (o == null) {
+                    throw new ShellValidationException("args contains null element");
+                }
+                if (!(o instanceof String arg)) {
+                    throw new ShellValidationException("parameters.args must be a list of strings");
+                }
+                out.add(arg);
+            }
+            return out;
+        }
+        throw new ShellValidationException("parameters.args must be a list of strings");
     }
-  }
 
-  /** 让 properties 自动配置在引入 ShellTaskExecutor 时生效。 */
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(ShellExecutorProperties.class)
-  static class PropertiesConfig {}
+    private Map<String, String> parseEnv(Object raw) {
+        if (raw == null) {
+            return Map.of();
+        }
+        if (!(raw instanceof Map<?, ?> map)) {
+            throw new ShellValidationException("parameters.env must be a map of string→string");
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : map.entrySet()) {
+            String k = String.valueOf(e.getKey());
+            if (!props.getAllowedEnvKeys().contains(k)) {
+                throw new ShellValidationException(
+                        "env key not in allowedEnvKeys: " + k + ", allowed=" + props.getAllowedEnvKeys());
+            }
+            out.put(k, e.getValue() == null ? "" : String.valueOf(e.getValue()));
+        }
+        return out;
+    }
+
+    private void validateAgainstRegex(String value, String fieldName) {
+        if (props.getArgRegexAllowlist().isEmpty()) {
+            return;
+        }
+        for (String regex : props.getArgRegexAllowlist()) {
+            if (Pattern.matches(regex, value)) {
+                return;
+            }
+        }
+        throw new ShellValidationException(fieldName + " contains disallowed characters: \"" + value + "\"");
+    }
+
+    private void validateNoParentDirRef(String value, String fieldName) {
+        if (props.isRejectParentDirRefs() && hasParentDirRef(value)) {
+            throw new ShellValidationException(fieldName + " contains parent-dir reference (..): \"" + value + "\"");
+        }
+    }
+
+    // ─── workdir ────────────────────────────────────────────────────────────────
+
+    private Path createIsolatedWorkdir(TaskContext ctx) {
+        try {
+            // 子进程可写业务中间数据;根和工作目录均须私有,随机目录名不能替代访问控制。
+            Path workdirBase = props.getWorkdirBase();
+            OwnerOnlyFiles.createDirectories(workdirBase);
+            String safeTenantId = safeForPath(ctx.tenantId());
+            String safeJobCode = safeForPath(ctx.jobCode());
+            UUID randomDirectoryId = UUID.randomUUID();
+            String randomDirectoryIdText = randomDirectoryId.toString();
+            String randomDirectorySuffix = randomDirectoryIdText.substring(0, 8);
+            String subdir = String.format("%s-%s-%s", safeTenantId, safeJobCode, randomDirectorySuffix);
+            Path dir = workdirBase.resolve(subdir);
+            FileAttribute<?>[] privateDirectoryAttributes = OwnerOnlyFiles.attributes(workdirBase, true);
+            Files.createDirectory(dir, privateDirectoryAttributes);
+            OwnerOnlyFiles.protectExisting(dir, true);
+            return dir;
+        } catch (IOException e) {
+            // 用 JDK 标准 UncheckedIOException 而非裸 RuntimeException(docs/agent-baseline.md #5):语义精确(IO 失败),
+            // 仍是 RuntimeException 子类 → 被 execute() 的 catch(RuntimeException) 兜住映射 EXECUTION_FAILED
+            // (不能用 BizException:会被上面 catch(BizException) 误判为 Lane C 安全拒入 SECURITY_REJECTED)。
+            throw new UncheckedIOException("create workdir failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void cleanupWorkdir(Path workdir) {
+        if (workdir == null || !Files.exists(workdir)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(workdir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    log.warn("cleanup workdir failed: {}", SwallowedExceptionLogger.summary(e));
+                }
+            });
+        } catch (IOException e) {
+            log.warn("cleanup workdir walk failed: {}", SwallowedExceptionLogger.summary(e));
+        }
+    }
+
+    private static String safeForPath(String s) {
+        return s == null ? "_" : s.replaceAll("[^A-Za-z0-9._\\-]", "_");
+    }
+
+    // ─── process exec ───────────────────────────────────────────────────────────
+
+    private TaskResult runProcess(TaskContext ctx, ShellInvocation inv, Path workdir) {
+        List<String> cmd = new ArrayList<>(1 + inv.args.size());
+        cmd.add(inv.command);
+        cmd.addAll(inv.args);
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.directory(workdir.toFile());
+        Map<String, String> env = pb.environment();
+        env.clear(); // scrub:不继承父进程 env
+        env.put("BATCH_TENANT_ID", Objects.toString(ctx.tenantId(), ""));
+        env.put("BATCH_JOB_CODE", Objects.toString(ctx.jobCode(), ""));
+        env.put("BATCH_WORKER_ID", Objects.toString(ctx.workerId(), ""));
+        env.put("BATCH_WORKDIR", workdir.toString());
+        env.putAll(inv.env); // 业务 env 在白名单内才到这步
+
+        long start = System.currentTimeMillis();
+        Process proc;
+        try {
+            proc = pb.start();
+        } catch (IOException e) {
+            return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, "process start failed: " + e.getMessage(), e);
+        }
+
+        // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
+        String invocationId = nextInvocationId();
+        String taskInstanceId = ctx.taskInstanceId();
+        if (taskInstanceId != null && !taskInstanceId.isBlank()) {
+            running.put(taskInstanceId, proc);
+        }
+        try {
+            // 异步读 stdout / stderr,防 buffer full block
+            OutputReader stdoutReader =
+                    startReaderThread(proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
+            OutputReader stderrReader =
+                    startReaderThread(proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
+
+            boolean finished = proc.waitFor(inv.timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!finished) {
+                destroyProcessTree(proc);
+            }
+            stdoutReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
+            stderrReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
+
+            ReaderResult stdout = stdoutReader.result().get();
+            ReaderResult stderr = stderrReader.result().get();
+
+            long duration = System.currentTimeMillis() - start;
+
+            if (!finished) {
+                long timeoutSeconds = inv.timeout.toSeconds();
+                return AtomicErrorCode.fail(
+                        AtomicErrorCode.TIMEOUT,
+                        "timed out after " + timeoutSeconds + "s",
+                        new ShellTimeoutException(inv.timeout));
+            }
+
+            Map<String, Object> output = new HashMap<>();
+            output.put("exitCode", proc.exitValue());
+            output.put("stdout", stdout == null ? "" : stdout.text);
+            output.put("stderr", stderr == null ? "" : stderr.text);
+            output.put("stdoutTruncated", stdout != null && stdout.truncated);
+            output.put("stderrTruncated", stderr != null && stderr.truncated);
+            output.put("durationMillis", duration);
+            output.put("workdir", workdir.toString());
+
+            if (proc.exitValue() == 0) {
+                return TaskResult.ok("exit=0", output);
+            }
+            boolean truncated = (stdout != null && stdout.truncated) || (stderr != null && stderr.truncated);
+            AtomicErrorCode code = truncated ? AtomicErrorCode.RESOURCE_EXHAUSTED : AtomicErrorCode.EXECUTION_FAILED;
+            // 失败路径只带 error_code,不回写完整 output(保持与现有 TaskResult.fail 语义对齐;
+            // exitCode / stdout / stderr 仍在 log 里可追溯)
+            return AtomicErrorCode.fail(code, "exit=" + proc.exitValue() + " stderr=" + summarize(stderr));
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            destroyProcessTree(proc);
+            return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
+        } finally {
+            if (taskInstanceId != null && !taskInstanceId.isBlank()) {
+                running.remove(taskInstanceId, proc);
+            }
+        }
+    }
+
+    /** 终止父进程及其后代，避免 shell wrapper 留下实际业务子进程。 */
+    private void destroyProcessTree(Process process) {
+        List<ProcessHandle> descendants = process.toHandle().descendants().toList();
+        for (int i = descendants.size() - 1; i >= 0; i--) {
+            descendants.get(i).destroyForcibly();
+        }
+        process.destroyForcibly();
+        try {
+            process.waitFor(1, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // 输出只属于本次调用；取消后晚到的 reader 结果不会留在单例 Map 中。
+    private OutputReader startReaderThread(InputStream in, int maxBytes, String name) {
+        AtomicReference<ReaderResult> result = new AtomicReference<>();
+        Thread t = new Thread(
+                () -> {
+                    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                    boolean truncated = false;
+                    byte[] tmp = new byte[4096];
+                    try (in) {
+                        int n;
+                        while ((n = in.read(tmp)) != -1) {
+                            if (buf.size() + n > maxBytes) {
+                                int allowed = maxBytes - buf.size();
+                                if (allowed > 0) {
+                                    buf.write(tmp, 0, allowed);
+                                }
+                                truncated = true;
+                                log.warn("{}: output truncated at {} bytes", name, maxBytes);
+                                // 继续 drain 防 pipe buffer 满阻塞 child
+                                while (in.read(tmp) != -1) {
+                                    // discard
+                                }
+                                break;
+                            }
+                            buf.write(tmp, 0, n);
+                        }
+                    } catch (IOException e) {
+                        String causeSummary = SwallowedExceptionLogger.summary(e);
+                        log.warn("{}: reader IO error: {}", name, causeSummary);
+                    }
+                    String outputText = buf.toString();
+                    ReaderResult readerResult = new ReaderResult(outputText, truncated);
+                    result.set(readerResult);
+                },
+                name);
+        t.setDaemon(true);
+        t.start();
+        return new OutputReader(t, result);
+    }
+
+    private record OutputReader(Thread thread, AtomicReference<ReaderResult> result) {}
+
+    private static String summarize(ReaderResult r) {
+        if (r == null || r.text == null) {
+            return "";
+        }
+        return r.text.length() <= OUTPUT_SUMMARY_MAX_LENGTH
+                ? r.text
+                : r.text.substring(0, OUTPUT_SUMMARY_MAX_LENGTH) + "...";
+    }
+
+    // ─── helper records / exceptions ────────────────────────────────────────────
+
+    private record ShellInvocation(String command, List<String> args, Duration timeout, Map<String, String> env) {}
+
+    private record ReaderResult(String text, boolean truncated) {}
+
+    /** 业务参数校验失败,转 TaskResult.fail 友好 message(不抛栈)。 */
+    static final class ShellValidationException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        ShellValidationException(String message) {
+            super(message);
+        }
+    }
+
+    /** 进程超时,作为 error 透传到 TaskResult。 */
+    static final class ShellTimeoutException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        ShellTimeoutException(Duration timeout) {
+            super("shell process timed out after " + timeout.toSeconds() + "s");
+        }
+    }
+
+    /** 让 properties 自动配置在引入 ShellTaskExecutor 时生效。 */
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(ShellExecutorProperties.class)
+    static class PropertiesConfig {}
 }

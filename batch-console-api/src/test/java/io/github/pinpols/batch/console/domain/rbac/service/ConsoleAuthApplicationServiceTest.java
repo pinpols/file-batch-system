@@ -44,255 +44,251 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 @DisplayName("认证应用服务: 登录委托、令牌签发与个人资料组装的租户解析")
 class ConsoleAuthApplicationServiceTest {
 
-  @Mock
-  private ConsoleJwtService jwtService;
+    @Mock
+    private ConsoleJwtService jwtService;
 
-  @Mock
-  private ConsoleLoginService loginService;
+    @Mock
+    private ConsoleLoginService loginService;
 
-  @Mock
-  private ConsoleLoginKeyPairService loginKeyPairService;
+    @Mock
+    private ConsoleLoginKeyPairService loginKeyPairService;
 
-  @Mock
-  private ConsoleSessionRegistry sessionRegistry;
+    @Mock
+    private ConsoleSessionRegistry sessionRegistry;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Mock
-  private ConsoleUserAccountServiceSupport userAccountService;
+    @Mock
+    private ConsoleUserAccountServiceSupport userAccountService;
 
-  private ConsoleSecurityProperties securityProperties;
-  private ConsoleAuthApplicationService service;
+    private ConsoleSecurityProperties securityProperties;
+    private ConsoleAuthApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    securityProperties = new ConsoleSecurityProperties();
-    securityProperties.setDefaultTenantId("default-tenant");
-    securityProperties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
+    @BeforeEach
+    void setUp() {
+        securityProperties = new ConsoleSecurityProperties();
+        securityProperties.setDefaultTenantId("default-tenant");
+        securityProperties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
 
-    service = new ConsoleAuthApplicationService(
-        jwtService,
-        loginService,
-        loginKeyPairService,
-        sessionRegistry,
-        securityProperties,
-        requestMetadataResolver,
-        new ConsoleMenuRegistry(new ConsoleMenuProperties()),
-        userAccountService,
-        List.of((username, authorities) -> Set.of("TEST_CAPABILITY")));
-    lenient().when(userAccountService.findByUsername(anyString())).thenReturn(Optional.empty());
-  }
+        service = new ConsoleAuthApplicationService(
+                jwtService,
+                loginService,
+                loginKeyPairService,
+                sessionRegistry,
+                securityProperties,
+                requestMetadataResolver,
+                new ConsoleMenuRegistry(new ConsoleMenuProperties()),
+                userAccountService,
+                List.of((username, authorities) -> Set.of("TEST_CAPABILITY")));
+        lenient().when(userAccountService.findByUsername(anyString())).thenReturn(Optional.empty());
+    }
 
-  @Test
-  @DisplayName("登录请求原样委托给登录服务, 返回结果与下游一致")
-  void login_delegatesToLoginService() {
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setUsername("admin");
-    request.setPassword("pass");
-    ConsoleAuthTokenResponse response = stubTokenResponse();
-    when(loginService.login(request)).thenReturn(response);
+    @Test
+    @DisplayName("登录请求原样委托给登录服务, 返回结果与下游一致")
+    void login_delegatesToLoginService() {
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setUsername("admin");
+        request.setPassword("pass");
+        ConsoleAuthTokenResponse response = stubTokenResponse();
+        when(loginService.login(request)).thenReturn(response);
 
-    ConsoleAuthTokenResponse result = service.login(request);
+        ConsoleAuthTokenResponse result = service.login(request);
 
-    assertThat(result).isSameAs(response);
-    verify(loginService).login(request);
-  }
+        assertThat(result).isSameAs(response);
+        verify(loginService).login(request);
+    }
 
-  @Test
-  @DisplayName("要求加密时直接调用登录应用入口也拒绝明文，且不执行账号登录")
-  void login_rejectsPlaintextWhenEncryptionRequired() {
-    securityProperties.getLoginEncryption().setRequired(true);
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setUsername("admin");
-    request.setPassword("pass");
+    @Test
+    @DisplayName("要求加密时直接调用登录应用入口也拒绝明文，且不执行账号登录")
+    void login_rejectsPlaintextWhenEncryptionRequired() {
+        securityProperties.getLoginEncryption().setRequired(true);
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setUsername("admin");
+        request.setPassword("pass");
 
-    assertThatThrownBy(() -> service.login(request))
-        .isInstanceOf(BizException.class)
-        .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
-            .isEqualTo("error.auth.encryption_required"));
-    verify(loginService, never()).login(any());
-  }
+        assertThatThrownBy(() -> service.login(request))
+                .isInstanceOf(BizException.class)
+                .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
+                        .isEqualTo("error.auth.encryption_required"));
+        verify(loginService, never()).login(any());
+    }
 
-  @Test
-  @DisplayName("加密登录先解密再携带外层验证码调用账号登录")
-  void login_decryptsAndPreservesOuterCaptcha() {
-    securityProperties.getLoginEncryption().setRequired(true);
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setEncryptedKey("encrypted-key");
-    request.setIv("iv");
-    request.setCiphertext("ciphertext");
-    request.setCaptchaToken("captcha");
-    when(loginKeyPairService.decrypt("encrypted-key", "iv", "ciphertext"))
-        .thenReturn("{\"username\":\"alice\",\"password\":\"secret\"}");
-    ConsoleAuthTokenResponse response = stubTokenResponse();
-    when(loginService.login(any())).thenReturn(response);
+    @Test
+    @DisplayName("加密登录先解密再携带外层验证码调用账号登录")
+    void login_decryptsAndPreservesOuterCaptcha() {
+        securityProperties.getLoginEncryption().setRequired(true);
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setEncryptedKey("encrypted-key");
+        request.setIv("iv");
+        request.setCiphertext("ciphertext");
+        request.setCaptchaToken("captcha");
+        when(loginKeyPairService.decrypt("encrypted-key", "iv", "ciphertext"))
+                .thenReturn("{\"username\":\"alice\",\"password\":\"secret\"}");
+        ConsoleAuthTokenResponse response = stubTokenResponse();
+        when(loginService.login(any())).thenReturn(response);
 
-    assertThat(service.login(request)).isSameAs(response);
-    ArgumentCaptor<ConsoleLoginRequest> resolved =
-        ArgumentCaptor.forClass(ConsoleLoginRequest.class);
-    verify(loginService).login(resolved.capture());
-    assertThat(resolved.getValue().getUsername()).isEqualTo("alice");
-    assertThat(resolved.getValue().getPassword()).isEqualTo("secret");
-    assertThat(resolved.getValue().getCaptchaToken()).isEqualTo("captcha");
-  }
+        assertThat(service.login(request)).isSameAs(response);
+        ArgumentCaptor<ConsoleLoginRequest> resolved = ArgumentCaptor.forClass(ConsoleLoginRequest.class);
+        verify(loginService).login(resolved.capture());
+        assertThat(resolved.getValue().getUsername()).isEqualTo("alice");
+        assertThat(resolved.getValue().getPassword()).isEqualTo("secret");
+        assertThat(resolved.getValue().getCaptchaToken()).isEqualTo("captcha");
+    }
 
-  @Test
-  @DisplayName("存在已认证主体时按其用户名与租户签发令牌, 并带上会话版本")
-  void issueToken_usesConsolePrincipalWhenPresent() {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
-    when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(1L);
-    when(jwtService.issueToken(anyString(), anyString(), any(), anyLong()))
-        .thenReturn(stubTokenResponse());
+    @Test
+    @DisplayName("存在已认证主体时按其用户名与租户签发令牌, 并带上会话版本")
+    void issueToken_usesConsolePrincipalWhenPresent() {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(1L);
+        when(jwtService.issueToken(anyString(), anyString(), any(), anyLong())).thenReturn(stubTokenResponse());
 
-    service.issueToken(auth);
+        service.issueToken(auth);
 
-    verify(jwtService).issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 1L);
-  }
+        verify(jwtService).issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 1L);
+    }
 
-  @Test
-  @DisplayName("OIDC 签发重新读取启用账号的租户、角色和改密状态")
-  void issueTokenForOidc_usesCurrentLocalAccountState() {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"));
-    ConsoleAuthTokenResponse issued = stubTokenResponse();
-    when(userAccountService.findByUsername("alice"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), true, true)));
-    when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(9L);
-    when(jwtService.issueToken("alice", "t1", Set.of("ROLE_TENANT_USER"), 9L)).thenReturn(issued);
+    @Test
+    @DisplayName("OIDC 签发重新读取启用账号的租户、角色和改密状态")
+    void issueTokenForOidc_usesCurrentLocalAccountState() {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"));
+        ConsoleAuthTokenResponse issued = stubTokenResponse();
+        when(userAccountService.findByUsername("alice"))
+                .thenReturn(Optional.of(new ConsoleUserAccount(
+                        "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), true, true)));
+        when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(9L);
+        when(jwtService.issueToken("alice", "t1", Set.of("ROLE_TENANT_USER"), 9L))
+                .thenReturn(issued);
 
-    ConsoleAuthTokenResponse response = service.issueToken(principal);
+        ConsoleAuthTokenResponse response = service.issueToken(principal);
 
-    assertThat(response.accessToken()).isEqualTo(issued.accessToken());
-    assertThat(response.mustChangePassword()).isTrue();
-  }
+        assertThat(response.accessToken()).isEqualTo(issued.accessToken());
+        assertThat(response.mustChangePassword()).isTrue();
+    }
 
-  @Test
-  @DisplayName("OIDC 不接受非正式角色、账号停用或账号租户变化")
-  void issueTokenForOidc_rejectsInvalidPrincipalOrChangedAccount() {
-    assertThatThrownBy(
-            () -> service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_USER"))))
-        .isInstanceOf(BizException.class);
+    @Test
+    @DisplayName("OIDC 不接受非正式角色、账号停用或账号租户变化")
+    void issueTokenForOidc_rejectsInvalidPrincipalOrChangedAccount() {
+        assertThatThrownBy(() -> service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_USER"))))
+                .isInstanceOf(BizException.class);
 
-    when(userAccountService.findByUsername("alice"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), false, false)));
-    assertThatThrownBy(() ->
-            service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"))))
-        .isInstanceOf(BizException.class);
+        when(userAccountService.findByUsername("alice"))
+                .thenReturn(Optional.of(new ConsoleUserAccount(
+                        "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), false, false)));
+        assertThatThrownBy(() -> service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"))))
+                .isInstanceOf(BizException.class);
 
-    when(userAccountService.findByUsername("bob"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "tenant-b", "bob", "Bob", "hash", Set.of("ROLE_TENANT_USER"), true, false)));
-    assertThatThrownBy(() ->
-            service.issueToken(new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER"))))
-        .isInstanceOf(BizException.class);
-  }
+        when(userAccountService.findByUsername("bob"))
+                .thenReturn(Optional.of(new ConsoleUserAccount(
+                        "tenant-b", "bob", "Bob", "hash", Set.of("ROLE_TENANT_USER"), true, false)));
+        assertThatThrownBy(
+                        () -> service.issueToken(new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER"))))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("存在已认证主体时资料回包用户名、租户、权限与能力集")
-  void profile_returnsConsolePrincipalFieldsWhenPresent() {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    @Test
+    @DisplayName("存在已认证主体时资料回包用户名、租户、权限与能力集")
+    void profile_returnsConsolePrincipalFieldsWhenPresent() {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
 
-    ConsoleAuthProfileResponse response = service.profile(auth);
+        ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.username()).isEqualTo("alice");
-    assertThat(response.tenantId()).isEqualTo("t1");
-    assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
-    assertThat(response.capabilities()).containsExactly("TEST_CAPABILITY");
-    assertThat(response.mustChangePassword()).isFalse();
-  }
+        assertThat(response.username()).isEqualTo("alice");
+        assertThat(response.tenantId()).isEqualTo("t1");
+        assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
+        assertThat(response.capabilities()).containsExactly("TEST_CAPABILITY");
+        assertThat(response.mustChangePassword()).isFalse();
+    }
 
-  @Test
-  @DisplayName("账号要求强制改密时资料回包该标记为真")
-  void profile_includesMustChangePasswordFromUserAccount() {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
-    when(userAccountService.findByUsername("alice"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "t1", "alice", "Alice", "hash", Set.of("ROLE_ADMIN"), true, true)));
+    @Test
+    @DisplayName("账号要求强制改密时资料回包该标记为真")
+    void profile_includesMustChangePasswordFromUserAccount() {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        when(userAccountService.findByUsername("alice"))
+                .thenReturn(Optional.of(
+                        new ConsoleUserAccount("t1", "alice", "Alice", "hash", Set.of("ROLE_ADMIN"), true, true)));
 
-    ConsoleAuthProfileResponse response = service.profile(auth);
+        ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.mustChangePassword()).isTrue();
-  }
+        assertThat(response.mustChangePassword()).isTrue();
+    }
 
-  @Test
-  @DisplayName("无已认证主体时仍返回资料, 租户取默认值")
-  void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+    @Test
+    @DisplayName("无已认证主体时仍返回资料, 租户取默认值")
+    void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-    ConsoleAuthProfileResponse response = service.profile(auth);
+        ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.tenantId())
-        .isEqualTo("default-tenant"); // metadata.tenantId() is null → fallback
-  }
+        assertThat(response.tenantId()).isEqualTo("default-tenant"); // metadata.tenantId() is null → fallback
+    }
 
-  @Test
-  @DisplayName("权限为租户级用户且请求元数据无租户时, 租户回落默认值")
-  void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+    @Test
+    @DisplayName("权限为租户级用户且请求元数据无租户时, 租户回落默认值")
+    void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-    ConsoleAuthProfileResponse response = service.profile(auth);
+        ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.tenantId()).isEqualTo("default-tenant");
-  }
+        assertThat(response.tenantId()).isEqualTo("default-tenant");
+    }
 
-  @Test
-  @DisplayName("租户级用户权限在资料回包中原样保留")
-  void profile_keepsTenantUserAuthority() {
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+    @Test
+    @DisplayName("租户级用户权限在资料回包中原样保留")
+    void profile_keepsTenantUserAuthority() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-    ConsoleAuthProfileResponse response = service.profile(auth);
+        ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.authorities()).containsExactly("ROLE_TENANT_USER");
-  }
+        assertThat(response.authorities()).containsExactly("ROLE_TENANT_USER");
+    }
 
-  @Test
-  @DisplayName("携带历史遗留权限查询资料时抛出业务异常")
-  void profile_rejectsLegacyAuthority() {
-    ConsolePrincipal principal = new ConsolePrincipal("legacy", "t1", Set.of("ROLE_USER"));
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    @Test
+    @DisplayName("携带历史遗留权限查询资料时抛出业务异常")
+    void profile_rejectsLegacyAuthority() {
+        ConsolePrincipal principal = new ConsolePrincipal("legacy", "t1", Set.of("ROLE_USER"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
 
-    assertThatThrownBy(() -> service.profile(auth)).isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service.profile(auth)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("认证上下文为空时资料回包用户名为空且租户取默认值")
-  void profile_handlesNullAuthentication() {
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+    @Test
+    @DisplayName("认证上下文为空时资料回包用户名为空且租户取默认值")
+    void profile_handlesNullAuthentication() {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-    ConsoleAuthProfileResponse response = service.profile(null);
+        ConsoleAuthProfileResponse response = service.profile(null);
 
-    assertThat(response.username()).isNull();
-    assertThat(response.tenantId()).isEqualTo("default-tenant");
-  }
+        assertThat(response.username()).isNull();
+        assertThat(response.tenantId()).isEqualTo("default-tenant");
+    }
 
-  private ConsoleAuthTokenResponse stubTokenResponse() {
-    return new ConsoleAuthTokenResponse(
-        "jwt-token",
-        "Bearer",
-        BatchDateTimeSupport.utcNow(),
-        BatchDateTimeSupport.utcNow().plusSeconds(3600),
-        "admin",
-        "t1",
-        Set.of("ROLE_ADMIN"),
-        false);
-  }
+    private ConsoleAuthTokenResponse stubTokenResponse() {
+        return new ConsoleAuthTokenResponse(
+                "jwt-token",
+                "Bearer",
+                BatchDateTimeSupport.utcNow(),
+                BatchDateTimeSupport.utcNow().plusSeconds(3600),
+                "admin",
+                "t1",
+                Set.of("ROLE_ADMIN"),
+                false);
+    }
 }

@@ -19,32 +19,32 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdminTestDataCleanupService {
 
-  private final AdminTestDataCleanupRepository repository;
-  private final Environment environment;
+    private final AdminTestDataCleanupRepository repository;
+    private final Environment environment;
 
-  // 捕获、歧义检查及删除共享同一快照，避免后续裸 ID 弱引用清理看到新插入的范围外实例。
-  @Transactional(isolation = Isolation.REPEATABLE_READ)
-  public Map<String, Integer> cleanupByPrefix(String prefix) {
-    rejectProductionProfile();
-    return repository.cleanupByPrefix(prefix);
-  }
-
-  @Transactional
-  public Map<String, Integer> cleanupByExactTenantIds(String ids) {
-    rejectProductionProfile();
-    List<String> tenantIds = Arrays.stream(ids.split(","))
-        .map(String::trim)
-        .filter(value -> EmptyChecks.isNotEmpty(value))
-        .toList();
-    if (EmptyChecks.isEmpty(tenantIds)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    // 捕获、歧义检查及删除共享同一快照，避免后续裸 ID 弱引用清理看到新插入的范围外实例。
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public Map<String, Integer> cleanupByPrefix(String prefix) {
+        rejectProductionProfile();
+        return repository.cleanupByPrefix(prefix);
     }
-    return repository.cleanupByExactTenantIds(tenantIds);
-  }
 
-  private void rejectProductionProfile() {
-    if (BatchProfileSupport.isProductionProfile(environment)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.admin.test_data_cleanup_prod_forbidden");
+    @Transactional
+    public Map<String, Integer> cleanupByExactTenantIds(String ids) {
+        rejectProductionProfile();
+        List<String> tenantIds = Arrays.stream(ids.split(","))
+                .map(String::trim)
+                .filter(value -> EmptyChecks.isNotEmpty(value))
+                .toList();
+        if (EmptyChecks.isEmpty(tenantIds)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+        }
+        return repository.cleanupByExactTenantIds(tenantIds);
     }
-  }
+
+    private void rejectProductionProfile() {
+        if (BatchProfileSupport.isProductionProfile(environment)) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.admin.test_data_cleanup_prod_forbidden");
+        }
+    }
 }

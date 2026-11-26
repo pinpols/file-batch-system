@@ -36,87 +36,84 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleWebhookController {
 
-  private final ConsoleWebhookService webhookService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleWebhookService webhookService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  public CommonResponse<List<WebhookSubscriptionResponse>> list(
-      @RequestParam("tenantId") String tenantId) {
-    List<WebhookSubscriptionEntity> subscriptions = webhookService.listSubscriptions(tenantId);
-    List<WebhookSubscriptionResponse> responses =
-        subscriptions.stream().map(WebhookSubscriptionResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    public CommonResponse<List<WebhookSubscriptionResponse>> list(@RequestParam("tenantId") String tenantId) {
+        List<WebhookSubscriptionEntity> subscriptions = webhookService.listSubscriptions(tenantId);
+        List<WebhookSubscriptionResponse> responses =
+                subscriptions.stream().map(WebhookSubscriptionResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  @GetMapping("/delivery-logs")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  public CommonResponse<List<WebhookDeliveryLogResponse>> deliveryLogs(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
-      @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    List<WebhookDeliveryLogEntity> deliveryLogs =
-        webhookService.deliveryLogs(tenantId, subscriptionId, limit);
-    List<WebhookDeliveryLogResponse> responses =
-        deliveryLogs.stream().map(WebhookDeliveryLogResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping("/delivery-logs")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    public CommonResponse<List<WebhookDeliveryLogResponse>> deliveryLogs(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        List<WebhookDeliveryLogEntity> deliveryLogs = webhookService.deliveryLogs(tenantId, subscriptionId, limit);
+        List<WebhookDeliveryLogResponse> responses =
+                deliveryLogs.stream().map(WebhookDeliveryLogResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  @GetMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  public CommonResponse<WebhookSubscriptionResponse> detail(
-      @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    WebhookSubscriptionEntity subscription = webhookService.getSubscription(tenantId, id);
-    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
-    return responseFactory.success(response);
-  }
+    @GetMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    public CommonResponse<WebhookSubscriptionResponse> detail(
+            @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
+        WebhookSubscriptionEntity subscription = webhookService.getSubscription(tenantId, id);
+        WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+        return responseFactory.success(response);
+    }
 
-  @PostMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WebhookSubscriptionResponse> create(
-      @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    CreateSubscriptionCommand createCommand = CreateSubscriptionCommand.builder()
-        .tenantId(tenantId)
-        .name(request.name())
-        .callbackUrl(request.callbackUrl())
-        .eventTypes(String.join(",", request.eventTypes()))
-        .secret(request.secret())
-        .enabled(request.enabled() == null || request.enabled())
-        .operator(operator)
-        .build();
-    WebhookSubscriptionEntity subscription = webhookService.createSubscription(createCommand);
-    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
-    return responseFactory.success(response);
-  }
+    @PostMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WebhookSubscriptionResponse> create(
+            @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        CreateSubscriptionCommand createCommand = CreateSubscriptionCommand.builder()
+                .tenantId(tenantId)
+                .name(request.name())
+                .callbackUrl(request.callbackUrl())
+                .eventTypes(String.join(",", request.eventTypes()))
+                .secret(request.secret())
+                .enabled(request.enabled() == null || request.enabled())
+                .operator(operator)
+                .build();
+        WebhookSubscriptionEntity subscription = webhookService.createSubscription(createCommand);
+        WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+        return responseFactory.success(response);
+    }
 
-  @PutMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WebhookSubscriptionResponse> update(
-      @RequestParam("tenantId") String tenantId,
-      @PathVariable Long id,
-      @Valid @RequestBody UpdateWebhookRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    UpdateSubscriptionCommand updateCommand = UpdateSubscriptionCommand.builder()
-        .tenantId(tenantId)
-        .id(id)
-        .callbackUrl(request.callbackUrl())
-        .eventTypes(String.join(",", request.eventTypes()))
-        .secret(request.secret())
-        .enabled(request.enabled() == null || request.enabled())
-        .operator(operator)
-        .build();
-    WebhookSubscriptionEntity subscription = webhookService.updateSubscription(updateCommand);
-    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
-    return responseFactory.success(response);
-  }
+    @PutMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WebhookSubscriptionResponse> update(
+            @RequestParam("tenantId") String tenantId,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateWebhookRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        UpdateSubscriptionCommand updateCommand = UpdateSubscriptionCommand.builder()
+                .tenantId(tenantId)
+                .id(id)
+                .callbackUrl(request.callbackUrl())
+                .eventTypes(String.join(",", request.eventTypes()))
+                .secret(request.secret())
+                .enabled(request.enabled() == null || request.enabled())
+                .operator(operator)
+                .build();
+        WebhookSubscriptionEntity subscription = webhookService.updateSubscription(updateCommand);
+        WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+        return responseFactory.success(response);
+    }
 
-  @DeleteMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> delete(
-      @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    webhookService.deleteSubscription(tenantId, id);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> delete(@RequestParam("tenantId") String tenantId, @PathVariable Long id) {
+        webhookService.deleteSubscription(tenantId, id);
+        return responseFactory.success(null);
+    }
 }

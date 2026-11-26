@@ -31,127 +31,115 @@ import java.util.Set;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TaskDispatchMessage(
-    @JsonProperty("schemaVersion") String schemaVersion,
-    @JsonProperty("taskId") Long taskId,
-    @JsonProperty("tenantId") String tenantId,
-    @JsonProperty("jobCode") String jobCode,
-    @JsonProperty("workerType") @JsonAlias("taskType") String taskType,
-    @JsonProperty("taskInstanceId") String taskInstanceId,
-    @JsonProperty("parameters") Map<String, Object> parameters,
-    @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes,
-    @JsonProperty("schedulingContext") SdkSchedulingContext schedulingContext) {
+        @JsonProperty("schemaVersion") String schemaVersion,
+        @JsonProperty("taskId") Long taskId,
+        @JsonProperty("tenantId") String tenantId,
+        @JsonProperty("jobCode") String jobCode,
+        @JsonProperty("workerType") @JsonAlias("taskType") String taskType,
+        @JsonProperty("taskInstanceId") String taskInstanceId,
+        @JsonProperty("parameters") Map<String, Object> parameters,
+        @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes,
+        @JsonProperty("schedulingContext") SdkSchedulingContext schedulingContext) {
 
-  /**
-   * 显式标注 canonical 构造器为 Jackson creator。
-   *
-   * <p>**workerType P0 回归守护**:本 record 声明了 8 参 / 7 参兼容构造器,多构造器场景下 Jackson 的"隐式 canonical
-   * creator"自动探测会失效 —— 退化成按 record 组件名直接绑定,组件名与 JSON 字段名一致的(schemaVersion / taskId)还能绑上, 但靠 {@link
-   * JsonProperty}/{@link JsonAlias} 改名的 {@code taskType}(读平台 JSON 的 {@code workerType})被忽略 → {@code
-   * taskType} 反序列化为 null → {@code handlers.get(null)} 拿不到 handler,派单静默失败。加 {@link JsonCreator} 把
-   * canonical 构造器钉成唯一 creator,使组件上的 {@code @JsonProperty("workerType") @JsonAlias("taskType")} 生效。
-   * 守护见 {@code SdkWireContractTest.platformWorkerTypeBindsToSdkHandlerKeyOverWire}。
-   */
-  @JsonCreator
-  public TaskDispatchMessage {}
+    /**
+     * 显式标注 canonical 构造器为 Jackson creator。
+     *
+     * <p>**workerType P0 回归守护**:本 record 声明了 8 参 / 7 参兼容构造器,多构造器场景下 Jackson 的"隐式 canonical
+     * creator"自动探测会失效 —— 退化成按 record 组件名直接绑定,组件名与 JSON 字段名一致的(schemaVersion / taskId)还能绑上, 但靠 {@link
+     * JsonProperty}/{@link JsonAlias} 改名的 {@code taskType}(读平台 JSON 的 {@code workerType})被忽略 → {@code
+     * taskType} 反序列化为 null → {@code handlers.get(null)} 拿不到 handler,派单静默失败。加 {@link JsonCreator} 把
+     * canonical 构造器钉成唯一 creator,使组件上的 {@code @JsonProperty("workerType") @JsonAlias("taskType")} 生效。
+     * 守护见 {@code SdkWireContractTest.platformWorkerTypeBindsToSdkHandlerKeyOverWire}。
+     */
+    @JsonCreator
+    public TaskDispatchMessage {}
 
-  /**
-   * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject +
-   * 上报 WARN,不调 handler,等运维升级 SDK。
-   */
-  public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
+    /**
+     * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject +
+     * 上报 WARN,不调 handler,等运维升级 SDK。
+     */
+    public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
 
-  /** 缺字段时 fallback 主版本(老 orchestrator 没填 schemaVersion 时按 v1 解析)。 */
-  public static final String DEFAULT_SCHEMA_VERSION = "v1";
+    /** 缺字段时 fallback 主版本(老 orchestrator 没填 schemaVersion 时按 v1 解析)。 */
+    public static final String DEFAULT_SCHEMA_VERSION = "v1";
 
-  /**
-   * 8 参兼容构造器 —— 带 schemaVersion 但无 schedulingContext(Phase 2 前的 canonical),schedulingContext 走
-   * null。
-   */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public TaskDispatchMessage(
-      String schemaVersion,
-      Long taskId,
-      String tenantId,
-      String jobCode,
-      String taskType,
-      String taskInstanceId,
-      Map<String, Object> parameters,
-      Map<String, Object> runtimeAttributes) {
-    this(
-        schemaVersion,
-        taskId,
-        tenantId,
-        jobCode,
-        taskType,
-        taskInstanceId,
-        parameters,
-        runtimeAttributes,
-        null);
-  }
-
-  /**
-   * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion / schedulingContext)继续可用,schemaVersion 走 {@link
-   * #DEFAULT_SCHEMA_VERSION}。新代码推荐用 canonical 9 参构造,显式带 schemaVersion + schedulingContext。
-   */
-  public TaskDispatchMessage(
-      Long taskId,
-      String tenantId,
-      String jobCode,
-      String taskType,
-      String taskInstanceId,
-      Map<String, Object> parameters,
-      Map<String, Object> runtimeAttributes) {
-    this(
-        DEFAULT_SCHEMA_VERSION,
-        taskId,
-        tenantId,
-        jobCode,
-        taskType,
-        taskInstanceId,
-        parameters,
-        runtimeAttributes,
-        null);
-  }
-
-  /** 校验消息必备字段;不合规抛 {@link IllegalArgumentException},dispatcher 跳过该消息 + 上报 WARN。 */
-  public void validate() {
-    if (taskId == null) throw new IllegalArgumentException("taskId required");
-    if (tenantId == null || tenantId.isBlank())
-      throw new IllegalArgumentException("tenantId required");
-    if (jobCode == null || jobCode.isBlank())
-      throw new IllegalArgumentException("jobCode required");
-    if (taskType == null || taskType.isBlank())
-      throw new IllegalArgumentException("taskType required");
-  }
-
-  /**
-   * 解析 schemaVersion 的主版本前缀(如 {@code "v2-rc"} → {@code "v2"};{@code "v2.1"} → {@code
-   * "v2"};null/blank → {@link #DEFAULT_SCHEMA_VERSION})。 用于 {@link #isSchemaSupported()} 判定。
-   *
-   * <p><b>畸形值语义(向 Go/TS/Rust 的 reject 收敛)</b>:只有<b>真正缺省</b>(null / 全空白)才回退 {@link
-   * #DEFAULT_SCHEMA_VERSION}(对齐 fixture 16 缺省=v1 accept)。非空但首字符即非字母数字的畸形值(如 {@code " v3"} 前导空格、
-   * {@code "!v3"}、BOM+{@code v3})<b>不再</b>退回 v1 —— 否则带前导空白的 v3 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 的
-   * {@code sdkMustNot "process a v3 message under v1 assumptions"} 精神。此时返回去空白后的原串,使其必不在 {@link
-   * #SUPPORTED_MAJOR_VERSIONS} → {@link #isSchemaSupported()} 判 false → dispatcher reject(不提交
-   * offset)。
-   */
-  public String resolvedMajor() {
-    if (schemaVersion == null || schemaVersion.isBlank()) {
-      return DEFAULT_SCHEMA_VERSION;
+    /**
+     * 8 参兼容构造器 —— 带 schemaVersion 但无 schedulingContext(Phase 2 前的 canonical),schedulingContext 走
+     * null。
+     */
+    @SuppressWarnings("PMD.ExcessiveParameterList")
+    public TaskDispatchMessage(
+            String schemaVersion,
+            Long taskId,
+            String tenantId,
+            String jobCode,
+            String taskType,
+            String taskInstanceId,
+            Map<String, Object> parameters,
+            Map<String, Object> runtimeAttributes) {
+        this(schemaVersion, taskId, tenantId, jobCode, taskType, taskInstanceId, parameters, runtimeAttributes, null);
     }
-    // 截断到首个非字母数字字符前(支持 "v2-rc" / "v2.1" / "v2_x" 等后缀格式)
-    int end = 0;
-    while (end < schemaVersion.length() && Character.isLetterOrDigit(schemaVersion.charAt(end))) {
-      end++;
-    }
-    // end==0:非空却以非字母数字打头(畸形值,如 " v1"/" v3"/"!v3"/BOM+v3)。返回原串(已非 blank
-    // 且以非字母数字打头 → 必不等于 "v1"/"v2")→ isSchemaSupported=false → reject。**不能** strip 后返回,
-    // 否则 " v1" 会被去空格成 "v1" 而被误 accept;也不能回退 DEFAULT_SCHEMA_VERSION 按 v1 解析(违反 fixture 18)。
-    return end > 0 ? schemaVersion.substring(0, end) : schemaVersion;
-  }
 
-  /** 当前 SDK 是否能处理此消息的 schema(false → dispatcher 拒收 + log WARN)。 */
-  public boolean isSchemaSupported() {
-    return SUPPORTED_MAJOR_VERSIONS.contains(resolvedMajor());
-  }
+    /**
+     * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion / schedulingContext)继续可用,schemaVersion 走 {@link
+     * #DEFAULT_SCHEMA_VERSION}。新代码推荐用 canonical 9 参构造,显式带 schemaVersion + schedulingContext。
+     */
+    public TaskDispatchMessage(
+            Long taskId,
+            String tenantId,
+            String jobCode,
+            String taskType,
+            String taskInstanceId,
+            Map<String, Object> parameters,
+            Map<String, Object> runtimeAttributes) {
+        this(
+                DEFAULT_SCHEMA_VERSION,
+                taskId,
+                tenantId,
+                jobCode,
+                taskType,
+                taskInstanceId,
+                parameters,
+                runtimeAttributes,
+                null);
+    }
+
+    /** 校验消息必备字段;不合规抛 {@link IllegalArgumentException},dispatcher 跳过该消息 + 上报 WARN。 */
+    public void validate() {
+        if (taskId == null) throw new IllegalArgumentException("taskId required");
+        if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("tenantId required");
+        if (jobCode == null || jobCode.isBlank()) throw new IllegalArgumentException("jobCode required");
+        if (taskType == null || taskType.isBlank()) throw new IllegalArgumentException("taskType required");
+    }
+
+    /**
+     * 解析 schemaVersion 的主版本前缀(如 {@code "v2-rc"} → {@code "v2"};{@code "v2.1"} → {@code
+     * "v2"};null/blank → {@link #DEFAULT_SCHEMA_VERSION})。 用于 {@link #isSchemaSupported()} 判定。
+     *
+     * <p><b>畸形值语义(向 Go/TS/Rust 的 reject 收敛)</b>:只有<b>真正缺省</b>(null / 全空白)才回退 {@link
+     * #DEFAULT_SCHEMA_VERSION}(对齐 fixture 16 缺省=v1 accept)。非空但首字符即非字母数字的畸形值(如 {@code " v3"} 前导空格、
+     * {@code "!v3"}、BOM+{@code v3})<b>不再</b>退回 v1 —— 否则带前导空白的 v3 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 的
+     * {@code sdkMustNot "process a v3 message under v1 assumptions"} 精神。此时返回去空白后的原串,使其必不在 {@link
+     * #SUPPORTED_MAJOR_VERSIONS} → {@link #isSchemaSupported()} 判 false → dispatcher reject(不提交
+     * offset)。
+     */
+    public String resolvedMajor() {
+        if (schemaVersion == null || schemaVersion.isBlank()) {
+            return DEFAULT_SCHEMA_VERSION;
+        }
+        // 截断到首个非字母数字字符前(支持 "v2-rc" / "v2.1" / "v2_x" 等后缀格式)
+        int end = 0;
+        while (end < schemaVersion.length() && Character.isLetterOrDigit(schemaVersion.charAt(end))) {
+            end++;
+        }
+        // end==0:非空却以非字母数字打头(畸形值,如 " v1"/" v3"/"!v3"/BOM+v3)。返回原串(已非 blank
+        // 且以非字母数字打头 → 必不等于 "v1"/"v2")→ isSchemaSupported=false → reject。**不能** strip 后返回,
+        // 否则 " v1" 会被去空格成 "v1" 而被误 accept;也不能回退 DEFAULT_SCHEMA_VERSION 按 v1 解析(违反 fixture 18)。
+        return end > 0 ? schemaVersion.substring(0, end) : schemaVersion;
+    }
+
+    /** 当前 SDK 是否能处理此消息的 schema(false → dispatcher 拒收 + log WARN)。 */
+    public boolean isSchemaSupported() {
+        return SUPPORTED_MAJOR_VERSIONS.contains(resolvedMajor());
+    }
 }

@@ -13,69 +13,67 @@ import java.util.List;
  */
 public final class DelimitedCodec {
 
-  private DelimitedCodec() {}
+    private DelimitedCodec() {}
 
-  /** 解析一行为字段列表。 */
-  public static List<String> parse(String line, char delimiter, char quote) {
-    List<String> out = new ArrayList<>();
-    StringBuilder field = new StringBuilder();
-    boolean inQuotes = false;
-    int i = 0;
-    int n = line.length();
-    while (i < n) {
-      char c = line.charAt(i);
-      if (inQuotes) {
-        if (c == quote) {
-          if (i + 1 < n && line.charAt(i + 1) == quote) {
-            field.append(quote);
-            i += 2;
-          } else {
-            inQuotes = false;
-            i++;
-          }
-        } else {
-          field.append(c);
-          i++;
+    /** 解析一行为字段列表。 */
+    public static List<String> parse(String line, char delimiter, char quote) {
+        List<String> out = new ArrayList<>();
+        StringBuilder field = new StringBuilder();
+        boolean inQuotes = false;
+        int i = 0;
+        int n = line.length();
+        while (i < n) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == quote) {
+                    if (i + 1 < n && line.charAt(i + 1) == quote) {
+                        field.append(quote);
+                        i += 2;
+                    } else {
+                        inQuotes = false;
+                        i++;
+                    }
+                } else {
+                    field.append(c);
+                    i++;
+                }
+            } else if (c == quote) {
+                inQuotes = true;
+                i++;
+            } else if (c == delimiter) {
+                out.add(field.toString());
+                field.setLength(0);
+                i++;
+            } else {
+                field.append(c);
+                i++;
+            }
         }
-      } else if (c == quote) {
-        inQuotes = true;
-        i++;
-      } else if (c == delimiter) {
         out.add(field.toString());
-        field.setLength(0);
-        i++;
-      } else {
-        field.append(c);
-        i++;
-      }
+        return out;
     }
-    out.add(field.toString());
-    return out;
-  }
 
-  /** 编码字段列表为一行(必要时加引号转义)。 */
-  public static String encode(List<String> fields, char delimiter, char quote) {
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < fields.size(); i++) {
-      if (i > 0) {
-        sb.append(delimiter);
-      }
-      String f = fields.get(i) == null ? "" : fields.get(i);
-      boolean needQuote = f.indexOf(delimiter) >= 0
-          || f.indexOf(quote) >= 0
-          || f.indexOf('\n') >= 0
-          || f.indexOf('\r') >= 0;
-      if (needQuote) {
-        sb.append(quote);
-        String quoteText = String.valueOf(quote);
-        String doubledQuote = quoteText + quote;
-        String escapedField = f.replace(quoteText, doubledQuote);
-        sb.append(escapedField);
-        sb.append(quote);
-      } else {
-        sb.append(f);
-      }
+    /** 编码字段列表为一行(必要时加引号转义)。 */
+    public static String encode(List<String> fields, char delimiter, char quote) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < fields.size(); i++) {
+            if (i > 0) {
+                sb.append(delimiter);
+            }
+            String f = fields.get(i) == null ? "" : fields.get(i);
+            boolean needQuote =
+                    f.indexOf(delimiter) >= 0 || f.indexOf(quote) >= 0 || f.indexOf('\n') >= 0 || f.indexOf('\r') >= 0;
+            if (needQuote) {
+                sb.append(quote);
+                String quoteText = String.valueOf(quote);
+                String doubledQuote = quoteText + quote;
+                String escapedField = f.replace(quoteText, doubledQuote);
+                sb.append(escapedField);
+                sb.append(quote);
+            } else {
+                sb.append(f);
+            }
+        }
+        return sb.toString();
     }
-    return sb.toString();
-  }
 }

@@ -9,16 +9,16 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FilePipelineQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
+    private String tenantId;
 
-  @Size(max = 128)
-  private String keyword;
+    @Size(max = 128)
+    private String keyword;
 
-  private Long fileId;
-  private Long pipelineInstanceId;
-  private String pipelineType;
-  private String runStatus;
-  private String traceId;
-  private String fromTime;
-  private String toTime;
+    private Long fileId;
+    private Long pipelineInstanceId;
+    private String pipelineType;
+    private String runStatus;
+    private String traceId;
+    private String fromTime;
+    private String toTime;
 }

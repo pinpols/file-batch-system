@@ -14,14 +14,14 @@ import lombok.Data;
 @Data
 public class ConsolePushSubscriptionEntity {
 
-  private Long id;
-  private String tenantId;
-  private String username;
-  private String endpoint;
-  private String p256dhKey;
-  private String authSecret;
-  private String userAgent;
-  private Instant createdAt;
-  private Instant lastPushedAt;
-  private Instant lastSeenAt;
+    private Long id;
+    private String tenantId;
+    private String username;
+    private String endpoint;
+    private String p256dhKey;
+    private String authSecret;
+    private String userAgent;
+    private Instant createdAt;
+    private Instant lastPushedAt;
+    private Instant lastSeenAt;
 }

@@ -37,86 +37,86 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(TriggerInternalProperties.class)
 public class TriggerReadinessRecoveryClient {
 
-  private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
+    private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
 
-  private final OutboundHttpTransport transport;
-  private final TriggerInternalProperties properties;
-  private final String internalSecret;
+    private final OutboundHttpTransport transport;
+    private final TriggerInternalProperties properties;
+    private final String internalSecret;
 
-  public TriggerReadinessRecoveryClient(
-      TriggerInternalProperties properties,
-      BatchSecurityProperties securityProperties,
-      @OrchestratorOutboundTransport OutboundHttpTransport transport) {
-    this.properties = properties;
-    this.transport = transport;
-    this.internalSecret = securityProperties.getInternalSecret();
-  }
-
-  public RecoveryOutcome recover(ReadinessWaitEntity wait) {
-    if (EmptyChecks.isNull(wait) || !Texts.hasText(internalSecret)) {
-      return RecoveryOutcome.FAILED;
+    public TriggerReadinessRecoveryClient(
+            TriggerInternalProperties properties,
+            BatchSecurityProperties securityProperties,
+            @OrchestratorOutboundTransport OutboundHttpTransport transport) {
+        this.properties = properties;
+        this.transport = transport;
+        this.internalSecret = securityProperties.getInternalSecret();
     }
-    try {
-      String body = JsonUtils.toJson(Map.of(
-          "tenantId", wait.getTenantId(),
-          "workflowDefinitionId", wait.getWorkflowDefinitionId(),
-          "scheduledFireTime", wait.getScheduledFireTime().toString()));
-      String baseUrl = properties.getBaseUrl().replaceAll("/+$", "");
-      OutboundHttpContent content = new OutboundHttpContent(body, "application/json");
-      OutboundHttpRequest request = OutboundHttpRequest.post(
-          baseUrl + "/internal/trigger/readiness-waits/recover",
-          Map.of(INTERNAL_SECRET_HEADER, internalSecret),
-          content,
-          properties.getConnectTimeout(),
-          properties.getRequestTimeout(),
-          OutboundAddressPolicy.TRUSTED);
-      OutboundHttpResponse response = transport.execute(request);
-      if (response.isSuccessful()) {
-        return RecoveryOutcome.LAUNCHED;
-      }
-      if (response.statusCode() == 409) {
-        String outcome = extractOutcome(response.body());
-        return "ALREADY_TERMINATED".equals(outcome)
-            ? RecoveryOutcome.ALREADY_TERMINATED
-            : RecoveryOutcome.NOT_READY;
-      }
-      log.warn(
-          "readiness recovery call rejected: tenantId={}, workflowDefinitionId={},"
-              + " scheduledFireTime={}, status={}",
-          wait.getTenantId(),
-          wait.getWorkflowDefinitionId(),
-          wait.getScheduledFireTime(),
-          response.statusCode());
-      return RecoveryOutcome.FAILED;
-    } catch (IOException | RuntimeException ex) {
-      log.warn(
-          "readiness recovery call failed; wait stays pending: tenantId={}, workflowDefinitionId={},"
-              + " scheduledFireTime={}, cause={}",
-          wait.getTenantId(),
-          wait.getWorkflowDefinitionId(),
-          wait.getScheduledFireTime(),
-          SwallowedExceptionLogger.summary(ex));
-      return RecoveryOutcome.FAILED;
+
+    public RecoveryOutcome recover(ReadinessWaitEntity wait) {
+        if (EmptyChecks.isNull(wait) || !Texts.hasText(internalSecret)) {
+            return RecoveryOutcome.FAILED;
+        }
+        try {
+            String body = JsonUtils.toJson(Map.of(
+                    "tenantId", wait.getTenantId(),
+                    "workflowDefinitionId", wait.getWorkflowDefinitionId(),
+                    "scheduledFireTime", wait.getScheduledFireTime().toString()));
+            String baseUrl = properties.getBaseUrl().replaceAll("/+$", "");
+            OutboundHttpContent content = new OutboundHttpContent(body, "application/json");
+            OutboundHttpRequest request = OutboundHttpRequest.post(
+                    baseUrl + "/internal/trigger/readiness-waits/recover",
+                    Map.of(INTERNAL_SECRET_HEADER, internalSecret),
+                    content,
+                    properties.getConnectTimeout(),
+                    properties.getRequestTimeout(),
+                    OutboundAddressPolicy.TRUSTED);
+            OutboundHttpResponse response = transport.execute(request);
+            if (response.isSuccessful()) {
+                return RecoveryOutcome.LAUNCHED;
+            }
+            if (response.statusCode() == 409) {
+                String outcome = extractOutcome(response.body());
+                return "ALREADY_TERMINATED".equals(outcome)
+                        ? RecoveryOutcome.ALREADY_TERMINATED
+                        : RecoveryOutcome.NOT_READY;
+            }
+            log.warn(
+                    "readiness recovery call rejected: tenantId={}, workflowDefinitionId={},"
+                            + " scheduledFireTime={}, status={}",
+                    wait.getTenantId(),
+                    wait.getWorkflowDefinitionId(),
+                    wait.getScheduledFireTime(),
+                    response.statusCode());
+            return RecoveryOutcome.FAILED;
+        } catch (IOException | RuntimeException ex) {
+            log.warn(
+                    "readiness recovery call failed; wait stays pending: tenantId={}, workflowDefinitionId={},"
+                            + " scheduledFireTime={}, cause={}",
+                    wait.getTenantId(),
+                    wait.getWorkflowDefinitionId(),
+                    wait.getScheduledFireTime(),
+                    SwallowedExceptionLogger.summary(ex));
+            return RecoveryOutcome.FAILED;
+        }
     }
-  }
 
-  /** 409 响应体 {@code {"outcome":"..."}} 中的结果码；解析失败按 null 处理。 */
-  private String extractOutcome(String responseBody) {
-    try {
-      RecoverOutcomeBody body = JsonUtils.fromJson(responseBody, RecoverOutcomeBody.class);
-      return EmptyChecks.isNull(body) ? null : body.outcome();
-    } catch (RuntimeException parseFailure) {
-      return null;
+    /** 409 响应体 {@code {"outcome":"..."}} 中的结果码；解析失败按 null 处理。 */
+    private String extractOutcome(String responseBody) {
+        try {
+            RecoverOutcomeBody body = JsonUtils.fromJson(responseBody, RecoverOutcomeBody.class);
+            return EmptyChecks.isNull(body) ? null : body.outcome();
+        } catch (RuntimeException parseFailure) {
+            return null;
+        }
     }
-  }
 
-  private record RecoverOutcomeBody(String outcome) {}
+    private record RecoverOutcomeBody(String outcome) {}
 
-  /** 恢复调用结果。 */
-  public enum RecoveryOutcome {
-    LAUNCHED,
-    NOT_READY,
-    ALREADY_TERMINATED,
-    FAILED
-  }
+    /** 恢复调用结果。 */
+    public enum RecoveryOutcome {
+        LAUNCHED,
+        NOT_READY,
+        ALREADY_TERMINATED,
+        FAILED
+    }
 }

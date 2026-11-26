@@ -6,10 +6,10 @@ import lombok.Getter;
 @Getter
 public class DistributedLockAcquireException extends RuntimeException {
 
-  private final String lockKey;
+    private final String lockKey;
 
-  public DistributedLockAcquireException(String lockKey) {
-    super("failed to acquire distributed lock: " + lockKey);
-    this.lockKey = lockKey;
-  }
+    public DistributedLockAcquireException(String lockKey) {
+        super("failed to acquire distributed lock: " + lockKey);
+        this.lockKey = lockKey;
+    }
 }

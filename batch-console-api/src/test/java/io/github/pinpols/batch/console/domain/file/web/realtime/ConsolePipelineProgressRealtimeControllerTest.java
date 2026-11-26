@@ -26,42 +26,40 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ExtendWith(MockitoExtension.class)
 class ConsolePipelineProgressRealtimeControllerTest {
 
-  @Mock
-  private ConsoleRealtimeSubscriptionPort realtimeEventHub;
+    @Mock
+    private ConsoleRealtimeSubscriptionPort realtimeEventHub;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
-        new ConsoleResponseFactory(requestMetadataResolver));
+    @BeforeEach
+    void setUp() {
+        ConsoleApiExceptionHandler exceptionHandler =
+                ConsoleApiExceptionHandler.forStandaloneTest(new ConsoleResponseFactory(requestMetadataResolver));
 
-    when(tenantGuard.resolveTenant(anyString()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
-        .thenReturn(new SseEmitter());
+        when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
+                .thenReturn(new SseEmitter());
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsolePipelineProgressRealtimeController(realtimeEventHub, tenantGuard))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsolePipelineProgressRealtimeController(realtimeEventHub, tenantGuard))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("订阅流水线进度事件流并按租户建立推送通道")
-  void shouldExposePipelineProgressRealtimeStream() throws Exception {
-    mockMvc
-        .perform(get("/api/console/stream/pipeline-progress/events").param("tenantId", "t1"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("订阅流水线进度事件流并按租户建立推送通道")
+    void shouldExposePipelineProgressRealtimeStream() throws Exception {
+        mockMvc.perform(get("/api/console/stream/pipeline-progress/events").param("tenantId", "t1"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(tenantGuard).resolveTenant("t1");
-    verify(realtimeEventHub).subscribe("t1", "pipeline-progress", null, null, null);
-  }
+        verify(tenantGuard).resolveTenant("t1");
+        verify(realtimeEventHub).subscribe("t1", "pipeline-progress", null, null, null);
+    }
 }

@@ -16,10 +16,6 @@ import org.springframework.retry.annotation.Retryable;
  */
 @AutoConfiguration
 @ConditionalOnClass(Retryable.class)
-@ConditionalOnProperty(
-    prefix = "batch.retry",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(prefix = "batch.retry", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableRetry
 public class BatchRetryAutoConfiguration {}

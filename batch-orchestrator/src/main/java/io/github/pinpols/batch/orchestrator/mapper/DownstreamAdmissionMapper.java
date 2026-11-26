@@ -7,6 +7,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface DownstreamAdmissionMapper {
 
-  boolean isAnyDispatchChannelBlocked(
-      @Param("tenantId") String tenantId, @Param("channelCodes") Collection<String> channelCodes);
+    boolean isAnyDispatchChannelBlocked(
+            @Param("tenantId") String tenantId, @Param("channelCodes") Collection<String> channelCodes);
 }

@@ -5,5 +5,4 @@ package io.github.pinpols.batch.worker.dispatchs.domain;
  *
  * <p>字段顺序必须与 {@code FileDispatchMapper.xml} 的 {@code <constructor>} 声明保持一致。
  */
-public record PendingReceiptPollRow(
-    String tenantId, Long fileId, String channelCode, String externalRequestId) {}
+public record PendingReceiptPollRow(String tenantId, Long fileId, String channelCode, String externalRequestId) {}

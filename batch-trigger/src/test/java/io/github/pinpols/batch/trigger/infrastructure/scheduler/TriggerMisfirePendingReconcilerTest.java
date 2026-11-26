@@ -18,36 +18,36 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Misfire 待审对账器")
 class TriggerMisfirePendingReconcilerTest {
 
-  @Mock
-  private TriggerMisfirePendingMapper pendingMapper;
+    @Mock
+    private TriggerMisfirePendingMapper pendingMapper;
 
-  @Mock
-  private TriggerGracefulShutdown gracefulShutdown;
+    @Mock
+    private TriggerGracefulShutdown gracefulShutdown;
 
-  @InjectMocks
-  private TriggerMisfirePendingReconciler reconciler;
+    @InjectMocks
+    private TriggerMisfirePendingReconciler reconciler;
 
-  @Test
-  @DisplayName("正常运行时同时收敛统一审批拒绝和超期记录")
-  void reconcile_runsBothConvergencePaths() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
+    @Test
+    @DisplayName("正常运行时同时收敛统一审批拒绝和超期记录")
+    void reconcile_runsBothConvergencePaths() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(pendingMapper).approveCentrallyApproved();
-    verify(pendingMapper).rejectAndCloseCentrallyRejected();
-    verify(pendingMapper).expireAndCloseUnlaunched(ArgumentMatchers.any());
-  }
+        verify(pendingMapper).approveCentrallyApproved();
+        verify(pendingMapper).rejectAndCloseCentrallyRejected();
+        verify(pendingMapper).expireAndCloseUnlaunched(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("优雅排空期间不处理审批或过期记录")
-  void draining_skipsReconciliation() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("优雅排空期间不处理审批或过期记录")
+    void draining_skipsReconciliation() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(pendingMapper, never()).approveCentrallyApproved();
-    verify(pendingMapper, never()).rejectAndCloseCentrallyRejected();
-    verify(pendingMapper, never()).expireAndCloseUnlaunched(ArgumentMatchers.any());
-  }
+        verify(pendingMapper, never()).approveCentrallyApproved();
+        verify(pendingMapper, never()).rejectAndCloseCentrallyRejected();
+        verify(pendingMapper, never()).expireAndCloseUnlaunched(ArgumentMatchers.any());
+    }
 }

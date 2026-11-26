@@ -9,8 +9,8 @@ import java.util.Set;
  * 为节假日集合，{@code workdayOverrides} 为调班工作日集合， 两者共同决定最终有效业务日期。该 record 为不可变对象，创建后不应修改。
  */
 public record CalendarBizDateDefinition(
-    String timezone,
-    LocalTime cutoffTime,
-    String holidayRollRule,
-    Set<LocalDate> holidays,
-    Set<LocalDate> workdayOverrides) {}
+        String timezone,
+        LocalTime cutoffTime,
+        String holidayRollRule,
+        Set<LocalDate> holidays,
+        Set<LocalDate> workdayOverrides) {}

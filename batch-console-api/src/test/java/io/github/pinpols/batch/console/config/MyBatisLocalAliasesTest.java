@@ -17,27 +17,27 @@ import org.springframework.core.io.ClassPathResource;
 @DisplayName("MyBatis本地别名：实际local配置中的全部领域类可同时注册")
 class MyBatisLocalAliasesTest {
 
-  @Test
-  @DisplayName("local领域包的统计视图别名不冲突，并分别指向集群和仪表盘投影")
-  void shouldRegisterLocalAliasesForClusterAndDashboardViews() throws IOException {
-    YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-    ClassPathResource localConfiguration = new ClassPathResource("application-local.yml");
-    List<PropertySource<?>> propertySources = loader.load("local", localConfiguration);
-    String aliasesPackage = null;
-    for (PropertySource<?> source : propertySources) {
-      Object configuredPackage = source.getProperty("mybatis.type-aliases-package");
-      if (configuredPackage instanceof String packageName) {
-        aliasesPackage = packageName;
-      }
+    @Test
+    @DisplayName("local领域包的统计视图别名不冲突，并分别指向集群和仪表盘投影")
+    void shouldRegisterLocalAliasesForClusterAndDashboardViews() throws IOException {
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        ClassPathResource localConfiguration = new ClassPathResource("application-local.yml");
+        List<PropertySource<?>> propertySources = loader.load("local", localConfiguration);
+        String aliasesPackage = null;
+        for (PropertySource<?> source : propertySources) {
+            Object configuredPackage = source.getProperty("mybatis.type-aliases-package");
+            if (configuredPackage instanceof String packageName) {
+                aliasesPackage = packageName;
+            }
+        }
+        assertThat(aliasesPackage).isNotBlank();
+
+        TypeAliasRegistry aliases = new TypeAliasRegistry();
+        aliases.registerAliases(aliasesPackage);
+        Class<?> clusterAlias = aliases.resolveAlias("ClusterStatusCountView");
+        Class<?> dashboardAlias = aliases.resolveAlias("StatusCountView");
+
+        assertThat(clusterAlias).isEqualTo(ClusterStatusCountView.class);
+        assertThat(dashboardAlias).isEqualTo(StatusCountView.class);
     }
-    assertThat(aliasesPackage).isNotBlank();
-
-    TypeAliasRegistry aliases = new TypeAliasRegistry();
-    aliases.registerAliases(aliasesPackage);
-    Class<?> clusterAlias = aliases.resolveAlias("ClusterStatusCountView");
-    Class<?> dashboardAlias = aliases.resolveAlias("StatusCountView");
-
-    assertThat(clusterAlias).isEqualTo(ClusterStatusCountView.class);
-    assertThat(dashboardAlias).isEqualTo(StatusCountView.class);
-  }
 }

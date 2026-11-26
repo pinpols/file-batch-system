@@ -48,224 +48,223 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @DisplayName("导出阶段执行器单测:成功,业务异常,基础设施异常与步骤缺失的结果归类")
 class DefaultExportStageExecutorTest {
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  // 当前被测步骤。
-  private ExportStageStep prepareStep;
+    // 当前被测步骤。
+    private ExportStageStep prepareStep;
 
-  private DefaultExportStageExecutor executor;
-  private MeterRegistry meterRegistry;
+    private DefaultExportStageExecutor executor;
+    private MeterRegistry meterRegistry;
 
-  private static final Long PIPELINE_INSTANCE_ID = 100L;
-  private static final Long STEP_RUN_ID = 200L;
+    private static final Long PIPELINE_INSTANCE_ID = 100L;
+    private static final Long STEP_RUN_ID = 200L;
 
-  @BeforeEach
-  void setUp() {
-    prepareStep = stubStep(ExportStage.PREPARE);
-    meterRegistry = new SimpleMeterRegistry();
+    @BeforeEach
+    void setUp() {
+        prepareStep = stubStep(ExportStage.PREPARE);
+        meterRegistry = new SimpleMeterRegistry();
 
-    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+        when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
-    // 提供全部必需阶段，避免 buildDefaultStepDefinitions() 抛出异常。
-    List<ExportStageStep> allSteps = new ArrayList<>();
-    allSteps.add(prepareStep);
-    for (ExportStage stage : ExportStage.values()) {
-      if (stage != ExportStage.PREPARE) {
-        allSteps.add(stubStep(stage));
-      }
+        // 提供全部必需阶段，避免 buildDefaultStepDefinitions() 抛出异常。
+        List<ExportStageStep> allSteps = new ArrayList<>();
+        allSteps.add(prepareStep);
+        for (ExportStage stage : ExportStage.values()) {
+            if (stage != ExportStage.PREPARE) {
+                allSteps.add(stubStep(stage));
+            }
+        }
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+        when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+        executor = new DefaultExportStageExecutor(allSteps, pipelineRuns, meterRegistryProvider);
     }
+
+    @Test
+    @DisplayName("回放能力由真实 PREPARE 模板与 GENERATE 阶段插件配置解析")
     @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    executor = new DefaultExportStageExecutor(allSteps, pipelineRuns, meterRegistryProvider);
-  }
+    void replayCapability_resolvesFrozenTemplateFromPrepareAndSelectedGenerateStep() {
+        PrepareStep configuredPrepareStep = mock(PrepareStep.class);
+        when(configuredPrepareStep.stage()).thenReturn(ExportStage.PREPARE);
+        when(configuredPrepareStep.implCode()).thenReturn("EXPORT_PREPARE");
+        when(configuredPrepareStep.stepCode()).thenReturn("EXPORT_PREPARE");
+        when(configuredPrepareStep.stepName()).thenReturn("Prepare");
+        GenerateStep configuredGenerateStep = mock(GenerateStep.class);
+        when(configuredGenerateStep.stage()).thenReturn(ExportStage.GENERATE);
+        when(configuredGenerateStep.implCode()).thenReturn("EXPORT_GENERATE");
+        when(configuredGenerateStep.stepCode()).thenReturn("EXPORT_GENERATE");
+        when(configuredGenerateStep.stepName()).thenReturn("Generate");
+        Map<String, Object> frozenTemplateConfig = Map.of("export_data_ref", "settlement-export");
+        ExportJobContext context = buildContext();
+        when(configuredPrepareStep.resolveTemplateConfig(context)).thenReturn(frozenTemplateConfig);
+        ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("settlement-export");
+        when(configuredGenerateStep.replayCapability(frozenTemplateConfig)).thenReturn(expected);
+        List<ExportStageStep> configuredSteps = new ArrayList<>();
+        configuredSteps.add(configuredPrepareStep);
+        configuredSteps.add(configuredGenerateStep);
+        for (ExportStage stage : ExportStage.values()) {
+            if (stage != ExportStage.PREPARE && stage != ExportStage.GENERATE) {
+                configuredSteps.add(stubStep(stage));
+            }
+        }
+        ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+        when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+        DefaultExportStageExecutor replayExecutor =
+                new DefaultExportStageExecutor(configuredSteps, pipelineRuns, meterRegistryProvider);
 
-  @Test
-  @DisplayName("回放能力由真实 PREPARE 模板与 GENERATE 阶段插件配置解析")
-  @SuppressWarnings("unchecked")
-  void replayCapability_resolvesFrozenTemplateFromPrepareAndSelectedGenerateStep() {
-    PrepareStep configuredPrepareStep = mock(PrepareStep.class);
-    when(configuredPrepareStep.stage()).thenReturn(ExportStage.PREPARE);
-    when(configuredPrepareStep.implCode()).thenReturn("EXPORT_PREPARE");
-    when(configuredPrepareStep.stepCode()).thenReturn("EXPORT_PREPARE");
-    when(configuredPrepareStep.stepName()).thenReturn("Prepare");
-    GenerateStep configuredGenerateStep = mock(GenerateStep.class);
-    when(configuredGenerateStep.stage()).thenReturn(ExportStage.GENERATE);
-    when(configuredGenerateStep.implCode()).thenReturn("EXPORT_GENERATE");
-    when(configuredGenerateStep.stepCode()).thenReturn("EXPORT_GENERATE");
-    when(configuredGenerateStep.stepName()).thenReturn("Generate");
-    Map<String, Object> frozenTemplateConfig = Map.of("export_data_ref", "settlement-export");
-    ExportJobContext context = buildContext();
-    when(configuredPrepareStep.resolveTemplateConfig(context)).thenReturn(frozenTemplateConfig);
-    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("settlement-export");
-    when(configuredGenerateStep.replayCapability(frozenTemplateConfig)).thenReturn(expected);
-    List<ExportStageStep> configuredSteps = new ArrayList<>();
-    configuredSteps.add(configuredPrepareStep);
-    configuredSteps.add(configuredGenerateStep);
-    for (ExportStage stage : ExportStage.values()) {
-      if (stage != ExportStage.PREPARE && stage != ExportStage.GENERATE) {
-        configuredSteps.add(stubStep(stage));
-      }
+        ReplayCapabilityDeclaration actual = replayExecutor.resolveReplayCapability(context);
+
+        assertThat(actual).isEqualTo(expected);
+        verify(configuredPrepareStep).resolveTemplateConfig(context);
+        verify(configuredGenerateStep).replayCapability(frozenTemplateConfig);
     }
-    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    DefaultExportStageExecutor replayExecutor =
-        new DefaultExportStageExecutor(configuredSteps, pipelineRuns, meterRegistryProvider);
 
-    ReplayCapabilityDeclaration actual = replayExecutor.resolveReplayCapability(context);
+    @Test
+    @DisplayName("步骤成功时返回成功结果,并把记录数计入指标且不附加租户标签")
+    void execute_returnsSuccess_whenStepSucceeds() {
+        when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
+        ExportJobContext context = buildContext();
+        context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, 3);
 
-    assertThat(actual).isEqualTo(expected);
-    verify(configuredPrepareStep).resolveTemplateConfig(context);
-    verify(configuredGenerateStep).replayCapability(frozenTemplateConfig);
-  }
+        List<ExportStageResult> results = executor.execute(context);
 
-  @Test
-  @DisplayName("步骤成功时返回成功结果,并把记录数计入指标且不附加租户标签")
-  void execute_returnsSuccess_whenStepSucceeds() {
-    when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
-    ExportJobContext context = buildContext();
-    context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, 3);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isTrue();
+        assertThat(results.get(0).stage()).isEqualTo(ExportStage.PREPARE);
+        assertThat(meterRegistry
+                        .find("export.file.rows.total")
+                        .tag("workerType", "EXPORT")
+                        .counter())
+                .isNotNull();
+        assertThat(hasTagKey("export.file.rows.total", "tenant")).isFalse();
+        verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
+    }
 
-    List<ExportStageResult> results = executor.execute(context);
+    @Test
+    @DisplayName("步骤成功但缺少记录数时单独记录诊断指标,不伪造导出行数")
+    void execute_recordsMissingCountMetric_whenStepSucceedsWithoutRecordCount() {
+        when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isTrue();
-    assertThat(results.get(0).stage()).isEqualTo(ExportStage.PREPARE);
-    assertThat(meterRegistry
-            .find("export.file.rows.total")
-            .tag("workerType", "EXPORT")
-            .counter())
-        .isNotNull();
-    assertThat(hasTagKey("export.file.rows.total", "tenant")).isFalse();
-    verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
-  }
+        List<ExportStageResult> results = executor.execute(buildContext());
 
-  @Test
-  @DisplayName("步骤成功但缺少记录数时单独记录诊断指标,不伪造导出行数")
-  void execute_recordsMissingCountMetric_whenStepSucceedsWithoutRecordCount() {
-    when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isTrue();
+        assertThat(meterRegistry
+                        .counter("export.file.rows.count_missing", "workerType", "EXPORT")
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry.find("export.file.rows.total").counter()).isNull();
+    }
 
-    List<ExportStageResult> results = executor.execute(buildContext());
+    @Test
+    @DisplayName("步骤抛业务异常时归类为业务错误,错误码与明细一并写入步骤运行记录")
+    void execute_returnsBusinessError_whenStepThrowsBizException() {
+        when(prepareStep.execute(any()))
+                .thenThrow(BizException.of(
+                        ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "invalid export config"));
+        ExportJobContext context = buildContext();
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isTrue();
-    assertThat(meterRegistry
-            .counter("export.file.rows.count_missing", "workerType", "EXPORT")
-            .count())
-        .isEqualTo(1.0);
-    assertThat(meterRegistry.find("export.file.rows.total").counter()).isNull();
-  }
+        List<ExportStageResult> results = executor.execute(context);
 
-  @Test
-  @DisplayName("步骤抛业务异常时归类为业务错误,错误码与明细一并写入步骤运行记录")
-  void execute_returnsBusinessError_whenStepThrowsBizException() {
-    when(prepareStep.execute(any()))
-        .thenThrow(BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "invalid export config"));
-    ExportJobContext context = buildContext();
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
+        assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
+        assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
+        verify(pipelineRuns)
+                .finishStepRunFailure(
+                        eq(STEP_RUN_ID),
+                        eq(StageFailureCode.BUSINESS_ERROR.name()),
+                        eq("error.common.invalid_argument"),
+                        eq("error.common.invalid_argument"),
+                        eq("[\"invalid export config\"]"),
+                        any());
+    }
 
-    List<ExportStageResult> results = executor.execute(context);
+    @Test
+    @DisplayName("步骤抛运行时异常时归类为基础设施错误,且不保存异常中的凭据")
+    void execute_returnsInfraError_whenStepThrowsRuntimeException(CapturedOutput output) {
+        when(prepareStep.execute(any())).thenThrow(new RuntimeException("connection token=probe-secret timeout"));
+        ExportJobContext context = buildContext();
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
-    assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
-    verify(pipelineRuns)
-        .finishStepRunFailure(
-            eq(STEP_RUN_ID),
-            eq(StageFailureCode.BUSINESS_ERROR.name()),
-            eq("error.common.invalid_argument"),
-            eq("error.common.invalid_argument"),
-            eq("[\"invalid export config\"]"),
-            any());
-  }
+        List<ExportStageResult> results = executor.execute(context);
 
-  @Test
-  @DisplayName("步骤抛运行时异常时归类为基础设施错误,且不保存异常中的凭据")
-  void execute_returnsInfraError_whenStepThrowsRuntimeException(CapturedOutput output) {
-    when(prepareStep.execute(any()))
-        .thenThrow(new RuntimeException("connection token=probe-secret timeout"));
-    ExportJobContext context = buildContext();
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
+        assertThat(results.get(0).message()).contains("connection").doesNotContain("probe-secret");
+        assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret");
+        verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
+    }
 
-    List<ExportStageResult> results = executor.execute(context);
+    @Test
+    @DisplayName("实现编码未注册时返回步骤未找到结果,不执行任何阶段")
+    void execute_returnsStepNotFound_whenImplCodeNotRegistered() {
+        ExportJobContext context = buildContext("UNKNOWN_IMPL");
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).contains("connection").doesNotContain("probe-secret");
-    assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret");
-    verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
-  }
+        List<ExportStageResult> results = executor.execute(context);
 
-  @Test
-  @DisplayName("实现编码未注册时返回步骤未找到结果,不执行任何阶段")
-  void execute_returnsStepNotFound_whenImplCodeNotRegistered() {
-    ExportJobContext context = buildContext("UNKNOWN_IMPL");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.STEP_NOT_FOUND.name());
+    }
 
-    List<ExportStageResult> results = executor.execute(context);
+    @Test
+    @DisplayName("管道未配置任何步骤时返回步骤缺失结果")
+    void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
+        ExportJobContext context = new ExportJobContext();
+        context.setTenantId("t1");
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.STEP_NOT_FOUND.name());
-  }
+        List<ExportStageResult> results = executor.execute(context);
 
-  @Test
-  @DisplayName("管道未配置任何步骤时返回步骤缺失结果")
-  void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
-    ExportJobContext context = new ExportJobContext();
-    context.setTenantId("t1");
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.PIPELINE_STEP_MISSING.name());
+    }
 
-    List<ExportStageResult> results = executor.execute(context);
+    private ExportJobContext buildContext() {
+        return buildContext("EXPORT_PREPARE");
+    }
 
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.PIPELINE_STEP_MISSING.name());
-  }
+    private ExportJobContext buildContext(String implCode) {
+        ExportJobContext context = new ExportJobContext();
+        context.setTenantId("t1");
+        context.setWorkerId("w1");
+        context.setJobCode("JOB_001");
+        PipelineStepDefinition step = new PipelineStepDefinition(
+                1L,
+                "EXPORT_PREPARE",
+                "Export Prepare",
+                ExportStage.PREPARE.name(),
+                1,
+                implCode,
+                Map.of(),
+                0,
+                "NONE",
+                0,
+                true);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+        return context;
+    }
 
-  private ExportJobContext buildContext() {
-    return buildContext("EXPORT_PREPARE");
-  }
+    private boolean hasTagKey(String meterName, String tagKey) {
+        return meterRegistry.getMeters().stream()
+                .filter(meter -> meterName.equals(meter.getId().getName()))
+                .flatMap(meter -> meter.getId().getTags().stream())
+                .anyMatch(tag -> tagKey.equals(tag.getKey()));
+    }
 
-  private ExportJobContext buildContext(String implCode) {
-    ExportJobContext context = new ExportJobContext();
-    context.setTenantId("t1");
-    context.setWorkerId("w1");
-    context.setJobCode("JOB_001");
-    PipelineStepDefinition step = new PipelineStepDefinition(
-        1L,
-        "EXPORT_PREPARE",
-        "Export Prepare",
-        ExportStage.PREPARE.name(),
-        1,
-        implCode,
-        Map.of(),
-        0,
-        "NONE",
-        0,
-        true);
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    return context;
-  }
-
-  private boolean hasTagKey(String meterName, String tagKey) {
-    return meterRegistry.getMeters().stream()
-        .filter(meter -> meterName.equals(meter.getId().getName()))
-        .flatMap(meter -> meter.getId().getTags().stream())
-        .anyMatch(tag -> tagKey.equals(tag.getKey()));
-  }
-
-  private static ExportStageStep stubStep(ExportStage stage) {
-    ExportStageStep step = mock(ExportStageStep.class);
-    String code = "EXPORT_" + stage.name();
-    when(step.stage()).thenReturn(stage);
-    when(step.implCode()).thenReturn(code);
-    when(step.stepCode()).thenReturn(code);
-    when(step.stepName()).thenReturn(code);
-    return step;
-  }
+    private static ExportStageStep stubStep(ExportStage stage) {
+        ExportStageStep step = mock(ExportStageStep.class);
+        String code = "EXPORT_" + stage.name();
+        when(step.stage()).thenReturn(stage);
+        when(step.implCode()).thenReturn(code);
+        when(step.stepCode()).thenReturn(code);
+        when(step.stepName()).thenReturn(code);
+        return step;
+    }
 }

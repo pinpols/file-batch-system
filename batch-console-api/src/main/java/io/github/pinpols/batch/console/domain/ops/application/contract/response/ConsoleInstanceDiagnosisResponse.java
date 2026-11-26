@@ -17,48 +17,48 @@ import lombok.Builder;
  * Map<String,Object>}（additionalProperties）。
  */
 public record ConsoleInstanceDiagnosisResponse(
-    String tenantId,
-    Long jobInstanceId,
-    Boolean healthy,
-    InstanceSummary instance,
-    DiagnosisSummary summary,
-    List<Finding> findings) {
+        String tenantId,
+        Long jobInstanceId,
+        Boolean healthy,
+        InstanceSummary instance,
+        DiagnosisSummary summary,
+        List<Finding> findings) {
 
-  /** job_instance 摘要（选列自 selectJobInstanceSummary；键恒定，值可 null）。 */
-  @Builder
-  public record InstanceSummary(
-      Long id,
-      String instanceNo,
-      String jobCode,
-      LocalDate bizDate,
-      String instanceStatus,
-      String queueCode,
-      String workerGroup,
-      String traceId,
-      Instant startedAt,
-      Instant deadlineAt,
-      Instant now) {}
+    /** job_instance 摘要（选列自 selectJobInstanceSummary；键恒定，值可 null）。 */
+    @Builder
+    public record InstanceSummary(
+            Long id,
+            String instanceNo,
+            String jobCode,
+            LocalDate bizDate,
+            String instanceStatus,
+            String queueCode,
+            String workerGroup,
+            String traceId,
+            Instant startedAt,
+            Instant deadlineAt,
+            Instant now) {}
 
-  /** 分区 / 任务 / outbox 状态计数；实例未指定工作组时，组内在线 worker 数为 null。 */
-  public record DiagnosisSummary(
-      List<StatusCount> partitionStatusCounts,
-      List<StatusCount> taskStatusCounts,
-      List<OutboxStatusCount> outboxStatusCounts,
-      Long onlineWorkersForGroup) {}
+    /** 分区 / 任务 / outbox 状态计数；实例未指定工作组时，组内在线 worker 数为 null。 */
+    public record DiagnosisSummary(
+            List<StatusCount> partitionStatusCounts,
+            List<StatusCount> taskStatusCounts,
+            List<OutboxStatusCount> outboxStatusCounts,
+            Long onlineWorkersForGroup) {}
 
-  /** 状态计数响应行；可空状态不输出。 */
-  @JsonInclude(JsonInclude.Include.NON_NULL)
-  public record StatusCount(String status, Long count) {}
+    /** 状态计数响应行；可空状态不输出。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record StatusCount(String status, Long count) {}
 
-  /** outbox 状态计数响应行；可空时间不输出。 */
-  @JsonInclude(JsonInclude.Include.NON_NULL)
-  public record OutboxStatusCount(String status, Long count, Instant oldest, Instant newest) {}
+    /** outbox 状态计数响应行；可空时间不输出。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record OutboxStatusCount(String status, Long count, Instant oldest, Instant newest) {}
 
-  /** 诊断发现项。{@code evidence} 为真动态负载 → 保留 Map。 */
-  public record Finding(
-      String severity,
-      String reasonCode,
-      String message,
-      List<String> suggestedActions,
-      Map<String, Object> evidence) {}
+    /** 诊断发现项。{@code evidence} 为真动态负载 → 保留 Map。 */
+    public record Finding(
+            String severity,
+            String reasonCode,
+            String message,
+            List<String> suggestedActions,
+            Map<String, Object> evidence) {}
 }

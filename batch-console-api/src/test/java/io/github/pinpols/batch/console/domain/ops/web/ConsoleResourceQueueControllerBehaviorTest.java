@@ -26,39 +26,36 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleResourceQueueControllerBehaviorTest {
 
-  @Mock
-  private ConsoleResourceQueueApplicationService service;
+    @Mock
+    private ConsoleResourceQueueApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleResourceQueueController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleResourceQueueController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("启停资源队列时, 队列标识、租户与目标状态传给服务")
-  void shouldDelegateToggle_whenSettingQueueEnabled() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/queues/9/enabled")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
-  }
+    @Test
+    @DisplayName("启停资源队列时, 队列标识、租户与目标状态传给服务")
+    void shouldDelegateToggle_whenSettingQueueEnabled() throws Exception {
+        mockMvc.perform(patch("/api/console/queues/9/enabled")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
+                .andExpect(status().isOk());
+        verify(service).toggle(9L, "ta", true);
+    }
 }

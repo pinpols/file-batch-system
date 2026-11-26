@@ -7,28 +7,28 @@ import lombok.Data;
 @Data
 public class DataQualityRuleEntity {
 
-  private Long id;
-  private String tenantId;
-  private String ruleCode;
-  private String ruleName;
+    private Long id;
+    private String tenantId;
+    private String ruleCode;
+    private String ruleName;
 
-  /** ROW_LEVEL / TABLE_LEVEL / CROSS_TABLE / CROSS_DAY。 */
-  private String ruleType;
+    /** ROW_LEVEL / TABLE_LEVEL / CROSS_TABLE / CROSS_DAY。 */
+    private String ruleType;
 
-  /** 关联 result_version.business_key（前缀匹配，如 {@code job:DAILY_PNL:}）。 */
-  private String scopeBusinessKey;
+    /** 关联 result_version.business_key（前缀匹配，如 {@code job:DAILY_PNL:}）。 */
+    private String scopeBusinessKey;
 
-  /** 规则表达式（SQL / JSONLogic / SPI ref）。 */
-  private String expression;
+    /** 规则表达式（SQL / JSONLogic / SPI ref）。 */
+    private String expression;
 
-  /** {maxFailRows / failRatio / deltaTolerance...} JSON。 */
-  private String thresholdJson;
+    /** {maxFailRows / failRatio / deltaTolerance...} JSON。 */
+    private String thresholdJson;
 
-  /** BLOCKER / WARN / INFO。 */
-  private String severity;
+    /** BLOCKER / WARN / INFO。 */
+    private String severity;
 
-  private Boolean enabled;
-  private String description;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Boolean enabled;
+    private String description;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

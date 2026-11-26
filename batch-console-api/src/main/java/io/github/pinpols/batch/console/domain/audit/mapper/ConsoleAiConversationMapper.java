@@ -14,73 +14,67 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface ConsoleAiConversationMapper {
 
-  enum TurnStatus {
-    IN_PROGRESS,
-    COMPLETE,
-    FAILED
-  }
+    enum TurnStatus {
+        IN_PROGRESS,
+        COMPLETE,
+        FAILED
+    }
 
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  ConsoleAiConversationEntity selectForUpdate(
-      @Param("tenantId") String tenantId, @Param("conversationId") String conversationId);
+    ConsoleAiConversationEntity selectForUpdate(
+            @Param("tenantId") String tenantId, @Param("conversationId") String conversationId);
 
-  ConsoleAiConversationEntity selectActiveByOwner(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("ownerUserId") String ownerUserId);
+    ConsoleAiConversationEntity selectActiveByOwner(
+            @Param("tenantId") String tenantId,
+            @Param("conversationId") String conversationId,
+            @Param("ownerUserId") String ownerUserId);
 
-  int insertConversation(ConsoleAiConversationEntity conversation);
+    int insertConversation(ConsoleAiConversationEntity conversation);
 
-  Long allocateTurnNo(ConsoleAiConversationAllocateTurnNoParam parameters);
+    Long allocateTurnNo(ConsoleAiConversationAllocateTurnNoParam parameters);
 
-  default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
-      String tenantId, String conversationId, int limit) {
-    List<String> terminalStatuses = List.of(TurnStatus.COMPLETE.name(), TurnStatus.FAILED.name());
-    return selectRecentTurnsByStatuses(tenantId, conversationId, limit, terminalStatuses);
-  }
+    default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(String tenantId, String conversationId, int limit) {
+        List<String> terminalStatuses = List.of(TurnStatus.COMPLETE.name(), TurnStatus.FAILED.name());
+        return selectRecentTurnsByStatuses(tenantId, conversationId, limit, terminalStatuses);
+    }
 
-  List<ConsoleAiTurnEntity> selectRecentTurnsByStatuses(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("limit") int limit,
-      @Param("turnStatuses") List<String> turnStatuses);
+    List<ConsoleAiTurnEntity> selectRecentTurnsByStatuses(
+            @Param("tenantId") String tenantId,
+            @Param("conversationId") String conversationId,
+            @Param("limit") int limit,
+            @Param("turnStatuses") List<String> turnStatuses);
 
-  default int insertTurn(ConsoleAiTurnEntity turn) {
-    return insertTurnWithStatus(turn, TurnStatus.IN_PROGRESS.name());
-  }
+    default int insertTurn(ConsoleAiTurnEntity turn) {
+        return insertTurnWithStatus(turn, TurnStatus.IN_PROGRESS.name());
+    }
 
-  int insertTurnWithStatus(
-      @Param("turn") ConsoleAiTurnEntity turn, @Param("initialStatus") String initialStatus);
+    int insertTurnWithStatus(@Param("turn") ConsoleAiTurnEntity turn, @Param("initialStatus") String initialStatus);
 
-  ConsoleAiTurnEntity selectByClientTurnId(
-      @Param("tenantId") String tenantId,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("clientTurnId") UUID clientTurnId);
+    ConsoleAiTurnEntity selectByClientTurnId(
+            @Param("tenantId") String tenantId,
+            @Param("ownerUserId") String ownerUserId,
+            @Param("clientTurnId") UUID clientTurnId);
 
-  default int completeTurn(ConsoleAiTurnEntity turn) {
-    return completeTurnIfCurrent(turn, TurnStatus.IN_PROGRESS.name());
-  }
+    default int completeTurn(ConsoleAiTurnEntity turn) {
+        return completeTurnIfCurrent(turn, TurnStatus.IN_PROGRESS.name());
+    }
 
-  int completeTurnIfCurrent(
-      @Param("turn") ConsoleAiTurnEntity turn, @Param("expectedStatus") String expectedStatus);
+    int completeTurnIfCurrent(@Param("turn") ConsoleAiTurnEntity turn, @Param("expectedStatus") String expectedStatus);
 
-  List<ConsoleAiConversationEntity> selectByOwner(
-      @Param("tenantId") String tenantId,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("limit") int limit);
+    List<ConsoleAiConversationEntity> selectByOwner(
+            @Param("tenantId") String tenantId, @Param("ownerUserId") String ownerUserId, @Param("limit") int limit);
 
-  List<ConsoleAiConversationEntity> selectPageByOwner(
-      ConsoleAiConversationPageByOwnerQuery parameters);
+    List<ConsoleAiConversationEntity> selectPageByOwner(ConsoleAiConversationPageByOwnerQuery parameters);
 
-  List<ConsoleAiTurnEntity> selectTurns(ConsoleAiConversationTurnsQuery parameters);
+    List<ConsoleAiTurnEntity> selectTurns(ConsoleAiConversationTurnsQuery parameters);
 
-  int deleteConversation(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("ownerUserId") String ownerUserId);
+    int deleteConversation(
+            @Param("tenantId") String tenantId,
+            @Param("conversationId") String conversationId,
+            @Param("ownerUserId") String ownerUserId);
 
-  List<String> selectTenantIds();
+    List<String> selectTenantIds();
 
-  int deleteExpired(@Param("tenantId") String tenantId, @Param("cutoff") OffsetDateTime cutoff);
+    int deleteExpired(@Param("tenantId") String tenantId, @Param("cutoff") OffsetDateTime cutoff);
 }

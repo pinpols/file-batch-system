@@ -22,86 +22,84 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsolePushJobNotifier {
 
-  private final ConsolePushProperties properties;
-  private final JobPushDeliveryService deliveries;
+    private final ConsolePushProperties properties;
+    private final JobPushDeliveryService deliveries;
 
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private ScheduledExecutorService scheduler;
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private ScheduledExecutorService scheduler;
 
-  @PostConstruct
-  void start() {
-    if (!properties.isEnabled() || !properties.getJobNotify().isEnabled()) {
-      log.info(
-          "[push] ConsolePushJobNotifier disabled (push.enabled or job-notify.enabled = false)");
-      return;
+    @PostConstruct
+    void start() {
+        if (!properties.isEnabled() || !properties.getJobNotify().isEnabled()) {
+            log.info("[push] ConsolePushJobNotifier disabled (push.enabled or job-notify.enabled = false)");
+            return;
+        }
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "push-job-notifier");
+            t.setDaemon(true);
+            return t;
+        });
+        long intervalMillis = properties.getJobNotify().getPollIntervalMillis();
+        scheduler.scheduleWithFixedDelay(this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        log.info(
+                "[push] ConsolePushJobNotifier started, intervalMillis={} batchSize={}",
+                intervalMillis,
+                properties.getJobNotify().getBatchSize());
     }
-    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "push-job-notifier");
-      t.setDaemon(true);
-      return t;
-    });
-    long intervalMillis = properties.getJobNotify().getPollIntervalMillis();
-    scheduler.scheduleWithFixedDelay(
-        this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
-    log.info(
-        "[push] ConsolePushJobNotifier started, intervalMillis={} batchSize={}",
-        intervalMillis,
-        properties.getJobNotify().getBatchSize());
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopScheduler("context-closed");
-  }
-
-  @PreDestroy
-  void stop() {
-    stopScheduler("pre-destroy");
-  }
-
-  private void stopScheduler(String source) {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopScheduler("context-closed");
     }
-    if (scheduler != null) {
-      log.info("[push] ConsolePushJobNotifier stopping: source={}", source);
-      scheduler.shutdownNow();
-    }
-  }
 
-  void pollSafely() {
-    if (stopping.get()) {
-      return;
+    @PreDestroy
+    void stop() {
+        stopScheduler("pre-destroy");
     }
-    try {
-      pollOnce();
-    } catch (RuntimeException e) {
-      if (stopping.get() && isShutdownNoise(e)) {
-        String causeSummary = SwallowedExceptionLogger.summary(e);
-        log.info("[push] job-notify poll skipped during shutdown: {}", causeSummary);
-        return;
-      }
-      log.error("[push] job-notify poll failed", e);
-    }
-  }
 
-  void pollOnce() {
-    if (!stopping.get()) deliveries.poll(stopping::get);
-  }
-
-  private static boolean isShutdownNoise(Throwable throwable) {
-    Throwable current = throwable;
-    while (current != null) {
-      String message = current.getMessage();
-      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
-          && (message.contains("has been closed")
-              || message.contains("Connection pool shut down")
-              || message.contains("Interrupted"));
-      if (isConnectionShutdownMessage) {
-        return true;
-      }
-      current = current.getCause();
+    private void stopScheduler(String source) {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        if (scheduler != null) {
+            log.info("[push] ConsolePushJobNotifier stopping: source={}", source);
+            scheduler.shutdownNow();
+        }
     }
-    return false;
-  }
+
+    void pollSafely() {
+        if (stopping.get()) {
+            return;
+        }
+        try {
+            pollOnce();
+        } catch (RuntimeException e) {
+            if (stopping.get() && isShutdownNoise(e)) {
+                String causeSummary = SwallowedExceptionLogger.summary(e);
+                log.info("[push] job-notify poll skipped during shutdown: {}", causeSummary);
+                return;
+            }
+            log.error("[push] job-notify poll failed", e);
+        }
+    }
+
+    void pollOnce() {
+        if (!stopping.get()) deliveries.poll(stopping::get);
+    }
+
+    private static boolean isShutdownNoise(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+                    && (message.contains("has been closed")
+                            || message.contains("Connection pool shut down")
+                            || message.contains("Interrupted"));
+            if (isConnectionShutdownMessage) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 }

@@ -32,74 +32,67 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAssetPartitionControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestratorProxy;
+    @Mock
+    private ConsoleOrchestratorPort orchestratorProxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAssetPartitionController(orchestratorProxy, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleAssetPartitionController(orchestratorProxy, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询就绪状态时, 原始结果包装为统一信封并带出追踪标识")
-  void shouldWrapRawPayload_whenQueryingReadiness() throws Exception {
-    when(orchestratorProxy.assetPartitionReadiness(
-            "ta", "settlement_daily", LocalDate.parse("2026-06-30")))
-        .thenReturn(new AssetPartitionReadinessResponse(
-            true,
-            "READY",
-            "asset-settlement-daily",
-            LocalDate.parse("2026-06-30"),
-            "2026-06-30",
-            "job:settlement_daily:2026-06-30",
-            "EFFECTIVE",
-            3,
-            9L,
-            "OBJECT_STORE",
-            "s3://bucket/path/result.csv"));
-    MvcResult result = mockMvc
-        .perform(get("/api/console/asset-partitions/readiness")
-            .param("tenantId", "ta")
-            .param("jobCode", "settlement_daily")
-            .param("bizDate", "2026-06-30"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.ready").value(true))
-        .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
-        .andExpect(jsonPath("$.data.versionNo").value(3))
-        .andReturn();
-    Assertions.assertThat(result.getResponse().getContentAsString())
-        .contains("\"traceId\":\"trace-1\"");
-    verify(orchestratorProxy)
-        .assetPartitionReadiness("ta", "settlement_daily", LocalDate.parse("2026-06-30"));
-  }
+    @Test
+    @DisplayName("查询就绪状态时, 原始结果包装为统一信封并带出追踪标识")
+    void shouldWrapRawPayload_whenQueryingReadiness() throws Exception {
+        when(orchestratorProxy.assetPartitionReadiness("ta", "settlement_daily", LocalDate.parse("2026-06-30")))
+                .thenReturn(new AssetPartitionReadinessResponse(
+                        true,
+                        "READY",
+                        "asset-settlement-daily",
+                        LocalDate.parse("2026-06-30"),
+                        "2026-06-30",
+                        "job:settlement_daily:2026-06-30",
+                        "EFFECTIVE",
+                        3,
+                        9L,
+                        "OBJECT_STORE",
+                        "s3://bucket/path/result.csv"));
+        MvcResult result = mockMvc.perform(get("/api/console/asset-partitions/readiness")
+                        .param("tenantId", "ta")
+                        .param("jobCode", "settlement_daily")
+                        .param("bizDate", "2026-06-30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.ready").value(true))
+                .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
+                .andExpect(jsonPath("$.data.versionNo").value(3))
+                .andReturn();
+        Assertions.assertThat(result.getResponse().getContentAsString()).contains("\"traceId\":\"trace-1\"");
+        verify(orchestratorProxy).assetPartitionReadiness("ta", "settlement_daily", LocalDate.parse("2026-06-30"));
+    }
 
-  @Test
-  @DisplayName("租户不匹配被应用端口拒绝时, 接口返回禁止访问")
-  void shouldPropagateTenantRejection_whenTenantNotPermitted() throws Exception {
-    doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
-        .when(orchestratorProxy)
-        .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
-    mockMvc
-        .perform(get("/api/console/asset-partitions/readiness")
-            .param("tenantId", "tb")
-            .param("jobCode", "settlement_daily")
-            .param("bizDate", "2026-06-30"))
-        .andExpect(status().isForbidden());
-    verify(orchestratorProxy)
-        .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
-  }
+    @Test
+    @DisplayName("租户不匹配被应用端口拒绝时, 接口返回禁止访问")
+    void shouldPropagateTenantRejection_whenTenantNotPermitted() throws Exception {
+        doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
+                .when(orchestratorProxy)
+                .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
+        mockMvc.perform(get("/api/console/asset-partitions/readiness")
+                        .param("tenantId", "tb")
+                        .param("jobCode", "settlement_daily")
+                        .param("bizDate", "2026-06-30"))
+                .andExpect(status().isForbidden());
+        verify(orchestratorProxy).assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
+    }
 }

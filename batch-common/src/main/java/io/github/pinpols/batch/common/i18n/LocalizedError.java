@@ -21,13 +21,13 @@ package io.github.pinpols.batch.common.i18n;
  */
 public record LocalizedError(String key, String argsJson, String renderedMessage) {
 
-  public static final LocalizedError EMPTY = new LocalizedError(null, null, null);
+    public static final LocalizedError EMPTY = new LocalizedError(null, null, null);
 
-  public boolean hasKey() {
-    return key != null && !key.isBlank();
-  }
+    public boolean hasKey() {
+        return key != null && !key.isBlank();
+    }
 
-  public boolean hasMessage() {
-    return renderedMessage != null && !renderedMessage.isBlank();
-  }
+    public boolean hasMessage() {
+        return renderedMessage != null && !renderedMessage.isBlank();
+    }
 }

@@ -26,35 +26,35 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OutboxOpsController {
 
-  private final OutboxOpsApplicationService outboxOpsApplicationService;
+    private final OutboxOpsApplicationService outboxOpsApplicationService;
 
-  /**
-   * 删除已终结事件(PUBLISHED + GIVE_UP 且 updated_at 早于 retainDays)。
-   *
-   * @return key=published / giveUp 的删除条数(dryRun=true 时返回预估条数, 不实际删除)
-   */
-  @PostMapping("/cleanup")
-  public OutboxCleanupResponse cleanup(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("retainDays") int retainDays,
-      @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
-      @RequestBody(required = false) OutboxOpsRequest body) {
-    String operatorId = body == null ? null : body.operatorId();
-    String reason = body == null ? null : body.reason();
-    return outboxOpsApplicationService.cleanup(tenantId, retainDays, dryRun, operatorId, reason);
-  }
+    /**
+     * 删除已终结事件(PUBLISHED + GIVE_UP 且 updated_at 早于 retainDays)。
+     *
+     * @return key=published / giveUp 的删除条数(dryRun=true 时返回预估条数, 不实际删除)
+     */
+    @PostMapping("/cleanup")
+    public OutboxCleanupResponse cleanup(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("retainDays") int retainDays,
+            @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
+            @RequestBody(required = false) OutboxOpsRequest body) {
+        String operatorId = body == null ? null : body.operatorId();
+        String reason = body == null ? null : body.reason();
+        return outboxOpsApplicationService.cleanup(tenantId, retainDays, dryRun, operatorId, reason);
+    }
 
-  /** 重投递 FAILED / GIVE_UP 事件(reset 为 NEW,由 OutboxForwarder 重发);dryRun=true 只返回 candidate 数。 */
-  @PostMapping("/republish")
-  public OutboxRepublishResponse republish(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
-      @RequestBody RepublishRequest request) {
-    return outboxOpsApplicationService.republish(
-        tenantId, request.ids(), dryRun, request.operatorId(), request.reason());
-  }
+    /** 重投递 FAILED / GIVE_UP 事件(reset 为 NEW,由 OutboxForwarder 重发);dryRun=true 只返回 candidate 数。 */
+    @PostMapping("/republish")
+    public OutboxRepublishResponse republish(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
+            @RequestBody RepublishRequest request) {
+        return outboxOpsApplicationService.republish(
+                tenantId, request.ids(), dryRun, request.operatorId(), request.reason());
+    }
 
-  public record OutboxOpsRequest(String operatorId, String reason) {}
+    public record OutboxOpsRequest(String operatorId, String reason) {}
 
-  public record RepublishRequest(List<Long> ids, String operatorId, String reason) {}
+    public record RepublishRequest(List<Long> ids, String operatorId, String reason) {}
 }

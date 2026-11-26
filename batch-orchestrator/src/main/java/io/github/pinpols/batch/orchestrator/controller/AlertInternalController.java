@@ -19,20 +19,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AlertInternalController {
 
-  private final AlertEventService alertEventService;
+    private final AlertEventService alertEventService;
 
-  @PostMapping
-  public void emit(@RequestBody AlertEmitRequest request) {
-    AlertEmitCommand command = AlertEmitCommand.builder()
-        .tenantId(request.tenantId())
-        .serviceName(request.serviceName())
-        .alertType(request.alertType())
-        .severity(request.severity())
-        .title(request.title())
-        .detailJson(request.detailJson())
-        .resourceKey(request.resourceKey())
-        .traceId(request.traceId())
-        .build();
-    alertEventService.emit(command);
-  }
+    @PostMapping
+    public void emit(@RequestBody AlertEmitRequest request) {
+        AlertEmitCommand command = AlertEmitCommand.builder()
+                .tenantId(request.tenantId())
+                .serviceName(request.serviceName())
+                .alertType(request.alertType())
+                .severity(request.severity())
+                .title(request.title())
+                .detailJson(request.detailJson())
+                .resourceKey(request.resourceKey())
+                .traceId(request.traceId())
+                .build();
+        alertEventService.emit(command);
+    }
 }

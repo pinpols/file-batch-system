@@ -12,33 +12,32 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface PipelineProgressMapper {
 
-  /** 启动续跑用:按 (tenantId, pipelineInstanceId, stage) 取唯一行;无则返回 null。 */
-  PipelineProgressEntity findByInstanceAndStage(
-      @Param("tenantId") String tenantId,
-      @Param("pipelineInstanceId") long pipelineInstanceId,
-      @Param("stage") String stage);
+    /** 启动续跑用:按 (tenantId, pipelineInstanceId, stage) 取唯一行;无则返回 null。 */
+    PipelineProgressEntity findByInstanceAndStage(
+            @Param("tenantId") String tenantId,
+            @Param("pipelineInstanceId") long pipelineInstanceId,
+            @Param("stage") String stage);
 
-  /**
-   * UPSERT 位点；返回0表示父实例不存在或不属于调用租户，调用方必须拒绝成功。{@code processedCountIncrement} 累加到当前 processed_count。已
-   * completed 的行不会被回写位点(防止迟到 chunk 把已完成位点撤回)。
-   */
-  int advance(PipelineProgressAdvanceParam parameters);
+    /**
+     * UPSERT 位点；返回0表示父实例不存在或不属于调用租户，调用方必须拒绝成功。{@code processedCountIncrement} 累加到当前 processed_count。已
+     * completed 的行不会被回写位点(防止迟到 chunk 把已完成位点撤回)。
+     */
+    int advance(PipelineProgressAdvanceParam parameters);
 
-  /** 阶段整体完成时调用;completed=true + completed_at = now。幂等(已 completed 不变)。 */
-  int markCompleted(
-      @Param("tenantId") String tenantId,
-      @Param("pipelineInstanceId") long pipelineInstanceId,
-      @Param("stage") String stage);
+    /** 阶段整体完成时调用;completed=true + completed_at = now。幂等(已 completed 不变)。 */
+    int markCompleted(
+            @Param("tenantId") String tenantId,
+            @Param("pipelineInstanceId") long pipelineInstanceId,
+            @Param("stage") String stage);
 
-  /**
-   * 删除某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
-   *
-   * <p>安全增量补偿(compensate_on_failure)反向删除了本 run 的业务行后,advance 已推进的位点会指向被删数据; 若不作废,重试复用同一 {@code
-   * pipelineInstanceId} 续跑会跳过已删 chunk → 数据永久缺失。故补偿成功后必须清位点, 让重试从头全量重做。带 {@code tenant_id}
-   * 谓词纵深防御(表有该列);{@code pipelineInstanceId} 本身全局唯一。
-   *
-   * @return 删除行数
-   */
-  int deleteByInstance(
-      @Param("tenantId") String tenantId, @Param("pipelineInstanceId") long pipelineInstanceId);
+    /**
+     * 删除某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
+     *
+     * <p>安全增量补偿(compensate_on_failure)反向删除了本 run 的业务行后,advance 已推进的位点会指向被删数据; 若不作废,重试复用同一 {@code
+     * pipelineInstanceId} 续跑会跳过已删 chunk → 数据永久缺失。故补偿成功后必须清位点, 让重试从头全量重做。带 {@code tenant_id}
+     * 谓词纵深防御(表有该列);{@code pipelineInstanceId} 本身全局唯一。
+     *
+     * @return 删除行数
+     */
+    int deleteByInstance(@Param("tenantId") String tenantId, @Param("pipelineInstanceId") long pipelineInstanceId);
 }

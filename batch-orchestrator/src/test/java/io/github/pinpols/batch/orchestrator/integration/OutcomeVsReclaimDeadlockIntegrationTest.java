@@ -81,432 +81,434 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 每个抛出都走 cause 链扫 {@code 40P01};良性并发冲突(STATE_CONFLICT / invocation CONFLICT / ReclaimRetryable /
  * CAS no-op)记数但不判失败。收尾单线程干净结算,证明风暴后状态机仍收敛、计数无丢更新。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("作业结果上报与分区租约回收的并发锁竞争:生产链路并发风暴下无死锁,收尾后状态与计数一致收敛")
 class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  /** 分区数 = 每轮并发对数;2*N 线程需 2*N 个平台库连接(pool=50),取 12 → 24 并发,留足余量。 */
-  private static final int PARTITIONS = 12;
+    /** 分区数 = 每轮并发对数;2*N 线程需 2*N 个平台库连接(pool=50),取 12 → 24 并发,留足余量。 */
+    private static final int PARTITIONS = 12;
 
-  /** 抢锁窗口窄,多跑几轮放大命中概率。R*N = 120 对 outcome/reclaim 抢锁。 */
-  private static final int ROUNDS = 10;
+    /** 抢锁窗口窄,多跑几轮放大命中概率。R*N = 120 对 outcome/reclaim 抢锁。 */
+    private static final int ROUNDS = 10;
 
-  private final WorkflowRunLaunchService workflowRunLaunchService;
+    private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  private final TaskAssignmentService taskAssignmentService;
+    private final TaskAssignmentService taskAssignmentService;
 
-  private final TaskOutcomeService taskOutcomeService;
+    private final TaskOutcomeService taskOutcomeService;
 
-  private final PartitionReclaimUnit reclaimUnit;
+    private final PartitionReclaimUnit reclaimUnit;
 
-  private final JobInstanceMapper jobInstanceMapper;
+    private final JobInstanceMapper jobInstanceMapper;
 
-  private final JobPartitionMapper jobPartitionMapper;
+    private final JobPartitionMapper jobPartitionMapper;
 
-  private final JobTaskMapper jobTaskMapper;
+    private final JobTaskMapper jobTaskMapper;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  private final WorkerRegistryCache workerRegistryCache;
+    private final WorkerRegistryCache workerRegistryCache;
 
-  private final JobInstanceTerminalStatusApplicationService terminalStatusService;
-  private final PlatformTransactionManager transactionManager;
+    private final JobInstanceTerminalStatusApplicationService terminalStatusService;
+    private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  OutcomeVsReclaimDeadlockIntegrationTest(
-      WorkflowRunLaunchService workflowRunLaunchService,
-      TaskAssignmentService taskAssignmentService,
-      TaskOutcomeService taskOutcomeService,
-      PartitionReclaimUnit reclaimUnit,
-      JobInstanceMapper jobInstanceMapper,
-      JobPartitionMapper jobPartitionMapper,
-      JobTaskMapper jobTaskMapper,
-      JdbcTemplate jdbcTemplate,
-      WorkerRegistryCache workerRegistryCache,
-      JobInstanceTerminalStatusApplicationService terminalStatusService,
-      PlatformTransactionManager transactionManager) {
-    this.workflowRunLaunchService = workflowRunLaunchService;
-    this.taskAssignmentService = taskAssignmentService;
-    this.taskOutcomeService = taskOutcomeService;
-    this.reclaimUnit = reclaimUnit;
-    this.jobInstanceMapper = jobInstanceMapper;
-    this.jobPartitionMapper = jobPartitionMapper;
-    this.jobTaskMapper = jobTaskMapper;
-    this.jdbcTemplate = jdbcTemplate;
-    this.workerRegistryCache = workerRegistryCache;
-    this.terminalStatusService = terminalStatusService;
-    this.transactionManager = transactionManager;
-  }
+    @Autowired
+    OutcomeVsReclaimDeadlockIntegrationTest(
+            WorkflowRunLaunchService workflowRunLaunchService,
+            TaskAssignmentService taskAssignmentService,
+            TaskOutcomeService taskOutcomeService,
+            PartitionReclaimUnit reclaimUnit,
+            JobInstanceMapper jobInstanceMapper,
+            JobPartitionMapper jobPartitionMapper,
+            JobTaskMapper jobTaskMapper,
+            JdbcTemplate jdbcTemplate,
+            WorkerRegistryCache workerRegistryCache,
+            JobInstanceTerminalStatusApplicationService terminalStatusService,
+            PlatformTransactionManager transactionManager) {
+        this.workflowRunLaunchService = workflowRunLaunchService;
+        this.taskAssignmentService = taskAssignmentService;
+        this.taskOutcomeService = taskOutcomeService;
+        this.reclaimUnit = reclaimUnit;
+        this.jobInstanceMapper = jobInstanceMapper;
+        this.jobPartitionMapper = jobPartitionMapper;
+        this.jobTaskMapper = jobTaskMapper;
+        this.jdbcTemplate = jdbcTemplate;
+        this.workerRegistryCache = workerRegistryCache;
+        this.terminalStatusService = terminalStatusService;
+        this.transactionManager = transactionManager;
+    }
 
-  @Test
-  @DisplayName("上报事务持有分区行锁时,终止态更新先等待锁再执行,且不覆盖实例的成功终态")
-  void shouldWaitForReleasedPartitionLock_whenTerminalUpdateTakesParentLock() throws Exception {
-    final String setLocalSql = """
+    @Test
+    @DisplayName("上报事务持有分区行锁时,终止态更新先等待锁再执行,且不覆盖实例的成功终态")
+    void shouldWaitForReleasedPartitionLock_whenTerminalUpdateTakesParentLock() throws Exception {
+        final String setLocalSql = """
         set local lock_timeout = '5s'
     """;
 
-    final String selectIdSql = """
+        final String selectIdSql = """
         select id from batch.job_partition where tenant_id = ? and id = ? for update
     """;
-    final String selectPgBackendPidSql = """
+        final String selectPgBackendPidSql = """
         select pg_backend_pid()
     """;
-    final String selectExistsSql = """
+        final String selectExistsSql = """
         select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')
     """;
 
-    var instance = launchBundle(1);
-    var shard = claimAllShards(instance).getFirst();
-    String invocation = "terminal-race-" + UUID.randomUUID();
-    resetShardToRunning(shard, instance.seed().workerCode(), invocation);
-    Long version = jobInstanceMapper.selectById(TENANT, instance.instanceId()).getVersion();
-    var reportLocked = new CountDownLatch(1);
-    var releaseReport = new CountDownLatch(1);
-    var terminalPid = new CompletableFuture<Integer>();
-    var pool = Executors.newFixedThreadPool(2);
-    try {
-      Future<?> report = pool.submit(() -> new TransactionTemplate(transactionManager)
-          .executeWithoutResult(status -> {
-            jdbcTemplate.execute(setLocalSql);
-            jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instance.instanceId());
-            jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, shard.partitionId());
-            reportLocked.countDown();
-            try {
-              if (!releaseReport.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("report barrier timed out");
-              }
-            } catch (InterruptedException interrupted) {
-              Thread.currentThread().interrupt();
-              throw new IllegalStateException(interrupted);
-            }
-            TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-                .tenantId(TENANT)
-                .taskId(shard.taskId())
-                .success(true)
-                .resultSummary("{\"records\":1}")
-                .partitionInvocationId(invocation)
-                .build();
-            taskOutcomeService.applyTaskOutcome(command);
-          }));
-      assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
-      Future<Integer> terminal =
-          pool.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
-            jdbcTemplate.execute(setLocalSql);
-            terminalPid.complete(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
-            return terminalStatusService.updateTerminalStatusAndReconcileChildren(
-                new JobInstanceTerminalStatusCommand(
-                    TENANT,
-                    instance.instanceId(),
-                    JobInstanceStatus.TERMINATED.code(),
-                    Instant.now(),
-                    version));
-          }));
-      int pid = terminalPid.get(5, TimeUnit.SECONDS);
-      Awaitility.await()
-          .alias("终止事务必须实际进入锁等待")
-          .atMost(3, TimeUnit.SECONDS)
-          .until(() -> Boolean.TRUE.equals(
-              jdbcTemplate.queryForObject(selectExistsSql, Boolean.class, pid)));
-      releaseReport.countDown();
-      report.get(10, TimeUnit.SECONDS);
-      assertThat(terminal.get(10, TimeUnit.SECONDS)).isZero();
-      assertThat(jobInstanceMapper.selectById(TENANT, instance.instanceId()).getInstanceStatus())
-          .isEqualTo(JobInstanceStatus.SUCCESS.code());
-    } finally {
-      releaseReport.countDown();
-      pool.shutdownNow();
-      assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
-    }
-  }
-
-  @BeforeEach
-  void refreshWorkers() {
-    WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-  }
-
-  @Test
-  @DisplayName("outcome 与 reclaim 并发抢同 (task,partition):#768 下 60s 内无行锁反转死锁,收尾状态一致")
-  void concurrentOutcomeVsReclaim_noRowLockInversionDeadlock_stateConverges() throws Exception {
-    long overallDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
-
-    FannedOutInstance fannedOut = launchBundle(PARTITIONS);
-    List<Shard> shards = claimAllShards(fannedOut);
-    assertThat(shards).hasSize(PARTITIONS);
-
-    List<Throwable> deadlocks = new CopyOnWriteArrayList<>();
-    List<Throwable> benignConflicts = new CopyOnWriteArrayList<>();
-    ExecutorService pool = Executors.newFixedThreadPool(2 * PARTITIONS);
-    try {
-      for (int round = 0; round < ROUNDS; round++) {
-        // 每轮生成新 invocation,把 (task,partition,step) 重置回 RUNNING + 过期 lease,让两条路径都能真正取锁。
-        String[] invocations = new String[PARTITIONS];
-        List<JobPartitionEntity> freshPartitions = new ArrayList<>();
-        for (int i = 0; i < PARTITIONS; i++) {
-          invocations[i] = "inv-" + round + "-" + UUID.randomUUID();
-          resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), invocations[i]);
-          // reclaim 用传入实体的 version 做 partition CAS,必须在 reset 之后重新读到最新 version。
-          freshPartitions.add(
-              jobPartitionMapper.selectById(TENANT, shards.get(i).partitionId()));
+        var instance = launchBundle(1);
+        var shard = claimAllShards(instance).getFirst();
+        String invocation = "terminal-race-" + UUID.randomUUID();
+        resetShardToRunning(shard, instance.seed().workerCode(), invocation);
+        Long version =
+                jobInstanceMapper.selectById(TENANT, instance.instanceId()).getVersion();
+        var reportLocked = new CountDownLatch(1);
+        var releaseReport = new CountDownLatch(1);
+        var terminalPid = new CompletableFuture<Integer>();
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> report =
+                    pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        jdbcTemplate.execute(setLocalSql);
+                        jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instance.instanceId());
+                        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, shard.partitionId());
+                        reportLocked.countDown();
+                        try {
+                            if (!releaseReport.await(10, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("report barrier timed out");
+                            }
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(interrupted);
+                        }
+                        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                                .tenantId(TENANT)
+                                .taskId(shard.taskId())
+                                .success(true)
+                                .resultSummary("{\"records\":1}")
+                                .partitionInvocationId(invocation)
+                                .build();
+                        taskOutcomeService.applyTaskOutcome(command);
+                    }));
+            assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<Integer> terminal = pool.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+                jdbcTemplate.execute(setLocalSql);
+                terminalPid.complete(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
+                return terminalStatusService.updateTerminalStatusAndReconcileChildren(
+                        new JobInstanceTerminalStatusCommand(
+                                TENANT,
+                                instance.instanceId(),
+                                JobInstanceStatus.TERMINATED.code(),
+                                Instant.now(),
+                                version));
+            }));
+            int pid = terminalPid.get(5, TimeUnit.SECONDS);
+            Awaitility.await()
+                    .alias("终止事务必须实际进入锁等待")
+                    .atMost(3, TimeUnit.SECONDS)
+                    .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(selectExistsSql, Boolean.class, pid)));
+            releaseReport.countDown();
+            report.get(10, TimeUnit.SECONDS);
+            assertThat(terminal.get(10, TimeUnit.SECONDS)).isZero();
+            assertThat(jobInstanceMapper
+                            .selectById(TENANT, instance.instanceId())
+                            .getInstanceStatus())
+                    .isEqualTo(JobInstanceStatus.SUCCESS.code());
+        } finally {
+            releaseReport.countDown();
+            pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
-
-        CountDownLatch startGate = new CountDownLatch(1);
-        List<Future<?>> futures = new ArrayList<>();
-        for (int i = 0; i < PARTITIONS; i++) {
-          Shard shard = shards.get(i);
-          String invocation = invocations[i];
-          JobPartitionEntity reclaimTarget = freshPartitions.get(i);
-          // outcome 线程:真 applyTaskOutcome(success)——task→partition 锁序。
-          futures.add(pool.submit(() -> {
-            await(startGate);
-            try {
-              TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
-                  .tenantId(TENANT)
-                  .taskId(shard.taskId())
-                  .success(true)
-                  .resultSummary("{\"records\":1}")
-                  .partitionInvocationId(invocation)
-                  .build();
-              taskOutcomeService.applyTaskOutcome(outcome);
-            } catch (RuntimeException ex) {
-              classify(ex, deadlocks, benignConflicts);
-            }
-            return null;
-          }));
-          // reclaim 线程:真实 PartitionReclaimUnit，先取得实例 fence，再执行 partition→task 的防御性锁序。
-          futures.add(pool.submit(() -> {
-            await(startGate);
-            try {
-              reclaimUnit.reclaim(reclaimTarget);
-            } catch (RuntimeException ex) {
-              classify(ex, deadlocks, benignConflicts);
-            }
-            return null;
-          }));
-        }
-
-        startGate.countDown();
-        for (Future<?> f : futures) {
-          long remainingNanos = overallDeadline - System.nanoTime();
-          // 每个任务必须在总 60s 预算内完成。真死锁 → PG 抛 40P01(已被 classify 捕获,不会挂);
-          // 若在此 get 超时,说明出现未被 PG 检测的锁挂起(同样是问题)——让 TimeoutException 冒泡判失败。
-          f.get(Math.max(1, remainingNanos), TimeUnit.NANOSECONDS);
-        }
-      }
-    } finally {
-      pool.shutdownNow();
     }
 
-    // === 核心断言:60s 并发风暴内不得出现任何行锁反转死锁 ===
-    assertThat(deadlocks)
-        .as(
-            "outcome(instance→task→partition) vs reclaim(partition→task NOWAIT) 必须无 PG"
-                + " 死锁(40P01);若非空则统一锁序或 NOWAIT 让路约束已回归。deadlocks=%s",
-            renderThrowables(deadlocks))
-        .isEmpty();
+    @BeforeEach
+    void refreshWorkers() {
+        WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    }
 
-    // === 收尾一致性:干净单线程结算,证明风暴后状态机仍收敛、计数无丢更新 ===
-    assertStateConverges(fannedOut, shards);
+    @Test
+    @DisplayName("outcome 与 reclaim 并发抢同 (task,partition):#768 下 60s 内无行锁反转死锁,收尾状态一致")
+    void concurrentOutcomeVsReclaim_noRowLockInversionDeadlock_stateConverges() throws Exception {
+        long overallDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
 
-    // 交待良性并发冲突计数(非断言目标,仅证明确有真并发争用发生、窗口被真正压到)。
-    assertThat(benignConflicts)
-        .as("并发争用应真实发生(否则说明两路径没抢到一起,测试没压到窗口)")
-        .hasSizeGreaterThanOrEqualTo(0);
-  }
+        FannedOutInstance fannedOut = launchBundle(PARTITIONS);
+        List<Shard> shards = claimAllShards(fannedOut);
+        assertThat(shards).hasSize(PARTITIONS);
 
-  // ---- 收尾结算 ----
+        List<Throwable> deadlocks = new CopyOnWriteArrayList<>();
+        List<Throwable> benignConflicts = new CopyOnWriteArrayList<>();
+        ExecutorService pool = Executors.newFixedThreadPool(2 * PARTITIONS);
+        try {
+            for (int round = 0; round < ROUNDS; round++) {
+                // 每轮生成新 invocation,把 (task,partition,step) 重置回 RUNNING + 过期 lease,让两条路径都能真正取锁。
+                String[] invocations = new String[PARTITIONS];
+                List<JobPartitionEntity> freshPartitions = new ArrayList<>();
+                for (int i = 0; i < PARTITIONS; i++) {
+                    invocations[i] = "inv-" + round + "-" + UUID.randomUUID();
+                    resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), invocations[i]);
+                    // reclaim 用传入实体的 version 做 partition CAS,必须在 reset 之后重新读到最新 version。
+                    freshPartitions.add(
+                            jobPartitionMapper.selectById(TENANT, shards.get(i).partitionId()));
+                }
 
-  private void assertStateConverges(FannedOutInstance fannedOut, List<Shard> shards) {
-    final String updateJobInstanceSql = """
+                CountDownLatch startGate = new CountDownLatch(1);
+                List<Future<?>> futures = new ArrayList<>();
+                for (int i = 0; i < PARTITIONS; i++) {
+                    Shard shard = shards.get(i);
+                    String invocation = invocations[i];
+                    JobPartitionEntity reclaimTarget = freshPartitions.get(i);
+                    // outcome 线程:真 applyTaskOutcome(success)——task→partition 锁序。
+                    futures.add(pool.submit(() -> {
+                        await(startGate);
+                        try {
+                            TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
+                                    .tenantId(TENANT)
+                                    .taskId(shard.taskId())
+                                    .success(true)
+                                    .resultSummary("{\"records\":1}")
+                                    .partitionInvocationId(invocation)
+                                    .build();
+                            taskOutcomeService.applyTaskOutcome(outcome);
+                        } catch (RuntimeException ex) {
+                            classify(ex, deadlocks, benignConflicts);
+                        }
+                        return null;
+                    }));
+                    // reclaim 线程:真实 PartitionReclaimUnit，先取得实例 fence，再执行 partition→task 的防御性锁序。
+                    futures.add(pool.submit(() -> {
+                        await(startGate);
+                        try {
+                            reclaimUnit.reclaim(reclaimTarget);
+                        } catch (RuntimeException ex) {
+                            classify(ex, deadlocks, benignConflicts);
+                        }
+                        return null;
+                    }));
+                }
+
+                startGate.countDown();
+                for (Future<?> f : futures) {
+                    long remainingNanos = overallDeadline - System.nanoTime();
+                    // 每个任务必须在总 60s 预算内完成。真死锁 → PG 抛 40P01(已被 classify 捕获,不会挂);
+                    // 若在此 get 超时,说明出现未被 PG 检测的锁挂起(同样是问题)——让 TimeoutException 冒泡判失败。
+                    f.get(Math.max(1, remainingNanos), TimeUnit.NANOSECONDS);
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // === 核心断言:60s 并发风暴内不得出现任何行锁反转死锁 ===
+        assertThat(deadlocks)
+                .as(
+                        "outcome(instance→task→partition) vs reclaim(partition→task NOWAIT) 必须无 PG"
+                                + " 死锁(40P01);若非空则统一锁序或 NOWAIT 让路约束已回归。deadlocks=%s",
+                        renderThrowables(deadlocks))
+                .isEmpty();
+
+        // === 收尾一致性:干净单线程结算,证明风暴后状态机仍收敛、计数无丢更新 ===
+        assertStateConverges(fannedOut, shards);
+
+        // 交待良性并发冲突计数(非断言目标,仅证明确有真并发争用发生、窗口被真正压到)。
+        assertThat(benignConflicts).as("并发争用应真实发生(否则说明两路径没抢到一起,测试没压到窗口)").hasSizeGreaterThanOrEqualTo(0);
+    }
+
+    // ---- 收尾结算 ----
+
+    private void assertStateConverges(FannedOutInstance fannedOut, List<Shard> shards) {
+        final String updateJobInstanceSql = """
         update batch.job_instance set instance_status = 'RUNNING', finished_at = null, success_partition_count =\s\
         0, failed_partition_count = 0, version = version + 1, updated_at = current_timestamp where tenant_id = ?\s\
         and id = ?\
         """;
 
-    // 把 instance / partition / task / step 全部复位到干净 RUNNING,再单线程逐分片报 success → 必然收敛 SUCCESS。
-    jdbcTemplate.update(updateJobInstanceSql, TENANT, fannedOut.instanceId());
-    String[] settleInvocations = new String[shards.size()];
-    for (int i = 0; i < shards.size(); i++) {
-      settleInvocations[i] = "settle-" + UUID.randomUUID();
-      resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), settleInvocations[i]);
+        // 把 instance / partition / task / step 全部复位到干净 RUNNING,再单线程逐分片报 success → 必然收敛 SUCCESS。
+        jdbcTemplate.update(updateJobInstanceSql, TENANT, fannedOut.instanceId());
+        String[] settleInvocations = new String[shards.size()];
+        for (int i = 0; i < shards.size(); i++) {
+            settleInvocations[i] = "settle-" + UUID.randomUUID();
+            resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), settleInvocations[i]);
+        }
+        for (int i = 0; i < shards.size(); i++) {
+            TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
+                    .tenantId(TENANT)
+                    .taskId(shards.get(i).taskId())
+                    .success(true)
+                    .resultSummary("{\"records\":1}")
+                    .partitionInvocationId(settleInvocations[i])
+                    .build();
+            taskOutcomeService.applyTaskOutcome(outcome);
+        }
+
+        for (Shard shard : shards) {
+            assertThat(jobPartitionMapper
+                            .selectById(TENANT, shard.partitionId())
+                            .getPartitionStatus())
+                    .as("每个分区收尾必须 SUCCESS")
+                    .isEqualTo(PartitionStatus.SUCCESS.code());
+        }
+        JobInstanceEntity terminal = jobInstanceMapper.selectById(TENANT, fannedOut.instanceId());
+        assertThat(terminal.getInstanceStatus())
+                .as("全分片成功 → instance 收敛 SUCCESS")
+                .isEqualTo(JobInstanceStatus.SUCCESS.code());
+        assertThat(countColumn("success_partition_count", fannedOut.instanceId()))
+                .as("成功分区计数无丢更新")
+                .isEqualTo(PARTITIONS);
+        assertThat(countColumn("failed_partition_count", fannedOut.instanceId()))
+                .isZero();
     }
-    for (int i = 0; i < shards.size(); i++) {
-      TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
-          .tenantId(TENANT)
-          .taskId(shards.get(i).taskId())
-          .success(true)
-          .resultSummary("{\"records\":1}")
-          .partitionInvocationId(settleInvocations[i])
-          .build();
-      taskOutcomeService.applyTaskOutcome(outcome);
+
+    // ---- 分类:死锁 vs 良性并发冲突 ----
+
+    private void classify(Throwable ex, List<Throwable> deadlocks, List<Throwable> benignConflicts) {
+        if (isDeadlock(ex)) {
+            deadlocks.add(ex);
+        } else {
+            // BizException(STATE_CONFLICT / invocation CONFLICT)、ReclaimRetryableException、CAS no-op 均属
+            // 并发抢占的良性结果(其中一方赢);不作为失败,只记数以证明确有争用。
+            benignConflicts.add(ex);
+        }
     }
 
-    for (Shard shard : shards) {
-      assertThat(jobPartitionMapper.selectById(TENANT, shard.partitionId()).getPartitionStatus())
-          .as("每个分区收尾必须 SUCCESS")
-          .isEqualTo(PartitionStatus.SUCCESS.code());
+    private static boolean isDeadlock(Throwable ex) {
+        for (Throwable c = ex; c != null; c = c.getCause()) {
+            if (c instanceof SQLException se && "40P01".equals(se.getSQLState())) {
+                return true;
+            }
+            String msg = c.getMessage();
+            if (msg != null && msg.toLowerCase().contains("deadlock detected")) {
+                return true;
+            }
+            if (c == c.getCause()) {
+                break;
+            }
+        }
+        return false;
     }
-    JobInstanceEntity terminal = jobInstanceMapper.selectById(TENANT, fannedOut.instanceId());
-    assertThat(terminal.getInstanceStatus())
-        .as("全分片成功 → instance 收敛 SUCCESS")
-        .isEqualTo(JobInstanceStatus.SUCCESS.code());
-    assertThat(countColumn("success_partition_count", fannedOut.instanceId()))
-        .as("成功分区计数无丢更新")
-        .isEqualTo(PARTITIONS);
-    assertThat(countColumn("failed_partition_count", fannedOut.instanceId())).isZero();
-  }
 
-  // ---- 分类:死锁 vs 良性并发冲突 ----
-
-  private void classify(Throwable ex, List<Throwable> deadlocks, List<Throwable> benignConflicts) {
-    if (isDeadlock(ex)) {
-      deadlocks.add(ex);
-    } else {
-      // BizException(STATE_CONFLICT / invocation CONFLICT)、ReclaimRetryableException、CAS no-op 均属
-      // 并发抢占的良性结果(其中一方赢);不作为失败,只记数以证明确有争用。
-      benignConflicts.add(ex);
+    private static String renderThrowables(List<Throwable> ts) {
+        StringBuilder sb = new StringBuilder();
+        for (Throwable t : ts) {
+            sb.append("\n  - ")
+                    .append(t.getClass().getSimpleName())
+                    .append(": ")
+                    .append(t.getMessage());
+        }
+        return sb.toString();
     }
-  }
 
-  private static boolean isDeadlock(Throwable ex) {
-    for (Throwable c = ex; c != null; c = c.getCause()) {
-      if (c instanceof SQLException se && "40P01".equals(se.getSQLState())) {
-        return true;
-      }
-      String msg = c.getMessage();
-      if (msg != null && msg.toLowerCase().contains("deadlock detected")) {
-        return true;
-      }
-      if (c == c.getCause()) {
-        break;
-      }
-    }
-    return false;
-  }
+    // ---- fixture helpers（复用 PartitionJoinPromotionIntegrationTest 的 launch/claim 范式）----
 
-  private static String renderThrowables(List<Throwable> ts) {
-    StringBuilder sb = new StringBuilder();
-    for (Throwable t : ts) {
-      sb.append("\n  - ").append(t.getClass().getSimpleName()).append(": ").append(t.getMessage());
-    }
-    return sb.toString();
-  }
-
-  // ---- fixture helpers（复用 PartitionJoinPromotionIntegrationTest 的 launch/claim 范式）----
-
-  private FannedOutInstance launchBundle(int count) {
-    final String insertFileRecordSql = """
+    private FannedOutInstance launchBundle(int count) {
+        final String insertFileRecordSql = """
         insert into batch.file_record (tenant_id, file_category, file_name, file_format_type, storage_type,\s\
         storage_path, source_type, file_status)\s\
         values (?, 'INPUT', ?, 'DELIMITED', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id\
         """;
 
-    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
-    List<Map<String, Object>> bundleFiles = new ArrayList<>();
-    for (int i = 0; i < count; i++) {
-      String suffix = UUID.randomUUID().toString();
-      Long fileId = jdbcTemplate.queryForObject(
-          insertFileRecordSql,
-          Long.class,
-          TENANT,
-          "outcome-reclaim-source-" + suffix,
-          "/test/outcome-reclaim/" + suffix);
-      bundleFiles.add(Map.of("sourceFileId", fileId, "templateCode", "TPL_" + i));
+        WorkflowLaunchSeed seed =
+                LaunchIntegrationFixture.prepareBundleLaunchWithWorker(jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
+        List<Map<String, Object>> bundleFiles = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String suffix = UUID.randomUUID().toString();
+            Long fileId = jdbcTemplate.queryForObject(
+                    insertFileRecordSql,
+                    Long.class,
+                    TENANT,
+                    "outcome-reclaim-source-" + suffix,
+                    "/test/outcome-reclaim/" + suffix);
+            bundleFiles.add(Map.of("sourceFileId", fileId, "templateCode", "TPL_" + i));
+        }
+        LaunchRequest request = LaunchRequest.builder()
+                .tenantId(TENANT)
+                .workflowDefinitionId(seed.workflowDefinitionId())
+                .bizDate(BIZ_DATE)
+                .triggerType(TriggerType.EVENT)
+                .requestId(seed.requestId())
+                .traceId("trace-deadlock-" + seed.requestId())
+                .params(Map.of("bundleFiles", bundleFiles))
+                .build();
+        var response = workflowRunLaunchService.launch(request);
+
+        Long jobInstanceId =
+                LaunchIntegrationFixture.selectDispatchedJobInstanceId(jdbcTemplate, TENANT, response.instanceNo());
+        JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
+        assertThat(instance).as("bundle launch must create the instance").isNotNull();
+        List<JobPartitionEntity> partitions =
+                jobPartitionMapper.selectByQuery(new JobPartitionQuery(TENANT, instance.getId(), null, null));
+        assertThat(partitions).as("bundle must fan out into K partitions").hasSize(count);
+        return new FannedOutInstance(seed, instance.getId());
     }
-    LaunchRequest request = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(BIZ_DATE)
-        .triggerType(TriggerType.EVENT)
-        .requestId(seed.requestId())
-        .traceId("trace-deadlock-" + seed.requestId())
-        .params(Map.of("bundleFiles", bundleFiles))
-        .build();
-    var response = workflowRunLaunchService.launch(request);
 
-    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
-        jdbcTemplate, TENANT, response.instanceNo());
-    JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
-    assertThat(instance).as("bundle launch must create the instance").isNotNull();
-    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(TENANT, instance.getId(), null, null));
-    assertThat(partitions).as("bundle must fan out into K partitions").hasSize(count);
-    return new FannedOutInstance(seed, instance.getId());
-  }
-
-  private List<Shard> claimAllShards(FannedOutInstance fannedOut) {
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-        new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
-    List<Shard> shards = new ArrayList<>();
-    for (JobTaskEntity task : tasks) {
-      JobTaskEntity claimed = taskAssignmentService.assignWorker(
-          TENANT, task.getId(), fannedOut.seed().workerCode());
-      assertThat(claimed).isNotNull();
-      shards.add(new Shard(task.getId(), task.getJobPartitionId()));
+    private List<Shard> claimAllShards(FannedOutInstance fannedOut) {
+        LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+        List<JobTaskEntity> tasks =
+                jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
+        List<Shard> shards = new ArrayList<>();
+        for (JobTaskEntity task : tasks) {
+            JobTaskEntity claimed = taskAssignmentService.assignWorker(
+                    TENANT, task.getId(), fannedOut.seed().workerCode());
+            assertThat(claimed).isNotNull();
+            shards.add(new Shard(task.getId(), task.getJobPartitionId()));
+        }
+        return shards;
     }
-    return shards;
-  }
 
-  /**
-   * 把单个 (task, partition, step) 复位到 RUNNING + 过期 lease + 指定 invocation,让下一轮 outcome / reclaim
-   * 都能真正取锁:
-   *
-   * <ul>
-   *   <li>task → RUNNING(否则 applyTaskOutcome 幂等短路、不取锁;reclaim 也扫不到 RUNNING task)。
-   *   <li>partition → RUNNING + current_invocation_id 匹配(否则 outcome invocation 守卫抛 CONFLICT) +
-   *       lease_expire_at 置于过去(否则 reclaim 的 resetForDispatch WHERE lease<now 不命中、不取锁)。
-   *   <li>step → RUNNING(reclaim 第三步 resetForRetryByJobTaskId 需命中,否则 ReclaimRetryable 提前回滚——
-   *       两把行锁其实已取,窗口仍在,但复位后语义更干净)。
-   * </ul>
-   *
-   * version 全部 +1 保证 reclaim 传入的旧实体不会误命中(上一轮 CAS 幂等短路),每轮都是真争用。
-   */
-  private void resetShardToRunning(Shard shard, String workerCode, String invocation) {
-    final String updateJobTaskSql = """
+    /**
+     * 把单个 (task, partition, step) 复位到 RUNNING + 过期 lease + 指定 invocation,让下一轮 outcome / reclaim
+     * 都能真正取锁:
+     *
+     * <ul>
+     *   <li>task → RUNNING(否则 applyTaskOutcome 幂等短路、不取锁;reclaim 也扫不到 RUNNING task)。
+     *   <li>partition → RUNNING + current_invocation_id 匹配(否则 outcome invocation 守卫抛 CONFLICT) +
+     *       lease_expire_at 置于过去(否则 reclaim 的 resetForDispatch WHERE lease<now 不命中、不取锁)。
+     *   <li>step → RUNNING(reclaim 第三步 resetForRetryByJobTaskId 需命中,否则 ReclaimRetryable 提前回滚——
+     *       两把行锁其实已取,窗口仍在,但复位后语义更干净)。
+     * </ul>
+     *
+     * version 全部 +1 保证 reclaim 传入的旧实体不会误命中(上一轮 CAS 幂等短路),每轮都是真争用。
+     */
+    private void resetShardToRunning(Shard shard, String workerCode, String invocation) {
+        final String updateJobTaskSql = """
         update batch.job_task set task_status = 'RUNNING', assigned_worker_code = ?, version = version + 1,\s\
         updated_at = current_timestamp where tenant_id = ? and id = ?\
         """;
-    final String updateJobPartitionSql = """
+        final String updateJobPartitionSql = """
         update batch.job_partition set partition_status = 'RUNNING', worker_code = ?, current_invocation_id = ?,\s\
         invocation_started_at = current_timestamp, lease_expire_at = current_timestamp - interval '1 hour',\s\
         finished_at = null, version = version + 1, updated_at = current_timestamp where tenant_id = ? and id = ?\
         """;
-    final String updateJobStepInstanceSql = """
+        final String updateJobStepInstanceSql = """
         update batch.job_step_instance set step_status = 'RUNNING', finished_at = null, version = version + 1,\s\
         updated_at = current_timestamp where tenant_id = ? and job_task_id = ?\
         """;
 
-    jdbcTemplate.update(updateJobTaskSql, workerCode, TENANT, shard.taskId());
-    jdbcTemplate.update(updateJobPartitionSql, workerCode, invocation, TENANT, shard.partitionId());
-    jdbcTemplate.update(updateJobStepInstanceSql, TENANT, shard.taskId());
-  }
+        jdbcTemplate.update(updateJobTaskSql, workerCode, TENANT, shard.taskId());
+        jdbcTemplate.update(updateJobPartitionSql, workerCode, invocation, TENANT, shard.partitionId());
+        jdbcTemplate.update(updateJobStepInstanceSql, TENANT, shard.taskId());
+    }
 
-  private int countColumn(String column, Long instanceId) {
-    final String selectStatementSql = """
+    private int countColumn(String column, Long instanceId) {
+        final String selectStatementSql = """
       select %s from batch.job_instance where tenant_id = ? and id = ?\
       """.formatted(column);
-    Integer value =
-        jdbcTemplate.queryForObject(selectStatementSql, Integer.class, TENANT, instanceId);
-    return value == null ? 0 : value;
-  }
-
-  private static void await(CountDownLatch gate) {
-    try {
-      gate.await();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("interrupted waiting for start gate", e);
+        Integer value = jdbcTemplate.queryForObject(selectStatementSql, Integer.class, TENANT, instanceId);
+        return value == null ? 0 : value;
     }
-  }
 
-  private record FannedOutInstance(WorkflowLaunchSeed seed, Long instanceId) {}
+    private static void await(CountDownLatch gate) {
+        try {
+            gate.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted waiting for start gate", e);
+        }
+    }
 
-  private record Shard(Long taskId, Long partitionId) {}
+    private record FannedOutInstance(WorkflowLaunchSeed seed, Long instanceId) {}
+
+    private record Shard(Long taskId, Long partitionId) {}
 }

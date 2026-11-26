@@ -19,81 +19,73 @@ import org.springframework.stereotype.Component;
 @Component
 public class PipelineStageProgressRegistry {
 
-  private final Map<Key, WorkerPipelineProgressDto> snapshots = new ConcurrentHashMap<>();
+    private final Map<Key, WorkerPipelineProgressDto> snapshots = new ConcurrentHashMap<>();
 
-  public void publish(
-      ExecutionContext context, String stageCode, long rowsProcessed, Long totalRowsHint) {
-    Key key = key(context, stageCode);
-    if (EmptyChecks.isNull(key)) {
-      return;
+    public void publish(ExecutionContext context, String stageCode, long rowsProcessed, Long totalRowsHint) {
+        Key key = key(context, stageCode);
+        if (EmptyChecks.isNull(key)) {
+            return;
+        }
+        snapshots.put(
+                key,
+                new WorkerPipelineProgressDto(
+                        key.taskId(),
+                        key.pipelineInstanceId(),
+                        key.stageCode(),
+                        rowsProcessed,
+                        totalRowsHint,
+                        key.invocationId(),
+                        key.stepRunId()));
     }
-    snapshots.put(
-        key,
-        new WorkerPipelineProgressDto(
-            key.taskId(),
-            key.pipelineInstanceId(),
-            key.stageCode(),
-            rowsProcessed,
-            totalRowsHint,
-            key.invocationId(),
-            key.stepRunId()));
-  }
 
-  public void clear(ExecutionContext context, String stageCode) {
-    Key key = key(context, stageCode);
-    if (EmptyChecks.isNotNull(key)) {
-      snapshots.remove(key);
+    public void clear(ExecutionContext context, String stageCode) {
+        Key key = key(context, stageCode);
+        if (EmptyChecks.isNotNull(key)) {
+            snapshots.remove(key);
+        }
     }
-  }
 
-  public List<WorkerPipelineProgressDto> snapshots() {
-    return snapshots.values().stream()
-        .sorted(Comparator.comparing(WorkerPipelineProgressDto::pipelineInstanceId)
-            .thenComparing(WorkerPipelineProgressDto::taskId)
-            .thenComparing(WorkerPipelineProgressDto::stageCode))
-        .toList();
-  }
+    public List<WorkerPipelineProgressDto> snapshots() {
+        return snapshots.values().stream()
+                .sorted(Comparator.comparing(WorkerPipelineProgressDto::pipelineInstanceId)
+                        .thenComparing(WorkerPipelineProgressDto::taskId)
+                        .thenComparing(WorkerPipelineProgressDto::stageCode))
+                .toList();
+    }
 
-  private static Key key(ExecutionContext context, String stageCode) {
-    if (EmptyChecks.isNull(context) || !Texts.hasText(stageCode)) {
-      return null;
+    private static Key key(ExecutionContext context, String stageCode) {
+        if (EmptyChecks.isNull(context) || !Texts.hasText(stageCode)) {
+            return null;
+        }
+        Long taskId = longValue(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
+        Long pipelineInstanceId = longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(pipelineInstanceId)) {
+            return null;
+        }
+        Object invocation = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+        Long stepRunId = longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+        return new Key(
+                taskId,
+                pipelineInstanceId,
+                stageCode,
+                EmptyChecks.isNull(invocation) ? null : String.valueOf(invocation),
+                stepRunId);
     }
-    Long taskId = longValue(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
-    Long pipelineInstanceId =
-        longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(pipelineInstanceId)) {
-      return null;
-    }
-    Object invocation = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-    Long stepRunId =
-        longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
-    return new Key(
-        taskId,
-        pipelineInstanceId,
-        stageCode,
-        EmptyChecks.isNull(invocation) ? null : String.valueOf(invocation),
-        stepRunId);
-  }
 
-  private static Long longValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    private static Long longValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        try {
+            String numericText = String.valueOf(value);
+            return Long.valueOf(numericText);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    try {
-      String numericText = String.valueOf(value);
-      return Long.valueOf(numericText);
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
 
-  private record Key(
-      Long taskId,
-      Long pipelineInstanceId,
-      String stageCode,
-      String invocationId,
-      Long stepRunId) {}
+    private record Key(Long taskId, Long pipelineInstanceId, String stageCode, String invocationId, Long stepRunId) {}
 }

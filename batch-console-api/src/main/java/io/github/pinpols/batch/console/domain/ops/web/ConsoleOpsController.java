@@ -36,54 +36,47 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleOpsController {
 
-  private final ConsoleOpsSummaryPort opsApplicationService;
-  private final ConsoleOutboxOpsApplicationService outboxOpsService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleKafkaLagQueryPort kafkaLagQueryService;
+    private final ConsoleOpsSummaryPort opsApplicationService;
+    private final ConsoleOutboxOpsApplicationService outboxOpsService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleKafkaLagQueryPort kafkaLagQueryService;
 
-  /** 租户运维摘要（Redis 缓存 10s，避免多用户同时刷导致 DB 重复聚合）。 */
-  @GetMapping("/summary")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<ConsoleOpsSummaryResponse> summary(
-      @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(opsApplicationService.summary(tenantId));
-  }
+    /** 租户运维摘要（Redis 缓存 10s，避免多用户同时刷导致 DB 重复聚合）。 */
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+    public CommonResponse<ConsoleOpsSummaryResponse> summary(@RequestParam @NotBlank String tenantId) {
+        return responseFactory.success(opsApplicationService.summary(tenantId));
+    }
 
-  /** Kafka consumer group 积压查询。 */
-  @GetMapping("/kafka-lag")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR)
-  public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
-      @RequestParam(value = "groupId", required = false) String groupId) {
-    return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
-  }
+    /** Kafka consumer group 积压查询。 */
+    @GetMapping("/kafka-lag")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR)
+    public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
+            @RequestParam(value = "groupId", required = false) String groupId) {
+        return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
+    }
 
-  /** Outbox 积压统计（按 publish_status 分组）。 */
-  @GetMapping("/outbox/stats")
-  public CommonResponse<ConsoleOutboxStatsResponse> outboxStats(
-      @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(outboxOpsService.stats(tenantId));
-  }
+    /** Outbox 积压统计（按 publish_status 分组）。 */
+    @GetMapping("/outbox/stats")
+    public CommonResponse<ConsoleOutboxStatsResponse> outboxStats(@RequestParam @NotBlank String tenantId) {
+        return responseFactory.success(outboxOpsService.stats(tenantId));
+    }
 
-  /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
-  @PostMapping("/outbox/cleanup")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  @AuditAction(action = "outbox.cleanup", aggregateType = "outbox", targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
-      @RequestParam @NotBlank String tenantId,
-      @RequestParam(defaultValue = "7") @Positive int retainDays) {
-    return responseFactory.success(outboxOpsService.cleanup(tenantId, retainDays));
-  }
+    /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
+    @PostMapping("/outbox/cleanup")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    @AuditAction(action = "outbox.cleanup", aggregateType = "outbox", targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
+            @RequestParam @NotBlank String tenantId, @RequestParam(defaultValue = "7") @Positive int retainDays) {
+        return responseFactory.success(outboxOpsService.cleanup(tenantId, retainDays));
+    }
 
-  /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
-  @PostMapping("/outbox/republish")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  @AuditAction(
-      action = "outbox.republish",
-      aggregateType = "outbox",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
-      @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
-    return responseFactory.success(outboxOpsService.republish(tenantId, ids));
-  }
+    /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
+    @PostMapping("/outbox/republish")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    @AuditAction(action = "outbox.republish", aggregateType = "outbox", targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
+            @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
+        return responseFactory.success(outboxOpsService.republish(tenantId, ids));
+    }
 }

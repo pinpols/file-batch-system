@@ -23,60 +23,60 @@ import org.junit.jupiter.api.Test;
 @DisplayName("TaskDispatcher 租户自检 — 非本租户消息拒收与租户一致时的正常派发")
 class TaskDispatcherTenantMismatchTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tenant-a")
-      .workerCode("w-1")
-      .kafkaBootstrap("k:9092")
-      .kafkaTopicPattern("p.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tenant-a")
+            .workerCode("w-1")
+            .kafkaBootstrap("k:9092")
+            .kafkaTopicPattern("p.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
+    private TaskDispatcher dispatcher;
 
-  @AfterEach
-  void tearDown() {
-    if (dispatcher != null) dispatcher.stop();
-  }
+    @AfterEach
+    void tearDown() {
+        if (dispatcher != null) dispatcher.stop();
+    }
 
-  @Test
-  @DisplayName("消息租户与本工作节点不一致时拒收,不认领不执行且不误判致命")
-  void shouldDropMessage_whenTenantMismatch() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    SdkTaskHandler handler = mock(SdkTaskHandler.class);
-    dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
+    @Test
+    @DisplayName("消息租户与本工作节点不一致时拒收,不认领不执行且不误判致命")
+    void shouldDropMessage_whenTenantMismatch() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        SdkTaskHandler handler = mock(SdkTaskHandler.class);
+        dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
 
-    // 准备: 构造一条 tenantId != config.tenantId 的合法消息
-    TaskDispatchMessage foreign = new TaskDispatchMessage(
-        42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
+        // 准备: 构造一条 tenantId != config.tenantId 的合法消息
+        TaskDispatchMessage foreign =
+                new TaskDispatchMessage(42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
-    // 执行
-    TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(foreign);
+        // 执行
+        TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(foreign);
 
-    // 断言: 既不 claim 也不调 handler.execute
-    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
-    verify(http, never()).claim(anyLong(), anyString(), any());
-    verify(handler, never()).execute(any());
-    // 安全仍 fail-closed(不 claim/不 commit),但不 fail-stop 整个 worker。
-    assertThat(dispatcher.isFatal()).isFalse();
-    assertThat(dispatcher.isDraining()).isFalse();
-  }
+        // 断言: 既不 claim 也不调 handler.execute
+        assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
+        verify(http, never()).claim(anyLong(), anyString(), any());
+        verify(handler, never()).execute(any());
+        // 安全仍 fail-closed(不 claim/不 commit),但不 fail-stop 整个 worker。
+        assertThat(dispatcher.isFatal()).isFalse();
+        assertThat(dispatcher.isDraining()).isFalse();
+    }
 
-  @Test
-  @DisplayName("租户一致的消息正常认领并进入执行链路")
-  void shouldDispatchNormally_whenTenantMatches() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    SdkTaskHandler handler = mock(SdkTaskHandler.class);
-    dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
+    @Test
+    @DisplayName("租户一致的消息正常认领并进入执行链路")
+    void shouldDispatchNormally_whenTenantMatches() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        SdkTaskHandler handler = mock(SdkTaskHandler.class);
+        dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
 
-    TaskDispatchMessage own = new TaskDispatchMessage(
-        42L, "tenant-a", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
+        TaskDispatchMessage own =
+                new TaskDispatchMessage(42L, "tenant-a", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
-    dispatcher.onMessage(own);
+        dispatcher.onMessage(own);
 
-    // 给 executor 异步任务一点点时间走到 claim
-    Thread.sleep(200);
-    verify(http).claim(anyLong(), anyString(), any());
-  }
+        // 给 executor 异步任务一点点时间走到 claim
+        Thread.sleep(200);
+        verify(http).claim(anyLong(), anyString(), any());
+    }
 }

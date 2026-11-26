@@ -49,664 +49,610 @@ import okhttp3.Response;
 @Slf4j
 final class RemoteFilesystemDispatchSupport {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String LOG_CATCH_EXCEPTION = "catch:Exception";
-  private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
-  private static final String PATH_SEP = "/";
-  private static final String NAS_SANDBOX_PROPERTY_KEY =
-      "batch.worker.dispatch.runtime.nas-sandbox-root";
-  private static final String NAS_SYMLINK_WARNING_FORMAT = """
+    // ── duplicate literal constants ─────────────────────────────────────────
+    private static final String LOG_CATCH_EXCEPTION = "catch:Exception";
+    private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
+    private static final String PATH_SEP = "/";
+    private static final String NAS_SANDBOX_PROPERTY_KEY = "batch.worker.dispatch.runtime.nas-sandbox-root";
+    private static final String NAS_SYMLINK_WARNING_FORMAT = """
           NAS directory contains symlink(s): configured={}, real={} — using real path; set \
           {}=<abs-path> to enforce sandbox \
           root and reject symlink escape (this warning is emitted only once per configured path)\
           """;
-  // R-4.2: NAS 沙箱根目录（可选）。若 batch.worker.dispatch.runtime.nas-sandbox-root 设置，
-  // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
-  // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
-  private static final DispatchRuntimeProperties DEFAULT_RUNTIME_PROPERTIES =
-      new DispatchRuntimeProperties();
+    // R-4.2: NAS 沙箱根目录（可选）。若 batch.worker.dispatch.runtime.nas-sandbox-root 设置，
+    // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
+    // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
+    private static final DispatchRuntimeProperties DEFAULT_RUNTIME_PROPERTIES = new DispatchRuntimeProperties();
 
-  // Dedup: 每个 configured NAS path 的 symlink WARN 只报一次；否则每次 dispatch 都会刷同样告警
-  // （macOS 本地 `/tmp → /private/tmp` 是典型场景）。路径在进程生命周期内稳定，内存开销可忽略。
-  private static final ConcurrentMap<String, Boolean> NAS_SYMLINK_WARNED =
-      new ConcurrentHashMap<>();
+    // Dedup: 每个 configured NAS path 的 symlink WARN 只报一次；否则每次 dispatch 都会刷同样告警
+    // （macOS 本地 `/tmp → /private/tmp` 是典型场景）。路径在进程生命周期内稳定，内存开销可忽略。
+    private static final ConcurrentMap<String, Boolean> NAS_SYMLINK_WARNED = new ConcurrentHashMap<>();
 
-  // OSS 内联上传需把对象整读入堆(AWS SDK v2 RequestBody 需精确 contentLength,且分发流可能已解密)。
-  // 无上限 readAllBytes 遇 GB 级文件 + 多路并发 dispatch → OOM。与 import 侧 MAX_OBJECT_BYTES 同语义,
-  // 默认 512 MiB,可由 DispatchRuntimeProperties 调整;超限拒绝该 dispatch(返回 failed,不 OOM)。
-  private RemoteFilesystemDispatchSupport() {}
+    // OSS 内联上传需把对象整读入堆(AWS SDK v2 RequestBody 需精确 contentLength,且分发流可能已解密)。
+    // 无上限 readAllBytes 遇 GB 级文件 + 多路并发 dispatch → OOM。与 import 侧 MAX_OBJECT_BYTES 同语义,
+    // 默认 512 MiB,可由 DispatchRuntimeProperties 调整;超限拒绝该 dispatch(返回 failed,不 OOM)。
+    private RemoteFilesystemDispatchSupport() {}
 
-  static DispatchResult dispatchNas(
-      DispatchCommand command,
-      DispatchFileContentResolver contentResolver,
-      DispatchRuntimeProperties properties,
-      NasCopyExecutor copyExecutor) {
-    boolean publicationAttempted = false;
-    boolean publicationConfirmed = false;
-    try {
-      Map<String, Object> channelConfig = command.channelConfig();
-      String remoteDir =
-          resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
-      if (!Texts.hasText(remoteDir)) {
-        return DispatchResult.failureWithoutReceipt("nas_remote_directory missing");
-      }
-      // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
-      // 即可绕过路径遍历防线。此处额外解析 realPath，若可选的 sandbox root 配置了
-      // 则强制 realPath 必须落在沙箱内。
-      Path directory = resolveNasDirectory(remoteDir, properties);
-      String externalRequestId = resolveExternalRequestId(command);
-      String receiptCode = resolveReceiptCode(command, externalRequestId);
-      String remoteName =
-          resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
-      Path target = directory.resolve(remoteName);
-      String temporaryRemoteName = remoteName + ".tmp-" + UUID.randomUUID();
-      Path tempTarget = directory.resolve(temporaryRemoteName);
-      DispatchManifestSupport.PayloadDigest payloadDigest;
-      try {
-        try (InputStream in = contentResolver.openInputStream(command.fileRecord());
-            DispatchManifestSupport.DigestingInputStream digesting =
-                DispatchManifestSupport.digesting(in)) {
-          copyExecutor.copy(digesting, tempTarget, properties);
-          payloadDigest = digesting.finish();
-        }
-        publicationAttempted = true;
-        movePublishedFile(tempTarget, target);
-        publicationConfirmed = true;
-      } finally {
-        Files.deleteIfExists(tempTarget);
-      }
-      DispatchManifestSupport.ManifestPayload manifest = null;
-      if (DispatchManifestSupport.enabled(channelConfig)) {
-        Path manifestPath =
-            directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
-        String manifestTempName = manifestPath.getFileName() + ".tmp-" + UUID.randomUUID();
-        Path manifestTempPath = directory.resolve(manifestTempName);
-        DispatchManifestSupport.ManifestTarget manifestTarget =
-            new DispatchManifestSupport.ManifestTarget(
-                target.toString(), remoteName, manifestPath.toString());
-        manifest = DispatchManifestSupport.manifestPayload(
-            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
+    static DispatchResult dispatchNas(
+            DispatchCommand command,
+            DispatchFileContentResolver contentResolver,
+            DispatchRuntimeProperties properties,
+            NasCopyExecutor copyExecutor) {
+        boolean publicationAttempted = false;
+        boolean publicationConfirmed = false;
         try {
-          Files.write(manifestTempPath, manifest.bytes());
-          movePublishedFile(manifestTempPath, manifestPath);
-        } finally {
-          Files.deleteIfExists(manifestTempPath);
+            Map<String, Object> channelConfig = command.channelConfig();
+            String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
+            if (!Texts.hasText(remoteDir)) {
+                return DispatchResult.failureWithoutReceipt("nas_remote_directory missing");
+            }
+            // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
+            // 即可绕过路径遍历防线。此处额外解析 realPath，若可选的 sandbox root 配置了
+            // 则强制 realPath 必须落在沙箱内。
+            Path directory = resolveNasDirectory(remoteDir, properties);
+            String externalRequestId = resolveExternalRequestId(command);
+            String receiptCode = resolveReceiptCode(command, externalRequestId);
+            String remoteName = resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
+            Path target = directory.resolve(remoteName);
+            String temporaryRemoteName = remoteName + ".tmp-" + UUID.randomUUID();
+            Path tempTarget = directory.resolve(temporaryRemoteName);
+            DispatchManifestSupport.PayloadDigest payloadDigest;
+            try {
+                try (InputStream in = contentResolver.openInputStream(command.fileRecord());
+                        DispatchManifestSupport.DigestingInputStream digesting =
+                                DispatchManifestSupport.digesting(in)) {
+                    copyExecutor.copy(digesting, tempTarget, properties);
+                    payloadDigest = digesting.finish();
+                }
+                publicationAttempted = true;
+                movePublishedFile(tempTarget, target);
+                publicationConfirmed = true;
+            } finally {
+                Files.deleteIfExists(tempTarget);
+            }
+            DispatchManifestSupport.ManifestPayload manifest = null;
+            if (DispatchManifestSupport.enabled(channelConfig)) {
+                Path manifestPath = directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
+                String manifestTempName = manifestPath.getFileName() + ".tmp-" + UUID.randomUUID();
+                Path manifestTempPath = directory.resolve(manifestTempName);
+                DispatchManifestSupport.ManifestTarget manifestTarget = new DispatchManifestSupport.ManifestTarget(
+                        target.toString(), remoteName, manifestPath.toString());
+                manifest = DispatchManifestSupport.manifestPayload(
+                        command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
+                try {
+                    Files.write(manifestTempPath, manifest.bytes());
+                    movePublishedFile(manifestTempPath, manifestPath);
+                } finally {
+                    Files.deleteIfExists(manifestTempPath);
+                }
+            }
+            return finishResult(
+                    command, externalRequestId, receiptCode, "uploaded via NAS", target.toString(), manifest);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
+
+            return failResult(command, ex, publicationAttempted, publicationConfirmed);
         }
-      }
-      return finishResult(
-          command, externalRequestId, receiptCode, "uploaded via NAS", target.toString(), manifest);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return failResult(command, ex, publicationAttempted, publicationConfirmed);
     }
-  }
 
-  /**
-   * R-4.2: 返回安全可写的 NAS 目录 {@link Path}。
-   *
-   * <p>流程：
-   *
-   * <ol>
-   *   <li>{@code toAbsolutePath().normalize()} 消除 . / ..
-   *   <li>{@code Files.createDirectories} 保证存在
-   *   <li>{@code toRealPath} 解析 symlink 到真实路径
-   *   <li>检查真实路径是否等于 normalize 路径；不同则记 WARN（存在 symlink）
-   *   <li>若 {@code batch.worker.dispatch.runtime.nas-sandbox-root} 已配置，强制真实路径必须落在沙箱内
-   * </ol>
-   *
-   * <p>返回后续操作使用的真实路径。
-   */
-  private static Path resolveNasDirectory(String remoteDir) throws IOException {
-    return resolveNasDirectory(remoteDir, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  private static Path resolveNasDirectory(String remoteDir, DispatchRuntimeProperties properties)
-      throws IOException {
-    Path requestedDirectory = Path.of(remoteDir);
-    Path absoluteDirectory = requestedDirectory.toAbsolutePath();
-    Path directory = absoluteDirectory.normalize();
-    Files.createDirectories(directory);
-    Path realDirectory = directory.toRealPath();
-    if (!realDirectory.equals(directory)
-        && NAS_SYMLINK_WARNED.putIfAbsent(directory.toString(), Boolean.TRUE) == null) {
-      // macOS 系统级 symlink (/tmp -> /private/tmp, /var -> /private/var) 是 OS 行为，
-      // 不属于用户错配，降级到 INFO；非此模式才以 WARN 提示真正的可疑 symlink。
-      boolean macOsPrivatePrefix = realDirectory.toString().equals("/private" + directory)
-          && (directory.startsWith("/tmp") || directory.startsWith("/var"));
-      if (macOsPrivatePrefix) {
-        log.info(
-            "NAS directory resolved through macOS /private symlink: configured={}, real={}",
-            directory,
-            realDirectory);
-      } else {
-        log.warn(NAS_SYMLINK_WARNING_FORMAT, directory, realDirectory, NAS_SANDBOX_PROPERTY_KEY);
-      }
+    /**
+     * R-4.2: 返回安全可写的 NAS 目录 {@link Path}。
+     *
+     * <p>流程：
+     *
+     * <ol>
+     *   <li>{@code toAbsolutePath().normalize()} 消除 . / ..
+     *   <li>{@code Files.createDirectories} 保证存在
+     *   <li>{@code toRealPath} 解析 symlink 到真实路径
+     *   <li>检查真实路径是否等于 normalize 路径；不同则记 WARN（存在 symlink）
+     *   <li>若 {@code batch.worker.dispatch.runtime.nas-sandbox-root} 已配置，强制真实路径必须落在沙箱内
+     * </ol>
+     *
+     * <p>返回后续操作使用的真实路径。
+     */
+    private static Path resolveNasDirectory(String remoteDir) throws IOException {
+        return resolveNasDirectory(remoteDir, DEFAULT_RUNTIME_PROPERTIES);
     }
-    String sandboxRootRaw = properties.getNasSandboxRoot();
-    if (Texts.hasText(sandboxRootRaw)) {
-      Path configuredSandboxRoot = Path.of(sandboxRootRaw);
-      Path absoluteSandboxRoot = configuredSandboxRoot.toAbsolutePath();
-      Path normalizedSandboxRoot = absoluteSandboxRoot.normalize();
-      Path sandboxRoot = normalizedSandboxRoot.toRealPath();
-      if (!realDirectory.startsWith(sandboxRoot)) {
-        throw new SecurityException("NAS directory escapes sandbox root: real="
-            + realDirectory
-            + ", sandboxRoot="
-            + sandboxRoot);
-      }
-    }
-    return realDirectory;
-  }
 
-  static DispatchResult dispatchOss(
-      DispatchCommand command,
-      DispatchFileContentResolver contentResolver,
-      S3StorageProperties s3Properties,
-      BatchObjectStore objectStore) {
-    return dispatchOss(
-        command, contentResolver, s3Properties, objectStore, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchResult dispatchOss(
-      DispatchCommand command,
-      DispatchFileContentResolver contentResolver,
-      S3StorageProperties s3Properties,
-      BatchObjectStore objectStore,
-      DispatchRuntimeProperties properties) {
-    boolean publicationAttempted = false;
-    boolean publicationConfirmed = false;
-    try {
-      Map<String, Object> channelConfig = command.channelConfig();
-      String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
-      if (!Texts.hasText(bucket)) {
-        return DispatchResult.failureWithoutReceipt("oss_bucket missing");
-      }
-      String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
-      String externalRequestId = resolveExternalRequestId(command);
-      String receiptCode = resolveReceiptCode(command, externalRequestId);
-      String remoteName =
-          resolveRemoteFileName(channelConfig, command.fileRecord(), "oss_object_name");
-      String objectName = normalizeObjectName(objectPrefix, remoteName);
-      String contentType = firstText(
-          command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
-      // AWS SDK v2 RequestBody.fromInputStream 需要确定的 contentLength；分发流可能已解密、
-      // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
-      // 防 OOM:bounded 读到上限+1,超限说明文件过大,拒绝该 dispatch 而非把 GB 级整文件读进堆。
-      byte[] payload;
-      int maxInlinePayloadBytes = maxInlinePayloadBytes(properties);
-      try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        payload = in.readNBytes(maxInlinePayloadBytes + 1);
-      }
-      if (payload.length > maxInlinePayloadBytes) {
-        return DispatchResult.failureWithoutReceipt("oss payload exceeds inline upload limit ("
-            + maxInlinePayloadBytes
-            + " bytes); reduce file size or use a streaming-capable channel");
-      }
-      DispatchManifestSupport.PayloadDigest payloadDigest = DispatchManifestSupport.digest(payload);
-      publicationAttempted = true;
-      objectStore.put(
-          bucket, objectName, new ByteArrayInputStream(payload), payload.length, contentType);
-      publicationConfirmed = true;
-      String evidence = "oss://" + bucket + PATH_SEP + objectName;
-      DispatchManifestSupport.ManifestPayload manifest = null;
-      if (DispatchManifestSupport.enabled(channelConfig)) {
-        String manifestName = objectName + DispatchManifestSupport.suffix(channelConfig);
-        String manifestRef = "oss://" + bucket + PATH_SEP + manifestName;
-        DispatchManifestSupport.ManifestTarget manifestTarget =
-            new DispatchManifestSupport.ManifestTarget(evidence, remoteName, manifestRef);
-        manifest = DispatchManifestSupport.manifestPayload(
-            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
-        byte[] manifestBytes = manifest.bytes();
-        ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
-        objectStore.put(
-            bucket,
-            manifestName,
-            manifestStream,
-            manifest.sizeBytes(),
-            DispatchManifestSupport.CONTENT_TYPE);
-      }
-      return finishResult(
-          command, externalRequestId, receiptCode, "uploaded via OSS", evidence, manifest);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return failResult(command, ex, publicationAttempted, publicationConfirmed);
-    }
-  }
-
-  private static DispatchResult failResult(
-      DispatchCommand command,
-      Exception ex,
-      boolean publicationAttempted,
-      boolean publicationConfirmed) {
-    String externalRequestId = resolveExternalRequestId(command);
-    String receiptCode = resolveReceiptCode(command, externalRequestId);
-    boolean unknownExternalOutcome =
-        publicationConfirmed || (publicationAttempted && !isKnownNoEffectFailure(ex));
-    String failureSummary = SwallowedExceptionLogger.summary(ex);
-    if (unknownExternalOutcome) {
-      return DispatchResult.externalOutcomeUnknown(
-          externalRequestId,
-          receiptCode,
-          "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
-              + failureSummary);
-    }
-    return new DispatchResult(
-        false, externalRequestId, receiptCode, false, false, failureSummary, null);
-  }
-
-  private static boolean isKnownNoEffectFailure(Exception failure) {
-    if (failure instanceof ObjectStoreAccessException) {
-      return true;
-    }
-    Throwable cause = failure.getCause();
-    while (EmptyChecks.isNotNull(cause)) {
-      if (cause instanceof AtomicMoveNotSupportedException) {
-        return true;
-      }
-      cause = cause.getCause();
-    }
-    return false;
-  }
-
-  static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
-    return probeNas(channelConfig, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchChannelProbeResult probeNas(
-      Map<String, Object> channelConfig, DispatchRuntimeProperties properties) {
-    try {
-      String remoteDir =
-          resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
-      if (!Texts.hasText(remoteDir)) {
-        return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
-      }
-      // R-4.2: probe 与 dispatch 走同一路径解析，保证两者对"可写性"的判断一致，
-      // 避免 probe 显示 OK 但 dispatch 被沙箱拒绝（或反之）。
-      Path directory = resolveNasDirectory(remoteDir, properties);
-      if (!Files.isDirectory(directory)) {
-        return new DispatchChannelProbeResult(
-            false, "nas path is not a directory: " + directory, null);
-      }
-      if (!Files.isWritable(directory)) {
-        return new DispatchChannelProbeResult(
-            false,
-            "nas path not writable (read-only mount or permission denied): " + directory,
-            null);
-      }
-      String probeName = BatchFileConstants.newHealthProbeName();
-      Path probeFile = directory.resolve(probeName);
-      String probeContent = "probe@" + BatchDateTimeSupport.utcNow();
-      Files.writeString(probeFile, probeContent, StandardCharsets.UTF_8);
-      Files.deleteIfExists(probeFile);
-      return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
-    }
-  }
-
-  static DispatchChannelProbeResult probeOss(
-      Map<String, Object> channelConfig,
-      S3StorageProperties s3Properties,
-      BatchObjectStore objectStore) {
-    try {
-      String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
-      if (!Texts.hasText(bucket)) {
-        return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
-      }
-      String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
-      String healthProbeName = BatchFileConstants.newHealthProbeName();
-      String objectName = normalizeObjectName(prefix, healthProbeName);
-      String payloadText = "probe@" + BatchDateTimeSupport.utcNow();
-      byte[] payload = payloadText.getBytes(StandardCharsets.UTF_8);
-      objectStore.put(
-          bucket,
-          objectName,
-          new ByteArrayInputStream(payload),
-          payload.length,
-          BatchFileConstants.CONTENT_TYPE_TEXT_UTF8);
-      try {
-        objectStore.statSize(bucket, objectName);
-      } finally {
-        objectStore.delete(bucket, objectName);
-      }
-      return new DispatchChannelProbeResult(
-          true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
-    }
-  }
-
-  static DispatchChannelProbeResult probeSftp(
-      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
-    return probeSftp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchChannelProbeResult probeSftp(
-      Map<String, Object> channelConfig,
-      boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties) {
-    try {
-      String host = resolveEndpointOrFail(channelConfig, "sftp_host", KEY_TARGET_ENDPOINT);
-      if (!Texts.hasText(host)) {
-        return new DispatchChannelProbeResult(false, "sftp_host missing", null);
-      }
-      int port = intProp(channelConfig, "sftp_port", 22);
-      // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target;
-      if (dnsGuardEnabled) {
-        InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
-        target = new InetSocketAddress(validatedAddress, port);
-      } else {
-        target = new InetSocketAddress(host, port);
-      }
-      try (Socket socket = new Socket()) {
-        int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
-        socket.connect(target, connectTimeoutMillis);
-      }
-      return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
-    }
-  }
-
-  static DispatchChannelProbeResult probeSmtp(
-      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
-    return probeSmtp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchChannelProbeResult probeSmtp(
-      Map<String, Object> channelConfig,
-      boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties) {
-    try {
-      String host = resolveEndpointOrFail(channelConfig, "smtp_host", KEY_TARGET_ENDPOINT);
-      if (!Texts.hasText(host)) {
-        return new DispatchChannelProbeResult(false, "smtp_host missing", null);
-      }
-      int port = intProp(channelConfig, "smtp_port", 25);
-      // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target;
-      if (dnsGuardEnabled) {
-        InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
-        target = new InetSocketAddress(validatedAddress, port);
-      } else {
-        target = new InetSocketAddress(host, port);
-      }
-      try (Socket socket = new Socket()) {
-        int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
-        socket.connect(target, connectTimeoutMillis);
-      }
-      return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
-    }
-  }
-
-  static DispatchChannelProbeResult probeHttp(
-      Map<String, Object> channelConfig,
-      boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties,
-      OkHttpClient baseClient) {
-    try {
-      String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      if (!Texts.hasText(endpoint)) {
-        return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
-      }
-      // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
-      // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
-      OkHttpClient client = baseClient
-          .newBuilder()
-          .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
-          .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
-          .build();
-      if (dnsGuardEnabled) {
-        URI endpointUri = URI.create(endpoint);
-        String probeHost = endpointUri.getHost();
-        List<InetAddress> resolved = DnsResolveGuard.resolveAllAndValidate(probeHost);
-        client = client.newBuilder().dns(hostname -> resolved).build();
-      }
-      Request request = new Request.Builder().url(endpoint).head().build();
-      try (Response response = client.newCall(request).execute()) {
-        int status = response.code();
-        String safeEndpoint = SecretMasking.maskEndpoint(endpoint);
-        if (status >= 200 && status < 500) {
-          return new DispatchChannelProbeResult(
-              true, "http probe ok (status=" + status + ")", safeEndpoint);
+    private static Path resolveNasDirectory(String remoteDir, DispatchRuntimeProperties properties) throws IOException {
+        Path requestedDirectory = Path.of(remoteDir);
+        Path absoluteDirectory = requestedDirectory.toAbsolutePath();
+        Path directory = absoluteDirectory.normalize();
+        Files.createDirectories(directory);
+        Path realDirectory = directory.toRealPath();
+        if (!realDirectory.equals(directory)
+                && NAS_SYMLINK_WARNED.putIfAbsent(directory.toString(), Boolean.TRUE) == null) {
+            // macOS 系统级 symlink (/tmp -> /private/tmp, /var -> /private/var) 是 OS 行为，
+            // 不属于用户错配，降级到 INFO；非此模式才以 WARN 提示真正的可疑 symlink。
+            boolean macOsPrivatePrefix = realDirectory.toString().equals("/private" + directory)
+                    && (directory.startsWith("/tmp") || directory.startsWith("/var"));
+            if (macOsPrivatePrefix) {
+                log.info(
+                        "NAS directory resolved through macOS /private symlink: configured={}, real={}",
+                        directory,
+                        realDirectory);
+            } else {
+                log.warn(NAS_SYMLINK_WARNING_FORMAT, directory, realDirectory, NAS_SANDBOX_PROPERTY_KEY);
+            }
         }
-        return new DispatchChannelProbeResult(
-            false, "http probe failed (status=" + status + ")", safeEndpoint);
-      }
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
-
-      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        String sandboxRootRaw = properties.getNasSandboxRoot();
+        if (Texts.hasText(sandboxRootRaw)) {
+            Path configuredSandboxRoot = Path.of(sandboxRootRaw);
+            Path absoluteSandboxRoot = configuredSandboxRoot.toAbsolutePath();
+            Path normalizedSandboxRoot = absoluteSandboxRoot.normalize();
+            Path sandboxRoot = normalizedSandboxRoot.toRealPath();
+            if (!realDirectory.startsWith(sandboxRoot)) {
+                throw new SecurityException(
+                        "NAS directory escapes sandbox root: real=" + realDirectory + ", sandboxRoot=" + sandboxRoot);
+            }
+        }
+        return realDirectory;
     }
-  }
 
-  static DispatchChannelProbeResult probeChannel(
-      Map<String, Object> channelConfig,
-      S3StorageProperties s3Properties,
-      BatchObjectStore objectStore,
-      boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties,
-      OkHttpClient httpProbeClient) {
-    Object channelTypeValue = channelConfig.getOrDefault("channel_type", "");
-    String rawChannelType = String.valueOf(channelTypeValue);
-    String channelType = rawChannelType.toUpperCase(Locale.ROOT);
-    FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
-    if (EmptyChecks.isNull(type)) {
-      return new DispatchChannelProbeResult(
-          false, "unsupported health probe channel type: " + channelType, null);
+    static DispatchResult dispatchOss(
+            DispatchCommand command,
+            DispatchFileContentResolver contentResolver,
+            S3StorageProperties s3Properties,
+            BatchObjectStore objectStore) {
+        return dispatchOss(command, contentResolver, s3Properties, objectStore, DEFAULT_RUNTIME_PROPERTIES);
     }
-    return switch (type) {
-      case NAS -> probeNas(channelConfig, properties);
-      case OSS -> probeOss(channelConfig, s3Properties, objectStore);
-      case SFTP -> probeSftp(channelConfig, dnsGuardEnabled, properties);
-      case EMAIL -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
-      case API, API_PUSH -> probeHttp(channelConfig, dnsGuardEnabled, properties, httpProbeClient);
-      default ->
-        new DispatchChannelProbeResult(
-            false, "unsupported health probe channel type: " + channelType, null);
-    };
-  }
 
-  private static int probeConnectTimeoutMillis(DispatchRuntimeProperties properties) {
-    long timeout = properties.getProbeConnectTimeoutMillis();
-    if (timeout < 1 || timeout > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException(
-          "probe-connect-timeout-millis must be between 1 and 2147483647");
+    static DispatchResult dispatchOss(
+            DispatchCommand command,
+            DispatchFileContentResolver contentResolver,
+            S3StorageProperties s3Properties,
+            BatchObjectStore objectStore,
+            DispatchRuntimeProperties properties) {
+        boolean publicationAttempted = false;
+        boolean publicationConfirmed = false;
+        try {
+            Map<String, Object> channelConfig = command.channelConfig();
+            String bucket = firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
+            if (!Texts.hasText(bucket)) {
+                return DispatchResult.failureWithoutReceipt("oss_bucket missing");
+            }
+            String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
+            String externalRequestId = resolveExternalRequestId(command);
+            String receiptCode = resolveReceiptCode(command, externalRequestId);
+            String remoteName = resolveRemoteFileName(channelConfig, command.fileRecord(), "oss_object_name");
+            String objectName = normalizeObjectName(objectPrefix, remoteName);
+            String contentType =
+                    firstText(command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
+            // AWS SDK v2 RequestBody.fromInputStream 需要确定的 contentLength；分发流可能已解密、
+            // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
+            // 防 OOM:bounded 读到上限+1,超限说明文件过大,拒绝该 dispatch 而非把 GB 级整文件读进堆。
+            byte[] payload;
+            int maxInlinePayloadBytes = maxInlinePayloadBytes(properties);
+            try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
+                payload = in.readNBytes(maxInlinePayloadBytes + 1);
+            }
+            if (payload.length > maxInlinePayloadBytes) {
+                return DispatchResult.failureWithoutReceipt("oss payload exceeds inline upload limit ("
+                        + maxInlinePayloadBytes
+                        + " bytes); reduce file size or use a streaming-capable channel");
+            }
+            DispatchManifestSupport.PayloadDigest payloadDigest = DispatchManifestSupport.digest(payload);
+            publicationAttempted = true;
+            objectStore.put(bucket, objectName, new ByteArrayInputStream(payload), payload.length, contentType);
+            publicationConfirmed = true;
+            String evidence = "oss://" + bucket + PATH_SEP + objectName;
+            DispatchManifestSupport.ManifestPayload manifest = null;
+            if (DispatchManifestSupport.enabled(channelConfig)) {
+                String manifestName = objectName + DispatchManifestSupport.suffix(channelConfig);
+                String manifestRef = "oss://" + bucket + PATH_SEP + manifestName;
+                DispatchManifestSupport.ManifestTarget manifestTarget =
+                        new DispatchManifestSupport.ManifestTarget(evidence, remoteName, manifestRef);
+                manifest = DispatchManifestSupport.manifestPayload(
+                        command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
+                byte[] manifestBytes = manifest.bytes();
+                ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
+                objectStore.put(
+                        bucket,
+                        manifestName,
+                        manifestStream,
+                        manifest.sizeBytes(),
+                        DispatchManifestSupport.CONTENT_TYPE);
+            }
+            return finishResult(command, externalRequestId, receiptCode, "uploaded via OSS", evidence, manifest);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
+
+            return failResult(command, ex, publicationAttempted, publicationConfirmed);
+        }
     }
-    return (int) timeout;
-  }
 
-  private static int maxInlinePayloadBytes(DispatchRuntimeProperties properties) {
-    long bytes = properties.getOssMaxInlineMib() * 1024L * 1024L;
-    if (bytes <= 0 || bytes > Integer.MAX_VALUE - 1L) {
-      throw new IllegalArgumentException("oss-max-inline-mib must be between 1 and 2047");
+    private static DispatchResult failResult(
+            DispatchCommand command, Exception ex, boolean publicationAttempted, boolean publicationConfirmed) {
+        String externalRequestId = resolveExternalRequestId(command);
+        String receiptCode = resolveReceiptCode(command, externalRequestId);
+        boolean unknownExternalOutcome = publicationConfirmed || (publicationAttempted && !isKnownNoEffectFailure(ex));
+        String failureSummary = SwallowedExceptionLogger.summary(ex);
+        if (unknownExternalOutcome) {
+            return DispatchResult.externalOutcomeUnknown(
+                    externalRequestId,
+                    receiptCode,
+                    "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: " + failureSummary);
+        }
+        return new DispatchResult(false, externalRequestId, receiptCode, false, false, failureSummary, null);
     }
-    return (int) bytes;
-  }
 
-  private static DispatchResult finishResult(
-      DispatchCommand command,
-      String externalRequestId,
-      String receiptCode,
-      String message,
-      String evidence,
-      DispatchManifestSupport.ManifestPayload manifest) {
-    Map<String, Object> channelConfig = command.channelConfig();
-    Object configuredReceiptPolicy =
-        channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.SYNC.code());
-    String receiptPolicy = String.valueOf(configuredReceiptPolicy);
-    boolean acknowledged = FileReceiptPolicy.NONE.code().equalsIgnoreCase(receiptPolicy)
-        || FileReceiptPolicy.SYNC.code().equalsIgnoreCase(receiptPolicy);
-    boolean pending = FileReceiptPolicy.ASYNC.code().equalsIgnoreCase(receiptPolicy)
-        || FileReceiptPolicy.POLLING.code().equalsIgnoreCase(receiptPolicy);
-    if (manifest == null) {
-      return new DispatchResult(
-          true, externalRequestId, receiptCode, acknowledged, pending, message, evidence);
+    private static boolean isKnownNoEffectFailure(Exception failure) {
+        if (failure instanceof ObjectStoreAccessException) {
+            return true;
+        }
+        Throwable cause = failure.getCause();
+        while (EmptyChecks.isNotNull(cause)) {
+            if (cause instanceof AtomicMoveNotSupportedException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
-    return new DispatchResult(
-        true,
-        externalRequestId,
-        receiptCode,
-        acknowledged,
-        pending,
-        message,
-        evidence,
-        manifest.toRef());
-  }
 
-  private static void movePublishedFile(Path tempTarget, Path target) throws IOException {
-    movePublishedFile(tempTarget, target, Files::move);
-  }
-
-  static void movePublishedFile(Path tempTarget, Path target, AtomicFileMover atomicFileMover)
-      throws IOException {
-    try {
-      atomicFileMover.move(
-          tempTarget, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-    } catch (AtomicMoveNotSupportedException atomicEx) {
-      throw new IOException("NAS dispatch requires atomic move to publish safely", atomicEx);
+    static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
+        return probeNas(channelConfig, DEFAULT_RUNTIME_PROPERTIES);
     }
-  }
 
-  @FunctionalInterface
-  interface AtomicFileMover {
-    Path move(Path source, Path target, CopyOption... options) throws IOException;
-  }
+    static DispatchChannelProbeResult probeNas(
+            Map<String, Object> channelConfig, DispatchRuntimeProperties properties) {
+        try {
+            String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
+            if (!Texts.hasText(remoteDir)) {
+                return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
+            }
+            // R-4.2: probe 与 dispatch 走同一路径解析，保证两者对"可写性"的判断一致，
+            // 避免 probe 显示 OK 但 dispatch 被沙箱拒绝（或反之）。
+            Path directory = resolveNasDirectory(remoteDir, properties);
+            if (!Files.isDirectory(directory)) {
+                return new DispatchChannelProbeResult(false, "nas path is not a directory: " + directory, null);
+            }
+            if (!Files.isWritable(directory)) {
+                return new DispatchChannelProbeResult(
+                        false, "nas path not writable (read-only mount or permission denied): " + directory, null);
+            }
+            String probeName = BatchFileConstants.newHealthProbeName();
+            Path probeFile = directory.resolve(probeName);
+            String probeContent = "probe@" + BatchDateTimeSupport.utcNow();
+            Files.writeString(probeFile, probeContent, StandardCharsets.UTF_8);
+            Files.deleteIfExists(probeFile);
+            return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-  private static String resolveExternalRequestId(DispatchCommand command) {
-    if (command.payload().externalRequestId() != null
-        && !command.payload().externalRequestId().isBlank()) {
-      return command.payload().externalRequestId();
+            return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        }
     }
-    UUID requestId = UUID.randomUUID();
-    return requestId.toString();
-  }
 
-  private static String resolveReceiptCode(DispatchCommand command, String externalRequestId) {
-    if (command.payload().receiptCode() != null
-        && !command.payload().receiptCode().isBlank()) {
-      return command.payload().receiptCode();
-    }
-    return "R-" + externalRequestId;
-  }
+    static DispatchChannelProbeResult probeOss(
+            Map<String, Object> channelConfig, S3StorageProperties s3Properties, BatchObjectStore objectStore) {
+        try {
+            String bucket = firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
+            if (!Texts.hasText(bucket)) {
+                return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
+            }
+            String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
+            String healthProbeName = BatchFileConstants.newHealthProbeName();
+            String objectName = normalizeObjectName(prefix, healthProbeName);
+            String payloadText = "probe@" + BatchDateTimeSupport.utcNow();
+            byte[] payload = payloadText.getBytes(StandardCharsets.UTF_8);
+            objectStore.put(
+                    bucket,
+                    objectName,
+                    new ByteArrayInputStream(payload),
+                    payload.length,
+                    BatchFileConstants.CONTENT_TYPE_TEXT_UTF8);
+            try {
+                objectStore.statSize(bucket, objectName);
+            } finally {
+                objectStore.delete(bucket, objectName);
+            }
+            return new DispatchChannelProbeResult(true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-  private static String resolveRemoteFileName(
-      Map<String, Object> channelConfig, Map<String, Object> fileRecord, String overrideKey) {
-    String explicit = firstText(channelConfig, overrideKey, null);
-    if (Texts.hasText(explicit)) {
-      return sanitizeFileName(explicit);
+            return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        }
     }
-    Object originalFileName =
-        EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
-    Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
-    Object original = firstNonNull(originalFileName, fileName);
-    String fallback =
-        original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
-    return sanitizeFileName(fallback);
-  }
 
-  private static String sanitizeFileName(String name) {
-    if (name == null) {
-      return BatchFileConstants.DEFAULT_FILE_NAME;
+    static DispatchChannelProbeResult probeSftp(Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
+        return probeSftp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
     }
-    String trimmedName = name.trim();
-    String withoutParentTraversal = trimmedName.replace("..", "_");
-    String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
-    String sanitizedName = withoutForwardSlashes.replace('\\', '_');
-    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName))
-        ? BatchFileConstants.DEFAULT_FILE_NAME
-        : sanitizedName;
-  }
 
-  private static String normalizeObjectName(String prefix, String name) {
-    String p = prefix == null ? "" : prefix.trim();
-    if (p.startsWith(PATH_SEP)) {
-      p = p.substring(1);
-    }
-    if (!p.isEmpty() && !p.endsWith(PATH_SEP)) {
-      p = p + PATH_SEP;
-    }
-    return p + sanitizeFileName(name);
-  }
+    static DispatchChannelProbeResult probeSftp(
+            Map<String, Object> channelConfig, boolean dnsGuardEnabled, DispatchRuntimeProperties properties) {
+        try {
+            String host = resolveEndpointOrFail(channelConfig, "sftp_host", KEY_TARGET_ENDPOINT);
+            if (!Texts.hasText(host)) {
+                return new DispatchChannelProbeResult(false, "sftp_host missing", null);
+            }
+            int port = intProp(channelConfig, "sftp_port", 22);
+            // S-2.6: resolve-then-connect — 用已校验的 IP 建连
+            InetSocketAddress target;
+            if (dnsGuardEnabled) {
+                InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
+                target = new InetSocketAddress(validatedAddress, port);
+            } else {
+                target = new InetSocketAddress(host, port);
+            }
+            try (Socket socket = new Socket()) {
+                int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
+                socket.connect(target, connectTimeoutMillis);
+            }
+            return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-  private static String firstText(Map<String, Object> map, String key, String fallback) {
-    Object v = map == null ? null : map.get(key);
-    if (v == null) {
-      return fallback;
+            return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        }
     }
-    String rawText = String.valueOf(v);
-    String text = rawText.trim();
-    return text.isEmpty() ? fallback : text;
-  }
 
-  private static String firstText(
-      Map<String, Object> map, String key1, String key2, String fallback) {
-    String v = firstText(map, key1, null);
-    if (Texts.hasText(v)) {
-      return v;
+    static DispatchChannelProbeResult probeSmtp(Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
+        return probeSmtp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
     }
-    return firstText(map, key2, fallback);
-  }
 
-  private static int intProp(Map<String, Object> map, String key, int defaultValue) {
-    Object v = map == null ? null : map.get(key);
-    if (v == null) {
-      return defaultValue;
+    static DispatchChannelProbeResult probeSmtp(
+            Map<String, Object> channelConfig, boolean dnsGuardEnabled, DispatchRuntimeProperties properties) {
+        try {
+            String host = resolveEndpointOrFail(channelConfig, "smtp_host", KEY_TARGET_ENDPOINT);
+            if (!Texts.hasText(host)) {
+                return new DispatchChannelProbeResult(false, "smtp_host missing", null);
+            }
+            int port = intProp(channelConfig, "smtp_port", 25);
+            // S-2.6: resolve-then-connect — 用已校验的 IP 建连
+            InetSocketAddress target;
+            if (dnsGuardEnabled) {
+                InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
+                target = new InetSocketAddress(validatedAddress, port);
+            } else {
+                target = new InetSocketAddress(host, port);
+            }
+            try (Socket socket = new Socket()) {
+                int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
+                socket.connect(target, connectTimeoutMillis);
+            }
+            return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
+
+            return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        }
     }
-    try {
-      String rawValue = String.valueOf(v);
-      String trimmedValue = rawValue.trim();
-      return Integer.parseInt(trimmedValue);
-    } catch (NumberFormatException e) {
-      SwallowedExceptionLogger.info(
-          RemoteFilesystemDispatchSupport.class, "catch:NumberFormatException", e);
 
-      return defaultValue;
+    static DispatchChannelProbeResult probeHttp(
+            Map<String, Object> channelConfig,
+            boolean dnsGuardEnabled,
+            DispatchRuntimeProperties properties,
+            OkHttpClient baseClient) {
+        try {
+            String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
+            if (!Texts.hasText(endpoint)) {
+                return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
+            }
+            // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
+            // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
+            OkHttpClient client = baseClient
+                    .newBuilder()
+                    .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
+                    .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
+                    .build();
+            if (dnsGuardEnabled) {
+                URI endpointUri = URI.create(endpoint);
+                String probeHost = endpointUri.getHost();
+                List<InetAddress> resolved = DnsResolveGuard.resolveAllAndValidate(probeHost);
+                client = client.newBuilder().dns(hostname -> resolved).build();
+            }
+            Request request = new Request.Builder().url(endpoint).head().build();
+            try (Response response = client.newCall(request).execute()) {
+                int status = response.code();
+                String safeEndpoint = SecretMasking.maskEndpoint(endpoint);
+                if (status >= 200 && status < 500) {
+                    return new DispatchChannelProbeResult(true, "http probe ok (status=" + status + ")", safeEndpoint);
+                }
+                return new DispatchChannelProbeResult(false, "http probe failed (status=" + status + ")", safeEndpoint);
+            }
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
+
+            return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
+        }
     }
-  }
 
-  /**
-   * 渠道配置端点解析：先读 {@code primaryKey}（如 {@code nas_remote_directory} / {@code sftp_host} / {@code
-   * smtp_host}），缺失再回退到 {@code fallbackKey}（通常是 {@link #KEY_TARGET_ENDPOINT}）。 消除 NAS dispatch / NAS
-   * probe / SFTP probe / SMTP probe 四处重复的 3 行 primary→fallback 读取样板。
-   *
-   * @return 解析后的 endpoint 字符串；两键都为 null/blank 时返回 {@code null}，由调用方产出带渠道语义的错误消息。
-   */
-  private static String resolveEndpointOrFail(
-      Map<String, Object> channelConfig, String primaryKey, String fallbackKey) {
-    String value = stringProp(channelConfig, primaryKey);
-    if (Texts.hasText(value)) {
-      return value;
+    static DispatchChannelProbeResult probeChannel(
+            Map<String, Object> channelConfig,
+            S3StorageProperties s3Properties,
+            BatchObjectStore objectStore,
+            boolean dnsGuardEnabled,
+            DispatchRuntimeProperties properties,
+            OkHttpClient httpProbeClient) {
+        Object channelTypeValue = channelConfig.getOrDefault("channel_type", "");
+        String rawChannelType = String.valueOf(channelTypeValue);
+        String channelType = rawChannelType.toUpperCase(Locale.ROOT);
+        FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
+        if (EmptyChecks.isNull(type)) {
+            return new DispatchChannelProbeResult(false, "unsupported health probe channel type: " + channelType, null);
+        }
+        return switch (type) {
+            case NAS -> probeNas(channelConfig, properties);
+            case OSS -> probeOss(channelConfig, s3Properties, objectStore);
+            case SFTP -> probeSftp(channelConfig, dnsGuardEnabled, properties);
+            case EMAIL -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
+            case API, API_PUSH -> probeHttp(channelConfig, dnsGuardEnabled, properties, httpProbeClient);
+            default ->
+                new DispatchChannelProbeResult(false, "unsupported health probe channel type: " + channelType, null);
+        };
     }
-    return stringProp(channelConfig, fallbackKey);
-  }
 
-  private static String stringProp(Map<String, Object> map, String key) {
-    Object v = map == null ? null : map.get(key);
-    if (v == null) {
-      return null;
+    private static int probeConnectTimeoutMillis(DispatchRuntimeProperties properties) {
+        long timeout = properties.getProbeConnectTimeoutMillis();
+        if (timeout < 1 || timeout > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("probe-connect-timeout-millis must be between 1 and 2147483647");
+        }
+        return (int) timeout;
     }
-    String rawText = String.valueOf(v);
-    String text = rawText.trim();
-    return text.isEmpty() ? null : text;
-  }
 
-  private static Object firstNonNull(Object a, Object b) {
-    return a != null ? a : b;
-  }
+    private static int maxInlinePayloadBytes(DispatchRuntimeProperties properties) {
+        long bytes = properties.getOssMaxInlineMib() * 1024L * 1024L;
+        if (bytes <= 0 || bytes > Integer.MAX_VALUE - 1L) {
+            throw new IllegalArgumentException("oss-max-inline-mib must be between 1 and 2047");
+        }
+        return (int) bytes;
+    }
+
+    private static DispatchResult finishResult(
+            DispatchCommand command,
+            String externalRequestId,
+            String receiptCode,
+            String message,
+            String evidence,
+            DispatchManifestSupport.ManifestPayload manifest) {
+        Map<String, Object> channelConfig = command.channelConfig();
+        Object configuredReceiptPolicy = channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.SYNC.code());
+        String receiptPolicy = String.valueOf(configuredReceiptPolicy);
+        boolean acknowledged = FileReceiptPolicy.NONE.code().equalsIgnoreCase(receiptPolicy)
+                || FileReceiptPolicy.SYNC.code().equalsIgnoreCase(receiptPolicy);
+        boolean pending = FileReceiptPolicy.ASYNC.code().equalsIgnoreCase(receiptPolicy)
+                || FileReceiptPolicy.POLLING.code().equalsIgnoreCase(receiptPolicy);
+        if (manifest == null) {
+            return new DispatchResult(true, externalRequestId, receiptCode, acknowledged, pending, message, evidence);
+        }
+        return new DispatchResult(
+                true, externalRequestId, receiptCode, acknowledged, pending, message, evidence, manifest.toRef());
+    }
+
+    private static void movePublishedFile(Path tempTarget, Path target) throws IOException {
+        movePublishedFile(tempTarget, target, Files::move);
+    }
+
+    static void movePublishedFile(Path tempTarget, Path target, AtomicFileMover atomicFileMover) throws IOException {
+        try {
+            atomicFileMover.move(
+                    tempTarget, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException atomicEx) {
+            throw new IOException("NAS dispatch requires atomic move to publish safely", atomicEx);
+        }
+    }
+
+    @FunctionalInterface
+    interface AtomicFileMover {
+        Path move(Path source, Path target, CopyOption... options) throws IOException;
+    }
+
+    private static String resolveExternalRequestId(DispatchCommand command) {
+        if (command.payload().externalRequestId() != null
+                && !command.payload().externalRequestId().isBlank()) {
+            return command.payload().externalRequestId();
+        }
+        UUID requestId = UUID.randomUUID();
+        return requestId.toString();
+    }
+
+    private static String resolveReceiptCode(DispatchCommand command, String externalRequestId) {
+        if (command.payload().receiptCode() != null
+                && !command.payload().receiptCode().isBlank()) {
+            return command.payload().receiptCode();
+        }
+        return "R-" + externalRequestId;
+    }
+
+    private static String resolveRemoteFileName(
+            Map<String, Object> channelConfig, Map<String, Object> fileRecord, String overrideKey) {
+        String explicit = firstText(channelConfig, overrideKey, null);
+        if (Texts.hasText(explicit)) {
+            return sanitizeFileName(explicit);
+        }
+        Object originalFileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
+        Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
+        Object original = firstNonNull(originalFileName, fileName);
+        String fallback = original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
+        return sanitizeFileName(fallback);
+    }
+
+    private static String sanitizeFileName(String name) {
+        if (name == null) {
+            return BatchFileConstants.DEFAULT_FILE_NAME;
+        }
+        String trimmedName = name.trim();
+        String withoutParentTraversal = trimmedName.replace("..", "_");
+        String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
+        String sanitizedName = withoutForwardSlashes.replace('\\', '_');
+        return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName))
+                ? BatchFileConstants.DEFAULT_FILE_NAME
+                : sanitizedName;
+    }
+
+    private static String normalizeObjectName(String prefix, String name) {
+        String p = prefix == null ? "" : prefix.trim();
+        if (p.startsWith(PATH_SEP)) {
+            p = p.substring(1);
+        }
+        if (!p.isEmpty() && !p.endsWith(PATH_SEP)) {
+            p = p + PATH_SEP;
+        }
+        return p + sanitizeFileName(name);
+    }
+
+    private static String firstText(Map<String, Object> map, String key, String fallback) {
+        Object v = map == null ? null : map.get(key);
+        if (v == null) {
+            return fallback;
+        }
+        String rawText = String.valueOf(v);
+        String text = rawText.trim();
+        return text.isEmpty() ? fallback : text;
+    }
+
+    private static String firstText(Map<String, Object> map, String key1, String key2, String fallback) {
+        String v = firstText(map, key1, null);
+        if (Texts.hasText(v)) {
+            return v;
+        }
+        return firstText(map, key2, fallback);
+    }
+
+    private static int intProp(Map<String, Object> map, String key, int defaultValue) {
+        Object v = map == null ? null : map.get(key);
+        if (v == null) {
+            return defaultValue;
+        }
+        try {
+            String rawValue = String.valueOf(v);
+            String trimmedValue = rawValue.trim();
+            return Integer.parseInt(trimmedValue);
+        } catch (NumberFormatException e) {
+            SwallowedExceptionLogger.info(RemoteFilesystemDispatchSupport.class, "catch:NumberFormatException", e);
+
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 渠道配置端点解析：先读 {@code primaryKey}（如 {@code nas_remote_directory} / {@code sftp_host} / {@code
+     * smtp_host}），缺失再回退到 {@code fallbackKey}（通常是 {@link #KEY_TARGET_ENDPOINT}）。 消除 NAS dispatch / NAS
+     * probe / SFTP probe / SMTP probe 四处重复的 3 行 primary→fallback 读取样板。
+     *
+     * @return 解析后的 endpoint 字符串；两键都为 null/blank 时返回 {@code null}，由调用方产出带渠道语义的错误消息。
+     */
+    private static String resolveEndpointOrFail(
+            Map<String, Object> channelConfig, String primaryKey, String fallbackKey) {
+        String value = stringProp(channelConfig, primaryKey);
+        if (Texts.hasText(value)) {
+            return value;
+        }
+        return stringProp(channelConfig, fallbackKey);
+    }
+
+    private static String stringProp(Map<String, Object> map, String key) {
+        Object v = map == null ? null : map.get(key);
+        if (v == null) {
+            return null;
+        }
+        String rawText = String.valueOf(v);
+        String text = rawText.trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private static Object firstNonNull(Object a, Object b) {
+        return a != null ? a : b;
+    }
 }

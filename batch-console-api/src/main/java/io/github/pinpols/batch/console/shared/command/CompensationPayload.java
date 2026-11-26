@@ -8,26 +8,26 @@ import lombok.Getter;
 @Getter
 @Builder(toBuilder = true)
 public class CompensationPayload {
-  private final String tenantId;
-  private final String compensationType;
-  private final Long targetId;
-  private final String targetInstanceNo;
-  private final String jobCode;
-  private final LocalDate bizDate;
-  private final String batchNo;
-  private final Long relatedFileId;
-  private final String channelCode;
-  private final String reason;
-  private final String operatorId;
-  private final String approvalId;
-  private final String strategy;
-  private final String traceId;
-  private final String resultPolicy;
-  private final String configVersionPolicy;
-  private final Integer configVersion;
-  private final Long sourceWorkflowRunId;
-  private final Long sourceWorkflowNodeRunId;
-  private final Long replayOperationId;
-  private final Boolean externalActionVerifiedNotExecuted;
-  private final String externalOutcomeEvidenceReference;
+    private final String tenantId;
+    private final String compensationType;
+    private final Long targetId;
+    private final String targetInstanceNo;
+    private final String jobCode;
+    private final LocalDate bizDate;
+    private final String batchNo;
+    private final Long relatedFileId;
+    private final String channelCode;
+    private final String reason;
+    private final String operatorId;
+    private final String approvalId;
+    private final String strategy;
+    private final String traceId;
+    private final String resultPolicy;
+    private final String configVersionPolicy;
+    private final Integer configVersion;
+    private final Long sourceWorkflowRunId;
+    private final Long sourceWorkflowNodeRunId;
+    private final Long replayOperationId;
+    private final Boolean externalActionVerifiedNotExecuted;
+    private final String externalOutcomeEvidenceReference;
 }

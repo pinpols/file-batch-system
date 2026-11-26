@@ -39,193 +39,181 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Slf4j
 public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
-  private static final String LOGIN_PATH = "/api/console/auth/login";
-  private static final String TRIGGER_PATH_PREFIX = "/api/console/ops/triggers/";
+    private static final String LOGIN_PATH = "/api/console/auth/login";
+    private static final String TRIGGER_PATH_PREFIX = "/api/console/ops/triggers/";
 
-  private final SlidingWindowRateLimiter rateLimiter;
-  private final ConsoleRateLimitProperties properties;
-  private final ConsoleSecurityResponseWriter responseWriter;
-  private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
-  private final ConsoleLoginIpRateLimiter loginIpRateLimiter;
+    private final SlidingWindowRateLimiter rateLimiter;
+    private final ConsoleRateLimitProperties properties;
+    private final ConsoleSecurityResponseWriter responseWriter;
+    private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
+    private final ConsoleLoginIpRateLimiter loginIpRateLimiter;
 
-  public ConsoleRateLimitFilter(
-      SlidingWindowRateLimiter rateLimiter,
-      ConsoleRateLimitProperties properties,
-      ConsoleSecurityResponseWriter responseWriter,
-      RedisRateLimitCircuitBreaker redisCircuitBreaker,
-      ConsoleLoginIpRateLimiter loginIpRateLimiter) {
-    this.rateLimiter = rateLimiter;
-    this.properties = properties;
-    this.responseWriter = responseWriter;
-    this.redisCircuitBreaker = redisCircuitBreaker;
-    this.loginIpRateLimiter = loginIpRateLimiter;
-  }
-
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    if (!properties.isEnabled()) {
-      filterChain.doFilter(request, response);
-      return;
+    public ConsoleRateLimitFilter(
+            SlidingWindowRateLimiter rateLimiter,
+            ConsoleRateLimitProperties properties,
+            ConsoleSecurityResponseWriter responseWriter,
+            RedisRateLimitCircuitBreaker redisCircuitBreaker,
+            ConsoleLoginIpRateLimiter loginIpRateLimiter) {
+        this.rateLimiter = rateLimiter;
+        this.properties = properties;
+        this.responseWriter = responseWriter;
+        this.redisCircuitBreaker = redisCircuitBreaker;
+        this.loginIpRateLimiter = loginIpRateLimiter;
     }
 
-    String path = ServletRequestPaths.applicationPath(request);
-    String method = request.getMethod();
-
-    if (rejectLogin(request, response, path, method)) return;
-    if (rejectSensitiveOperation(response, path, method)) return;
-    if (rejectExpensiveOperation(response, path)) return;
-    if (rejectFileOperation(response, path)) return;
-
-    filterChain.doFilter(request, response);
-  }
-
-  private boolean rejectLogin(
-      HttpServletRequest request, HttpServletResponse response, String path, String method)
-      throws IOException {
-    // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────
-    boolean passwordLogin = HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path);
-    if (passwordLogin) {
-      if (!loginIpRateLimiter.tryAcquire(request)) {
-        String ip = request.getRemoteAddr();
-        String sanitizedIp = LogSanitizer.value(ip);
-        String sanitizedPath = LogSanitizer.value(path);
-        log.warn("Console login rate limit triggered: ip={} path={}", sanitizedIp, sanitizedPath);
-        responseWriter.write(
-            response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private boolean rejectSensitiveOperation(HttpServletResponse response, String path, String method)
-      throws IOException {
-    // ── 2. 敏感操作接口：用户限流 ─────────────────────────────────────────
-    if (HttpMethod.POST.matches(method) && path.startsWith(TRIGGER_PATH_PREFIX)) {
-      String username = resolveUsername();
-      if (Texts.hasText(username)) {
-        String key = "sensitive:user:" + username;
-        if (!tryAcquireFailOpen(
-            key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
-          String sanitizedUsername = LogSanitizer.value(username);
-          String sanitizedPath = LogSanitizer.value(path);
-          log.warn(
-              "Sensitive-operation rate limit triggered: user={} path={}",
-              sanitizedUsername,
-              sanitizedPath);
-          responseWriter.write(
-              response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return true;
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        if (!properties.isEnabled()) {
+            filterChain.doFilter(request, response);
+            return;
         }
-      }
+
+        String path = ServletRequestPaths.applicationPath(request);
+        String method = request.getMethod();
+
+        if (rejectLogin(request, response, path, method)) return;
+        if (rejectSensitiveOperation(response, path, method)) return;
+        if (rejectExpensiveOperation(response, path)) return;
+        if (rejectFileOperation(response, path)) return;
+
+        filterChain.doFilter(request, response);
     }
 
-    return false;
-  }
-
-  private boolean rejectExpensiveOperation(HttpServletResponse response, String path)
-      throws IOException {
-    // ── 3. 昂贵接口（导出/导入/Excel/报表）：用户限流（任意方法，更严阈值）────────────────
-    if (isExpensivePath(path)) {
-      String username = resolveUsername();
-      if (Texts.hasText(username)) {
-        String key = "expensive:user:" + username;
-        if (!tryAcquireFailOpen(
-            key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
-          String sanitizedUsername = LogSanitizer.value(username);
-          String sanitizedPath = LogSanitizer.value(path);
-          log.warn(
-              "Expensive-operation rate limit triggered: user={} path={}",
-              sanitizedUsername,
-              sanitizedPath);
-          responseWriter.write(
-              response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return true;
+    private boolean rejectLogin(HttpServletRequest request, HttpServletResponse response, String path, String method)
+            throws IOException {
+        // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────
+        boolean passwordLogin = HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path);
+        if (passwordLogin) {
+            if (!loginIpRateLimiter.tryAcquire(request)) {
+                String ip = request.getRemoteAddr();
+                String sanitizedIp = LogSanitizer.value(ip);
+                String sanitizedPath = LogSanitizer.value(path);
+                log.warn("Console login rate limit triggered: ip={} path={}", sanitizedIp, sanitizedPath);
+                responseWriter.write(response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
+                return true;
+            }
         }
-      }
+
+        return false;
     }
 
-    return false;
-  }
-
-  private boolean rejectFileOperation(HttpServletResponse response, String path)
-      throws IOException {
-    // ── 4. 文件操作接口（下载/错误导出/归档/重派/到达组）：用户限流（任意方法，高水位）──────────
-    if (matchesAnyPrefix(path, properties.getFileOpPathPrefixes())) {
-      String username = resolveUsername();
-      if (Texts.hasText(username)) {
-        String key = "fileop:user:" + username;
-        if (!tryAcquireFailOpen(
-            key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
-          String sanitizedUsername = LogSanitizer.value(username);
-          String sanitizedPath = LogSanitizer.value(path);
-          log.warn(
-              "File-operation rate limit triggered: user={} path={}",
-              sanitizedUsername,
-              sanitizedPath);
-          responseWriter.write(
-              response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return true;
+    private boolean rejectSensitiveOperation(HttpServletResponse response, String path, String method)
+            throws IOException {
+        // ── 2. 敏感操作接口：用户限流 ─────────────────────────────────────────
+        if (HttpMethod.POST.matches(method) && path.startsWith(TRIGGER_PATH_PREFIX)) {
+            String username = resolveUsername();
+            if (Texts.hasText(username)) {
+                String key = "sensitive:user:" + username;
+                if (!tryAcquireFailOpen(key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
+                    String sanitizedUsername = LogSanitizer.value(username);
+                    String sanitizedPath = LogSanitizer.value(path);
+                    log.warn(
+                            "Sensitive-operation rate limit triggered: user={} path={}",
+                            sanitizedUsername,
+                            sanitizedPath);
+                    responseWriter.write(
+                            response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
+                    return true;
+                }
+            }
         }
-      }
+
+        return false;
     }
 
-    return false;
-  }
+    private boolean rejectExpensiveOperation(HttpServletResponse response, String path) throws IOException {
+        // ── 3. 昂贵接口（导出/导入/Excel/报表）：用户限流（任意方法，更严阈值）────────────────
+        if (isExpensivePath(path)) {
+            String username = resolveUsername();
+            if (Texts.hasText(username)) {
+                String key = "expensive:user:" + username;
+                if (!tryAcquireFailOpen(key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
+                    String sanitizedUsername = LogSanitizer.value(username);
+                    String sanitizedPath = LogSanitizer.value(path);
+                    log.warn(
+                            "Expensive-operation rate limit triggered: user={} path={}",
+                            sanitizedUsername,
+                            sanitizedPath);
+                    responseWriter.write(
+                            response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
+                    return true;
+                }
+            }
+        }
 
-  private boolean isExpensivePath(String path) {
-    return matchesAnyPrefix(path, properties.getExpensiveOpPathPrefixes());
-  }
+        return false;
+    }
 
-  private static boolean matchesAnyPrefix(String path, List<String> prefixes) {
-    for (String prefix : prefixes) {
-      if (path.startsWith(prefix)) {
-        return true;
-      }
-    }
-    return false;
-  }
+    private boolean rejectFileOperation(HttpServletResponse response, String path) throws IOException {
+        // ── 4. 文件操作接口（下载/错误导出/归档/重派/到达组）：用户限流（任意方法，高水位）──────────
+        if (matchesAnyPrefix(path, properties.getFileOpPathPrefixes())) {
+            String username = resolveUsername();
+            if (Texts.hasText(username)) {
+                String key = "fileop:user:" + username;
+                if (!tryAcquireFailOpen(key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
+                    String sanitizedUsername = LogSanitizer.value(username);
+                    String sanitizedPath = LogSanitizer.value(path);
+                    log.warn("File-operation rate limit triggered: user={} path={}", sanitizedUsername, sanitizedPath);
+                    responseWriter.write(
+                            response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
+                    return true;
+                }
+            }
+        }
 
-  /**
-   * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana
-   * 告警回退。
-   *
-   * @return true 表示放行（正常通过 / Redis 故障回退），false 表示超限拒绝
-   */
-  private boolean tryAcquireFailOpen(
-      String key, int limitPerMinute, String category, String identity) {
-    if (!redisCircuitBreaker.allowRedisCall()) {
-      return true;
+        return false;
     }
-    try {
-      boolean allowed = rateLimiter.tryAcquire(key, limitPerMinute);
-      redisCircuitBreaker.recordSuccess();
-      return allowed;
-    } catch (DataAccessException ex) {
-      redisCircuitBreaker.recordFailure();
-      String sanitizedCategory = LogSanitizer.value(category);
-      String sanitizedIdentity = LogSanitizer.value(identity);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
-          sanitizedCategory,
-          sanitizedIdentity,
-          causeSummary);
-      return true;
-    }
-  }
 
-  private String resolveUsername() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(auth) || !auth.isAuthenticated()) {
-      return null;
+    private boolean isExpensivePath(String path) {
+        return matchesAnyPrefix(path, properties.getExpensiveOpPathPrefixes());
     }
-    if (auth.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+
+    private static boolean matchesAnyPrefix(String path, List<String> prefixes) {
+        for (String prefix : prefixes) {
+            if (path.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
-    return auth.getName();
-  }
+
+    /**
+     * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana
+     * 告警回退。
+     *
+     * @return true 表示放行（正常通过 / Redis 故障回退），false 表示超限拒绝
+     */
+    private boolean tryAcquireFailOpen(String key, int limitPerMinute, String category, String identity) {
+        if (!redisCircuitBreaker.allowRedisCall()) {
+            return true;
+        }
+        try {
+            boolean allowed = rateLimiter.tryAcquire(key, limitPerMinute);
+            redisCircuitBreaker.recordSuccess();
+            return allowed;
+        } catch (DataAccessException ex) {
+            redisCircuitBreaker.recordFailure();
+            String sanitizedCategory = LogSanitizer.value(category);
+            String sanitizedIdentity = LogSanitizer.value(identity);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
+                    sanitizedCategory,
+                    sanitizedIdentity,
+                    causeSummary);
+            return true;
+        }
+    }
+
+    private String resolveUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (EmptyChecks.isNull(auth) || !auth.isAuthenticated()) {
+            return null;
+        }
+        if (auth.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        return auth.getName();
+    }
 }

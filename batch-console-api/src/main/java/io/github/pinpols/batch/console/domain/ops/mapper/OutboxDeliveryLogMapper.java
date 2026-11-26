@@ -8,10 +8,9 @@ import org.apache.ibatis.annotations.Param;
 
 public interface OutboxDeliveryLogMapper {
 
-  List<OutboxDeliveryLogRow> selectByQuery(OutboxDeliveryLogQuery query);
+    List<OutboxDeliveryLogRow> selectByQuery(OutboxDeliveryLogQuery query);
 
-  long countByQuery(OutboxDeliveryLogCountQuery parameters);
+    long countByQuery(OutboxDeliveryLogCountQuery parameters);
 
-  long countByStatus(
-      @Param("tenantId") String tenantId, @Param("deliveryStatus") String deliveryStatus);
+    long countByStatus(@Param("tenantId") String tenantId, @Param("deliveryStatus") String deliveryStatus);
 }

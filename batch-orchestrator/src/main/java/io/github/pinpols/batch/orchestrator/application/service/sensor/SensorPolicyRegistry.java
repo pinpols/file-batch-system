@@ -15,24 +15,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class SensorPolicyRegistry {
 
-  private final Map<SensorType, SensorPolicy> policies = new EnumMap<>(SensorType.class);
+    private final Map<SensorType, SensorPolicy> policies = new EnumMap<>(SensorType.class);
 
-  public SensorPolicyRegistry(List<SensorPolicy> policyBeans) {
-    for (SensorPolicy policy : policyBeans) {
-      SensorPolicy existing = policies.putIfAbsent(policy.type(), policy);
-      if (existing != null) {
-        throw new IllegalStateException("Duplicate SensorPolicy for type "
-            + policy.type()
-            + ": "
-            + existing.getClass().getName()
-            + " vs "
-            + policy.getClass().getName());
-      }
+    public SensorPolicyRegistry(List<SensorPolicy> policyBeans) {
+        for (SensorPolicy policy : policyBeans) {
+            SensorPolicy existing = policies.putIfAbsent(policy.type(), policy);
+            if (existing != null) {
+                throw new IllegalStateException("Duplicate SensorPolicy for type "
+                        + policy.type()
+                        + ": "
+                        + existing.getClass().getName()
+                        + " vs "
+                        + policy.getClass().getName());
+            }
+        }
     }
-  }
 
-  /** 路由到 {@code type} 对应 policy，未注册时返回 null。 */
-  public SensorPolicy resolve(SensorType type) {
-    return policies.get(type);
-  }
+    /** 路由到 {@code type} 对应 policy，未注册时返回 null。 */
+    public SensorPolicy resolve(SensorType type) {
+        return policies.get(type);
+    }
 }

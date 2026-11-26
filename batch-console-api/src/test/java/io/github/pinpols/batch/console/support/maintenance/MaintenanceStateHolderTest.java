@@ -18,42 +18,42 @@ import org.junit.jupiter.api.Test;
 @DisplayName("维护状态读取与应用启动时序")
 class MaintenanceStateHolderTest {
 
-  private MaintenanceStateHolder stateHolder;
+    private MaintenanceStateHolder stateHolder;
 
-  @AfterEach
-  void shutDownStateHolder() {
-    if (stateHolder != null) {
-      stateHolder.shutdown();
+    @AfterEach
+    void shutDownStateHolder() {
+        if (stateHolder != null) {
+            stateHolder.shutdown();
+        }
     }
-  }
 
-  @DisplayName("应用就绪后才读取已迁移维护状态表")
-  @Test
-  void shouldWaitUntilApplicationReadyBeforeReadingMigratedMaintenanceTable() {
-    ConsoleMaintenanceProperties properties = new ConsoleMaintenanceProperties();
-    MaintenanceStateMapper mapper = mock(MaintenanceStateMapper.class);
-    MaintenanceStateEntity entity = new MaintenanceStateEntity();
-    entity.setEnabled(true);
-    entity.setReadOnly(true);
-    entity.setMessage("maintenance loaded after migration");
-    entity.setAffectedServicesJson("[\"workflow\"]");
-    entity.setVersion(7L);
-    entity.setUpdatedAt(Instant.parse("2026-10-17T00:00:00Z"));
-    when(mapper.selectSingleton()).thenReturn(entity);
-    stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
+    @DisplayName("应用就绪后才读取已迁移维护状态表")
+    @Test
+    void shouldWaitUntilApplicationReadyBeforeReadingMigratedMaintenanceTable() {
+        ConsoleMaintenanceProperties properties = new ConsoleMaintenanceProperties();
+        MaintenanceStateMapper mapper = mock(MaintenanceStateMapper.class);
+        MaintenanceStateEntity entity = new MaintenanceStateEntity();
+        entity.setEnabled(true);
+        entity.setReadOnly(true);
+        entity.setMessage("maintenance loaded after migration");
+        entity.setAffectedServicesJson("[\"workflow\"]");
+        entity.setVersion(7L);
+        entity.setUpdatedAt(Instant.parse("2026-10-17T00:00:00Z"));
+        when(mapper.selectSingleton()).thenReturn(entity);
+        stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
 
-    stateHolder.initFromProperties();
+        stateHolder.initFromProperties();
 
-    verifyNoInteractions(mapper);
-    assertThat(stateHolder.sharedStateAvailable()).isFalse();
+        verifyNoInteractions(mapper);
+        assertThat(stateHolder.sharedStateAvailable()).isFalse();
 
-    stateHolder.refreshAfterApplicationReady();
+        stateHolder.refreshAfterApplicationReady();
 
-    verify(mapper).selectSingleton();
-    assertThat(stateHolder.sharedStateAvailable()).isTrue();
-    assertThat(stateHolder.current().enabled()).isTrue();
-    assertThat(stateHolder.current().readOnly()).isTrue();
-    assertThat(stateHolder.current().affectedServices()).containsExactly("workflow");
-    assertThat(stateHolder.current().version()).isEqualTo(7L);
-  }
+        verify(mapper).selectSingleton();
+        assertThat(stateHolder.sharedStateAvailable()).isTrue();
+        assertThat(stateHolder.current().enabled()).isTrue();
+        assertThat(stateHolder.current().readOnly()).isTrue();
+        assertThat(stateHolder.current().affectedServices()).containsExactly("workflow");
+        assertThat(stateHolder.current().version()).isEqualTo(7L);
+    }
 }

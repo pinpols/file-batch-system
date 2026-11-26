@@ -14,28 +14,26 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ArchiveSchedulerHealthMetrics {
 
-  private static final String LAST_SUCCESS_METRIC =
-      "batch.archive.scheduler.last.success.timestamp.seconds";
+    private static final String LAST_SUCCESS_METRIC = "batch.archive.scheduler.last.success.timestamp.seconds";
 
-  private final MeterRegistry meterRegistry;
-  private final ConcurrentMap<String, AtomicLong> lastSuccessByScheduler =
-      new ConcurrentHashMap<>();
+    private final MeterRegistry meterRegistry;
+    private final ConcurrentMap<String, AtomicLong> lastSuccessByScheduler = new ConcurrentHashMap<>();
 
-  public void register(String scheduler) {
-    lastSuccessByScheduler.computeIfAbsent(scheduler, name -> {
-      AtomicLong lastSuccess = new AtomicLong(0);
-      Gauge.builder(LAST_SUCCESS_METRIC, lastSuccess, AtomicLong::get)
-          .tag("scheduler", name)
-          .description("Unix timestamp of the last archive scheduler run that returned normally")
-          .register(meterRegistry);
-      return lastSuccess;
-    });
-  }
+    public void register(String scheduler) {
+        lastSuccessByScheduler.computeIfAbsent(scheduler, name -> {
+            AtomicLong lastSuccess = new AtomicLong(0);
+            Gauge.builder(LAST_SUCCESS_METRIC, lastSuccess, AtomicLong::get)
+                    .tag("scheduler", name)
+                    .description("Unix timestamp of the last archive scheduler run that returned normally")
+                    .register(meterRegistry);
+            return lastSuccess;
+        });
+    }
 
-  public void markSuccess(String scheduler) {
-    register(scheduler);
-    AtomicLong lastSuccessEpochSeconds = lastSuccessByScheduler.get(scheduler);
-    long currentEpochSecond = Instant.now().getEpochSecond();
-    lastSuccessEpochSeconds.set(currentEpochSecond);
-  }
+    public void markSuccess(String scheduler) {
+        register(scheduler);
+        AtomicLong lastSuccessEpochSeconds = lastSuccessByScheduler.get(scheduler);
+        long currentEpochSecond = Instant.now().getEpochSecond();
+        lastSuccessEpochSeconds.set(currentEpochSecond);
+    }
 }

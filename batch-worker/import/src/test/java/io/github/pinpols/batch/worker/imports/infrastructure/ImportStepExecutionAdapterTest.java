@@ -36,161 +36,156 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("导入步骤执行适配器单测:上下文映射,阶段委派与成功响应计数语义")
 class ImportStepExecutionAdapterTest {
 
-  @Mock
-  private ImportStageExecutor stageExecutor;
+    @Mock
+    private ImportStageExecutor stageExecutor;
 
-  @Mock
-  private PlatformFileRecordRepository runtimeRepository;
+    @Mock
+    private PlatformFileRecordRepository runtimeRepository;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  private ImportStepExecutionAdapter adapter;
+    private ImportStepExecutionAdapter adapter;
 
-  @BeforeEach
-  void setUp() {
-    adapter = new ImportStepExecutionAdapter(
-        stageExecutor, pipelineRuns, runtimeRepository, emptyProvider(), emptyProvider());
-  }
+    @BeforeEach
+    void setUp() {
+        adapter = new ImportStepExecutionAdapter(
+                stageExecutor, pipelineRuns, runtimeRepository, emptyProvider(), emptyProvider());
+    }
 
-  @Test
-  @DisplayName("适配器的管道类型与起始阶段同导入流程保持一致")
-  void shouldMatchImportPipeline_whenDescribingAdapter() {
-    assertThat(adapter.pipelineType()).isEqualTo(ImportWorkerType.IMPORT);
-    assertThat(adapter.initialStage()).isEqualTo(ImportStage.RECEIVE.name());
-  }
+    @Test
+    @DisplayName("适配器的管道类型与起始阶段同导入流程保持一致")
+    void shouldMatchImportPipeline_whenDescribingAdapter() {
+        assertThat(adapter.pipelineType()).isEqualTo(ImportWorkerType.IMPORT);
+        assertThat(adapter.initialStage()).isEqualTo(ImportStage.RECEIVE.name());
+    }
 
-  @Test
-  @DisplayName("构建上下文时映射租户,作业,执行器与业务日期,并复用属性映射")
-  void shouldMapCommonFieldsAndAttributes_whenBuildingContext() {
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
-    attributes.put("payload", "{}");
+    @Test
+    @DisplayName("构建上下文时映射租户,作业,执行器与业务日期,并复用属性映射")
+    void shouldMapCommonFieldsAndAttributes_whenBuildingContext() {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
+        attributes.put("payload", "{}");
 
-    ImportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
+        ImportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
 
-    assertThat(context.getTenantId()).isEqualTo("tenant-a");
-    assertThat(context.getJobCode()).isEqualTo("job-import");
-    assertThat(context.getWorkerId()).isEqualTo("worker-1");
-    assertThat(context.getBizDate()).isEqualTo("2026-09-11");
-    assertThat(context.getFileId()).isEqualTo("42");
-    assertThat(context.getAttributes()).isSameAs(attributes);
-  }
+        assertThat(context.getTenantId()).isEqualTo("tenant-a");
+        assertThat(context.getJobCode()).isEqualTo("job-import");
+        assertThat(context.getWorkerId()).isEqualTo("worker-1");
+        assertThat(context.getBizDate()).isEqualTo("2026-09-11");
+        assertThat(context.getFileId()).isEqualTo("42");
+        assertThat(context.getAttributes()).isSameAs(attributes);
+    }
 
-  @Test
-  @DisplayName("回放能力预检把带固定系统版本的原始请求交给 IMPORT 阶段解析器")
-  void shouldResolveReplayCapabilityFromPinnedImportRequest() {
-    when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
-    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("import-load");
-    when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
-    Map<String, Object> attributes = Map.of(
-        PipelineRuntimeKeys.PAYLOAD,
-        "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":1,"
-            + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
-            + "\"frozenFileTemplateProtected\":\"protected-template\"}",
-        PipelineRuntimeKeys.BIZ_DATE,
-        "2026-10-23");
-    StepExecutionRequest request =
-        new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
+    @Test
+    @DisplayName("回放能力预检把带固定系统版本的原始请求交给 IMPORT 阶段解析器")
+    void shouldResolveReplayCapabilityFromPinnedImportRequest() {
+        when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
+        ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("import-load");
+        when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
+        Map<String, Object> attributes = Map.of(
+                PipelineRuntimeKeys.PAYLOAD,
+                "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":1,"
+                        + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
+                        + "\"frozenFileTemplateProtected\":\"protected-template\"}",
+                PipelineRuntimeKeys.BIZ_DATE,
+                "2026-10-23");
+        StepExecutionRequest request =
+                new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
 
-    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+        ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
 
-    assertThat(actual).isEqualTo(expected);
-    ArgumentCaptor<ImportJobContext> contextCaptor =
-        ArgumentCaptor.forClass(ImportJobContext.class);
-    verify(stageExecutor).resolveReplayCapability(contextCaptor.capture());
-    assertThat(contextCaptor.getValue().getTenantId()).isEqualTo("tenant-a");
-    assertThat(contextCaptor.getValue().getBizDate()).isEqualTo("2026-10-23");
-    assertThat(contextCaptor.getValue().getRawPayload())
-        .contains("protected-template", "WORKFLOW_RUN");
-  }
+        assertThat(actual).isEqualTo(expected);
+        ArgumentCaptor<ImportJobContext> contextCaptor = ArgumentCaptor.forClass(ImportJobContext.class);
+        verify(stageExecutor).resolveReplayCapability(contextCaptor.capture());
+        assertThat(contextCaptor.getValue().getTenantId()).isEqualTo("tenant-a");
+        assertThat(contextCaptor.getValue().getBizDate()).isEqualTo("2026-10-23");
+        assertThat(contextCaptor.getValue().getRawPayload()).contains("protected-template", "WORKFLOW_RUN");
+    }
 
-  @Test
-  @DisplayName("执行阶段时原样委派给阶段执行器,并返回其结果")
-  void shouldDelegateStages_whenExecuting() {
-    ImportJobContext context = new ImportJobContext();
-    List<ImportStageResult> expected = List.of(ImportStageResult.success(ImportStage.RECEIVE));
-    when(stageExecutor.execute(context)).thenReturn(expected);
+    @Test
+    @DisplayName("执行阶段时原样委派给阶段执行器,并返回其结果")
+    void shouldDelegateStages_whenExecuting() {
+        ImportJobContext context = new ImportJobContext();
+        List<ImportStageResult> expected = List.of(ImportStageResult.success(ImportStage.RECEIVE));
+        when(stageExecutor.execute(context)).thenReturn(expected);
 
-    assertThat(adapter.executeStages(context)).isSameAs(expected);
-    verify(stageExecutor).execute(context);
-  }
+        assertThat(adapter.executeStages(context)).isSameAs(expected);
+        verify(stageExecutor).execute(context);
+    }
 
-  @Test
-  @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
-  void shouldPreserveStageResultContract_whenReadingAccessors() {
-    ImportStageResult result =
-        ImportStageResult.failure(ImportStage.VALIDATE, "INVALID_ROW", "invalid row");
+    @Test
+    @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
+    void shouldPreserveStageResultContract_whenReadingAccessors() {
+        ImportStageResult result = ImportStageResult.failure(ImportStage.VALIDATE, "INVALID_ROW", "invalid row");
 
-    assertThat(adapter.isSuccess(null)).isFalse();
-    assertThat(adapter.isSuccess(result)).isFalse();
-    assertThat(adapter.resultStage(result)).isEqualTo("VALIDATE");
-    assertThat(adapter.resultCode(result)).isEqualTo("INVALID_ROW");
-    assertThat(adapter.resultMessage(result)).isEqualTo("invalid row");
-  }
+        assertThat(adapter.isSuccess(null)).isFalse();
+        assertThat(adapter.isSuccess(result)).isFalse();
+        assertThat(adapter.resultStage(result)).isEqualTo("VALIDATE");
+        assertThat(adapter.resultCode(result)).isEqualTo("INVALID_ROW");
+        assertThat(adapter.resultMessage(result)).isEqualTo("invalid row");
+    }
 
-  @Test
-  @DisplayName("拒绝携带不匹配系统 Pipeline 版本的任务,且不创建运行实例")
-  void shouldRejectMismatchedPinnedSystemPipelineBeforeCreatingRun() {
-    when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
-    Map<String, Object> attributes = Map.of(
-        PipelineRuntimeKeys.PAYLOAD,
-        "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":2}");
-    StepExecutionRequest request =
-        new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
+    @Test
+    @DisplayName("拒绝携带不匹配系统 Pipeline 版本的任务,且不创建运行实例")
+    void shouldRejectMismatchedPinnedSystemPipelineBeforeCreatingRun() {
+        when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
+        Map<String, Object> attributes =
+                Map.of(PipelineRuntimeKeys.PAYLOAD, "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":2}");
+        StepExecutionRequest request =
+                new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
 
-    StepExecutionResponse response = adapter.execute(request);
+        StepExecutionResponse response = adapter.execute(request);
 
-    assertThat(response.success()).isFalse();
-    assertThat(response.code()).isEqualTo("INVALID_ARGUMENT");
-    verify(pipelineRuns, Mockito.never()).createPipelineInstance(ArgumentMatchers.any());
-    verify(stageExecutor, Mockito.never()).execute(ArgumentMatchers.any());
-  }
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("INVALID_ARGUMENT");
+        verify(pipelineRuns, Mockito.never()).createPipelineInstance(ArgumentMatchers.any());
+        verify(stageExecutor, Mockito.never()).execute(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("成功响应把文件标识,输入输出计数与业务日期写入节点输出")
-  @SuppressWarnings("unchecked")
-  void shouldPublishImportCounts_whenBuildingSuccessResponse() {
-    ImportJobContext context = new ImportJobContext();
-    context.setBizDate("2026-09-11");
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attributes.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 12L);
-    attributes.put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 12L);
-    attributes.put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 10L);
-    context.setAttributes(attributes);
+    @Test
+    @DisplayName("成功响应把文件标识,输入输出计数与业务日期写入节点输出")
+    @SuppressWarnings("unchecked")
+    void shouldPublishImportCounts_whenBuildingSuccessResponse() {
+        ImportJobContext context = new ImportJobContext();
+        context.setBizDate("2026-09-11");
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
+        attributes.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 12L);
+        attributes.put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 12L);
+        attributes.put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 10L);
+        context.setAttributes(attributes);
 
-    StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
+        StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
 
-    assertThat(response.success()).isTrue();
-    assertThat(response.message()).isEqualTo("imported 10 row(s)");
-    assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
-        .containsEntry("inputCount", 12L)
-        .containsEntry("outputCount", 10L)
-        .containsEntry(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
-  }
+        assertThat(response.success()).isTrue();
+        assertThat(response.message()).isEqualTo("imported 10 row(s)");
+        assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
+                .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
+                .containsEntry("inputCount", 12L)
+                .containsEntry("outputCount", 10L)
+                .containsEntry(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
+    }
 
-  private static StepExecutionRequest request(Map<String, Object> attributes) {
-    return new StepExecutionRequest(
-        "tenant-a", "job-import", "IMPORT_RECEIVE", "worker-1", attributes);
-  }
+    private static StepExecutionRequest request(Map<String, Object> attributes) {
+        return new StepExecutionRequest("tenant-a", "job-import", "IMPORT_RECEIVE", "worker-1", attributes);
+    }
 
-  private static List<PipelineStepTemplate> importStageTemplates() {
-    return List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK").stream()
-        .map(stage -> PipelineStepTemplate.builder()
-            .stageCode(stage)
-            .stepCode(stage)
-            .stepName(stage)
-            .stepOrder(1)
-            .implCode(stage)
-            .enabled(true)
-            .build())
-        .toList();
-  }
+    private static List<PipelineStepTemplate> importStageTemplates() {
+        return List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK").stream()
+                .map(stage -> PipelineStepTemplate.builder()
+                        .stageCode(stage)
+                        .stepCode(stage)
+                        .stepName(stage)
+                        .stepOrder(1)
+                        .implCode(stage)
+                        .enabled(true)
+                        .build())
+                .toList();
+    }
 
-  @SuppressWarnings("unchecked")
-  private static <T> ObjectProvider<T> emptyProvider() {
-    return mock(ObjectProvider.class);
-  }
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> emptyProvider() {
+        return mock(ObjectProvider.class);
+    }
 }

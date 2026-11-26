@@ -15,29 +15,28 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("过期补偿命令对账器,验证超时仍处于运行中状态的命令被批量标记为失败")
 class StaleCompensationCommandReconcilerTest {
 
-  @Test
-  @DisplayName("补偿命令超过超时阈值仍为运行中时,对账应按配置的批量大小将其标记为失败并记录错误原因")
-  void shouldMarkTimedOutRunningCommandsFailed_whenReconciling() {
-    CompensationCommandMapper mapper = mock(CompensationCommandMapper.class);
-    StaleCompensationReconcilerProperties properties = new StaleCompensationReconcilerProperties();
-    properties.setTimeoutSeconds(300L);
-    properties.setBatchSize(25);
-    StaleCompensationCommandReconciler reconciler =
-        new StaleCompensationCommandReconciler(mapper, properties);
-    when(mapper.markStaleRunningFailed(ArgumentMatchers.any(StaleCompensationFailureParam.class)))
-        .thenReturn(2);
+    @Test
+    @DisplayName("补偿命令超过超时阈值仍为运行中时,对账应按配置的批量大小将其标记为失败并记录错误原因")
+    void shouldMarkTimedOutRunningCommandsFailed_whenReconciling() {
+        CompensationCommandMapper mapper = mock(CompensationCommandMapper.class);
+        StaleCompensationReconcilerProperties properties = new StaleCompensationReconcilerProperties();
+        properties.setTimeoutSeconds(300L);
+        properties.setBatchSize(25);
+        StaleCompensationCommandReconciler reconciler = new StaleCompensationCommandReconciler(mapper, properties);
+        when(mapper.markStaleRunningFailed(ArgumentMatchers.any(StaleCompensationFailureParam.class)))
+                .thenReturn(2);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(mapper)
-        .markStaleRunningFailed(ArgumentMatchers.argThat(param -> param != null
-            && Objects.equals(param.runningStatus(), CompensationCommandStatus.RUNNING.code())
-            && Objects.equals(param.failedStatus(), CompensationCommandStatus.FAILED.code())
-            && param.cutoff() != null
-            && Objects.equals(param.errorCode(), StaleCompensationCommandReconciler.ERROR_CODE)
-            && Objects.equals(
-                param.errorMessage(),
-                "compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
-            && Objects.equals(param.limit(), 25)));
-  }
+        verify(mapper)
+                .markStaleRunningFailed(ArgumentMatchers.argThat(param -> param != null
+                        && Objects.equals(param.runningStatus(), CompensationCommandStatus.RUNNING.code())
+                        && Objects.equals(param.failedStatus(), CompensationCommandStatus.FAILED.code())
+                        && param.cutoff() != null
+                        && Objects.equals(param.errorCode(), StaleCompensationCommandReconciler.ERROR_CODE)
+                        && Objects.equals(
+                                param.errorMessage(),
+                                "compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
+                        && Objects.equals(param.limit(), 25)));
+    }
 }

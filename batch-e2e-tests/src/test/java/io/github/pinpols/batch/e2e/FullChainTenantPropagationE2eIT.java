@@ -52,55 +52,54 @@ import org.springframework.test.context.jdbc.Sql;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.import.worker-type=IMPORT")
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
 @Sql(scripts = {E2eTestSql.IMPORT_TEMPLATE_SEED})
 @Tag("critical")
 @DisplayName("导入全链路租户传播守护:从触发请求、派发事件到执行回报与终态写入,全部落库行的租户标识不得漂移")
 class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
 
-  // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  private final DataSource businessDataSource;
+    private final DataSource businessDataSource;
 
-  @Autowired
-  FullChainTenantPropagationE2eIT(
-      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
-    this.businessDataSource = businessDataSource;
-  }
+    @Autowired
+    FullChainTenantPropagationE2eIT(@Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+        this.businessDataSource = businessDataSource;
+    }
 
-  @Test
-  @DisplayName("导入全链路到达任务成功终态后,逐表核对每一行租户标识严格一致;链路未写入的表跳过核对")
-  void shouldNotDriftTenantId_whenFullChainImportWritesEveryPath() {
-    final String selectTaskStatusSql = """
+    @Test
+    @DisplayName("导入全链路到达任务成功终态后,逐表核对每一行租户标识严格一致;链路未写入的表跳过核对")
+    void shouldNotDriftTenantId_whenFullChainImportWritesEveryPath() {
+        final String selectTaskStatusSql = """
         select t.task_status from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
         where ji.tenant_id = ? and ji.dedup_key = ?\
         """;
-    final String selectIdSql = """
+        final String selectIdSql = """
         select id from batch.job_instance where tenant_id = ? and dedup_key = ?
     """;
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("fileFormatType", "JSON");
-    params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
-    params.put("bizType", "CUSTOMER");
-    params.put("content", """
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileFormatType", "JSON");
+        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+        params.put("bizType", "CUSTOMER");
+        params.put("content", """
             [{
               "customerNo": "TENANT_GUARD_001",
               "customerName": "Tenant Guard",
@@ -112,108 +111,93 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
             }]
             """.stripTrailing());
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-tenant-propagation",
-        params));
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-tenant-propagation",
+                params));
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    // 等待 task 完成
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("SUCCESS");
-        });
+        // 等待 task 完成
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("SUCCESS");
+                });
 
-    Long jobInstanceId =
-        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
-    assertThat(jobInstanceId).isNotNull();
+        Long jobInstanceId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
+        assertThat(jobInstanceId).isNotNull();
 
-    // ── 1) job_instance: 行存在且 tenant=ta ────────────────────────────────
-    assertSingleTenantOnly(
-        "batch.job_instance", "id = ?", new Object[] {jobInstanceId}, "job_instance");
+        // ── 1) job_instance: 行存在且 tenant=ta ────────────────────────────────
+        assertSingleTenantOnly("batch.job_instance", "id = ?", new Object[] {jobInstanceId}, "job_instance");
 
-    // ── 2) trigger_request: launch 入口幂等记录 ──────────────────────────
-    assertSingleTenantOnly(
-        "batch.trigger_request",
-        "request_id = ?",
-        new Object[] {seed.requestId()},
-        "trigger_request");
+        // ── 2) trigger_request: launch 入口幂等记录 ──────────────────────────
+        assertSingleTenantOnly(
+                "batch.trigger_request", "request_id = ?", new Object[] {seed.requestId()}, "trigger_request");
 
-    // ── 3) outbox_event: orchestrator 同事务写入的派发事件 ────────────────
-    // outbox_event 是 aggregate_type=JOB_TASK + aggregate_id=task.id;按 job_instance 反查
-    assertSingleTenantOnly(
-        "batch.outbox_event",
-        "aggregate_type = 'JOB_TASK' AND aggregate_id IN (select id from batch.job_task where job_instance_id = ?)",
-        new Object[] {jobInstanceId},
-        "outbox_event");
+        // ── 3) outbox_event: orchestrator 同事务写入的派发事件 ────────────────
+        // outbox_event 是 aggregate_type=JOB_TASK + aggregate_id=task.id;按 job_instance 反查
+        assertSingleTenantOnly(
+                "batch.outbox_event",
+                "aggregate_type = 'JOB_TASK' AND aggregate_id IN (select id from batch.job_task where job_instance_id = ?)",
+                new Object[] {jobInstanceId},
+                "outbox_event");
 
-    // ── 4) job_task: 任务行 ─────────────────────────────────────────────
-    assertSingleTenantOnly(
-        "batch.job_task", "job_instance_id = ?", new Object[] {jobInstanceId}, "job_task");
+        // ── 4) job_task: 任务行 ─────────────────────────────────────────────
+        assertSingleTenantOnly("batch.job_task", "job_instance_id = ?", new Object[] {jobInstanceId}, "job_task");
 
-    // ── 5) job_partition: 分片 ─────────────────────────────────────────
-    assertSingleTenantOnly(
-        "batch.job_partition",
-        "job_instance_id = ?",
-        new Object[] {jobInstanceId},
-        "job_partition");
+        // ── 5) job_partition: 分片 ─────────────────────────────────────────
+        assertSingleTenantOnly(
+                "batch.job_partition", "job_instance_id = ?", new Object[] {jobInstanceId}, "job_partition");
 
-    // ── 6) worker_report_outbox: worker → orchestrator 回报 ─────────────
-    // V96 schema 用 task_id 列(非 job_task_id);可能为空(report 路径走 sync inbound 时不入此表)
-    assertSingleTenantOnlyOrEmpty(
-        "batch.worker_report_outbox",
-        "task_id IN (select id from batch.job_task where job_instance_id = ?)",
-        new Object[] {jobInstanceId},
-        "worker_report_outbox");
+        // ── 6) worker_report_outbox: worker → orchestrator 回报 ─────────────
+        // V96 schema 用 task_id 列(非 job_task_id);可能为空(report 路径走 sync inbound 时不入此表)
+        assertSingleTenantOnlyOrEmpty(
+                "batch.worker_report_outbox",
+                "task_id IN (select id from batch.job_task where job_instance_id = ?)",
+                new Object[] {jobInstanceId},
+                "worker_report_outbox");
 
-    // ── 7) file_record: import 注册的文件 ───────────────────────────────
-    // file_record 通过 trace_id 关联(import 用 e2e-tr-tenant-propagation 作为 traceId)
-    assertSingleTenantOnly(
-        "batch.file_record",
-        "trace_id = ?",
-        new Object[] {"e2e-tr-tenant-propagation"},
-        "file_record");
+        // ── 7) file_record: import 注册的文件 ───────────────────────────────
+        // file_record 通过 trace_id 关联(import 用 e2e-tr-tenant-propagation 作为 traceId)
+        assertSingleTenantOnly(
+                "batch.file_record", "trace_id = ?", new Object[] {"e2e-tr-tenant-propagation"}, "file_record");
 
-    final String selectCustomerCountSql = """
+        final String selectCustomerCountSql = """
         select count(*) from biz.customer_account where tenant_id = ? and customer_no = ?
         """;
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Integer customerCount = businessJdbc.queryForObject(
-        selectCustomerCountSql, Integer.class, TENANT, "TENANT_GUARD_001");
-    assertThat(customerCount).as("业务库中必须有本次租户的客户记录").isEqualTo(1);
-  }
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        Integer customerCount =
+                businessJdbc.queryForObject(selectCustomerCountSql, Integer.class, TENANT, "TENANT_GUARD_001");
+        assertThat(customerCount).as("业务库中必须有本次租户的客户记录").isEqualTo(1);
+    }
 
-  /**
-   * 必需记录必须存在，所有匹配行的 tenant_id 必须严格等于 {@link #TENANT}；可选记录允许为空。
-   */
-  private void assertSingleTenantOnly(String table, String where, Object[] params, String label) {
-    assertTenantRows(table, where, params, label, true);
-  }
+    /**
+     * 必需记录必须存在，所有匹配行的 tenant_id 必须严格等于 {@link #TENANT}；可选记录允许为空。
+     */
+    private void assertSingleTenantOnly(String table, String where, Object[] params, String label) {
+        assertTenantRows(table, where, params, label, true);
+    }
 
-  private void assertSingleTenantOnlyOrEmpty(
-      String table, String where, Object[] params, String label) {
-    assertTenantRows(table, where, params, label, false);
-  }
+    private void assertSingleTenantOnlyOrEmpty(String table, String where, Object[] params, String label) {
+        assertTenantRows(table, where, params, label, false);
+    }
 
-  private void assertTenantRows(
-      String table, String where, Object[] params, String label, boolean required) {
-    final String selectTenantIdSql = """
+    private void assertTenantRows(String table, String where, Object[] params, String label, boolean required) {
+        final String selectTenantIdSql = """
         select tenant_id from %s where %s\
         """.formatted(table, where);
-    List<String> tenants = jdbcTemplate.queryForList(selectTenantIdSql, String.class, params);
-    if (required) {
-      assertThat(tenants).as("%s 必须有本次链路记录", label).isNotEmpty();
+        List<String> tenants = jdbcTemplate.queryForList(selectTenantIdSql, String.class, params);
+        if (required) {
+            assertThat(tenants).as("%s 必须有本次链路记录", label).isNotEmpty();
+        }
+        assertThat(tenants)
+                .as("%s 表中存在 tenant_id 漂移行:%s,期望全部 = '%s'", label, tenants, TENANT)
+                .allMatch(t -> TENANT.equals(t));
     }
-    assertThat(tenants)
-        .as("%s 表中存在 tenant_id 漂移行:%s,期望全部 = '%s'", label, tenants, TENANT)
-        .allMatch(t -> TENANT.equals(t));
-  }
 }

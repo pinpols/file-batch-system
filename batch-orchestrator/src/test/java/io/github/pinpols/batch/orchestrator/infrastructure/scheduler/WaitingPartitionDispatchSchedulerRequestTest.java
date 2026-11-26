@@ -15,43 +15,43 @@ import org.junit.jupiter.api.Test;
 @DisplayName("等待分片重派时的调度请求构建: 队列,资源档位与下游通道约束均取自分片输入快照")
 class WaitingPartitionDispatchSchedulerRequestTest {
 
-  @Test
-  @DisplayName("WAITING 重派保留资源池与下游通道约束")
-  void shouldKeepResourceAndChannelConstraints_whenRebuildingRetryRequest() {
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setTenantId("ta");
-    instance.setJobCode("dispatch-job");
-    instance.setQueueCode("workflow-queue");
-    instance.setWorkerGroup("DISPATCH");
-    instance.setPriority(8);
+    @Test
+    @DisplayName("WAITING 重派保留资源池与下游通道约束")
+    void shouldKeepResourceAndChannelConstraints_whenRebuildingRetryRequest() {
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setTenantId("ta");
+        instance.setJobCode("dispatch-job");
+        instance.setQueueCode("workflow-queue");
+        instance.setWorkerGroup("DISPATCH");
+        instance.setPriority(8);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setWorkerGroup("dispatch-pool");
-    partition.setInputSnapshot(JsonUtils.toJson(Map.of(
-        "queueCode", "dispatch-queue",
-        "resourceProfile", "io-heavy",
-        "downstreamChannelCode", "sftp-primary",
-        "windowCode", "night-window")));
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setWorkerGroup("dispatch-pool");
+        partition.setInputSnapshot(JsonUtils.toJson(Map.of(
+                "queueCode", "dispatch-queue",
+                "resourceProfile", "io-heavy",
+                "downstreamChannelCode", "sftp-primary",
+                "windowCode", "night-window")));
 
-    JobTaskEntity task = new JobTaskEntity();
-    task.setTaskType("DISPATCH");
+        JobTaskEntity task = new JobTaskEntity();
+        task.setTaskType("DISPATCH");
 
-    JobDefinitionView definition = JobDefinitionView.builder()
-        .id(1L)
-        .tenantId("ta")
-        .jobCode("dispatch-job")
-        .jobName("dispatch-job")
-        .jobType("DISPATCH")
-        .windowCode("fallback-window")
-        .build();
+        JobDefinitionView definition = JobDefinitionView.builder()
+                .id(1L)
+                .tenantId("ta")
+                .jobCode("dispatch-job")
+                .jobName("dispatch-job")
+                .jobType("DISPATCH")
+                .windowCode("fallback-window")
+                .build();
 
-    ResourceSchedulingRequest request =
-        WaitingPartitionDispatchScheduler.buildRequest(instance, partition, task, definition);
+        ResourceSchedulingRequest request =
+                WaitingPartitionDispatchScheduler.buildRequest(instance, partition, task, definition);
 
-    assertThat(request.getQueueCode()).isEqualTo("dispatch-queue");
-    assertThat(request.getWorkerGroup()).isEqualTo("dispatch-pool");
-    assertThat(request.getResourceProfile()).isEqualTo("io-heavy");
-    assertThat(request.getDownstreamChannelCode()).isEqualTo("sftp-primary");
-    assertThat(request.getWindowCode()).isEqualTo("night-window");
-  }
+        assertThat(request.getQueueCode()).isEqualTo("dispatch-queue");
+        assertThat(request.getWorkerGroup()).isEqualTo("dispatch-pool");
+        assertThat(request.getResourceProfile()).isEqualTo("io-heavy");
+        assertThat(request.getDownstreamChannelCode()).isEqualTo("sftp-primary");
+        assertThat(request.getWindowCode()).isEqualTo("night-window");
+    }
 }

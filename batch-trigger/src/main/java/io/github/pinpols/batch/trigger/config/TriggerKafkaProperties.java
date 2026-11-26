@@ -20,18 +20,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.trigger.kafka")
 public class TriggerKafkaProperties {
 
-  /** 单次同步 send 等待 ack 的超时(秒),超时记 PublishResult.fail。默认 10。 */
-  private int sendTimeoutSeconds = 10;
+    /** 单次同步 send 等待 ack 的超时(秒),超时记 PublishResult.fail。默认 10。 */
+    private int sendTimeoutSeconds = 10;
 
-  /** ProducerConfig 相关参数子分组。 */
-  private final Producer producer = new Producer();
+    /** ProducerConfig 相关参数子分组。 */
+    private final Producer producer = new Producer();
 
-  @Data
-  public static class Producer {
-    /** ProducerConfig.ACKS_CONFIG,默认 "all" 强一致。 */
-    private String acks = "all";
+    @Data
+    public static class Producer {
+        /** ProducerConfig.ACKS_CONFIG,默认 "all" 强一致。 */
+        private String acks = "all";
 
-    /** ProducerConfig.RETRIES_CONFIG。默认 5(idempotence via retry,与 batch-orchestrator/worker 对齐)。 */
-    private int retries = 5;
-  }
+        /** ProducerConfig.RETRIES_CONFIG。默认 5(idempotence via retry,与 batch-orchestrator/worker 对齐)。 */
+        private int retries = 5;
+    }
 }

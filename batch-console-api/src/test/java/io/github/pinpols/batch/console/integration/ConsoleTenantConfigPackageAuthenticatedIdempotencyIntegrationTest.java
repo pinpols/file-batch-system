@@ -32,267 +32,245 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 
 @SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "batch.console.security.single-session-enabled=false",
-      "batch.console.ai.enabled=false",
-      "batch.console.security.rate-limit.expensive-op-user-limit-per-minute=100"
-    })
+        classes = BatchConsoleApiApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            "batch.console.security.single-session-enabled=false",
+            "batch.console.ai.enabled=false",
+            "batch.console.security.rate-limit.expensive-op-user-limit-per-minute=100"
+        })
 @Import(ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest.SecurityMode.class)
 @DisplayName("租户配置包认证 Apply 幂等: 成功提交后同键重放不重复写入")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
-    extends AbstractIntegrationTest {
+class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT_ID = "excel-upload-ta";
+    private static final String TENANT_ID = "excel-upload-ta";
 
-  @TestConfiguration(proxyBeanMethods = false)
-  static class SecurityMode {
-    @Bean
-    static BeanPostProcessor requireAuthentication() {
-      return new BeanPostProcessor() {
-        @Override
-        public Object postProcessAfterInitialization(Object bean, String beanName) {
-          if (bean instanceof BatchSecurityProperties security) {
-            security.setBypassMode(false);
-          }
-          return bean;
+    @TestConfiguration(proxyBeanMethods = false)
+    static class SecurityMode {
+        @Bean
+        static BeanPostProcessor requireAuthentication() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (bean instanceof BatchSecurityProperties security) {
+                        security.setBypassMode(false);
+                    }
+                    return bean;
+                }
+            };
         }
-      };
     }
-  }
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  private final ConsoleJwtService jwtService;
+    private final ConsoleJwtService jwtService;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest(
-      ConsoleJwtService jwtService, JdbcTemplate jdbcTemplate) {
-    this.jwtService = jwtService;
-    this.jdbcTemplate = jdbcTemplate;
-  }
+    ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest(
+            ConsoleJwtService jwtService, JdbcTemplate jdbcTemplate) {
+        this.jwtService = jwtService;
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
-  @Test
-  @DisplayName("真实 JWT/CSRF 上传、预览、Apply 后同键重放返回 409 且业务行只写一次")
-  void shouldPersistOnceWhenSuccessfulApplyIsReplayedWithSameKey() throws Exception {
-    String suffix = Long.toUnsignedString(System.nanoTime(), 36);
-    String channelCode = "idem_apply_" + suffix;
-    String templateCode = "idem_template_" + suffix;
-    String uploadToken = null;
-    WebTestClient client = WebTestClient.bindToServer()
-        .baseUrl("http://127.0.0.1:" + port)
-        .responseTimeout(Duration.ofSeconds(60))
-        .build();
-    AuthenticatedClient tenantAdmin = authenticatedClient(
-        client, "config-idempotency-tenant-admin", TENANT_ID, "ROLE_TENANT_ADMIN");
+    @Test
+    @DisplayName("真实 JWT/CSRF 上传、预览、Apply 后同键重放返回 409 且业务行只写一次")
+    void shouldPersistOnceWhenSuccessfulApplyIsReplayedWithSameKey() throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime(), 36);
+        String channelCode = "idem_apply_" + suffix;
+        String templateCode = "idem_template_" + suffix;
+        String uploadToken = null;
+        WebTestClient client = WebTestClient.bindToServer()
+                .baseUrl("http://127.0.0.1:" + port)
+                .responseTimeout(Duration.ofSeconds(60))
+                .build();
+        AuthenticatedClient tenantAdmin =
+                authenticatedClient(client, "config-idempotency-tenant-admin", TENANT_ID, "ROLE_TENANT_ADMIN");
 
-    try {
-      byte[] workbook = workbookWithUniqueCodes(channelCode, templateCode);
-      MultipartBodyBuilder multipart = new MultipartBodyBuilder();
-      multipart
-          .part("file", new ByteArrayResource(workbook) {
-            @Override
-            public String getFilename() {
-              return "tenant-config.xlsx";
+        try {
+            byte[] workbook = workbookWithUniqueCodes(channelCode, templateCode);
+            MultipartBodyBuilder multipart = new MultipartBodyBuilder();
+            multipart
+                    .part("file", new ByteArrayResource(workbook) {
+                        @Override
+                        public String getFilename() {
+                            return "tenant-config.xlsx";
+                        }
+                    })
+                    .contentType(MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+
+            String uploadBody = client.post()
+                    .uri("/api/console/config/tenant-package/excel/upload")
+                    .cookie("batch_console_token", tenantAdmin.jwt())
+                    .cookie("XSRF-TOKEN", tenantAdmin.csrfToken())
+                    .header("X-XSRF-TOKEN", tenantAdmin.csrfToken())
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+                    .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-upload-" + suffix)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(BodyInserters.fromMultipartData(multipart.build()))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(String.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(uploadBody).isNotBlank();
+            uploadToken = new ObjectMapper()
+                    .readTree(uploadBody)
+                    .path("data")
+                    .path("uploadToken")
+                    .asText();
+            assertThat(uploadToken).isNotBlank();
+
+            String previewBody = client.get()
+                    .uri("/api/console/config/tenant-package/excel/preview/{token}", uploadToken)
+                    .cookie("batch_console_token", tenantAdmin.jwt())
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(String.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(previewBody).isNotBlank();
+            String previewToken = new ObjectMapper()
+                    .readTree(previewBody)
+                    .path("data")
+                    .path("previewToken")
+                    .asText();
+            assertThat(previewToken).isNotBlank();
+
+            String applyUri = "/api/console/config/tenant-package/excel/apply/" + uploadToken;
+            apply(client, applyUri, tenantAdmin, "idem-apply-no-preview-" + suffix, "{}")
+                    .expectStatus()
+                    .isForbidden();
+
+            for (String role : Set.of("ROLE_AUDITOR", "ROLE_TENANT_USER")) {
+                AuthenticatedClient readOnly =
+                        authenticatedClient(client, "config-idempotency-" + role + suffix, TENANT_ID, role);
+                apply(
+                                client,
+                                applyUri,
+                                readOnly,
+                                "idem-apply-denied-" + role + suffix,
+                                "{\"previewToken\":\"" + previewToken + "\"}")
+                        .expectStatus()
+                        .isForbidden();
             }
-          })
-          .contentType(MediaType.parseMediaType(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 
-      String uploadBody = client
-          .post()
-          .uri("/api/console/config/tenant-package/excel/upload")
-          .cookie("batch_console_token", tenantAdmin.jwt())
-          .cookie("XSRF-TOKEN", tenantAdmin.csrfToken())
-          .header("X-XSRF-TOKEN", tenantAdmin.csrfToken())
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-upload-" + suffix)
-          .contentType(MediaType.MULTIPART_FORM_DATA)
-          .body(BodyInserters.fromMultipartData(multipart.build()))
-          .exchange()
-          .expectStatus()
-          .isOk()
-          .expectBody(String.class)
-          .returnResult()
-          .getResponseBody();
-      assertThat(uploadBody).isNotBlank();
-      uploadToken = new ObjectMapper()
-          .readTree(uploadBody)
-          .path("data")
-          .path("uploadToken")
-          .asText();
-      assertThat(uploadToken).isNotBlank();
+            AuthenticatedClient otherTenantAdmin = authenticatedClient(
+                    client,
+                    "config-idempotency-other-tenant-admin" + suffix,
+                    "excel-upload-other-tenant",
+                    "ROLE_TENANT_ADMIN");
+            apply(
+                            client,
+                            applyUri,
+                            otherTenantAdmin,
+                            "idem-apply-cross-tenant-" + suffix,
+                            "{\"previewToken\":\"" + previewToken + "\"}")
+                    .expectStatus()
+                    .isForbidden();
+            assertThat(channelCount(channelCode)).isZero();
+            assertThat(templateCount(templateCode)).isZero();
 
-      String previewBody = client
-          .get()
-          .uri("/api/console/config/tenant-package/excel/preview/{token}", uploadToken)
-          .cookie("batch_console_token", tenantAdmin.jwt())
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-          .exchange()
-          .expectStatus()
-          .isOk()
-          .expectBody(String.class)
-          .returnResult()
-          .getResponseBody();
-      assertThat(previewBody).isNotBlank();
-      String previewToken = new ObjectMapper()
-          .readTree(previewBody)
-          .path("data")
-          .path("previewToken")
-          .asText();
-      assertThat(previewToken).isNotBlank();
+            String idempotencyKey = "idem-apply-" + suffix;
+            apply(client, applyUri, tenantAdmin, idempotencyKey, "{\"previewToken\":\"" + previewToken + "\"}")
+                    .expectStatus()
+                    .isOk();
 
-      String applyUri = "/api/console/config/tenant-package/excel/apply/" + uploadToken;
-      apply(client, applyUri, tenantAdmin, "idem-apply-no-preview-" + suffix, "{}")
-          .expectStatus()
-          .isForbidden();
+            assertThat(channelCount(channelCode)).isEqualTo(1);
+            assertThat(templateCount(templateCode)).isEqualTo(1);
 
-      for (String role : Set.of("ROLE_AUDITOR", "ROLE_TENANT_USER")) {
-        AuthenticatedClient readOnly =
-            authenticatedClient(client, "config-idempotency-" + role + suffix, TENANT_ID, role);
-        apply(
-                client,
-                applyUri,
-                readOnly,
-                "idem-apply-denied-" + role + suffix,
-                "{\"previewToken\":\"" + previewToken + "\"}")
-            .expectStatus()
-            .isForbidden();
-      }
+            apply(client, applyUri, tenantAdmin, idempotencyKey, "{\"previewToken\":\"" + previewToken + "\"}")
+                    .expectStatus()
+                    .isEqualTo(409);
 
-      AuthenticatedClient otherTenantAdmin = authenticatedClient(
-          client,
-          "config-idempotency-other-tenant-admin" + suffix,
-          "excel-upload-other-tenant",
-          "ROLE_TENANT_ADMIN");
-      apply(
-              client,
-              applyUri,
-              otherTenantAdmin,
-              "idem-apply-cross-tenant-" + suffix,
-              "{\"previewToken\":\"" + previewToken + "\"}")
-          .expectStatus()
-          .isForbidden();
-      assertThat(channelCount(channelCode)).isZero();
-      assertThat(templateCount(templateCode)).isZero();
-
-      String idempotencyKey = "idem-apply-" + suffix;
-      apply(
-              client,
-              applyUri,
-              tenantAdmin,
-              idempotencyKey,
-              "{\"previewToken\":\"" + previewToken + "\"}")
-          .expectStatus()
-          .isOk();
-
-      assertThat(channelCount(channelCode)).isEqualTo(1);
-      assertThat(templateCount(templateCode)).isEqualTo(1);
-
-      apply(
-              client,
-              applyUri,
-              tenantAdmin,
-              idempotencyKey,
-              "{\"previewToken\":\"" + previewToken + "\"}")
-          .expectStatus()
-          .isEqualTo(409);
-
-      assertThat(channelCount(channelCode)).isEqualTo(1);
-      assertThat(templateCount(templateCode)).isEqualTo(1);
-    } finally {
-      if (uploadToken != null) {
-        String deleteFileChannelConfigSql = """
+            assertThat(channelCount(channelCode)).isEqualTo(1);
+            assertThat(templateCount(templateCode)).isEqualTo(1);
+        } finally {
+            if (uploadToken != null) {
+                String deleteFileChannelConfigSql = """
             delete from batch.file_channel_config where tenant_id = ? and channel_code = ?
             """;
-        jdbcTemplate.update(deleteFileChannelConfigSql, TENANT_ID, channelCode);
-        String deleteFileTemplateConfigSql = """
+                jdbcTemplate.update(deleteFileChannelConfigSql, TENANT_ID, channelCode);
+                String deleteFileTemplateConfigSql = """
             delete from batch.file_template_config where tenant_id = ? and template_code = ?
             """;
-        jdbcTemplate.update(deleteFileTemplateConfigSql, TENANT_ID, templateCode);
-      }
+                jdbcTemplate.update(deleteFileTemplateConfigSql, TENANT_ID, templateCode);
+            }
+        }
     }
-  }
 
-  private AuthenticatedClient authenticatedClient(
-      WebTestClient client, String username, String tenantId, String role) {
-    String jwt = jwtService.issueToken(username, tenantId, Set.of(role)).accessToken();
-    ResponseCookie csrfCookie = client
-        .get()
-        .uri("/api/console/auth/check")
-        .cookie("batch_console_token", jwt)
-        .exchange()
-        .expectStatus()
-        .isNoContent()
-        .returnResult(Void.class)
-        .getResponseCookies()
-        .getFirst("XSRF-TOKEN");
-    assertThat(csrfCookie).isNotNull();
-    return new AuthenticatedClient(jwt, csrfCookie.getValue());
-  }
+    private AuthenticatedClient authenticatedClient(
+            WebTestClient client, String username, String tenantId, String role) {
+        String jwt = jwtService.issueToken(username, tenantId, Set.of(role)).accessToken();
+        ResponseCookie csrfCookie = client.get()
+                .uri("/api/console/auth/check")
+                .cookie("batch_console_token", jwt)
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .returnResult(Void.class)
+                .getResponseCookies()
+                .getFirst("XSRF-TOKEN");
+        assertThat(csrfCookie).isNotNull();
+        return new AuthenticatedClient(jwt, csrfCookie.getValue());
+    }
 
-  private WebTestClient.ResponseSpec apply(
-      WebTestClient client,
-      String uri,
-      AuthenticatedClient auth,
-      String idempotencyKey,
-      String body) {
-    return client
-        .post()
-        .uri(uri)
-        .cookie("batch_console_token", auth.jwt())
-        .cookie("XSRF-TOKEN", auth.csrfToken())
-        .header("X-XSRF-TOKEN", auth.csrfToken())
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body)
-        .exchange();
-  }
+    private WebTestClient.ResponseSpec apply(
+            WebTestClient client, String uri, AuthenticatedClient auth, String idempotencyKey, String body) {
+        return client.post()
+                .uri(uri)
+                .cookie("batch_console_token", auth.jwt())
+                .cookie("XSRF-TOKEN", auth.csrfToken())
+                .header("X-XSRF-TOKEN", auth.csrfToken())
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange();
+    }
 
-  private record AuthenticatedClient(String jwt, String csrfToken) {}
+    private record AuthenticatedClient(String jwt, String csrfToken) {}
 
-  private Integer channelCount(String channelCode) {
-    String channelCountSql = """
+    private Integer channelCount(String channelCode) {
+        String channelCountSql = """
         select count(*) from batch.file_channel_config where tenant_id = ? and channel_code = ?
         """;
-    return jdbcTemplate.queryForObject(channelCountSql, Integer.class, TENANT_ID, channelCode);
-  }
+        return jdbcTemplate.queryForObject(channelCountSql, Integer.class, TENANT_ID, channelCode);
+    }
 
-  private Integer templateCount(String templateCode) {
-    String templateCountSql = """
+    private Integer templateCount(String templateCode) {
+        String templateCountSql = """
         select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?
         """;
-    return jdbcTemplate.queryForObject(templateCountSql, Integer.class, TENANT_ID, templateCode);
-  }
-
-  private static byte[] workbookWithUniqueCodes(String channelCode, String templateCode)
-      throws Exception {
-    byte[] source =
-        ConsoleTenantConfigPackageExcelUploadIntegrationTest.tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(source))) {
-      replaceWorkbookValue(workbook, "file_channel_config", "channel_code", channelCode);
-      replaceWorkbookValue(workbook, "file_template_config", "template_code", templateCode);
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      return output.toByteArray();
+        return jdbcTemplate.queryForObject(templateCountSql, Integer.class, TENANT_ID, templateCode);
     }
-  }
 
-  private static void replaceWorkbookValue(
-      XSSFWorkbook workbook, String sheetName, String columnName, String value) {
-    var sheet = workbook.getSheet(sheetName);
-    Row header = sheet.getRow(0);
-    for (int i = 0; i < header.getLastCellNum(); i++) {
-      if (columnName.equals(header.getCell(i).getStringCellValue())) {
-        sheet.getRow(1).getCell(i).setCellValue(value);
-        return;
-      }
+    private static byte[] workbookWithUniqueCodes(String channelCode, String templateCode) throws Exception {
+        byte[] source = ConsoleTenantConfigPackageExcelUploadIntegrationTest.tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(source))) {
+            replaceWorkbookValue(workbook, "file_channel_config", "channel_code", channelCode);
+            replaceWorkbookValue(workbook, "file_template_config", "template_code", templateCode);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            return output.toByteArray();
+        }
     }
-    throw new IllegalStateException(sheetName + " workbook is missing " + columnName);
-  }
+
+    private static void replaceWorkbookValue(XSSFWorkbook workbook, String sheetName, String columnName, String value) {
+        var sheet = workbook.getSheet(sheetName);
+        Row header = sheet.getRow(0);
+        for (int i = 0; i < header.getLastCellNum(); i++) {
+            if (columnName.equals(header.getCell(i).getStringCellValue())) {
+                sheet.getRow(1).getCell(i).setCellValue(value);
+                return;
+            }
+        }
+        throw new IllegalStateException(sheetName + " workbook is missing " + columnName);
+    }
 }

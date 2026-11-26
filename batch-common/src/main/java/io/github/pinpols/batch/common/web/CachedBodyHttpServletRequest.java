@@ -12,47 +12,47 @@ import java.nio.charset.StandardCharsets;
 /** 缓存请求体的包装器：上游过滤器读取 body 后，下游 controller 仍可重复读取同一份字节。 */
 public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
-  private final byte[] cachedBody;
+    private final byte[] cachedBody;
 
-  public CachedBodyHttpServletRequest(HttpServletRequest request, byte[] cachedBody) {
-    super(request);
-    this.cachedBody = cachedBody == null ? new byte[0] : cachedBody;
-  }
+    public CachedBodyHttpServletRequest(HttpServletRequest request, byte[] cachedBody) {
+        super(request);
+        this.cachedBody = cachedBody == null ? new byte[0] : cachedBody;
+    }
 
-  public byte[] cachedBody() {
-    return cachedBody.clone();
-  }
+    public byte[] cachedBody() {
+        return cachedBody.clone();
+    }
 
-  @Override
-  public ServletInputStream getInputStream() {
-    ByteArrayInputStream buffer = new ByteArrayInputStream(cachedBody);
-    return new ServletInputStream() {
-      @Override
-      public int read() {
-        return buffer.read();
-      }
+    @Override
+    public ServletInputStream getInputStream() {
+        ByteArrayInputStream buffer = new ByteArrayInputStream(cachedBody);
+        return new ServletInputStream() {
+            @Override
+            public int read() {
+                return buffer.read();
+            }
 
-      @Override
-      public boolean isFinished() {
-        return buffer.available() == 0;
-      }
+            @Override
+            public boolean isFinished() {
+                return buffer.available() == 0;
+            }
 
-      @Override
-      public boolean isReady() {
-        return true;
-      }
+            @Override
+            public boolean isReady() {
+                return true;
+            }
 
-      @Override
-      public void setReadListener(ReadListener readListener) {
-        throw new UnsupportedOperationException();
-      }
-    };
-  }
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
 
-  @Override
-  public BufferedReader getReader() {
-    ByteArrayInputStream bodyStream = new ByteArrayInputStream(cachedBody);
-    InputStreamReader bodyReader = new InputStreamReader(bodyStream, StandardCharsets.UTF_8);
-    return new BufferedReader(bodyReader);
-  }
+    @Override
+    public BufferedReader getReader() {
+        ByteArrayInputStream bodyStream = new ByteArrayInputStream(cachedBody);
+        InputStreamReader bodyReader = new InputStreamReader(bodyStream, StandardCharsets.UTF_8);
+        return new BufferedReader(bodyReader);
+    }
 }

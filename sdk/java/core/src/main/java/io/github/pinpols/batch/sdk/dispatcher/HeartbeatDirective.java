@@ -17,55 +17,55 @@ import java.util.Map;
  * @param nextHeartbeatHint 建议下次心跳间隔(秒);null = 不下发
  */
 public record HeartbeatDirective(
-    String platformStatus,
-    Integer desiredMaxConcurrent,
-    boolean shouldDrain,
-    List<String> pausedTaskTypes,
-    Integer nextHeartbeatHint) {
+        String platformStatus,
+        Integer desiredMaxConcurrent,
+        boolean shouldDrain,
+        List<String> pausedTaskTypes,
+        Integer nextHeartbeatHint) {
 
-  public static final String STATUS_NORMAL = "NORMAL";
-  public static final String STATUS_DEGRADED = "DEGRADED";
-  public static final String STATUS_PAUSED = "PAUSED";
-  public static final String STATUS_DRAINING = "DRAINING";
+    public static final String STATUS_NORMAL = "NORMAL";
+    public static final String STATUS_DEGRADED = "DEGRADED";
+    public static final String STATUS_PAUSED = "PAUSED";
+    public static final String STATUS_DRAINING = "DRAINING";
 
-  /** 仅供同包契约测试构造旧平台回包；生产 transport 直接反序列化为本 record。 */
-  static HeartbeatDirective fromResponse(Map<String, Object> response) {
-    if (EmptyChecks.isEmpty(response)) {
-      return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
+    /** 仅供同包契约测试构造旧平台回包；生产 transport 直接反序列化为本 record。 */
+    static HeartbeatDirective fromResponse(Map<String, Object> response) {
+        if (EmptyChecks.isEmpty(response)) {
+            return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
+        }
+        Object paused = response.get("pausedTaskTypes");
+        Object platformStatusForDefaultCheck = response.get("platformStatus");
+        String platformStatus = EmptyChecks.isNull(platformStatusForDefaultCheck)
+                ? STATUS_NORMAL
+                : response.get("platformStatus").toString();
+        Integer desiredMaxConcurrent = integerValue(response.get("desiredMaxConcurrent"));
+        boolean shouldDrain = Boolean.TRUE.equals(response.get("shouldDrain"));
+        List<String> pausedTaskTypes = paused instanceof List<?> values
+                ? values.stream().map(String::valueOf).toList()
+                : List.of();
+        Integer nextHeartbeatHint = integerValue(response.get("nextHeartbeatHint"));
+        return new HeartbeatDirective(
+                platformStatus, desiredMaxConcurrent, shouldDrain, pausedTaskTypes, nextHeartbeatHint);
     }
-    Object paused = response.get("pausedTaskTypes");
-    Object platformStatusForDefaultCheck = response.get("platformStatus");
-    String platformStatus = EmptyChecks.isNull(platformStatusForDefaultCheck)
-        ? STATUS_NORMAL
-        : response.get("platformStatus").toString();
-    Integer desiredMaxConcurrent = integerValue(response.get("desiredMaxConcurrent"));
-    boolean shouldDrain = Boolean.TRUE.equals(response.get("shouldDrain"));
-    List<String> pausedTaskTypes = paused instanceof List<?> values
-        ? values.stream().map(String::valueOf).toList()
-        : List.of();
-    Integer nextHeartbeatHint = integerValue(response.get("nextHeartbeatHint"));
-    return new HeartbeatDirective(
-        platformStatus, desiredMaxConcurrent, shouldDrain, pausedTaskTypes, nextHeartbeatHint);
-  }
 
-  private static Integer integerValue(Object value) {
-    return value instanceof Number number ? number.intValue() : null;
-  }
+    private static Integer integerValue(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
 
-  /**
-   * 指令映射到 worker 运行态:shouldDrain / DRAINING 最高优先 → DRAINING;PAUSED → PAUSED;DEGRADED →
-   * DEGRADED;其余(含未知值,向后兼容)→ NORMAL。
-   */
-  public WorkerRuntimeState toRuntimeState() {
-    if (shouldDrain || STATUS_DRAINING.equals(platformStatus)) {
-      return WorkerRuntimeState.DRAINING;
+    /**
+     * 指令映射到 worker 运行态:shouldDrain / DRAINING 最高优先 → DRAINING;PAUSED → PAUSED;DEGRADED →
+     * DEGRADED;其余(含未知值,向后兼容)→ NORMAL。
+     */
+    public WorkerRuntimeState toRuntimeState() {
+        if (shouldDrain || STATUS_DRAINING.equals(platformStatus)) {
+            return WorkerRuntimeState.DRAINING;
+        }
+        if (STATUS_PAUSED.equals(platformStatus)) {
+            return WorkerRuntimeState.PAUSED;
+        }
+        if (STATUS_DEGRADED.equals(platformStatus)) {
+            return WorkerRuntimeState.DEGRADED;
+        }
+        return WorkerRuntimeState.NORMAL;
     }
-    if (STATUS_PAUSED.equals(platformStatus)) {
-      return WorkerRuntimeState.PAUSED;
-    }
-    if (STATUS_DEGRADED.equals(platformStatus)) {
-      return WorkerRuntimeState.DEGRADED;
-    }
-    return WorkerRuntimeState.NORMAL;
-  }
 }

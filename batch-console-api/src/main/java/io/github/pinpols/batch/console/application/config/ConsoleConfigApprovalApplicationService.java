@@ -6,12 +6,11 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 
 public interface ConsoleConfigApprovalApplicationService {
 
-  ConsoleConfigApprovalDetailResponse submit(
-      Long releaseId, ConfigReleaseApprovalSubmitRequest request);
+    ConsoleConfigApprovalDetailResponse submit(Long releaseId, ConfigReleaseApprovalSubmitRequest request);
 
-  ConsoleConfigApprovalDetailResponse detail(String tenantId, Long releaseId);
+    ConsoleConfigApprovalDetailResponse detail(String tenantId, Long releaseId);
 
-  ConsoleConfigApprovalDetailResponse approve(Long approvalId, ConfigApprovalActionRequest request);
+    ConsoleConfigApprovalDetailResponse approve(Long approvalId, ConfigApprovalActionRequest request);
 
-  ConsoleConfigApprovalDetailResponse reject(Long approvalId, ConfigApprovalActionRequest request);
+    ConsoleConfigApprovalDetailResponse reject(Long approvalId, ConfigApprovalActionRequest request);
 }

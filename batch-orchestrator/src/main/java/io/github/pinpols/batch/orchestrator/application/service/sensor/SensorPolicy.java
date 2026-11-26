@@ -15,7 +15,7 @@ import io.github.pinpols.batch.common.enums.SensorType;
  */
 public interface SensorPolicy {
 
-  SensorType type();
+    SensorType type();
 
-  SensorProbeResult probe(SensorContext ctx);
+    SensorProbeResult probe(SensorContext ctx);
 }

@@ -44,97 +44,96 @@ import org.junit.jupiter.api.Test;
 @DisplayName("配置缓存失效覆盖守护: 受缓存约束的服务写库时必须同时失效缓存, 并校验受守护服务可解析")
 class ConsoleCacheInvalidationCoverageTest {
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.console..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.console..");
 
-  /** 受缓存约束的 5 个 application service 实现类（全限定名）。 */
-  private static final Set<String> CACHED_SERVICE_FQNS = Set.of(
-      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService",
-      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService",
-      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleCalendarApplicationService",
-      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleBatchWindowApplicationService",
-      "io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleQuotaPolicyApplicationService");
+    /** 受缓存约束的 5 个 application service 实现类（全限定名）。 */
+    private static final Set<String> CACHED_SERVICE_FQNS = Set.of(
+            "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService",
+            "io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService",
+            "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleCalendarApplicationService",
+            "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleBatchWindowApplicationService",
+            "io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleQuotaPolicyApplicationService");
 
-  /**
-   * mapper 写方法名前缀集合（按这 5 个 service 实际调用的 mapper 方法名归纳）：insert / batchInsert / update* /
-   * updateAndBumpVersion / delete* / upsert* / toggleEnabled / batchToggleEnabled /
-   * copyJobDefinition / insertVersionSnapshot。读方法 selectBy* / countBy* / selectById* 不在内。
-   */
-  private static final List<String> MAPPER_WRITE_PREFIXES =
-      List.of("insert", "update", "delete", "upsert", "batch", "toggle", "copy");
+    /**
+     * mapper 写方法名前缀集合（按这 5 个 service 实际调用的 mapper 方法名归纳）：insert / batchInsert / update* /
+     * updateAndBumpVersion / delete* / upsert* / toggleEnabled / batchToggleEnabled /
+     * copyJobDefinition / insertVersionSnapshot。读方法 selectBy* / countBy* / selectById* 不在内。
+     */
+    private static final List<String> MAPPER_WRITE_PREFIXES =
+            List.of("insert", "update", "delete", "upsert", "batch", "toggle", "copy");
 
-  private static final String CACHE_SERVICE_FQN =
-      "io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService";
+    private static final String CACHE_SERVICE_FQN =
+            "io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService";
 
-  /**
-   * 缓存写入协作者不在本组 service 清单中；主 service 仍负责在事务内显式 evict 父聚合缓存。
-   * 如果后续把 mapper 写操作重新放回受守护 service，必须同时补充 evict 或登记明确的非缓存表理由。
-   */
-  @Test
-  @DisplayName("受缓存约束的服务方法写库时必须同时失效缓存, 否则热路径会读到陈旧配置")
-  void shouldInvalidateCache_whenCachedServicePerformsWrite() {
-    // 硬化:5 个受守护 service 必须都能解析到。若有人改名/移包,FQN 失配会让护栏"无方法可查"而静默通过
-    // (空守护)——这里显式断言它们都在,改名即红,逼着同步更新 CACHED_SERVICE_FQNS。
-    for (String fqn : CACHED_SERVICE_FQNS) {
-      boolean present = CLASSES.stream().anyMatch(c -> c.getFullName().equals(fqn));
-      Assertions.assertThat(present)
-          .as("受缓存 service 未找到(改名/移包了?护栏会静默失效,请同步更新): %s", fqn)
-          .isTrue();
-    }
-    ArchRule rule = ArchRuleDefinition.methods()
-        .that(areDeclaredInCachedServices())
-        .and()
-        .areNotStatic()
-        .should(evictCacheWheneverTheyWriteAMapper());
-    rule.check(CLASSES);
-  }
-
-  private static DescribedPredicate<JavaMethod> areDeclaredInCachedServices() {
-    return new DescribedPredicate<>("declared in a cached console config service") {
-      @Override
-      public boolean test(JavaMethod method) {
-        return CACHED_SERVICE_FQNS.contains(method.getOwner().getFullName());
-      }
-    };
-  }
-
-  private static ArchCondition<JavaMethod> evictCacheWheneverTheyWriteAMapper() {
-    return new ArchCondition<>(
-        "evict console config cache whenever they call a mapper write method") {
-      @Override
-      public void check(JavaMethod method, ConditionEvents events) {
-        boolean writesMapper = false;
-        boolean evictsCache = false;
-        for (JavaMethodCall call : method.getMethodCallsFromSelf()) {
-          JavaClass targetOwner = call.getTargetOwner();
-          if (isMapperWrite(targetOwner, call.getName())) {
-            writesMapper = true;
-          }
-          if (CACHE_SERVICE_FQN.equals(targetOwner.getFullName())) {
-            evictsCache = true;
-          }
+    /**
+     * 缓存写入协作者不在本组 service 清单中；主 service 仍负责在事务内显式 evict 父聚合缓存。
+     * 如果后续把 mapper 写操作重新放回受守护 service，必须同时补充 evict 或登记明确的非缓存表理由。
+     */
+    @Test
+    @DisplayName("受缓存约束的服务方法写库时必须同时失效缓存, 否则热路径会读到陈旧配置")
+    void shouldInvalidateCache_whenCachedServicePerformsWrite() {
+        // 硬化:5 个受守护 service 必须都能解析到。若有人改名/移包,FQN 失配会让护栏"无方法可查"而静默通过
+        // (空守护)——这里显式断言它们都在,改名即红,逼着同步更新 CACHED_SERVICE_FQNS。
+        for (String fqn : CACHED_SERVICE_FQNS) {
+            boolean present = CLASSES.stream().anyMatch(c -> c.getFullName().equals(fqn));
+            Assertions.assertThat(present)
+                    .as("受缓存 service 未找到(改名/移包了?护栏会静默失效,请同步更新): %s", fqn)
+                    .isTrue();
         }
-        if (writesMapper && !evictsCache) {
-          events.add(SimpleConditionEvent.violated(
-              method,
-              method.getFullName()
-                  + " 调用了 mapper 写方法但没有调用 ConsoleConfigCacheInvalidationService 的 evict* —— "
-                  + "可能留陈旧缓存。若该写表非 orchestrator 读热点，请加入 EXEMPTIONS 并注释理由；否则补 evict。"));
-        }
-      }
-    };
-  }
+        ArchRule rule = ArchRuleDefinition.methods()
+                .that(areDeclaredInCachedServices())
+                .and()
+                .areNotStatic()
+                .should(evictCacheWheneverTheyWriteAMapper());
+        rule.check(CLASSES);
+    }
 
-  private static boolean isMapperWrite(JavaClass owner, String methodName) {
-    if (!owner.getSimpleName().endsWith("Mapper")) {
-      return false;
+    private static DescribedPredicate<JavaMethod> areDeclaredInCachedServices() {
+        return new DescribedPredicate<>("declared in a cached console config service") {
+            @Override
+            public boolean test(JavaMethod method) {
+                return CACHED_SERVICE_FQNS.contains(method.getOwner().getFullName());
+            }
+        };
     }
-    for (String prefix : MAPPER_WRITE_PREFIXES) {
-      if (methodName.startsWith(prefix)) {
-        return true;
-      }
+
+    private static ArchCondition<JavaMethod> evictCacheWheneverTheyWriteAMapper() {
+        return new ArchCondition<>("evict console config cache whenever they call a mapper write method") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                boolean writesMapper = false;
+                boolean evictsCache = false;
+                for (JavaMethodCall call : method.getMethodCallsFromSelf()) {
+                    JavaClass targetOwner = call.getTargetOwner();
+                    if (isMapperWrite(targetOwner, call.getName())) {
+                        writesMapper = true;
+                    }
+                    if (CACHE_SERVICE_FQN.equals(targetOwner.getFullName())) {
+                        evictsCache = true;
+                    }
+                }
+                if (writesMapper && !evictsCache) {
+                    events.add(SimpleConditionEvent.violated(
+                            method,
+                            method.getFullName()
+                                    + " 调用了 mapper 写方法但没有调用 ConsoleConfigCacheInvalidationService 的 evict* —— "
+                                    + "可能留陈旧缓存。若该写表非 orchestrator 读热点，请加入 EXEMPTIONS 并注释理由；否则补 evict。"));
+                }
+            }
+        };
     }
-    return false;
-  }
+
+    private static boolean isMapperWrite(JavaClass owner, String methodName) {
+        if (!owner.getSimpleName().endsWith("Mapper")) {
+            return false;
+        }
+        for (String prefix : MAPPER_WRITE_PREFIXES) {
+            if (methodName.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -26,138 +26,138 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("导入接收阶段文件记录回填单测:存储坐标补全与已带字段不被覆盖语义")
 class ReceiveStepBundleEnrichTest {
 
-  @Mock
-  private PlatformFileRecordRepository runtimeRepository;
+    @Mock
+    private PlatformFileRecordRepository runtimeRepository;
 
-  @Mock
-  private FrozenFileTemplateResolver templateResolver;
+    @Mock
+    private FrozenFileTemplateResolver templateResolver;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private BatchSecurityProperties batchSecurityProperties;
+    @Mock
+    private BatchSecurityProperties batchSecurityProperties;
 
-  private ReceiveStep receiveStep;
+    private ReceiveStep receiveStep;
 
-  @BeforeEach
-  void setUp() {
-    receiveStep = new ReceiveStep(
-        runtimeRepository,
-        templateResolver,
-        pipelineRuns,
-        batchSecurityProperties,
-        new ObjectMapper(),
-        new WorkerImportPayloadProperties());
-  }
+    @BeforeEach
+    void setUp() {
+        receiveStep = new ReceiveStep(
+                runtimeRepository,
+                templateResolver,
+                pipelineRuns,
+                batchSecurityProperties,
+                new ObjectMapper(),
+                new WorkerImportPayloadProperties());
+    }
 
-  private ImportPayload payloadWithTemplateOnly(String templateCode) {
-    return new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        templateCode,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        Map.of());
-  }
+    private ImportPayload payloadWithTemplateOnly(String templateCode) {
+        return new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                templateCode,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of());
+    }
 
-  private Map<String, Object> fileRecord() {
-    Map<String, Object> fr = new LinkedHashMap<>();
-    fr.put("storage_path", "ingress/t1/g1/risk.csv");
-    fr.put("storage_bucket", "batch-ingress");
-    fr.put("storage_type", "S3");
-    fr.put("file_format_type", "CSV");
-    fr.put("charset", "UTF-8");
-    fr.put("file_name", "risk.csv");
-    fr.put("original_file_name", "risk-2026.csv");
-    fr.put("file_code", "FR-1");
-    fr.put("biz_type", "RISK");
-    fr.put("checksum_type", "SHA-256");
-    fr.put("checksum_value", "abc123");
-    return fr;
-  }
+    private Map<String, Object> fileRecord() {
+        Map<String, Object> fr = new LinkedHashMap<>();
+        fr.put("storage_path", "ingress/t1/g1/risk.csv");
+        fr.put("storage_bucket", "batch-ingress");
+        fr.put("storage_type", "S3");
+        fr.put("file_format_type", "CSV");
+        fr.put("charset", "UTF-8");
+        fr.put("file_name", "risk.csv");
+        fr.put("original_file_name", "risk-2026.csv");
+        fr.put("file_code", "FR-1");
+        fr.put("biz_type", "RISK");
+        fr.put("checksum_type", "SHA-256");
+        fr.put("checksum_value", "abc123");
+        return fr;
+    }
 
-  @Test
-  @DisplayName("文件记录里的存储坐标与校验信息回填到空字段,已有模板编码不受影响")
-  void enrichFromFileRecord_backfillsStorageCoordinatesForBundlePartition() {
-    ImportPayload enriched =
-        receiveStep.enrichFromFileRecord(payloadWithTemplateOnly("RISK_IMPORT_V2"), fileRecord());
+    @Test
+    @DisplayName("文件记录里的存储坐标与校验信息回填到空字段,已有模板编码不受影响")
+    void enrichFromFileRecord_backfillsStorageCoordinatesForBundlePartition() {
+        ImportPayload enriched =
+                receiveStep.enrichFromFileRecord(payloadWithTemplateOnly("RISK_IMPORT_V2"), fileRecord());
 
-    assertThat(enriched.storagePath()).isEqualTo("ingress/t1/g1/risk.csv");
-    assertThat(enriched.storageBucket()).isEqualTo("batch-ingress");
-    assertThat(enriched.storageType()).isEqualTo("S3");
-    assertThat(enriched.fileFormatType()).isEqualTo("CSV");
-    assertThat(enriched.charset()).isEqualTo("UTF-8");
-    assertThat(enriched.fileName()).isEqualTo("risk.csv");
-    assertThat(enriched.originalFileName()).isEqualTo("risk-2026.csv");
-    assertThat(enriched.checksumType()).isEqualTo("SHA-256");
-    assertThat(enriched.checksumValue()).isEqualTo("abc123");
-    // payload 已带的 templateCode 不被回填逻辑触碰
-    assertThat(enriched.templateCode()).isEqualTo("RISK_IMPORT_V2");
-  }
+        assertThat(enriched.storagePath()).isEqualTo("ingress/t1/g1/risk.csv");
+        assertThat(enriched.storageBucket()).isEqualTo("batch-ingress");
+        assertThat(enriched.storageType()).isEqualTo("S3");
+        assertThat(enriched.fileFormatType()).isEqualTo("CSV");
+        assertThat(enriched.charset()).isEqualTo("UTF-8");
+        assertThat(enriched.fileName()).isEqualTo("risk.csv");
+        assertThat(enriched.originalFileName()).isEqualTo("risk-2026.csv");
+        assertThat(enriched.checksumType()).isEqualTo("SHA-256");
+        assertThat(enriched.checksumValue()).isEqualTo("abc123");
+        // payload 已带的 templateCode 不被回填逻辑触碰
+        assertThat(enriched.templateCode()).isEqualTo("RISK_IMPORT_V2");
+    }
 
-  @Test
-  @DisplayName("载荷自带的存储信息优先,文件记录不覆盖已填字段")
-  void enrichFromFileRecord_doesNotOverrideFieldsPayloadAlreadyCarries() {
-    ImportPayload payload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        "TSV",
-        "GBK",
-        null,
-        null,
-        null,
-        null,
-        null,
-        "TYPE_A",
-        "my/own/path.tsv",
-        "my-bucket",
-        "T1",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        Map.of());
+    @Test
+    @DisplayName("载荷自带的存储信息优先,文件记录不覆盖已填字段")
+    void enrichFromFileRecord_doesNotOverrideFieldsPayloadAlreadyCarries() {
+        ImportPayload payload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                "TSV",
+                "GBK",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "TYPE_A",
+                "my/own/path.tsv",
+                "my-bucket",
+                "T1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of());
 
-    ImportPayload enriched = receiveStep.enrichFromFileRecord(payload, fileRecord());
+        ImportPayload enriched = receiveStep.enrichFromFileRecord(payload, fileRecord());
 
-    // payload 自带的存储信息优先,file_record 不得覆盖
-    assertThat(enriched.storagePath()).isEqualTo("my/own/path.tsv");
-    assertThat(enriched.storageBucket()).isEqualTo("my-bucket");
-    assertThat(enriched.storageType()).isEqualTo("TYPE_A");
-    assertThat(enriched.fileFormatType()).isEqualTo("TSV");
-    assertThat(enriched.charset()).isEqualTo("GBK");
-  }
+        // payload 自带的存储信息优先,file_record 不得覆盖
+        assertThat(enriched.storagePath()).isEqualTo("my/own/path.tsv");
+        assertThat(enriched.storageBucket()).isEqualTo("my-bucket");
+        assertThat(enriched.storageType()).isEqualTo("TYPE_A");
+        assertThat(enriched.fileFormatType()).isEqualTo("TSV");
+        assertThat(enriched.charset()).isEqualTo("GBK");
+    }
 
-  @Test
-  @DisplayName("文件记录为空或结构不符时,原样返回载荷")
-  void enrichFromFileRecord_nullOrEmptyFileRecordReturnsPayloadUnchanged() {
-    ImportPayload payload = payloadWithTemplateOnly("RISK_IMPORT_V2");
+    @Test
+    @DisplayName("文件记录为空或结构不符时,原样返回载荷")
+    void enrichFromFileRecord_nullOrEmptyFileRecordReturnsPayloadUnchanged() {
+        ImportPayload payload = payloadWithTemplateOnly("RISK_IMPORT_V2");
 
-    assertThat(receiveStep.enrichFromFileRecord(payload, null)).isSameAs(payload);
-    assertThat(receiveStep.enrichFromFileRecord(payload, Map.of())).isSameAs(payload);
-    assertThat(receiveStep.enrichFromFileRecord(payload, "not-a-map")).isSameAs(payload);
-  }
+        assertThat(receiveStep.enrichFromFileRecord(payload, null)).isSameAs(payload);
+        assertThat(receiveStep.enrichFromFileRecord(payload, Map.of())).isSameAs(payload);
+        assertThat(receiveStep.enrichFromFileRecord(payload, "not-a-map")).isSameAs(payload);
+    }
 }

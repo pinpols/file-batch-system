@@ -7,5 +7,5 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
  * ScheduleForwarderResult}。
  */
 public interface ScheduleForwarder {
-  ScheduleForwarderResult advance(SchedulePlan plan);
+    ScheduleForwarderResult advance(SchedulePlan plan);
 }

@@ -13,20 +13,20 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 @DisplayName("资源保留前缀校验")
 @ResourceLock("java.util.Locale.default")
 class ReservedPrefixGuardTest {
-  @Test
-  @DisplayName("土耳其语默认环境仍拒绝保留前缀并允许普通编码")
-  void shouldUseLocaleIndependentReservedPrefix() {
-    Locale previous = Locale.getDefault();
-    try {
-      Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-      assertThatThrownBy(() -> ReservedPrefixGuard.checkResourceCode("internal_job", true))
-          .isInstanceOf(BizException.class)
-          .extracting(ex -> ((BizException) ex).getCode())
-          .isEqualTo(ResultCode.INVALID_ARGUMENT);
-      assertThatCode(() -> ReservedPrefixGuard.checkResourceCode("invoice_job", true))
-          .doesNotThrowAnyException();
-    } finally {
-      Locale.setDefault(previous);
+    @Test
+    @DisplayName("土耳其语默认环境仍拒绝保留前缀并允许普通编码")
+    void shouldUseLocaleIndependentReservedPrefix() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertThatThrownBy(() -> ReservedPrefixGuard.checkResourceCode("internal_job", true))
+                    .isInstanceOf(BizException.class)
+                    .extracting(ex -> ((BizException) ex).getCode())
+                    .isEqualTo(ResultCode.INVALID_ARGUMENT);
+            assertThatCode(() -> ReservedPrefixGuard.checkResourceCode("invoice_job", true))
+                    .doesNotThrowAnyException();
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
-  }
 }

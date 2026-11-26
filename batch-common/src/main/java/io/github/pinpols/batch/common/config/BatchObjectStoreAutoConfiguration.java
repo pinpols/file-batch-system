@@ -48,128 +48,115 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @AutoConfiguration(after = {S3AutoConfiguration.class, BatchObjectCryptoAutoConfiguration.class})
 @ConditionalOnClass(S3Client.class)
 @EnableConfigurationProperties({
-  S3StorageProperties.class,
-  FilesystemStorageProperties.class,
-  StorageBackendGuardProperties.class,
-  StorageBackendProperties.class,
-  BatchSecurityProperties.class,
-  ObjectStoreEncryptionProperties.class
+    S3StorageProperties.class,
+    FilesystemStorageProperties.class,
+    StorageBackendGuardProperties.class,
+    StorageBackendProperties.class,
+    BatchSecurityProperties.class,
+    ObjectStoreEncryptionProperties.class
 })
 @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
 @RequiredArgsConstructor
 public class BatchObjectStoreAutoConfiguration {
 
-  // 只在装配默认存储时解析命名空间，保留完整存储实现覆盖的退避条件。
-  private final ObjectProvider<KafkaNamespaceProperties> deploymentNamespaceProvider;
+    // 只在装配默认存储时解析命名空间，保留完整存储实现覆盖的退避条件。
+    private final ObjectProvider<KafkaNamespaceProperties> deploymentNamespaceProvider;
 
-  @Bean
-  @ConditionalOnBean(DataSource.class)
-  public ObjectStorageBackendGuard objectStorageBackendGuard(
-      DataSource dataSource,
-      S3StorageProperties s3Properties,
-      FilesystemStorageProperties filesystemProperties,
-      StorageBackendGuardProperties backendGuardProperties,
-      StorageBackendProperties backendProperties,
-      Environment environment) {
-    return new ObjectStorageBackendGuard(
-        dataSource,
-        s3Properties,
-        filesystemProperties,
-        backendGuardProperties,
-        backendProperties,
-        environment);
-  }
-
-  /** S3 后端 raw 实现（默认）。 */
-  @Bean(name = "rawObjectStore")
-  @ConditionalOnMissingBean(name = "rawObjectStore")
-  @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
-  public RawObjectStoreBackend s3RawObjectStore(
-      S3Client s3Client, S3Presigner presigner, S3StorageProperties properties) {
-    S3ObjectStore s3ObjectStore = new S3ObjectStore(s3Client, presigner, properties);
-    return new RawObjectStoreBackend(s3ObjectStore);
-  }
-
-  /** FS 后端 raw 实现。 */
-  @Bean(name = "rawObjectStore")
-  @ConditionalOnMissingBean(name = "rawObjectStore")
-  @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "filesystem")
-  public RawObjectStoreBackend filesystemRawObjectStore(
-      FilesystemStorageProperties properties, BatchSecurityProperties securityProperties) {
-    String secret = Texts.hasText(properties.getPresignSecret())
-        ? properties.getPresignSecret()
-        : securityProperties.getInternalSecret();
-    FilesystemObjectStore filesystemObjectStore = new FilesystemObjectStore(
-        properties.getRoot(),
-        properties.getDownloadBaseUrl(),
-        secret,
-        properties.getDefaultPresignTtl(),
-        properties.getMaxListScanEntries());
-    return new RawObjectStoreBackend(filesystemObjectStore);
-  }
-
-  /**
-   * 最外层 {@link BatchObjectStore} bean——业务代码注入此。
-   *
-   * <p>加密装饰启用 + 非 bypass → {@link EncryptingObjectStore} 包裹 raw；否则直接暴露 raw。
-   */
-  @Bean
-  @ConditionalOnMissingBean(BatchObjectStore.class)
-  public BatchObjectStore objectStore(
-      @Qualifier("rawObjectStore") RawObjectStoreBackend rawBackend,
-      BatchSecurityProperties securityProperties,
-      ObjectStoreEncryptionProperties encryptionProperties,
-      ObjectProvider<BatchObjectCryptoService> cryptoProvider,
-      ObjectProvider<BatchKmsProperties> kmsPropertiesProvider,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    KafkaNamespaceProperties deploymentNamespace = deploymentNamespaceProvider.getObject();
-    BatchObjectStore raw = rawBackend.delegate();
-    if (Texts.hasText(deploymentNamespace.getNamespace())) {
-      raw = new NamespacedObjectStore(raw, deploymentNamespace.getNamespace());
+    @Bean
+    @ConditionalOnBean(DataSource.class)
+    public ObjectStorageBackendGuard objectStorageBackendGuard(
+            DataSource dataSource,
+            S3StorageProperties s3Properties,
+            FilesystemStorageProperties filesystemProperties,
+            StorageBackendGuardProperties backendGuardProperties,
+            StorageBackendProperties backendProperties,
+            Environment environment) {
+        return new ObjectStorageBackendGuard(
+                dataSource, s3Properties, filesystemProperties, backendGuardProperties, backendProperties, environment);
     }
-    BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
-    BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
-    BatchObjectStore store;
-    boolean objectStoreEncryptionIsUnavailable = !encryptionProperties.isDecoratorEnabled()
-        || securityProperties.isBypassMode()
-        || EmptyChecks.isNull(crypto);
-    if (objectStoreEncryptionIsUnavailable) {
-      store = raw;
-    } else {
-      String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
-      store = new EncryptingObjectStore(
-          raw,
-          crypto,
-          securityProperties,
-          defaultKeyRef,
-          encryptionProperties.getMaxInMemoryEncryptBytes());
+
+    /** S3 后端 raw 实现（默认）。 */
+    @Bean(name = "rawObjectStore")
+    @ConditionalOnMissingBean(name = "rawObjectStore")
+    @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
+    public RawObjectStoreBackend s3RawObjectStore(
+            S3Client s3Client, S3Presigner presigner, S3StorageProperties properties) {
+        S3ObjectStore s3ObjectStore = new S3ObjectStore(s3Client, presigner, properties);
+        return new RawObjectStoreBackend(s3ObjectStore);
     }
-    // 指标装饰挂最外层：有 MeterRegistry 即包裹（actuator 起则有），缺失则无声跳过，零回归。
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    return registry == null ? store : new MeteredObjectStore(store, registry);
-  }
 
-  /** 隔离 raw backend 的容器类型，避免它被业务注入或触发最外层 Bean 的退避条件。 */
-  record RawObjectStoreBackend(BatchObjectStore delegate) {}
+    /** FS 后端 raw 实现。 */
+    @Bean(name = "rawObjectStore")
+    @ConditionalOnMissingBean(name = "rawObjectStore")
+    @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "filesystem")
+    public RawObjectStoreBackend filesystemRawObjectStore(
+            FilesystemStorageProperties properties, BatchSecurityProperties securityProperties) {
+        String secret = Texts.hasText(properties.getPresignSecret())
+                ? properties.getPresignSecret()
+                : securityProperties.getInternalSecret();
+        FilesystemObjectStore filesystemObjectStore = new FilesystemObjectStore(
+                properties.getRoot(),
+                properties.getDownloadBaseUrl(),
+                secret,
+                properties.getDefaultPresignTtl(),
+                properties.getMaxListScanEntries());
+        return new RawObjectStoreBackend(filesystemObjectStore);
+    }
 
-  /**
-   * 对象存储启动冒烟自检（{@code batch.storage.startup-check.enabled=true}，默认开）。
-   *
-   * <p>启动期对配置 bucket 真做一遍 put→exists→statSize→get→list→delete 探针，任一步不符即 fail-fast 让 boot 失败。
-   * 把「换了对象存储后端跑起来才发现不兼容 / endpoint 错 / bucket 无权限 / path-style 或 checksum 没配对」从运行时惊吓变成启动期失败。
-   *
-   * <p>{@link ConditionalOnBean} 守门：只有真存在 {@link BatchObjectStore} bean 的上下文才挂——很多 worker / 测试上下文
-   * 根本不装配对象存储（无 S3Client / 后端未配），这些上下文不应被本自检牵连失败。bean 在 {@link #objectStore} 之后声明， 保证条件求值时能看到它。s3 /
-   * filesystem 后端同样适用(后者校验 NAS 挂载可写)。
-   */
-  @Bean
-  @ConditionalOnBean(BatchObjectStore.class)
-  @ConditionalOnProperty(
-      name = "batch.storage.startup-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public ApplicationRunner objectStoreStartupCheck(
-      BatchObjectStore objectStore, S3StorageProperties properties) {
-    return new ObjectStoreStartupCheck(objectStore, properties.getBucket());
-  }
+    /**
+     * 最外层 {@link BatchObjectStore} bean——业务代码注入此。
+     *
+     * <p>加密装饰启用 + 非 bypass → {@link EncryptingObjectStore} 包裹 raw；否则直接暴露 raw。
+     */
+    @Bean
+    @ConditionalOnMissingBean(BatchObjectStore.class)
+    public BatchObjectStore objectStore(
+            @Qualifier("rawObjectStore") RawObjectStoreBackend rawBackend,
+            BatchSecurityProperties securityProperties,
+            ObjectStoreEncryptionProperties encryptionProperties,
+            ObjectProvider<BatchObjectCryptoService> cryptoProvider,
+            ObjectProvider<BatchKmsProperties> kmsPropertiesProvider,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        KafkaNamespaceProperties deploymentNamespace = deploymentNamespaceProvider.getObject();
+        BatchObjectStore raw = rawBackend.delegate();
+        if (Texts.hasText(deploymentNamespace.getNamespace())) {
+            raw = new NamespacedObjectStore(raw, deploymentNamespace.getNamespace());
+        }
+        BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
+        BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
+        BatchObjectStore store;
+        boolean objectStoreEncryptionIsUnavailable = !encryptionProperties.isDecoratorEnabled()
+                || securityProperties.isBypassMode()
+                || EmptyChecks.isNull(crypto);
+        if (objectStoreEncryptionIsUnavailable) {
+            store = raw;
+        } else {
+            String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
+            store = new EncryptingObjectStore(
+                    raw, crypto, securityProperties, defaultKeyRef, encryptionProperties.getMaxInMemoryEncryptBytes());
+        }
+        // 指标装饰挂最外层：有 MeterRegistry 即包裹（actuator 起则有），缺失则无声跳过，零回归。
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        return registry == null ? store : new MeteredObjectStore(store, registry);
+    }
+
+    /** 隔离 raw backend 的容器类型，避免它被业务注入或触发最外层 Bean 的退避条件。 */
+    record RawObjectStoreBackend(BatchObjectStore delegate) {}
+
+    /**
+     * 对象存储启动冒烟自检（{@code batch.storage.startup-check.enabled=true}，默认开）。
+     *
+     * <p>启动期对配置 bucket 真做一遍 put→exists→statSize→get→list→delete 探针，任一步不符即 fail-fast 让 boot 失败。
+     * 把「换了对象存储后端跑起来才发现不兼容 / endpoint 错 / bucket 无权限 / path-style 或 checksum 没配对」从运行时惊吓变成启动期失败。
+     *
+     * <p>{@link ConditionalOnBean} 守门：只有真存在 {@link BatchObjectStore} bean 的上下文才挂——很多 worker / 测试上下文
+     * 根本不装配对象存储（无 S3Client / 后端未配），这些上下文不应被本自检牵连失败。bean 在 {@link #objectStore} 之后声明， 保证条件求值时能看到它。s3 /
+     * filesystem 后端同样适用(后者校验 NAS 挂载可写)。
+     */
+    @Bean
+    @ConditionalOnBean(BatchObjectStore.class)
+    @ConditionalOnProperty(name = "batch.storage.startup-check.enabled", havingValue = "true", matchIfMissing = true)
+    public ApplicationRunner objectStoreStartupCheck(BatchObjectStore objectStore, S3StorageProperties properties) {
+        return new ObjectStoreStartupCheck(objectStore, properties.getBucket());
+    }
 }

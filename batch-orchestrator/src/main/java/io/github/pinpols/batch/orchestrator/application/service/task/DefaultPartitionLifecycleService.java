@@ -47,264 +47,242 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 @RequiredArgsConstructor
 public class DefaultPartitionLifecycleService implements PartitionLifecycleService {
 
-  private static final String PARTITION_INSTANCE_REFERENCE_CONSTRAINT =
-      "fk_job_partition_instance_tenant_date";
-  private static final String PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT =
-      "fk_job_partition_source_file_tenant";
+    private static final String PARTITION_INSTANCE_REFERENCE_CONSTRAINT = "fk_job_partition_instance_tenant_date";
+    private static final String PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT = "fk_job_partition_source_file_tenant";
 
-  private final JobPartitionMapper jobPartitionMapper;
-  private final JobTaskMapper jobTaskMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final RelatedFileReferenceValidator relatedFileReferenceValidator;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final JobTaskMapper jobTaskMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final RelatedFileReferenceValidator relatedFileReferenceValidator;
 
-  @Override
-  @Transactional
-  public List<JobPartitionEntity> createPartitions(
-      SchedulePlan plan, Long jobInstanceId, String initialStatus) {
-    List<JobPartitionEntity> partitionEntities = new ArrayList<>();
-    if (EmptyChecks.isNull(plan) || EmptyChecks.isNull(plan.getPartitions())) {
-      return partitionEntities;
+    @Override
+    @Transactional
+    public List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId, String initialStatus) {
+        List<JobPartitionEntity> partitionEntities = new ArrayList<>();
+        if (EmptyChecks.isNull(plan) || EmptyChecks.isNull(plan.getPartitions())) {
+            return partitionEntities;
+        }
+        JobInstanceEntity jobInstance = jobInstanceMapper.selectById(plan.getTenantId(), jobInstanceId);
+        if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getBizDate())) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
+        }
+        // 创建分区或批量写入前，先验证每个 bundle 来源，避免单个
+        // 外租户文件导致部分分区记录被持久化。
+        for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
+            relatedFileReferenceValidator.validate(plan.getTenantId(), partitionPlan.getSourceFileId());
+        }
+        for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
+            JobPartitionEntity partitionEntity = new JobPartitionEntity();
+            partitionEntity.setTenantId(plan.getTenantId());
+            partitionEntity.setJobInstanceId(jobInstanceId);
+            partitionEntity.setJobInstanceBizDate(jobInstance.getBizDate());
+            partitionEntity.setPartitionNo(partitionPlan.getPartitionNo());
+            partitionEntity.setPartitionKey(partitionPlan.getPartitionKey());
+            partitionEntity.setPartitionStatus(resolveInitialPartitionStatus(partitionPlan, initialStatus));
+            partitionEntity.setWorkerGroup(plan.getWorkerGroup());
+            partitionEntity.setWorkerCode(
+                    EmptyChecks.isNull(partitionPlan.getWorkerRoute())
+                            ? null
+                            : partitionPlan.getWorkerRoute().getWorkerCode());
+            partitionEntity.setVersion(0L);
+            partitionEntity.setRetryCount(0);
+            partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());
+            // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
+            // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
+            // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
+            // 调用方始终设非空,此处显式 Guard 回退,任何后续 partitionPlan.partitionNo 为 null 的
+            // 退化分支也会立刻 fail-fast,而不是悄悄写入数据库一行 NULL idempotency_key 绕过 UNIQUE。
+            Guard.require(EmptyChecks.isNotNull(partitionPlan.getPartitionNo()), "job_partition.partition_no");
+            String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
+            Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
+            partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
+            String inputSnapshot = buildInputSnapshot(plan, partitionPlan, jobInstanceId);
+            partitionEntity.setInputSnapshot(inputSnapshot);
+            partitionEntity.setDryRun(plan.isDryRun());
+            // ADR-046 文件束:把 plan 里的 per-file 绑定写进 partition(非束作业这些为 null)。
+            partitionEntity.setSourceFileId(partitionPlan.getSourceFileId());
+            partitionEntity.setTemplateCode(partitionPlan.getTemplateCode());
+            partitionEntity.setTargetRef(partitionPlan.getTargetRef());
+            partitionEntities.add(partitionEntity);
+        }
+        // PERF(5.1): launch fan-out 由逐条 insert 改单条多行 INSERT（N 往返 → 1）；
+        // useGeneratedKeys 按序回填每个 entity 的 id，下游 buildTask/releaseForDispatch 依赖。
+        // R2:按固定 chunk 切批,防绑定参数越 PG 65535 上限整批回滚;subList 视图回填保证 id 顺序正确。
+        try {
+            BatchInsertChunks.insertInChunks(
+                    partitionEntities, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobPartitionMapper::insertBatch);
+        } catch (RuntimeException failure) {
+            if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
+                    failure, PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT)) {
+                throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", failure);
+            }
+            if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
+                    failure, PARTITION_INSTANCE_REFERENCE_CONSTRAINT)) {
+                throw BizException.of(ResultCode.CONFLICT, "error.job.partition_parent_changed", failure);
+            }
+            throw failure;
+        }
+        return partitionEntities;
     }
-    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(plan.getTenantId(), jobInstanceId);
-    if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getBizDate())) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
-    }
-    // 创建分区或批量写入前，先验证每个 bundle 来源，避免单个
-    // 外租户文件导致部分分区记录被持久化。
-    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
-      relatedFileReferenceValidator.validate(plan.getTenantId(), partitionPlan.getSourceFileId());
-    }
-    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
-      JobPartitionEntity partitionEntity = new JobPartitionEntity();
-      partitionEntity.setTenantId(plan.getTenantId());
-      partitionEntity.setJobInstanceId(jobInstanceId);
-      partitionEntity.setJobInstanceBizDate(jobInstance.getBizDate());
-      partitionEntity.setPartitionNo(partitionPlan.getPartitionNo());
-      partitionEntity.setPartitionKey(partitionPlan.getPartitionKey());
-      partitionEntity.setPartitionStatus(
-          resolveInitialPartitionStatus(partitionPlan, initialStatus));
-      partitionEntity.setWorkerGroup(plan.getWorkerGroup());
-      partitionEntity.setWorkerCode(
-          EmptyChecks.isNull(partitionPlan.getWorkerRoute())
-              ? null
-              : partitionPlan.getWorkerRoute().getWorkerCode());
-      partitionEntity.setVersion(0L);
-      partitionEntity.setRetryCount(0);
-      partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());
-      // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
-      // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
-      // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
-      // 调用方始终设非空,此处显式 Guard 回退,任何后续 partitionPlan.partitionNo 为 null 的
-      // 退化分支也会立刻 fail-fast,而不是悄悄写入数据库一行 NULL idempotency_key 绕过 UNIQUE。
-      Guard.require(
-          EmptyChecks.isNotNull(partitionPlan.getPartitionNo()), "job_partition.partition_no");
-      String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
-      Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
-      partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
-      String inputSnapshot = buildInputSnapshot(plan, partitionPlan, jobInstanceId);
-      partitionEntity.setInputSnapshot(inputSnapshot);
-      partitionEntity.setDryRun(plan.isDryRun());
-      // ADR-046 文件束:把 plan 里的 per-file 绑定写进 partition(非束作业这些为 null)。
-      partitionEntity.setSourceFileId(partitionPlan.getSourceFileId());
-      partitionEntity.setTemplateCode(partitionPlan.getTemplateCode());
-      partitionEntity.setTargetRef(partitionPlan.getTargetRef());
-      partitionEntities.add(partitionEntity);
-    }
-    // PERF(5.1): launch fan-out 由逐条 insert 改单条多行 INSERT（N 往返 → 1）；
-    // useGeneratedKeys 按序回填每个 entity 的 id，下游 buildTask/releaseForDispatch 依赖。
-    // R2:按固定 chunk 切批,防绑定参数越 PG 65535 上限整批回滚;subList 视图回填保证 id 顺序正确。
-    try {
-      BatchInsertChunks.insertInChunks(
-          partitionEntities, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobPartitionMapper::insertBatch);
-    } catch (RuntimeException failure) {
-      if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
-          failure, PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT)) {
-        throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", failure);
-      }
-      if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
-          failure, PARTITION_INSTANCE_REFERENCE_CONSTRAINT)) {
-        throw BizException.of(ResultCode.CONFLICT, "error.job.partition_parent_changed", failure);
-      }
-      throw failure;
-    }
-    return partitionEntities;
-  }
 
-  @Override
-  @Transactional
-  public JobPartitionEntity claimPartition(
-      String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
-    JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
-    if (EmptyChecks.isNull(existingPartition)) {
-      return null;
+    @Override
+    @Transactional
+    public JobPartitionEntity claimPartition(
+            String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
+        JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
+        if (EmptyChecks.isNull(existingPartition)) {
+            return null;
+        }
+        ClaimPartitionParam claimPartitionParam = ClaimPartitionParam.builder()
+                .tenantId(tenantId)
+                .id(partitionId)
+                .workerCode(workerCode)
+                .leaseExpireAt(leaseExpireAt)
+                .fromStatus(PartitionStatus.READY.code())
+                .toStatus(PartitionStatus.RUNNING.code())
+                .expectedVersion(existingPartition.getVersion())
+                .build();
+        JobPartitionEntity claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
+        return EmptyChecks.isNotNull(claimed) ? claimed : existingPartition;
     }
-    ClaimPartitionParam claimPartitionParam = ClaimPartitionParam.builder()
-        .tenantId(tenantId)
-        .id(partitionId)
-        .workerCode(workerCode)
-        .leaseExpireAt(leaseExpireAt)
-        .fromStatus(PartitionStatus.READY.code())
-        .toStatus(PartitionStatus.RUNNING.code())
-        .expectedVersion(existingPartition.getVersion())
-        .build();
-    JobPartitionEntity claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
-    return EmptyChecks.isNotNull(claimed) ? claimed : existingPartition;
-  }
 
-  @Override
-  @Transactional
-  public JobPartitionEntity renewLease(
-      String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
-    JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
-    if (EmptyChecks.isNull(existingPartition)) {
-      return null;
+    @Override
+    @Transactional
+    public JobPartitionEntity renewLease(String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
+        JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
+        if (EmptyChecks.isNull(existingPartition)) {
+            return null;
+        }
+        int updated = jobPartitionMapper.renewLease(RenewLeaseParam.builder()
+                .tenantId(tenantId)
+                .id(partitionId)
+                .workerCode(workerCode)
+                .leaseExpireAt(leaseExpireAt)
+                .expectedInvocationId(null)
+                .build());
+        return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
     }
-    int updated = jobPartitionMapper.renewLease(RenewLeaseParam.builder()
-        .tenantId(tenantId)
-        .id(partitionId)
-        .workerCode(workerCode)
-        .leaseExpireAt(leaseExpireAt)
-        .expectedInvocationId(null)
-        .build());
-    return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
-  }
 
-  /**
-   * 回收租约到期的分片：状态推回 {@code WAITING}（而非 {@code READY}），让分片重新走一遍调度决策 + outbox 派发，防止直接回 READY 跳过 outbox
-   * 写入数据库导致任务没有 Kafka 消息可消费、永远无人认领。
-   */
-  @Override
-  @Transactional
-  public int reclaimExpiredPartitions(String tenantId) {
-    int reclaimed = 0;
-    List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(
-        tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
-    for (JobPartitionEntity partition : expired) {
-      reclaimed += jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
-          .tenantId(tenantId)
-          .id(partition.getId())
-          .partitionStatus(PartitionStatus.WAITING.code())
-          .runningStatus(PartitionStatus.RUNNING.code())
-          .terminalStatus1(PartitionStatus.SUCCESS.code())
-          .terminalStatus2(PartitionStatus.FAILED.code())
-          .terminalStatus3(PartitionStatus.CANCELLED.code())
-          .terminalStatus4(PartitionStatus.TERMINATED.code())
-          .expectedVersion(partition.getVersion())
-          .build());
+    /**
+     * 回收租约到期的分片：状态推回 {@code WAITING}（而非 {@code READY}），让分片重新走一遍调度决策 + outbox 派发，防止直接回 READY 跳过 outbox
+     * 写入数据库导致任务没有 Kafka 消息可消费、永远无人认领。
+     */
+    @Override
+    @Transactional
+    public int reclaimExpiredPartitions(String tenantId) {
+        int reclaimed = 0;
+        List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(
+                tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
+        for (JobPartitionEntity partition : expired) {
+            reclaimed += jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                    .tenantId(tenantId)
+                    .id(partition.getId())
+                    .partitionStatus(PartitionStatus.WAITING.code())
+                    .runningStatus(PartitionStatus.RUNNING.code())
+                    .terminalStatus1(PartitionStatus.SUCCESS.code())
+                    .terminalStatus2(PartitionStatus.FAILED.code())
+                    .terminalStatus3(PartitionStatus.CANCELLED.code())
+                    .terminalStatus4(PartitionStatus.TERMINATED.code())
+                    .expectedVersion(partition.getVersion())
+                    .build());
+        }
+        return reclaimed;
     }
-    return reclaimed;
-  }
 
-  /** READY 出队前统一做分片与任务状态同步推进，避免 launch、DAG dispatch、waiting release 各写一套状态机。 */
-  @Override
-  @Transactional
-  public boolean releaseForDispatch(
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      String fromPartitionStatus,
-      String fromTaskStatus) {
-    if (EmptyChecks.isNull(partition) || EmptyChecks.isNull(task)) {
-      return false;
+    /** READY 出队前统一做分片与任务状态同步推进，避免 launch、DAG dispatch、waiting release 各写一套状态机。 */
+    @Override
+    @Transactional
+    public boolean releaseForDispatch(
+            JobPartitionEntity partition, JobTaskEntity task, String fromPartitionStatus, String fromTaskStatus) {
+        if (EmptyChecks.isNull(partition) || EmptyChecks.isNull(task)) {
+            return false;
+        }
+        JobPartitionPromoteStatusParam jobPartitionPromoteStatusParam = JobPartitionPromoteStatusParam.builder()
+                .tenantId(partition.getTenantId())
+                .id(partition.getId())
+                .fromStatus(fromPartitionStatus)
+                .toStatus(PartitionStatus.READY.code())
+                .expectedVersion(partition.getVersion())
+                .build();
+        int partitionUpdated = jobPartitionMapper.promoteStatus(jobPartitionPromoteStatusParam);
+        if (partitionUpdated <= 0) {
+            return false;
+        }
+        JobTaskPromoteStatusParam jobTaskPromoteStatusParam = JobTaskPromoteStatusParam.builder()
+                .tenantId(task.getTenantId())
+                .id(task.getId())
+                .fromStatus(fromTaskStatus)
+                .toStatus(TaskStatus.READY.code())
+                .expectedVersion(task.getVersion())
+                .build();
+        int taskUpdated = jobTaskMapper.promoteStatus(jobTaskPromoteStatusParam);
+        if (taskUpdated <= 0) {
+            // 分片与任务是”必须一起推进”的原子语义：
+            // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致
+            // 因此这里宁可回滚重试，也不要留下半推进状态。
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            // C-2.3: 事务回滚后 DB 状态不变，必须同步还原内存对象，避免调用方持有”已推进”的脏状态
+            partition.setPartitionStatus(fromPartitionStatus);
+            task.setTaskStatus(fromTaskStatus);
+            return false;
+        }
+        partition.setPartitionStatus(PartitionStatus.READY.code());
+        partition.setVersion(EmptyChecks.isNull(partition.getVersion()) ? 1L : partition.getVersion() + 1);
+        task.setTaskStatus(TaskStatus.READY.code());
+        task.setVersion(EmptyChecks.isNull(task.getVersion()) ? 1L : task.getVersion() + 1);
+        return true;
     }
-    JobPartitionPromoteStatusParam jobPartitionPromoteStatusParam =
-        JobPartitionPromoteStatusParam.builder()
-            .tenantId(partition.getTenantId())
-            .id(partition.getId())
-            .fromStatus(fromPartitionStatus)
-            .toStatus(PartitionStatus.READY.code())
-            .expectedVersion(partition.getVersion())
-            .build();
-    int partitionUpdated = jobPartitionMapper.promoteStatus(jobPartitionPromoteStatusParam);
-    if (partitionUpdated <= 0) {
-      return false;
-    }
-    JobTaskPromoteStatusParam jobTaskPromoteStatusParam = JobTaskPromoteStatusParam.builder()
-        .tenantId(task.getTenantId())
-        .id(task.getId())
-        .fromStatus(fromTaskStatus)
-        .toStatus(TaskStatus.READY.code())
-        .expectedVersion(task.getVersion())
-        .build();
-    int taskUpdated = jobTaskMapper.promoteStatus(jobTaskPromoteStatusParam);
-    if (taskUpdated <= 0) {
-      // 分片与任务是”必须一起推进”的原子语义：
-      // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致
-      // 因此这里宁可回滚重试，也不要留下半推进状态。
-      TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-      // C-2.3: 事务回滚后 DB 状态不变，必须同步还原内存对象，避免调用方持有”已推进”的脏状态
-      partition.setPartitionStatus(fromPartitionStatus);
-      task.setTaskStatus(fromTaskStatus);
-      return false;
-    }
-    partition.setPartitionStatus(PartitionStatus.READY.code());
-    partition.setVersion(
-        EmptyChecks.isNull(partition.getVersion()) ? 1L : partition.getVersion() + 1);
-    task.setTaskStatus(TaskStatus.READY.code());
-    task.setVersion(EmptyChecks.isNull(task.getVersion()) ? 1L : task.getVersion() + 1);
-    return true;
-  }
 
-  private String resolveInitialPartitionStatus(
-      SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
-    String recordedStatus =
-        EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionStatus();
-    if (EmptyChecks.isNotBlank(recordedStatus)) {
-      return recordedStatus;
+    private String resolveInitialPartitionStatus(SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
+        String recordedStatus = EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionStatus();
+        if (EmptyChecks.isNotBlank(recordedStatus)) {
+            return recordedStatus;
+        }
+        return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
     }
-    return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
-  }
 
-  private String buildInputSnapshot(
-      SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan, Long jobInstanceId) {
-    Map<String, Object> snapshot = new LinkedHashMap<>();
-    snapshot.put("jobInstanceId", jobInstanceId);
-    snapshot.put("tenantId", EmptyChecks.isNull(plan) ? null : plan.getTenantId());
-    snapshot.put("jobCode", EmptyChecks.isNull(plan) ? null : plan.getJobCode());
-    snapshot.put("bizDate", EmptyChecks.isNull(plan) ? null : plan.getBizDate());
-    snapshot.put(
-        "partitionNo", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionNo());
-    snapshot.put(
-        "partitionKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionKey());
-    snapshot.put(
-        "businessKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getBusinessKey());
-    snapshot.put("partitionPlanVersion", 1);
-    snapshot.put(
-        "shardIndex", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardIndex());
-    snapshot.put(
-        "shardTotal", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardTotal());
-    snapshot.put(
-        "rangeStartInclusive",
-        EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeStartInclusive());
-    snapshot.put(
-        "rangeEndExclusive",
-        EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeEndExclusive());
-    snapshot.put(
-        "expectedRows", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getExpectedRows());
-    snapshot.put(
-        "workerRoute",
-        EmptyChecks.isNull(partitionPlan) || EmptyChecks.isNull(partitionPlan.getWorkerRoute())
-            ? Map.of()
-            : partitionPlan.getWorkerRoute());
-    snapshot.put("workerGroup", EmptyChecks.isNull(plan) ? null : plan.getWorkerGroup());
-    snapshot.put("queueCode", EmptyChecks.isNull(plan) ? null : plan.getQueueCode());
-    snapshot.put("resourceProfile", EmptyChecks.isNull(plan) ? null : plan.getResourceProfile());
-    snapshot.put("downstreamChannelCode", resolveDownstreamChannelCode(plan, partitionPlan));
-    snapshot.put("windowCode", EmptyChecks.isNull(plan) ? null : plan.getWindowCode());
-    return JsonUtils.toJson(snapshot);
-  }
+    private String buildInputSnapshot(SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan, Long jobInstanceId) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("jobInstanceId", jobInstanceId);
+        snapshot.put("tenantId", EmptyChecks.isNull(plan) ? null : plan.getTenantId());
+        snapshot.put("jobCode", EmptyChecks.isNull(plan) ? null : plan.getJobCode());
+        snapshot.put("bizDate", EmptyChecks.isNull(plan) ? null : plan.getBizDate());
+        snapshot.put("partitionNo", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionNo());
+        snapshot.put("partitionKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionKey());
+        snapshot.put("businessKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getBusinessKey());
+        snapshot.put("partitionPlanVersion", 1);
+        snapshot.put("shardIndex", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardIndex());
+        snapshot.put("shardTotal", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardTotal());
+        snapshot.put(
+                "rangeStartInclusive",
+                EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeStartInclusive());
+        snapshot.put(
+                "rangeEndExclusive", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeEndExclusive());
+        snapshot.put("expectedRows", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getExpectedRows());
+        snapshot.put(
+                "workerRoute",
+                EmptyChecks.isNull(partitionPlan) || EmptyChecks.isNull(partitionPlan.getWorkerRoute())
+                        ? Map.of()
+                        : partitionPlan.getWorkerRoute());
+        snapshot.put("workerGroup", EmptyChecks.isNull(plan) ? null : plan.getWorkerGroup());
+        snapshot.put("queueCode", EmptyChecks.isNull(plan) ? null : plan.getQueueCode());
+        snapshot.put("resourceProfile", EmptyChecks.isNull(plan) ? null : plan.getResourceProfile());
+        snapshot.put("downstreamChannelCode", resolveDownstreamChannelCode(plan, partitionPlan));
+        snapshot.put("windowCode", EmptyChecks.isNull(plan) ? null : plan.getWindowCode());
+        return JsonUtils.toJson(snapshot);
+    }
 
-  /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
-  private String resolveDownstreamChannelCode(
-      SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
-    if (EmptyChecks.isNull(plan)
-        || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-        || EmptyChecks.isNull(partitionPlan)) {
-      return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
+    /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
+    private String resolveDownstreamChannelCode(SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
+        if (EmptyChecks.isNull(plan)
+                || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+                || EmptyChecks.isNull(partitionPlan)) {
+            return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
+        }
+        String targetRef = partitionPlan.getTargetRef();
+        if (EmptyChecks.isNotBlank(targetRef)) {
+            return targetRef;
+        }
+        return plan.getDownstreamChannelCode();
     }
-    String targetRef = partitionPlan.getTargetRef();
-    if (EmptyChecks.isNotBlank(targetRef)) {
-      return targetRef;
-    }
-    return plan.getDownstreamChannelCode();
-  }
 }

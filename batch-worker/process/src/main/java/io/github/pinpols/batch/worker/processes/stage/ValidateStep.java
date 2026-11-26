@@ -11,22 +11,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class ValidateStep implements ProcessStageStep {
 
-  @Override
-  public ProcessStage stage() {
-    return ProcessStage.VALIDATE;
-  }
+    @Override
+    public ProcessStage stage() {
+        return ProcessStage.VALIDATE;
+    }
 
-  @Override
-  public ProcessStageResult execute(ProcessJobContext context) {
-    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
-        .isDryRun()) {
-      return ProcessStageResult.success(stage());
+    @Override
+    public ProcessStageResult execute(ProcessJobContext context) {
+        if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
+                .isDryRun()) {
+            return ProcessStageResult.success(stage());
+        }
+        ProcessComputePlugin plugin = context.getResolvedPlugin();
+        if (EmptyChecks.isNull(plugin)) {
+            return ProcessStageResult.success(stage());
+        }
+        ProcessStageResult result = plugin.validate(context);
+        return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
     }
-    ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (EmptyChecks.isNull(plugin)) {
-      return ProcessStageResult.success(stage());
-    }
-    ProcessStageResult result = plugin.validate(context);
-    return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
-  }
 }

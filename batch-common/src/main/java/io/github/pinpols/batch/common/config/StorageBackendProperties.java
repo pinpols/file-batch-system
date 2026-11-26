@@ -14,9 +14,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.storage")
 public class StorageBackendProperties {
 
-  /** 完整 key；供启动守护、诊断端点与测试夹具复用，避免字面量在多处漂移。 */
-  public static final String BACKEND_KEY = "batch.storage.backend";
+    /** 完整 key；供启动守护、诊断端点与测试夹具复用，避免字面量在多处漂移。 */
+    public static final String BACKEND_KEY = "batch.storage.backend";
 
-  /** 后端标识：{@code s3}（默认）或 {@code filesystem}。 */
-  private String backend = "s3";
+    /** 后端标识：{@code s3}（默认）或 {@code filesystem}。 */
+    private String backend = "s3";
 }

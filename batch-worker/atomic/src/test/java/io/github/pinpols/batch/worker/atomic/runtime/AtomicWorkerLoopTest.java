@@ -20,25 +20,24 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Atomic Worker 注册能力快照")
 class AtomicWorkerLoopTest {
 
-  @Test
-  @DisplayName("从本地执行器注册表读取能力摘要")
-  void shouldExposeRegisteredExecutorCapabilities() {
-    BatchTaskExecutorRegistry taskExecutorRegistry = mock(BatchTaskExecutorRegistry.class);
-    List<WorkerTaskCapabilityDto> capabilities =
-        List.of(new WorkerTaskCapabilityDto("checksum", List.of("DISK"), true, false, 1));
-    when(taskExecutorRegistry.capabilitySnapshot()).thenReturn(capabilities);
+    @Test
+    @DisplayName("从本地执行器注册表读取能力摘要")
+    void shouldExposeRegisteredExecutorCapabilities() {
+        BatchTaskExecutorRegistry taskExecutorRegistry = mock(BatchTaskExecutorRegistry.class);
+        List<WorkerTaskCapabilityDto> capabilities =
+                List.of(new WorkerTaskCapabilityDto("checksum", List.of("DISK"), true, false, 1));
+        when(taskExecutorRegistry.capabilitySnapshot()).thenReturn(capabilities);
 
-    AtomicWorkerLoop loop = new AtomicWorkerLoop(
-        mock(WorkerLifecycleManager.class),
-        mock(HeartbeatService.class),
-        mock(BatchDateTimeSupport.class),
-        new AtomicWorkerConfiguration(
-            "atomic-1", "TASK", "tenant-a", 15000L, "topic", "group", List.of()),
-        new WorkerIdentityProperties(),
-        new WorkerRegistryStartupProperties(),
-        new WorkerConcurrencyProperties(),
-        taskExecutorRegistry);
+        AtomicWorkerLoop loop = new AtomicWorkerLoop(
+                mock(WorkerLifecycleManager.class),
+                mock(HeartbeatService.class),
+                mock(BatchDateTimeSupport.class),
+                new AtomicWorkerConfiguration("atomic-1", "TASK", "tenant-a", 15000L, "topic", "group", List.of()),
+                new WorkerIdentityProperties(),
+                new WorkerRegistryStartupProperties(),
+                new WorkerConcurrencyProperties(),
+                taskExecutorRegistry);
 
-    assertThat(loop.taskCapabilities()).containsExactlyElementsOf(capabilities);
-  }
+        assertThat(loop.taskCapabilities()).containsExactlyElementsOf(capabilities);
+    }
 }

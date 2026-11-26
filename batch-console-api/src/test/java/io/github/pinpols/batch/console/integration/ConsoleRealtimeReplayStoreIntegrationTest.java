@@ -23,106 +23,99 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** 集成测试：验证 ConsoleRealtimeReplayStore 的 append/replay 操作使用真实 Redis 容器执行。 */
 @SpringBootTest(
-    classes = ConsoleRealtimeReplayStoreIntegrationTest.TestApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {
-      "batch.console.realtime.replay-max-entries=100",
-      "batch.console.realtime.replay-ttl=1h",
-      "batch.startup-self-check.enabled=false"
-    })
+        classes = ConsoleRealtimeReplayStoreIntegrationTest.TestApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "batch.console.realtime.replay-max-entries=100",
+            "batch.console.realtime.replay-ttl=1h",
+            "batch.startup-self-check.enabled=false"
+        })
 @DisplayName("实时回放存储: 基于真实 Redis 的追加与游标回放语义")
 class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest {
 
-  @SpringBootConfiguration
-  @EnableAutoConfiguration
-  @EnableConfigurationProperties(ConsoleRealtimeProperties.class)
-  @Import({BatchClockConfig.class, ConsoleRealtimeReplayStore.class})
-  static class TestApplication {}
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
+    @EnableConfigurationProperties(ConsoleRealtimeProperties.class)
+    @Import({BatchClockConfig.class, ConsoleRealtimeReplayStore.class})
+    static class TestApplication {}
 
-  @MockitoBean
-  private ConsoleRealtimeMetrics realtimeMetrics;
+    @MockitoBean
+    private ConsoleRealtimeMetrics realtimeMetrics;
 
-  @Autowired
-  private ConsoleRealtimeReplayStore replayStore;
+    @Autowired
+    private ConsoleRealtimeReplayStore replayStore;
 
-  @Test
-  @DisplayName("从已知游标回放: 判定游标命中,只返回其后的两条事件")
-  void shouldReturnEventsAfterCursor_whenReplayingFromKnownCursor() {
-    String tenantId = "t-replay-" + System.nanoTime();
-    String stream = "job-instance";
+    @Test
+    @DisplayName("从已知游标回放: 判定游标命中,只返回其后的两条事件")
+    void shouldReturnEventsAfterCursor_whenReplayingFromKnownCursor() {
+        String tenantId = "t-replay-" + System.nanoTime();
+        String stream = "job-instance";
 
-    ConsoleRealtimeStreamEnvelope e1 = envelope(tenantId, stream, "cursor-1", "JOB_STATUS");
-    ConsoleRealtimeStreamEnvelope e2 = envelope(tenantId, stream, "cursor-2", "JOB_STATUS");
-    ConsoleRealtimeStreamEnvelope e3 = envelope(tenantId, stream, "cursor-3", "JOB_STATUS");
+        ConsoleRealtimeStreamEnvelope e1 = envelope(tenantId, stream, "cursor-1", "JOB_STATUS");
+        ConsoleRealtimeStreamEnvelope e2 = envelope(tenantId, stream, "cursor-2", "JOB_STATUS");
+        ConsoleRealtimeStreamEnvelope e3 = envelope(tenantId, stream, "cursor-3", "JOB_STATUS");
 
-    replayStore.append(e1);
-    replayStore.append(e2);
-    replayStore.append(e3);
+        replayStore.append(e1);
+        replayStore.append(e2);
+        replayStore.append(e3);
 
-    ReplayBatch batch = replayStore.replay(tenantId, stream, "cursor-1", null);
+        ReplayBatch batch = replayStore.replay(tenantId, stream, "cursor-1", null);
 
-    assertThat(batch.cursorFound()).isTrue();
-    assertThat(batch.events()).hasSize(2);
-    assertThat(batch.events().get(0).cursor()).isEqualTo("cursor-2");
-    assertThat(batch.events().get(1).cursor()).isEqualTo("cursor-3");
-  }
+        assertThat(batch.cursorFound()).isTrue();
+        assertThat(batch.events()).hasSize(2);
+        assertThat(batch.events().get(0).cursor()).isEqualTo("cursor-2");
+        assertThat(batch.events().get(1).cursor()).isEqualTo("cursor-3");
+    }
 
-  @Test
-  @DisplayName("游标未知: 返回全部事件并标记游标未命中")
-  void shouldReturnAllEventsAndReportCursorMissing_whenCursorUnknown() {
-    String tenantId = "t-nocursor-" + System.nanoTime();
-    String stream = "ops";
+    @Test
+    @DisplayName("游标未知: 返回全部事件并标记游标未命中")
+    void shouldReturnAllEventsAndReportCursorMissing_whenCursorUnknown() {
+        String tenantId = "t-nocursor-" + System.nanoTime();
+        String stream = "ops";
 
-    replayStore.append(envelope(tenantId, stream, "c-10", "SUMMARY"));
-    replayStore.append(envelope(tenantId, stream, "c-11", "SUMMARY"));
+        replayStore.append(envelope(tenantId, stream, "c-10", "SUMMARY"));
+        replayStore.append(envelope(tenantId, stream, "c-11", "SUMMARY"));
 
-    ReplayBatch batch = replayStore.replay(tenantId, stream, "unknown-cursor", null);
+        ReplayBatch batch = replayStore.replay(tenantId, stream, "unknown-cursor", null);
 
-    assertThat(batch.cursorFound()).isFalse();
-    assertThat(batch.events()).hasSize(2);
-  }
+        assertThat(batch.cursorFound()).isFalse();
+        assertThat(batch.events()).hasSize(2);
+    }
 
-  @Test
-  @DisplayName("按事件类型过滤: 只返回该类型的两条事件")
-  void shouldReturnOnlyMatchingEvents_whenEventTypeFilterGiven() {
-    String tenantId = "t-filter-" + System.nanoTime();
-    String stream = "pipeline";
+    @Test
+    @DisplayName("按事件类型过滤: 只返回该类型的两条事件")
+    void shouldReturnOnlyMatchingEvents_whenEventTypeFilterGiven() {
+        String tenantId = "t-filter-" + System.nanoTime();
+        String stream = "pipeline";
 
-    replayStore.append(envelope(tenantId, stream, "c-a", "NODE_STATUS"));
-    replayStore.append(envelope(tenantId, stream, "c-b", "SUMMARY_REFRESH"));
-    replayStore.append(envelope(tenantId, stream, "c-c", "NODE_STATUS"));
+        replayStore.append(envelope(tenantId, stream, "c-a", "NODE_STATUS"));
+        replayStore.append(envelope(tenantId, stream, "c-b", "SUMMARY_REFRESH"));
+        replayStore.append(envelope(tenantId, stream, "c-c", "NODE_STATUS"));
 
-    ReplayBatch batch = replayStore.replay(tenantId, stream, "NONEXISTENT", "NODE_STATUS");
+        ReplayBatch batch = replayStore.replay(tenantId, stream, "NONEXISTENT", "NODE_STATUS");
 
-    List<ConsoleRealtimeStreamEnvelope> nodeEvents = batch.events();
-    assertThat(nodeEvents).hasSize(2).allMatch(e -> "NODE_STATUS".equals(e.eventType()));
-  }
+        List<ConsoleRealtimeStreamEnvelope> nodeEvents = batch.events();
+        assertThat(nodeEvents).hasSize(2).allMatch(e -> "NODE_STATUS".equals(e.eventType()));
+    }
 
-  @Test
-  @DisplayName("租户,流或游标为空: 判定游标命中但事件列表为空")
-  void shouldReturnEmptyBatchWithCursorFound_whenParamsBlank() {
-    ReplayBatch blankTenant = replayStore.replay("", "stream", "cursor", null);
-    ReplayBatch blankStream = replayStore.replay("tenant", "", "cursor", null);
-    ReplayBatch blankCursor = replayStore.replay("tenant", "stream", "", null);
+    @Test
+    @DisplayName("租户,流或游标为空: 判定游标命中但事件列表为空")
+    void shouldReturnEmptyBatchWithCursorFound_whenParamsBlank() {
+        ReplayBatch blankTenant = replayStore.replay("", "stream", "cursor", null);
+        ReplayBatch blankStream = replayStore.replay("tenant", "", "cursor", null);
+        ReplayBatch blankCursor = replayStore.replay("tenant", "stream", "", null);
 
-    assertThat(blankTenant.cursorFound()).isTrue();
-    assertThat(blankTenant.events()).isEmpty();
-    assertThat(blankStream.cursorFound()).isTrue();
-    assertThat(blankStream.events()).isEmpty();
-    assertThat(blankCursor.cursorFound()).isTrue();
-    assertThat(blankCursor.events()).isEmpty();
-  }
+        assertThat(blankTenant.cursorFound()).isTrue();
+        assertThat(blankTenant.events()).isEmpty();
+        assertThat(blankStream.cursorFound()).isTrue();
+        assertThat(blankStream.events()).isEmpty();
+        assertThat(blankCursor.cursorFound()).isTrue();
+        assertThat(blankCursor.events()).isEmpty();
+    }
 
-  private static ConsoleRealtimeStreamEnvelope envelope(
-      String tenantId, String stream, String cursor, String eventType) {
-    return new ConsoleRealtimeStreamEnvelope(
-        "instance-1",
-        tenantId,
-        stream,
-        eventType,
-        cursor,
-        false,
-        "{}",
-        BatchDateTimeSupport.utcNow());
-  }
+    private static ConsoleRealtimeStreamEnvelope envelope(
+            String tenantId, String stream, String cursor, String eventType) {
+        return new ConsoleRealtimeStreamEnvelope(
+                "instance-1", tenantId, stream, eventType, cursor, false, "{}", BatchDateTimeSupport.utcNow());
+    }
 }

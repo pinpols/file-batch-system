@@ -46,18 +46,15 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@ConditionalOnProperty(
-    name = "batch.quota.runtime-store",
-    havingValue = "redis",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.quota.runtime-store", havingValue = "redis", matchIfMissing = true)
 public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
-  // 索引项 ttl：14 天，足以覆盖任何业务窗口；过期由 Redis 自然清理
-  private static final Duration INDEX_TTL = Duration.ofDays(14);
+    // 索引项 ttl：14 天，足以覆盖任何业务窗口；过期由 Redis 自然清理
+    private static final Duration INDEX_TTL = Duration.ofDays(14);
 
-  // Lua 脚本：evaluateAndReserve 的原子实现
-  // 返回值: [allowed(1/0), peakBorrowedCount, windowStartedAtMillis, windowExpiresAtMillis]
-  private static final String EVAL_RESERVE_SCRIPT = """
+    // Lua 脚本：evaluateAndReserve 的原子实现
+    // 返回值: [allowed(1/0), peakBorrowedCount, windowStartedAtMillis, windowExpiresAtMillis]
+    private static final String EVAL_RESERVE_SCRIPT = """
       local nowMillis = tonumber(ARGV[1])
       local baseCap = tonumber(ARGV[2])
       local burst = tonumber(ARGV[3])
@@ -128,223 +125,218 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       return { allowed, peak, winStart or 0, winEnd or 0 }
       """;
 
-  // describe 只读不写，但仍要触发窗口过期判定（在脚本里）。简化：直接 HGETALL，过期由 evaluateAndReserve 触发
-  // 同步重置；这里只做 nowMillis < windowExpiresAt 时返回真实数据，否则视为已过期返回零值。
+    // describe 只读不写，但仍要触发窗口过期判定（在脚本里）。简化：直接 HGETALL，过期由 evaluateAndReserve 触发
+    // 同步重置；这里只做 nowMillis < windowExpiresAt 时返回真实数据，否则视为已过期返回零值。
 
-  private final OrchestratorRedisSupport redis;
-  private final BatchTimezoneProvider timezoneProvider;
+    private final OrchestratorRedisSupport redis;
+    private final BatchTimezoneProvider timezoneProvider;
 
-  /** Redis 故障策略：FAIL_CLOSED 保证控制面不绕过租户配额；本地兼容可显式设为 FAIL_OPEN。 */
-  private final String redisFailureMode;
+    /** Redis 故障策略：FAIL_CLOSED 保证控制面不绕过租户配额；本地兼容可显式设为 FAIL_OPEN。 */
+    private final String redisFailureMode;
 
-  public RedisQuotaRuntimeStateService(
-      OrchestratorRedisSupport redis, BatchTimezoneProvider timezoneProvider) {
-    this(redis, timezoneProvider, new QuotaProperties());
-  }
-
-  @Autowired
-  public RedisQuotaRuntimeStateService(
-      OrchestratorRedisSupport redis,
-      BatchTimezoneProvider timezoneProvider,
-      QuotaProperties quotaProperties) {
-    this.redis = redis;
-    this.timezoneProvider = timezoneProvider;
-    String configuredMode = quotaProperties.getRedis().getFailureMode();
-    this.redisFailureMode = Texts.hasText(configuredMode) ? configuredMode.trim() : "FAIL_CLOSED";
-  }
-
-  @Override
-  public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
-    QuotaReservationSupport.Precheck precheck = QuotaReservationSupport.precheck(request);
-    if (!precheck.applicable()) {
-      return ResourceCheck.allow();
+    public RedisQuotaRuntimeStateService(OrchestratorRedisSupport redis, BatchTimezoneProvider timezoneProvider) {
+        this(redis, timezoneProvider, new QuotaProperties());
     }
-    Optional<ResourceCheck> staticCheck = QuotaReservationSupport.resolveStaticReservation(
-        request, precheck, RedisQuotaRuntimeStateService::waitForCapacity);
-    if (staticCheck.isPresent()) {
-      return staticCheck.get();
+
+    @Autowired
+    public RedisQuotaRuntimeStateService(
+            OrchestratorRedisSupport redis, BatchTimezoneProvider timezoneProvider, QuotaProperties quotaProperties) {
+        this.redis = redis;
+        this.timezoneProvider = timezoneProvider;
+        String configuredMode = quotaProperties.getRedis().getFailureMode();
+        this.redisFailureMode = Texts.hasText(configuredMode) ? configuredMode.trim() : "FAIL_CLOSED";
     }
-    int normalizedBurst = precheck.normalizedBurst();
-    int normalizedRequested = precheck.normalizedRequested();
-    QuotaResetPolicy policy = precheck.policy();
 
-    Instant now = BatchDateTimeSupport.utcNow();
-    long nowMillis = now.toEpochMilli();
-    long calendarStartMillis = 0L;
-    long calendarEndMillis = 0L;
-    if (policy == QuotaResetPolicy.CALENDAR_DAY) {
-      ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
-      Instant start = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
-      Instant end = start.plus(Duration.ofDays(1));
-      calendarStartMillis = start.toEpochMilli();
-      calendarEndMillis = end.toEpochMilli();
-    }
-    int slidingHours = Math.max(1, request.policy().slidingWindowHours());
+    @Override
+    public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
+        QuotaReservationSupport.Precheck precheck = QuotaReservationSupport.precheck(request);
+        if (!precheck.applicable()) {
+            return ResourceCheck.allow();
+        }
+        Optional<ResourceCheck> staticCheck = QuotaReservationSupport.resolveStaticReservation(
+                request, precheck, RedisQuotaRuntimeStateService::waitForCapacity);
+        if (staticCheck.isPresent()) {
+            return staticCheck.get();
+        }
+        int normalizedBurst = precheck.normalizedBurst();
+        int normalizedRequested = precheck.normalizedRequested();
+        QuotaResetPolicy policy = precheck.policy();
 
-    String key = BatchRedisKeys.quotaState(
-        request.owner().tenantId(),
-        request.owner().quotaScope(),
-        request.owner().ownerCode());
+        Instant now = BatchDateTimeSupport.utcNow();
+        long nowMillis = now.toEpochMilli();
+        long calendarStartMillis = 0L;
+        long calendarEndMillis = 0L;
+        if (policy == QuotaResetPolicy.CALENDAR_DAY) {
+            ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
+            Instant start = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
+            Instant end = start.plus(Duration.ofDays(1));
+            calendarStartMillis = start.toEpochMilli();
+            calendarEndMillis = end.toEpochMilli();
+        }
+        int slidingHours = Math.max(1, request.policy().slidingWindowHours());
 
-    List<Object> result;
-    try {
-      result = redis.evalList(
-          EVAL_RESERVE_SCRIPT,
-          key,
-          Long.toString(nowMillis),
-          Integer.toString(request.policy().baseCap()),
-          Integer.toString(normalizedBurst),
-          Integer.toString(normalizedRequested),
-          Long.toString(request.currentActiveCount()),
-          policy.name(),
-          Long.toString(calendarStartMillis),
-          Long.toString(calendarEndMillis),
-          Integer.toString(slidingHours));
-    } catch (DataAccessException ex) {
-      String tenantId = request.owner().tenantId();
-      String quotaScope = request.owner().quotaScope();
-      String ownerCode = request.owner().ownerCode();
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "redis quota evaluateAndReserve failed; failureMode={}, tenant={}, scope={}, owner={},"
-              + " cause={}",
-          redisFailureMode,
-          tenantId,
-          quotaScope,
-          ownerCode,
-          causeSummary);
-      if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
+        String key = BatchRedisKeys.quotaState(
+                request.owner().tenantId(),
+                request.owner().quotaScope(),
+                request.owner().ownerCode());
+
+        List<Object> result;
+        try {
+            result = redis.evalList(
+                    EVAL_RESERVE_SCRIPT,
+                    key,
+                    Long.toString(nowMillis),
+                    Integer.toString(request.policy().baseCap()),
+                    Integer.toString(normalizedBurst),
+                    Integer.toString(normalizedRequested),
+                    Long.toString(request.currentActiveCount()),
+                    policy.name(),
+                    Long.toString(calendarStartMillis),
+                    Long.toString(calendarEndMillis),
+                    Integer.toString(slidingHours));
+        } catch (DataAccessException ex) {
+            String tenantId = request.owner().tenantId();
+            String quotaScope = request.owner().quotaScope();
+            String ownerCode = request.owner().ownerCode();
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "redis quota evaluateAndReserve failed; failureMode={}, tenant={}, scope={}, owner={},"
+                            + " cause={}",
+                    redisFailureMode,
+                    tenantId,
+                    quotaScope,
+                    ownerCode,
+                    causeSummary);
+            if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
+                return ResourceCheck.allow();
+            }
+            QuotaReservationRequest unavailableBackendRequest = new QuotaReservationRequest(
+                    request.owner(),
+                    request.policy(),
+                    request.currentActiveCount(),
+                    request.requestedCount(),
+                    new QuotaReservationReason("QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable"));
+            return waitForCapacity(unavailableBackendRequest);
+        }
+
+        if (result == null || result.isEmpty()) {
+            return ResourceCheck.allow();
+        }
+        long allowed = parseLong(asString(result.get(0)));
+        if (allowed != 1L) {
+            return waitForCapacity(request);
+        }
+
+        // 命中即把 owner 加入租户索引，供 snapshot 调度器枚举
+        try {
+            String indexKey = BatchRedisKeys.quotaStateIndex(request.owner().tenantId());
+            String indexEntry =
+                    request.owner().quotaScope() + ":" + request.owner().ownerCode();
+            StringRedisTemplate template = redis.redisTemplate();
+            template.opsForSet().add(indexKey, indexEntry);
+            template.expire(indexKey, INDEX_TTL);
+        } catch (DataAccessException ex) {
+            // 索引失败不影响主流程；snapshot 拿不到就等下次
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.debug("redis quota index update failed: {}", causeSummary);
+        }
         return ResourceCheck.allow();
-      }
-      QuotaReservationRequest unavailableBackendRequest = new QuotaReservationRequest(
-          request.owner(),
-          request.policy(),
-          request.currentActiveCount(),
-          request.requestedCount(),
-          new QuotaReservationReason(
-              "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable"));
-      return waitForCapacity(unavailableBackendRequest);
     }
 
-    if (result == null || result.isEmpty()) {
-      return ResourceCheck.allow();
-    }
-    long allowed = parseLong(asString(result.get(0)));
-    if (allowed != 1L) {
-      return waitForCapacity(request);
+    @Override
+    public QuotaRuntimeSnapshot describe(QuotaDescribeRequest request) {
+        String tenantId = request.owner().tenantId();
+        String quotaScope = request.owner().quotaScope();
+        String ownerCode = request.owner().ownerCode();
+        int burstLimit = Math.max(0, request.burstLimit());
+        QuotaResetPolicy policy = QuotaResetPolicy.from(request.quotaResetPolicy());
+
+        if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+        if (!policy.isRuntimeManaged() || burstLimit <= 0) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+
+        String key = BatchRedisKeys.quotaState(tenantId, quotaScope, ownerCode);
+        Map<Object, Object> entries;
+        try {
+            entries = redis.entries(key);
+        } catch (DataAccessException ex) {
+            String safeTenantId = LogSanitizer.value(tenantId);
+            String safeQuotaScope = LogSanitizer.value(quotaScope);
+            String safeOwnerCode = LogSanitizer.value(ownerCode);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "redis quota describe failed; returning empty snapshot: tenant={}, scope={}, owner={},"
+                            + " cause={}",
+                    safeTenantId,
+                    safeQuotaScope,
+                    safeOwnerCode,
+                    causeSummary);
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+        if (entries == null || entries.isEmpty()) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+
+        long nowMillis = BatchDateTimeSupport.utcNow().toEpochMilli();
+        String windowExpiresAt = asString(entries.get("windowExpiresAt"));
+        long winEndMillis = parseLong(windowExpiresAt);
+        String windowStartedAt = asString(entries.get("windowStartedAt"));
+        long winStartMillis = parseLong(windowStartedAt);
+        String lastResetAt = asString(entries.get("lastResetAt"));
+        long lastResetMillis = parseLong(lastResetAt);
+        String peakBorrowedCount = asString(entries.get("peakBorrowedCount"));
+        int peak = (int) parseLong(peakBorrowedCount);
+        if (winEndMillis > 0 && nowMillis >= winEndMillis) {
+            // 窗口已过期：实际可用 burst 全量复位（Redis 端 TTL 到期会清掉，这里读路径同步语义）
+            return new QuotaRuntimeSnapshot(
+                    policy.name(),
+                    burstLimit,
+                    0,
+                    burstLimit,
+                    winStartMillis > 0 ? Instant.ofEpochMilli(winStartMillis) : null,
+                    Instant.ofEpochMilli(winEndMillis),
+                    lastResetMillis > 0 ? Instant.ofEpochMilli(lastResetMillis) : null);
+        }
+        int remaining = Math.max(0, burstLimit - peak);
+        return new QuotaRuntimeSnapshot(
+                policy.name(),
+                burstLimit,
+                peak,
+                remaining,
+                winStartMillis > 0 ? Instant.ofEpochMilli(winStartMillis) : null,
+                winEndMillis > 0 ? Instant.ofEpochMilli(winEndMillis) : null,
+                lastResetMillis > 0 ? Instant.ofEpochMilli(lastResetMillis) : null);
     }
 
-    // 命中即把 owner 加入租户索引，供 snapshot 调度器枚举
-    try {
-      String indexKey = BatchRedisKeys.quotaStateIndex(request.owner().tenantId());
-      String indexEntry = request.owner().quotaScope() + ":" + request.owner().ownerCode();
-      StringRedisTemplate template = redis.redisTemplate();
-      template.opsForSet().add(indexKey, indexEntry);
-      template.expire(indexKey, INDEX_TTL);
-    } catch (DataAccessException ex) {
-      // 索引失败不影响主流程；snapshot 拿不到就等下次
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.debug("redis quota index update failed: {}", causeSummary);
-    }
-    return ResourceCheck.allow();
-  }
-
-  @Override
-  public QuotaRuntimeSnapshot describe(QuotaDescribeRequest request) {
-    String tenantId = request.owner().tenantId();
-    String quotaScope = request.owner().quotaScope();
-    String ownerCode = request.owner().ownerCode();
-    int burstLimit = Math.max(0, request.burstLimit());
-    QuotaResetPolicy policy = QuotaResetPolicy.from(request.quotaResetPolicy());
-
-    if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
-    }
-    if (!policy.isRuntimeManaged() || burstLimit <= 0) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+    /** Redis 实现下窗口由 TTL 自动回收，无需调度器 reconcile。 */
+    @Override
+    public void reconcileExpiredStates(int slidingWindowHours) {
+        // 无操作
     }
 
-    String key = BatchRedisKeys.quotaState(tenantId, quotaScope, ownerCode);
-    Map<Object, Object> entries;
-    try {
-      entries = redis.entries(key);
-    } catch (DataAccessException ex) {
-      String safeTenantId = LogSanitizer.value(tenantId);
-      String safeQuotaScope = LogSanitizer.value(quotaScope);
-      String safeOwnerCode = LogSanitizer.value(ownerCode);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "redis quota describe failed; returning empty snapshot: tenant={}, scope={}, owner={},"
-              + " cause={}",
-          safeTenantId,
-          safeQuotaScope,
-          safeOwnerCode,
-          causeSummary);
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
-    }
-    if (entries == null || entries.isEmpty()) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+    private static long parseLong(String s) {
+        if (s == null || s.isBlank()) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException ex) {
+            SwallowedExceptionLogger.info(RedisQuotaRuntimeStateService.class, "catch:NumberFormatException", ex);
+
+            return 0L;
+        }
     }
 
-    long nowMillis = BatchDateTimeSupport.utcNow().toEpochMilli();
-    String windowExpiresAt = asString(entries.get("windowExpiresAt"));
-    long winEndMillis = parseLong(windowExpiresAt);
-    String windowStartedAt = asString(entries.get("windowStartedAt"));
-    long winStartMillis = parseLong(windowStartedAt);
-    String lastResetAt = asString(entries.get("lastResetAt"));
-    long lastResetMillis = parseLong(lastResetAt);
-    String peakBorrowedCount = asString(entries.get("peakBorrowedCount"));
-    int peak = (int) parseLong(peakBorrowedCount);
-    if (winEndMillis > 0 && nowMillis >= winEndMillis) {
-      // 窗口已过期：实际可用 burst 全量复位（Redis 端 TTL 到期会清掉，这里读路径同步语义）
-      return new QuotaRuntimeSnapshot(
-          policy.name(),
-          burstLimit,
-          0,
-          burstLimit,
-          winStartMillis > 0 ? Instant.ofEpochMilli(winStartMillis) : null,
-          Instant.ofEpochMilli(winEndMillis),
-          lastResetMillis > 0 ? Instant.ofEpochMilli(lastResetMillis) : null);
+    private static String asString(Object value) {
+        return value == null ? null : value.toString();
     }
-    int remaining = Math.max(0, burstLimit - peak);
-    return new QuotaRuntimeSnapshot(
-        policy.name(),
-        burstLimit,
-        peak,
-        remaining,
-        winStartMillis > 0 ? Instant.ofEpochMilli(winStartMillis) : null,
-        winEndMillis > 0 ? Instant.ofEpochMilli(winEndMillis) : null,
-        lastResetMillis > 0 ? Instant.ofEpochMilli(lastResetMillis) : null);
-  }
 
-  /** Redis 实现下窗口由 TTL 自动回收，无需调度器 reconcile。 */
-  @Override
-  public void reconcileExpiredStates(int slidingWindowHours) {
-    // 无操作
-  }
-
-  private static long parseLong(String s) {
-    if (s == null || s.isBlank()) {
-      return 0L;
+    private static ResourceCheck waitForCapacity(QuotaReservationRequest request) {
+        QuotaReservationReason reason = request.reason();
+        return ResourceCheck.waitForCapacity(
+                reason == null ? null : reason.reasonCode(), reason == null ? null : reason.reasonMessage());
     }
-    try {
-      return Long.parseLong(s);
-    } catch (NumberFormatException ex) {
-      SwallowedExceptionLogger.info(
-          RedisQuotaRuntimeStateService.class, "catch:NumberFormatException", ex);
-
-      return 0L;
-    }
-  }
-
-  private static String asString(Object value) {
-    return value == null ? null : value.toString();
-  }
-
-  private static ResourceCheck waitForCapacity(QuotaReservationRequest request) {
-    QuotaReservationReason reason = request.reason();
-    return ResourceCheck.waitForCapacity(
-        reason == null ? null : reason.reasonCode(),
-        reason == null ? null : reason.reasonMessage());
-  }
 }

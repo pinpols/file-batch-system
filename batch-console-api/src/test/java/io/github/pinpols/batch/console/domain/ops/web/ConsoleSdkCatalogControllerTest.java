@@ -20,30 +20,30 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("SDK 目录接口:服务层目录包装为统一响应, 版本与语言数量保持不变")
 class ConsoleSdkCatalogControllerTest {
 
-  @Mock
-  private ConsoleSdkCatalogService catalogService;
+    @Mock
+    private ConsoleSdkCatalogService catalogService;
 
-  @Mock
-  private ConsoleResponseFactory responseFactory;
+    @Mock
+    private ConsoleResponseFactory responseFactory;
 
-  @InjectMocks
-  private ConsoleSdkCatalogController controller;
+    @InjectMocks
+    private ConsoleSdkCatalogController controller;
 
-  @Test
-  @DisplayName("目录包装:返回对象与服务层目录同一实例, 版本与语言数量保持不变")
-  void shouldWrapServiceOutput_whenReadingCatalog() {
-    // arrange
-    SdkCatalog catalog = new ConsoleSdkCatalogService().catalog(); // 用真实结构当 fixture,避免重复手搓
-    when(catalogService.catalog()).thenReturn(catalog);
-    when(responseFactory.success(any(SdkCatalog.class)))
-        .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
+    @Test
+    @DisplayName("目录包装:返回对象与服务层目录同一实例, 版本与语言数量保持不变")
+    void shouldWrapServiceOutput_whenReadingCatalog() {
+        // arrange
+        SdkCatalog catalog = new ConsoleSdkCatalogService().catalog(); // 用真实结构当 fixture,避免重复手搓
+        when(catalogService.catalog()).thenReturn(catalog);
+        when(responseFactory.success(any(SdkCatalog.class)))
+                .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
 
-    // act
-    CommonResponse<SdkCatalog> resp = controller.catalog();
+        // act
+        CommonResponse<SdkCatalog> resp = controller.catalog();
 
-    // assert
-    assertThat(resp.data()).isSameAs(catalog);
-    assertThat(resp.data().protocolVersion().supportedMajors()).containsExactly("v1", "v2");
-    assertThat(resp.data().languages()).hasSize(5);
-  }
+        // assert
+        assertThat(resp.data()).isSameAs(catalog);
+        assertThat(resp.data().protocolVersion().supportedMajors()).containsExactly("v1", "v2");
+        assertThat(resp.data().languages()).hasSize(5);
+    }
 }

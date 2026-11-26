@@ -8,16 +8,16 @@ import java.time.Instant;
  * <p>error_key / error_args / error_message 在成功投递行中为 null，按可空 String 承载。
  */
 public record OutboxDeliveryLogRow(
-    Long id,
-    String tenantId,
-    String eventType,
-    String eventKey,
-    String traceId,
-    String deliveryStatus,
-    String targetTopic,
-    Integer deliveryAttempt,
-    String errorKey,
-    String errorArgs,
-    String errorMessage,
-    Instant createdAt,
-    Instant updatedAt) {}
+        Long id,
+        String tenantId,
+        String eventType,
+        String eventKey,
+        String traceId,
+        String deliveryStatus,
+        String targetTopic,
+        Integer deliveryAttempt,
+        String errorKey,
+        String errorArgs,
+        String errorMessage,
+        Instant createdAt,
+        Instant updatedAt) {}

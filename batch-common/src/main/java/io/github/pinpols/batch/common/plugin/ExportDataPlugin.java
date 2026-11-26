@@ -6,60 +6,56 @@ import java.util.Map;
 /** 导出 GENERATE 插件：加载批次头信息和明细分页数据用于文件生成。 */
 public interface ExportDataPlugin {
 
-  record DetailPage(List<Map<String, Object>> rows, Object nextCursor) {
-    public static DetailPage empty() {
-      return new DetailPage(List.of(), null);
+    record DetailPage(List<Map<String, Object>> rows, Object nextCursor) {
+        public static DetailPage empty() {
+            return new DetailPage(List.of(), null);
+        }
     }
-  }
 
-  record DelimitedColumn(String header, String source) {}
+    record DelimitedColumn(String header, String source) {}
 
-  @SuppressWarnings("java:S112")
-  String id();
+    @SuppressWarnings("java:S112")
+    String id();
 
-  /** 加载批次行数据（如结算批次），返回空 map 表示未找到。 */
-  @SuppressWarnings("java:S112")
-  Map<String, Object> loadBatch(ExportDataContext context) throws Exception;
+    /** 加载批次行数据（如结算批次），返回空 map 表示未找到。 */
+    @SuppressWarnings("java:S112")
+    Map<String, Object> loadBatch(ExportDataContext context) throws Exception;
 
-  /** 按插件定义的游标语义加载一页明细数据，{@code nextCursor == null} 表示无更多数据。 */
-  @SuppressWarnings("java:S112")
-  DetailPage loadDetailPage(ExportDataContext context, Long batchId, int pageSize, Object cursor)
-      throws Exception;
+    /** 按插件定义的游标语义加载一页明细数据，{@code nextCursor == null} 表示无更多数据。 */
+    @SuppressWarnings("java:S112")
+    DetailPage loadDetailPage(ExportDataContext context, Long batchId, int pageSize, Object cursor) throws Exception;
 
-  /** 可选的插件自定义分隔符列布局，模板级配置仍可覆盖此定义。 */
-  default List<DelimitedColumn> describeDelimitedColumns(
-      ExportDataContext context, Map<String, Object> batch) {
-    return List.of();
-  }
+    /** 可选的插件自定义分隔符列布局，模板级配置仍可覆盖此定义。 */
+    default List<DelimitedColumn> describeDelimitedColumns(ExportDataContext context, Map<String, Object> batch) {
+        return List.of();
+    }
 
-  /** 可选的插件自定义定长列布局，默认回退至分隔符布局。 */
-  default List<DelimitedColumn> describeFixedWidthColumns(
-      ExportDataContext context, Map<String, Object> batch) {
-    return describeDelimitedColumns(context, batch);
-  }
+    /** 可选的插件自定义定长列布局，默认回退至分隔符布局。 */
+    default List<DelimitedColumn> describeFixedWidthColumns(ExportDataContext context, Map<String, Object> batch) {
+        return describeDelimitedColumns(context, batch);
+    }
 
-  /** 由 {@code RegisterStep} 在文件记录成功持久化后回调，插件可借此标记自身业务数据已导出（如更新状态列），默认为空实现。 */
-  default void onRegistered(
-      ExportDataContext context, Long batchId, int exportVersion, String traceId) {}
+    /** 由 {@code RegisterStep} 在文件记录成功持久化后回调，插件可借此标记自身业务数据已导出（如更新状态列），默认为空实现。 */
+    default void onRegistered(ExportDataContext context, Long batchId, int exportVersion, String traceId) {}
 
-  /**
-   * {@link #onRegistered} 回调的重复执行安全性。插件执行非幂等副作用时应声明 {@link
-   * IdempotencyCapability#NONE}；未声明时按 UNKNOWN 处理，并在调用前设置执行围栏。
-   */
-  default IdempotencyCapability registrationCallbackIdempotencyCapability() {
-    return IdempotencyCapability.UNKNOWN;
-  }
+    /**
+     * {@link #onRegistered} 回调的重复执行安全性。插件执行非幂等副作用时应声明 {@link
+     * IdempotencyCapability#NONE}；未声明时按 UNKNOWN 处理，并在调用前设置执行围栏。
+     */
+    default IdempotencyCapability registrationCallbackIdempotencyCapability() {
+        return IdempotencyCapability.UNKNOWN;
+    }
 
-  /** 注册目录采用保守声明，必须适用于该插件的所有配置。 */
-  default ReplayCapabilityDeclaration replayCapabilityDeclaration() {
-    return ReplayCapabilityDeclaration.unknown(id());
-  }
+    /** 注册目录采用保守声明，必须适用于该插件的所有配置。 */
+    default ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+        return ReplayCapabilityDeclaration.unknown(id());
+    }
 
-  /**
-   * 解析冻结导出配置的全部外部副作用，包括登记
-   * 回调；无法证明完整副作用边界时必须返回 UNKNOWN。
-   */
-  default ReplayCapabilityDeclaration replayCapability(Map<String, Object> exportConfig) {
-    return replayCapabilityDeclaration();
-  }
+    /**
+     * 解析冻结导出配置的全部外部副作用，包括登记
+     * 回调；无法证明完整副作用边界时必须返回 UNKNOWN。
+     */
+    default ReplayCapabilityDeclaration replayCapability(Map<String, Object> exportConfig) {
+        return replayCapabilityDeclaration();
+    }
 }

@@ -38,65 +38,59 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/console/users/batch")
 public class ConsoleUserBatchProvisioningController {
 
-  private final ConsoleUserBatchProvisioningService service;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleUserBatchProvisioningService service;
+    private final ConsoleResponseFactory responseFactory;
 
-  public record PatchRequest(
-      @NotNull Integer version, @NotNull AccountRow row) {}
+    public record PatchRequest(
+            @NotNull Integer version, @NotNull AccountRow row) {}
 
-  public record ApplyRequest(
-      @NotNull Integer version, @NotNull UUID requestId) {}
+    public record ApplyRequest(
+            @NotNull Integer version, @NotNull UUID requestId) {}
 
-  @GetMapping("/template")
-  public ResponseEntity<byte[]> template() {
-    return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=accounts-template.xlsx")
-        .cacheControl(CacheControl.noStore())
-        .contentType(MediaType.parseMediaType(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-        .body(service.template());
-  }
+    @GetMapping("/template")
+    public ResponseEntity<byte[]> template() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=accounts-template.xlsx")
+                .cacheControl(CacheControl.noStore())
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(service.template());
+    }
 
-  @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @AuditAction(action = "user.batchPreview", aggregateType = "user_account", recordParams = false)
-  public CommonResponse<Preview> preview(@RequestParam("file") MultipartFile file)
-      throws IOException {
-    return responseFactory.success(service.preview(file));
-  }
+    @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @AuditAction(action = "user.batchPreview", aggregateType = "user_account", recordParams = false)
+    public CommonResponse<Preview> preview(@RequestParam("file") MultipartFile file) throws IOException {
+        return responseFactory.success(service.preview(file));
+    }
 
-  @PostMapping("/preview/{token}/patch")
-  @AuditAction(
-      action = "user.batchPreviewPatch",
-      aggregateType = "user_account",
-      recordParams = false)
-  public CommonResponse<Preview> patch(
-      @PathVariable String token, @Valid @RequestBody PatchRequest request) {
-    Preview preview = service.patch(token, request.version(), request.row());
-    return responseFactory.success(preview);
-  }
+    @PostMapping("/preview/{token}/patch")
+    @AuditAction(action = "user.batchPreviewPatch", aggregateType = "user_account", recordParams = false)
+    public CommonResponse<Preview> patch(@PathVariable String token, @Valid @RequestBody PatchRequest request) {
+        Preview preview = service.patch(token, request.version(), request.row());
+        return responseFactory.success(preview);
+    }
 
-  @PostMapping("/apply/{token}")
-  @Idempotent
-  @AuditAction(
-      action = "user.batchCreate",
-      aggregateType = "user_batch_operation",
-      aggregateId = "#request.requestId",
-      recordParams = false)
-  public CommonResponse<ApplyResult> apply(
-      @PathVariable String token, @Valid @RequestBody ApplyRequest request) {
-    ApplyResult result = service.apply(token, request.version(), request.requestId());
-    return responseFactory.success(result);
-  }
+    @PostMapping("/apply/{token}")
+    @Idempotent
+    @AuditAction(
+            action = "user.batchCreate",
+            aggregateType = "user_batch_operation",
+            aggregateId = "#request.requestId",
+            recordParams = false)
+    public CommonResponse<ApplyResult> apply(@PathVariable String token, @Valid @RequestBody ApplyRequest request) {
+        ApplyResult result = service.apply(token, request.version(), request.requestId());
+        return responseFactory.success(result);
+    }
 
-  @GetMapping("/operations/{operationId}")
-  public CommonResponse<Operation> operation(
-      @PathVariable UUID operationId, @RequestParam(required = false) String targetTenantId) {
-    return responseFactory.success(service.operation(operationId, targetTenantId));
-  }
+    @GetMapping("/operations/{operationId}")
+    public CommonResponse<Operation> operation(
+            @PathVariable UUID operationId, @RequestParam(required = false) String targetTenantId) {
+        return responseFactory.success(service.operation(operationId, targetTenantId));
+    }
 
-  @GetMapping("/operations")
-  public CommonResponse<Operation> findOperation(
-      @RequestParam UUID requestId, @RequestParam(required = false) String targetTenantId) {
-    return responseFactory.success(service.findByRequestId(requestId, targetTenantId));
-  }
+    @GetMapping("/operations")
+    public CommonResponse<Operation> findOperation(
+            @RequestParam UUID requestId, @RequestParam(required = false) String targetTenantId) {
+        return responseFactory.success(service.findByRequestId(requestId, targetTenantId));
+    }
 }

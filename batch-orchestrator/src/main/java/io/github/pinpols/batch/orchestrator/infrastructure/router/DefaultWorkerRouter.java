@@ -20,17 +20,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultWorkerRouter implements WorkerRouter {
 
-  private final WorkerRoutingPolicy workerRoutingPolicy;
+    private final WorkerRoutingPolicy workerRoutingPolicy;
 
-  @Override
-  public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
-    String workerType = EmptyChecks.isBlank(stepCode) ? "DEFAULT" : stepCode.toUpperCase();
-    route.setWorkerType(workerType);
-    route.setPriority(5);
-    route.setAvailable(true);
-    WorkerRouteModel selected = workerRoutingPolicy.select(List.of(route));
-    return selected == null ? route : selected;
-  }
+    @Override
+    public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
+        String workerType = EmptyChecks.isBlank(stepCode) ? "DEFAULT" : stepCode.toUpperCase();
+        route.setWorkerType(workerType);
+        route.setPriority(5);
+        route.setAvailable(true);
+        WorkerRouteModel selected = workerRoutingPolicy.select(List.of(route));
+        return selected == null ? route : selected;
+    }
 }

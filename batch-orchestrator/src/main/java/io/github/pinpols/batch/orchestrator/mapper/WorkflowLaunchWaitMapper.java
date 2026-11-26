@@ -8,35 +8,29 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowLaunchWaitMapper {
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  int defer(WorkflowLaunchWaitInsertParam request);
+    int defer(WorkflowLaunchWaitInsertParam request);
 
-  WorkflowLaunchWaitClaim selectWaitingForUpdate(
-      @Param("tenantId") String tenantId, @Param("requestId") String requestId);
+    WorkflowLaunchWaitClaim selectWaitingForUpdate(
+            @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
-  List<WorkflowLaunchWaitClaim> claimDue(String tenantId, int limit, Instant nextAttemptAt);
+    List<WorkflowLaunchWaitClaim> claimDue(String tenantId, int limit, Instant nextAttemptAt);
 
-  int release(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("nextAttemptAt") Instant nextAttemptAt);
+    int release(
+            @Param("tenantId") String tenantId,
+            @Param("requestId") String requestId,
+            @Param("nextAttemptAt") Instant nextAttemptAt);
 
-  default int markResumed(String tenantId, String requestId) {
-    return updateStatus(
-        tenantId,
-        requestId,
-        WorkflowLaunchWaitStatus.WAITING.code(),
-        WorkflowLaunchWaitStatus.RESUMED.code());
-  }
+    default int markResumed(String tenantId, String requestId) {
+        return updateStatus(
+                tenantId, requestId, WorkflowLaunchWaitStatus.WAITING.code(), WorkflowLaunchWaitStatus.RESUMED.code());
+    }
 
-  default int markRejected(String tenantId, String requestId) {
-    return updateStatus(
-        tenantId,
-        requestId,
-        WorkflowLaunchWaitStatus.WAITING.code(),
-        WorkflowLaunchWaitStatus.REJECTED.code());
-  }
+    default int markRejected(String tenantId, String requestId) {
+        return updateStatus(
+                tenantId, requestId, WorkflowLaunchWaitStatus.WAITING.code(), WorkflowLaunchWaitStatus.REJECTED.code());
+    }
 
-  int updateStatus(String tenantId, String requestId, String expectedStatus, String targetStatus);
+    int updateStatus(String tenantId, String requestId, String expectedStatus, String targetStatus);
 }

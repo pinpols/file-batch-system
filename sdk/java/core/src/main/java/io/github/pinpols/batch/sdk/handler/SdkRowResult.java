@@ -13,60 +13,60 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public final class SdkRowResult {
 
-  private final LongAdder success = new LongAdder();
-  private final LongAdder skipped = new LongAdder();
-  private final LongAdder failed = new LongAdder();
-  private final LongAdder reject = new LongAdder();
+    private final LongAdder success = new LongAdder();
+    private final LongAdder skipped = new LongAdder();
+    private final LongAdder failed = new LongAdder();
+    private final LongAdder reject = new LongAdder();
 
-  public void incSuccess() {
-    success.increment();
-  }
+    public void incSuccess() {
+        success.increment();
+    }
 
-  public void incSkipped() {
-    skipped.increment();
-  }
+    public void incSkipped() {
+        skipped.increment();
+    }
 
-  public void incFailed() {
-    failed.increment();
-  }
+    public void incFailed() {
+        failed.increment();
+    }
 
-  public void incReject() {
-    reject.increment();
-  }
+    public void incReject() {
+        reject.increment();
+    }
 
-  public void addSuccess(long n) {
-    success.add(n);
-  }
+    public void addSuccess(long n) {
+        success.add(n);
+    }
 
-  public long success() {
-    return success.sum();
-  }
+    public long success() {
+        return success.sum();
+    }
 
-  public long skipped() {
-    return skipped.sum();
-  }
+    public long skipped() {
+        return skipped.sum();
+    }
 
-  public long failed() {
-    return failed.sum();
-  }
+    public long failed() {
+        return failed.sum();
+    }
 
-  public long reject() {
-    return reject.sum();
-  }
+    public long reject() {
+        return reject.sum();
+    }
 
-  /** 处理总数 = success + skipped + failed + reject。 */
-  public long total() {
-    return success() + skipped() + failed() + reject();
-  }
+    /** 处理总数 = success + skipped + failed + reject。 */
+    public long total() {
+        return success() + skipped() + failed() + reject();
+    }
 
-  /** 转 SdkTaskResult.output Map(只放非零项,保持 output 精简)。 */
-  public Map<String, Object> toOutput() {
-    Map<String, Object> m = new LinkedHashMap<>();
-    m.put("success", success());
-    if (skipped() > 0) m.put("skipped", skipped());
-    if (failed() > 0) m.put("failed", failed());
-    if (reject() > 0) m.put("reject", reject());
-    m.put("total", total());
-    return m;
-  }
+    /** 转 SdkTaskResult.output Map(只放非零项,保持 output 精简)。 */
+    public Map<String, Object> toOutput() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("success", success());
+        if (skipped() > 0) m.put("skipped", skipped());
+        if (failed() > 0) m.put("failed", failed());
+        if (reject() > 0) m.put("reject", reject());
+        m.put("total", total());
+        return m;
+    }
 }

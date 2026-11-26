@@ -34,37 +34,35 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("Workflow启动接口,验证成功响应内容,接口密钥租户校验,租户回填以及业务异常到统一错误响应的映射")
 class LaunchControllerTest {
 
-  @Mock
-  private TenantActionRateLimiter tenantActionRateLimiter;
+    @Mock
+    private TenantActionRateLimiter tenantActionRateLimiter;
 
-  @Mock
-  private WorkflowRunLaunchService workflowRunLaunchService;
+    @Mock
+    private WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Mock
-  private OrchestratorDrainService drainService;
+    @Mock
+    private OrchestratorDrainService drainService;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    LaunchApplicationService launchApplicationService =
-        new LaunchApplicationService(tenantActionRateLimiter, workflowRunLaunchService);
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new LaunchController(launchApplicationService, drainService))
-        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        LaunchApplicationService launchApplicationService =
+                new LaunchApplicationService(tenantActionRateLimiter, workflowRunLaunchService);
+        mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchApplicationService, drainService))
+                .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+                .build();
+    }
 
-  @Test
-  @DisplayName("显式Workflow启动成功后返回运行编号与链路标识")
-  void shouldReturnLaunchResponseOnSuccess() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(workflowRunLaunchService.launch(any()))
-        .thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
+    @Test
+    @DisplayName("显式Workflow启动成功后返回运行编号与链路标识")
+    void shouldReturnLaunchResponseOnSuccess() throws Exception {
+        when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
+        when(workflowRunLaunchService.launch(any())).thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
 
-    mockMvc
-        .perform(
-            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("""
+        mockMvc.perform(post("/internal/orchestrator/launch")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 42,
@@ -75,21 +73,20 @@ class LaunchControllerTest {
                       "params": {}
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.instanceNo").value("workflow-run-001"))
-        .andExpect(jsonPath("$.traceId").value("trace-001"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.instanceNo").value("workflow-run-001"))
+                .andExpect(jsonPath("$.traceId").value("trace-001"));
+    }
 
-  @Test
-  @DisplayName("接口密钥归属租户与请求体声明租户不一致时返回禁止访问,错误信息指向租户不匹配")
-  void shouldRejectWhenApiKeyResolvedTenantMismatchesBody() throws Exception {
-    // arrange: filter 解析出 API-Key 真实租户 t-real,但 body 声明的是 t-fake
-    // act + assert: 租户边界守卫拒绝,不应落到 launch
-    mockMvc
-        .perform(post("/internal/orchestrator/launch")
-            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("接口密钥归属租户与请求体声明租户不一致时返回禁止访问,错误信息指向租户不匹配")
+    void shouldRejectWhenApiKeyResolvedTenantMismatchesBody() throws Exception {
+        // arrange: filter 解析出 API-Key 真实租户 t-real,但 body 声明的是 t-fake
+        // act + assert: 租户边界守卫拒绝,不应落到 launch
+        mockMvc.perform(post("/internal/orchestrator/launch")
+                        .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t-fake",
                       "workflowDefinitionId": 42,
@@ -100,24 +97,22 @@ class LaunchControllerTest {
                       "params": {}
                     }
                     """))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.message").value("error.common.tenant_id_mismatch"));
-  }
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("error.common.tenant_id_mismatch"));
+    }
 
-  @Test
-  @DisplayName("请求体未声明租户时,下游服务收到的租户为接口密钥解析出的租户")
-  void shouldUseApiKeyResolvedTenantWhenBodyTenantBlank() throws Exception {
-    // arrange: API-Key 解析出 t-real,body 未声明 tenantId
-    when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(workflowRunLaunchService.launch(any()))
-        .thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
+    @Test
+    @DisplayName("请求体未声明租户时,下游服务收到的租户为接口密钥解析出的租户")
+    void shouldUseApiKeyResolvedTenantWhenBodyTenantBlank() throws Exception {
+        // arrange: API-Key 解析出 t-real,body 未声明 tenantId
+        when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
+        when(workflowRunLaunchService.launch(any())).thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
 
-    // act: launch 应使用解析出的 t-real,而非 body 里的 null
-    mockMvc
-        .perform(post("/internal/orchestrator/launch")
-            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        // act: launch 应使用解析出的 t-real,而非 body 里的 null
+        mockMvc.perform(post("/internal/orchestrator/launch")
+                        .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "workflowDefinitionId": 42,
                       "bizDate": "2026-03-27",
@@ -127,30 +122,30 @@ class LaunchControllerTest {
                       "params": {}
                     }
                     """))
-        .andExpect(status().isOk());
+                .andExpect(status().isOk());
 
-    // assert: 下游收到的 tenantId 已被守卫改写为 t-real
-    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(workflowRunLaunchService).launch(captor.capture());
-    assertThat(captor.getValue().tenantId()).isEqualTo("t-real");
-  }
+        // assert: 下游收到的 tenantId 已被守卫改写为 t-real
+        ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+        verify(workflowRunLaunchService).launch(captor.capture());
+        assertThat(captor.getValue().tenantId()).isEqualTo("t-real");
+    }
 
-  @Test
-  @DisplayName("业务异常被映射为统一失败响应,状态码与错误码及错误信息与异常内容一致")
-  void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(workflowRunLaunchService.launch(any()))
-        .thenThrow(BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
+    @Test
+    @DisplayName("业务异常被映射为统一失败响应,状态码与错误码及错误信息与异常内容一致")
+    void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
+        when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
+        when(workflowRunLaunchService.launch(any()))
+                .thenThrow(
+                        BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
 
-    mockMvc
-        .perform(
-            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("""
+        mockMvc.perform(post("/internal/orchestrator/launch")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"t1","workflowDefinitionId":42,"bizDate":"2026-03-27",
                  "triggerType":"API","requestId":"req-invalid","traceId":"trace-invalid","params":{}}
                 """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value(ResultCode.INVALID_ARGUMENT.name()))
-        .andExpect(jsonPath("$.message").value("error.common.invalid_argument"));
-  }
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ResultCode.INVALID_ARGUMENT.name()))
+                .andExpect(jsonPath("$.message").value("error.common.invalid_argument"));
+    }
 }

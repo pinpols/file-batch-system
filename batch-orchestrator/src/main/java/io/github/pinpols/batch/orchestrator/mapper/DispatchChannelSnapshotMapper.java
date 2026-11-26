@@ -7,6 +7,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface DispatchChannelSnapshotMapper {
 
-  String selectCurrentChannelSnapshotJson(
-      @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
+    String selectCurrentChannelSnapshotJson(
+            @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
 }

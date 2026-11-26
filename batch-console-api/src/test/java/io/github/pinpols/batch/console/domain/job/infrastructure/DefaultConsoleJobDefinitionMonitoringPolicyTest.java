@@ -40,400 +40,399 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("作业监控策略维护:默认值、计划时间边界与缓存一致性")
 class DefaultConsoleJobDefinitionMonitoringPolicyTest {
 
-  @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+    @Mock
+    private JobDefinitionMapper jobDefinitionMapper;
 
-  @Mock
-  private JobDependencyRuleWriter dependencyRuleWriter;
+    @Mock
+    private JobDependencyRuleWriter dependencyRuleWriter;
 
-  @Mock
-  private TenantIdResolver tenantGuard;
+    @Mock
+    private TenantIdResolver tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Mock
-  private ConsoleConfigCacheInvalidationService cacheInvalidationService;
+    @Mock
+    private ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
-  @Mock
-  private BuiltinTaskTypeGuard builtinTaskTypeGuard;
+    @Mock
+    private BuiltinTaskTypeGuard builtinTaskTypeGuard;
 
-  @Mock
-  private JobResourceAssignmentGuard resourceAssignmentGuard;
+    @Mock
+    private JobResourceAssignmentGuard resourceAssignmentGuard;
 
-  @Mock
-  private DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
+    @Mock
+    private DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
-  @InjectMocks
-  private DefaultConsoleJobDefinitionApplicationService service;
+    @InjectMocks
+    private DefaultConsoleJobDefinitionApplicationService service;
 
-  private final JobMonitoringDefaultsProperties defaults = new JobMonitoringDefaultsProperties();
+    private final JobMonitoringDefaultsProperties defaults = new JobMonitoringDefaultsProperties();
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultConsoleJobDefinitionApplicationService(
-        jobDefinitionMapper,
-        dependencyRuleWriter,
-        tenantGuard,
-        requestMetadataResolver,
-        cacheInvalidationService,
-        defaults,
-        builtinTaskTypeGuard,
-        resourceAssignmentGuard,
-        singleJobWorkflowProvisioner);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultConsoleJobDefinitionApplicationService(
+                jobDefinitionMapper,
+                dependencyRuleWriter,
+                tenantGuard,
+                requestMetadataResolver,
+                cacheInvalidationService,
+                defaults,
+                builtinTaskTypeGuard,
+                resourceAssignmentGuard,
+                singleJobWorkflowProvisioner);
+    }
 
-  private void stubTenantAndOperator() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "tester", null, null));
-  }
+    private void stubTenantAndOperator() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "tester", null, null));
+    }
 
-  @Test
-  @DisplayName("创建 Cron 作业时应用监控默认值并原子保存策略")
-  void shouldApplyMonitoringDefaults_whenCreatingCronJob() {
-    stubTenantAndOperator();
-    defaults.setSoftRuntimeSeconds(1200);
-    defaults.setStartGraceSeconds(300);
-    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
-    request.setTenantId("tenant-a");
-    request.setJobCode("JOB_DAILY");
-    request.setJobName("daily job");
-    request.setJobType("IMPORT");
-    request.setScheduleType("CRON");
-    request.setScheduleExpr("0 0 2 * * *");
-    request.setCompletionDeadlineEnabled(true);
-    request.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
+    @Test
+    @DisplayName("创建 Cron 作业时应用监控默认值并原子保存策略")
+    void shouldApplyMonitoringDefaults_whenCreatingCronJob() {
+        stubTenantAndOperator();
+        defaults.setSoftRuntimeSeconds(1200);
+        defaults.setStartGraceSeconds(300);
+        JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+        request.setTenantId("tenant-a");
+        request.setJobCode("JOB_DAILY");
+        request.setJobName("daily job");
+        request.setJobType("IMPORT");
+        request.setScheduleType("CRON");
+        request.setScheduleExpr("0 0 2 * * *");
+        request.setCompletionDeadlineEnabled(true);
+        request.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
 
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(null);
-    doAnswer(invocation -> {
-          JobDefinitionEntity entity = invocation.getArgument(0);
-          entity.setId(41L);
-          return 1;
-        })
-        .when(jobDefinitionMapper)
-        .insert(any(JobDefinitionEntity.class));
-    JobDefinitionView stored = copyEntity("JOB_DAILY");
-    stored.setSoftRuntimeSeconds(1200);
-    stored.setStartGraceSeconds(300);
-    stored.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
-    when(jobDefinitionMapper.selectById("tenant-a", 41L)).thenReturn(stored);
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(null);
+        doAnswer(invocation -> {
+                    JobDefinitionEntity entity = invocation.getArgument(0);
+                    entity.setId(41L);
+                    return 1;
+                })
+                .when(jobDefinitionMapper)
+                .insert(any(JobDefinitionEntity.class));
+        JobDefinitionView stored = copyEntity("JOB_DAILY");
+        stored.setSoftRuntimeSeconds(1200);
+        stored.setStartGraceSeconds(300);
+        stored.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
+        when(jobDefinitionMapper.selectById("tenant-a", 41L)).thenReturn(stored);
 
-    var response = service.create(request);
+        var response = service.create(request);
 
-    assertThat(response.softRuntimeSeconds()).isEqualTo(1200);
-    assertThat(response.startGraceSeconds()).isEqualTo(300);
-    assertThat(response.completionDeadlineLocalTime()).isEqualTo(LocalTime.of(4, 0));
-    ArgumentCaptor<JobMonitoringPolicyUpsertParam> policyCaptor =
-        ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
-    verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policyCaptor.capture());
-    assertThat(policyCaptor.getValue().getJobDefinitionId()).isEqualTo(41L);
-    assertThat(policyCaptor.getValue().getSoftRuntimeSeconds()).isEqualTo(1200);
-    assertThat(policyCaptor.getValue().getStartGraceSeconds()).isEqualTo(300);
-    assertThat(policyCaptor.getValue().getCompletionDeadlineLocalTime())
-        .isEqualTo(LocalTime.of(4, 0));
-    verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_DAILY");
-  }
+        assertThat(response.softRuntimeSeconds()).isEqualTo(1200);
+        assertThat(response.startGraceSeconds()).isEqualTo(300);
+        assertThat(response.completionDeadlineLocalTime()).isEqualTo(LocalTime.of(4, 0));
+        ArgumentCaptor<JobMonitoringPolicyUpsertParam> policyCaptor =
+                ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
+        verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policyCaptor.capture());
+        assertThat(policyCaptor.getValue().getJobDefinitionId()).isEqualTo(41L);
+        assertThat(policyCaptor.getValue().getSoftRuntimeSeconds()).isEqualTo(1200);
+        assertThat(policyCaptor.getValue().getStartGraceSeconds()).isEqualTo(300);
+        assertThat(policyCaptor.getValue().getCompletionDeadlineLocalTime()).isEqualTo(LocalTime.of(4, 0));
+        verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_DAILY");
+    }
 
-  @Test
-  @DisplayName("更新依赖作业时保留未提交阈值并显式关闭完成截止时间")
-  void shouldPreserveDependencyPolicy_whenUpdatingJob() {
-    stubTenantAndOperator();
-    JobDefinitionView existing = new JobDefinitionView();
-    existing.setId(51L);
-    existing.setTenantId("tenant-a");
-    existing.setJobCode("JOB_CHILD");
-    existing.setJobName("child job");
-    existing.setJobType("PROCESS");
-    existing.setScheduleType("FIXED_RATE");
-    existing.setDependsOnJobCode("JOB_PARENT");
-    existing.setSoftRuntimeSeconds(1800);
-    existing.setSoftRuntimeSeverity("ERROR");
-    existing.setStartGraceSeconds(240);
-    existing.setStartGraceSeverity("WARN");
-    existing.setCompletionDeadlineLocalTime(LocalTime.of(5, 0));
-    existing.setCompletionDeadlineDayOffset(1);
-    existing.setCompletionDeadlineSeverity("CRITICAL");
-    existing.setDependencyCompletionWindowSeconds(900);
-    existing.setExecutionHandler("handler-v1");
-    existing.setParamSchema("{\"type\":\"string\"}");
-    existing.setPriority(4);
-    existing.setEnabled(true);
-    JobDefinitionView upstream = new JobDefinitionView();
-    upstream.setTenantId("tenant-a");
-    upstream.setJobCode("JOB_PARENT");
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_PARENT")).thenReturn(upstream);
-    when(jobDefinitionMapper.selectAllDependencies("tenant-a")).thenReturn(List.of());
+    @Test
+    @DisplayName("更新依赖作业时保留未提交阈值并显式关闭完成截止时间")
+    void shouldPreserveDependencyPolicy_whenUpdatingJob() {
+        stubTenantAndOperator();
+        JobDefinitionView existing = new JobDefinitionView();
+        existing.setId(51L);
+        existing.setTenantId("tenant-a");
+        existing.setJobCode("JOB_CHILD");
+        existing.setJobName("child job");
+        existing.setJobType("PROCESS");
+        existing.setScheduleType("FIXED_RATE");
+        existing.setDependsOnJobCode("JOB_PARENT");
+        existing.setSoftRuntimeSeconds(1800);
+        existing.setSoftRuntimeSeverity("ERROR");
+        existing.setStartGraceSeconds(240);
+        existing.setStartGraceSeverity("WARN");
+        existing.setCompletionDeadlineLocalTime(LocalTime.of(5, 0));
+        existing.setCompletionDeadlineDayOffset(1);
+        existing.setCompletionDeadlineSeverity("CRITICAL");
+        existing.setDependencyCompletionWindowSeconds(900);
+        existing.setExecutionHandler("handler-v1");
+        existing.setParamSchema("{\"type\":\"string\"}");
+        existing.setPriority(4);
+        existing.setEnabled(true);
+        JobDefinitionView upstream = new JobDefinitionView();
+        upstream.setTenantId("tenant-a");
+        upstream.setJobCode("JOB_PARENT");
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_PARENT")).thenReturn(upstream);
+        when(jobDefinitionMapper.selectAllDependencies("tenant-a")).thenReturn(List.of());
 
-    JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
-    request.setTenantId("tenant-a");
-    request.setCompletionDeadlineEnabled(false);
-    when(jobDefinitionMapper.selectById("tenant-a", 51L)).thenReturn(existing);
+        JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
+        request.setTenantId("tenant-a");
+        request.setCompletionDeadlineEnabled(false);
+        when(jobDefinitionMapper.selectById("tenant-a", 51L)).thenReturn(existing);
 
-    service.update(51L, request);
+        service.update(51L, request);
 
-    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
-        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
-    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
-    assertThat(updateCaptor.getValue().getSoftRuntimeSeconds()).isEqualTo(1800);
-    assertThat(updateCaptor.getValue().getStartGraceSeconds()).isEqualTo(240);
-    assertThat(updateCaptor.getValue().getCompletionDeadlineLocalTime()).isNull();
-    assertThat(updateCaptor.getValue().getCompletionDeadlineDayOffset()).isZero();
-    assertThat(updateCaptor.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(900);
-    assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("handler-v1");
-    assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"string\"}");
-    assertThat(updateCaptor.getValue().getPriority()).isEqualTo(4);
+        ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
+                ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+        verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getSoftRuntimeSeconds()).isEqualTo(1800);
+        assertThat(updateCaptor.getValue().getStartGraceSeconds()).isEqualTo(240);
+        assertThat(updateCaptor.getValue().getCompletionDeadlineLocalTime()).isNull();
+        assertThat(updateCaptor.getValue().getCompletionDeadlineDayOffset()).isZero();
+        assertThat(updateCaptor.getValue().getDependencyCompletionWindowSeconds())
+                .isEqualTo(900);
+        assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("handler-v1");
+        assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"string\"}");
+        assertThat(updateCaptor.getValue().getPriority()).isEqualTo(4);
 
-    ArgumentCaptor<JobMonitoringPolicyUpsertParam> policyCaptor =
-        ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
-    verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policyCaptor.capture());
-    assertThat(policyCaptor.getValue().getCompletionDeadlineLocalTime()).isNull();
-    assertThat(policyCaptor.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(900);
-    verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_CHILD");
-  }
+        ArgumentCaptor<JobMonitoringPolicyUpsertParam> policyCaptor =
+                ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
+        verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policyCaptor.capture());
+        assertThat(policyCaptor.getValue().getCompletionDeadlineLocalTime()).isNull();
+        assertThat(policyCaptor.getValue().getDependencyCompletionWindowSeconds())
+                .isEqualTo(900);
+        verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_CHILD");
+    }
 
-  @Test
-  @DisplayName("更新作业时持久化 executionHandler、paramSchema 和 priority")
-  void shouldPersistEditableExecutionFields_whenUpdatingJob() {
-    stubTenantAndOperator();
-    JobDefinitionView existing = new JobDefinitionView();
-    existing.setId(53L);
-    existing.setTenantId("tenant-a");
-    existing.setJobCode("JOB_EDITABLE");
-    existing.setJobName("editable job");
-    existing.setJobType("PROCESS");
-    existing.setScheduleType("MANUAL");
-    existing.setExecutionHandler("old-handler");
-    existing.setParamSchema("{\"type\":\"string\"}");
-    existing.setPriority(3);
-    existing.setEnabled(true);
-    when(jobDefinitionMapper.selectById("tenant-a", 53L)).thenReturn(existing);
+    @Test
+    @DisplayName("更新作业时持久化 executionHandler、paramSchema 和 priority")
+    void shouldPersistEditableExecutionFields_whenUpdatingJob() {
+        stubTenantAndOperator();
+        JobDefinitionView existing = new JobDefinitionView();
+        existing.setId(53L);
+        existing.setTenantId("tenant-a");
+        existing.setJobCode("JOB_EDITABLE");
+        existing.setJobName("editable job");
+        existing.setJobType("PROCESS");
+        existing.setScheduleType("MANUAL");
+        existing.setExecutionHandler("old-handler");
+        existing.setParamSchema("{\"type\":\"string\"}");
+        existing.setPriority(3);
+        existing.setEnabled(true);
+        when(jobDefinitionMapper.selectById("tenant-a", 53L)).thenReturn(existing);
 
-    JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
-    request.setTenantId("tenant-a");
-    request.setExecutionHandler("new-handler");
-    request.setParamSchema("{\"type\":\"object\"}");
-    request.setPriority(7);
+        JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
+        request.setTenantId("tenant-a");
+        request.setExecutionHandler("new-handler");
+        request.setParamSchema("{\"type\":\"object\"}");
+        request.setPriority(7);
 
-    service.update(53L, request);
+        service.update(53L, request);
 
-    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
-        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
-    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
-    assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("new-handler");
-    assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"object\"}");
-    assertThat(updateCaptor.getValue().getPriority()).isEqualTo(7);
-  }
+        ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
+                ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+        verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("new-handler");
+        assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"object\"}");
+        assertThat(updateCaptor.getValue().getPriority()).isEqualTo(7);
+    }
 
-  @Test
-  @DisplayName("创建作业时拒绝与调度类型不兼容的触发模式（如 CRON + MANUAL）")
-  void shouldRejectIncompatibleTriggerMode_whenCreatingJob() {
-    // 校验在解析操作人之前完成，这里只需要租户
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
-    request.setTenantId("tenant-a");
-    request.setJobCode("JOB_CRON_MANUAL");
-    request.setJobName("cron manual");
-    request.setJobType("IMPORT");
-    request.setScheduleType("CRON");
-    request.setScheduleExpr("0 0 2 * * *");
-    request.setTriggerMode("MANUAL");
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_CRON_MANUAL")).thenReturn(null);
+    @Test
+    @DisplayName("创建作业时拒绝与调度类型不兼容的触发模式（如 CRON + MANUAL）")
+    void shouldRejectIncompatibleTriggerMode_whenCreatingJob() {
+        // 校验在解析操作人之前完成，这里只需要租户
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+        request.setTenantId("tenant-a");
+        request.setJobCode("JOB_CRON_MANUAL");
+        request.setJobName("cron manual");
+        request.setJobType("IMPORT");
+        request.setScheduleType("CRON");
+        request.setScheduleExpr("0 0 2 * * *");
+        request.setTriggerMode("MANUAL");
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_CRON_MANUAL"))
+                .thenReturn(null);
 
-    assertThatThrownBy(() -> service.create(request))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.job.trigger_mode_incompatible");
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.job.trigger_mode_incompatible");
 
-    verify(jobDefinitionMapper, never()).insert(any(JobDefinitionEntity.class));
-  }
+        verify(jobDefinitionMapper, never()).insert(any(JobDefinitionEntity.class));
+    }
 
-  @Test
-  @DisplayName("创建手动作业且未给触发模式时取 MANUAL，而不是一律 SCHEDULED")
-  void shouldDefaultTriggerModeFromScheduleType_whenCreatingManualJob() {
-    stubTenantAndOperator();
-    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
-    request.setTenantId("tenant-a");
-    request.setJobCode("JOB_MANUAL");
-    request.setJobName("manual job");
-    request.setJobType("IMPORT");
-    request.setScheduleType("MANUAL");
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_MANUAL")).thenReturn(null);
-    doAnswer(invocation -> {
-          JobDefinitionEntity entity = invocation.getArgument(0);
-          entity.setId(42L);
-          return 1;
-        })
-        .when(jobDefinitionMapper)
-        .insert(any(JobDefinitionEntity.class));
-    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(copyEntity("JOB_MANUAL"));
+    @Test
+    @DisplayName("创建手动作业且未给触发模式时取 MANUAL，而不是一律 SCHEDULED")
+    void shouldDefaultTriggerModeFromScheduleType_whenCreatingManualJob() {
+        stubTenantAndOperator();
+        JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+        request.setTenantId("tenant-a");
+        request.setJobCode("JOB_MANUAL");
+        request.setJobName("manual job");
+        request.setJobType("IMPORT");
+        request.setScheduleType("MANUAL");
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_MANUAL")).thenReturn(null);
+        doAnswer(invocation -> {
+                    JobDefinitionEntity entity = invocation.getArgument(0);
+                    entity.setId(42L);
+                    return 1;
+                })
+                .when(jobDefinitionMapper)
+                .insert(any(JobDefinitionEntity.class));
+        when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(copyEntity("JOB_MANUAL"));
 
-    service.create(request);
+        service.create(request);
 
-    ArgumentCaptor<JobDefinitionEntity> inserted =
-        ArgumentCaptor.forClass(JobDefinitionEntity.class);
-    verify(jobDefinitionMapper).insert(inserted.capture());
-    assertThat(inserted.getValue().getTriggerMode()).isEqualTo("MANUAL");
-  }
+        ArgumentCaptor<JobDefinitionEntity> inserted = ArgumentCaptor.forClass(JobDefinitionEntity.class);
+        verify(jobDefinitionMapper).insert(inserted.capture());
+        assertThat(inserted.getValue().getTriggerMode()).isEqualTo("MANUAL");
+    }
 
-  @Test
-  @DisplayName("Job 更新入口拒绝修改由关联 Workflow 管理的调度字段")
-  void shouldRejectScheduleMutation_whenUpdatingJob() {
-    JobDefinitionView existing = new JobDefinitionView();
-    existing.setId(52L);
-    existing.setTenantId("tenant-a");
-    existing.setJobCode("JOB_SCHEDULED");
-    existing.setScheduleType("CRON");
-    existing.setScheduleExpr("0 0 2 * * *");
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(jobDefinitionMapper.selectById("tenant-a", 52L)).thenReturn(existing);
-    JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
-    request.setTenantId("tenant-a");
-    request.setScheduleExpr("0 0 3 * * *");
+    @Test
+    @DisplayName("Job 更新入口拒绝修改由关联 Workflow 管理的调度字段")
+    void shouldRejectScheduleMutation_whenUpdatingJob() {
+        JobDefinitionView existing = new JobDefinitionView();
+        existing.setId(52L);
+        existing.setTenantId("tenant-a");
+        existing.setJobCode("JOB_SCHEDULED");
+        existing.setScheduleType("CRON");
+        existing.setScheduleExpr("0 0 2 * * *");
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(jobDefinitionMapper.selectById("tenant-a", 52L)).thenReturn(existing);
+        JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
+        request.setTenantId("tenant-a");
+        request.setScheduleExpr("0 0 3 * * *");
 
-    assertThatThrownBy(() -> service.update(52L, request))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.job.schedule_managed_by_workflow");
+        assertThatThrownBy(() -> service.update(52L, request))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.job.schedule_managed_by_workflow");
 
-    verify(jobDefinitionMapper, never())
-        .updateJobDefinitionMaintenance(any(JobDefinitionMaintenanceUpdateParam.class));
-  }
+        verify(jobDefinitionMapper, never())
+                .updateJobDefinitionMaintenance(any(JobDefinitionMaintenanceUpdateParam.class));
+    }
 
-  @Test
-  @DisplayName("MANUAL 作业可预先配置 Workflow 就绪规则，运行时仍按真实资格判断")
-  void shouldAllowExplicitWorkflowPolicyBeforeJobIsAttached() {
-    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
-    request.setTenantId("tenant-a");
-    request.setJobCode("JOB_MANUAL");
-    request.setJobName("manual job");
-    request.setJobType("PROCESS");
-    request.setScheduleType("MANUAL");
-    request.setStartGraceSeconds(60);
-    request.setDependencyCompletionWindowSeconds(120);
+    @Test
+    @DisplayName("MANUAL 作业可预先配置 Workflow 就绪规则，运行时仍按真实资格判断")
+    void shouldAllowExplicitWorkflowPolicyBeforeJobIsAttached() {
+        JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+        request.setTenantId("tenant-a");
+        request.setJobCode("JOB_MANUAL");
+        request.setJobName("manual job");
+        request.setJobType("PROCESS");
+        request.setScheduleType("MANUAL");
+        request.setStartGraceSeconds(60);
+        request.setDependencyCompletionWindowSeconds(120);
 
-    assertThat(request.isScheduledMonitoringConfiguredCorrectly()).isTrue();
-    stubTenantAndOperator();
-    doAnswer(invocation -> {
-          JobDefinitionEntity entity = invocation.getArgument(0);
-          entity.setId(42L);
-          return 1;
-        })
-        .when(jobDefinitionMapper)
-        .insert(any(JobDefinitionEntity.class));
-    JobDefinitionView stored = copyEntity("JOB_MANUAL");
-    stored.setStartGraceSeconds(60);
-    stored.setDependencyCompletionWindowSeconds(120);
-    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(stored);
+        assertThat(request.isScheduledMonitoringConfiguredCorrectly()).isTrue();
+        stubTenantAndOperator();
+        doAnswer(invocation -> {
+                    JobDefinitionEntity entity = invocation.getArgument(0);
+                    entity.setId(42L);
+                    return 1;
+                })
+                .when(jobDefinitionMapper)
+                .insert(any(JobDefinitionEntity.class));
+        JobDefinitionView stored = copyEntity("JOB_MANUAL");
+        stored.setStartGraceSeconds(60);
+        stored.setDependencyCompletionWindowSeconds(120);
+        when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(stored);
 
-    var response = service.create(request);
-    assertThat(response.startGraceSeconds()).isEqualTo(60);
-    assertThat(response.dependencyCompletionWindowSeconds()).isEqualTo(120);
-    ArgumentCaptor<JobMonitoringPolicyUpsertParam> policy =
-        ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
-    verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policy.capture());
-    assertThat(policy.getValue().getStartGraceSeconds()).isEqualTo(60);
-    assertThat(policy.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(120);
-  }
+        var response = service.create(request);
+        assertThat(response.startGraceSeconds()).isEqualTo(60);
+        assertThat(response.dependencyCompletionWindowSeconds()).isEqualTo(120);
+        ArgumentCaptor<JobMonitoringPolicyUpsertParam> policy =
+                ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
+        verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policy.capture());
+        assertThat(policy.getValue().getStartGraceSeconds()).isEqualTo(60);
+        assertThat(policy.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(120);
+    }
 
-  @Test
-  @DisplayName("复制作业时同步复制监控策略并使新作业缓存失效")
-  void shouldCopyMonitoringPolicy_whenCopyingJob() {
-    stubTenantAndOperator();
-    JobDefinitionView copied = copyEntity("JOB_COPY");
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY")).thenReturn(null, copied);
-    when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
-    when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenReturn(copied);
+    @Test
+    @DisplayName("复制作业时同步复制监控策略并使新作业缓存失效")
+    void shouldCopyMonitoringPolicy_whenCopyingJob() {
+        stubTenantAndOperator();
+        JobDefinitionView copied = copyEntity("JOB_COPY");
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY")).thenReturn(null, copied);
+        when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
+        when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenReturn(copied);
 
-    var response = service.copy(60L, "tenant-a", "JOB_COPY");
+        var response = service.copy(60L, "tenant-a", "JOB_COPY");
 
-    assertThat(response.jobCode()).isEqualTo("JOB_COPY");
-    verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
-    verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY");
-  }
+        assertThat(response.jobCode()).isEqualTo("JOB_COPY");
+        verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
+        verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY");
+    }
 
-  @Test
-  @DisplayName("租户复制作业时清除继承的物理路由,交由平台重新解析")
-  void shouldResolveRoutingForTenantCopy() {
-    stubTenantAndOperator();
-    when(resourceAssignmentGuard.shouldResolveRoutingForCopy()).thenReturn(true);
-    JobDefinitionView copied = copyEntity("JOB_COPY_ROUTE");
-    copied.setQueueCode("queue_a");
-    copied.setWorkerGroup("IMPORT");
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_ROUTE"))
-        .thenReturn(null, copied);
-    when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
-    when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenAnswer(invocation -> copied);
-    doAnswer(invocation -> {
-          copied.setQueueCode(null);
-          copied.setWorkerGroup(null);
-          return 1;
-        })
-        .when(jobDefinitionMapper)
-        .clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
+    @Test
+    @DisplayName("租户复制作业时清除继承的物理路由,交由平台重新解析")
+    void shouldResolveRoutingForTenantCopy() {
+        stubTenantAndOperator();
+        when(resourceAssignmentGuard.shouldResolveRoutingForCopy()).thenReturn(true);
+        JobDefinitionView copied = copyEntity("JOB_COPY_ROUTE");
+        copied.setQueueCode("queue_a");
+        copied.setWorkerGroup("IMPORT");
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_ROUTE"))
+                .thenReturn(null, copied);
+        when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
+        when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenAnswer(invocation -> copied);
+        doAnswer(invocation -> {
+                    copied.setQueueCode(null);
+                    copied.setWorkerGroup(null);
+                    return 1;
+                })
+                .when(jobDefinitionMapper)
+                .clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
 
-    var response = service.copy(60L, "tenant-a", "JOB_COPY_ROUTE");
+        var response = service.copy(60L, "tenant-a", "JOB_COPY_ROUTE");
 
-    assertThat(response.queueCode()).isNull();
-    assertThat(response.workerGroup()).isNull();
-    verify(jobDefinitionMapper)
-        .clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
-  }
+        assertThat(response.queueCode()).isNull();
+        assertThat(response.workerGroup()).isNull();
+        verify(jobDefinitionMapper).clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
+    }
 
-  @Test
-  @DisplayName("复制并覆盖作业时保留策略字段并应用基础定义覆盖")
-  void shouldPreserveMonitoringPolicy_whenCopyingWithOverrides() {
-    stubTenantAndOperator();
-    JobDefinitionView copied = copyEntity("JOB_COPY_OVERRIDE");
-    copied.setTriggerMode("SCHEDULED");
-    copied.setExecutionHandler("dispatch.order");
-    copied.setParamSchema("{\"type\":\"object\"}");
-    copied.setPriority(4);
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_OVERRIDE"))
-        .thenReturn(null, copied);
-    when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
-    when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenReturn(copied);
-    JobDefinitionCopyRequest request = new JobDefinitionCopyRequest();
-    request.setTenantId("tenant-a");
-    request.setNewJobCode("JOB_COPY_OVERRIDE");
-    request.setJobName("overridden name");
-    request.setQueueCode("new-queue");
-    request.setWorkerGroup("new-group");
+    @Test
+    @DisplayName("复制并覆盖作业时保留策略字段并应用基础定义覆盖")
+    void shouldPreserveMonitoringPolicy_whenCopyingWithOverrides() {
+        stubTenantAndOperator();
+        JobDefinitionView copied = copyEntity("JOB_COPY_OVERRIDE");
+        copied.setTriggerMode("SCHEDULED");
+        copied.setExecutionHandler("dispatch.order");
+        copied.setParamSchema("{\"type\":\"object\"}");
+        copied.setPriority(4);
+        when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_OVERRIDE"))
+                .thenReturn(null, copied);
+        when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
+        when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenReturn(copied);
+        JobDefinitionCopyRequest request = new JobDefinitionCopyRequest();
+        request.setTenantId("tenant-a");
+        request.setNewJobCode("JOB_COPY_OVERRIDE");
+        request.setJobName("overridden name");
+        request.setQueueCode("new-queue");
+        request.setWorkerGroup("new-group");
 
-    var response = service.copyWithOverrides(60L, request);
+        var response = service.copyWithOverrides(60L, request);
 
-    assertThat(response.jobCode()).isEqualTo("JOB_COPY_OVERRIDE");
-    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
-        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
-    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
-    assertThat(updateCaptor.getValue().getJobName()).isEqualTo("overridden name");
-    assertThat(updateCaptor.getValue().getQueueCode()).isEqualTo("new_queue");
-    assertThat(updateCaptor.getValue().getTriggerMode()).isEqualTo("SCHEDULED");
-    assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("dispatch.order");
-    assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"object\"}");
-    assertThat(updateCaptor.getValue().getPriority()).isEqualTo(4);
-    verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
-    verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY_OVERRIDE");
-  }
+        assertThat(response.jobCode()).isEqualTo("JOB_COPY_OVERRIDE");
+        ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> updateCaptor =
+                ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+        verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getJobName()).isEqualTo("overridden name");
+        assertThat(updateCaptor.getValue().getQueueCode()).isEqualTo("new_queue");
+        assertThat(updateCaptor.getValue().getTriggerMode()).isEqualTo("SCHEDULED");
+        assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("dispatch.order");
+        assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"object\"}");
+        assertThat(updateCaptor.getValue().getPriority()).isEqualTo(4);
+        verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
+        verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY_OVERRIDE");
+    }
 
-  private static JobDefinitionView copyEntity(String jobCode) {
-    JobDefinitionView entity = new JobDefinitionView();
-    entity.setId(61L);
-    entity.setTenantId("tenant-a");
-    entity.setJobCode(jobCode);
-    entity.setJobName("copied job");
-    entity.setJobType("PROCESS");
-    entity.setScheduleType("MANUAL");
-    entity.setRetryPolicy("NONE");
-    entity.setShardStrategy("NONE");
-    entity.setExecutionMode("FULL");
-    entity.setEnabled(true);
-    entity.setSoftRuntimeSeconds(3600);
-    entity.setSoftRuntimeSeverity("ERROR");
-    entity.setStartGraceSeconds(0);
-    entity.setStartGraceSeverity("WARN");
-    entity.setCompletionDeadlineDayOffset(0);
-    entity.setCompletionDeadlineSeverity("WARN");
-    entity.setDependencyCompletionWindowSeconds(0);
-    return entity;
-  }
+    private static JobDefinitionView copyEntity(String jobCode) {
+        JobDefinitionView entity = new JobDefinitionView();
+        entity.setId(61L);
+        entity.setTenantId("tenant-a");
+        entity.setJobCode(jobCode);
+        entity.setJobName("copied job");
+        entity.setJobType("PROCESS");
+        entity.setScheduleType("MANUAL");
+        entity.setRetryPolicy("NONE");
+        entity.setShardStrategy("NONE");
+        entity.setExecutionMode("FULL");
+        entity.setEnabled(true);
+        entity.setSoftRuntimeSeconds(3600);
+        entity.setSoftRuntimeSeverity("ERROR");
+        entity.setStartGraceSeconds(0);
+        entity.setStartGraceSeverity("WARN");
+        entity.setCompletionDeadlineDayOffset(0);
+        entity.setCompletionDeadlineSeverity("WARN");
+        entity.setDependencyCompletionWindowSeconds(0);
+        return entity;
+    }
 }

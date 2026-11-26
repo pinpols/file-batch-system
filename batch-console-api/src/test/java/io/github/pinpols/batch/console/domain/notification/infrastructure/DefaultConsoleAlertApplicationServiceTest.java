@@ -22,67 +22,67 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Console 告警关闭与 Alertmanager 单实体解除")
 class DefaultConsoleAlertApplicationServiceTest {
 
-  private static final String TENANT_ID = "tenant-a";
-  private static final long ALERT_ID = 41L;
+    private static final String TENANT_ID = "tenant-a";
+    private static final long ALERT_ID = 41L;
 
-  @Mock
-  private TenantIdResolver tenantResolver;
+    @Mock
+    private TenantIdResolver tenantResolver;
 
-  @Mock
-  private AlertEventMapper alertEventMapper;
+    @Mock
+    private AlertEventMapper alertEventMapper;
 
-  @Mock
-  private ConsoleRealtimeEventPort realtimeEventPort;
+    @Mock
+    private ConsoleRealtimeEventPort realtimeEventPort;
 
-  @Mock
-  private AlertmanagerSilenceBridge alertmanagerSilenceBridge;
+    @Mock
+    private AlertmanagerSilenceBridge alertmanagerSilenceBridge;
 
-  private DefaultConsoleAlertApplicationService service;
+    private DefaultConsoleAlertApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultConsoleAlertApplicationService(
-        tenantResolver, alertEventMapper, realtimeEventPort, alertmanagerSilenceBridge);
-    when(tenantResolver.resolveTenant(TENANT_ID)).thenReturn(TENANT_ID);
-    when(alertEventMapper.selectById(TENANT_ID, ALERT_ID)).thenReturn(activeAlert());
-    when(alertEventMapper.updateStatus(TENANT_ID, ALERT_ID, "CLOSED")).thenReturn(1);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultConsoleAlertApplicationService(
+                tenantResolver, alertEventMapper, realtimeEventPort, alertmanagerSilenceBridge);
+        when(tenantResolver.resolveTenant(TENANT_ID)).thenReturn(TENANT_ID);
+        when(alertEventMapper.selectById(TENANT_ID, ALERT_ID)).thenReturn(activeAlert());
+        when(alertEventMapper.updateStatus(TENANT_ID, ALERT_ID, "CLOSED")).thenReturn(1);
+    }
 
-  @DisplayName("同组另一实体仍 OPEN 时，仅按当前指纹解除已关闭实体")
-  @Test
-  void shouldResolveClosedEntityWhenAnotherMatchingAlertIsOpen() {
-    service.close(ALERT_ID, request(), "close-1");
+    @DisplayName("同组另一实体仍 OPEN 时，仅按当前指纹解除已关闭实体")
+    @Test
+    void shouldResolveClosedEntityWhenAnotherMatchingAlertIsOpen() {
+        service.close(ALERT_ID, request(), "close-1");
 
-    verify(alertmanagerSilenceBridge).resolve(activeAlert());
-    verify(alertEventMapper, never()).countActiveAlertsInAmGroup(ArgumentMatchers.any());
-  }
+        verify(alertmanagerSilenceBridge).resolve(activeAlert());
+        verify(alertEventMapper, never()).countActiveAlertsInAmGroup(ArgumentMatchers.any());
+    }
 
-  @DisplayName("同组最后一条 OPEN 告警关闭后发送解除")
-  @Test
-  void shouldResolveAmGroupWhenNoMatchingAlertRemainsOpen() {
-    AlertEventEntity alert = activeAlert();
+    @DisplayName("同组最后一条 OPEN 告警关闭后发送解除")
+    @Test
+    void shouldResolveAmGroupWhenNoMatchingAlertRemainsOpen() {
+        AlertEventEntity alert = activeAlert();
 
-    service.close(ALERT_ID, request(), "close-2");
+        service.close(ALERT_ID, request(), "close-2");
 
-    verify(alertmanagerSilenceBridge).resolve(alert);
-  }
+        verify(alertmanagerSilenceBridge).resolve(alert);
+    }
 
-  private static AlertActionRequest request() {
-    AlertActionRequest request = new AlertActionRequest();
-    request.setTenantId(TENANT_ID);
-    request.setOperatorId("operator");
-    request.setReason("incident recovered");
-    return request;
-  }
+    private static AlertActionRequest request() {
+        AlertActionRequest request = new AlertActionRequest();
+        request.setTenantId(TENANT_ID);
+        request.setOperatorId("operator");
+        request.setReason("incident recovered");
+        return request;
+    }
 
-  private static AlertEventEntity activeAlert() {
-    AlertEventEntity alert = new AlertEventEntity();
-    alert.setId(ALERT_ID);
-    alert.setTenantId(TENANT_ID);
-    alert.setServiceName("batch-orchestrator");
-    alert.setAlertType("JOB_RUNNING_TOO_LONG");
-    alert.setSeverity("WARN");
-    alert.setStatus("OPEN");
-    return alert;
-  }
+    private static AlertEventEntity activeAlert() {
+        AlertEventEntity alert = new AlertEventEntity();
+        alert.setId(ALERT_ID);
+        alert.setTenantId(TENANT_ID);
+        alert.setServiceName("batch-orchestrator");
+        alert.setAlertType("JOB_RUNNING_TOO_LONG");
+        alert.setSeverity("WARN");
+        alert.setStatus("OPEN");
+        return alert;
+    }
 }

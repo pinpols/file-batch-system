@@ -30,64 +30,63 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("作业实例执行超时的收敛器:排空状态下跳过扫描,且只收敛扫描判定为执行超时的实例")
 class JobInstanceTimeoutEnforcerTest {
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private JobInstanceTerminalStatusApplicationService terminalStatusService;
+    @Mock
+    private JobInstanceTerminalStatusApplicationService terminalStatusService;
 
-  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-  private final TimeoutEnforcerProperties timeoutProperties = new TimeoutEnforcerProperties();
-  private JobInstanceTimeoutEnforcer enforcer;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final TimeoutEnforcerProperties timeoutProperties = new TimeoutEnforcerProperties();
+    private JobInstanceTimeoutEnforcer enforcer;
 
-  @BeforeEach
-  void setUp() {
-    enforcer = new JobInstanceTimeoutEnforcer(
-        jobInstanceMapper, governance, gracefulShutdown, meterRegistry, terminalStatusService);
-  }
+    @BeforeEach
+    void setUp() {
+        enforcer = new JobInstanceTimeoutEnforcer(
+                jobInstanceMapper, governance, gracefulShutdown, meterRegistry, terminalStatusService);
+    }
 
-  @Test
-  @DisplayName("节点处于排空状态时跳过超时实例扫描")
-  void shouldSkipScan_whenDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("节点处于排空状态时跳过超时实例扫描")
+    void shouldSkipScan_whenDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    verify(jobInstanceMapper, never()).selectTimedOutCandidates(anyInt());
-  }
+        verify(jobInstanceMapper, never()).selectTimedOutCandidates(anyInt());
+    }
 
-  @Test
-  @DisplayName("扫描判定实例确为执行超时时收敛为失败终态并累计一次失败计数")
-  void shouldTerminateInstance_whenMapperReportsExecutionTimeout() {
-    JobInstanceEntity candidate = new JobInstanceEntity();
-    candidate.setId(1L);
-    candidate.setTenantId("t1");
-    candidate.setJobCode("job-a");
-    candidate.setVersion(3L);
-    candidate.setDryRun(false);
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProperties);
-    when(jobInstanceMapper.selectTimedOutCandidates(anyInt())).thenReturn(List.of(candidate));
-    when(terminalStatusService.enforceTimeoutAndReconcileWorkflow(any())).thenReturn(1);
+    @Test
+    @DisplayName("扫描判定实例确为执行超时时收敛为失败终态并累计一次失败计数")
+    void shouldTerminateInstance_whenMapperReportsExecutionTimeout() {
+        JobInstanceEntity candidate = new JobInstanceEntity();
+        candidate.setId(1L);
+        candidate.setTenantId("t1");
+        candidate.setJobCode("job-a");
+        candidate.setVersion(3L);
+        candidate.setDryRun(false);
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProperties);
+        when(jobInstanceMapper.selectTimedOutCandidates(anyInt())).thenReturn(List.of(candidate));
+        when(terminalStatusService.enforceTimeoutAndReconcileWorkflow(any())).thenReturn(1);
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    ArgumentCaptor<JobInstanceTerminalStatusCommand> command =
-        ArgumentCaptor.forClass(JobInstanceTerminalStatusCommand.class);
-    verify(terminalStatusService).enforceTimeoutAndReconcileWorkflow(command.capture());
-    assertThat(command.getValue().tenantId()).isEqualTo("t1");
-    assertThat(command.getValue().id()).isEqualTo(1L);
-    assertThat(command.getValue().terminalInstanceStatus())
-        .isEqualTo(JobInstanceStatus.FAILED.code());
-    assertThat(command.getValue().expectedVersion()).isEqualTo(3L);
-    assertThat(command.getValue().finishedAt()).isNotNull();
-    assertThat(meterRegistry.counter("batch.timeout.enforcer.failed.total").count())
-        .isEqualTo(1.0);
-  }
+        ArgumentCaptor<JobInstanceTerminalStatusCommand> command =
+                ArgumentCaptor.forClass(JobInstanceTerminalStatusCommand.class);
+        verify(terminalStatusService).enforceTimeoutAndReconcileWorkflow(command.capture());
+        assertThat(command.getValue().tenantId()).isEqualTo("t1");
+        assertThat(command.getValue().id()).isEqualTo(1L);
+        assertThat(command.getValue().terminalInstanceStatus()).isEqualTo(JobInstanceStatus.FAILED.code());
+        assertThat(command.getValue().expectedVersion()).isEqualTo(3L);
+        assertThat(command.getValue().finishedAt()).isNotNull();
+        assertThat(meterRegistry.counter("batch.timeout.enforcer.failed.total").count())
+                .isEqualTo(1.0);
+    }
 }

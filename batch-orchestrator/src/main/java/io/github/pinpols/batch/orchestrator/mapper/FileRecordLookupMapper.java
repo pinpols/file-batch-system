@@ -16,11 +16,9 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface FileRecordLookupMapper {
 
-  /** 按 (tenantId, traceId) 反查最新的 GENERATED file_record id；未命中返 null。 */
-  Long selectIdByTenantAndTraceId(
-      @Param("tenantId") String tenantId, @Param("traceId") String traceId);
+    /** 按 (tenantId, traceId) 反查最新的 GENERATED file_record id；未命中返 null。 */
+    Long selectIdByTenantAndTraceId(@Param("tenantId") String tenantId, @Param("traceId") String traceId);
 
-  /** 按 (tenantId, sourceRef) 反查最新的 GENERATED file_record id；未命中返 null。 */
-  Long selectIdByTenantAndSourceRef(
-      @Param("tenantId") String tenantId, @Param("sourceRef") String sourceRef);
+    /** 按 (tenantId, sourceRef) 反查最新的 GENERATED file_record id；未命中返 null。 */
+    Long selectIdByTenantAndSourceRef(@Param("tenantId") String tenantId, @Param("sourceRef") String sourceRef);
 }

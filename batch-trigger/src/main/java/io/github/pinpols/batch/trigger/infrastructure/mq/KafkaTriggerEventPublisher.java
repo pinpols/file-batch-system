@@ -34,113 +34,102 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
-  private static final String HEADER_TRACE_ID = CommonConstants.DEFAULT_TRACE_ID_HEADER;
-  private static final String HEADER_TENANT_ID = CommonConstants.DEFAULT_TENANT_ID_HEADER;
-  private static final String HEADER_ENVELOPE_VERSION = "X-Envelope-Version";
+    private static final String HEADER_TRACE_ID = CommonConstants.DEFAULT_TRACE_ID_HEADER;
+    private static final String HEADER_TENANT_ID = CommonConstants.DEFAULT_TENANT_ID_HEADER;
+    private static final String HEADER_ENVELOPE_VERSION = "X-Envelope-Version";
 
-  private final MqMessagePublisher mqMessagePublisher;
-  private final TriggerKafkaProperties kafkaProperties;
+    private final MqMessagePublisher mqMessagePublisher;
+    private final TriggerKafkaProperties kafkaProperties;
 
-  public KafkaTriggerEventPublisher(
-      @Qualifier("triggerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
-      TriggerKafkaProperties kafkaProperties) {
-    this.mqMessagePublisher = mqMessagePublisher;
-    this.kafkaProperties = kafkaProperties;
-  }
+    public KafkaTriggerEventPublisher(
+            @Qualifier("triggerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
+            TriggerKafkaProperties kafkaProperties) {
+        this.mqMessagePublisher = mqMessagePublisher;
+        this.kafkaProperties = kafkaProperties;
+    }
 
-  @Override
-  public CompletableFuture<PublishResult> publishAsync(
-      String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    if (EmptyChecks.isNull(envelope)) {
-      return CompletableFuture.completedFuture(
-          PublishResult.fail("envelope or launchRequest is null"));
+    @Override
+    public CompletableFuture<PublishResult> publishAsync(
+            String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
+        if (EmptyChecks.isNull(envelope)) {
+            return CompletableFuture.completedFuture(PublishResult.fail("envelope or launchRequest is null"));
+        }
+        LaunchRequest launchRequest = envelope.launchRequest();
+        if (EmptyChecks.isNull(launchRequest)) {
+            return CompletableFuture.completedFuture(PublishResult.fail("envelope or launchRequest is null"));
+        }
+        String payload;
+        try {
+            payload = JsonUtils.toJson(envelope);
+        } catch (RuntimeException ex) {
+            log.error(
+                    "KafkaTriggerEventPublisher failed to serialize envelope: tenantId={} requestId={}",
+                    launchRequest.tenantId(),
+                    launchRequest.requestId(),
+                    ex);
+            String failureMessage = "serialize envelope: " + ex.getMessage();
+            PublishResult failure = PublishResult.fail(failureMessage);
+            return CompletableFuture.completedFuture(failure);
+        }
+        Map<String, String> headers = new LinkedHashMap<>();
+        if (EmptyChecks.isNotBlank(traceId)) {
+            headers.put(HEADER_TRACE_ID, traceId);
+        }
+        if (EmptyChecks.isNotNull(launchRequest.tenantId())) {
+            headers.put(HEADER_TENANT_ID, launchRequest.tenantId());
+        }
+        headers.put(HEADER_ENVELOPE_VERSION, String.valueOf(envelope.envelopeVersion()));
+        try {
+            CompletableFuture<MqPublishResult> sendFuture;
+            try (Scope ignored = OtelTracePropagation.restore(envelope.traceContext())) {
+                sendFuture = mqMessagePublisher.publish(new MqMessage(topic, messageKey, payload, headers));
+            }
+            int sendTimeoutSeconds = kafkaProperties.getSendTimeoutSeconds();
+            CompletableFuture<MqPublishResult> timedFuture = sendFuture.orTimeout(sendTimeoutSeconds, TimeUnit.SECONDS);
+            return timedFuture.handle((result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
+        } catch (RuntimeException ex) {
+            // KafkaProducer.send() 在 ensureValidRecordSize / SerializationException 等校验失败时
+            // 同步抛 RuntimeException,绕过上面 ExecutionException catch。补 broad catch 避免 outbox
+            // 卡 PUBLISHING attempt=0 永远不进 retry/GIVE_UP 路径(A2 agent 发现的真因)。
+            log.error(
+                    "kafka publish failed synchronously (will retry until GIVE_UP):" + " topic={} messageKey={}",
+                    topic,
+                    messageKey,
+                    ex);
+            String failureMessage = "kafka send sync: " + ex.getMessage();
+            PublishResult failure = PublishResult.fail(failureMessage);
+            return CompletableFuture.completedFuture(failure);
+        }
     }
-    LaunchRequest launchRequest = envelope.launchRequest();
-    if (EmptyChecks.isNull(launchRequest)) {
-      return CompletableFuture.completedFuture(
-          PublishResult.fail("envelope or launchRequest is null"));
-    }
-    String payload;
-    try {
-      payload = JsonUtils.toJson(envelope);
-    } catch (RuntimeException ex) {
-      log.error(
-          "KafkaTriggerEventPublisher failed to serialize envelope: tenantId={} requestId={}",
-          launchRequest.tenantId(),
-          launchRequest.requestId(),
-          ex);
-      String failureMessage = "serialize envelope: " + ex.getMessage();
-      PublishResult failure = PublishResult.fail(failureMessage);
-      return CompletableFuture.completedFuture(failure);
-    }
-    Map<String, String> headers = new LinkedHashMap<>();
-    if (EmptyChecks.isNotBlank(traceId)) {
-      headers.put(HEADER_TRACE_ID, traceId);
-    }
-    if (EmptyChecks.isNotNull(launchRequest.tenantId())) {
-      headers.put(HEADER_TENANT_ID, launchRequest.tenantId());
-    }
-    headers.put(HEADER_ENVELOPE_VERSION, String.valueOf(envelope.envelopeVersion()));
-    try {
-      CompletableFuture<MqPublishResult> sendFuture;
-      try (Scope ignored = OtelTracePropagation.restore(envelope.traceContext())) {
-        sendFuture = mqMessagePublisher.publish(new MqMessage(topic, messageKey, payload, headers));
-      }
-      int sendTimeoutSeconds = kafkaProperties.getSendTimeoutSeconds();
-      CompletableFuture<MqPublishResult> timedFuture =
-          sendFuture.orTimeout(sendTimeoutSeconds, TimeUnit.SECONDS);
-      return timedFuture.handle(
-          (result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
-    } catch (RuntimeException ex) {
-      // KafkaProducer.send() 在 ensureValidRecordSize / SerializationException 等校验失败时
-      // 同步抛 RuntimeException,绕过上面 ExecutionException catch。补 broad catch 避免 outbox
-      // 卡 PUBLISHING attempt=0 永远不进 retry/GIVE_UP 路径(A2 agent 发现的真因)。
-      log.error(
-          "kafka publish failed synchronously (will retry until GIVE_UP):"
-              + " topic={} messageKey={}",
-          topic,
-          messageKey,
-          ex);
-      String failureMessage = "kafka send sync: " + ex.getMessage();
-      PublishResult failure = PublishResult.fail(failureMessage);
-      return CompletableFuture.completedFuture(failure);
-    }
-  }
 
-  @Override
-  public PublishResult publish(
-      String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    return publishAsync(topic, messageKey, envelope, traceId).join();
-  }
+    @Override
+    public PublishResult publish(String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
+        return publishAsync(topic, messageKey, envelope, traceId).join();
+    }
 
-  private PublishResult toPublishResult(
-      String topic, String messageKey, MqPublishResult result, Throwable throwable) {
-    if (EmptyChecks.isNull(throwable)) {
-      log.debug(
-          "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
-          topic,
-          messageKey,
-          result.partition(),
-          result.offset());
-      return PublishResult.ok();
+    private PublishResult toPublishResult(
+            String topic, String messageKey, MqPublishResult result, Throwable throwable) {
+        if (EmptyChecks.isNull(throwable)) {
+            log.debug(
+                    "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
+                    topic,
+                    messageKey,
+                    result.partition(),
+                    result.offset());
+            return PublishResult.ok();
+        }
+        Throwable cause = unwrapCompletionException(throwable);
+        if (cause instanceof TimeoutException) {
+            return PublishResult.fail("kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
+        }
+        log.error("kafka publish failed (will retry until GIVE_UP): topic={} messageKey={}", topic, messageKey, cause);
+        return PublishResult.fail("kafka send: " + cause.getMessage());
     }
-    Throwable cause = unwrapCompletionException(throwable);
-    if (cause instanceof TimeoutException) {
-      return PublishResult.fail(
-          "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
-    }
-    log.error(
-        "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={}",
-        topic,
-        messageKey,
-        cause);
-    return PublishResult.fail("kafka send: " + cause.getMessage());
-  }
 
-  private static Throwable unwrapCompletionException(Throwable throwable) {
-    if (throwable instanceof CompletionException && EmptyChecks.isNotNull(throwable.getCause())) {
-      return throwable.getCause();
+    private static Throwable unwrapCompletionException(Throwable throwable) {
+        if (throwable instanceof CompletionException && EmptyChecks.isNotNull(throwable.getCause())) {
+            return throwable.getCause();
+        }
+        return throwable;
     }
-    return throwable;
-  }
 }

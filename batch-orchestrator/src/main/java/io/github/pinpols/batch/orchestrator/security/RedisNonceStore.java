@@ -10,12 +10,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisNonceStore implements NonceStore {
 
-  private final OrchestratorRedisSupport redis;
+    private final OrchestratorRedisSupport redis;
 
-  @Override
-  public boolean registerIfAbsent(String tenantId, String nonce, Duration ttl) {
-    String key = "sig:nonce:" + tenantId + ':' + nonce;
-    Boolean firstWrite = redis.redisTemplate().opsForValue().setIfAbsent(key, "1", ttl);
-    return Boolean.TRUE.equals(firstWrite);
-  }
+    @Override
+    public boolean registerIfAbsent(String tenantId, String nonce, Duration ttl) {
+        String key = "sig:nonce:" + tenantId + ':' + nonce;
+        Boolean firstWrite = redis.redisTemplate().opsForValue().setIfAbsent(key, "1", ttl);
+        return Boolean.TRUE.equals(firstWrite);
+    }
 }

@@ -28,26 +28,26 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface RetryOn {
 
-  /** 触发重试的异常类型(子类也匹配)。至少填一个。 */
-  Class<? extends Throwable>[] value();
+    /** 触发重试的异常类型(子类也匹配)。至少填一个。 */
+    Class<? extends Throwable>[] value();
 
-  /** 最大尝试次数(含首次),默认 3;必须 {@code >= 1}。 */
-  int maxAttempts() default 3;
+    /** 最大尝试次数(含首次),默认 3;必须 {@code >= 1}。 */
+    int maxAttempts() default 3;
 
-  /** 首次重试前的退避毫秒,默认 200。 */
-  long initialDelayMillis() default 200L;
+    /** 首次重试前的退避毫秒,默认 200。 */
+    long initialDelayMillis() default 200L;
 
-  /** 退避封顶毫秒,默认 5000;{@link Backoff#EXPONENTIAL} 时生效。 */
-  long maxDelayMillis() default 5_000L;
+    /** 退避封顶毫秒,默认 5000;{@link Backoff#EXPONENTIAL} 时生效。 */
+    long maxDelayMillis() default 5_000L;
 
-  /** 退避策略,默认指数。 */
-  Backoff backoff() default Backoff.EXPONENTIAL;
+    /** 退避策略,默认指数。 */
+    Backoff backoff() default Backoff.EXPONENTIAL;
 
-  /** 退避策略枚举。 */
-  enum Backoff {
-    /** 固定间隔(delay 恒为 initialDelayMillis)。 */
-    FIXED,
-    /** 指数退避(delay = initial * 2^n,封顶 maxDelayMillis)。 */
-    EXPONENTIAL
-  }
+    /** 退避策略枚举。 */
+    enum Backoff {
+        /** 固定间隔(delay 恒为 initialDelayMillis)。 */
+        FIXED,
+        /** 指数退避(delay = initial * 2^n,封顶 maxDelayMillis)。 */
+        EXPONENTIAL
+    }
 }

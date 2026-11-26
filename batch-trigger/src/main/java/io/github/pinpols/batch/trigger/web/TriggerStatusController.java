@@ -19,24 +19,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TriggerStatusController {
 
-  private final TriggerStatusQueryService triggerStatusQueryService;
-  private final TriggerDrainService drainService;
+    private final TriggerStatusQueryService triggerStatusQueryService;
+    private final TriggerDrainService drainService;
 
-  @GetMapping("/list")
-  public CommonResponse<List<TriggerStatusInfo>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return CommonResponse.success(triggerStatusQueryService.listRegisteredTriggers(tenantId));
-  }
+    @GetMapping("/list")
+    public CommonResponse<List<TriggerStatusInfo>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return CommonResponse.success(triggerStatusQueryService.listRegisteredTriggers(tenantId));
+    }
 
-  @GetMapping("/scheduler-status")
-  public CommonResponse<TriggerSchedulerStatus> schedulerStatus() {
-    String schedulerState = triggerStatusQueryService.schedulerStatus();
-    TriggerSchedulerStatus status = new TriggerSchedulerStatus(schedulerState);
-    return CommonResponse.success(status);
-  }
+    @GetMapping("/scheduler-status")
+    public CommonResponse<TriggerSchedulerStatus> schedulerStatus() {
+        String schedulerState = triggerStatusQueryService.schedulerStatus();
+        TriggerSchedulerStatus status = new TriggerSchedulerStatus(schedulerState);
+        return CommonResponse.success(status);
+    }
 
-  @GetMapping("/drain/status")
-  public CommonResponse<TriggerDrainStatus> drainStatus() {
-    return CommonResponse.success(drainService.status());
-  }
+    @GetMapping("/drain/status")
+    public CommonResponse<TriggerDrainStatus> drainStatus() {
+        return CommonResponse.success(drainService.status());
+    }
 }

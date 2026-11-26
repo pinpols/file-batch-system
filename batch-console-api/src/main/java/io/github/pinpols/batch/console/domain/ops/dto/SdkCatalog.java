@@ -23,42 +23,37 @@ import java.util.Map;
  * @param docs 文档索引
  */
 public record SdkCatalog(
-    ProtocolVersion protocolVersion,
-    List<SdkLanguage> languages,
-    Map<String, List<String>> sharedConstants,
-    List<SdkDoc> docs) {
+        ProtocolVersion protocolVersion,
+        List<SdkLanguage> languages,
+        Map<String, List<String>> sharedConstants,
+        List<SdkDoc> docs) {
 
-  /**
-   * 协议版本视图。
-   *
-   * @param supportedMajors 平台当前支持的协议 major 集(如 {@code [v1, v2]})
-   * @param current 当前 canonical 协议 major(派单时填的最新版,如 {@code v2})
-   * @param rejectedFrom 平台 reject 的最低 major(如 {@code v3} — 含及以上 reject)
-   */
-  public record ProtocolVersion(
-      List<String> supportedMajors, String current, String rejectedFrom) {}
+    /**
+     * 协议版本视图。
+     *
+     * @param supportedMajors 平台当前支持的协议 major 集(如 {@code [v1, v2]})
+     * @param current 当前 canonical 协议 major(派单时填的最新版,如 {@code v2})
+     * @param rejectedFrom 平台 reject 的最低 major(如 {@code v3} — 含及以上 reject)
+     */
+    public record ProtocolVersion(List<String> supportedMajors, String current, String rejectedFrom) {}
 
-  /**
-   * 单语言 SDK 条目。
-   *
-   * @param lang 语言标识(java / python / typescript / rust / go)
-   * @param artifact 包/坐标标识
-   * @param latestVersion 最新版本(未发布标 {@code repo-version} / {@code unpublished})
-   * @param installSnippet 安装片段(从包元数据推导)
-   * @param conformanceStatus 合规状态(BYO conformance 契约)
-   */
-  public record SdkLanguage(
-      String lang,
-      String artifact,
-      String latestVersion,
-      String installSnippet,
-      String conformanceStatus) {}
+    /**
+     * 单语言 SDK 条目。
+     *
+     * @param lang 语言标识(java / python / typescript / rust / go)
+     * @param artifact 包/坐标标识
+     * @param latestVersion 最新版本(未发布标 {@code repo-version} / {@code unpublished})
+     * @param installSnippet 安装片段(从包元数据推导)
+     * @param conformanceStatus 合规状态(BYO conformance 契约)
+     */
+    public record SdkLanguage(
+            String lang, String artifact, String latestVersion, String installSnippet, String conformanceStatus) {}
 
-  /**
-   * 文档索引项。
-   *
-   * @param title 标题
-   * @param path 仓库相对路径
-   */
-  public record SdkDoc(String title, String path) {}
+    /**
+     * 文档索引项。
+     *
+     * @param title 标题
+     * @param path 仓库相对路径
+     */
+    public record SdkDoc(String title, String path) {}
 }

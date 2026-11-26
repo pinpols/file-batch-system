@@ -39,142 +39,142 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("触发请求启动对账器: 停机排水跳过,超时请求补偿回写与计数上报")
 class TriggerRequestLaunchReconcilerTest {
 
-  @Mock
-  private TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    private TriggerRequestMapper triggerRequestMapper;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private SimpleMeterRegistry meterRegistry;
-  private TriggerRequestLaunchReconciler reconciler;
+    private SimpleMeterRegistry meterRegistry;
+    private TriggerRequestLaunchReconciler reconciler;
 
-  @BeforeEach
-  void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-    TriggerLaunchReconcilerProperties props = new TriggerLaunchReconcilerProperties();
-    props.setMinAgeSeconds(300);
-    props.setBatchSize(200);
-    reconciler = new TriggerRequestLaunchReconciler(
-        triggerRequestMapper, gracefulShutdown, meterRegistry, props);
-  }
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        TriggerLaunchReconcilerProperties props = new TriggerLaunchReconcilerProperties();
+        props.setMinAgeSeconds(300);
+        props.setBatchSize(200);
+        reconciler = new TriggerRequestLaunchReconciler(triggerRequestMapper, gracefulShutdown, meterRegistry, props);
+    }
 
-  @Test
-  @DisplayName("应用处于停机排水状态时整体跳过对账,不查询也不回写")
-  void reconcile_skipsWhenDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("应用处于停机排水状态时整体跳过对账,不查询也不回写")
+    void reconcile_skipsWhenDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(triggerRequestMapper, never()).selectStaleAcceptedWithJobInstance(any(), anyInt());
-    verify(triggerRequestMapper, never()).reconcileLaunched(any(), any(), any());
-  }
+        verify(triggerRequestMapper, never()).selectStaleAcceptedWithJobInstance(any(), anyInt());
+        verify(triggerRequestMapper, never()).reconcileLaunched(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("没有超时未回写的请求时安静返回,不执行任何回写")
-  void reconcile_noCandidates_returnsQuietly() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("没有超时未回写的请求时安静返回,不执行任何回写")
+    void reconcile_noCandidates_returnsQuietly() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+                .thenReturn(List.of());
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(triggerRequestMapper, never()).reconcileLaunched(any(), any(), any());
-  }
+        verify(triggerRequestMapper, never()).reconcileLaunched(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("正常回写多行启动结果,累加已对账计数且跳过计数保持为零")
-  void reconcile_happyPath_writesBackAndIncrementsCounter() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    TriggerRequestLaunchReconcileRow row1 = row("tenant-a", "req-1", 101L);
-    TriggerRequestLaunchReconcileRow row2 = row("tenant-a", "req-2", 102L);
-    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
-        .thenReturn(List.of(row1, row2));
-    when(triggerRequestMapper.reconcileLaunched("tenant-a", "req-1", 101L)).thenReturn(1);
-    when(triggerRequestMapper.reconcileLaunched("tenant-a", "req-2", 102L)).thenReturn(1);
+    @Test
+    @DisplayName("正常回写多行启动结果,累加已对账计数且跳过计数保持为零")
+    void reconcile_happyPath_writesBackAndIncrementsCounter() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        TriggerRequestLaunchReconcileRow row1 = row("tenant-a", "req-1", 101L);
+        TriggerRequestLaunchReconcileRow row2 = row("tenant-a", "req-2", 102L);
+        when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+                .thenReturn(List.of(row1, row2));
+        when(triggerRequestMapper.reconcileLaunched("tenant-a", "req-1", 101L)).thenReturn(1);
+        when(triggerRequestMapper.reconcileLaunched("tenant-a", "req-2", 102L)).thenReturn(1);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    verify(triggerRequestMapper, times(2)).reconcileLaunched(any(), any(), any());
-    assertThat(reconciledCount("tenant-a")).isEqualTo(2.0);
-    assertThat(skippedCount("tenant-a")).isEqualTo(0.0);
-  }
+        verify(triggerRequestMapper, times(2)).reconcileLaunched(any(), any(), any());
+        assertThat(reconciledCount("tenant-a")).isEqualTo(2.0);
+        assertThat(skippedCount("tenant-a")).isEqualTo(0.0);
+    }
 
-  @Test
-  @DisplayName("条件更新未命中说明已被消费端回写时累加跳过计数,不增加已对账计数")
-  void reconcile_casMiss_incrementsSkippedCounter() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    TriggerRequestLaunchReconcileRow row = row("tenant-b", "req-conc", 201L);
-    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
-        .thenReturn(List.of(row));
-    // CAS 返回 0 = 并发已被 consumer writeBack 改走
-    when(triggerRequestMapper.reconcileLaunched("tenant-b", "req-conc", 201L)).thenReturn(0);
+    @Test
+    @DisplayName("条件更新未命中说明已被消费端回写时累加跳过计数,不增加已对账计数")
+    void reconcile_casMiss_incrementsSkippedCounter() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        TriggerRequestLaunchReconcileRow row = row("tenant-b", "req-conc", 201L);
+        when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+                .thenReturn(List.of(row));
+        // CAS 返回 0 = 并发已被 consumer writeBack 改走
+        when(triggerRequestMapper.reconcileLaunched("tenant-b", "req-conc", 201L))
+                .thenReturn(0);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    assertThat(reconciledCount("tenant-b")).isEqualTo(0.0);
-    assertThat(skippedCount("tenant-b")).isEqualTo(1.0);
-  }
+        assertThat(reconciledCount("tenant-b")).isEqualTo(0.0);
+        assertThat(skippedCount("tenant-b")).isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("单行回写抛异常时继续处理同批后续行,只把成功的行计入已对账")
-  void reconcile_singleRowThrows_continuesBatch() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    TriggerRequestLaunchReconcileRow bad = row("tenant-c", "req-bad", 301L);
-    TriggerRequestLaunchReconcileRow good = row("tenant-c", "req-good", 302L);
-    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
-        .thenReturn(List.of(bad, good));
-    when(triggerRequestMapper.reconcileLaunched("tenant-c", "req-bad", 301L))
-        .thenThrow(new IllegalStateException("DB transient down"));
-    when(triggerRequestMapper.reconcileLaunched("tenant-c", "req-good", 302L)).thenReturn(1);
+    @Test
+    @DisplayName("单行回写抛异常时继续处理同批后续行,只把成功的行计入已对账")
+    void reconcile_singleRowThrows_continuesBatch() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        TriggerRequestLaunchReconcileRow bad = row("tenant-c", "req-bad", 301L);
+        TriggerRequestLaunchReconcileRow good = row("tenant-c", "req-good", 302L);
+        when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+                .thenReturn(List.of(bad, good));
+        when(triggerRequestMapper.reconcileLaunched("tenant-c", "req-bad", 301L))
+                .thenThrow(new IllegalStateException("DB transient down"));
+        when(triggerRequestMapper.reconcileLaunched("tenant-c", "req-good", 302L))
+                .thenReturn(1);
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    // 第一行抛了,第二行仍要处理
-    verify(triggerRequestMapper).reconcileLaunched("tenant-c", "req-good", 302L);
-    assertThat(reconciledCount("tenant-c")).isEqualTo(1.0);
-  }
+        // 第一行抛了,第二行仍要处理
+        verify(triggerRequestMapper).reconcileLaunched("tenant-c", "req-good", 302L);
+        assertThat(reconciledCount("tenant-c")).isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("跨租户请求逐行在所属租户上下文内回写并清理上下文")
-  void reconcile_bindsTenantContextForEachCandidate() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    TriggerRequestLaunchReconcileRow tenantA = row("tenant-a", "req-a", 401L);
-    TriggerRequestLaunchReconcileRow tenantB = row("tenant-b", "req-b", 402L);
-    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
-        .thenReturn(List.of(tenantA, tenantB));
-    Mockito.doAnswer(invocation -> {
-          String tenantId = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
-          return 1;
-        })
-        .when(triggerRequestMapper)
-        .reconcileLaunched(any(), any(), any());
+    @Test
+    @DisplayName("跨租户请求逐行在所属租户上下文内回写并清理上下文")
+    void reconcile_bindsTenantContextForEachCandidate() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        TriggerRequestLaunchReconcileRow tenantA = row("tenant-a", "req-a", 401L);
+        TriggerRequestLaunchReconcileRow tenantB = row("tenant-b", "req-b", 402L);
+        when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+                .thenReturn(List.of(tenantA, tenantB));
+        Mockito.doAnswer(invocation -> {
+                    String tenantId = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+                    return 1;
+                })
+                .when(triggerRequestMapper)
+                .reconcileLaunched(any(), any(), any());
 
-    reconciler.reconcile();
+        reconciler.reconcile();
 
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private static TriggerRequestLaunchReconcileRow row(
-      String tenantId, String requestId, Long jobInstanceId) {
-    TriggerRequestLaunchReconcileRow r = new TriggerRequestLaunchReconcileRow();
-    r.setTenantId(tenantId);
-    r.setRequestId(requestId);
-    r.setJobInstanceId(jobInstanceId);
-    return r;
-  }
+    private static TriggerRequestLaunchReconcileRow row(String tenantId, String requestId, Long jobInstanceId) {
+        TriggerRequestLaunchReconcileRow r = new TriggerRequestLaunchReconcileRow();
+        r.setTenantId(tenantId);
+        r.setRequestId(requestId);
+        r.setJobInstanceId(jobInstanceId);
+        return r;
+    }
 
-  private double reconciledCount(String tenant) {
-    return meterRegistry
-        .counter("batch.trigger.launch.reconciled.total", "tenant", tenant)
-        .count();
-  }
+    private double reconciledCount(String tenant) {
+        return meterRegistry
+                .counter("batch.trigger.launch.reconciled.total", "tenant", tenant)
+                .count();
+    }
 
-  private double skippedCount(String tenant) {
-    return meterRegistry
-        .counter("batch.trigger.launch.reconciled.skipped.total", "tenant", tenant)
-        .count();
-  }
+    private double skippedCount(String tenant) {
+        return meterRegistry
+                .counter("batch.trigger.launch.reconciled.skipped.total", "tenant", tenant)
+                .count();
+    }
 }

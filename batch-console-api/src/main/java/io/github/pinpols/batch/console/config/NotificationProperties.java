@@ -14,6 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.notification")
 public class NotificationProperties {
 
-  /** 邮件收件人域名白名单(不含 @);空表示不限制。例:["example.com","corp.internal"]。 */
-  private List<String> emailAllowedDomains = List.of();
+    /** 邮件收件人域名白名单(不含 @);空表示不限制。例:["example.com","corp.internal"]。 */
+    private List<String> emailAllowedDomains = List.of();
 }

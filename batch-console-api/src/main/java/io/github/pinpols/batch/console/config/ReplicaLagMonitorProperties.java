@@ -15,11 +15,11 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.console.replica")
 public class ReplicaLagMonitorProperties {
 
-  /** 采样间隔（毫秒）。 */
-  @Min(value = 1, message = "replica lag monitor interval must be positive")
-  private long lagMonitorIntervalMillis = 30_000L;
+    /** 采样间隔（毫秒）。 */
+    @Min(value = 1, message = "replica lag monitor interval must be positive")
+    private long lagMonitorIntervalMillis = 30_000L;
 
-  /** 首次采样延迟（毫秒）。 */
-  @Min(value = 0, message = "replica lag monitor initial delay must not be negative")
-  private long lagMonitorInitialDelayMillis = 10_000L;
+    /** 首次采样延迟（毫秒）。 */
+    @Min(value = 0, message = "replica lag monitor initial delay must not be negative")
+    private long lagMonitorInitialDelayMillis = 10_000L;
 }

@@ -66,319 +66,314 @@ import org.springframework.stereotype.Component;
 @Lazy(false)
 public class OutboxPollScheduler {
 
-  /**
-   * ShedLock 回退持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到 锁的
-   * lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s, 不至于让单实例长时间故障后才能切换。
-   *
-   * <p>历史问题:lockAtMost 与 publishingTimeoutSeconds 严格相等时,GC 停顿或 Kafka 超时期间锁刚过期就被另一
-   * 实例抢走,原实例继续推进与新实例并发处理同一批 outbox 事件(outbox UNIQUE(tenant_id, event_key) ON CONFLICT
-   * 回退但会刷错误日志)。+10s 缓冲将这种竞争窗口压缩到极小。
-   */
-  private static final Duration LOCK_AT_MOST_BUFFER = Duration.ofSeconds(10);
+    /**
+     * ShedLock 回退持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到 锁的
+     * lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s, 不至于让单实例长时间故障后才能切换。
+     *
+     * <p>历史问题:lockAtMost 与 publishingTimeoutSeconds 严格相等时,GC 停顿或 Kafka 超时期间锁刚过期就被另一
+     * 实例抢走,原实例继续推进与新实例并发处理同一批 outbox 事件(outbox UNIQUE(tenant_id, event_key) ON CONFLICT
+     * 回退但会刷错误日志)。+10s 缓冲将这种竞争窗口压缩到极小。
+     */
+    private static final Duration LOCK_AT_MOST_BUFFER = Duration.ofSeconds(10);
 
-  /**
-   * ShedLock 最小持锁时长 — 200ms(从原 3s 降下来,2026-05-01 校准)。
-   *
-   * <p>目的:让闲置 instance 不长占锁;3s 太长造成多 instance 部署时另一个 instance 一旦抢到锁就要至少憋 3s 才放,即使本轮没事可做。200ms
-   * 仍能覆盖单轮 advance 平均耗时(~50ms)防止瞬抢/瞬释抖动。
-   */
-  private static final Duration LOCK_AT_LEAST = Duration.ofMillis(200);
+    /**
+     * ShedLock 最小持锁时长 — 200ms(从原 3s 降下来,2026-05-01 校准)。
+     *
+     * <p>目的:让闲置 instance 不长占锁;3s 太长造成多 instance 部署时另一个 instance 一旦抢到锁就要至少憋 3s 才放,即使本轮没事可做。200ms
+     * 仍能覆盖单轮 advance 平均耗时(~50ms)防止瞬抢/瞬释抖动。
+     */
+    private static final Duration LOCK_AT_LEAST = Duration.ofMillis(200);
 
-  private final DefaultScheduleForwarder scheduleForwarder;
-  private final OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final LockingTaskExecutor lockingTaskExecutor;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final OutboxEventMapper outboxEventMapper;
-  private final ShardAssignmentProvider shardAssignmentProvider;
-  private final ThreadPoolTaskScheduler executor;
+    private final DefaultScheduleForwarder scheduleForwarder;
+    private final OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final LockingTaskExecutor lockingTaskExecutor;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final OutboxEventMapper outboxEventMapper;
+    private final ShardAssignmentProvider shardAssignmentProvider;
+    private final ThreadPoolTaskScheduler executor;
 
-  /** O1:因集群 outbox 熔断打开而整轮跳过推进的次数。稳态应为 0,持续增长=集群投递降级。 */
-  private final Counter circuitSkippedPollsCounter;
+    /** O1:因集群 outbox 熔断打开而整轮跳过推进的次数。稳态应为 0,持续增长=集群投递降级。 */
+    private final Counter circuitSkippedPollsCounter;
 
-  private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private final AtomicBoolean running = new AtomicBoolean(false);
-  private final AtomicLong currentIntervalMillis = new AtomicLong(0);
-  private final AtomicReference<ScheduledFuture<?>> pendingPoll = new AtomicReference<>();
+    private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong currentIntervalMillis = new AtomicLong(0);
+    private final AtomicReference<ScheduledFuture<?>> pendingPoll = new AtomicReference<>();
 
-  @SuppressWarnings("PMD.ExcessiveParameterList") // 9 项依赖均单一职责,封装 Command 类反而模糊语义
-  public OutboxPollScheduler(
-      DefaultScheduleForwarder scheduleForwarder,
-      OutboxPublishCircuitBreaker outboxPublishCircuitBreaker,
-      BatchOrchestratorGovernanceProperties governance,
-      LockingTaskExecutor lockingTaskExecutor,
-      OrchestratorGracefulShutdown gracefulShutdown,
-      OutboxEventMapper outboxEventMapper,
-      ShardAssignmentProvider shardAssignmentProvider,
-      MeterRegistry meterRegistry,
-      @Qualifier(OrchestratorAsyncConfiguration.OUTBOX_POLL_SCHEDULER)
-          ThreadPoolTaskScheduler executor) {
-    this.scheduleForwarder = scheduleForwarder;
-    this.outboxPublishCircuitBreaker = outboxPublishCircuitBreaker;
-    this.governance = governance;
-    this.lockingTaskExecutor = lockingTaskExecutor;
-    this.gracefulShutdown = gracefulShutdown;
-    this.outboxEventMapper = outboxEventMapper;
-    this.shardAssignmentProvider = shardAssignmentProvider;
-    this.executor = executor;
-    this.circuitSkippedPollsCounter = Counter.builder("batch.outbox.circuit.skipped_polls.total")
-        .description("Outbox poll rounds skipped because the cluster circuit breaker was open"
-            + " (cooldown). Non-zero rate mirrors batch.outbox.circuit.open=1.")
-        .register(meterRegistry);
-  }
+    @SuppressWarnings("PMD.ExcessiveParameterList") // 9 项依赖均单一职责,封装 Command 类反而模糊语义
+    public OutboxPollScheduler(
+            DefaultScheduleForwarder scheduleForwarder,
+            OutboxPublishCircuitBreaker outboxPublishCircuitBreaker,
+            BatchOrchestratorGovernanceProperties governance,
+            LockingTaskExecutor lockingTaskExecutor,
+            OrchestratorGracefulShutdown gracefulShutdown,
+            OutboxEventMapper outboxEventMapper,
+            ShardAssignmentProvider shardAssignmentProvider,
+            MeterRegistry meterRegistry,
+            @Qualifier(OrchestratorAsyncConfiguration.OUTBOX_POLL_SCHEDULER) ThreadPoolTaskScheduler executor) {
+        this.scheduleForwarder = scheduleForwarder;
+        this.outboxPublishCircuitBreaker = outboxPublishCircuitBreaker;
+        this.governance = governance;
+        this.lockingTaskExecutor = lockingTaskExecutor;
+        this.gracefulShutdown = gracefulShutdown;
+        this.outboxEventMapper = outboxEventMapper;
+        this.shardAssignmentProvider = shardAssignmentProvider;
+        this.executor = executor;
+        this.circuitSkippedPollsCounter = Counter.builder("batch.outbox.circuit.skipped_polls.total")
+                .description("Outbox poll rounds skipped because the cluster circuit breaker was open"
+                        + " (cooldown). Non-zero rate mirrors batch.outbox.circuit.open=1.")
+                .register(meterRegistry);
+    }
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void onApplicationReady(ApplicationReadyEvent ignored) {
-    OutboxProperties outbox = governance.outbox();
-    // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
-    boolean staticShardIndexIsInvalid =
-        outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
-            && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal());
-    if (staticShardIndexIsInvalid) {
-      throw new IllegalStateException("Invalid Outbox shard configuration: shardIndex="
-          + outbox.getShardIndex()
-          + " 必须在 [0, shardTotal="
-          + outbox.getShardTotal()
-          + ") 范围内");
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady(ApplicationReadyEvent ignored) {
+        OutboxProperties outbox = governance.outbox();
+        // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
+        boolean staticShardIndexIsInvalid = outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
+                && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal());
+        if (staticShardIndexIsInvalid) {
+            throw new IllegalStateException("Invalid Outbox shard configuration: shardIndex="
+                    + outbox.getShardIndex()
+                    + " 必须在 [0, shardTotal="
+                    + outbox.getShardTotal()
+                    + ") 范围内");
+        }
+        if (!pollingLoopStarted.compareAndSet(false, true)) {
+            return;
+        }
+        long initialDelay = outbox.getMinPollIntervalMillis();
+        currentIntervalMillis.set(initialDelay);
+        Instant schedulerStartedAt = BatchDateTimeSupport.utcNow();
+        Instant firstPollAt = schedulerStartedAt.plusMillis(initialDelay);
+        scheduleAt(firstPollAt);
+        ShardAssignment initial = shardAssignmentProvider.current();
+        log.info(
+                "OutboxPollScheduler started (adaptive mode): min={}ms max={}ms backoff={}x mode={} shard={}/{}",
+                outbox.getMinPollIntervalMillis(),
+                outbox.getPollIntervalMillis(),
+                outbox.getBackoffMultiplier(),
+                outbox.getShardingMode(),
+                initial.shardIndex(),
+                initial.shardTotal());
     }
-    if (!pollingLoopStarted.compareAndSet(false, true)) {
-      return;
-    }
-    long initialDelay = outbox.getMinPollIntervalMillis();
-    currentIntervalMillis.set(initialDelay);
-    Instant schedulerStartedAt = BatchDateTimeSupport.utcNow();
-    Instant firstPollAt = schedulerStartedAt.plusMillis(initialDelay);
-    scheduleAt(firstPollAt);
-    ShardAssignment initial = shardAssignmentProvider.current();
-    log.info(
-        "OutboxPollScheduler started (adaptive mode): min={}ms max={}ms backoff={}x mode={} shard={}/{}",
-        outbox.getMinPollIntervalMillis(),
-        outbox.getPollIntervalMillis(),
-        outbox.getBackoffMultiplier(),
-        outbox.getShardingMode(),
-        initial.shardIndex(),
-        initial.shardTotal());
-  }
 
-  /**
-   * 停止自调度循环，但不打断正在投递的当前轮次。
-   *
-   * <p>必须在 Spring 销毁专用 executor 前取消延迟任务。否则 {@code waitForTasksToCompleteOnShutdown=true}
-   * 会等待下一次 poll 的触发时间，容器关闭时可能无意义地耗满 30 秒。
-   */
-  @PreDestroy
-  void stopScheduling() {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
+    /**
+     * 停止自调度循环，但不打断正在投递的当前轮次。
+     *
+     * <p>必须在 Spring 销毁专用 executor 前取消延迟任务。否则 {@code waitForTasksToCompleteOnShutdown=true}
+     * 会等待下一次 poll 的触发时间，容器关闭时可能无意义地耗满 30 秒。
+     */
+    @PreDestroy
+    void stopScheduling() {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        ScheduledFuture<?> future = pendingPoll.getAndSet(null);
+        if (EmptyChecks.isNotNull(future)) {
+            future.cancel(false);
+        }
     }
-    ScheduledFuture<?> future = pendingPoll.getAndSet(null);
-    if (EmptyChecks.isNotNull(future)) {
-      future.cancel(false);
-    }
-  }
 
-  /** 供单元测试直接触发一次轮询（不走自调度循环）。 */
-  public void poll() {
-    if (!running.compareAndSet(false, true)) {
-      return;
+    /** 供单元测试直接触发一次轮询（不走自调度循环）。 */
+    public void poll() {
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            ShardAssignment assignment = shardAssignmentProvider.current();
+            if (!shardAssignmentProvider.canPoll()) {
+                log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
+                return;
+            }
+            LockingTaskExecutor executor = lockingTaskExecutor;
+            LockingTaskExecutor.Task pollTask = () -> executeAdvance(assignment);
+            LockConfiguration pollLock = lockConfig(assignment);
+            executor.executeWithLock(pollTask, pollLock);
+        } catch (Throwable t) {
+            rethrowFatal(t);
+            log.error("Outbox poll failed", t);
+        } finally {
+            running.set(false);
+        }
     }
-    try {
-      ShardAssignment assignment = shardAssignmentProvider.current();
-      if (!shardAssignmentProvider.canPoll()) {
-        log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
-        return;
-      }
-      LockingTaskExecutor executor = lockingTaskExecutor;
-      LockingTaskExecutor.Task pollTask = () -> executeAdvance(assignment);
-      LockConfiguration pollLock = lockConfig(assignment);
-      executor.executeWithLock(pollTask, pollLock);
-    } catch (Throwable t) {
-      rethrowFatal(t);
-      log.error("Outbox poll failed", t);
-    } finally {
-      running.set(false);
-    }
-  }
 
-  private void pollAndReschedule() {
-    if (stopping.get()) {
-      return;
+    private void pollAndReschedule() {
+        if (stopping.get()) {
+            return;
+        }
+        if (!running.compareAndSet(false, true)) {
+            // 上一轮仍在执行，视为繁忙但不累积任务，退避后重试
+            scheduleNext(null);
+            return;
+        }
+        if (gracefulShutdown.isDraining()) {
+            // 前置短路：shutdown 已触发时不再抢 ShedLock，也不再安排下一轮。
+            running.set(false);
+            return;
+        }
+        ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
+        try {
+            ShardAssignment assignment = shardAssignmentProvider.current();
+            if (!shardAssignmentProvider.canPoll()) {
+                log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
+                return;
+            }
+            LockingTaskExecutor executor = lockingTaskExecutor;
+            LockingTaskExecutor.Task pollTask = () -> holder[0] = executeAdvance(assignment);
+            LockConfiguration pollLock = lockConfig(assignment);
+            executor.executeWithLock(pollTask, pollLock);
+        } catch (DataAccessException dae) {
+            // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
+            // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
+            Throwable mostSpecificCause = dae.getMostSpecificCause();
+            String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+                    ? SwallowedExceptionLogger.summary(dae)
+                    : SwallowedExceptionLogger.summary(mostSpecificCause);
+            log.warn("Outbox poll transient database failure; retrying on the next cycle: {}", failureSummary);
+            log.debug("Outbox poll database exception", dae);
+        } catch (OutOfMemoryError oom) {
+            // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
+            log.error("Outbox poll encountered an OOM; the process may need to restart", oom);
+            throw oom;
+        } catch (Throwable t) {
+            // 其他异常（Kafka 故障、序列化错误等）—— 真异常用 ERROR
+            rethrowFatal(t);
+            log.error("Outbox poll failed (non-database exception)", t);
+        } finally {
+            running.set(false);
+            scheduleNext(holder[0]);
+        }
     }
-    if (!running.compareAndSet(false, true)) {
-      // 上一轮仍在执行，视为繁忙但不累积任务，退避后重试
-      scheduleNext(null);
-      return;
-    }
-    if (gracefulShutdown.isDraining()) {
-      // 前置短路：shutdown 已触发时不再抢 ShedLock，也不再安排下一轮。
-      running.set(false);
-      return;
-    }
-    ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
-    try {
-      ShardAssignment assignment = shardAssignmentProvider.current();
-      if (!shardAssignmentProvider.canPoll()) {
-        log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
-        return;
-      }
-      LockingTaskExecutor executor = lockingTaskExecutor;
-      LockingTaskExecutor.Task pollTask = () -> holder[0] = executeAdvance(assignment);
-      LockConfiguration pollLock = lockConfig(assignment);
-      executor.executeWithLock(pollTask, pollLock);
-    } catch (DataAccessException dae) {
-      // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
-      // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
-      Throwable mostSpecificCause = dae.getMostSpecificCause();
-      String failureSummary = EmptyChecks.isNull(mostSpecificCause)
-          ? SwallowedExceptionLogger.summary(dae)
-          : SwallowedExceptionLogger.summary(mostSpecificCause);
-      log.warn(
-          "Outbox poll transient database failure; retrying on the next cycle: {}", failureSummary);
-      log.debug("Outbox poll database exception", dae);
-    } catch (OutOfMemoryError oom) {
-      // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
-      log.error("Outbox poll encountered an OOM; the process may need to restart", oom);
-      throw oom;
-    } catch (Throwable t) {
-      // 其他异常（Kafka 故障、序列化错误等）—— 真异常用 ERROR
-      rethrowFatal(t);
-      log.error("Outbox poll failed (non-database exception)", t);
-    } finally {
-      running.set(false);
-      scheduleNext(holder[0]);
-    }
-  }
 
-  /** 调度循环可以隔离业务异常，但不能吞掉会破坏 JVM 的致命错误。 */
-  private static void rethrowFatal(Throwable throwable) {
-    if (throwable instanceof Error error) {
-      throw error;
+    /** 调度循环可以隔离业务异常，但不能吞掉会破坏 JVM 的致命错误。 */
+    private static void rethrowFatal(Throwable throwable) {
+        if (throwable instanceof Error error) {
+            throw error;
+        }
     }
-  }
 
-  private ScheduleForwarderResult executeAdvance(ShardAssignment assignment) {
-    if (gracefulShutdown.isDraining()) {
-      log.info("Skipping Outbox poll: orchestrator is draining");
-      return null;
+    private ScheduleForwarderResult executeAdvance(ShardAssignment assignment) {
+        if (gracefulShutdown.isDraining()) {
+            log.info("Skipping Outbox poll: orchestrator is draining");
+            return null;
+        }
+        if (!outboxPublishCircuitBreaker.allowNow()) {
+            circuitSkippedPollsCounter.increment();
+            log.warn("Outbox publish circuit breaker is open: skipping advancement (cooldown active)");
+            return null;
+        }
+        OutboxProperties outbox = governance.outbox();
+        // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久长期停滞
+        resetStalePublishingEvents(outbox);
+        if (!shardAssignmentProvider.canPoll()) {
+            log.warn(
+                    "Skipping Outbox poll: dynamic shard coordination backend is unavailable; retaining assignment total={} index={}"
+                            + " and waiting for fencing coordination to recover",
+                    assignment.shardTotal(),
+                    assignment.shardIndex());
+            return null;
+        }
+        SchedulePlan plan = new SchedulePlan();
+        plan.setShardTotal(assignment.shardTotal());
+        plan.setShardIndex(assignment.shardIndex());
+        ScheduleForwarderResult result = scheduleForwarder.advance(plan);
+        outboxPublishCircuitBreaker.onAdvanceResult(result == null ? 0 : result.totalFailures());
+        return result;
     }
-    if (!outboxPublishCircuitBreaker.allowNow()) {
-      circuitSkippedPollsCounter.increment();
-      log.warn("Outbox publish circuit breaker is open: skipping advancement (cooldown active)");
-      return null;
-    }
-    OutboxProperties outbox = governance.outbox();
-    // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久长期停滞
-    resetStalePublishingEvents(outbox);
-    if (!shardAssignmentProvider.canPoll()) {
-      log.warn(
-          "Skipping Outbox poll: dynamic shard coordination backend is unavailable; retaining assignment total={} index={}"
-              + " and waiting for fencing coordination to recover",
-          assignment.shardTotal(),
-          assignment.shardIndex());
-      return null;
-    }
-    SchedulePlan plan = new SchedulePlan();
-    plan.setShardTotal(assignment.shardTotal());
-    plan.setShardIndex(assignment.shardIndex());
-    ScheduleForwarderResult result = scheduleForwarder.advance(plan);
-    outboxPublishCircuitBreaker.onAdvanceResult(result == null ? 0 : result.totalFailures());
-    return result;
-  }
 
-  private void resetStalePublishingEvents(OutboxProperties outbox) {
-    try {
-      int reset = outboxEventMapper.resetStalePublishing(
-          OutboxPublishStatus.PUBLISHING.code(),
-          OutboxPublishStatus.FAILED.code(),
-          outbox.getPublishingTimeoutSeconds());
-      if (reset > 0) {
-        log.warn("Reset {} stale PUBLISHING Outbox events to FAILED", reset);
-      }
-    } catch (DataAccessException ex) {
-      // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
-      Throwable mostSpecificCause = ex.getMostSpecificCause();
-      String failureSummary = EmptyChecks.isNull(mostSpecificCause)
-          ? SwallowedExceptionLogger.summary(ex)
-          : SwallowedExceptionLogger.summary(mostSpecificCause);
-      log.warn(
-          "Failed to reset stale PUBLISHING events (transient database failure; retrying on the next cycle): {}",
-          failureSummary);
-      log.debug("Failed to reset stale PUBLISHING events", ex);
+    private void resetStalePublishingEvents(OutboxProperties outbox) {
+        try {
+            int reset = outboxEventMapper.resetStalePublishing(
+                    OutboxPublishStatus.PUBLISHING.code(),
+                    OutboxPublishStatus.FAILED.code(),
+                    outbox.getPublishingTimeoutSeconds());
+            if (reset > 0) {
+                log.warn("Reset {} stale PUBLISHING Outbox events to FAILED", reset);
+            }
+        } catch (DataAccessException ex) {
+            // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
+            Throwable mostSpecificCause = ex.getMostSpecificCause();
+            String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+                    ? SwallowedExceptionLogger.summary(ex)
+                    : SwallowedExceptionLogger.summary(mostSpecificCause);
+            log.warn(
+                    "Failed to reset stale PUBLISHING events (transient database failure; retrying on the next cycle): {}",
+                    failureSummary);
+            log.debug("Failed to reset stale PUBLISHING events", ex);
+        }
     }
-  }
 
-  /**
-   * 根据本轮结果计算下一轮调度延迟：
-   *
-   * <ul>
-   *   <li>本轮有事件（busy）→ 立即以 minPollIntervalMillis 重调。
-   *   <li>本轮空闲 / null → 当前间隔 × backoffMultiplier，上限 pollIntervalMillis（最大间隔）。
-   * </ul>
-   */
-  private void scheduleNext(ScheduleForwarderResult result) {
-    if (stopping.get() || gracefulShutdown.isDraining()) {
-      return;
+    /**
+     * 根据本轮结果计算下一轮调度延迟：
+     *
+     * <ul>
+     *   <li>本轮有事件（busy）→ 立即以 minPollIntervalMillis 重调。
+     *   <li>本轮空闲 / null → 当前间隔 × backoffMultiplier，上限 pollIntervalMillis（最大间隔）。
+     * </ul>
+     */
+    private void scheduleNext(ScheduleForwarderResult result) {
+        if (stopping.get() || gracefulShutdown.isDraining()) {
+            return;
+        }
+        OutboxProperties outbox = governance.outbox();
+        long min = outbox.getMinPollIntervalMillis();
+        long max = outbox.getPollIntervalMillis();
+
+        long nextDelay;
+        if (result != null && result.attemptedEvents() > 0) {
+            nextDelay = min;
+        } else {
+            long current = currentIntervalMillis.get();
+            nextDelay = (long) (current * outbox.getBackoffMultiplier());
+            nextDelay = Math.min(nextDelay, max);
+            nextDelay = Math.max(nextDelay, min);
+        }
+        currentIntervalMillis.set(nextDelay);
+        log.debug(
+                "Next Outbox poll delayed by {}ms (attempted={})",
+                nextDelay,
+                result == null ? "n/a" : result.attemptedEvents());
+
+        Instant pollCompletedAt = BatchDateTimeSupport.utcNow();
+        Instant nextPollAt = pollCompletedAt.plusMillis(nextDelay);
+        scheduleAt(nextPollAt);
     }
-    OutboxProperties outbox = governance.outbox();
-    long min = outbox.getMinPollIntervalMillis();
-    long max = outbox.getPollIntervalMillis();
 
-    long nextDelay;
-    if (result != null && result.attemptedEvents() > 0) {
-      nextDelay = min;
-    } else {
-      long current = currentIntervalMillis.get();
-      nextDelay = (long) (current * outbox.getBackoffMultiplier());
-      nextDelay = Math.min(nextDelay, max);
-      nextDelay = Math.max(nextDelay, min);
+    private void scheduleAt(Instant triggerTime) {
+        if (stopping.get() || executor.getScheduledExecutor().isShutdown()) {
+            return;
+        }
+        try {
+            ScheduledFuture<?> future = executor.schedule(this::pollAndReschedule, triggerTime);
+            pendingPoll.set(future);
+            // 覆盖 stopScheduling 与 schedule 之间的竞态：若关闭已开始，立即撤销刚创建的任务。
+            if (stopping.get() && pendingPoll.compareAndSet(future, null)) {
+                future.cancel(false);
+            }
+        } catch (RejectedExecutionException ex) {
+            boolean publisherIsStopping = stopping.get()
+                    || gracefulShutdown.isDraining()
+                    || executor.getScheduledExecutor().isShutdown();
+            if (publisherIsStopping) {
+                log.debug("Skipping the next Outbox poll: scheduler is shutting down");
+                return;
+            }
+            throw ex;
+        }
     }
-    currentIntervalMillis.set(nextDelay);
-    log.debug(
-        "Next Outbox poll delayed by {}ms (attempted={})",
-        nextDelay,
-        result == null ? "n/a" : result.attemptedEvents());
 
-    Instant pollCompletedAt = BatchDateTimeSupport.utcNow();
-    Instant nextPollAt = pollCompletedAt.plusMillis(nextDelay);
-    scheduleAt(nextPollAt);
-  }
-
-  private void scheduleAt(Instant triggerTime) {
-    if (stopping.get() || executor.getScheduledExecutor().isShutdown()) {
-      return;
+    /**
+     * shardTotal = 1：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。
+     *
+     * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计回退。
+     */
+    private LockConfiguration lockConfig(ShardAssignment assignment) {
+        String lockName = assignment.shardTotal() > 1 ? "outbox_poll_shard_" + assignment.shardIndex() : "outbox_poll";
+        Instant now = BatchDateTimeSupport.utcNow();
+        Duration lockAtMost = Duration.ofSeconds(governance.outbox().getPublishingTimeoutSeconds())
+                .plus(LOCK_AT_MOST_BUFFER);
+        return new LockConfiguration(now, lockName, lockAtMost, LOCK_AT_LEAST);
     }
-    try {
-      ScheduledFuture<?> future = executor.schedule(this::pollAndReschedule, triggerTime);
-      pendingPoll.set(future);
-      // 覆盖 stopScheduling 与 schedule 之间的竞态：若关闭已开始，立即撤销刚创建的任务。
-      if (stopping.get() && pendingPoll.compareAndSet(future, null)) {
-        future.cancel(false);
-      }
-    } catch (RejectedExecutionException ex) {
-      boolean publisherIsStopping = stopping.get()
-          || gracefulShutdown.isDraining()
-          || executor.getScheduledExecutor().isShutdown();
-      if (publisherIsStopping) {
-        log.debug("Skipping the next Outbox poll: scheduler is shutting down");
-        return;
-      }
-      throw ex;
-    }
-  }
-
-  /**
-   * shardTotal = 1：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。
-   *
-   * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计回退。
-   */
-  private LockConfiguration lockConfig(ShardAssignment assignment) {
-    String lockName = assignment.shardTotal() > 1
-        ? "outbox_poll_shard_" + assignment.shardIndex()
-        : "outbox_poll";
-    Instant now = BatchDateTimeSupport.utcNow();
-    Duration lockAtMost = Duration.ofSeconds(governance.outbox().getPublishingTimeoutSeconds())
-        .plus(LOCK_AT_MOST_BUFFER);
-    return new LockConfiguration(now, lockName, lockAtMost, LOCK_AT_LEAST);
-  }
 }

@@ -44,122 +44,117 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleForensicControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort proxy;
+    @Mock
+    private ConsoleOrchestratorPort proxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleForensicController(proxy, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleForensicController(proxy, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  // @Idempotent 走 WebMvcConfigurer 全局拦截器,standalone MockMvc 不装;
-  // Idempotency-Key 缺失场景由 ConsoleIdempotencyInterceptorTest 专项覆盖
+    // @Idempotent 走 WebMvcConfigurer 全局拦截器,standalone MockMvc 不装;
+    // Idempotency-Key 缺失场景由 ConsoleIdempotencyInterceptorTest 专项覆盖
 
-  @Test
-  @DisplayName("非法租户:包含路径穿越字符的租户标识返回参数错误")
-  void shouldRejectInvalidTenantIdFormat_whenRequestingExport() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(post("/api/console/forensic/export")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("非法租户:包含路径穿越字符的租户标识返回参数错误")
+    void shouldRejectInvalidTenantIdFormat_whenRequestingExport() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(post("/api/console/forensic/export")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"../escape","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19","requestedBy":"admin"}
                     """))
-        .andExpect(status().isBadRequest());
-  }
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("导出格式缺省时原值交给应用代理，由代理保持下游默认格式")
-  void shouldPassMissingFormatToProxy() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata(
-            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
-    when(proxy.requestForensicExport(
-            ArgumentMatchers.argThat(command -> command != null && command.exportFormat() == null)))
-        .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
-    mockMvc
-        .perform(post("/api/console/forensic/export")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("导出格式缺省时原值交给应用代理，由代理保持下游默认格式")
+    void shouldPassMissingFormatToProxy() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.current())
+                .thenReturn(
+                        new ConsoleRequestMetadata("req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
+        when(proxy.requestForensicExport(
+                        ArgumentMatchers.argThat(command -> command != null && command.exportFormat() == null)))
+                .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
+        mockMvc.perform(post("/api/console/forensic/export")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19"}
                 """))
-        .andExpect(status().isOk());
-    verify(proxy)
-        .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
-            && command.exportFormat() == null
-            && "authenticated-admin".equals(command.requestedBy())));
-  }
+                .andExpect(status().isOk());
+        verify(proxy)
+                .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+                        && command.exportFormat() == null
+                        && "authenticated-admin".equals(command.requestedBy())));
+    }
 
-  @Test
-  @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
-  void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata(
-            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
-    when(proxy.requestForensicExport(ArgumentMatchers.argThat(command -> command != null
-            && command.tenantId() != null
-            && command.exportFormat() != null
-            && command.requestedBy() != null)))
-        .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
-    mockMvc
-        .perform(post("/api/console/forensic/export")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
+    void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.current())
+                .thenReturn(
+                        new ConsoleRequestMetadata("req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
+        when(proxy.requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+                        && command.tenantId() != null
+                        && command.exportFormat() != null
+                        && command.requestedBy() != null)))
+                .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
+        mockMvc.perform(post("/api/console/forensic/export")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19",
                      "jobCodes":["JOB_A"],"exportFormat":"BUNDLE","requestedBy":"admin"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.exportId").value("fx-001"));
-    verify(proxy)
-        .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
-            && Objects.equals(command.tenantId(), "t1")
-            && Objects.equals(command.exportFormat(), "BUNDLE")
-            && Objects.equals(command.requestedBy(), "authenticated-admin")));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.exportId").value("fx-001"));
+        verify(proxy)
+                .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+                        && Objects.equals(command.tenantId(), "t1")
+                        && Objects.equals(command.exportFormat(), "BUNDLE")
+                        && Objects.equals(command.requestedBy(), "authenticated-admin")));
+    }
 
-  @Test
-  @DisplayName("下载导出:异步完成后以附件头返回压缩字节, 内容与预期一致")
-  void shouldReturnZipWithAttachmentHeader_whenDownloadingExport() throws Exception {
-    byte[] payload = new byte[] {1, 2, 3};
-    doAnswer(invocation -> {
-          invocation.getArgument(2, OutputStream.class).write(payload);
-          return null;
-        })
-        .when(proxy)
-        .downloadForensicExport(eq("t1"), eq("fx-001"), any(OutputStream.class));
-    MvcResult asyncResult = mockMvc
-        .perform(get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(request().asyncStarted())
-        .andReturn();
-    mockMvc
-        .perform(asyncDispatch(asyncResult))
-        .andExpect(status().isOk())
-        .andExpect(header().string("Content-Disposition", "attachment; filename=\"fx-001.zip\""))
-        .andExpect(content().bytes(payload));
-    assertThat(payload).hasSize(3);
-  }
+    @Test
+    @DisplayName("下载导出:异步完成后以附件头返回压缩字节, 内容与预期一致")
+    void shouldReturnZipWithAttachmentHeader_whenDownloadingExport() throws Exception {
+        byte[] payload = new byte[] {1, 2, 3};
+        doAnswer(invocation -> {
+                    invocation.getArgument(2, OutputStream.class).write(payload);
+                    return null;
+                })
+                .when(proxy)
+                .downloadForensicExport(eq("t1"), eq("fx-001"), any(OutputStream.class));
+        MvcResult asyncResult = mockMvc.perform(
+                        get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"fx-001.zip\""))
+                .andExpect(content().bytes(payload));
+        assertThat(payload).hasSize(3);
+    }
 }

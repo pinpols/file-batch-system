@@ -32,112 +32,105 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 @DisplayName("优雅关闭: 排空结果指标与注册状态流转顺序")
 class GracefulKafkaShutdownTest {
 
-  private WorkerRuntimeState runtimeState;
-  private WorkerSelfRegistrationService registryService;
-  private KafkaListenerEndpointRegistry kafkaRegistry;
-  private ActiveTaskLeaseRegistry leaseRegistry;
-  private SimpleMeterRegistry meterRegistry;
-  private GracefulKafkaShutdown shutdown;
+    private WorkerRuntimeState runtimeState;
+    private WorkerSelfRegistrationService registryService;
+    private KafkaListenerEndpointRegistry kafkaRegistry;
+    private ActiveTaskLeaseRegistry leaseRegistry;
+    private SimpleMeterRegistry meterRegistry;
+    private GracefulKafkaShutdown shutdown;
 
-  @BeforeEach
-  void setUp() {
-    runtimeState = mock(WorkerRuntimeState.class);
-    registryService = mock(WorkerSelfRegistrationService.class);
-    kafkaRegistry = mock(KafkaListenerEndpointRegistry.class);
-    leaseRegistry = new ActiveTaskLeaseRegistry();
-    meterRegistry = new SimpleMeterRegistry();
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> provider =
-        (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
-    lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
-    lenient().when(runtimeState.snapshot()).thenReturn(List.of());
+    @BeforeEach
+    void setUp() {
+        runtimeState = mock(WorkerRuntimeState.class);
+        registryService = mock(WorkerSelfRegistrationService.class);
+        kafkaRegistry = mock(KafkaListenerEndpointRegistry.class);
+        leaseRegistry = new ActiveTaskLeaseRegistry();
+        meterRegistry = new SimpleMeterRegistry();
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
+        lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        lenient().when(runtimeState.snapshot()).thenReturn(List.of());
 
-    WorkerGracefulShutdownProperties gracefulShutdownProperties =
-        new WorkerGracefulShutdownProperties();
-    gracefulShutdownProperties.setTimeoutSeconds(1L); // 短 timeout 加快测试
+        WorkerGracefulShutdownProperties gracefulShutdownProperties = new WorkerGracefulShutdownProperties();
+        gracefulShutdownProperties.setTimeoutSeconds(1L); // 短 timeout 加快测试
 
-    shutdown = new GracefulKafkaShutdown(
-        runtimeState,
-        registryService,
-        kafkaRegistry,
-        leaseRegistry,
-        provider,
-        gracefulShutdownProperties);
-  }
+        shutdown = new GracefulKafkaShutdown(
+                runtimeState, registryService, kafkaRegistry, leaseRegistry, provider, gracefulShutdownProperties);
+    }
 
-  @Test
-  @DisplayName("没有活跃任务租约时排空立即成功, 记录耗时与成功结果计数")
-  void shouldRecordSuccessOutcomeWhenNoActiveLeases() {
-    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+    @Test
+    @DisplayName("没有活跃任务租约时排空立即成功, 记录耗时与成功结果计数")
+    void shouldRecordSuccessOutcomeWhenNoActiveLeases() {
+        shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
-    assertThat(meterRegistry.find("batch.worker.drain.duration_seconds").timer())
-        .isNotNull();
-    assertThat(meterRegistry
-            .find("batch.worker.drain.outcome_total")
-            .tag("outcome", "success")
-            .counter())
-        .isNotNull();
-    assertThat(meterRegistry
-            .find("batch.worker.drain.outcome_total")
-            .tag("outcome", "success")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
+        assertThat(meterRegistry.find("batch.worker.drain.duration_seconds").timer())
+                .isNotNull();
+        assertThat(meterRegistry
+                        .find("batch.worker.drain.outcome_total")
+                        .tag("outcome", "success")
+                        .counter())
+                .isNotNull();
+        assertThat(meterRegistry
+                        .find("batch.worker.drain.outcome_total")
+                        .tag("outcome", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("等待超时后仍有活跃租约时按超时结果计数, 并记录初始租约数量")
-  void shouldRecordTimeoutOutcomeWhenLeasesRemainAfterTimeout() {
-    leaseRegistry.register("task-1", "t1", "w1"); // 不会被 remove → 必触发 timeout
+    @Test
+    @DisplayName("等待超时后仍有活跃租约时按超时结果计数, 并记录初始租约数量")
+    void shouldRecordTimeoutOutcomeWhenLeasesRemainAfterTimeout() {
+        leaseRegistry.register("task-1", "t1", "w1"); // 不会被 remove → 必触发 timeout
 
-    long start = BatchDateTimeSupport.utcEpochMillis();
-    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
-    long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
+        long start = BatchDateTimeSupport.utcEpochMillis();
+        shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+        long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
 
-    // 至少等待了 timeout（1s），实际 1~3s 可接受
-    assertThat(elapsed).isGreaterThanOrEqualTo(900);
+        // 至少等待了 timeout（1s），实际 1~3s 可接受
+        assertThat(elapsed).isGreaterThanOrEqualTo(900);
 
-    assertThat(meterRegistry
-            .find("batch.worker.drain.outcome_total")
-            .tag("outcome", "timeout")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-    // initialActive=1 → counter 也应该有值
-    assertThat(meterRegistry
-            .find("batch.worker.drain.initial_active_leases")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
+        assertThat(meterRegistry
+                        .find("batch.worker.drain.outcome_total")
+                        .tag("outcome", "timeout")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        // initialActive=1 → counter 也应该有值
+        assertThat(meterRegistry
+                        .find("batch.worker.drain.initial_active_leases")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("关闭时先把注册状态置为排空再注销, 两步顺序不可颠倒")
-  void shouldMarkDrainingThenDeactivateOnShutdown() {
-    WorkerRegistration reg = mock(WorkerRegistration.class);
-    lenient().when(reg.getWorkerId()).thenReturn("w1");
-    when(runtimeState.snapshot()).thenReturn(List.of(reg));
+    @Test
+    @DisplayName("关闭时先把注册状态置为排空再注销, 两步顺序不可颠倒")
+    void shouldMarkDrainingThenDeactivateOnShutdown() {
+        WorkerRegistration reg = mock(WorkerRegistration.class);
+        lenient().when(reg.getWorkerId()).thenReturn("w1");
+        when(runtimeState.snapshot()).thenReturn(List.of(reg));
 
-    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+        shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
-    // 顺序:先 DRAINING(派发停)→ ... 排空 ... → deactivate(→OFFLINE,免心跳超时窗口)
-    var ordered = inOrder(registryService);
-    ordered.verify(registryService).updateStatus(reg, WorkerRegistryStatus.DRAINING.code());
-    ordered.verify(registryService).deactivate(reg);
-  }
+        // 顺序:先 DRAINING(派发停)→ ... 排空 ... → deactivate(→OFFLINE,免心跳超时窗口)
+        var ordered = inOrder(registryService);
+        ordered.verify(registryService).updateStatus(reg, WorkerRegistryStatus.DRAINING.code());
+        ordered.verify(registryService).deactivate(reg);
+    }
 
-  @Test
-  @DisplayName("注册信息缺少有效标识时跳过注销动作")
-  void shouldSkipDeactivateForInvalidRegistration() {
-    WorkerRegistration blank = mock(WorkerRegistration.class);
-    lenient().when(blank.getWorkerId()).thenReturn("  ");
-    when(runtimeState.snapshot()).thenReturn(List.of(blank));
+    @Test
+    @DisplayName("注册信息缺少有效标识时跳过注销动作")
+    void shouldSkipDeactivateForInvalidRegistration() {
+        WorkerRegistration blank = mock(WorkerRegistration.class);
+        lenient().when(blank.getWorkerId()).thenReturn("  ");
+        when(runtimeState.snapshot()).thenReturn(List.of(blank));
 
-    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+        shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
-    verify(registryService, never()).deactivate(blank);
-  }
+        verify(registryService, never()).deactivate(blank);
+    }
 
-  /** 占位 stub：ContextClosedEvent 需要一个 ApplicationContext source；测试不实际使用。 */
-  private interface ApplicationContextStub extends ApplicationContext {}
+    /** 占位 stub：ContextClosedEvent 需要一个 ApplicationContext source；测试不实际使用。 */
+    private interface ApplicationContextStub extends ApplicationContext {}
 }

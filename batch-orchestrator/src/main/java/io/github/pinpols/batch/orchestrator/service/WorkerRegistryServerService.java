@@ -9,11 +9,11 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
  */
 public interface WorkerRegistryServerService {
 
-  WorkerRegistryEntity register(WorkerHeartbeatDto request);
+    WorkerRegistryEntity register(WorkerHeartbeatDto request);
 
-  WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request);
+    WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request);
 
-  void deactivate(String tenantId, String workerCode);
+    void deactivate(String tenantId, String workerCode);
 
-  WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status);
+    WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status);
 }

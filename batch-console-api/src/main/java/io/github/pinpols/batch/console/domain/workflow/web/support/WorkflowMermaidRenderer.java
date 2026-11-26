@@ -20,110 +20,109 @@ import java.util.Map;
  */
 public final class WorkflowMermaidRenderer {
 
-  private WorkflowMermaidRenderer() {}
+    private WorkflowMermaidRenderer() {}
 
-  public static String render(WorkflowDefinitionDetailResponse detail) {
-    StringBuilder sb = new StringBuilder(512);
-    sb.append("flowchart LR\n");
-    if (detail == null) {
-      return sb.toString();
+    public static String render(WorkflowDefinitionDetailResponse detail) {
+        StringBuilder sb = new StringBuilder(512);
+        sb.append("flowchart LR\n");
+        if (detail == null) {
+            return sb.toString();
+        }
+        if (Texts.hasText(detail.workflowName()) || Texts.hasText(detail.workflowCode())) {
+            sb.append("  %% ")
+                    .append(detail.workflowName() == null ? "" : detail.workflowName())
+                    .append(" · ")
+                    .append(detail.workflowCode() == null ? "" : detail.workflowCode())
+                    .append(" v")
+                    .append(detail.version() == null ? "?" : detail.version())
+                    .append("\n");
+        }
+        Map<String, String> nodeIds = new HashMap<>();
+        List<ConsoleWorkflowNodeResponse> nodes = detail.nodes() == null ? List.of() : detail.nodes();
+        for (ConsoleWorkflowNodeResponse n : nodes) {
+            if (!Texts.hasText(n.nodeCode())) continue;
+            String id = sanitizeId(n.nodeCode());
+            nodeIds.put(n.nodeCode(), id);
+            sb.append("  ").append(id).append(shapeFor(n)).append("\n");
+        }
+        List<ConsoleWorkflowEdgeResponse> edges = detail.edges() == null ? List.of() : detail.edges();
+        for (ConsoleWorkflowEdgeResponse e : edges) {
+            if (!Texts.hasText(e.fromNodeCode()) || !Texts.hasText(e.toNodeCode())) continue;
+            String fromNodeCode = e.fromNodeCode();
+            String fallbackFromNodeId = sanitizeId(e.fromNodeCode());
+            String from = nodeIds.getOrDefault(fromNodeCode, fallbackFromNodeId);
+            String toNodeCode = e.toNodeCode();
+            String fallbackToNodeId = sanitizeId(e.toNodeCode());
+            String to = nodeIds.getOrDefault(toNodeCode, fallbackToNodeId);
+            sb.append("  ").append(from).append(arrowFor(e)).append(to).append("\n");
+        }
+        return sb.toString();
     }
-    if (Texts.hasText(detail.workflowName()) || Texts.hasText(detail.workflowCode())) {
-      sb.append("  %% ")
-          .append(detail.workflowName() == null ? "" : detail.workflowName())
-          .append(" · ")
-          .append(detail.workflowCode() == null ? "" : detail.workflowCode())
-          .append(" v")
-          .append(detail.version() == null ? "?" : detail.version())
-          .append("\n");
-    }
-    Map<String, String> nodeIds = new HashMap<>();
-    List<ConsoleWorkflowNodeResponse> nodes = detail.nodes() == null ? List.of() : detail.nodes();
-    for (ConsoleWorkflowNodeResponse n : nodes) {
-      if (!Texts.hasText(n.nodeCode())) continue;
-      String id = sanitizeId(n.nodeCode());
-      nodeIds.put(n.nodeCode(), id);
-      sb.append("  ").append(id).append(shapeFor(n)).append("\n");
-    }
-    List<ConsoleWorkflowEdgeResponse> edges = detail.edges() == null ? List.of() : detail.edges();
-    for (ConsoleWorkflowEdgeResponse e : edges) {
-      if (!Texts.hasText(e.fromNodeCode()) || !Texts.hasText(e.toNodeCode())) continue;
-      String fromNodeCode = e.fromNodeCode();
-      String fallbackFromNodeId = sanitizeId(e.fromNodeCode());
-      String from = nodeIds.getOrDefault(fromNodeCode, fallbackFromNodeId);
-      String toNodeCode = e.toNodeCode();
-      String fallbackToNodeId = sanitizeId(e.toNodeCode());
-      String to = nodeIds.getOrDefault(toNodeCode, fallbackToNodeId);
-      sb.append("  ").append(from).append(arrowFor(e)).append(to).append("\n");
-    }
-    return sb.toString();
-  }
 
-  private static String shapeFor(ConsoleWorkflowNodeResponse n) {
-    String label = escapeLabel(displayLabel(n));
-    WorkflowNodeType type = DictEnum.fromCode(WorkflowNodeType.class, n.nodeType());
-    if (EmptyChecks.isNull(type)) {
-      return "[" + label + "]";
+    private static String shapeFor(ConsoleWorkflowNodeResponse n) {
+        String label = escapeLabel(displayLabel(n));
+        WorkflowNodeType type = DictEnum.fromCode(WorkflowNodeType.class, n.nodeType());
+        if (EmptyChecks.isNull(type)) {
+            return "[" + label + "]";
+        }
+        return switch (type) {
+            case START, END -> "([" + label + "])";
+            case GATEWAY -> "{" + label + "}";
+            case WAIT -> "[[" + label + "]]";
+            case TASK, JOB -> "[" + label + "]";
+        };
     }
-    return switch (type) {
-      case START, END -> "([" + label + "])";
-      case GATEWAY -> "{" + label + "}";
-      case WAIT -> "[[" + label + "]]";
-      case TASK, JOB -> "[" + label + "]";
-    };
-  }
 
-  private static String displayLabel(ConsoleWorkflowNodeResponse n) {
-    if (Texts.hasText(n.nodeName())) {
-      return n.nodeName() + " · " + n.nodeCode();
+    private static String displayLabel(ConsoleWorkflowNodeResponse n) {
+        if (Texts.hasText(n.nodeName())) {
+            return n.nodeName() + " · " + n.nodeCode();
+        }
+        return n.nodeCode();
     }
-    return n.nodeCode();
-  }
 
-  private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
-    WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, e.edgeType());
-    if (EmptyChecks.isNull(type)) {
-      return " --> ";
+    private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
+        WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, e.edgeType());
+        if (EmptyChecks.isNull(type)) {
+            return " --> ";
+        }
+        if (type == WorkflowEdgeType.CONDITION) {
+            String conditionExpr = e.conditionExpr();
+            String conditionLabel = Texts.hasText(conditionExpr) ? conditionExpr : "?";
+            String escapedConditionLabel = escapeLabel(conditionLabel);
+            return " -- \"" + escapedConditionLabel + "\" --> ";
+        }
+        return switch (type) {
+            case FAILURE -> " -. failure .-> ";
+            case SUCCESS -> " -- success --> ";
+            case ALWAYS, CONDITION -> " --> ";
+        };
     }
-    if (type == WorkflowEdgeType.CONDITION) {
-      String conditionExpr = e.conditionExpr();
-      String conditionLabel = Texts.hasText(conditionExpr) ? conditionExpr : "?";
-      String escapedConditionLabel = escapeLabel(conditionLabel);
-      return " -- \"" + escapedConditionLabel + "\" --> ";
-    }
-    return switch (type) {
-      case FAILURE -> " -. failure .-> ";
-      case SUCCESS -> " -- success --> ";
-      case ALWAYS, CONDITION -> " --> ";
-    };
-  }
 
-  /** Mermaid id 只允许 ASCII 字母数字下划线;首字符必须是 ASCII 字母。中文/标点等一律换成 _。 */
-  static String sanitizeId(String raw) {
-    StringBuilder sb = new StringBuilder(raw.length());
-    for (int i = 0; i < raw.length(); i++) {
-      char c = raw.charAt(i);
-      boolean asciiAlphaNum =
-          (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
-      if (asciiAlphaNum || c == '_') {
-        sb.append(c);
-      } else {
-        sb.append('_');
-      }
+    /** Mermaid id 只允许 ASCII 字母数字下划线;首字符必须是 ASCII 字母。中文/标点等一律换成 _。 */
+    static String sanitizeId(String raw) {
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            boolean asciiAlphaNum = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+            if (asciiAlphaNum || c == '_') {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        char first = sb.isEmpty() ? '_' : sb.charAt(0);
+        boolean firstAsciiLetter = (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z');
+        if (!firstAsciiLetter) {
+            sb.insert(0, 'n');
+        }
+        return sb.toString();
     }
-    char first = sb.isEmpty() ? '_' : sb.charAt(0);
-    boolean firstAsciiLetter = (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z');
-    if (!firstAsciiLetter) {
-      sb.insert(0, 'n');
-    }
-    return sb.toString();
-  }
 
-  /** Mermaid label 里不允许裸 " / 换行 / 反引号。 */
-  static String escapeLabel(String raw) {
-    if (raw == null) return "";
-    String escapedQuotes = raw.replace("\"", "&quot;");
-    String escapedNewlines = escapedQuotes.replace("\n", " ");
-    return escapedNewlines.replace("`", "'");
-  }
+    /** Mermaid label 里不允许裸 " / 换行 / 反引号。 */
+    static String escapeLabel(String raw) {
+        if (raw == null) return "";
+        String escapedQuotes = raw.replace("\"", "&quot;");
+        String escapedNewlines = escapedQuotes.replace("\n", " ");
+        return escapedNewlines.replace("`", "'");
+    }
 }

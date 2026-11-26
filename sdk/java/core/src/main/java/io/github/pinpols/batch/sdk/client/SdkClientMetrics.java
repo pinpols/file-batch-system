@@ -29,14 +29,14 @@ import lombok.Builder;
  */
 @Builder
 public record SdkClientMetrics(
-    String tenantId,
-    String workerCode,
-    boolean started,
-    boolean healthy,
-    int inFlightTaskCount,
-    int maxConcurrentTasks,
-    int registeredHandlerCount,
-    boolean dispatcherFatal,
-    boolean dispatcherDraining,
-    boolean consumerCrashed,
-    long kafkaConsumerLag) {}
+        String tenantId,
+        String workerCode,
+        boolean started,
+        boolean healthy,
+        int inFlightTaskCount,
+        int maxConcurrentTasks,
+        int registeredHandlerCount,
+        boolean dispatcherFatal,
+        boolean dispatcherDraining,
+        boolean consumerCrashed,
+        long kafkaConsumerLag) {}

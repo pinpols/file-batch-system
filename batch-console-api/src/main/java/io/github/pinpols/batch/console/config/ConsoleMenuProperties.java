@@ -26,25 +26,25 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.menu")
 public class ConsoleMenuProperties {
 
-  /** 菜单组列表。 */
-  private List<GroupDef> groups = new ArrayList<>();
+    /** 菜单组列表。 */
+    private List<GroupDef> groups = new ArrayList<>();
 
-  @Data
-  public static class GroupDef {
-    private String key;
-    private String title;
-    private String icon;
-    private String minRole;
-    private List<String> authorities = new ArrayList<>();
-    private List<ItemDef> children = new ArrayList<>();
-  }
+    @Data
+    public static class GroupDef {
+        private String key;
+        private String title;
+        private String icon;
+        private String minRole;
+        private List<String> authorities = new ArrayList<>();
+        private List<ItemDef> children = new ArrayList<>();
+    }
 
-  @Data
-  public static class ItemDef {
-    private String title;
-    private String path;
-    private String icon;
-    private String minRole;
-    private List<String> authorities = new ArrayList<>();
-  }
+    @Data
+    public static class ItemDef {
+        private String title;
+        private String path;
+        private String icon;
+        private String minRole;
+        private List<String> authorities = new ArrayList<>();
+    }
 }

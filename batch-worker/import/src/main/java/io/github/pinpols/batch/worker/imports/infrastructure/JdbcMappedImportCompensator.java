@@ -51,173 +51,168 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class JdbcMappedImportCompensator implements PipelineCompensator {
 
-  private static final String RUN_BINDING_BATCH_NO = "${batchNo}";
-  private static final String RUN_BINDING_TRACE_ID = "${traceId}";
+    private static final String RUN_BINDING_BATCH_NO = "${batchNo}";
+    private static final String RUN_BINDING_TRACE_ID = "${traceId}";
 
-  private final DataSource businessDataSource;
-  private final JdbcTemplate jdbcTemplate;
-  private final ObjectMapper objectMapper;
-  private final TransactionTemplate txTemplate;
+    private final DataSource businessDataSource;
+    private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+    private final TransactionTemplate txTemplate;
 
-  public JdbcMappedImportCompensator(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
-      ObjectMapper objectMapper) {
-    this.businessDataSource = importBusinessDataSource;
-    this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
-    this.objectMapper = objectMapper;
-    DataSourceTransactionManager transactionManager =
-        new DataSourceTransactionManager(importBusinessDataSource);
-    this.txTemplate = new TransactionTemplate(transactionManager);
-  }
-
-  @Override
-  public String pipelineType() {
-    return ImportWorkerType.IMPORT;
-  }
-
-  @Override
-  @SuppressWarnings("java:S2077")
-  public CompensationResult compensate(
-      String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
-    try {
-      Map<String, Object> templateConfig = templateConfigMap(attributes);
-      if (templateConfig.isEmpty()) {
-        // LOAD 必在 PREPROCESS 之后(那时 templateConfig 已入 attributes);缺失 = LOAD 从未执行 = 无行可删。
-        return CompensationResult.skipped(
-            "no templateConfig in attributes — LOAD never ran, nothing written to reverse");
-      }
-      JdbcMappedImportSpec spec;
-      try {
-        spec = JdbcMappedImportSpec.parse(templateConfig, objectMapper);
-      } catch (RuntimeException ex) {
-        return CompensationResult.skipped(
-            "jdbcMappedImport spec parse failed, cannot safely scope reverse: " + ex.getMessage());
-      }
-
-      // run 标识列:systemBindings 里 value 恰为 ${batchNo} / ${traceId} 的目标列。
-      RunScope runScope = resolveRunScope(spec, attributes);
-      if (runScope == null) {
-        return CompensationResult.skipped(
-            "template binds no run-identifier column (${batchNo}/${traceId}) in systemBindings;"
-                + " cannot safely scope reverse DELETE — SKIPPED (no rows deleted) for table "
-                + spec.schema()
-                + "."
-                + spec.table());
-      }
-      if (!Texts.hasText(runScope.runValue())) {
-        return CompensationResult.skipped("run-identifier column '"
-            + runScope.runColumn()
-            + "' resolved to blank value at compensation time; cannot scope reverse — SKIPPED");
-      }
-
-      // 强校验所有进 SQL 的标识符(表名来自模板,必须校验白名单 + 正则)。
-      JdbcMappedSqlValidator.requireInAllowlist(spec.schema(), allowedSchemas(spec));
-      String fqTable = JdbcMappedSqlValidator.quotePg(spec.schema())
-          + "."
-          + JdbcMappedSqlValidator.quotePg(spec.table());
-      String tenantCol = JdbcMappedSqlValidator.quotePg(spec.tenantColumn());
-      String runCol = JdbcMappedSqlValidator.quotePg(runScope.runColumn());
-
-      // 反向 DELETE：tenant + run 值用 ? 绑定参数（等价 #{}），绝无 ${} 拼接、无宽 WHERE。
-      String deleteSql =
-          "DELETE FROM " + fqTable + " WHERE " + tenantCol + " = ? AND " + runCol + " = ?";
-
-      Integer deleted = txTemplate.execute(status -> {
-        RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-        return jdbcTemplate.update(deleteSql, tenantId, runScope.runValue());
-      });
-      long reversed = deleted == null ? 0L : deleted;
-      String detail = "reversed import rows: table="
-          + spec.schema()
-          + "."
-          + spec.table()
-          + ", where "
-          + spec.tenantColumn()
-          + "=<tenant> AND "
-          + runScope.runColumn()
-          + "="
-          + runScope.runValue()
-          + ", deletedRows="
-          + reversed;
-      log.info(
-          "import compensation reversed rows: tenantId={}, pipelineInstanceId={}, table={}.{},"
-              + " runColumn={}, runValue={}, deletedRows={}",
-          tenantId,
-          pipelineInstanceId,
-          spec.schema(),
-          spec.table(),
-          runScope.runColumn(),
-          runScope.runValue(),
-          reversed);
-      return CompensationResult.reversed(reversed, detail);
-    } catch (RuntimeException ex) {
-      // best-effort：补偿失败不掩盖原始失败。
-      SwallowedExceptionLogger.warn(
-          JdbcMappedImportCompensator.class, "catch:RuntimeException", ex);
-      return CompensationResult.failed("import reverse DELETE failed: " + ex.getMessage());
+    public JdbcMappedImportCompensator(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource, ObjectMapper objectMapper) {
+        this.businessDataSource = importBusinessDataSource;
+        this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
+        this.objectMapper = objectMapper;
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(importBusinessDataSource);
+        this.txTemplate = new TransactionTemplate(transactionManager);
     }
-  }
 
-  /** 模板里允许 schema 列表:沿用 spec.schema() 自身白名单语义,这里以 spec 的 schema 作为唯一允许项做形态校验。 */
-  private static List<String> allowedSchemas(JdbcMappedImportSpec spec) {
-    // spec.schema() 已是模板声明的目标 schema;LOAD 阶段 validateIdentifiers 已按 securityProperties 白名单校验过。
-    // 补偿阶段无 securityProperties，这里复用同一 schema 做 requireInAllowlist 的形态 + 一致性回退
-    // （仅允许删与 LOAD 同一 schema，不放大范围）。
-    String trimmedSchema = spec.schema().trim();
-    String normalizedSchema = trimmedSchema.toLowerCase(Locale.ROOT);
-    return List.of(normalizedSchema);
-  }
-
-  /**
-   * 解析 run 标识列 + 当前 run 的标识值。run 列 = systemBindings 里 value 恰为 {@code ${batchNo}} 或 {@code
-   * ${traceId}} 的目标列(优先 batchNo)。
-   */
-  private RunScope resolveRunScope(JdbcMappedImportSpec spec, Map<String, Object> attributes) {
-    String batchNoColumn = null;
-    String traceIdColumn = null;
-    for (Map.Entry<String, String> binding : spec.systemBindings().entrySet()) {
-      String value = binding.getValue() == null ? "" : binding.getValue().trim();
-      if (RUN_BINDING_BATCH_NO.equals(value) && batchNoColumn == null) {
-        batchNoColumn = binding.getKey();
-      } else if (RUN_BINDING_TRACE_ID.equals(value) && traceIdColumn == null) {
-        traceIdColumn = binding.getKey();
-      }
+    @Override
+    public String pipelineType() {
+        return ImportWorkerType.IMPORT;
     }
-    if (batchNoColumn != null) {
-      String runValue = resolveBatchNo(attributes);
-      return new RunScope(batchNoColumn, runValue);
-    }
-    if (traceIdColumn != null) {
-      String runValue = resolveTraceId(attributes);
-      return new RunScope(traceIdColumn, runValue);
-    }
-    return null;
-  }
 
-  /** 与 LoadStep.buildLoadContext 一致:batchNo 取 importPayload.batchNo,缺省回退 bizDate。 */
-  private String resolveBatchNo(Map<String, Object> attributes) {
-    Object payloadObj = attributes.get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
-    if (payloadObj instanceof ImportPayload payload && Texts.hasText(payload.batchNo())) {
-      return payload.batchNo();
+    @Override
+    @SuppressWarnings("java:S2077")
+    public CompensationResult compensate(
+            String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
+        try {
+            Map<String, Object> templateConfig = templateConfigMap(attributes);
+            if (templateConfig.isEmpty()) {
+                // LOAD 必在 PREPROCESS 之后(那时 templateConfig 已入 attributes);缺失 = LOAD 从未执行 = 无行可删。
+                return CompensationResult.skipped(
+                        "no templateConfig in attributes — LOAD never ran, nothing written to reverse");
+            }
+            JdbcMappedImportSpec spec;
+            try {
+                spec = JdbcMappedImportSpec.parse(templateConfig, objectMapper);
+            } catch (RuntimeException ex) {
+                return CompensationResult.skipped(
+                        "jdbcMappedImport spec parse failed, cannot safely scope reverse: " + ex.getMessage());
+            }
+
+            // run 标识列:systemBindings 里 value 恰为 ${batchNo} / ${traceId} 的目标列。
+            RunScope runScope = resolveRunScope(spec, attributes);
+            if (runScope == null) {
+                return CompensationResult.skipped(
+                        "template binds no run-identifier column (${batchNo}/${traceId}) in systemBindings;"
+                                + " cannot safely scope reverse DELETE — SKIPPED (no rows deleted) for table "
+                                + spec.schema()
+                                + "."
+                                + spec.table());
+            }
+            if (!Texts.hasText(runScope.runValue())) {
+                return CompensationResult.skipped("run-identifier column '"
+                        + runScope.runColumn()
+                        + "' resolved to blank value at compensation time; cannot scope reverse — SKIPPED");
+            }
+
+            // 强校验所有进 SQL 的标识符(表名来自模板,必须校验白名单 + 正则)。
+            JdbcMappedSqlValidator.requireInAllowlist(spec.schema(), allowedSchemas(spec));
+            String fqTable =
+                    JdbcMappedSqlValidator.quotePg(spec.schema()) + "." + JdbcMappedSqlValidator.quotePg(spec.table());
+            String tenantCol = JdbcMappedSqlValidator.quotePg(spec.tenantColumn());
+            String runCol = JdbcMappedSqlValidator.quotePg(runScope.runColumn());
+
+            // 反向 DELETE：tenant + run 值用 ? 绑定参数（等价 #{}），绝无 ${} 拼接、无宽 WHERE。
+            String deleteSql = "DELETE FROM " + fqTable + " WHERE " + tenantCol + " = ? AND " + runCol + " = ?";
+
+            Integer deleted = txTemplate.execute(status -> {
+                RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+                return jdbcTemplate.update(deleteSql, tenantId, runScope.runValue());
+            });
+            long reversed = deleted == null ? 0L : deleted;
+            String detail = "reversed import rows: table="
+                    + spec.schema()
+                    + "."
+                    + spec.table()
+                    + ", where "
+                    + spec.tenantColumn()
+                    + "=<tenant> AND "
+                    + runScope.runColumn()
+                    + "="
+                    + runScope.runValue()
+                    + ", deletedRows="
+                    + reversed;
+            log.info(
+                    "import compensation reversed rows: tenantId={}, pipelineInstanceId={}, table={}.{},"
+                            + " runColumn={}, runValue={}, deletedRows={}",
+                    tenantId,
+                    pipelineInstanceId,
+                    spec.schema(),
+                    spec.table(),
+                    runScope.runColumn(),
+                    runScope.runValue(),
+                    reversed);
+            return CompensationResult.reversed(reversed, detail);
+        } catch (RuntimeException ex) {
+            // best-effort：补偿失败不掩盖原始失败。
+            SwallowedExceptionLogger.warn(JdbcMappedImportCompensator.class, "catch:RuntimeException", ex);
+            return CompensationResult.failed("import reverse DELETE failed: " + ex.getMessage());
+        }
     }
-    Object bizDate = attributes.get(PipelineRuntimeKeys.BIZ_DATE);
-    return bizDate == null ? null : String.valueOf(bizDate);
-  }
 
-  private String resolveTraceId(Map<String, Object> attributes) {
-    Object traceId = attributes.get(PipelineRuntimeKeys.TRACE_ID);
-    return traceId == null ? null : String.valueOf(traceId);
-  }
-
-  private Map<String, Object> templateConfigMap(Map<String, Object> attributes) {
-    Object o = attributes == null ? null : attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (o instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
+    /** 模板里允许 schema 列表:沿用 spec.schema() 自身白名单语义,这里以 spec 的 schema 作为唯一允许项做形态校验。 */
+    private static List<String> allowedSchemas(JdbcMappedImportSpec spec) {
+        // spec.schema() 已是模板声明的目标 schema;LOAD 阶段 validateIdentifiers 已按 securityProperties 白名单校验过。
+        // 补偿阶段无 securityProperties，这里复用同一 schema 做 requireInAllowlist 的形态 + 一致性回退
+        // （仅允许删与 LOAD 同一 schema，不放大范围）。
+        String trimmedSchema = spec.schema().trim();
+        String normalizedSchema = trimmedSchema.toLowerCase(Locale.ROOT);
+        return List.of(normalizedSchema);
     }
-    return Map.of();
-  }
 
-  private record RunScope(String runColumn, String runValue) {}
+    /**
+     * 解析 run 标识列 + 当前 run 的标识值。run 列 = systemBindings 里 value 恰为 {@code ${batchNo}} 或 {@code
+     * ${traceId}} 的目标列(优先 batchNo)。
+     */
+    private RunScope resolveRunScope(JdbcMappedImportSpec spec, Map<String, Object> attributes) {
+        String batchNoColumn = null;
+        String traceIdColumn = null;
+        for (Map.Entry<String, String> binding : spec.systemBindings().entrySet()) {
+            String value = binding.getValue() == null ? "" : binding.getValue().trim();
+            if (RUN_BINDING_BATCH_NO.equals(value) && batchNoColumn == null) {
+                batchNoColumn = binding.getKey();
+            } else if (RUN_BINDING_TRACE_ID.equals(value) && traceIdColumn == null) {
+                traceIdColumn = binding.getKey();
+            }
+        }
+        if (batchNoColumn != null) {
+            String runValue = resolveBatchNo(attributes);
+            return new RunScope(batchNoColumn, runValue);
+        }
+        if (traceIdColumn != null) {
+            String runValue = resolveTraceId(attributes);
+            return new RunScope(traceIdColumn, runValue);
+        }
+        return null;
+    }
+
+    /** 与 LoadStep.buildLoadContext 一致:batchNo 取 importPayload.batchNo,缺省回退 bizDate。 */
+    private String resolveBatchNo(Map<String, Object> attributes) {
+        Object payloadObj = attributes.get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
+        if (payloadObj instanceof ImportPayload payload && Texts.hasText(payload.batchNo())) {
+            return payload.batchNo();
+        }
+        Object bizDate = attributes.get(PipelineRuntimeKeys.BIZ_DATE);
+        return bizDate == null ? null : String.valueOf(bizDate);
+    }
+
+    private String resolveTraceId(Map<String, Object> attributes) {
+        Object traceId = attributes.get(PipelineRuntimeKeys.TRACE_ID);
+        return traceId == null ? null : String.valueOf(traceId);
+    }
+
+    private Map<String, Object> templateConfigMap(Map<String, Object> attributes) {
+        Object o = attributes == null ? null : attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (o instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
+        return Map.of();
+    }
+
+    private record RunScope(String runColumn, String runValue) {}
 }

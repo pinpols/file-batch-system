@@ -13,15 +13,13 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class PlatformFileTemplateRepository {
 
-  private final PlatformFileRuntimeMapper mapper;
+    private final PlatformFileRuntimeMapper mapper;
 
-  public Map<String, Object> loadLatestTemplateConfig(
-      String tenantId, String templateCode, String templateType) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
-      return Map.of();
+    public Map<String, Object> loadLatestTemplateConfig(String tenantId, String templateCode, String templateType) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
+            return Map.of();
+        }
+        PlatformFileTemplateConfigView config = mapper.selectLatestTemplateConfig(tenantId, templateCode, templateType);
+        return EmptyChecks.isNull(config) ? Map.of() : config.toPluginValues();
     }
-    PlatformFileTemplateConfigView config =
-        mapper.selectLatestTemplateConfig(tenantId, templateCode, templateType);
-    return EmptyChecks.isNull(config) ? Map.of() : config.toPluginValues();
-  }
 }

@@ -32,183 +32,172 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("资产新鲜度策略服务: 到期扫描, 缺失与滞后告警口径")
 class AssetFreshnessPolicyServiceTest {
 
-  private AssetFreshnessPolicyMapper policyMapper;
-  private AssetPartitionService assetPartitionService;
-  private AlertEventService alertEventService;
-  private AssetFreshnessPolicyService service;
+    private AssetFreshnessPolicyMapper policyMapper;
+    private AssetPartitionService assetPartitionService;
+    private AlertEventService alertEventService;
+    private AssetFreshnessPolicyService service;
 
-  @BeforeEach
-  void setUp() {
-    policyMapper = mock(AssetFreshnessPolicyMapper.class);
-    assetPartitionService = mock(AssetPartitionService.class);
-    alertEventService = mock(AlertEventService.class);
-    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
-        Clock.fixed(Instant.parse("2026-06-30T03:30:00Z"), ZoneId.of("UTC")),
-        new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service = new AssetFreshnessPolicyService(
-        policyMapper, assetPartitionService, alertEventService, dateTimeSupport);
-  }
+    @BeforeEach
+    void setUp() {
+        policyMapper = mock(AssetFreshnessPolicyMapper.class);
+        assetPartitionService = mock(AssetPartitionService.class);
+        alertEventService = mock(AlertEventService.class);
+        BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+                Clock.fixed(Instant.parse("2026-06-30T03:30:00Z"), ZoneId.of("UTC")),
+                new BatchTimezoneProvider(new BatchTimezoneProperties()));
+        service = new AssetFreshnessPolicyService(
+                policyMapper, assetPartitionService, alertEventService, dateTimeSupport);
+    }
 
-  @Test
-  @DisplayName("超过期望产出时间仍未就绪时发出资产缺失告警")
-  void shouldEmitMissingAlert_whenExpectedTimePassed() {
-    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(false);
+    @Test
+    @DisplayName("超过期望产出时间仍未就绪时发出资产缺失告警")
+    void shouldEmitMissingAlert_whenExpectedTimePassed() {
+        AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(false);
 
-    int emitted = service.scanDuePolicies(10);
+        int emitted = service.scanDuePolicies(10);
 
-    assertThat(emitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
-    verify(alertEventService).emit(captor.capture());
-    assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_MISSING");
-    assertThat(captor.getValue().severity()).isEqualTo("WARN");
-    assertThat(captor.getValue().resourceKey()).isEqualTo("t1:JOB_A:2026-06-30");
-  }
+        assertThat(emitted).isEqualTo(1);
+        ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
+        verify(alertEventService).emit(captor.capture());
+        assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_MISSING");
+        assertThat(captor.getValue().severity()).isEqualTo("WARN");
+        assertThat(captor.getValue().resourceKey()).isEqualTo("t1:JOB_A:2026-06-30");
+    }
 
-  @Test
-  @DisplayName("资产告警事务在策略所属租户上下文中写入并清理上下文")
-  void shouldEmitAlertUnderPolicyTenantContext() {
-    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(false);
-    doAnswer(invocation -> {
-          AlertEmitCommand request = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(request.tenantId());
-          return null;
-        })
-        .when(alertEventService)
-        .emit(any());
+    @Test
+    @DisplayName("资产告警事务在策略所属租户上下文中写入并清理上下文")
+    void shouldEmitAlertUnderPolicyTenantContext() {
+        AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(false);
+        doAnswer(invocation -> {
+                    AlertEmitCommand request = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(request.tenantId());
+                    return null;
+                })
+                .when(alertEventService)
+                .emit(any());
 
-    assertThat(service.scanDuePolicies(10)).isEqualTo(1);
+        assertThat(service.scanDuePolicies(10)).isEqualTo(1);
 
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  @Test
-  @DisplayName("超过宽限期仍未就绪时发出资产滞后告警")
-  void shouldEmitStaleAlert_whenGraceWindowElapsed() {
-    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(false);
+    @Test
+    @DisplayName("超过宽限期仍未就绪时发出资产滞后告警")
+    void shouldEmitStaleAlert_whenGraceWindowElapsed() {
+        AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(false);
 
-    int emitted = service.scanDuePolicies(10);
+        int emitted = service.scanDuePolicies(10);
 
-    assertThat(emitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
-    verify(alertEventService).emit(captor.capture());
-    assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_STALE");
-    assertThat(captor.getValue().severity()).isEqualTo("ERROR");
-  }
+        assertThat(emitted).isEqualTo(1);
+        ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
+        verify(alertEventService).emit(captor.capture());
+        assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_STALE");
+        assertThat(captor.getValue().severity()).isEqualTo("ERROR");
+    }
 
-  @Test
-  @DisplayName("未到期望产出时间时不查询就绪状态也不告警")
-  void shouldSkip_whenBeforeExpectedTime() {
-    AssetFreshnessPolicyEntity policy = policy("12:00", 3600, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+    @Test
+    @DisplayName("未到期望产出时间时不查询就绪状态也不告警")
+    void shouldSkip_whenBeforeExpectedTime() {
+        AssetFreshnessPolicyEntity policy = policy("12:00", 3600, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
 
-    int emitted = service.scanDuePolicies(10);
+        int emitted = service.scanDuePolicies(10);
 
-    assertThat(emitted).isZero();
-    verify(assetPartitionService, never()).isJobPartitionReady(any(), any(), any());
-    verify(alertEventService, never()).emit(any());
-  }
+        assertThat(emitted).isZero();
+        verify(assetPartitionService, never()).isJobPartitionReady(any(), any(), any());
+        verify(alertEventService, never()).emit(any());
+    }
 
-  @Test
-  @DisplayName("资产已就绪时不发出任何告警")
-  void shouldSkip_whenPartitionReady() {
-    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(true);
+    @Test
+    @DisplayName("资产已就绪时不发出任何告警")
+    void shouldSkip_whenPartitionReady() {
+        AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(true);
 
-    int emitted = service.scanDuePolicies(10);
+        int emitted = service.scanDuePolicies(10);
 
-    assertThat(emitted).isZero();
-    verify(alertEventService, never()).emit(any());
-  }
+        assertThat(emitted).isZero();
+        verify(alertEventService, never()).emit(any());
+    }
 
-  @Test
-  @DisplayName("按配置的回看天数扫描对应营业日并逐日告警")
-  void shouldScanLookbackDays_whenPolicyConfigured() {
-    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(false);
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 29)))
-        .thenReturn(false);
+    @Test
+    @DisplayName("按配置的回看天数扫描对应营业日并逐日告警")
+    void shouldScanLookbackDays_whenPolicyConfigured() {
+        AssetFreshnessPolicyEntity policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(false);
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 29)))
+                .thenReturn(false);
 
-    int emitted = service.scanDuePolicies(10);
+        int emitted = service.scanDuePolicies(10);
 
-    assertThat(emitted).isEqualTo(2);
-  }
+        assertThat(emitted).isEqualTo(2);
+    }
 
-  @Test
-  @DisplayName("重复扫描同一滞后资产时告警去重键保持稳定, 不会产生重复告警")
-  void freshnessAlert_usesStableDedupKey_soRescanDoesNotStorm() {
-    // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
-    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
-    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady(
-            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
-        .thenReturn(false);
+    @Test
+    @DisplayName("重复扫描同一滞后资产时告警去重键保持稳定, 不会产生重复告警")
+    void freshnessAlert_usesStableDedupKey_soRescanDoesNotStorm() {
+        // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
+        AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+        when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+        when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+                .thenReturn(false);
 
-    // 执行：重新扫描同一仍过期的资产（模拟约 60 秒后定时扫描再次触发）。
-    int firstEmitted = service.scanDuePolicies(10);
-    int secondEmitted = service.scanDuePolicies(10);
+        // 执行：重新扫描同一仍过期的资产（模拟约 60 秒后定时扫描再次触发）。
+        int firstEmitted = service.scanDuePolicies(10);
+        int secondEmitted = service.scanDuePolicies(10);
 
-    // 断言：每次扫描都会产生事件，但去重指纹完全一致，因此下游
-    // 通过 UPSERT 合并记录，不会创建重复告警。
-    assertThat(firstEmitted).isEqualTo(1);
-    assertThat(secondEmitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
-    verify(alertEventService, times(2)).emit(captor.capture());
-    List<AlertEmitCommand> emissions = captor.getAllValues();
-    String firstKey = emissions.get(0).resourceKey();
-    String secondKey = emissions.get(1).resourceKey();
-    assertThat(firstKey).isEqualTo(secondKey);
-    // 由稳定标识 tenant:assetCode:bizDate 构成的确定性组合值。
-    assertThat(firstKey)
-        .isEqualTo("t1:JOB_A:2026-06-30")
-        .contains("t1")
-        .contains("JOB_A")
-        .contains("2026-06-30");
-    // 重复扫描时 alertType 也保持稳定（属于同一去重类别）。
-    assertThat(emissions.get(0).alertType()).isEqualTo(emissions.get(1).alertType());
-  }
+        // 断言：每次扫描都会产生事件，但去重指纹完全一致，因此下游
+        // 通过 UPSERT 合并记录，不会创建重复告警。
+        assertThat(firstEmitted).isEqualTo(1);
+        assertThat(secondEmitted).isEqualTo(1);
+        ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
+        verify(alertEventService, times(2)).emit(captor.capture());
+        List<AlertEmitCommand> emissions = captor.getAllValues();
+        String firstKey = emissions.get(0).resourceKey();
+        String secondKey = emissions.get(1).resourceKey();
+        assertThat(firstKey).isEqualTo(secondKey);
+        // 由稳定标识 tenant:assetCode:bizDate 构成的确定性组合值。
+        assertThat(firstKey)
+                .isEqualTo("t1:JOB_A:2026-06-30")
+                .contains("t1")
+                .contains("JOB_A")
+                .contains("2026-06-30");
+        // 重复扫描时 alertType 也保持稳定（属于同一去重类别）。
+        assertThat(emissions.get(0).alertType()).isEqualTo(emissions.get(1).alertType());
+    }
 
-  @Test
-  @DisplayName("扫描条数上限非正时直接返回零, 不查询策略")
-  void shouldReturnZero_whenScanLimitNotPositive() {
-    assertThat(service.scanDuePolicies(0)).isZero();
-    verify(policyMapper, never()).selectEnabledPolicies(0);
-  }
+    @Test
+    @DisplayName("扫描条数上限非正时直接返回零, 不查询策略")
+    void shouldReturnZero_whenScanLimitNotPositive() {
+        assertThat(service.scanDuePolicies(0)).isZero();
+        verify(policyMapper, never()).selectEnabledPolicies(0);
+    }
 
-  private static AssetFreshnessPolicyEntity policy(
-      String expectedBy,
-      int staleAfterSeconds,
-      int lookbackDays,
-      String timezone,
-      String severity) {
-    return new AssetFreshnessPolicyEntity(
-        1L,
-        "t1",
-        "JOB_A",
-        "JOB",
-        LocalTime.parse(expectedBy),
-        timezone,
-        staleAfterSeconds,
-        lookbackDays,
-        severity,
-        true);
-  }
+    private static AssetFreshnessPolicyEntity policy(
+            String expectedBy, int staleAfterSeconds, int lookbackDays, String timezone, String severity) {
+        return new AssetFreshnessPolicyEntity(
+                1L,
+                "t1",
+                "JOB_A",
+                "JOB",
+                LocalTime.parse(expectedBy),
+                timezone,
+                staleAfterSeconds,
+                lookbackDays,
+                severity,
+                true);
+    }
 }

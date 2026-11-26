@@ -28,86 +28,84 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleTenantConfigInitApplicationService
-    implements ConsoleTenantConfigInitApplicationService {
+public class DefaultConsoleTenantConfigInitApplicationService implements ConsoleTenantConfigInitApplicationService {
 
-  private final TenantConfigInitTenantExecutor tenantExecutor;
+    private final TenantConfigInitTenantExecutor tenantExecutor;
 
-  @Override
-  public TenantConfigBatchInitResponse batchInit(
-      TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
-    return batchInit(request, operator, batchOperationId, null);
-  }
-
-  @Override
-  public TenantConfigBatchInitResponse batchInit(
-      TenantConfigBatchInitRequest request, String operator, ConfigBatchOperationContext context) {
-    return batchInit(request, operator, context.operationId(), context);
-  }
-
-  private TenantConfigBatchInitResponse batchInit(
-      TenantConfigBatchInitRequest request,
-      String operator,
-      String batchOperationId,
-      ConfigBatchOperationContext context) {
-    List<String> targetTenantIds = request.getTargetTenantIds();
-    // 在首个租户事务开始前校验全部目标，避免参数错误发生在其他租户已提交之后。
-    boolean invalidTargets = EmptyChecks.isEmpty(targetTenantIds)
-        || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank);
-    if (invalidTargets) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
-    }
-    boolean dryRun = request.isDryRun();
-    List<TenantInitResult> results = new ArrayList<>();
-    int successCount = 0;
-    int failureCount = 0;
-
-    for (int ordinal = 0; ordinal < targetTenantIds.size(); ordinal++) {
-      String tenantId = targetTenantIds.get(ordinal);
-      int targetOrdinal = ordinal;
-      TenantInitResult result;
-      // 只有明确回滚才能记为失败；事务提交或连接异常可能发生在提交成功后，必须停止并向上传播。
-      try {
-        result = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-          if (EmptyChecks.isNull(context) || dryRun) {
-            return tenantExecutor.execute(tenantId, request, operator, dryRun);
-          }
-          return tenantExecutor.executeRecoverable(
-              tenantId, request, operator, context, targetOrdinal);
-        });
-      } catch (StrictBundleAbortedException ex) {
-        // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
-        log.warn(
-            "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
-            LogSanitizer.value(tenantId),
-            LogSanitizer.value(batchOperationId),
-            SwallowedExceptionLogger.summary(ex));
-        String failureMessage = TenantConfigFailureMessages.forFailure(ex);
-        result = TenantInitResult.failed(tenantId, failureMessage);
-      }
-      if (EmptyChecks.isNotNull(context) && !dryRun && !result.success()) {
-        TenantInitResult rolledBackResult = result;
-        RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-          tenantExecutor.recordRolledBack(context, targetOrdinal, tenantId, rolledBackResult);
-          return null;
-        });
-      }
-      results.add(result);
-      if (result.success()) {
-        successCount++;
-      } else {
-        failureCount++;
-      }
+    @Override
+    public TenantConfigBatchInitResponse batchInit(
+            TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
+        return batchInit(request, operator, batchOperationId, null);
     }
 
-    return new TenantConfigBatchInitResponse(
-        batchOperationId, targetTenantIds.size(), successCount, failureCount, dryRun, results);
-  }
-
-  /** strict 模式下任一 spec failed 触发,@Transactional 自动回滚后由 batchInit 转成 failed result。 */
-  static final class StrictBundleAbortedException extends RuntimeException {
-    StrictBundleAbortedException(String message) {
-      super(message);
+    @Override
+    public TenantConfigBatchInitResponse batchInit(
+            TenantConfigBatchInitRequest request, String operator, ConfigBatchOperationContext context) {
+        return batchInit(request, operator, context.operationId(), context);
     }
-  }
+
+    private TenantConfigBatchInitResponse batchInit(
+            TenantConfigBatchInitRequest request,
+            String operator,
+            String batchOperationId,
+            ConfigBatchOperationContext context) {
+        List<String> targetTenantIds = request.getTargetTenantIds();
+        // 在首个租户事务开始前校验全部目标，避免参数错误发生在其他租户已提交之后。
+        boolean invalidTargets =
+                EmptyChecks.isEmpty(targetTenantIds) || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank);
+        if (invalidTargets) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+        }
+        boolean dryRun = request.isDryRun();
+        List<TenantInitResult> results = new ArrayList<>();
+        int successCount = 0;
+        int failureCount = 0;
+
+        for (int ordinal = 0; ordinal < targetTenantIds.size(); ordinal++) {
+            String tenantId = targetTenantIds.get(ordinal);
+            int targetOrdinal = ordinal;
+            TenantInitResult result;
+            // 只有明确回滚才能记为失败；事务提交或连接异常可能发生在提交成功后，必须停止并向上传播。
+            try {
+                result = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+                    if (EmptyChecks.isNull(context) || dryRun) {
+                        return tenantExecutor.execute(tenantId, request, operator, dryRun);
+                    }
+                    return tenantExecutor.executeRecoverable(tenantId, request, operator, context, targetOrdinal);
+                });
+            } catch (StrictBundleAbortedException ex) {
+                // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
+                log.warn(
+                        "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
+                        LogSanitizer.value(tenantId),
+                        LogSanitizer.value(batchOperationId),
+                        SwallowedExceptionLogger.summary(ex));
+                String failureMessage = TenantConfigFailureMessages.forFailure(ex);
+                result = TenantInitResult.failed(tenantId, failureMessage);
+            }
+            if (EmptyChecks.isNotNull(context) && !dryRun && !result.success()) {
+                TenantInitResult rolledBackResult = result;
+                RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+                    tenantExecutor.recordRolledBack(context, targetOrdinal, tenantId, rolledBackResult);
+                    return null;
+                });
+            }
+            results.add(result);
+            if (result.success()) {
+                successCount++;
+            } else {
+                failureCount++;
+            }
+        }
+
+        return new TenantConfigBatchInitResponse(
+                batchOperationId, targetTenantIds.size(), successCount, failureCount, dryRun, results);
+    }
+
+    /** strict 模式下任一 spec failed 触发,@Transactional 自动回滚后由 batchInit 转成 failed result。 */
+    static final class StrictBundleAbortedException extends RuntimeException {
+        StrictBundleAbortedException(String message) {
+            super(message);
+        }
+    }
 }

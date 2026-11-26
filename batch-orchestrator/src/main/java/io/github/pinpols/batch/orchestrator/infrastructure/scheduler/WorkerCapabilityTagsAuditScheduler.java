@@ -45,107 +45,99 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkerCapabilityTagsAuditScheduler {
 
-  private static final String METRIC_INVALID_COUNT = "batch.worker.capability_tags.invalid.count";
+    private static final String METRIC_INVALID_COUNT = "batch.worker.capability_tags.invalid.count";
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
-  private final WorkerCapabilityTagsAuditProperties auditProperties;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
+    private final WorkerCapabilityTagsAuditProperties auditProperties;
 
-  private final AtomicLong invalidCount = new AtomicLong();
+    private final AtomicLong invalidCount = new AtomicLong();
 
-  @PostConstruct
-  void initializeMeters() {
-    meterRegistry.gauge(METRIC_INVALID_COUNT, invalidCount);
-  }
-
-  @Scheduled(fixedDelayString = "${batch.worker.audit.capability-tags-scan-interval-millis:300000}")
-  @SchedulerLock(
-      name = "worker_capability_tags_audit",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT5S")
-  public void auditCapabilityTags() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void initializeMeters() {
+        meterRegistry.gauge(METRIC_INVALID_COUNT, invalidCount);
     }
-    int logSampleLimit = auditProperties.getCapabilityTagsLogSampleLimit();
-    List<InvalidCapabilityTagsParam> rows = workerRegistryMapper.selectInvalidCapabilityTags();
-    if (EmptyChecks.isEmpty(rows)) {
-      invalidCount.set(0L);
-      return;
-    }
-    int confirmed = 0;
-    int logged = 0;
-    for (InvalidCapabilityTagsParam row : rows) {
-      String tenantId = row == null ? null : row.getTenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        // 没 tenantId 直接判脏（原 looksValidStringArray 逻辑保留）。
-        if (!looksValidStringArray(row == null ? null : row.getRawValue())) {
-          confirmed++;
+
+    @Scheduled(fixedDelayString = "${batch.worker.audit.capability-tags-scan-interval-millis:300000}")
+    @SchedulerLock(name = "worker_capability_tags_audit", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void auditCapabilityTags() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-        continue;
-      }
-      // RLS Phase B：审计 loop 当前只跑 JSON 解析、未触 DB，但按统一规范仍以 worker 所属 tenant 绑定，
-      // 让未来扩展（例如把脏行 mark 到 worker_registry.audit_invalid）天然落到正确 RLS 上下文。
-      final int loggedSnapshot = logged;
-      boolean invalid = RlsTenantContextHolder.runWithTenant(
-          tenantId, () -> inspectTenantRow(row, loggedSnapshot, logSampleLimit));
-      if (invalid) {
-        confirmed++;
-        if (logged < logSampleLimit) {
-          logged++;
+        int logSampleLimit = auditProperties.getCapabilityTagsLogSampleLimit();
+        List<InvalidCapabilityTagsParam> rows = workerRegistryMapper.selectInvalidCapabilityTags();
+        if (EmptyChecks.isEmpty(rows)) {
+            invalidCount.set(0L);
+            return;
         }
-      }
-    }
-    invalidCount.set(confirmed);
-    if (confirmed > logSampleLimit) {
-      log.warn(
-          "invalid capability_tags total={} (sampled first {} in logs above)",
-          confirmed,
-          logSampleLimit);
-    }
-  }
-
-  private boolean inspectTenantRow(
-      InvalidCapabilityTagsParam row, int loggedSnapshot, int logSampleLimit) {
-    if (looksValidStringArray(row.getRawValue())) {
-      return false;
-    }
-    if (loggedSnapshot < logSampleLimit) {
-      log.warn(
-          "invalid capability_tags detected: tenant={} workerCode={} raw={}",
-          row.getTenantId(),
-          row.getWorkerCode(),
-          row.getRawValue());
-    }
-    return true;
-  }
-
-  /**
-   * 严格校验"字符串数组"约定。必须用 {@link JsonNode} 而非 {@code String[].class}——Jackson 默认会把数值 元素静默强转成字符串（{@code
-   * [1,2]} 不会报错），这恰恰就是要审计的"异常数据"。
-   */
-  private boolean looksValidStringArray(String raw) {
-    if (raw == null || raw.isBlank()) {
-      return true;
-    }
-    try {
-      JsonNode node = JsonUtils.fromJson(raw, JsonNode.class);
-      // JsonUtils.fromJson 失败抛异常、成功必返回 JsonNode（字面量 null 也是 NullNode）
-      if (!node.isArray()) {
-        return false;
-      }
-      for (JsonNode elem : node) {
-        if (elem == null || !elem.isTextual()) {
-          return false;
+        int confirmed = 0;
+        int logged = 0;
+        for (InvalidCapabilityTagsParam row : rows) {
+            String tenantId = row == null ? null : row.getTenantId();
+            if (tenantId == null || tenantId.isBlank()) {
+                // 没 tenantId 直接判脏（原 looksValidStringArray 逻辑保留）。
+                if (!looksValidStringArray(row == null ? null : row.getRawValue())) {
+                    confirmed++;
+                }
+                continue;
+            }
+            // RLS Phase B：审计 loop 当前只跑 JSON 解析、未触 DB，但按统一规范仍以 worker 所属 tenant 绑定，
+            // 让未来扩展（例如把脏行 mark 到 worker_registry.audit_invalid）天然落到正确 RLS 上下文。
+            final int loggedSnapshot = logged;
+            boolean invalid = RlsTenantContextHolder.runWithTenant(
+                    tenantId, () -> inspectTenantRow(row, loggedSnapshot, logSampleLimit));
+            if (invalid) {
+                confirmed++;
+                if (logged < logSampleLimit) {
+                    logged++;
+                }
+            }
         }
-      }
-      return true;
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(
-          WorkerCapabilityTagsAuditScheduler.class, "catch:RuntimeException", ex);
-
-      return false;
+        invalidCount.set(confirmed);
+        if (confirmed > logSampleLimit) {
+            log.warn("invalid capability_tags total={} (sampled first {} in logs above)", confirmed, logSampleLimit);
+        }
     }
-  }
+
+    private boolean inspectTenantRow(InvalidCapabilityTagsParam row, int loggedSnapshot, int logSampleLimit) {
+        if (looksValidStringArray(row.getRawValue())) {
+            return false;
+        }
+        if (loggedSnapshot < logSampleLimit) {
+            log.warn(
+                    "invalid capability_tags detected: tenant={} workerCode={} raw={}",
+                    row.getTenantId(),
+                    row.getWorkerCode(),
+                    row.getRawValue());
+        }
+        return true;
+    }
+
+    /**
+     * 严格校验"字符串数组"约定。必须用 {@link JsonNode} 而非 {@code String[].class}——Jackson 默认会把数值 元素静默强转成字符串（{@code
+     * [1,2]} 不会报错），这恰恰就是要审计的"异常数据"。
+     */
+    private boolean looksValidStringArray(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return true;
+        }
+        try {
+            JsonNode node = JsonUtils.fromJson(raw, JsonNode.class);
+            // JsonUtils.fromJson 失败抛异常、成功必返回 JsonNode（字面量 null 也是 NullNode）
+            if (!node.isArray()) {
+                return false;
+            }
+            for (JsonNode elem : node) {
+                if (elem == null || !elem.isTextual()) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(WorkerCapabilityTagsAuditScheduler.class, "catch:RuntimeException", ex);
+
+            return false;
+        }
+    }
 }

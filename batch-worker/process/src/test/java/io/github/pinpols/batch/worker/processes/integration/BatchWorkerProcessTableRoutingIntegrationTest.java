@@ -19,53 +19,48 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(
-    classes = BatchWorkerProcessApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerProcessApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("Process Worker 业务分片 TABLE 模式: 完整应用装配")
 class BatchWorkerProcessTableRoutingIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void routingProperties(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-    registry.add("batch.datasource.business.routing.enabled", () -> true);
-    registry.add("batch.datasource.business.routing.placement-source", () -> "TABLE");
-    registry.add("batch.datasource.business.routing.placement-cache-ttl-ms", () -> 0);
-    registry.add("batch.datasource.business.routing.pooled-shard-count", () -> 1);
-    registry.add("batch.datasource.business.routing.shards[0].key", () -> "shard-0");
-    registry.add(
-        "batch.datasource.business.routing.shards[0].url",
-        AbstractIntegrationTest::businessJdbcUrl);
-    registry.add(
-        "batch.datasource.business.routing.shards[0].username",
-        AbstractIntegrationTest::businessJdbcUsername);
-    registry.add(
-        "batch.datasource.business.routing.shards[0].password",
-        AbstractIntegrationTest::businessJdbcPassword);
-  }
+    @DynamicPropertySource
+    static void routingProperties(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+        registry.add("batch.datasource.business.routing.enabled", () -> true);
+        registry.add("batch.datasource.business.routing.placement-source", () -> "TABLE");
+        registry.add("batch.datasource.business.routing.placement-cache-ttl-ms", () -> 0);
+        registry.add("batch.datasource.business.routing.pooled-shard-count", () -> 1);
+        registry.add("batch.datasource.business.routing.shards[0].key", () -> "shard-0");
+        registry.add("batch.datasource.business.routing.shards[0].url", AbstractIntegrationTest::businessJdbcUrl);
+        registry.add(
+                "batch.datasource.business.routing.shards[0].username", AbstractIntegrationTest::businessJdbcUsername);
+        registry.add(
+                "batch.datasource.business.routing.shards[0].password", AbstractIntegrationTest::businessJdbcPassword);
+    }
 
-  private final DataSource businessDataSource;
+    private final DataSource businessDataSource;
 
-  @Autowired
-  BatchWorkerProcessTableRoutingIntegrationTest(
-      @Qualifier("processBusinessDataSource") DataSource businessDataSource) {
-    this.businessDataSource = businessDataSource;
-  }
+    @Autowired
+    BatchWorkerProcessTableRoutingIntegrationTest(
+            @Qualifier("processBusinessDataSource") DataSource businessDataSource) {
+        this.businessDataSource = businessDataSource;
+    }
 
-  @AfterEach
-  void clearTenantContext() {
-    RlsTenantContextHolder.clear();
-  }
+    @AfterEach
+    void clearTenantContext() {
+        RlsTenantContextHolder.clear();
+    }
 
-  @Test
-  @DisplayName("TABLE 模式启动后未登记租户按哈希回退取得真实业务库连接")
-  void shouldBootWithTablePlacementAndFallbackToHashRouting() {
-    assertThat(businessDataSource).isInstanceOf(BusinessRoutingDataSource.class);
-    RlsTenantContextHolder.set("t_table_routing");
-    final String selectSql = """
+    @Test
+    @DisplayName("TABLE 模式启动后未登记租户按哈希回退取得真实业务库连接")
+    void shouldBootWithTablePlacementAndFallbackToHashRouting() {
+        assertThat(businessDataSource).isInstanceOf(BusinessRoutingDataSource.class);
+        RlsTenantContextHolder.set("t_table_routing");
+        final String selectSql = """
         select current_database()
     """;
-    String selectedDatabase =
-        new JdbcTemplate(businessDataSource).queryForObject(selectSql, String.class);
-    assertThat(selectedDatabase).isNotBlank();
-  }
+        String selectedDatabase = new JdbcTemplate(businessDataSource).queryForObject(selectSql, String.class);
+        assertThat(selectedDatabase).isNotBlank();
+    }
 }

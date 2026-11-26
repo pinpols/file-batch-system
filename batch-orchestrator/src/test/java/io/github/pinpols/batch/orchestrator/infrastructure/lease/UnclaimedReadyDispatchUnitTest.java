@@ -31,88 +31,87 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("未认领 READY 重发: 晚到认领胜出时不写 outbox，CAS 成功才按新版本重发")
 class UnclaimedReadyDispatchUnitTest {
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private TaskDispatchOutboxService taskDispatchOutboxService;
+    @Mock
+    private TaskDispatchOutboxService taskDispatchOutboxService;
 
-  private UnclaimedReadyDispatchUnit unit;
+    private UnclaimedReadyDispatchUnit unit;
 
-  @BeforeEach
-  void setUp() {
-    unit = new UnclaimedReadyDispatchUnit(
-        jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        taskDispatchOutboxService,
-        new SimpleMeterRegistry());
-  }
+    @BeforeEach
+    void setUp() {
+        unit = new UnclaimedReadyDispatchUnit(
+                jobTaskMapper,
+                jobPartitionMapper,
+                jobInstanceMapper,
+                taskDispatchOutboxService,
+                new SimpleMeterRegistry());
+    }
 
-  @Test
-  @DisplayName("认领先提交时版本 CAS 为 0，不再写 outbox")
-  void shouldNotPublishWhenLateClaimWins() {
-    JobTaskEntity scanned = readyTask();
-    when(jobTaskMapper.selectForWorkerClaim("ta", 9L)).thenReturn(readyTask());
-    when(jobPartitionMapper.selectById("ta", 3L)).thenReturn(readyPartition());
-    when(jobInstanceMapper.selectById("ta", 2L)).thenReturn(instance());
-    when(jobTaskMapper.bumpVersionIfUnclaimedReady("ta", 9L, 4L)).thenReturn(0);
+    @Test
+    @DisplayName("认领先提交时版本 CAS 为 0，不再写 outbox")
+    void shouldNotPublishWhenLateClaimWins() {
+        JobTaskEntity scanned = readyTask();
+        when(jobTaskMapper.selectForWorkerClaim("ta", 9L)).thenReturn(readyTask());
+        when(jobPartitionMapper.selectById("ta", 3L)).thenReturn(readyPartition());
+        when(jobInstanceMapper.selectById("ta", 2L)).thenReturn(instance());
+        when(jobTaskMapper.bumpVersionIfUnclaimedReady("ta", 9L, 4L)).thenReturn(0);
 
-    unit.redispatch(scanned);
+        unit.redispatch(scanned);
 
-    verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
-  }
+        verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
+    }
 
-  @Test
-  @DisplayName("宽限后仍未认领时只推进版本，并用新版本键重发，不改运行模式")
-  void shouldRepublishWithVersionedKeyWhenStillUnclaimed() {
-    JobTaskEntity scanned = readyTask();
-    when(jobTaskMapper.selectForWorkerClaim("ta", 9L)).thenReturn(readyTask());
-    when(jobPartitionMapper.selectById("ta", 3L)).thenReturn(readyPartition());
-    when(jobInstanceMapper.selectById("ta", 2L)).thenReturn(instance());
-    when(jobTaskMapper.bumpVersionIfUnclaimedReady("ta", 9L, 4L)).thenReturn(1);
+    @Test
+    @DisplayName("宽限后仍未认领时只推进版本，并用新版本键重发，不改运行模式")
+    void shouldRepublishWithVersionedKeyWhenStillUnclaimed() {
+        JobTaskEntity scanned = readyTask();
+        when(jobTaskMapper.selectForWorkerClaim("ta", 9L)).thenReturn(readyTask());
+        when(jobPartitionMapper.selectById("ta", 3L)).thenReturn(readyPartition());
+        when(jobInstanceMapper.selectById("ta", 2L)).thenReturn(instance());
+        when(jobTaskMapper.bumpVersionIfUnclaimedReady("ta", 9L, 4L)).thenReturn(1);
 
-    unit.redispatch(scanned);
+        unit.redispatch(scanned);
 
-    ArgumentCaptor<TaskDispatchEventCommand> command =
-        ArgumentCaptor.forClass(TaskDispatchEventCommand.class);
-    verify(taskDispatchOutboxService).writeDispatchEvent(command.capture());
-    assertThat(command.getValue().eventKey())
-        .isEqualTo(OutboxEventKeyGenerator.forUnclaimedRedispatch("ta", 9L, 5L));
-    assertThat(command.getValue().runModeOverride()).isNull();
-    verify(jobTaskMapper, never()).resetForLeaseReclaim(eq("ta"), eq(9L), any(), any());
-  }
+        ArgumentCaptor<TaskDispatchEventCommand> command = ArgumentCaptor.forClass(TaskDispatchEventCommand.class);
+        verify(taskDispatchOutboxService).writeDispatchEvent(command.capture());
+        assertThat(command.getValue().eventKey())
+                .isEqualTo(OutboxEventKeyGenerator.forUnclaimedRedispatch("ta", 9L, 5L));
+        assertThat(command.getValue().runModeOverride()).isNull();
+        verify(jobTaskMapper, never()).resetForLeaseReclaim(eq("ta"), eq(9L), any(), any());
+    }
 
-  private static JobTaskEntity readyTask() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(9L);
-    task.setTenantId("ta");
-    task.setJobInstanceId(2L);
-    task.setJobPartitionId(3L);
-    task.setTaskStatus(TaskStatus.READY.code());
-    task.setVersion(4L);
-    return task;
-  }
+    private static JobTaskEntity readyTask() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(9L);
+        task.setTenantId("ta");
+        task.setJobInstanceId(2L);
+        task.setJobPartitionId(3L);
+        task.setTaskStatus(TaskStatus.READY.code());
+        task.setVersion(4L);
+        return task;
+    }
 
-  private static JobPartitionEntity readyPartition() {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(3L);
-    partition.setTenantId("ta");
-    partition.setPartitionStatus(PartitionStatus.READY.code());
-    return partition;
-  }
+    private static JobPartitionEntity readyPartition() {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(3L);
+        partition.setTenantId("ta");
+        partition.setPartitionStatus(PartitionStatus.READY.code());
+        return partition;
+    }
 
-  private static JobInstanceEntity instance() {
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(2L);
-    instance.setTenantId("ta");
-    instance.setTraceId("trace-1");
-    return instance;
-  }
+    private static JobInstanceEntity instance() {
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(2L);
+        instance.setTenantId("ta");
+        instance.setTraceId("trace-1");
+        return instance;
+    }
 }

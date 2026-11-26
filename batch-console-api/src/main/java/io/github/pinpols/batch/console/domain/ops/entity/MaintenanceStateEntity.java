@@ -7,14 +7,14 @@ import lombok.Data;
 @Data
 public class MaintenanceStateEntity {
 
-  private Short id;
-  private boolean enabled;
-  private boolean readOnly;
-  private String message;
-  private Instant etaAt;
-  private Instant startsAt;
-  private String affectedServicesJson;
-  private long version;
-  private String updatedBy;
-  private Instant updatedAt;
+    private Short id;
+    private boolean enabled;
+    private boolean readOnly;
+    private String message;
+    private Instant etaAt;
+    private Instant startsAt;
+    private String affectedServicesJson;
+    private long version;
+    private String updatedBy;
+    private Instant updatedAt;
 }

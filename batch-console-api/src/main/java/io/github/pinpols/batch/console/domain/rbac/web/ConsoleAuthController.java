@@ -42,154 +42,146 @@ import org.springframework.web.bind.annotation.RestController;
 @SuppressWarnings("java:S2583")
 public class ConsoleAuthController {
 
-  private final ConsoleAuthApplicationService authApplicationService;
-  private final ConsoleResponseFactory responseFactory;
-  private final SseTicketService sseTicketService;
-  private final ConsoleSecurityProperties securityProperties;
-  private final ConsoleJwtService jwtService;
-  private final ConsoleUserAccountService userAccountService;
-  private final ConsoleTokenCookieWriter tokenCookieWriter;
+    private final ConsoleAuthApplicationService authApplicationService;
+    private final ConsoleResponseFactory responseFactory;
+    private final SseTicketService sseTicketService;
+    private final ConsoleSecurityProperties securityProperties;
+    private final ConsoleJwtService jwtService;
+    private final ConsoleUserAccountService userAccountService;
+    private final ConsoleTokenCookieWriter tokenCookieWriter;
 
-  private static final String CONSOLE_TOKEN_COOKIE = ConsoleTokenCookieWriter.COOKIE_NAME;
+    private static final String CONSOLE_TOKEN_COOKIE = ConsoleTokenCookieWriter.COOKIE_NAME;
 
-  /**
-   * 使用平台库中的控制台账号进行登录并签发 JWT。
-   *
-   * <p>ADR-030 §D7：token 走 HttpOnly cookie {@code batch_console_token}。P1-1 (pre-launch audit
-   * 2026-05-18) 收尾:响应 body 不再带明文 accessToken,防止 JS / XSS 读取抵消 cookie 防护。
-   *
-   * <p>2026-05-18 加密路径:FE 走 axios interceptor 用 RSA-OAEP-SHA256 + AES-256-GCM 加密 body, 此处先 decrypt
-   * 拿到 {@code {username,password}} 再走原 service。配置守护见 {@code
-   * ConsoleSecurityProperties.LoginEncryption} + prod 强制 required=true。
-   */
-  @PostMapping("/login")
-  @AuditAction(
-      action = "auth.login",
-      aggregateType = "auth",
-      aggregateId = "#request.username",
-      recordParams = false)
-  public CommonResponse<ConsoleAuthTokenResponse> login(
-      @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
-    ConsoleAuthTokenResponse body = authApplicationService.login(request);
-    tokenCookieWriter.write(body, response);
-    return responseFactory.success(body.withoutToken());
-  }
-
-  /**
-   * 返回 RSA 公钥（PEM）供 FE 加密 login body。配 {@code
-   * batch.console.security.login-encryption.enabled=false} 时该端点返回 404,FE 走明文路径。
-   */
-  @GetMapping("/public-key")
-  public CommonResponse<ConsoleLoginPublicKeyResponse> publicKey() {
-    return responseFactory.success(authApplicationService.loginPublicKey());
-  }
-
-  /** 为当前已认证用户签发 JWT。 */
-  @PostMapping("/token")
-  @PreAuthorize("isAuthenticated()")
-  public CommonResponse<ConsoleAuthTokenResponse> token(
-      Authentication authentication, HttpServletResponse response) {
-    ConsoleAuthTokenResponse body = authApplicationService.issueToken(authentication);
-    tokenCookieWriter.write(body, response);
-    return responseFactory.success(body.withoutToken());
-  }
-
-  /**
-   * 登出：把 cookie 设置成 Max-Age=0 立即失效（前端调用此端点替代手动清 localStorage）。
-   *
-   * <p>P0-3 (2026-05-18)：把当前 token 的 jti 加入 Redis revocation list,TTL = token 剩余生命; 防止"复制 cookie
-   * 到别处继续用"——logout 后服务端立即拒绝该 token。
-   */
-  @PostMapping("/logout")
-  @AuditAction(action = "auth.logout", aggregateType = "auth")
-  public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
-    String currentToken = extractTokenFromCookie(request);
-    if (currentToken != null) {
-      jwtService.revoke(currentToken);
+    /**
+     * 使用平台库中的控制台账号进行登录并签发 JWT。
+     *
+     * <p>ADR-030 §D7：token 走 HttpOnly cookie {@code batch_console_token}。P1-1 (pre-launch audit
+     * 2026-05-18) 收尾:响应 body 不再带明文 accessToken,防止 JS / XSS 读取抵消 cookie 防护。
+     *
+     * <p>2026-05-18 加密路径:FE 走 axios interceptor 用 RSA-OAEP-SHA256 + AES-256-GCM 加密 body, 此处先 decrypt
+     * 拿到 {@code {username,password}} 再走原 service。配置守护见 {@code
+     * ConsoleSecurityProperties.LoginEncryption} + prod 强制 required=true。
+     */
+    @PostMapping("/login")
+    @AuditAction(action = "auth.login", aggregateType = "auth", aggregateId = "#request.username", recordParams = false)
+    public CommonResponse<ConsoleAuthTokenResponse> login(
+            @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
+        ConsoleAuthTokenResponse body = authApplicationService.login(request);
+        tokenCookieWriter.write(body, response);
+        return responseFactory.success(body.withoutToken());
     }
-    response.addHeader(
-        HttpHeaders.SET_COOKIE,
-        ResponseCookie.from(CONSOLE_TOKEN_COOKIE, "")
-            .httpOnly(true)
-            // R7-A1-P2：与 buildTokenCookie 一致，由 cookie-secure 配置开关。
-            .secure(securityProperties.isCookieSecure())
-            .sameSite("Lax")
-            .path("/")
-            .maxAge(0)
-            .build()
-            .toString());
-    return ResponseEntity.noContent().build();
-  }
 
-  private String extractTokenFromCookie(HttpServletRequest request) {
-    Cookie[] cookies = request.getCookies();
-    if (cookies == null) {
-      return null;
+    /**
+     * 返回 RSA 公钥（PEM）供 FE 加密 login body。配 {@code
+     * batch.console.security.login-encryption.enabled=false} 时该端点返回 404,FE 走明文路径。
+     */
+    @GetMapping("/public-key")
+    public CommonResponse<ConsoleLoginPublicKeyResponse> publicKey() {
+        return responseFactory.success(authApplicationService.loginPublicKey());
     }
-    for (Cookie cookie : cookies) {
-      if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
-        String value = cookie.getValue();
-        return value == null || value.isBlank() ? null : value.trim();
-      }
+
+    /** 为当前已认证用户签发 JWT。 */
+    @PostMapping("/token")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResponse<ConsoleAuthTokenResponse> token(Authentication authentication, HttpServletResponse response) {
+        ConsoleAuthTokenResponse body = authApplicationService.issueToken(authentication);
+        tokenCookieWriter.write(body, response);
+        return responseFactory.success(body.withoutToken());
     }
-    return null;
-  }
 
-  /**
-   * 本人改密。
-   *
-   * <p>username 取自已认证 principal,不接受客户端指定;校验旧密码 → 写新密码 → 清除 must_change_password 提示标志 →
-   * 踢旧会话(强制用新密码重登)。
-   */
-  @PostMapping("/change-password")
-  @PreAuthorize("isAuthenticated()")
-  @AuditAction(action = "auth.changePassword", aggregateType = "auth", recordParams = false)
-  public CommonResponse<Void> changePassword(
-      @Validated @RequestBody ChangeOwnPasswordRequest request, Authentication authentication) {
-    String username = resolveUsername(authentication);
-    userAccountService.changeOwnPassword(
-        username, request.getCurrentPassword(), request.getNewPassword());
-    return responseFactory.success(null);
-  }
-
-  private String resolveUsername(Authentication authentication) {
-    if (authentication != null
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+    /**
+     * 登出：把 cookie 设置成 Max-Age=0 立即失效（前端调用此端点替代手动清 localStorage）。
+     *
+     * <p>P0-3 (2026-05-18)：把当前 token 的 jti 加入 Redis revocation list,TTL = token 剩余生命; 防止"复制 cookie
+     * 到别处继续用"——logout 后服务端立即拒绝该 token。
+     */
+    @PostMapping("/logout")
+    @AuditAction(action = "auth.logout", aggregateType = "auth")
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        String currentToken = extractTokenFromCookie(request);
+        if (currentToken != null) {
+            jwtService.revoke(currentToken);
+        }
+        response.addHeader(
+                HttpHeaders.SET_COOKIE,
+                ResponseCookie.from(CONSOLE_TOKEN_COOKIE, "")
+                        .httpOnly(true)
+                        // R7-A1-P2：与 buildTokenCookie 一致，由 cookie-secure 配置开关。
+                        .secure(securityProperties.isCookieSecure())
+                        .sameSite("Lax")
+                        .path("/")
+                        .maxAge(0)
+                        .build()
+                        .toString());
+        return ResponseEntity.noContent().build();
     }
-    if (authentication == null || authentication.getName() == null) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+
+    private String extractTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
+                String value = cookie.getValue();
+                return value == null || value.isBlank() ? null : value.trim();
+            }
+        }
+        return null;
     }
-    return authentication.getName();
-  }
 
-  /** 当前用户画像（租户、角色、菜单）。 */
-  @GetMapping("/me")
-  @PreAuthorize("isAuthenticated()")
-  public CommonResponse<ConsoleAuthProfileResponse> me(Authentication authentication) {
-    return responseFactory.success(authApplicationService.profile(authentication));
-  }
-
-  // 轻量鉴权探针，专给 nginx auth_request / 反代鉴权用：登录 → 204，未登录 → 401（走 entryPoint）。
-  // 不查 DB、不组菜单，避免 /docs/* 反代每次请求都拖累 /me。
-  @GetMapping("/check")
-  @PreAuthorize("isAuthenticated()")
-  public ResponseEntity<Void> check() {
-    return ResponseEntity.noContent().build();
-  }
-
-  /** 签发一次性 SSE ticket（5min 有效，用于 EventSource 连接鉴权）。 */
-  @PostMapping("/stream/ticket")
-  @PreAuthorize("isAuthenticated()")
-  public CommonResponse<ConsoleStreamTicketResponse> streamTicket(Authentication authentication) {
-    Object raw = authentication.getPrincipal();
-    if (!(raw instanceof ConsolePrincipal principal)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+    /**
+     * 本人改密。
+     *
+     * <p>username 取自已认证 principal,不接受客户端指定;校验旧密码 → 写新密码 → 清除 must_change_password 提示标志 →
+     * 踢旧会话(强制用新密码重登)。
+     */
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    @AuditAction(action = "auth.changePassword", aggregateType = "auth", recordParams = false)
+    public CommonResponse<Void> changePassword(
+            @Validated @RequestBody ChangeOwnPasswordRequest request, Authentication authentication) {
+        String username = resolveUsername(authentication);
+        userAccountService.changeOwnPassword(username, request.getCurrentPassword(), request.getNewPassword());
+        return responseFactory.success(null);
     }
-    // R4-P1-1：签发时带上当前 JWT 的真实角色集，消费端按此还原 ConsolePrincipal，
-    // 不再从配置的 defaultAuthorities 回退（防止低权用户拿 ticket 后被提权）。
-    String ticket =
-        sseTicketService.issue(principal.username(), principal.tenantId(), principal.authorities());
-    return responseFactory.success(new ConsoleStreamTicketResponse(ticket));
-  }
+
+    private String resolveUsername(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        if (authentication == null || authentication.getName() == null) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+        }
+        return authentication.getName();
+    }
+
+    /** 当前用户画像（租户、角色、菜单）。 */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResponse<ConsoleAuthProfileResponse> me(Authentication authentication) {
+        return responseFactory.success(authApplicationService.profile(authentication));
+    }
+
+    // 轻量鉴权探针，专给 nginx auth_request / 反代鉴权用：登录 → 204，未登录 → 401（走 entryPoint）。
+    // 不查 DB、不组菜单，避免 /docs/* 反代每次请求都拖累 /me。
+    @GetMapping("/check")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> check() {
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 签发一次性 SSE ticket（5min 有效，用于 EventSource 连接鉴权）。 */
+    @PostMapping("/stream/ticket")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResponse<ConsoleStreamTicketResponse> streamTicket(Authentication authentication) {
+        Object raw = authentication.getPrincipal();
+        if (!(raw instanceof ConsolePrincipal principal)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+        }
+        // R4-P1-1：签发时带上当前 JWT 的真实角色集，消费端按此还原 ConsolePrincipal，
+        // 不再从配置的 defaultAuthorities 回退（防止低权用户拿 ticket 后被提权）。
+        String ticket = sseTicketService.issue(principal.username(), principal.tenantId(), principal.authorities());
+        return responseFactory.success(new ConsoleStreamTicketResponse(ticket));
+    }
 }

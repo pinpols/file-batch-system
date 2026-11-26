@@ -20,54 +20,54 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchTopicResolver {
 
-  private final BatchMqTopicsProperties topicsProperties;
-  private final MqRoutingProperties routingProperties;
-  private final BatchKafkaTopicNamespace topicNamespace;
+    private final BatchMqTopicsProperties topicsProperties;
+    private final MqRoutingProperties routingProperties;
+    private final BatchKafkaTopicNamespace topicNamespace;
 
-  /**
-   * 解析派发目标 topic。
-   *
-   * @param workerType IMPORT / EXPORT / DISPATCH（决定 base topic）
-   * @param dispatch task 派发消息（取 tenantId / priorityBand）；可为 null（fallback 到 base）
-   * @return 解析后的 topic name；workerType 无效时返回 null（调用方走 fallback 路径）
-   */
-  public String resolve(String workerType, TaskDispatchMessage dispatch) {
-    String base = resolveBaseTopic(workerType);
-    if (base == null) {
-      return null;
-    }
-    if (routingProperties.getMode() == MqRoutingProperties.Mode.SINGLE || dispatch == null) {
-      return base;
-    }
-    return switch (routingProperties.getMode()) {
-      case TENANT -> {
-        if (!Texts.hasText(dispatch.tenantId())) {
-          yield base;
+    /**
+     * 解析派发目标 topic。
+     *
+     * @param workerType IMPORT / EXPORT / DISPATCH（决定 base topic）
+     * @param dispatch task 派发消息（取 tenantId / priorityBand）；可为 null（fallback 到 base）
+     * @return 解析后的 topic name；workerType 无效时返回 null（调用方走 fallback 路径）
+     */
+    public String resolve(String workerType, TaskDispatchMessage dispatch) {
+        String base = resolveBaseTopic(workerType);
+        if (base == null) {
+            return null;
         }
-        String tenantId = dispatch.tenantId();
-        String safeTenantId = safe(tenantId);
-        yield base + "." + safeTenantId;
-      }
-      case PRIORITY -> {
-        if (!Texts.hasText(dispatch.priorityBand())) {
-          yield base;
+        if (routingProperties.getMode() == MqRoutingProperties.Mode.SINGLE || dispatch == null) {
+            return base;
         }
-        String priorityBand = dispatch.priorityBand();
-        String safePriorityBand = safe(priorityBand);
-        String normalizedPriorityBand = safePriorityBand.toLowerCase(Locale.ROOT);
-        yield base + "." + normalizedPriorityBand;
-      }
-      default -> base;
-    };
-  }
+        return switch (routingProperties.getMode()) {
+            case TENANT -> {
+                if (!Texts.hasText(dispatch.tenantId())) {
+                    yield base;
+                }
+                String tenantId = dispatch.tenantId();
+                String safeTenantId = safe(tenantId);
+                yield base + "." + safeTenantId;
+            }
+            case PRIORITY -> {
+                if (!Texts.hasText(dispatch.priorityBand())) {
+                    yield base;
+                }
+                String priorityBand = dispatch.priorityBand();
+                String safePriorityBand = safe(priorityBand);
+                String normalizedPriorityBand = safePriorityBand.toLowerCase(Locale.ROOT);
+                yield base + "." + normalizedPriorityBand;
+            }
+            default -> base;
+        };
+    }
 
-  public String resolveBaseTopic(String workerType) {
-    String baseTopic = topicsProperties.resolveDispatchTopic(workerType);
-    return EmptyChecks.isNull(baseTopic) ? null : topicNamespace.topic(baseTopic);
-  }
+    public String resolveBaseTopic(String workerType) {
+        String baseTopic = topicsProperties.resolveDispatchTopic(workerType);
+        return EmptyChecks.isNull(baseTopic) ? null : topicNamespace.topic(baseTopic);
+    }
 
-  private static String safe(String s) {
-    // Kafka topic 合法字符：[a-zA-Z0-9._-]；其他字符替换为 _ 防止订阅失败
-    return s.replaceAll("[^a-zA-Z0-9._-]", "_");
-  }
+    private static String safe(String s) {
+        // Kafka topic 合法字符：[a-zA-Z0-9._-]；其他字符替换为 _ 防止订阅失败
+        return s.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
 }

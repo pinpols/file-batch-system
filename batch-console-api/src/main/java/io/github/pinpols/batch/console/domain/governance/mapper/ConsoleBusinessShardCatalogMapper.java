@@ -13,15 +13,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleBusinessShardCatalogMapper {
 
-  /** 全表列出(前端「分片列表」视图)。 */
-  List<BusinessShardCatalogEntity> findAll();
+    /** 全表列出(前端「分片列表」视图)。 */
+    List<BusinessShardCatalogEntity> findAll();
 
-  /** enabled=true 的 placement key 集合(placement 指派白名单源)。 */
-  List<String> findEnabledKeys();
+    /** enabled=true 的 placement key 集合(placement 指派白名单源)。 */
+    List<String> findEnabledKeys();
 
-  /** ON CONFLICT (placement_key) DO UPDATE 语义。 */
-  void upsert(@Param("p") BusinessShardCatalogUpsertParam p);
+    /** ON CONFLICT (placement_key) DO UPDATE 语义。 */
+    void upsert(@Param("p") BusinessShardCatalogUpsertParam p);
 
-  /** 删片(目录登记),返回删除行数。 */
-  int deleteByKey(@Param("placementKey") String placementKey);
+    /** 删片(目录登记),返回删除行数。 */
+    int deleteByKey(@Param("placementKey") String placementKey);
 }

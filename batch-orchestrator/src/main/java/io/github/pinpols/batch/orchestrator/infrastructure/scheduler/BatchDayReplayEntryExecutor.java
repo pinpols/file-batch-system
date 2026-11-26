@@ -28,91 +28,83 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class BatchDayReplayEntryExecutor {
 
-  /** 条目失败原因长度上限，对应 batch_day_replay_entry.failure_reason VARCHAR(1024)。 */
-  private static final int ENTRY_FAILURE_REASON_MAX_LENGTH = 1024;
+    /** 条目失败原因长度上限，对应 batch_day_replay_entry.failure_reason VARCHAR(1024)。 */
+    private static final int ENTRY_FAILURE_REASON_MAX_LENGTH = 1024;
 
-  private record PlanSnapshot(Integer jobDefinitionVersion, Map<String, Object> defaultParams) {}
+    private record PlanSnapshot(Integer jobDefinitionVersion, Map<String, Object> defaultParams) {}
 
-  private final BatchDayReplayEntryMapper entryMapper;
-  private final CompensationCommandMapper compensationCommandMapper;
-  private final CompensationService compensationService;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final BatchDayReplayEntryMapper entryMapper;
+    private final CompensationCommandMapper compensationCommandMapper;
+    private final CompensationService compensationService;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  void dispatch(BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry) {
-    Instant now = dateTimeSupport.nowInstant();
-    if (entryMapper.claimPending(entry.id(), session.tenantId(), session.id(), now) == 0) {
-      return;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void dispatch(BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry) {
+        Instant now = dateTimeSupport.nowInstant();
+        if (entryMapper.claimPending(entry.id(), session.tenantId(), session.id(), now) == 0) {
+            return;
+        }
+        PlanSnapshot planSnapshot =
+                entry.planSnapshot() == null ? null : JsonUtils.fromJson(entry.planSnapshot(), PlanSnapshot.class);
+        boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
+        String batchNoOverride = dryRun || EmptyChecks.isNull(entry.sourceInstanceId())
+                ? "dry-run-session-" + session.id() + "-entry-" + entry.id()
+                : null;
+        CompensationSubmitCommand command = CompensationSubmitCommand.builder()
+                .tenantId(session.tenantId())
+                .compensationType(entry.sourceInstanceId() == null ? "BATCH" : "JOB")
+                .targetId(entry.sourceInstanceId())
+                .jobCode(entry.jobCode())
+                .bizDate(session.bizDate())
+                .batchNo(batchNoOverride)
+                .reason("BATCH_DAY_REPLAY:" + session.reason())
+                .operatorId(session.requestedBy())
+                .resultPolicy(session.resultPolicy())
+                .configVersionPolicy(
+                        planSnapshot == null
+                                ? session.configVersionPolicy()
+                                : ConfigVersionPolicy.USE_SPECIFIED_VERSION.code())
+                .configVersion(planSnapshot == null ? session.configVersion() : planSnapshot.jobDefinitionVersion())
+                .strategy("SCHEDULE_PLAN".equals(session.candidateSource()) ? "SCHEDULE_PLAN" : null)
+                .replaySessionId(session.id())
+                .replayEntryId(entry.id())
+                .launchParams(planSnapshot == null ? null : planSnapshot.defaultParams())
+                .dryRun(dryRun)
+                .traceId(session.traceId())
+                .build();
+        String commandNo = compensationService.submit(command);
+        CompensationCommandEntity compensation =
+                compensationCommandMapper.selectByCommandNo(session.tenantId(), commandNo);
+        if (compensation != null && compensation.getRelatedJobInstanceId() != null) {
+            UpdateBatchDayReplayEntryStatusParam statusUpdate = UpdateBatchDayReplayEntryStatusParam.running(
+                    entry.id(), compensation.getRelatedJobInstanceId(), now, dateTimeSupport.nowInstant());
+            entryMapper.updateStatus(statusUpdate);
+        }
     }
-    PlanSnapshot planSnapshot = entry.planSnapshot() == null
-        ? null
-        : JsonUtils.fromJson(entry.planSnapshot(), PlanSnapshot.class);
-    boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
-    String batchNoOverride = dryRun || EmptyChecks.isNull(entry.sourceInstanceId())
-        ? "dry-run-session-" + session.id() + "-entry-" + entry.id()
-        : null;
-    CompensationSubmitCommand command = CompensationSubmitCommand.builder()
-        .tenantId(session.tenantId())
-        .compensationType(entry.sourceInstanceId() == null ? "BATCH" : "JOB")
-        .targetId(entry.sourceInstanceId())
-        .jobCode(entry.jobCode())
-        .bizDate(session.bizDate())
-        .batchNo(batchNoOverride)
-        .reason("BATCH_DAY_REPLAY:" + session.reason())
-        .operatorId(session.requestedBy())
-        .resultPolicy(session.resultPolicy())
-        .configVersionPolicy(
-            planSnapshot == null
-                ? session.configVersionPolicy()
-                : ConfigVersionPolicy.USE_SPECIFIED_VERSION.code())
-        .configVersion(
-            planSnapshot == null ? session.configVersion() : planSnapshot.jobDefinitionVersion())
-        .strategy("SCHEDULE_PLAN".equals(session.candidateSource()) ? "SCHEDULE_PLAN" : null)
-        .replaySessionId(session.id())
-        .replayEntryId(entry.id())
-        .launchParams(planSnapshot == null ? null : planSnapshot.defaultParams())
-        .dryRun(dryRun)
-        .traceId(session.traceId())
-        .build();
-    String commandNo = compensationService.submit(command);
-    CompensationCommandEntity compensation =
-        compensationCommandMapper.selectByCommandNo(session.tenantId(), commandNo);
-    if (compensation != null && compensation.getRelatedJobInstanceId() != null) {
-      UpdateBatchDayReplayEntryStatusParam statusUpdate =
-          UpdateBatchDayReplayEntryStatusParam.running(
-              entry.id(),
-              compensation.getRelatedJobInstanceId(),
-              now,
-              dateTimeSupport.nowInstant());
-      entryMapper.updateStatus(statusUpdate);
-    }
-  }
 
-  /** 提交事务回滚后，以新事务记录条目失败，避免 rollback-only 吞掉失败状态。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  void markFailed(
-      BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry, Exception failure) {
-    Instant now = dateTimeSupport.nowInstant();
-    UpdateBatchDayReplayEntryStatusParam statusUpdate =
-        UpdateBatchDayReplayEntryStatusParam.failedOnSubmission(
-            entry.id(), truncate(failure.getMessage(), ENTRY_FAILURE_REASON_MAX_LENGTH), now);
-    entryMapper.updateStatus(statusUpdate);
-    Long sessionId = session.id();
-    Long entryId = entry.id();
-    String jobCode = entry.jobCode();
-    String causeSummary = SwallowedExceptionLogger.summary(failure);
-    log.warn(
-        "batch_day_replay compensation submit failed: sessionId={}, entryId={}, jobCode={}, msg={}",
-        sessionId,
-        entryId,
-        jobCode,
-        causeSummary);
-  }
-
-  private static String truncate(String text, int max) {
-    if (text == null) {
-      return null;
+    /** 提交事务回滚后，以新事务记录条目失败，避免 rollback-only 吞掉失败状态。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void markFailed(BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry, Exception failure) {
+        Instant now = dateTimeSupport.nowInstant();
+        UpdateBatchDayReplayEntryStatusParam statusUpdate = UpdateBatchDayReplayEntryStatusParam.failedOnSubmission(
+                entry.id(), truncate(failure.getMessage(), ENTRY_FAILURE_REASON_MAX_LENGTH), now);
+        entryMapper.updateStatus(statusUpdate);
+        Long sessionId = session.id();
+        Long entryId = entry.id();
+        String jobCode = entry.jobCode();
+        String causeSummary = SwallowedExceptionLogger.summary(failure);
+        log.warn(
+                "batch_day_replay compensation submit failed: sessionId={}, entryId={}, jobCode={}, msg={}",
+                sessionId,
+                entryId,
+                jobCode,
+                causeSummary);
     }
-    return text.length() <= max ? text : text.substring(0, max);
-  }
+
+    private static String truncate(String text, int max) {
+        if (text == null) {
+            return null;
+        }
+        return text.length() <= max ? text : text.substring(0, max);
+    }
 }

@@ -7,8 +7,8 @@ import org.apache.ibatis.annotations.Param;
 
 public interface BusinessCalendarMapper {
 
-  TriggerCalendarConfig selectActiveByTenantAndCalendarCode(
-      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+    TriggerCalendarConfig selectActiveByTenantAndCalendarCode(
+            @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
-  List<CalendarHolidayRule> selectHolidayRulesByCalendarId(@Param("calendarId") Long calendarId);
+    List<CalendarHolidayRule> selectHolidayRulesByCalendarId(@Param("calendarId") Long calendarId);
 }

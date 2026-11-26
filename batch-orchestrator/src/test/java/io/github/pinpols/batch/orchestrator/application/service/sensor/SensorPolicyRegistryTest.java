@@ -11,32 +11,32 @@ import org.junit.jupiter.api.Test;
 @DisplayName("传感策略注册表: 类型解析与重复注册拒绝口径")
 class SensorPolicyRegistryTest {
 
-  @Test
-  @DisplayName("按传感类型解析出已注册策略, 未注册类型返回空")
-  void resolve_returnsRegisteredPolicy() {
-    SensorPolicy p1 = new StubPolicy(SensorType.FILE_ARRIVAL);
-    SensorPolicy p2 = new StubPolicy(SensorType.HTTP_POLL);
-    SensorPolicyRegistry registry = new SensorPolicyRegistry(List.of(p1, p2));
+    @Test
+    @DisplayName("按传感类型解析出已注册策略, 未注册类型返回空")
+    void resolve_returnsRegisteredPolicy() {
+        SensorPolicy p1 = new StubPolicy(SensorType.FILE_ARRIVAL);
+        SensorPolicy p2 = new StubPolicy(SensorType.HTTP_POLL);
+        SensorPolicyRegistry registry = new SensorPolicyRegistry(List.of(p1, p2));
 
-    assertThat(registry.resolve(SensorType.FILE_ARRIVAL)).isSameAs(p1);
-    assertThat(registry.resolve(SensorType.HTTP_POLL)).isSameAs(p2);
-    assertThat(registry.resolve(SensorType.KAFKA_OFFSET)).isNull();
-  }
-
-  @Test
-  @DisplayName("同一传感类型重复注册时构造失败")
-  void construct_duplicateSensorType_fails() {
-    SensorPolicy a = new StubPolicy(SensorType.FILE_ARRIVAL);
-    SensorPolicy b = new StubPolicy(SensorType.FILE_ARRIVAL);
-    assertThatThrownBy(() -> new SensorPolicyRegistry(List.of(a, b)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Duplicate SensorPolicy");
-  }
-
-  private record StubPolicy(SensorType type) implements SensorPolicy {
-    @Override
-    public SensorProbeResult probe(SensorContext ctx) {
-      return SensorProbeResult.notYet();
+        assertThat(registry.resolve(SensorType.FILE_ARRIVAL)).isSameAs(p1);
+        assertThat(registry.resolve(SensorType.HTTP_POLL)).isSameAs(p2);
+        assertThat(registry.resolve(SensorType.KAFKA_OFFSET)).isNull();
     }
-  }
+
+    @Test
+    @DisplayName("同一传感类型重复注册时构造失败")
+    void construct_duplicateSensorType_fails() {
+        SensorPolicy a = new StubPolicy(SensorType.FILE_ARRIVAL);
+        SensorPolicy b = new StubPolicy(SensorType.FILE_ARRIVAL);
+        assertThatThrownBy(() -> new SensorPolicyRegistry(List.of(a, b)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Duplicate SensorPolicy");
+    }
+
+    private record StubPolicy(SensorType type) implements SensorPolicy {
+        @Override
+        public SensorProbeResult probe(SensorContext ctx) {
+            return SensorProbeResult.notYet();
+        }
+    }
 }

@@ -16,17 +16,17 @@ import lombok.ToString;
 @Data
 public class ImportJobContext implements ExecutionContext {
 
-  private String tenantId;
-  private String jobCode;
-  private String bizDate;
-  private String fileId;
-  private String workerId;
-  private String rawPayload;
-  private Map<String, Object> attributes = new LinkedHashMap<>();
+    private String tenantId;
+    private String jobCode;
+    private String bizDate;
+    private String fileId;
+    private String workerId;
+    private String rawPayload;
+    private Map<String, Object> attributes = new LinkedHashMap<>();
 
-  /** 仅供当前进程使用的文件句柄,不得进入持久化载荷、日志或执行快照。 */
-  @JsonIgnore
-  @ToString.Exclude
-  @EqualsAndHashCode.Exclude
-  private ImportStagingFiles stagingFiles;
+    /** 仅供当前进程使用的文件句柄,不得进入持久化载荷、日志或执行快照。 */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private ImportStagingFiles stagingFiles;
 }

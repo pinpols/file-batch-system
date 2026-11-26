@@ -38,130 +38,127 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleFileTemplateControllerTest {
 
-  @Mock
-  private ConsoleFileTemplateApplicationService applicationService;
+    @Mock
+    private ConsoleFileTemplateApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleFileTemplateController(applicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleFileTemplateController(applicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("按标识查询模板返回成功与租户信息")
-  void shouldReturn200WhenGetTemplateById() throws Exception {
-    when(applicationService.get(anyLong(), anyString()))
-        .thenReturn(ConsoleFileProjectionMapper.templateView(
-            FileTemplateConfigQueryView.builder().id(1L).tenantId("t1").build()));
+    @Test
+    @DisplayName("按标识查询模板返回成功与租户信息")
+    void shouldReturn200WhenGetTemplateById() throws Exception {
+        when(applicationService.get(anyLong(), anyString()))
+                .thenReturn(ConsoleFileProjectionMapper.templateView(FileTemplateConfigQueryView.builder()
+                        .id(1L)
+                        .tenantId("t1")
+                        .build()));
 
-    mockMvc
-        .perform(get("/api/console/file-templates/1").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.tenantId").value("t1"));
-  }
+        mockMvc.perform(get("/api/console/file-templates/1").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.tenantId").value("t1"));
+    }
 
-  @Test
-  @DisplayName("创建模板缺少模板编码时返回校验错误")
-  void shouldReturn400WhenCreateRequestMissingTemplateCode() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/file-templates").contentType(APPLICATION_JSON).content("{}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("创建模板缺少模板编码时返回校验错误")
+    void shouldReturn400WhenCreateRequestMissingTemplateCode() throws Exception {
+        mockMvc.perform(post("/api/console/file-templates")
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-    verifyNoInteractions(applicationService);
-  }
+        verifyNoInteractions(applicationService);
+    }
 
-  @Test
-  @DisplayName("启停模板返回成功")
-  void shouldReturn200WhenToggleTemplate() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/file-templates/1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-  }
+    @Test
+    @DisplayName("启停模板返回成功")
+    void shouldReturn200WhenToggleTemplate() throws Exception {
+        mockMvc.perform(patch("/api/console/file-templates/1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+    }
 
-  @Test
-  @DisplayName("启停模板缺少租户标识时返回校验错误")
-  void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/file-templates/1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"enabled\":true}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("启停模板缺少租户标识时返回校验错误")
+    void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
+        mockMvc.perform(patch("/api/console/file-templates/1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"enabled\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-    verifyNoInteractions(applicationService);
-  }
+        verifyNoInteractions(applicationService);
+    }
 
-  @Test
-  @DisplayName("更新模板返回成功")
-  void shouldReturn200WhenUpdateTemplate() throws Exception {
-    when(applicationService.update(anyLong(), any()))
-        .thenReturn(ConsoleFileProjectionMapper.templateView(
-            FileTemplateConfigQueryView.builder().id(1L).tenantId("t1").build()));
+    @Test
+    @DisplayName("更新模板返回成功")
+    void shouldReturn200WhenUpdateTemplate() throws Exception {
+        when(applicationService.update(anyLong(), any()))
+                .thenReturn(ConsoleFileProjectionMapper.templateView(FileTemplateConfigQueryView.builder()
+                        .id(1L)
+                        .tenantId("t1")
+                        .build()));
 
-    mockMvc
-        .perform(put("/api/console/file-templates/1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-  }
+        mockMvc.perform(put("/api/console/file-templates/1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+    }
 
-  @Test
-  @DisplayName("生成映射草稿返回方向与字段映射结构")
-  void shouldReturn200WhenDraftMapping() throws Exception {
-    when(applicationService.draftMapping(any()))
-        .thenReturn(new FileTemplateMappingDraftResult(
-            "IMPORT", "[{\"name\":\"orderNo\"}]", "{\"jdbcMappedImport\":{}}", null, List.of()));
+    @Test
+    @DisplayName("生成映射草稿返回方向与字段映射结构")
+    void shouldReturn200WhenDraftMapping() throws Exception {
+        when(applicationService.draftMapping(any()))
+                .thenReturn(new FileTemplateMappingDraftResult(
+                        "IMPORT", "[{\"name\":\"orderNo\"}]", "{\"jdbcMappedImport\":{}}", null, List.of()));
 
-    mockMvc
-        .perform(post("/api/console/file-templates/mapping-draft")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/file-templates/mapping-draft")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","direction":"IMPORT","fields":[{"sourceColumn":"orderNo"}]}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.direction").value("IMPORT"))
-        .andExpect(jsonPath("$.data.fieldMappingsJson").value("[{\"name\":\"orderNo\"}]"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.direction").value("IMPORT"))
+                .andExpect(jsonPath("$.data.fieldMappingsJson").value("[{\"name\":\"orderNo\"}]"));
+    }
 
-  @Test
-  @DisplayName("命名预览返回与执行端兼容的文件名")
-  void shouldReturnWorkerCompatibleFileNamePreview() throws Exception {
-    when(applicationService.previewFileName(any()))
-        .thenReturn(new FileNamePreviewResponse("orders_2026-09-27.csv"));
+    @Test
+    @DisplayName("命名预览返回与执行端兼容的文件名")
+    void shouldReturnWorkerCompatibleFileNamePreview() throws Exception {
+        when(applicationService.previewFileName(any()))
+                .thenReturn(new FileNamePreviewResponse("orders_2026-09-27.csv"));
 
-    mockMvc
-        .perform(post("/api/console/file-templates/naming-preview")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/file-templates/naming-preview")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","fileFormatType":"DELIMITED","bizDate":"2026-09-27"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.fileName").value("orders_2026-09-27.csv"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fileName").value("orders_2026-09-27.csv"));
+    }
 }

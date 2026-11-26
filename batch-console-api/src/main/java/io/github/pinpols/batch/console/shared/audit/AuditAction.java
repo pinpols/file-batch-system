@@ -32,34 +32,34 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface AuditAction {
 
-  /** 动作名,与前端埋点 data-track 对齐(alert.close / approvals.approve / jobs.terminate / ...)。 必填。 */
-  String action();
+    /** 动作名,与前端埋点 data-track 对齐(alert.close / approvals.approve / jobs.terminate / ...)。 必填。 */
+    String action();
 
-  /** 聚合根类型(alert / approval / job_instance / worker / auth / ...)。必填,用于 Kafka 分区。 */
-  String aggregateType();
+    /** 聚合根类型(alert / approval / job_instance / worker / auth / ...)。必填,用于 Kafka 分区。 */
+    String aggregateType();
 
-  /**
-   * 聚合根 ID 的 SpEL 表达式,运行时对入参求值。例如 {@code "#id"} 或 {@code "#request.alertId"}。
-   * 留空时写「-」占位,适用于无聚合根的操作(如批量、登录)。
-   */
-  String aggregateId() default "";
+    /**
+     * 聚合根 ID 的 SpEL 表达式,运行时对入参求值。例如 {@code "#id"} 或 {@code "#request.alertId"}。
+     * 留空时写「-」占位,适用于无聚合根的操作(如批量、登录)。
+     */
+    String aggregateId() default "";
 
-  /**
-   * 是否把方法入参序列化到 audit 的 params JSONB 列。默认 true。
-   *
-   * <p>带密码 / 加密载荷 / 密钥的接口必须显式设 {@code false},否则原文落到审计表(比如 login 的 password 字段、API Key 创建的
-   * plaintext)。
-   */
-  boolean recordParams() default true;
+    /**
+     * 是否把方法入参序列化到 audit 的 params JSONB 列。默认 true。
+     *
+     * <p>带密码 / 加密载荷 / 密钥的接口必须显式设 {@code false},否则原文落到审计表(比如 login 的 password 字段、API Key 创建的
+     * plaintext)。
+     */
+    boolean recordParams() default true;
 
-  /**
-   * 目标租户的 SpEL 表达式或参数名,运行时对入参求值得到目标租户 ID。例如 {@code "#tenantId"} 或 {@code "#request.tenantId"}。
-   *
-   * <p><b>用途:</b>ROLE_ADMIN 跨租操作的 principal.tenantId() 为 null,默认会回退到 {@code "system"},导致审计行 tenant_id="system",取证按目标租户查询时漏掉这些行。显式指定 {@code targetTenantParam} 后,审计行的 tenant_id 取该入参值,而非 principal 的租户。
-   *
-   * <p><b>解析优先级:</b>targetTenantParam(非空且成功求值) → principal.tenantId() → MDC tenant → "system"。
-   *
-   * <p><b>留空(默认):</b>沿用 principal/MDC/system 回退链,适合 login/logout/系统级动作。
-   */
-  String targetTenantParam() default "";
+    /**
+     * 目标租户的 SpEL 表达式或参数名,运行时对入参求值得到目标租户 ID。例如 {@code "#tenantId"} 或 {@code "#request.tenantId"}。
+     *
+     * <p><b>用途:</b>ROLE_ADMIN 跨租操作的 principal.tenantId() 为 null,默认会回退到 {@code "system"},导致审计行 tenant_id="system",取证按目标租户查询时漏掉这些行。显式指定 {@code targetTenantParam} 后,审计行的 tenant_id 取该入参值,而非 principal 的租户。
+     *
+     * <p><b>解析优先级:</b>targetTenantParam(非空且成功求值) → principal.tenantId() → MDC tenant → "system"。
+     *
+     * <p><b>留空(默认):</b>沿用 principal/MDC/system 回退链,适合 login/logout/系统级动作。
+     */
+    String targetTenantParam() default "";
 }

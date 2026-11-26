@@ -22,161 +22,160 @@ import org.junit.jupiter.api.Test;
 @DisplayName("BatchPlatformClient 运行指标与健康判定 — 未启动、致命、崩溃与排空状态")
 class BatchPlatformClientMetricsTest {
 
-  private static BatchPlatformClientConfig cfg() {
-    return BatchPlatformClientConfig.builder()
-        .baseUrl("https://batch.example.com")
-        .tenantId("tx")
-        .workerCode("w-1")
-        .kafkaBootstrap("kafka:9092")
-        .kafkaTopicPattern("batch.task.dispatch.tx.*")
-        .kafkaGroupId("g")
-        .maxConcurrentTasks(8)
-        .build();
-  }
+    private static BatchPlatformClientConfig cfg() {
+        return BatchPlatformClientConfig.builder()
+                .baseUrl("https://batch.example.com")
+                .tenantId("tx")
+                .workerCode("w-1")
+                .kafkaBootstrap("kafka:9092")
+                .kafkaTopicPattern("batch.task.dispatch.tx.*")
+                .kafkaGroupId("g")
+                .maxConcurrentTasks(8)
+                .build();
+    }
 
-  private static SdkTaskHandler stub(String type) {
-    return new SdkTaskHandler() {
-      @Override
-      public String taskType() {
-        return type;
-      }
+    private static SdkTaskHandler stub(String type) {
+        return new SdkTaskHandler() {
+            @Override
+            public String taskType() {
+                return type;
+            }
 
-      @Override
-      public SdkTaskResult execute(SdkTaskContext ctx) {
-        return SdkTaskResult.ok();
-      }
-    };
-  }
+            @Override
+            public SdkTaskResult execute(SdkTaskContext ctx) {
+                return SdkTaskResult.ok();
+            }
+        };
+    }
 
-  private static void inject(BatchPlatformClient target, String field, Object value)
-      throws Exception {
-    Field f = BatchPlatformClient.class.getDeclaredField(field);
-    f.setAccessible(true);
-    f.set(target, value);
-  }
+    private static void inject(BatchPlatformClient target, String field, Object value) throws Exception {
+        Field f = BatchPlatformClient.class.getDeclaredField(field);
+        f.setAccessible(true);
+        f.set(target, value);
+    }
 
-  @Test
-  @DisplayName("未启动时健康为假,并发上限与已注册 handler 数等指标照实反映")
-  void shouldReportUnhealthyAndUnknownLag_whenNotStarted() {
-    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
-        .register(stub("type-a"))
-        .register(stub("type-b"))
-        .build();
+    @Test
+    @DisplayName("未启动时健康为假,并发上限与已注册 handler 数等指标照实反映")
+    void shouldReportUnhealthyAndUnknownLag_whenNotStarted() {
+        BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+                .register(stub("type-a"))
+                .register(stub("type-b"))
+                .build();
 
-    assertThat(client.isHealthy()).isFalse();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.tenantId()).isEqualTo("tx");
-    assertThat(m.workerCode()).isEqualTo("w-1");
-    assertThat(m.started()).isFalse();
-    assertThat(m.healthy()).isFalse();
-    assertThat(m.maxConcurrentTasks()).isEqualTo(8);
-    assertThat(m.registeredHandlerCount()).isEqualTo(2);
-    assertThat(m.inFlightTaskCount()).isZero();
-    assertThat(m.dispatcherFatal()).isFalse();
-    assertThat(m.dispatcherDraining()).isFalse();
-    assertThat(m.consumerCrashed()).isFalse();
-    assertThat(m.kafkaConsumerLag()).isEqualTo(-1L); // 无 consumer → 未知
-  }
+        assertThat(client.isHealthy()).isFalse();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.tenantId()).isEqualTo("tx");
+        assertThat(m.workerCode()).isEqualTo("w-1");
+        assertThat(m.started()).isFalse();
+        assertThat(m.healthy()).isFalse();
+        assertThat(m.maxConcurrentTasks()).isEqualTo(8);
+        assertThat(m.registeredHandlerCount()).isEqualTo(2);
+        assertThat(m.inFlightTaskCount()).isZero();
+        assertThat(m.dispatcherFatal()).isFalse();
+        assertThat(m.dispatcherDraining()).isFalse();
+        assertThat(m.consumerCrashed()).isFalse();
+        assertThat(m.kafkaConsumerLag()).isEqualTo(-1L); // 无 consumer → 未知
+    }
 
-  @Test
-  @DisplayName("已启动且无致命故障与崩溃时健康为真,在飞任务数与消费积压取自运行态")
-  void shouldReportHealthy_whenStartedWithoutFatalOrCrash() throws Exception {
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
-    when(dispatcher.isFatal()).thenReturn(false);
-    when(dispatcher.isDraining()).thenReturn(false);
-    when(dispatcher.inFlightCount()).thenReturn(3);
-    when(consumer.hasCrashed()).thenReturn(false);
-    when(consumer.consumerLagMax()).thenReturn(42L);
+    @Test
+    @DisplayName("已启动且无致命故障与崩溃时健康为真,在飞任务数与消费积压取自运行态")
+    void shouldReportHealthy_whenStartedWithoutFatalOrCrash() throws Exception {
+        BatchPlatformClient client =
+                BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
+        when(dispatcher.isFatal()).thenReturn(false);
+        when(dispatcher.isDraining()).thenReturn(false);
+        when(dispatcher.inFlightCount()).thenReturn(3);
+        when(consumer.hasCrashed()).thenReturn(false);
+        when(consumer.consumerLagMax()).thenReturn(42L);
 
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
-    inject(client, "kafkaConsumer", consumer);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
+        inject(client, "kafkaConsumer", consumer);
 
-    assertThat(client.isHealthy()).isTrue();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.started()).isTrue();
-    assertThat(m.healthy()).isTrue();
-    assertThat(m.inFlightTaskCount()).isEqualTo(3);
-    assertThat(m.kafkaConsumerLag()).isEqualTo(42L);
-  }
+        assertThat(client.isHealthy()).isTrue();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.started()).isTrue();
+        assertThat(m.healthy()).isTrue();
+        assertThat(m.inFlightTaskCount()).isEqualTo(3);
+        assertThat(m.kafkaConsumerLag()).isEqualTo(42L);
+    }
 
-  @Test
-  @DisplayName("派发器进入致命状态时客户端健康为假")
-  void shouldReportUnhealthy_whenDispatcherFatal() throws Exception {
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.isFatal()).thenReturn(true);
-    when(dispatcher.isDraining()).thenReturn(false);
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
+    @Test
+    @DisplayName("派发器进入致命状态时客户端健康为假")
+    void shouldReportUnhealthy_whenDispatcherFatal() throws Exception {
+        BatchPlatformClient client =
+                BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.isFatal()).thenReturn(true);
+        when(dispatcher.isDraining()).thenReturn(false);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
 
-    assertThat(client.isHealthy()).isFalse();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.dispatcherFatal()).isTrue();
-    assertThat(m.healthy()).isFalse();
-  }
+        assertThat(client.isHealthy()).isFalse();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.dispatcherFatal()).isTrue();
+        assertThat(m.healthy()).isFalse();
+    }
 
-  @Test
-  @DisplayName("消费线程崩溃时客户端健康为假")
-  void shouldReportUnhealthy_whenConsumerCrashed() throws Exception {
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
-    when(dispatcher.isFatal()).thenReturn(false);
-    when(consumer.hasCrashed()).thenReturn(true);
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
-    inject(client, "kafkaConsumer", consumer);
+    @Test
+    @DisplayName("消费线程崩溃时客户端健康为假")
+    void shouldReportUnhealthy_whenConsumerCrashed() throws Exception {
+        BatchPlatformClient client =
+                BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
+        when(dispatcher.isFatal()).thenReturn(false);
+        when(consumer.hasCrashed()).thenReturn(true);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
+        inject(client, "kafkaConsumer", consumer);
 
-    assertThat(client.isHealthy()).isFalse();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.consumerCrashed()).isTrue();
-    assertThat(m.healthy()).isFalse();
-  }
+        assertThat(client.isHealthy()).isFalse();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.consumerCrashed()).isTrue();
+        assertThat(m.healthy()).isFalse();
+    }
 
-  @Test
-  @DisplayName("认证失败导致消费停止时并入崩溃维度,健康为假以避免存活误报")
-  void shouldReportUnhealthyAndCrashed_whenKafkaAuthFails() throws Exception {
-    // Kafka SASL 认证失败:poll 线程 fail-fast 退出(非 crashed 路径),但消费已停。
-    // 必须并入 isHealthy/metrics,否则 actuator/liveness 误报 UP。
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
-    when(dispatcher.isFatal()).thenReturn(false);
-    when(dispatcher.isDraining()).thenReturn(false);
-    when(consumer.hasCrashed()).thenReturn(false);
-    when(consumer.isFatalAuthFailure()).thenReturn(true);
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
-    inject(client, "kafkaConsumer", consumer);
+    @Test
+    @DisplayName("认证失败导致消费停止时并入崩溃维度,健康为假以避免存活误报")
+    void shouldReportUnhealthyAndCrashed_whenKafkaAuthFails() throws Exception {
+        // Kafka SASL 认证失败:poll 线程 fail-fast 退出(非 crashed 路径),但消费已停。
+        // 必须并入 isHealthy/metrics,否则 actuator/liveness 误报 UP。
+        BatchPlatformClient client =
+                BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
+        when(dispatcher.isFatal()).thenReturn(false);
+        when(dispatcher.isDraining()).thenReturn(false);
+        when(consumer.hasCrashed()).thenReturn(false);
+        when(consumer.isFatalAuthFailure()).thenReturn(true);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
+        inject(client, "kafkaConsumer", consumer);
 
-    assertThat(client.isHealthy()).isFalse();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.healthy()).isFalse();
-    assertThat(m.consumerCrashed()).isTrue(); // auth 失败并入 crashed 维度供运维感知
-  }
+        assertThat(client.isHealthy()).isFalse();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.healthy()).isFalse();
+        assertThat(m.consumerCrashed()).isTrue(); // auth 失败并入 crashed 维度供运维感知
+    }
 
-  @Test
-  @DisplayName("排空阶段停止消费但租约与心跳继续,健康仍为真")
-  void shouldStayHealthy_whenDispatcherDraining() throws Exception {
-    // drain 是 graceful 状态:Kafka 不再消费但 lease / heartbeat 仍续约,平台不应误判
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    when(dispatcher.isFatal()).thenReturn(false);
-    when(dispatcher.isDraining()).thenReturn(true);
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
+    @Test
+    @DisplayName("排空阶段停止消费但租约与心跳继续,健康仍为真")
+    void shouldStayHealthy_whenDispatcherDraining() throws Exception {
+        // drain 是 graceful 状态:Kafka 不再消费但 lease / heartbeat 仍续约,平台不应误判
+        BatchPlatformClient client =
+                BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        when(dispatcher.isFatal()).thenReturn(false);
+        when(dispatcher.isDraining()).thenReturn(true);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
 
-    assertThat(client.isHealthy()).isTrue();
-    SdkClientMetrics m = client.metrics();
-    assertThat(m.dispatcherDraining()).isTrue();
-    assertThat(m.healthy()).isTrue();
-  }
+        assertThat(client.isHealthy()).isTrue();
+        SdkClientMetrics m = client.metrics();
+        assertThat(m.dispatcherDraining()).isTrue();
+        assertThat(m.healthy()).isTrue();
+    }
 }

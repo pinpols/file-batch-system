@@ -20,60 +20,61 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class WorkflowMonitoringAlertEmissionService {
-  private final WorkflowMonitoringMapper mapper;
-  private final AlertEventService alertEventService;
-  private final BatchTimezoneProvider timezoneProvider;
+    private final WorkflowMonitoringMapper mapper;
+    private final AlertEventService alertEventService;
+    private final BatchTimezoneProvider timezoneProvider;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public boolean emitOnce(WorkflowMonitoringAlertCandidate scanned) {
-    String tenantId = scanned.tenantId();
-    mapper.setTenantContext(tenantId);
-    mapper.acquireAlertLock(tenantId, scanned.resourceKey(), scanned.violation().name());
-    WorkflowMonitoringQuery query = WorkflowMonitoringQuery.builder()
-        .tenantId(tenantId)
-        .resourceKey(scanned.resourceKey())
-        .violation(scanned.violation())
-        .defaultTimezone(timezoneProvider.defaultZone().getId())
-        .limit(1)
-        .build();
-    List<WorkflowMonitoringAlertCandidate> current = mapper.selectCandidates(query);
-    if (EmptyChecks.isEmpty(current)) {
-      return false;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean emitOnce(WorkflowMonitoringAlertCandidate scanned) {
+        String tenantId = scanned.tenantId();
+        mapper.setTenantContext(tenantId);
+        mapper.acquireAlertLock(
+                tenantId, scanned.resourceKey(), scanned.violation().name());
+        WorkflowMonitoringQuery query = WorkflowMonitoringQuery.builder()
+                .tenantId(tenantId)
+                .resourceKey(scanned.resourceKey())
+                .violation(scanned.violation())
+                .defaultTimezone(timezoneProvider.defaultZone().getId())
+                .limit(1)
+                .build();
+        List<WorkflowMonitoringAlertCandidate> current = mapper.selectCandidates(query);
+        if (EmptyChecks.isEmpty(current)) {
+            return false;
+        }
+        WorkflowMonitoringAlertCandidate candidate = current.get(0);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("monitoringResourceKey", candidate.resourceKey());
+        detail.put("workflowDefinitionId", candidate.workflowDefinitionId().toString());
+        detail.put("workflowCode", candidate.workflowCode());
+        detail.put(
+                "workflowRunId",
+                EmptyChecks.isNull(candidate.workflowRunId())
+                        ? null
+                        : candidate.workflowRunId().toString());
+        detail.put(
+                "occurrenceId",
+                EmptyChecks.isNull(candidate.occurrenceId())
+                        ? null
+                        : candidate.occurrenceId().toString());
+        detail.put("bizDate", candidate.bizDate());
+        detail.put("expectedAt", candidate.expectedAt());
+        detail.put("startedAt", candidate.startedAt());
+        detail.put("finishedAt", candidate.finishedAt());
+        detail.put("opportunityClosedAt", candidate.opportunityClosedAt());
+        detail.put("monitoringDeadlineAt", candidate.monitoringDeadlineAt());
+        detail.put("violationReason", candidate.violation().name());
+        String detailJson = JsonUtils.toJson(detail);
+        AlertEmitCommand request = AlertEmitCommand.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType(candidate.violation().alertType())
+                .severity(candidate.severity())
+                .title(candidate.violation().title(candidate.workflowCode()))
+                .detailJson(detailJson)
+                .resourceKey(candidate.resourceKey())
+                .traceId(candidate.traceId())
+                .build();
+        alertEventService.emit(request);
+        return true;
     }
-    WorkflowMonitoringAlertCandidate candidate = current.get(0);
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("monitoringResourceKey", candidate.resourceKey());
-    detail.put("workflowDefinitionId", candidate.workflowDefinitionId().toString());
-    detail.put("workflowCode", candidate.workflowCode());
-    detail.put(
-        "workflowRunId",
-        EmptyChecks.isNull(candidate.workflowRunId())
-            ? null
-            : candidate.workflowRunId().toString());
-    detail.put(
-        "occurrenceId",
-        EmptyChecks.isNull(candidate.occurrenceId())
-            ? null
-            : candidate.occurrenceId().toString());
-    detail.put("bizDate", candidate.bizDate());
-    detail.put("expectedAt", candidate.expectedAt());
-    detail.put("startedAt", candidate.startedAt());
-    detail.put("finishedAt", candidate.finishedAt());
-    detail.put("opportunityClosedAt", candidate.opportunityClosedAt());
-    detail.put("monitoringDeadlineAt", candidate.monitoringDeadlineAt());
-    detail.put("violationReason", candidate.violation().name());
-    String detailJson = JsonUtils.toJson(detail);
-    AlertEmitCommand request = AlertEmitCommand.builder()
-        .tenantId(tenantId)
-        .serviceName("batch-orchestrator")
-        .alertType(candidate.violation().alertType())
-        .severity(candidate.severity())
-        .title(candidate.violation().title(candidate.workflowCode()))
-        .detailJson(detailJson)
-        .resourceKey(candidate.resourceKey())
-        .traceId(candidate.traceId())
-        .build();
-    alertEventService.emit(request);
-    return true;
-  }
 }

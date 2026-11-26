@@ -7,8 +7,4 @@ import lombok.Builder;
 /** 绑定一次selectByQuery操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
 @Builder
 public record BatchDayQuery(
-    String tenantId,
-    String calendarCode,
-    LocalDate fromBizDate,
-    LocalDate toBizDate,
-    PageRequest pageRequest) {}
+        String tenantId, String calendarCode, LocalDate fromBizDate, LocalDate toBizDate, PageRequest pageRequest) {}

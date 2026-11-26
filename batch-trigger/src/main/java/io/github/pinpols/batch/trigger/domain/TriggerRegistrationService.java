@@ -8,29 +8,29 @@ import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
  */
 public interface TriggerRegistrationService {
 
-  void registerAll();
+    void registerAll();
 
-  void registerByWorkflowCode(String tenantId, String workflowCode);
+    void registerByWorkflowCode(String tenantId, String workflowCode);
 
-  /** 发布等待数量和等待时长汇总，不带租户/作业标签。 */
-  void reconcileByWorkflowCode(String tenantId, String workflowCode);
+    /** 发布等待数量和等待时长汇总，不带租户/作业标签。 */
+    void reconcileByWorkflowCode(String tenantId, String workflowCode);
 
-  /** 度量已接受但过期的请求，以及近期请求到实例的启动延迟。 */
-  void registerRecoveryJob(TriggerDescriptor descriptor);
+    /** 度量已接受但过期的请求，以及近期请求到实例的启动延迟。 */
+    void registerRecoveryJob(TriggerDescriptor descriptor);
 
-  void unregisterByWorkflowCode(String tenantId, String workflowCode);
+    void unregisterByWorkflowCode(String tenantId, String workflowCode);
 
-  void removeQuartzJob(String tenantId, String quartzJobIdentity);
+    void removeQuartzJob(String tenantId, String quartzJobIdentity);
 
-  void pauseByWorkflowCode(String tenantId, String workflowCode);
+    void pauseByWorkflowCode(String tenantId, String workflowCode);
 
-  void resumeByWorkflowCode(String tenantId, String workflowCode);
+    void resumeByWorkflowCode(String tenantId, String workflowCode);
 
-  void pauseByTenant(String tenantId);
+    void pauseByTenant(String tenantId);
 
-  void resumeByTenant(String tenantId);
+    void resumeByTenant(String tenantId);
 
-  void pauseAll();
+    void pauseAll();
 
-  void resumeAll();
+    void resumeAll();
 }

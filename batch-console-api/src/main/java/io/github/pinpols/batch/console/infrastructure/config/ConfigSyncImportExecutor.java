@@ -17,55 +17,52 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class ConfigSyncImportExecutor {
 
-  private final ConfigSyncTargetExecutor targetExecutor;
+    private final ConfigSyncTargetExecutor targetExecutor;
 
-  record ImportContext(
-      String auditTenantId, Long logId, String operator, String batchOperationId) {}
+    record ImportContext(String auditTenantId, Long logId, String operator, String batchOperationId) {}
 
-  TenantConfigBatchInitResponse execute(
-      ImportContext context, TenantConfigBatchInitRequest request) {
-    List<TenantInitResult> results = new ArrayList<>();
-    for (String tenantId : request.getTargetTenantIds()) {
-      Target target = new Target(context.auditTenantId(), context.logId(), tenantId);
-      TenantInitResult result;
-      try {
-        result = RlsTenantContextHolder.runWithTenant(
-            tenantId, () -> targetExecutor.execute(target, request, context.operator()));
-      } catch (StrictBundleAbortedException failure) {
-        // 此异常只在目标事务主动回滚后传播，不能把一般提交/连接异常推断为未提交。
-        String message = TenantConfigFailureMessages.forFailure(failure);
-        result = TenantInitResult.failed(tenantId, message);
-      }
-      if (!result.success()) {
-        TenantInitResult rolledBackResult = result;
-        RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-          targetExecutor.recordRolledBack(target, rolledBackResult);
-          return null;
-        });
-      }
-      results.add(result);
+    TenantConfigBatchInitResponse execute(ImportContext context, TenantConfigBatchInitRequest request) {
+        List<TenantInitResult> results = new ArrayList<>();
+        for (String tenantId : request.getTargetTenantIds()) {
+            Target target = new Target(context.auditTenantId(), context.logId(), tenantId);
+            TenantInitResult result;
+            try {
+                result = RlsTenantContextHolder.runWithTenant(
+                        tenantId, () -> targetExecutor.execute(target, request, context.operator()));
+            } catch (StrictBundleAbortedException failure) {
+                // 此异常只在目标事务主动回滚后传播，不能把一般提交/连接异常推断为未提交。
+                String message = TenantConfigFailureMessages.forFailure(failure);
+                result = TenantInitResult.failed(tenantId, message);
+            }
+            if (!result.success()) {
+                TenantInitResult rolledBackResult = result;
+                RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+                    targetExecutor.recordRolledBack(target, rolledBackResult);
+                    return null;
+                });
+            }
+            results.add(result);
+        }
+        return aggregate(context.batchOperationId(), request.isDryRun(), results);
     }
-    return aggregate(context.batchOperationId(), request.isDryRun(), results);
-  }
 
-  List<TenantInitResult> readReceipts(
-      String auditTenantId, Long logId, List<String> targetTenantIds) {
-    List<TenantInitResult> results = new ArrayList<>();
-    for (String tenantId : targetTenantIds) {
-      Target target = new Target(auditTenantId, logId, tenantId);
-      TenantInitResult result =
-          RlsTenantContextHolder.runWithTenant(tenantId, () -> targetExecutor.findReceipt(target));
-      if (EmptyChecks.isNotNull(result)) {
-        results.add(result);
-      }
+    List<TenantInitResult> readReceipts(String auditTenantId, Long logId, List<String> targetTenantIds) {
+        List<TenantInitResult> results = new ArrayList<>();
+        for (String tenantId : targetTenantIds) {
+            Target target = new Target(auditTenantId, logId, tenantId);
+            TenantInitResult result =
+                    RlsTenantContextHolder.runWithTenant(tenantId, () -> targetExecutor.findReceipt(target));
+            if (EmptyChecks.isNotNull(result)) {
+                results.add(result);
+            }
+        }
+        return results;
     }
-    return results;
-  }
 
-  static TenantConfigBatchInitResponse aggregate(
-      String batchOperationId, boolean dryRun, List<TenantInitResult> results) {
-    int successes = (int) results.stream().filter(TenantInitResult::success).count();
-    return new TenantConfigBatchInitResponse(
-        batchOperationId, results.size(), successes, results.size() - successes, dryRun, results);
-  }
+    static TenantConfigBatchInitResponse aggregate(
+            String batchOperationId, boolean dryRun, List<TenantInitResult> results) {
+        int successes = (int) results.stream().filter(TenantInitResult::success).count();
+        return new TenantConfigBatchInitResponse(
+                batchOperationId, results.size(), successes, results.size() - successes, dryRun, results);
+    }
 }

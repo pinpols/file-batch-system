@@ -17,20 +17,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
 
-  @Override
-  public WorkerRouteModel select(List<WorkerRouteModel> candidates) {
-    if (EmptyChecks.isEmpty(candidates)) {
-      return null;
+    @Override
+    public WorkerRouteModel select(List<WorkerRouteModel> candidates) {
+        if (EmptyChecks.isEmpty(candidates)) {
+            return null;
+        }
+        WorkerRouteModel fallback =
+                candidates.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
+        if (EmptyChecks.isNull(fallback)) {
+            return null;
+        }
+        return candidates.stream()
+                .filter(EmptyChecks::isNotNull)
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getAvailable()))
+                .max(Comparator.comparingInt(candidate -> Nullables.coalesce(candidate.getPriority(), 0)))
+                .orElseGet(() -> fallback);
     }
-    WorkerRouteModel fallback =
-        candidates.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
-    if (EmptyChecks.isNull(fallback)) {
-      return null;
-    }
-    return candidates.stream()
-        .filter(EmptyChecks::isNotNull)
-        .filter(candidate -> Boolean.TRUE.equals(candidate.getAvailable()))
-        .max(Comparator.comparingInt(candidate -> Nullables.coalesce(candidate.getPriority(), 0)))
-        .orElseGet(() -> fallback);
-  }
 }

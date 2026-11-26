@@ -506,7 +506,7 @@
                             </excludes>
                             <palantirJavaFormat>
                                 <version>2.92.0</version>
-                                <style>GOOGLE</style>
+                                <style>PALANTIR</style>
                             </palantirJavaFormat>
                             <!--
                               团队约定：方法返回类型带注解（如 @Nullable）时，注解单独占一行，

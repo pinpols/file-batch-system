@@ -11,18 +11,18 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
  */
 public record ShardAssignment(int shardTotal, int shardIndex) {
 
-  public ShardAssignment {
-    if (shardTotal < 1) {
-      throw new IllegalArgumentException("shardTotal must be >= 1; actual value: " + shardTotal);
+    public ShardAssignment {
+        if (shardTotal < 1) {
+            throw new IllegalArgumentException("shardTotal must be >= 1; actual value: " + shardTotal);
+        }
+        if (shardIndex < 0 || shardIndex >= shardTotal) {
+            throw new IllegalArgumentException(
+                    "shardIndex must be in [0, shardTotal=" + shardTotal + "); actual value: " + shardIndex);
+        }
     }
-    if (shardIndex < 0 || shardIndex >= shardTotal) {
-      throw new IllegalArgumentException(
-          "shardIndex must be in [0, shardTotal=" + shardTotal + "); actual value: " + shardIndex);
-    }
-  }
 
-  /** 单实例模式：shardTotal=1, shardIndex=0。 */
-  public static ShardAssignment single() {
-    return new ShardAssignment(1, 0);
-  }
+    /** 单实例模式：shardTotal=1, shardIndex=0。 */
+    public static ShardAssignment single() {
+        return new ShardAssignment(1, 0);
+    }
 }

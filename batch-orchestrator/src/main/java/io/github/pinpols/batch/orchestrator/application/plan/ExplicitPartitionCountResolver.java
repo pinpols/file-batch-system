@@ -14,14 +14,13 @@ import org.springframework.stereotype.Component;
 @Order(1)
 public class ExplicitPartitionCountResolver implements PartitionCountResolver {
 
-  @Override
-  public int resolve(
-      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    return PartitionCountResolverSupport.firstPositiveInt(
-        ExplicitPartitionCountResolver.class,
-        params.get("partitionCount"),
-        params.get("estimatedPartitionCount"),
-        params.get("suggestedPartitionCount"),
-        params.get("shardCount"));
-  }
+    @Override
+    public int resolve(JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+        return PartitionCountResolverSupport.firstPositiveInt(
+                ExplicitPartitionCountResolver.class,
+                params.get("partitionCount"),
+                params.get("estimatedPartitionCount"),
+                params.get("suggestedPartitionCount"),
+                params.get("shardCount"));
+    }
 }

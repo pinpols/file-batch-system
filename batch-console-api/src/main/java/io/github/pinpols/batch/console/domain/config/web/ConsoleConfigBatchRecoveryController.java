@@ -27,34 +27,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleConfigBatchRecoveryController {
 
-  private final ConsoleConfigBatchOperationService recoveryService;
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleConfigBatchOperationService recoveryService;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<ConfigBatchOperationRecoveryResponse> find(
-      @RequestParam String auditTenantId,
-      @RequestParam String operationKind,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      HttpServletRequest request) {
-    tenantGuard.assertTenantAllowed(auditTenantId);
-    if (!Texts.hasText(idempotencyKey)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
-    }
-    String originalPath =
-        switch (operationKind) {
-          case "TENANT_COPY" -> "/api/console/config/tenant-copy";
-          case "JOB_BUNDLE_CREATE" -> "/api/console/jobs/bundle/create";
-          case "JOB_BUNDLE_IMPORT" -> "/api/console/jobs/bundle/import";
-          default ->
+    @GetMapping
+    public CommonResponse<ConfigBatchOperationRecoveryResponse> find(
+            @RequestParam String auditTenantId,
+            @RequestParam String operationKind,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            HttpServletRequest request) {
+        tenantGuard.assertTenantAllowed(auditTenantId);
+        if (!Texts.hasText(idempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
-        };
-    String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
-    String originalUri = request.getContextPath() + originalPath;
-    String hash = ConsoleIdempotencyRequestIdentity.requestHash(
-        tenantHeader, "POST", originalUri, idempotencyKey);
-    ConfigBatchOperationRecoveryResponse result =
-        recoveryService.find(auditTenantId, hash, operationKind);
-    return responseFactory.success(result);
-  }
+        }
+        String originalPath =
+                switch (operationKind) {
+                    case "TENANT_COPY" -> "/api/console/config/tenant-copy";
+                    case "JOB_BUNDLE_CREATE" -> "/api/console/jobs/bundle/create";
+                    case "JOB_BUNDLE_IMPORT" -> "/api/console/jobs/bundle/import";
+                    default -> throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+                };
+        String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+        String originalUri = request.getContextPath() + originalPath;
+        String hash = ConsoleIdempotencyRequestIdentity.requestHash(tenantHeader, "POST", originalUri, idempotencyKey);
+        ConfigBatchOperationRecoveryResponse result = recoveryService.find(auditTenantId, hash, operationKind);
+        return responseFactory.success(result);
+    }
 }

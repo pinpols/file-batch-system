@@ -67,467 +67,451 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    prefix = "batch.worker.executors.sql",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "batch.worker.executors.sql", name = "enabled", havingValue = "true")
 public class SqlTaskExecutor implements BatchTaskExecutor {
 
-  static final String PARAM_SQL = "sql";
-  static final String PARAM_DS_BEAN = "dataSourceBean";
-  static final String PARAM_STMT_TIMEOUT = "statementTimeoutSeconds";
-  static final String PARAM_AUTO_COMMIT = "autoCommit";
+    static final String PARAM_SQL = "sql";
+    static final String PARAM_DS_BEAN = "dataSourceBean";
+    static final String PARAM_STMT_TIMEOUT = "statementTimeoutSeconds";
+    static final String PARAM_AUTO_COMMIT = "autoCommit";
 
-  private final SqlExecutorProperties props;
-  private final DataSourceResolver dataSourceResolver;
+    private final SqlExecutorProperties props;
+    private final DataSourceResolver dataSourceResolver;
 
-  @Autowired
-  public SqlTaskExecutor(
-      SqlExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
-    this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
-  }
-
-  public SqlTaskExecutor(SqlExecutorProperties props, DataSourceResolver dataSourceResolver) {
-    this.props = props;
-    this.dataSourceResolver = dataSourceResolver;
-  }
-
-  @Override
-  public String taskType() {
-    return props.getTaskType();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    return new TaskCapability(
-        Set.of(ResourceKind.DB),
-        // SELECT 幂等,UPDATE/INSERT/DELETE/DDL 不幂等,无法静态判断 → 保守标 false
-        false,
-        true,
-        props.getDefaultStatementTimeout());
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    try {
-      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
-          ctx.parameters(), "atomic.sql.parameters");
-      SqlInvocation inv = parseInvocation(ctx);
-      if (ctx.isDryRun()) {
-        return buildDryRunResult(ctx, inv);
-      }
-      return runStatements(inv);
-    } catch (SqlValidationException ex) {
-      // SqlValidationException 同时承担「输入非法」和「OS-capable role 闸拒绝」语义,后者走 SECURITY_REJECTED
-      boolean security = ex.getMessage() != null && ex.getMessage().contains("OS-capable");
-      AtomicErrorCode errorCode =
-          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
-      return AtomicErrorCode.fail(errorCode, ex.getMessage());
-    } catch (BizException ex) {
-      log.warn(
-          "sql executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
-              ? "?"
-              : ex.getMessageArgs()[1]);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
-    } catch (RuntimeException ex) {
-      log.error(
-          "sql executor unexpected error: tenantId={}, jobCode={}, cause={}",
-          LogSanitizer.value(ctx.tenantId()),
-          LogSanitizer.value(ctx.jobCode()),
-          SwallowedExceptionLogger.summary(ex));
-      String exceptionMessage = ex.getMessage();
-      String failureMessage =
-          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
-      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
-    }
-  }
-
-  /**
-   * ADR-026 §dry-run:演练模式不发 SQL / 不开事务 / 不写库,返回解析后的"会执行什么"。 仅暴露 SQL 文本 + dataSource bean 名(Spring
-   * 标识,非凭据)+ 事务/超时参数;不进任何 row-level data。
-   */
-  private TaskResult buildDryRunResult(TaskContext ctx, SqlInvocation inv) {
-    String dsBean = resolveDataSourceBeanName(ctx.parameters());
-    Map<String, Object> planned = new LinkedHashMap<>();
-    planned.put(PipelineRuntimeKeys.DRY_RUN, true);
-    planned.put("plannedAction", "sql");
-    planned.put("statementCount", inv.statements.size());
-    planned.put("statements", inv.statements);
-    planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
-    planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
-    planned.put("readOnly", inv.allSelect);
-    planned.put(PARAM_STMT_TIMEOUT, inv.timeoutSec);
-    log.info(
-        "sql executor dry-run skipped real execution: tenantId={}, jobCode={}, statements={}",
-        ctx.tenantId(),
-        ctx.jobCode(),
-        inv.statements.size());
-    return TaskResult.ok(
-        "dry-run: parsed " + inv.statements.size() + " statement(s), not executed", planned);
-  }
-
-  // ─── parsing + validation ────────────────────────────────────────────────────
-
-  private SqlInvocation parseInvocation(TaskContext ctx) {
-    Map<String, Object> params = ctx.parameters();
-
-    Object sqlObj = params.get(PARAM_SQL);
-    if (!(sqlObj instanceof String sqlString) || EmptyChecks.isBlank(sqlString)) {
-      throw new SqlValidationException("parameters.sql required (non-blank string)");
-    }
-    String sql = sqlString.trim();
-
-    List<String> statements = SqlStatementSplitter.split(sql);
-    if (statements.isEmpty()) {
-      throw new SqlValidationException("no valid SQL statement found");
-    }
-    if (statements.size() > props.getMaxStatementsPerJob()) {
-      throw new SqlValidationException("too many statements: "
-          + statements.size()
-          + " > maxStatementsPerJob="
-          + props.getMaxStatementsPerJob());
+    @Autowired
+    public SqlTaskExecutor(SqlExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
+        this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
     }
 
-    // 三道闸模型:语句类型/DDL 不再由 app 白名单管控,放行范围 = 所连最小权限 DB 角色被授予的权限;
-    // OS 拒绝由 requireNonOsCapableRole(连接级角色闸)回退。
-
-    // dataSource(param 覆盖需命中 allowedDataSourceBeans)
-    String dsBeanName = resolveDataSourceBeanName(params);
-    DataSource ds = dataSourceResolver.resolve(dsBeanName);
-
-    boolean allSelect = statements.stream().allMatch(s -> "SELECT".equals(detectStatementType(s)));
-
-    // timeout(只能缩短)
-    int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
-    Object t = params.get(PARAM_STMT_TIMEOUT);
-    if (EmptyChecks.isNotNull(t)) {
-      Long requested = AtomicParameterNumbers.positiveLong(t);
-      if (EmptyChecks.isNull(requested)) {
-        throw new SqlValidationException("statementTimeoutSeconds must be positive integer");
-      }
-      if (requested < timeoutSec) {
-        timeoutSec = requested.intValue();
-      }
+    public SqlTaskExecutor(SqlExecutorProperties props, DataSourceResolver dataSourceResolver) {
+        this.props = props;
+        this.dataSourceResolver = dataSourceResolver;
     }
 
-    boolean autoCommit = props.isDefaultAutoCommit();
-    Object ac = params.get(PARAM_AUTO_COMMIT);
-    if (ac instanceof Boolean booleanValue) {
-      autoCommit = booleanValue;
+    @Override
+    public String taskType() {
+        return props.getTaskType();
     }
 
-    return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
-  }
-
-  /**
-   * 解析最终要用的 dataSource bean 名,并对 param {@code dataSourceBean} 覆盖做白名单校验。
-   *
-   * <p>规则:param 缺省时回落到 {@link SqlExecutorProperties#getDataSourceBeanName()}(可能 null = 默认库)。 当
-   * param 显式给出且与配置的默认 bean 名不同时,必须命中 {@link SqlExecutorProperties#getAllowedDataSourceBeans()},否则抛
-   * {@link SqlValidationException}。配置的默认 bean 永远允许。
-   *
-   * @return 校验后的 bean 名,或 null 表示用注入的默认 dataSource
-   */
-  String resolveDataSourceBeanName(Map<String, Object> params) {
-    String configured = props.getDataSourceBeanName();
-    Object v = params.get(PARAM_DS_BEAN);
-    String paramBean =
-        v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : null;
-
-    if (EmptyChecks.isNull(paramBean) || paramBean.equals(configured)) {
-      return configured;
+    @Override
+    public TaskCapability capability() {
+        return new TaskCapability(
+                Set.of(ResourceKind.DB),
+                // SELECT 幂等,UPDATE/INSERT/DELETE/DDL 不幂等,无法静态判断 → 保守标 false
+                false,
+                true,
+                props.getDefaultStatementTimeout());
     }
-    if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
-      throw new SqlValidationException("dataSourceBean '"
-          + paramBean
-          + "' not in allowedDataSourceBeans="
-          + props.getAllowedDataSourceBeans());
-    }
-    return paramBean;
-  }
 
-  /** 取首关键字粗分类语句类型。三道闸模型下<b>不再做类型白名单校验</b>,本方法仅用于判定"是否全是 SELECT"以走只读事务 + statement_timeout 优化。 */
-  static String detectStatementType(String stmt) {
-    String kw = firstKeyword(stmt);
-    if (kw == null) return "UNKNOWN";
-    kw = kw.toUpperCase(Locale.ROOT);
-    return switch (kw) {
-      case "SELECT", "WITH", "EXPLAIN", "SHOW" -> "SELECT";
-      case "INSERT" -> "INSERT";
-      case "UPDATE" -> "UPDATE";
-      case "DELETE" -> "DELETE";
-      case "MERGE", "UPSERT" -> "UPSERT";
-      case "CALL", "EXEC", "EXECUTE" -> "CALL";
-      case "CREATE",
-          "ALTER",
-          "DROP",
-          "TRUNCATE",
-          "RENAME",
-          "COMMENT",
-          "GRANT",
-          "REVOKE",
-          "ANALYZE",
-          "VACUUM",
-          "DO" -> "DDL";
-      case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
-      default -> "OTHER";
-    };
-  }
-
-  /** 跳过前导注释并读取关键字,避免使用可被超长注释触发回溯的正则表达式。 */
-  private static String firstKeyword(String stmt) {
-    if (stmt == null) {
-      return null;
-    }
-    int index = 0;
-    while (index < stmt.length()) {
-      while (index < stmt.length() && Character.isWhitespace(stmt.charAt(index))) {
-        index++;
-      }
-      if (index >= stmt.length()) {
-        return null;
-      }
-      if (stmt.startsWith("--", index)) {
-        int lineEnd = stmt.indexOf('\n', index + 2);
-        index = lineEnd < 0 ? stmt.length() : lineEnd + 1;
-        continue;
-      }
-      if (stmt.startsWith("/*", index)) {
-        int commentEnd = stmt.indexOf("*/", index + 2);
-        if (commentEnd < 0) {
-          return null;
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        try {
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(ctx.parameters(), "atomic.sql.parameters");
+            SqlInvocation inv = parseInvocation(ctx);
+            if (ctx.isDryRun()) {
+                return buildDryRunResult(ctx, inv);
+            }
+            return runStatements(inv);
+        } catch (SqlValidationException ex) {
+            // SqlValidationException 同时承担「输入非法」和「OS-capable role 闸拒绝」语义,后者走 SECURITY_REJECTED
+            boolean security = ex.getMessage() != null && ex.getMessage().contains("OS-capable");
+            AtomicErrorCode errorCode = security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
+            return AtomicErrorCode.fail(errorCode, ex.getMessage());
+        } catch (BizException ex) {
+            log.warn(
+                    "sql executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+                    ctx.tenantId(),
+                    ctx.jobCode(),
+                    ex.getMessageArgs() == null || ex.getMessageArgs().length < 2 ? "?" : ex.getMessageArgs()[1]);
+            return AtomicErrorCode.fail(
+                    AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            log.error(
+                    "sql executor unexpected error: tenantId={}, jobCode={}, cause={}",
+                    LogSanitizer.value(ctx.tenantId()),
+                    LogSanitizer.value(ctx.jobCode()),
+                    SwallowedExceptionLogger.summary(ex));
+            String exceptionMessage = ex.getMessage();
+            String failureMessage =
+                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
-        index = commentEnd + 2;
-        continue;
-      }
-      int keywordStart = index;
-      while (index < stmt.length()) {
-        char c = stmt.charAt(index);
-        if (!(Character.isLetterOrDigit(c) || c == '_')) {
-          break;
+    }
+
+    /**
+     * ADR-026 §dry-run:演练模式不发 SQL / 不开事务 / 不写库,返回解析后的"会执行什么"。 仅暴露 SQL 文本 + dataSource bean 名(Spring
+     * 标识,非凭据)+ 事务/超时参数;不进任何 row-level data。
+     */
+    private TaskResult buildDryRunResult(TaskContext ctx, SqlInvocation inv) {
+        String dsBean = resolveDataSourceBeanName(ctx.parameters());
+        Map<String, Object> planned = new LinkedHashMap<>();
+        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
+        planned.put("plannedAction", "sql");
+        planned.put("statementCount", inv.statements.size());
+        planned.put("statements", inv.statements);
+        planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
+        planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
+        planned.put("readOnly", inv.allSelect);
+        planned.put(PARAM_STMT_TIMEOUT, inv.timeoutSec);
+        log.info(
+                "sql executor dry-run skipped real execution: tenantId={}, jobCode={}, statements={}",
+                ctx.tenantId(),
+                ctx.jobCode(),
+                inv.statements.size());
+        return TaskResult.ok("dry-run: parsed " + inv.statements.size() + " statement(s), not executed", planned);
+    }
+
+    // ─── parsing + validation ────────────────────────────────────────────────────
+
+    private SqlInvocation parseInvocation(TaskContext ctx) {
+        Map<String, Object> params = ctx.parameters();
+
+        Object sqlObj = params.get(PARAM_SQL);
+        if (!(sqlObj instanceof String sqlString) || EmptyChecks.isBlank(sqlString)) {
+            throw new SqlValidationException("parameters.sql required (non-blank string)");
         }
-        index++;
-      }
-      return keywordStart == index ? null : stmt.substring(keywordStart, index);
-    }
-    return null;
-  }
+        String sql = sqlString.trim();
 
-  /**
-   * 代码层堵 OS 的硬保证:拒绝以 OS 能力角色执行 —— superuser 或 {@code pg_execute_server_program} / {@code
-   * pg_read_server_files} / {@code pg_write_server_files} 成员(COPY PROGRAM / 服务端文件 / 不可信 PL 的前置)。
-   *
-   * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
-   * forbidOsCapableRole=true},本方法 <b>fail-closed 拒绝执行</b>——既然运维显式要求"禁 OS 能力角色"、而本闸在该方言下无法核验,
-   * 静默放行等于安全控制 no-op(原 WARN+放行的"漏检"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
-   * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色回退。
-   *
-   * <p>见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
-   */
-  void requireNonOsCapableRole(Connection conn) {
-    String productName;
-    try {
-      productName = conn.getMetaData().getDatabaseProductName();
-    } catch (SQLException ex) {
-      throw new SqlValidationException(
-          "OS-capable role check failed reading DatabaseMetaData: " + ex.getMessage());
-    }
-    if (productName == null || !productName.toLowerCase(Locale.ROOT).contains("postgres")) {
-      throw new SqlValidationException(
-          "forbidOsCapableRole=true but OS-capable-role check is PostgreSQL-only and cannot be"
-              + " verified on dialect '"
-              + productName
-              + "' — refusing to execute (fail-closed). Run on PostgreSQL, or explicitly set"
-              + " batch.worker.executors.sql.forbid-os-capable-role=false and enforce a"
-              + " dialect-native least-privilege role.");
-    }
-    String sql = "select rolsuper"
-        + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
-        + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
-        + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
-        + " from pg_roles where rolname = current_user";
-    try (Statement st = conn.createStatement();
-        ResultSet rs = st.executeQuery(sql)) {
-      if (rs.next() && rs.getBoolean(1)) {
-        throw new SqlValidationException(
-            "refusing SQL on OS-capable DB role (superuser / pg_execute_server_program /"
-                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
-                + " role");
-      }
-    } catch (SQLException ex) {
-      throw new SqlValidationException("OS-capable role check failed: " + ex.getMessage());
-    }
-  }
-
-  // ─── execution ──────────────────────────────────────────────────────────────
-
-  @SuppressWarnings("java:S2077")
-  private TaskResult runStatements(SqlInvocation inv) {
-    long start = System.currentTimeMillis();
-    ExecResult execResult = new ExecResult();
-
-    // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
-    // 写任务保持原有 autoCommit 语义。
-    boolean effectiveAutoCommit = !inv.allSelect && inv.autoCommit;
-    AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
-        .withAutoCommit(effectiveAutoCommit)
-        .withReadOnly(inv.allSelect)
-        // 角色闸用 executor 本地实现(error message + 异常类型保留 i18n / SqlValidationException 语义),
-        // 不走 manager 的 SecurityException 实现。
-        .withForbidOsCapableRole(false);
-
-    try {
-      AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
-        if (props.isForbidOsCapableRole()) {
-          requireNonOsCapableRole(conn);
+        List<String> statements = SqlStatementSplitter.split(sql);
+        if (statements.isEmpty()) {
+            throw new SqlValidationException("no valid SQL statement found");
         }
-        if (inv.allSelect) {
-          applyReadOnlyStatementTimeout(conn, inv);
+        if (statements.size() > props.getMaxStatementsPerJob()) {
+            throw new SqlValidationException("too many statements: "
+                    + statements.size()
+                    + " > maxStatementsPerJob="
+                    + props.getMaxStatementsPerJob());
         }
-        for (String sql : inv.statements) {
-          executeStatement(conn, sql, inv, execResult);
+
+        // 三道闸模型:语句类型/DDL 不再由 app 白名单管控,放行范围 = 所连最小权限 DB 角色被授予的权限;
+        // OS 拒绝由 requireNonOsCapableRole(连接级角色闸)回退。
+
+        // dataSource(param 覆盖需命中 allowedDataSourceBeans)
+        String dsBeanName = resolveDataSourceBeanName(params);
+        DataSource ds = dataSourceResolver.resolve(dsBeanName);
+
+        boolean allSelect = statements.stream().allMatch(s -> "SELECT".equals(detectStatementType(s)));
+
+        // timeout(只能缩短)
+        int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
+        Object t = params.get(PARAM_STMT_TIMEOUT);
+        if (EmptyChecks.isNotNull(t)) {
+            Long requested = AtomicParameterNumbers.positiveLong(t);
+            if (EmptyChecks.isNull(requested)) {
+                throw new SqlValidationException("statementTimeoutSeconds must be positive integer");
+            }
+            if (requested < timeoutSec) {
+                timeoutSec = requested.intValue();
+            }
+        }
+
+        boolean autoCommit = props.isDefaultAutoCommit();
+        Object ac = params.get(PARAM_AUTO_COMMIT);
+        if (ac instanceof Boolean booleanValue) {
+            autoCommit = booleanValue;
+        }
+
+        return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
+    }
+
+    /**
+     * 解析最终要用的 dataSource bean 名,并对 param {@code dataSourceBean} 覆盖做白名单校验。
+     *
+     * <p>规则:param 缺省时回落到 {@link SqlExecutorProperties#getDataSourceBeanName()}(可能 null = 默认库)。 当
+     * param 显式给出且与配置的默认 bean 名不同时,必须命中 {@link SqlExecutorProperties#getAllowedDataSourceBeans()},否则抛
+     * {@link SqlValidationException}。配置的默认 bean 永远允许。
+     *
+     * @return 校验后的 bean 名,或 null 表示用注入的默认 dataSource
+     */
+    String resolveDataSourceBeanName(Map<String, Object> params) {
+        String configured = props.getDataSourceBeanName();
+        Object v = params.get(PARAM_DS_BEAN);
+        String paramBean = v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : null;
+
+        if (EmptyChecks.isNull(paramBean) || paramBean.equals(configured)) {
+            return configured;
+        }
+        if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
+            throw new SqlValidationException("dataSourceBean '"
+                    + paramBean
+                    + "' not in allowedDataSourceBeans="
+                    + props.getAllowedDataSourceBeans());
+        }
+        return paramBean;
+    }
+
+    /** 取首关键字粗分类语句类型。三道闸模型下<b>不再做类型白名单校验</b>,本方法仅用于判定"是否全是 SELECT"以走只读事务 + statement_timeout 优化。 */
+    static String detectStatementType(String stmt) {
+        String kw = firstKeyword(stmt);
+        if (kw == null) return "UNKNOWN";
+        kw = kw.toUpperCase(Locale.ROOT);
+        return switch (kw) {
+            case "SELECT", "WITH", "EXPLAIN", "SHOW" -> "SELECT";
+            case "INSERT" -> "INSERT";
+            case "UPDATE" -> "UPDATE";
+            case "DELETE" -> "DELETE";
+            case "MERGE", "UPSERT" -> "UPSERT";
+            case "CALL", "EXEC", "EXECUTE" -> "CALL";
+            case "CREATE",
+                    "ALTER",
+                    "DROP",
+                    "TRUNCATE",
+                    "RENAME",
+                    "COMMENT",
+                    "GRANT",
+                    "REVOKE",
+                    "ANALYZE",
+                    "VACUUM",
+                    "DO" -> "DDL";
+            case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
+            default -> "OTHER";
+        };
+    }
+
+    /** 跳过前导注释并读取关键字,避免使用可被超长注释触发回溯的正则表达式。 */
+    private static String firstKeyword(String stmt) {
+        if (stmt == null) {
+            return null;
+        }
+        int index = 0;
+        while (index < stmt.length()) {
+            while (index < stmt.length() && Character.isWhitespace(stmt.charAt(index))) {
+                index++;
+            }
+            if (index >= stmt.length()) {
+                return null;
+            }
+            if (stmt.startsWith("--", index)) {
+                int lineEnd = stmt.indexOf('\n', index + 2);
+                index = lineEnd < 0 ? stmt.length() : lineEnd + 1;
+                continue;
+            }
+            if (stmt.startsWith("/*", index)) {
+                int commentEnd = stmt.indexOf("*/", index + 2);
+                if (commentEnd < 0) {
+                    return null;
+                }
+                index = commentEnd + 2;
+                continue;
+            }
+            int keywordStart = index;
+            while (index < stmt.length()) {
+                char c = stmt.charAt(index);
+                if (!(Character.isLetterOrDigit(c) || c == '_')) {
+                    break;
+                }
+                index++;
+            }
+            return keywordStart == index ? null : stmt.substring(keywordStart, index);
         }
         return null;
-      });
-    } catch (SQLException ex) {
-      // PG statement_timeout → SQLState "57014" (query_canceled);其它驱动语义不同,这里做最常见识别
-      boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
-      boolean isTimeout = hasTimeoutSqlState
-          || (ex.getMessage() != null
-              && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
-      return AtomicErrorCode.fail(
-          isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
-          "sql failed: " + ex.getMessage(),
-          ex);
     }
 
-    Map<String, Object> output = new HashMap<>();
-    output.put("statementCount", inv.statements.size());
-    output.put("totalAffectedRows", execResult.totalAffected);
-    output.put("lastResultRows", execResult.lastResultRows);
-    output.put("resultTruncated", execResult.truncated);
-    output.put("durationMillis", System.currentTimeMillis() - start);
-    if (props.isIncludeResultSet()) {
-      output.put("lastResultSet", execResult.lastResultSet);
-    }
-    return TaskResult.ok(
-        "executed " + inv.statements.size() + " statement(s), affected=" + execResult.totalAffected,
-        output);
-  }
-
-  /** 全 SELECT 事务内设置 SET LOCAL statement_timeout;失败只告警,不影响后续语句执行。 */
-  private void applyReadOnlyStatementTimeout(Connection conn, SqlInvocation inv) {
-    try (Statement guard = conn.createStatement()) {
-      String setStatementTimeoutSql = "SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L);
-      guard.execute(setStatementTimeoutSql);
-    } catch (SQLException setEx) {
-      String causeSummary = SwallowedExceptionLogger.summary(setEx);
-      log.warn("SET LOCAL statement_timeout failed: {}", causeSummary);
-    }
-  }
-
-  /** 执行单条语句:有结果集则读取并覆盖"最后结果集",否则累加受影响行数。 */
-  private void executeStatement(
-      Connection conn, String sql, SqlInvocation inv, ExecResult execResult) throws SQLException {
-    try (Statement stmt = conn.createStatement()) {
-      stmt.setQueryTimeout(inv.timeoutSec);
-      boolean hasResultSet = stmt.execute(sql);
-      if (!hasResultSet) {
-        int affected = stmt.getUpdateCount();
-        if (affected > 0) {
-          execResult.totalAffected += affected;
+    /**
+     * 代码层堵 OS 的硬保证:拒绝以 OS 能力角色执行 —— superuser 或 {@code pg_execute_server_program} / {@code
+     * pg_read_server_files} / {@code pg_write_server_files} 成员(COPY PROGRAM / 服务端文件 / 不可信 PL 的前置)。
+     *
+     * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
+     * forbidOsCapableRole=true},本方法 <b>fail-closed 拒绝执行</b>——既然运维显式要求"禁 OS 能力角色"、而本闸在该方言下无法核验,
+     * 静默放行等于安全控制 no-op(原 WARN+放行的"漏检"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
+     * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色回退。
+     *
+     * <p>见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
+     */
+    void requireNonOsCapableRole(Connection conn) {
+        String productName;
+        try {
+            productName = conn.getMetaData().getDatabaseProductName();
+        } catch (SQLException ex) {
+            throw new SqlValidationException(
+                    "OS-capable role check failed reading DatabaseMetaData: " + ex.getMessage());
         }
-        return;
-      }
-      try (ResultSet rs = stmt.getResultSet()) {
-        FetchResult fr = fetchResults(rs);
-        execResult.lastResultSet = fr.rows;
-        execResult.lastResultRows = fr.actualCount;
-        execResult.truncated = execResult.truncated || fr.truncated;
-      }
+        if (productName == null || !productName.toLowerCase(Locale.ROOT).contains("postgres")) {
+            throw new SqlValidationException(
+                    "forbidOsCapableRole=true but OS-capable-role check is PostgreSQL-only and cannot be"
+                            + " verified on dialect '"
+                            + productName
+                            + "' — refusing to execute (fail-closed). Run on PostgreSQL, or explicitly set"
+                            + " batch.worker.executors.sql.forbid-os-capable-role=false and enforce a"
+                            + " dialect-native least-privilege role.");
+        }
+        String sql = "select rolsuper"
+                + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+                + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+                + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+                + " from pg_roles where rolname = current_user";
+        try (Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next() && rs.getBoolean(1)) {
+                throw new SqlValidationException(
+                        "refusing SQL on OS-capable DB role (superuser / pg_execute_server_program /"
+                                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
+                                + " role");
+            }
+        } catch (SQLException ex) {
+            throw new SqlValidationException("OS-capable role check failed: " + ex.getMessage());
+        }
     }
-  }
 
-  /** 单次执行结果聚合 — 给 lambda 内闭包写。 */
-  private static final class ExecResult {
-    long totalAffected;
-    List<Map<String, Object>> lastResultSet = List.of();
-    int lastResultRows;
-    boolean truncated;
-  }
+    // ─── execution ──────────────────────────────────────────────────────────────
 
-  private FetchResult fetchResults(ResultSet rs) throws SQLException {
-    ResultSetMetaData md = rs.getMetaData();
-    int colCount = md.getColumnCount();
-    List<Map<String, Object>> rows = new ArrayList<>();
-    int actual = 0;
-    boolean trunc = false;
-    while (rs.next()) {
-      actual++;
-      if (rows.size() < props.getMaxResultRows()) {
-        rows.add(readRow(rs, md, colCount));
-      } else if (!trunc) {
-        log.warn("sql resultSet truncated at maxResultRows={}", props.getMaxResultRows());
-        trunc = true;
-        // 继续 next() 数行数但不存(给业务知真实大小)
-      }
+    @SuppressWarnings("java:S2077")
+    private TaskResult runStatements(SqlInvocation inv) {
+        long start = System.currentTimeMillis();
+        ExecResult execResult = new ExecResult();
+
+        // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
+        // 写任务保持原有 autoCommit 语义。
+        boolean effectiveAutoCommit = !inv.allSelect && inv.autoCommit;
+        AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
+                .withAutoCommit(effectiveAutoCommit)
+                .withReadOnly(inv.allSelect)
+                // 角色闸用 executor 本地实现(error message + 异常类型保留 i18n / SqlValidationException 语义),
+                // 不走 manager 的 SecurityException 实现。
+                .withForbidOsCapableRole(false);
+
+        try {
+            AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
+                if (props.isForbidOsCapableRole()) {
+                    requireNonOsCapableRole(conn);
+                }
+                if (inv.allSelect) {
+                    applyReadOnlyStatementTimeout(conn, inv);
+                }
+                for (String sql : inv.statements) {
+                    executeStatement(conn, sql, inv, execResult);
+                }
+                return null;
+            });
+        } catch (SQLException ex) {
+            // PG statement_timeout → SQLState "57014" (query_canceled);其它驱动语义不同,这里做最常见识别
+            boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
+            boolean isTimeout = hasTimeoutSqlState
+                    || (ex.getMessage() != null
+                            && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+            return AtomicErrorCode.fail(
+                    isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
+                    "sql failed: " + ex.getMessage(),
+                    ex);
+        }
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("statementCount", inv.statements.size());
+        output.put("totalAffectedRows", execResult.totalAffected);
+        output.put("lastResultRows", execResult.lastResultRows);
+        output.put("resultTruncated", execResult.truncated);
+        output.put("durationMillis", System.currentTimeMillis() - start);
+        if (props.isIncludeResultSet()) {
+            output.put("lastResultSet", execResult.lastResultSet);
+        }
+        return TaskResult.ok(
+                "executed " + inv.statements.size() + " statement(s), affected=" + execResult.totalAffected, output);
     }
-    return new FetchResult(rows, actual, trunc);
-  }
 
-  private Map<String, Object> readRow(ResultSet rs, ResultSetMetaData md, int colCount)
-      throws SQLException {
-    Map<String, Object> row = new LinkedHashMap<>();
-    for (int i = 1; i <= colCount; i++) {
-      // 先取值再取列标签,保持与原实现一致的 JDBC 调用顺序
-      Object value = readColumn(rs, md, i);
-      row.put(md.getColumnLabel(i), value);
+    /** 全 SELECT 事务内设置 SET LOCAL statement_timeout;失败只告警,不影响后续语句执行。 */
+    private void applyReadOnlyStatementTimeout(Connection conn, SqlInvocation inv) {
+        try (Statement guard = conn.createStatement()) {
+            String setStatementTimeoutSql = "SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L);
+            guard.execute(setStatementTimeoutSql);
+        } catch (SQLException setEx) {
+            String causeSummary = SwallowedExceptionLogger.summary(setEx);
+            log.warn("SET LOCAL statement_timeout failed: {}", causeSummary);
+        }
     }
-    return row;
-  }
 
-  /** json/jsonb 列解析为对象;SQL 数组展开为 Java 数组并释放;其余原样返回。 */
-  private Object readColumn(ResultSet rs, ResultSetMetaData md, int index) throws SQLException {
-    String type = md.getColumnTypeName(index);
-    if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
-      String json = rs.getString(index);
-      return EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class);
+    /** 执行单条语句:有结果集则读取并覆盖"最后结果集",否则累加受影响行数。 */
+    private void executeStatement(Connection conn, String sql, SqlInvocation inv, ExecResult execResult)
+            throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(inv.timeoutSec);
+            boolean hasResultSet = stmt.execute(sql);
+            if (!hasResultSet) {
+                int affected = stmt.getUpdateCount();
+                if (affected > 0) {
+                    execResult.totalAffected += affected;
+                }
+                return;
+            }
+            try (ResultSet rs = stmt.getResultSet()) {
+                FetchResult fr = fetchResults(rs);
+                execResult.lastResultSet = fr.rows;
+                execResult.lastResultRows = fr.actualCount;
+                execResult.truncated = execResult.truncated || fr.truncated;
+            }
+        }
     }
-    Object value = rs.getObject(index);
-    if (value instanceof Array sqlArray) {
-      try {
-        return sqlArray.getArray();
-      } finally {
-        sqlArray.free();
-      }
+
+    /** 单次执行结果聚合 — 给 lambda 内闭包写。 */
+    private static final class ExecResult {
+        long totalAffected;
+        List<Map<String, Object>> lastResultSet = List.of();
+        int lastResultRows;
+        boolean truncated;
     }
-    return value;
-  }
 
-  // ─── helper records / exceptions ────────────────────────────────────────────
-
-  private record SqlInvocation(
-      List<String> statements,
-      DataSource dataSource,
-      int timeoutSec,
-      boolean autoCommit,
-      boolean allSelect) {}
-
-  private record FetchResult(List<Map<String, Object>> rows, int actualCount, boolean truncated) {}
-
-  static final class SqlValidationException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    SqlValidationException(String message) {
-      super(message);
+    private FetchResult fetchResults(ResultSet rs) throws SQLException {
+        ResultSetMetaData md = rs.getMetaData();
+        int colCount = md.getColumnCount();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int actual = 0;
+        boolean trunc = false;
+        while (rs.next()) {
+            actual++;
+            if (rows.size() < props.getMaxResultRows()) {
+                rows.add(readRow(rs, md, colCount));
+            } else if (!trunc) {
+                log.warn("sql resultSet truncated at maxResultRows={}", props.getMaxResultRows());
+                trunc = true;
+                // 继续 next() 数行数但不存(给业务知真实大小)
+            }
+        }
+        return new FetchResult(rows, actual, trunc);
     }
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(SqlExecutorProperties.class)
-  static class PropertiesConfig {}
+    private Map<String, Object> readRow(ResultSet rs, ResultSetMetaData md, int colCount) throws SQLException {
+        Map<String, Object> row = new LinkedHashMap<>();
+        for (int i = 1; i <= colCount; i++) {
+            // 先取值再取列标签,保持与原实现一致的 JDBC 调用顺序
+            Object value = readColumn(rs, md, i);
+            row.put(md.getColumnLabel(i), value);
+        }
+        return row;
+    }
+
+    /** json/jsonb 列解析为对象;SQL 数组展开为 Java 数组并释放;其余原样返回。 */
+    private Object readColumn(ResultSet rs, ResultSetMetaData md, int index) throws SQLException {
+        String type = md.getColumnTypeName(index);
+        if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
+            String json = rs.getString(index);
+            return EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class);
+        }
+        Object value = rs.getObject(index);
+        if (value instanceof Array sqlArray) {
+            try {
+                return sqlArray.getArray();
+            } finally {
+                sqlArray.free();
+            }
+        }
+        return value;
+    }
+
+    // ─── helper records / exceptions ────────────────────────────────────────────
+
+    private record SqlInvocation(
+            List<String> statements, DataSource dataSource, int timeoutSec, boolean autoCommit, boolean allSelect) {}
+
+    private record FetchResult(List<Map<String, Object>> rows, int actualCount, boolean truncated) {}
+
+    static final class SqlValidationException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        SqlValidationException(String message) {
+            super(message);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(SqlExecutorProperties.class)
+    static class PropertiesConfig {}
 }

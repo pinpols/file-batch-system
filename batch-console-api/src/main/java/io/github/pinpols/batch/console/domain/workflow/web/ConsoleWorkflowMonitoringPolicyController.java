@@ -25,24 +25,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleWorkflowMonitoringPolicyController {
-  private final WorkflowMonitoringPolicyService policyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final WorkflowMonitoringPolicyService policyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<WorkflowMonitoringPolicyResponse> get(
-      @PathVariable Long id, @RequestParam String tenantId) {
-    WorkflowMonitoringPolicyEntity policy = policyService.get(id, tenantId);
-    WorkflowMonitoringPolicyResponse response = WorkflowMonitoringPolicyResponse.from(policy);
-    return responseFactory.success(response);
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<WorkflowMonitoringPolicyResponse> get(@PathVariable Long id, @RequestParam String tenantId) {
+        WorkflowMonitoringPolicyEntity policy = policyService.get(id, tenantId);
+        WorkflowMonitoringPolicyResponse response = WorkflowMonitoringPolicyResponse.from(policy);
+        return responseFactory.success(response);
+    }
 
-  @PutMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowMonitoringPolicyResponse> save(
-      @PathVariable Long id, @Valid @RequestBody WorkflowMonitoringPolicyRequest request) {
-    WorkflowMonitoringPolicyEntity policy = policyService.save(id, request);
-    WorkflowMonitoringPolicyResponse response = WorkflowMonitoringPolicyResponse.from(policy);
-    return responseFactory.success(response);
-  }
+    @PutMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<WorkflowMonitoringPolicyResponse> save(
+            @PathVariable Long id, @Valid @RequestBody WorkflowMonitoringPolicyRequest request) {
+        WorkflowMonitoringPolicyEntity policy = policyService.save(id, request);
+        WorkflowMonitoringPolicyResponse response = WorkflowMonitoringPolicyResponse.from(policy);
+        return responseFactory.success(response);
+    }
 }

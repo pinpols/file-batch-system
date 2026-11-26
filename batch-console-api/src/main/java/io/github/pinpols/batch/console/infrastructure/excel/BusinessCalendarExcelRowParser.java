@@ -34,119 +34,112 @@ import lombok.Builder;
 /** business_calendar Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BusinessCalendarExcelRowParser {
 
-  /** business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql）。 */
-  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+    /** business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql）。 */
+    private static final int CALENDAR_CODE_MAX_LENGTH = 128;
 
-  /** business_calendar.calendar_name VARCHAR(256)（V3__create_config_tables.sql）。 */
-  private static final int CALENDAR_NAME_MAX_LENGTH = 256;
+    /** business_calendar.calendar_name VARCHAR(256)（V3__create_config_tables.sql）。 */
+    private static final int CALENDAR_NAME_MAX_LENGTH = 256;
 
-  /** business_calendar.timezone VARCHAR(64)（V3__create_config_tables.sql）。 */
-  private static final int TIMEZONE_MAX_LENGTH = 64;
+    /** business_calendar.timezone VARCHAR(64)（V3__create_config_tables.sql）。 */
+    private static final int TIMEZONE_MAX_LENGTH = 64;
 
-  /** business_calendar.holiday_roll_rule VARCHAR(32)（V3__create_config_tables.sql）。 */
-  private static final int HOLIDAY_ROLL_RULE_MAX_LENGTH = 32;
+    /** business_calendar.holiday_roll_rule VARCHAR(32)（V3__create_config_tables.sql）。 */
+    private static final int HOLIDAY_ROLL_RULE_MAX_LENGTH = 32;
 
-  /** business_calendar.catch_up_policy VARCHAR(32)（V3__create_config_tables.sql）。 */
-  private static final int CATCH_UP_POLICY_MAX_LENGTH = 32;
+    /** business_calendar.catch_up_policy VARCHAR(32)（V3__create_config_tables.sql）。 */
+    private static final int CATCH_UP_POLICY_MAX_LENGTH = 32;
 
-  public static final String SHEET_NAME = ConfigPackageExcelSchema.BusinessCalendar.SHEET_NAME;
+    public static final String SHEET_NAME = ConfigPackageExcelSchema.BusinessCalendar.SHEET_NAME;
 
-  private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
-  private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
+    private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
+    private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
 
-  private BusinessCalendarExcelRowParser() {}
+    private BusinessCalendarExcelRowParser() {}
 
-  public static CalendarRow parseRow(
-      String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    CalendarRow.CalendarRowBuilder rowBuilder =
-        CalendarRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
-    String calendarCodeText =
-        requireText(values, COL_CALENDAR_CODE, CALENDAR_CODE_MAX_LENGTH, issues);
-    String calendarCode = CodeNormalizer.toConfigFormOrNull(calendarCodeText);
-    rowBuilder.calendarCode(calendarCode);
-    String calendarName = requireText(values, COL_CALENDAR_NAME, CALENDAR_NAME_MAX_LENGTH, issues);
-    rowBuilder.calendarName(calendarName);
-    String timezone = requireText(values, COL_TIMEZONE, TIMEZONE_MAX_LENGTH, issues);
-    if (Texts.hasText(timezone) && !BusinessCalendarTimezone.isValid(timezone)) {
-      issues.add("timezone is invalid");
+    public static CalendarRow parseRow(String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
+        String effectiveTenant = resolveTenantField(values, tenantId, issues);
+        CalendarRow.CalendarRowBuilder rowBuilder =
+                CalendarRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
+        String calendarCodeText = requireText(values, COL_CALENDAR_CODE, CALENDAR_CODE_MAX_LENGTH, issues);
+        String calendarCode = CodeNormalizer.toConfigFormOrNull(calendarCodeText);
+        rowBuilder.calendarCode(calendarCode);
+        String calendarName = requireText(values, COL_CALENDAR_NAME, CALENDAR_NAME_MAX_LENGTH, issues);
+        rowBuilder.calendarName(calendarName);
+        String timezone = requireText(values, COL_TIMEZONE, TIMEZONE_MAX_LENGTH, issues);
+        if (Texts.hasText(timezone) && !BusinessCalendarTimezone.isValid(timezone)) {
+            issues.add("timezone is invalid");
+        }
+        rowBuilder.timezone(timezone);
+        String holidayRollRule = optionalEnum(
+                values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, HOLIDAY_ROLL_RULE_MAX_LENGTH, "SKIP", issues);
+        rowBuilder.holidayRollRule(holidayRollRule);
+        String catchUpPolicy = optionalEnum(
+                values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, CATCH_UP_POLICY_MAX_LENGTH, "NONE", issues);
+        rowBuilder.catchUpPolicy(catchUpPolicy);
+        Integer catchUpMaxDays = optionalInteger(values, COL_CATCH_UP_MAX_DAYS, 0, 0, issues);
+        rowBuilder.catchUpMaxDays(catchUpMaxDays);
+        List<LocalDate> holidays = parseHolidays(values.get(COL_HOLIDAYS), issues);
+        rowBuilder.holidays(holidays);
+        Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
+        rowBuilder.enabled(enabled);
+        String description = normalize(values.get(COL_DESCRIPTION));
+        rowBuilder.description(description);
+        return rowBuilder.build();
     }
-    rowBuilder.timezone(timezone);
-    String holidayRollRule = optionalEnum(
-        values,
-        COL_HOLIDAY_ROLL_RULE,
-        HOLIDAY_ROLL_RULES,
-        HOLIDAY_ROLL_RULE_MAX_LENGTH,
-        "SKIP",
-        issues);
-    rowBuilder.holidayRollRule(holidayRollRule);
-    String catchUpPolicy = optionalEnum(
-        values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, CATCH_UP_POLICY_MAX_LENGTH, "NONE", issues);
-    rowBuilder.catchUpPolicy(catchUpPolicy);
-    Integer catchUpMaxDays = optionalInteger(values, COL_CATCH_UP_MAX_DAYS, 0, 0, issues);
-    rowBuilder.catchUpMaxDays(catchUpMaxDays);
-    List<LocalDate> holidays = parseHolidays(values.get(COL_HOLIDAYS), issues);
-    rowBuilder.holidays(holidays);
-    Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
-    rowBuilder.enabled(enabled);
-    String description = normalize(values.get(COL_DESCRIPTION));
-    rowBuilder.description(description);
-    return rowBuilder.build();
-  }
 
-  public static BusinessCalendarUpsertParam toUpsertParam(CalendarRow row, String operatorId) {
-    BusinessCalendarUpsertParam param = new BusinessCalendarUpsertParam();
-    param.setTenantId(row.tenantId());
-    param.setCalendarCode(row.calendarCode());
-    param.setCalendarName(row.calendarName());
-    param.setTimezone(row.timezone());
-    param.setHolidayRollRule(row.holidayRollRule());
-    param.setCatchUpPolicy(row.catchUpPolicy());
-    param.setCatchUpMaxDays(row.catchUpMaxDays());
-    param.setEnabled(row.enabled());
-    param.setDescription(row.description());
-    param.setCreatedBy(operatorId);
-    param.setUpdatedBy(operatorId);
-    return param;
-  }
+    public static BusinessCalendarUpsertParam toUpsertParam(CalendarRow row, String operatorId) {
+        BusinessCalendarUpsertParam param = new BusinessCalendarUpsertParam();
+        param.setTenantId(row.tenantId());
+        param.setCalendarCode(row.calendarCode());
+        param.setCalendarName(row.calendarName());
+        param.setTimezone(row.timezone());
+        param.setHolidayRollRule(row.holidayRollRule());
+        param.setCatchUpPolicy(row.catchUpPolicy());
+        param.setCatchUpMaxDays(row.catchUpMaxDays());
+        param.setEnabled(row.enabled());
+        param.setDescription(row.description());
+        param.setCreatedBy(operatorId);
+        param.setUpdatedBy(operatorId);
+        return param;
+    }
 
-  private static List<LocalDate> parseHolidays(String value, List<String> issues) {
-    String normalized = normalize(value);
-    if (!Texts.hasText(normalized)) {
-      return List.of();
+    private static List<LocalDate> parseHolidays(String value, List<String> issues) {
+        String normalized = normalize(value);
+        if (!Texts.hasText(normalized)) {
+            return List.of();
+        }
+        String body = normalized;
+        if (body.startsWith("[") && body.endsWith("]")) {
+            String bracketContents = body.substring(1, body.length() - 1);
+            String unquotedContents = bracketContents.replace("\"", "");
+            body = unquotedContents;
+        }
+        List<LocalDate> dates = new ArrayList<>();
+        for (String part : body.split(",")) {
+            String item = part.trim();
+            if (!Texts.hasText(item)) {
+                continue;
+            }
+            try {
+                dates.add(LocalDate.parse(item));
+            } catch (DateTimeParseException e) {
+                issues.add("holidays must be comma separated yyyy-MM-dd dates");
+            }
+        }
+        return List.copyOf(dates);
     }
-    String body = normalized;
-    if (body.startsWith("[") && body.endsWith("]")) {
-      String bracketContents = body.substring(1, body.length() - 1);
-      String unquotedContents = bracketContents.replace("\"", "");
-      body = unquotedContents;
-    }
-    List<LocalDate> dates = new ArrayList<>();
-    for (String part : body.split(",")) {
-      String item = part.trim();
-      if (!Texts.hasText(item)) {
-        continue;
-      }
-      try {
-        dates.add(LocalDate.parse(item));
-      } catch (DateTimeParseException e) {
-        issues.add("holidays must be comma separated yyyy-MM-dd dates");
-      }
-    }
-    return List.copyOf(dates);
-  }
 
-  @Builder
-  public record CalendarRow(
-      int rowNo,
-      String tenantId,
-      String calendarCode,
-      String calendarName,
-      String timezone,
-      String holidayRollRule,
-      String catchUpPolicy,
-      Integer catchUpMaxDays,
-      List<LocalDate> holidays,
-      Boolean enabled,
-      String description) {}
+    @Builder
+    public record CalendarRow(
+            int rowNo,
+            String tenantId,
+            String calendarCode,
+            String calendarName,
+            String timezone,
+            String holidayRollRule,
+            String catchUpPolicy,
+            Integer catchUpMaxDays,
+            List<LocalDate> holidays,
+            Boolean enabled,
+            String description) {}
 }

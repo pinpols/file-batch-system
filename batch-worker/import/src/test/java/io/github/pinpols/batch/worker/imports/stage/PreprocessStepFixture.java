@@ -12,25 +12,25 @@ import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperti
 /** 仅为纯测试组装默认配置和对象读取协作者，生产代码始终由 Spring 注入。 */
 public final class PreprocessStepFixture {
 
-  private PreprocessStepFixture() {}
+    private PreprocessStepFixture() {}
 
-  public static PreprocessStep create(
-      PlatformFileRecordRepository fileRecords,
-      PlatformFileTemplateRepository pipelineDefinitions,
-      BatchSecurityProperties security,
-      BatchObjectCryptoService cryptoService,
-      S3StorageProperties storageProperties,
-      BatchObjectStore objectStore) {
-    WorkerImportPayloadProperties properties = new WorkerImportPayloadProperties();
-    ImportPreprocessObjectSource source =
-        new ImportPreprocessObjectSource(fileRecords, storageProperties, objectStore, properties);
-    return new PreprocessStep(
-        fileRecords,
-        pipelineDefinitions,
-        security,
-        cryptoService,
-        properties,
-        JsonUtils.newDefaultMapper(),
-        source);
-  }
+    public static PreprocessStep create(
+            PlatformFileRecordRepository fileRecords,
+            PlatformFileTemplateRepository pipelineDefinitions,
+            BatchSecurityProperties security,
+            BatchObjectCryptoService cryptoService,
+            S3StorageProperties storageProperties,
+            BatchObjectStore objectStore) {
+        WorkerImportPayloadProperties properties = new WorkerImportPayloadProperties();
+        ImportPreprocessObjectSource source =
+                new ImportPreprocessObjectSource(fileRecords, storageProperties, objectStore, properties);
+        return new PreprocessStep(
+                fileRecords,
+                pipelineDefinitions,
+                security,
+                cryptoService,
+                properties,
+                JsonUtils.newDefaultMapper(),
+                source);
+    }
 }

@@ -25,67 +25,63 @@ import org.springframework.web.client.RestClient;
 @DisplayName("上游就绪查询客户端")
 class UpstreamReadinessCheckerTest {
 
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JUNE, 20);
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JUNE, 20);
 
-  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-  private RestClient orchestratorRestClient;
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private RestClient orchestratorRestClient;
 
-  @SuppressWarnings("unchecked")
-  private void stubBody(ReadinessResponse response) {
-    lenient()
-        .when(orchestratorRestClient
-            .get()
-            .uri(any(Function.class))
-            .retrieve()
-            .body(eq(ReadinessResponse.class)))
-        .thenReturn(response);
-  }
+    @SuppressWarnings("unchecked")
+    private void stubBody(ReadinessResponse response) {
+        lenient()
+                .when(orchestratorRestClient
+                        .get()
+                        .uri(any(Function.class))
+                        .retrieve()
+                        .body(eq(ReadinessResponse.class)))
+                .thenReturn(response);
+    }
 
-  /** 构造就绪门禁配置，便于按开关值直测。 */
-  private static ReadinessGateProperties gate(boolean enabled) {
-    ReadinessGateProperties properties = new ReadinessGateProperties();
-    properties.setEnabled(enabled);
-    return properties;
-  }
+    /** 构造就绪门禁配置，便于按开关值直测。 */
+    private static ReadinessGateProperties gate(boolean enabled) {
+        ReadinessGateProperties properties = new ReadinessGateProperties();
+        properties.setEnabled(enabled);
+        return properties;
+    }
 
-  @Test
-  @DisplayName("上游 ready=true → 放行")
-  void shouldAllow_whenUpstreamReady() {
-    stubBody(new ReadinessResponse(true, null, Instant.parse("2026-06-20T04:15:00Z")));
-    UpstreamReadinessPort checker =
-        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
+    @Test
+    @DisplayName("上游 ready=true → 放行")
+    void shouldAllow_whenUpstreamReady() {
+        stubBody(new ReadinessResponse(true, null, Instant.parse("2026-06-20T04:15:00Z")));
+        UpstreamReadinessPort checker = new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE))
-        .contains(Instant.parse("2026-06-20T04:15:00Z"));
-  }
+        assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).contains(Instant.parse("2026-06-20T04:15:00Z"));
+    }
 
-  @Test
-  @DisplayName("上游 ready=false → 拦截")
-  void shouldBlock_whenUpstreamNotReady() {
-    stubBody(new ReadinessResponse(false, "upstream-job-not-success"));
-    UpstreamReadinessChecker checker =
-        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
+    @Test
+    @DisplayName("上游 ready=false → 拦截")
+    void shouldBlock_whenUpstreamNotReady() {
+        stubBody(new ReadinessResponse(false, "upstream-job-not-success"));
+        UpstreamReadinessChecker checker = new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
-  }
+        assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
+    }
 
-  @Test
-  @DisplayName("查询抛异常 → fail-closed 拦截")
-  void shouldFailClosed_whenQueryThrows() {
-    when(orchestratorRestClient.get()).thenThrow(new RuntimeException("orchestrator down"));
-    UpstreamReadinessChecker checker =
-        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
+    @Test
+    @DisplayName("查询抛异常 → fail-closed 拦截")
+    void shouldFailClosed_whenQueryThrows() {
+        when(orchestratorRestClient.get()).thenThrow(new RuntimeException("orchestrator down"));
+        UpstreamReadinessChecker checker = new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
-  }
+        assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
+    }
 
-  @Test
-  @DisplayName("总开关关闭 → 恒放行,不查 orchestrator")
-  void shouldAlwaysAllow_whenGateDisabled() {
-    RestClient unused = mock(RestClient.class);
-    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(unused, gate(false));
+    @Test
+    @DisplayName("总开关关闭 → 恒放行,不查 orchestrator")
+    void shouldAlwaysAllow_whenGateDisabled() {
+        RestClient unused = mock(RestClient.class);
+        UpstreamReadinessChecker checker = new UpstreamReadinessChecker(unused, gate(false));
 
-    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isPresent();
-    verifyNoInteractions(unused);
-  }
+        assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isPresent();
+        verifyNoInteractions(unused);
+    }
 }

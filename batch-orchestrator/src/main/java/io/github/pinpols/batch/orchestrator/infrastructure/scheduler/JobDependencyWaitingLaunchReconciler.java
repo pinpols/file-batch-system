@@ -36,189 +36,180 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JobDependencyWaitingLaunchReconciler {
 
-  /**
-   * 重试失败原因写入 job_dependency_waiting_launch.last_not_ready_reason，该列为 VARCHAR(512)
-   * （V257__job_dependency_waiting_launch.sql），截到 500 留余量。
-   */
-  private static final int WAIT_CHECK_REASON_MAX_LENGTH = 500;
+    /**
+     * 重试失败原因写入 job_dependency_waiting_launch.last_not_ready_reason，该列为 VARCHAR(512)
+     * （V257__job_dependency_waiting_launch.sql），截到 500 留余量。
+     */
+    private static final int WAIT_CHECK_REASON_MAX_LENGTH = 500;
 
-  private static final int TENANT_BATCH_SIZE = 100;
+    private static final int TENANT_BATCH_SIZE = 100;
 
-  private final TenantDirectoryMapper tenantDirectoryMapper;
-  private final JobDependencyWaitingLaunchService waitingLaunchService;
-  private final ObjectProvider<LaunchService> launchServiceProvider;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AlertEventService alertEventService;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final ObjectProvider<WorkflowNodeDispatchService> workflowDispatchProvider;
+    private final TenantDirectoryMapper tenantDirectoryMapper;
+    private final JobDependencyWaitingLaunchService waitingLaunchService;
+    private final ObjectProvider<LaunchService> launchServiceProvider;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AlertEventService alertEventService;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final ObjectProvider<WorkflowNodeDispatchService> workflowDispatchProvider;
 
-  private final JobDependencyWaitProperties dependencyWaitProperties;
+    private final JobDependencyWaitProperties dependencyWaitProperties;
 
-  @Scheduled(fixedDelayString = "${batch.job-dependency-wait.reconcile-interval-millis:30000}")
-  @SchedulerLock(
-      name = "job_dependency_wait_reconcile",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT5S")
-  public void reconcile() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    List<String> tenantIds = tenantDirectoryMapper.selectRunnableTenantIds();
-    if (EmptyChecks.isEmpty(tenantIds)) {
-      return;
-    }
-    for (String tenantId : tenantIds) {
-      try {
-        reconcileTenant(tenantId);
-      } catch (Exception failure) {
-        log.warn(
-            "job dependency wait reconcile failed for tenant={}: {}",
-            tenantId,
-            SwallowedExceptionLogger.summary(failure));
-      }
-    }
-  }
-
-  public void reconcileTenant(String tenantId) {
-    RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileTenantInContext(tenantId));
-  }
-
-  private void reconcileTenantInContext(String tenantId) {
-    List<JobDependencyWaitingLaunchEntity> waiting =
-        waitingLaunchService.selectWaiting(tenantId, TENANT_BATCH_SIZE);
-    for (JobDependencyWaitingLaunchEntity entry :
-        EmptyChecks.isNull(waiting) ? List.<JobDependencyWaitingLaunchEntity>of() : waiting) {
-      try {
-        reconcileOne(tenantId, entry);
-      } catch (RuntimeException failure) {
-        log.warn(
-            "job dependency wait entry failed: tenantId={}, requestId={}, error={}",
-            tenantId,
-            entry.requestId(),
-            SwallowedExceptionLogger.summary(failure));
-      }
-    }
-    for (String requestId :
-        waitingLaunchService.selectRejectedForWorkflowProgression(tenantId, TENANT_BATCH_SIZE)) {
-      try {
-        workflowDispatchProvider.getObject().rejectDeferredChildRequest(tenantId, requestId);
-      } catch (RuntimeException failure) {
-        log.warn(
-            "deferred Job rejection progression failed: tenantId={}, requestId={}, error={}",
-            tenantId,
-            requestId,
-            SwallowedExceptionLogger.summary(failure));
-      }
-    }
-  }
-
-  void reconcileOne(String tenantId, JobDependencyWaitingLaunchEntity entry) {
-    TriggerRequestEntity triggerRequest =
-        waitingLaunchService.selectOriginalRequest(tenantId, entry.requestId());
-    if (EmptyChecks.isNull(triggerRequest)) {
-      waitingLaunchService.markWaitCancelled(tenantId, entry.requestId());
-      return;
-    }
-    String requestStatus = triggerRequest.getRequestStatus();
-    boolean launchRequestWasNotAccepted = TriggerRequestStatus.REJECTED.code().equals(requestStatus)
-        || TriggerRequestStatus.DUPLICATE.code().equals(requestStatus)
-        || TriggerRequestStatus.GIVE_UP.code().equals(requestStatus);
-    if (launchRequestWasNotAccepted) {
-      waitingLaunchService.markWaitCancelled(tenantId, entry.requestId());
-      return;
-    }
-    if (TriggerRequestStatus.LAUNCHED.code().equals(requestStatus)) {
-      waitingLaunchService.markWaitReleased(tenantId, entry.requestId());
-      return;
+    @Scheduled(fixedDelayString = "${batch.job-dependency-wait.reconcile-interval-millis:30000}")
+    @SchedulerLock(name = "job_dependency_wait_reconcile", lockAtMostFor = "PT5M", lockAtLeastFor = "PT5S")
+    public void reconcile() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        List<String> tenantIds = tenantDirectoryMapper.selectRunnableTenantIds();
+        if (EmptyChecks.isEmpty(tenantIds)) {
+            return;
+        }
+        for (String tenantId : tenantIds) {
+            try {
+                reconcileTenant(tenantId);
+            } catch (Exception failure) {
+                log.warn(
+                        "job dependency wait reconcile failed for tenant={}: {}",
+                        tenantId,
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        }
     }
 
-    Optional<LaunchRequest> restored =
-        waitingLaunchService.restoreWaitRequest(entry, triggerRequest);
-    if (!restored.isPresent()) {
-      waitingLaunchService.rejectInvalidWait(entry);
-      log.error(
-          "invalid persisted dependency-wait payload; recovery refused tenant={} requestId={}",
-          tenantId,
-          entry.requestId());
-      return;
+    public void reconcileTenant(String tenantId) {
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileTenantInContext(tenantId));
     }
 
-    String notReadyReason = waitingLaunchService.findNotReadyReason(
-        tenantId, entry.jobCode(), entry.bizDate(), entry.dependencySnapshot());
-    if (EmptyChecks.isNotNull(notReadyReason)) {
-      waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), notReadyReason);
-      maybeEmitTimeoutAlert(tenantId, entry, triggerRequest, notReadyReason);
-      return;
+    private void reconcileTenantInContext(String tenantId) {
+        List<JobDependencyWaitingLaunchEntity> waiting =
+                waitingLaunchService.selectWaiting(tenantId, TENANT_BATCH_SIZE);
+        for (JobDependencyWaitingLaunchEntity entry :
+                EmptyChecks.isNull(waiting) ? List.<JobDependencyWaitingLaunchEntity>of() : waiting) {
+            try {
+                reconcileOne(tenantId, entry);
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "job dependency wait entry failed: tenantId={}, requestId={}, error={}",
+                        tenantId,
+                        entry.requestId(),
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        }
+        for (String requestId :
+                waitingLaunchService.selectRejectedForWorkflowProgression(tenantId, TENANT_BATCH_SIZE)) {
+            try {
+                workflowDispatchProvider.getObject().rejectDeferredChildRequest(tenantId, requestId);
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "deferred Job rejection progression failed: tenantId={}, requestId={}, error={}",
+                        tenantId,
+                        requestId,
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        }
     }
 
-    try {
-      LaunchRequest launchRequest = restored.get();
-      LaunchResponse response = launchServiceProvider.getObject().launch(launchRequest);
-      if (EmptyChecks.isNotNull(response) && EmptyChecks.isNotNull(response.instanceNo())) {
-        waitingLaunchService.markWaitReleased(tenantId, entry.requestId());
-      } else {
-        waitingLaunchService.recordWaitCheck(
-            tenantId, entry.requestId(), "LAUNCH_BLOCKED_BY_OTHER_GATE");
-      }
-    } catch (Exception failure) {
-      String reason = "LAUNCH_RETRY:" + SwallowedExceptionLogger.summary(failure);
-      String boundedReason =
-          reason.substring(0, Math.min(reason.length(), WAIT_CHECK_REASON_MAX_LENGTH));
-      waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), boundedReason);
-      log.warn(
-          "deferred job launch retry failed: tenantId={}, requestId={}, error={}",
-          tenantId,
-          entry.requestId(),
-          SwallowedExceptionLogger.summary(failure));
-    }
-  }
+    void reconcileOne(String tenantId, JobDependencyWaitingLaunchEntity entry) {
+        TriggerRequestEntity triggerRequest = waitingLaunchService.selectOriginalRequest(tenantId, entry.requestId());
+        if (EmptyChecks.isNull(triggerRequest)) {
+            waitingLaunchService.markWaitCancelled(tenantId, entry.requestId());
+            return;
+        }
+        String requestStatus = triggerRequest.getRequestStatus();
+        boolean launchRequestWasNotAccepted =
+                TriggerRequestStatus.REJECTED.code().equals(requestStatus)
+                        || TriggerRequestStatus.DUPLICATE.code().equals(requestStatus)
+                        || TriggerRequestStatus.GIVE_UP.code().equals(requestStatus);
+        if (launchRequestWasNotAccepted) {
+            waitingLaunchService.markWaitCancelled(tenantId, entry.requestId());
+            return;
+        }
+        if (TriggerRequestStatus.LAUNCHED.code().equals(requestStatus)) {
+            waitingLaunchService.markWaitReleased(tenantId, entry.requestId());
+            return;
+        }
 
-  private void maybeEmitTimeoutAlert(
-      String tenantId,
-      JobDependencyWaitingLaunchEntity entry,
-      TriggerRequestEntity triggerRequest,
-      String notReadyReason) {
-    boolean dependencyWaitNeedsNoTimeoutAlert =
-        dependencyWaitProperties.getTimeoutAlertSeconds() <= 0
-            || EmptyChecks.isNull(entry.createdAt())
-            || EmptyChecks.isNotNull(entry.timeoutAlertedAt());
-    if (dependencyWaitNeedsNoTimeoutAlert) {
-      return;
+        Optional<LaunchRequest> restored = waitingLaunchService.restoreWaitRequest(entry, triggerRequest);
+        if (!restored.isPresent()) {
+            waitingLaunchService.rejectInvalidWait(entry);
+            log.error(
+                    "invalid persisted dependency-wait payload; recovery refused tenant={} requestId={}",
+                    tenantId,
+                    entry.requestId());
+            return;
+        }
+
+        String notReadyReason = waitingLaunchService.findNotReadyReason(
+                tenantId, entry.jobCode(), entry.bizDate(), entry.dependencySnapshot());
+        if (EmptyChecks.isNotNull(notReadyReason)) {
+            waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), notReadyReason);
+            maybeEmitTimeoutAlert(tenantId, entry, triggerRequest, notReadyReason);
+            return;
+        }
+
+        try {
+            LaunchRequest launchRequest = restored.get();
+            LaunchResponse response = launchServiceProvider.getObject().launch(launchRequest);
+            if (EmptyChecks.isNotNull(response) && EmptyChecks.isNotNull(response.instanceNo())) {
+                waitingLaunchService.markWaitReleased(tenantId, entry.requestId());
+            } else {
+                waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), "LAUNCH_BLOCKED_BY_OTHER_GATE");
+            }
+        } catch (Exception failure) {
+            String reason = "LAUNCH_RETRY:" + SwallowedExceptionLogger.summary(failure);
+            String boundedReason = reason.substring(0, Math.min(reason.length(), WAIT_CHECK_REASON_MAX_LENGTH));
+            waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), boundedReason);
+            log.warn(
+                    "deferred job launch retry failed: tenantId={}, requestId={}, error={}",
+                    tenantId,
+                    entry.requestId(),
+                    SwallowedExceptionLogger.summary(failure));
+        }
     }
-    Instant now = dateTimeSupport.nowInstant();
-    Instant timeoutAlertAt =
-        entry.createdAt().plusSeconds(dependencyWaitProperties.getTimeoutAlertSeconds());
-    if (now.isBefore(timeoutAlertAt)) {
-      return;
+
+    private void maybeEmitTimeoutAlert(
+            String tenantId,
+            JobDependencyWaitingLaunchEntity entry,
+            TriggerRequestEntity triggerRequest,
+            String notReadyReason) {
+        boolean dependencyWaitNeedsNoTimeoutAlert = dependencyWaitProperties.getTimeoutAlertSeconds() <= 0
+                || EmptyChecks.isNull(entry.createdAt())
+                || EmptyChecks.isNotNull(entry.timeoutAlertedAt());
+        if (dependencyWaitNeedsNoTimeoutAlert) {
+            return;
+        }
+        Instant now = dateTimeSupport.nowInstant();
+        Instant timeoutAlertAt = entry.createdAt().plusSeconds(dependencyWaitProperties.getTimeoutAlertSeconds());
+        if (now.isBefore(timeoutAlertAt)) {
+            return;
+        }
+        if (waitingLaunchService.claimWaitTimeoutAlert(tenantId, entry.requestId(), now) != 1) {
+            return;
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("jobCode", entry.jobCode());
+        detail.put("bizDate", entry.bizDate().toString());
+        detail.put("dependencySnapshot", entry.dependencySnapshot());
+        detail.put("lastNotReadyReason", notReadyReason);
+        detail.put("createdAt", entry.createdAt().toString());
+        detail.put("timeoutSeconds", dependencyWaitProperties.getTimeoutAlertSeconds());
+        detail.put("requestId", entry.requestId());
+        if (EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
+            detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId());
+        }
+        if (!EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {
+            detail.put("nodeCode", triggerRequest.getParentNodeCode());
+        }
+        AlertEmitCommand alertRequest = AlertEmitCommand.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT")
+                .severity("ERROR")
+                .title("job dependency wait exceeded timeout")
+                .detailJson(JsonUtils.toJson(detail))
+                .resourceKey(tenantId + ":" + entry.jobCode() + ":" + entry.bizDate() + ":" + entry.requestId())
+                .traceId(triggerRequest.getTraceId())
+                .build();
+        alertEventService.emit(alertRequest);
     }
-    if (waitingLaunchService.claimWaitTimeoutAlert(tenantId, entry.requestId(), now) != 1) {
-      return;
-    }
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("jobCode", entry.jobCode());
-    detail.put("bizDate", entry.bizDate().toString());
-    detail.put("dependencySnapshot", entry.dependencySnapshot());
-    detail.put("lastNotReadyReason", notReadyReason);
-    detail.put("createdAt", entry.createdAt().toString());
-    detail.put("timeoutSeconds", dependencyWaitProperties.getTimeoutAlertSeconds());
-    detail.put("requestId", entry.requestId());
-    if (EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
-      detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId());
-    }
-    if (!EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {
-      detail.put("nodeCode", triggerRequest.getParentNodeCode());
-    }
-    AlertEmitCommand alertRequest = AlertEmitCommand.builder()
-        .tenantId(tenantId)
-        .serviceName("batch-orchestrator")
-        .alertType("BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT")
-        .severity("ERROR")
-        .title("job dependency wait exceeded timeout")
-        .detailJson(JsonUtils.toJson(detail))
-        .resourceKey(
-            tenantId + ":" + entry.jobCode() + ":" + entry.bizDate() + ":" + entry.requestId())
-        .traceId(triggerRequest.getTraceId())
-        .build();
-    alertEventService.emit(alertRequest);
-  }
 }

@@ -14,22 +14,22 @@ import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
 @ConditionalOnProperty(
-    prefix = "batch.startup-self-check",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.startup-self-check",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 @EnableConfigurationProperties(BatchStartupSelfCheckProperties.class)
 /** 按开关装配启动期基础设施与迁移自检。 */
 public class BatchStartupSelfCheckAutoConfiguration {
 
-  @Bean
-  public BatchStartupSelfCheck batchStartupSelfCheck(
-      InformationSchemaMapper informationSchemaMapper,
-      BatchStartupSelfCheckProperties properties,
-      ObjectProvider<Flyway> flyway,
-      ConfigurableApplicationContext applicationContext,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    return new BatchStartupSelfCheck(
-        informationSchemaMapper, properties, flyway, applicationContext, meterRegistryProvider);
-  }
+    @Bean
+    public BatchStartupSelfCheck batchStartupSelfCheck(
+            InformationSchemaMapper informationSchemaMapper,
+            BatchStartupSelfCheckProperties properties,
+            ObjectProvider<Flyway> flyway,
+            ConfigurableApplicationContext applicationContext,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        return new BatchStartupSelfCheck(
+                informationSchemaMapper, properties, flyway, applicationContext, meterRegistryProvider);
+    }
 }

@@ -16,19 +16,19 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入模块编码规约守护测试:事件监听与定时方法上的跨模块事务约束")
 class ImportCodingConventionsArchTest {
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.worker.imports..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.worker.imports..");
 
-  @Test
-  @DisplayName("事件监听方法叠加事务注解时,规约检查判定为违规")
-  void shouldRejectTransactional_whenEventListenerMethodAnnotated() {
-    CodingConventionsArchRules.noTransactionalOnEventListenerRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("事件监听方法叠加事务注解时,规约检查判定为违规")
+    void shouldRejectTransactional_whenEventListenerMethodAnnotated() {
+        CodingConventionsArchRules.noTransactionalOnEventListenerRule().check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("定时方法叠加事务注解时,规约检查判定为违规")
-  void shouldRejectTransactional_whenScheduledMethodAnnotated() {
-    CodingConventionsArchRules.noTransactionalOnScheduledRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("定时方法叠加事务注解时,规约检查判定为违规")
+    void shouldRejectTransactional_whenScheduledMethodAnnotated() {
+        CodingConventionsArchRules.noTransactionalOnScheduledRule().check(CLASSES);
+    }
 }

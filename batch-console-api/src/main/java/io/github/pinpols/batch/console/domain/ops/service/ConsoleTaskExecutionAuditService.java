@@ -41,84 +41,75 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleTaskExecutionAuditService {
 
-  private static final Set<String> VALUE_MASKED_MAPS = Set.of("env", "headers");
-  private static final Set<String> FULLY_MASKED_KEYS = Set.of("auth");
-  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final Set<String> VALUE_MASKED_MAPS = Set.of("env", "headers");
+    private static final Set<String> FULLY_MASKED_KEYS = Set.of("auth");
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-  private final JobTaskMapper jobTaskMapper;
-  private final ObjectMapper objectMapper;
-  private final TenantIdResolver tenantGuard;
+    private final JobTaskMapper jobTaskMapper;
+    private final ObjectMapper objectMapper;
+    private final TenantIdResolver tenantGuard;
 
-  /** 读指定租户下某任务的执行审计；不存在或不属于该租户时抛 NOT_FOUND。 */
-  public TaskExecutionAuditResponse getExecutionAudit(String tenantId, Long taskId) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    JobTaskExecutionAuditView task =
-        jobTaskMapper.selectExecutionAuditByTenantAndId(resolvedTenantId, taskId);
-    if (EmptyChecks.isNull(task)) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
+    /** 读指定租户下某任务的执行审计；不存在或不属于该租户时抛 NOT_FOUND。 */
+    public TaskExecutionAuditResponse getExecutionAudit(String tenantId, Long taskId) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        JobTaskExecutionAuditView task = jobTaskMapper.selectExecutionAuditByTenantAndId(resolvedTenantId, taskId);
+        if (EmptyChecks.isNull(task)) {
+            throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
+        }
+        Map<String, Object> parameters = maskParameters(parse(task.getEffectiveParameters(), taskId));
+        Map<String, Object> resultSummary =
+                SensitiveEvidenceMasking.maskMetadata(parse(task.getResultSummary(), taskId));
+        String errorMessage = EmptyChecks.isNull(task.getErrorMessage())
+                ? null
+                : SensitiveEvidenceMasking.maskText(task.getErrorMessage());
+        TaskExecutionAuditResponse.Outcome outcome = new TaskExecutionAuditResponse.Outcome(
+                task.getAssignedWorkerCode(),
+                task.getStartedAt(),
+                task.getFinishedAt(),
+                resultSummary,
+                task.getErrorCode(),
+                errorMessage);
+        return new TaskExecutionAuditResponse(
+                task.getId(), task.getJobInstanceId(), task.getJobCode(), task.getTaskStatus(), parameters, outcome);
     }
-    Map<String, Object> parameters = maskParameters(parse(task.getEffectiveParameters(), taskId));
-    Map<String, Object> resultSummary =
-        SensitiveEvidenceMasking.maskMetadata(parse(task.getResultSummary(), taskId));
-    String errorMessage = EmptyChecks.isNull(task.getErrorMessage())
-        ? null
-        : SensitiveEvidenceMasking.maskText(task.getErrorMessage());
-    TaskExecutionAuditResponse.Outcome outcome = new TaskExecutionAuditResponse.Outcome(
-        task.getAssignedWorkerCode(),
-        task.getStartedAt(),
-        task.getFinishedAt(),
-        resultSummary,
-        task.getErrorCode(),
-        errorMessage);
-    return new TaskExecutionAuditResponse(
-        task.getId(),
-        task.getJobInstanceId(),
-        task.getJobCode(),
-        task.getTaskStatus(),
-        parameters,
-        outcome);
-  }
 
-  static Map<String, Object> maskParameters(Map<String, Object> parameters) {
-    if (EmptyChecks.isNull(parameters)) {
-      return null;
+    static Map<String, Object> maskParameters(Map<String, Object> parameters) {
+        if (EmptyChecks.isNull(parameters)) {
+            return null;
+        }
+        Map<String, Object> masked = new LinkedHashMap<>();
+        parameters.forEach((key, value) -> {
+            String normalized = EmptyChecks.isNull(key) ? "" : key.toLowerCase(Locale.ROOT);
+            if (FULLY_MASKED_KEYS.contains(normalized)) {
+                masked.put(key, SecretMasking.MASKED_VALUE);
+            } else if (VALUE_MASKED_MAPS.contains(normalized) && value instanceof Map<?, ?> map) {
+                Map<String, Object> keysOnly = new LinkedHashMap<>();
+                map.keySet().forEach(name -> keysOnly.put(String.valueOf(name), SecretMasking.MASKED_VALUE));
+                masked.put(key, keysOnly);
+            } else {
+                masked.put(key, maskValue(key, value));
+            }
+        });
+        return masked;
     }
-    Map<String, Object> masked = new LinkedHashMap<>();
-    parameters.forEach((key, value) -> {
-      String normalized = EmptyChecks.isNull(key) ? "" : key.toLowerCase(Locale.ROOT);
-      if (FULLY_MASKED_KEYS.contains(normalized)) {
-        masked.put(key, SecretMasking.MASKED_VALUE);
-      } else if (VALUE_MASKED_MAPS.contains(normalized) && value instanceof Map<?, ?> map) {
-        Map<String, Object> keysOnly = new LinkedHashMap<>();
-        map.keySet()
-            .forEach(name -> keysOnly.put(String.valueOf(name), SecretMasking.MASKED_VALUE));
-        masked.put(key, keysOnly);
-      } else {
-        masked.put(key, maskValue(key, value));
-      }
-    });
-    return masked;
-  }
 
-  private static Object maskValue(String key, Object value) {
-    return SecretMasking.isSensitive(key)
-        ? SecretMasking.MASKED_VALUE
-        : SensitiveEvidenceMasking.maskJsonValue(value);
-  }
+    private static Object maskValue(String key, Object value) {
+        return SecretMasking.isSensitive(key)
+                ? SecretMasking.MASKED_VALUE
+                : SensitiveEvidenceMasking.maskJsonValue(value);
+    }
 
-  /** JSONB 文本解析为对象；空或解析失败返回 null，避免坏数据导致 500。 */
-  private Map<String, Object> parse(String raw, Long taskId) {
-    if (!Texts.hasText(raw)) {
-      return null;
+    /** JSONB 文本解析为对象；空或解析失败返回 null，避免坏数据导致 500。 */
+    private Map<String, Object> parse(String raw, Long taskId) {
+        if (!Texts.hasText(raw)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(raw, MAP_TYPE);
+        } catch (JsonProcessingException e) {
+            log.warn(
+                    "Failed to parse job_task audit JSON (taskId={}): {}", taskId, SwallowedExceptionLogger.summary(e));
+            return null;
+        }
     }
-    try {
-      return objectMapper.readValue(raw, MAP_TYPE);
-    } catch (JsonProcessingException e) {
-      log.warn(
-          "Failed to parse job_task audit JSON (taskId={}): {}",
-          taskId,
-          SwallowedExceptionLogger.summary(e));
-      return null;
-    }
-  }
 }

@@ -15,29 +15,29 @@ import lombok.Data;
 @Data
 public class WorkflowDefinitionVersionEntity {
 
-  private Long id;
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private String workflowCode;
-  private Integer version;
-  private String workflowName;
-  private String workflowType;
-  private Boolean enabled;
-  private Boolean scheduleEnabled;
-  private String scheduleType;
-  private String scheduleExpr;
-  private String timezone;
-  private String triggerMode;
-  private String calendarCode;
-  private String dependsOnJobCode;
+    private Long id;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private String workflowCode;
+    private Integer version;
+    private String workflowName;
+    private String workflowType;
+    private Boolean enabled;
+    private Boolean scheduleEnabled;
+    private String scheduleType;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String calendarCode;
+    private String dependsOnJobCode;
 
-  /** nodes JSONB 全文(::text 读出),反序列化由调用方负责。 */
-  private String nodesJson;
+    /** nodes JSONB 全文(::text 读出),反序列化由调用方负责。 */
+    private String nodesJson;
 
-  /** edges JSONB 全文(::text 读出),反序列化由调用方负责。 */
-  private String edgesJson;
+    /** edges JSONB 全文(::text 读出),反序列化由调用方负责。 */
+    private String edgesJson;
 
-  private String savedBy;
-  private Instant savedAt;
-  private String summary;
+    private String savedBy;
+    private Instant savedAt;
+    private String summary;
 }

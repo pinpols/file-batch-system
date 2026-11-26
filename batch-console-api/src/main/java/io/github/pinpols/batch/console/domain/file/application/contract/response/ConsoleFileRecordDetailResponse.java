@@ -13,43 +13,43 @@ import java.util.Map;
 /** 文件详情只读投影；存储路径和扩展元数据中的凭据在响应边界脱敏。 */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleFileRecordDetailResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("file_name") String fileName,
-    @JsonProperty("mime_type") String mimeType,
-    @JsonProperty("storage_type") String storageType,
-    @JsonProperty("storage_path") String storagePath,
-    @JsonProperty("storage_bucket") String storageBucket,
-    @JsonProperty("metadata_json") Object metadataJson) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("file_name") String fileName,
+        @JsonProperty("mime_type") String mimeType,
+        @JsonProperty("storage_type") String storageType,
+        @JsonProperty("storage_path") String storagePath,
+        @JsonProperty("storage_bucket") String storageBucket,
+        @JsonProperty("metadata_json") Object metadataJson) {
 
-  public static ConsoleFileRecordDetailResponse from(FileRecordStorageView row) {
-    String maskedStoragePath = SensitiveEvidenceMasking.maskText(row.storagePath());
-    Object normalizedMetadata = normalizeMetadata(row.metadataJson());
-    Object maskedMetadata = SensitiveEvidenceMasking.maskJsonValue(normalizedMetadata);
-    return new ConsoleFileRecordDetailResponse(
-        row.id(),
-        row.tenantId(),
-        row.fileName(),
-        row.mimeType(),
-        row.storageType(),
-        maskedStoragePath,
-        row.storageBucket(),
-        maskedMetadata);
-  }
+    public static ConsoleFileRecordDetailResponse from(FileRecordStorageView row) {
+        String maskedStoragePath = SensitiveEvidenceMasking.maskText(row.storagePath());
+        Object normalizedMetadata = normalizeMetadata(row.metadataJson());
+        Object maskedMetadata = SensitiveEvidenceMasking.maskJsonValue(normalizedMetadata);
+        return new ConsoleFileRecordDetailResponse(
+                row.id(),
+                row.tenantId(),
+                row.fileName(),
+                row.mimeType(),
+                row.storageType(),
+                maskedStoragePath,
+                row.storageBucket(),
+                maskedMetadata);
+    }
 
-  private static Object normalizeMetadata(Object metadata) {
-    if (EmptyChecks.isNull(metadata)
-        || metadata instanceof Map<?, ?>
-        || metadata instanceof List<?>
-        || metadata instanceof String
-        || metadata instanceof Number
-        || metadata instanceof Boolean) {
-      return metadata;
+    private static Object normalizeMetadata(Object metadata) {
+        if (EmptyChecks.isNull(metadata)
+                || metadata instanceof Map<?, ?>
+                || metadata instanceof List<?>
+                || metadata instanceof String
+                || metadata instanceof Number
+                || metadata instanceof Boolean) {
+            return metadata;
+        }
+        String json = PostgresqlJsonbTexts.tryExtract(metadata);
+        if (EmptyChecks.isNull(json)) {
+            throw new IllegalStateException("Unsupported file metadata representation");
+        }
+        return JsonUtils.fromJson(json, Object.class);
     }
-    String json = PostgresqlJsonbTexts.tryExtract(metadata);
-    if (EmptyChecks.isNull(json)) {
-      throw new IllegalStateException("Unsupported file metadata representation");
-    }
-    return JsonUtils.fromJson(json, Object.class);
-  }
 }

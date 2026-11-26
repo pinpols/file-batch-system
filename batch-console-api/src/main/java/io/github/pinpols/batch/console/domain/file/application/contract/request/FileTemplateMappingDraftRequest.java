@@ -13,71 +13,71 @@ import lombok.Data;
 @Data
 public class FileTemplateMappingDraftRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  /** IMPORT / EXPORT；缺省按 IMPORT 生成。 */
-  @Size(max = 16)
-  private String direction;
-
-  @Size(max = 64)
-  private String schemaName;
-
-  @Size(max = 128)
-  private String tableName;
-
-  @Size(max = 128)
-  private String tenantColumn;
-
-  private List<String> conflictColumns = new ArrayList<>();
-  private Boolean standardAuditBindings;
-  private String defaultQuerySql;
-
-  private List<@Valid Field> fields = new ArrayList<>();
-
-  public FileTemplateMappingDraftCommand toCommand() {
-    List<FileTemplateMappingDraftCommand.Field> commandFields = EmptyChecks.isNull(fields)
-        ? List.of()
-        : fields.stream().map(Field::toCommandOrNull).toList();
-    return new FileTemplateMappingDraftCommand(
-        tenantId,
-        direction,
-        schemaName,
-        tableName,
-        tenantColumn,
-        conflictColumns,
-        standardAuditBindings,
-        defaultQuerySql,
-        commandFields);
-  }
-
-  @Data
-  public static class Field {
-    @Size(max = 128)
-    private String sourceColumn;
-
-    @Size(max = 128)
-    private String targetColumn;
-
-    @Size(max = 128)
-    private String header;
-
-    @Size(max = 32)
-    private String type;
-
-    private Boolean required;
-    private Boolean persist;
+    /** IMPORT / EXPORT；缺省按 IMPORT 生成。 */
+    @Size(max = 16)
+    private String direction;
 
     @Size(max = 64)
-    private String format;
+    private String schemaName;
 
-    private static FileTemplateMappingDraftCommand.Field toCommandOrNull(Field field) {
-      return field == null ? null : field.toCommand();
+    @Size(max = 128)
+    private String tableName;
+
+    @Size(max = 128)
+    private String tenantColumn;
+
+    private List<String> conflictColumns = new ArrayList<>();
+    private Boolean standardAuditBindings;
+    private String defaultQuerySql;
+
+    private List<@Valid Field> fields = new ArrayList<>();
+
+    public FileTemplateMappingDraftCommand toCommand() {
+        List<FileTemplateMappingDraftCommand.Field> commandFields = EmptyChecks.isNull(fields)
+                ? List.of()
+                : fields.stream().map(Field::toCommandOrNull).toList();
+        return new FileTemplateMappingDraftCommand(
+                tenantId,
+                direction,
+                schemaName,
+                tableName,
+                tenantColumn,
+                conflictColumns,
+                standardAuditBindings,
+                defaultQuerySql,
+                commandFields);
     }
 
-    private FileTemplateMappingDraftCommand.Field toCommand() {
-      return new FileTemplateMappingDraftCommand.Field(
-          sourceColumn, targetColumn, header, type, required, persist, format);
+    @Data
+    public static class Field {
+        @Size(max = 128)
+        private String sourceColumn;
+
+        @Size(max = 128)
+        private String targetColumn;
+
+        @Size(max = 128)
+        private String header;
+
+        @Size(max = 32)
+        private String type;
+
+        private Boolean required;
+        private Boolean persist;
+
+        @Size(max = 64)
+        private String format;
+
+        private static FileTemplateMappingDraftCommand.Field toCommandOrNull(Field field) {
+            return field == null ? null : field.toCommand();
+        }
+
+        private FileTemplateMappingDraftCommand.Field toCommand() {
+            return new FileTemplateMappingDraftCommand.Field(
+                    sourceColumn, targetColumn, header, type, required, persist, format);
+        }
     }
-  }
 }

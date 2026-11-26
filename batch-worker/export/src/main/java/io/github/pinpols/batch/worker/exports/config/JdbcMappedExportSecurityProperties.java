@@ -10,5 +10,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.export.jdbc-mapped")
 public class JdbcMappedExportSecurityProperties {
 
-  private List<String> allowedSchemas = new ArrayList<>(List.of("biz"));
+    private List<String> allowedSchemas = new ArrayList<>(List.of("biz"));
 }

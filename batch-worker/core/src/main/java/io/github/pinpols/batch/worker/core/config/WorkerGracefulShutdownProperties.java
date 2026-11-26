@@ -14,6 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.graceful-shutdown")
 public class WorkerGracefulShutdownProperties {
 
-  /** 等待在途任务收敛的最长秒数。 */
-  private long timeoutSeconds = 120;
+    /** 等待在途任务收敛的最长秒数。 */
+    private long timeoutSeconds = 120;
 }

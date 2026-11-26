@@ -22,28 +22,26 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class ForensicExportLogTransactionService {
 
-  private final ForensicExportLogMapper forensicExportLogMapper;
+    private final ForensicExportLogMapper forensicExportLogMapper;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void insertProcessingRow(
-      ForensicExportRequest request, String exportId, String format, Instant requestedAt) {
-    String scopeJson =
-        JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));
-    String jobCodesJson =
-        EmptyChecks.isEmpty(request.jobCodes()) ? null : JsonUtils.toJson(request.jobCodes());
-    ForensicExportLogEntity exportLogEntity = ForensicExportLogEntity.builder()
-        .tenantId(request.tenantId())
-        .exportId(exportId)
-        .bizDateFrom(request.bizDateFrom())
-        .bizDateTo(request.bizDateTo())
-        .jobCodesJson(jobCodesJson)
-        .scopeJson(scopeJson)
-        .exportFormat(format)
-        .status("PROCESSING")
-        .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
-        .requestedAt(requestedAt)
-        .traceId(request.traceId())
-        .build();
-    forensicExportLogMapper.insert(exportLogEntity);
-  }
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void insertProcessingRow(
+            ForensicExportRequest request, String exportId, String format, Instant requestedAt) {
+        String scopeJson = JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));
+        String jobCodesJson = EmptyChecks.isEmpty(request.jobCodes()) ? null : JsonUtils.toJson(request.jobCodes());
+        ForensicExportLogEntity exportLogEntity = ForensicExportLogEntity.builder()
+                .tenantId(request.tenantId())
+                .exportId(exportId)
+                .bizDateFrom(request.bizDateFrom())
+                .bizDateTo(request.bizDateTo())
+                .jobCodesJson(jobCodesJson)
+                .scopeJson(scopeJson)
+                .exportFormat(format)
+                .status("PROCESSING")
+                .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
+                .requestedAt(requestedAt)
+                .traceId(request.traceId())
+                .build();
+        forensicExportLogMapper.insert(exportLogEntity);
+    }
 }

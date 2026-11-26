@@ -14,13 +14,13 @@ import io.github.pinpols.batch.console.domain.file.application.contract.response
  */
 public interface ConsoleFileChannelApplicationService {
 
-  PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request);
+    PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request);
 
-  ConsoleFileChannelResponse get(Long id, String tenantId);
+    ConsoleFileChannelResponse get(Long id, String tenantId);
 
-  ConsoleFileChannelResponse create(FileChannelCreateRequest request);
+    ConsoleFileChannelResponse create(FileChannelCreateRequest request);
 
-  ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request);
+    ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request);
 
-  void toggle(Long id, String tenantId, Boolean enabled);
+    void toggle(Long id, String tenantId, Boolean enabled);
 }

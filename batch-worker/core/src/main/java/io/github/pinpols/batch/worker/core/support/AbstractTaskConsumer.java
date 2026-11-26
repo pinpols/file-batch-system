@@ -56,468 +56,465 @@ import org.springframework.kafka.support.Acknowledgment;
 @Slf4j
 @SuppressWarnings("java:S2259")
 public abstract class AbstractTaskConsumer
-    implements WorkerLoadProvider, WorkerConsumptionControl, ApplicationContextAware {
+        implements WorkerLoadProvider, WorkerConsumptionControl, ApplicationContextAware {
 
-  /**
-   * DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。
-   * TaskConsumerBatchExecutionCoordinator 共用。
-   */
-  static final int DLQ_ERROR_MESSAGE_MAX_LENGTH = 2000;
+    /**
+     * DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。
+     * TaskConsumerBatchExecutionCoordinator 共用。
+     */
+    static final int DLQ_ERROR_MESSAGE_MAX_LENGTH = 2000;
 
-  /**
-   * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
-   *
-   * <p>消费者使用 {@code MANUAL_IMMEDIATE} 确认模式；仅不调用 acknowledge 不会让当前 poll 的 offset 自动回退。
-   * 使用 nack 才能保证恢复后重新投递，同时避免连接刚恢复时立即形成无间隔重试风暴。
-   */
-  private static final Duration TRANSIENT_REDELIVERY_DELAY = Duration.ofSeconds(1);
+    /**
+     * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
+     *
+     * <p>消费者使用 {@code MANUAL_IMMEDIATE} 确认模式；仅不调用 acknowledge 不会让当前 poll 的 offset 自动回退。
+     * 使用 nack 才能保证恢复后重新投递，同时避免连接刚恢复时立即形成无间隔重试风暴。
+     */
+    private static final Duration TRANSIENT_REDELIVERY_DELAY = Duration.ofSeconds(1);
 
-  /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
-  protected abstract AbstractWorkerLoop workerLoop();
+    /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
+    protected abstract AbstractWorkerLoop workerLoop();
 
-  /** Worker 侧配置（topic、workerType 等）。 */
-  protected abstract WorkerConfiguration workerConfiguration();
+    /** Worker 侧配置（topic、workerType 等）。 */
+    protected abstract WorkerConfiguration workerConfiguration();
 
-  /** 实际执行器：负责 claim + 执行业务 pipeline + report。 */
-  protected abstract TaskDispatchExecutor taskDispatchExecutor();
+    /** 实际执行器：负责 claim + 执行业务 pipeline + report。 */
+    protected abstract TaskDispatchExecutor taskDispatchExecutor();
 
-  /**
-   * KafkaListener 的 container id。public:本类的 {@code @KafkaListener(id =
-   * "#{__listener.listenerId()}")} 经 SpEL 反射调用,要求 public。背压需运行时 pause/resume container,故 id
-   * 固定来自本方法。
-   */
-  public abstract String listenerId();
+    /**
+     * KafkaListener 的 container id。public:本类的 {@code @KafkaListener(id =
+     * "#{__listener.listenerId()}")} 经 SpEL 反射调用,要求 public。背压需运行时 pause/resume container,故 id
+     * 固定来自本方法。
+     */
+    public abstract String listenerId();
 
-  private String batchListenerId() {
-    return listenerId() + "-batch";
-  }
-
-  /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
-  protected abstract DeadLetterPublisher deadLetterPublisher();
-
-  /**
-   * 单条消费入口(公共,所有 worker 子类共用)。id/topic/group 经 SpEL 从子类的 {@link #listenerId()}/ {@link
-   * #topicPattern()}/{@link #consumerGroupId()} 派生,无需各子类重复声明。 仅当 {@code
-   * batch.worker.batch-claim.enabled=false}(默认)时 autoStartup,与批量 listener 互斥。
-   */
-  @KafkaListener(
-      id = "#{__listener.listenerId()}",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}",
-      autoStartup = "#{!${batch.worker.batch-claim.enabled:false}}")
-  public void consume(String payload, Acknowledgment acknowledgment) {
-    if (doConsume(payload)) {
-      acknowledgment.acknowledge();
-    } else {
-      acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
+    private String batchListenerId() {
+        return listenerId() + "-batch";
     }
-  }
 
-  /**
-   * ADR-046 P2 切片 2.3c:批量消费入口(公共,所有 worker 子类共用)。仅当 {@code batch.worker.batch-claim.enabled=true} 时
-   * autoStartup,用批量 container factory 一次收 K 条交 {@link #doConsumeBatch}(claim-batch + 逐 partition
-   * 执行,CLAIM 往返 O(N)→O(N/K))。
-   */
-  @KafkaListener(
-      id = "#{__listener.listenerId()}-batch",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}",
-      containerFactory = "batchKafkaListenerContainerFactory",
-      autoStartup = "${batch.worker.batch-claim.enabled:false}")
-  public void consumeBatch(List<String> payloads, Acknowledgment acknowledgment) {
-    if (doConsumeBatch(payloads)) {
-      acknowledgment.acknowledge();
-    } else {
-      acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
-    }
-  }
+    /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
+    protected abstract DeadLetterPublisher deadLetterPublisher();
 
-  /**
-   * P1: 改为构造器注入(原 @Value field injection 违反 docs/agent-baseline.md #3)。
-   *
-   * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
-   * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。
-   */
-  private final TaskConsumerBackpressureController backpressure;
-
-  private final TaskConsumerBatchExecutionCoordinator batchExecution;
-
-  // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
-  // 注入不到时 topicPattern() 走默认 PATTERN 行为。
-  private WorkerKafkaSubscribeProperties subscribeProperties;
-
-  private BatchKafkaTopicNamespace topicNamespace = new BatchKafkaTopicNamespace("");
-
-  protected AbstractTaskConsumer(
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      WorkerConcurrencyProperties concurrencyProperties) {
-    this.backpressure = new TaskConsumerBackpressureController(
-        kafkaListenerEndpointRegistry,
-        meterRegistryProvider,
-        concurrencyProperties.getMaxConcurrentTasks(),
-        () -> workerConfiguration().workerType());
-    this.batchExecution = new TaskConsumerBatchExecutionCoordinator(
-        () -> workerConfiguration().workerType(),
-        this::taskDispatchExecutor,
-        this::accepts,
-        this::publishToDlqSafely);
-  }
-
-  @Override
-  public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-    this.subscribeProperties =
-        applicationContext.getBeanProvider(WorkerKafkaSubscribeProperties.class).getIfAvailable();
-    this.topicNamespace = applicationContext
-        .getBeanProvider(BatchKafkaTopicNamespace.class)
-        .getIfAvailable(() -> new BatchKafkaTopicNamespace(""));
-  }
-
-  /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
-  @PostConstruct
-  void initSemaphore() {
-    backpressure.initialize();
-  }
-
-  /** 当前正在执行的 task 数，供 worker heartbeat 上报容量占用。 */
-  @Override
-  public int currentLoad() {
-    return backpressure.currentLoad();
-  }
-
-  @Override
-  public void setPlatformDraining(boolean draining) {
-    backpressure.setPlatformDraining(draining, listenerId(), batchListenerId());
-  }
-
-  /**
-   * 由子类的 {@code @KafkaListener} 方法调用。
-   *
-   * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
-   */
-  protected boolean doConsume(String payload) {
-    if (backpressure.isPlatformDraining()) {
-      return false;
-    }
-    Semaphore sem = backpressure.semaphore();
-    boolean acquired = sem.tryAcquire();
-    if (!acquired) {
-      // 背压：当实例内并发达到上限时，暂停拉取新消息。
-      // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程长期停滞导致 rebalance 风险）。
-      backpressure.pause(listenerId());
-      return false;
-    }
-    // C-2.2: 所有 acquired=true 之后的出口（包括 JSON 解析异常 / accepts 失败 / 业务异常）
-    // 都必须经过 finally 释放 permit。之前 try 从 executor 调用才起，
-    // 导致 JsonUtils.fromJson 抛异常时 permit 泄漏，多次触发后信号量耗尽 → 背压失效。
-    TaskDispatchMessage message = null;
-    try {
-      message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
-      WorkerRegistration registration = workerLoop().ensureStarted();
-      if (!accepts(message, registration)) {
-        return true;
-      }
-      injectMdc(message, registration);
-      try {
-        // P1 fix(be-kafka-rls):tenantId 非空且非占位时绑 RLS holder,让 biz DS 事务起点把
-        // app.tenant_id 推到 PG session,触发 RLS policy。tenantId=null/"unknown" 不绑
-        // (让 RLS Phase B 严格策略拒绝,防伪造)。accepts() 已校验非空 → 此处一般不会为 null,但保留双保险。
-        final TaskDispatchMessage finalMessage = message;
-        final WorkerRegistration finalRegistration = registration;
-        String tenantId = finalMessage.tenantId();
-        WorkerExecutionResult result;
-        boolean hasKnownTenantIdentity =
-            EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId);
-        if (hasKnownTenantIdentity) {
-          result = RlsTenantContextHolder.runWithTenant(
-              tenantId,
-              () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
+    /**
+     * 单条消费入口(公共,所有 worker 子类共用)。id/topic/group 经 SpEL 从子类的 {@link #listenerId()}/ {@link
+     * #topicPattern()}/{@link #consumerGroupId()} 派生,无需各子类重复声明。 仅当 {@code
+     * batch.worker.batch-claim.enabled=false}(默认)时 autoStartup,与批量 listener 互斥。
+     */
+    @KafkaListener(
+            id = "#{__listener.listenerId()}",
+            topicPattern = "#{__listener.topicPattern()}",
+            groupId = "#{__listener.consumerGroupId()}",
+            autoStartup = "#{!${batch.worker.batch-claim.enabled:false}}")
+    public void consume(String payload, Acknowledgment acknowledgment) {
+        if (doConsume(payload)) {
+            acknowledgment.acknowledge();
         } else {
-          result = taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId());
+            acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
         }
-        if (result == null) {
-          log.info(
-              "{} task skipped after claim check: taskId={}",
-              workerConfiguration().workerType(),
-              message.taskId());
-          return true;
+    }
+
+    /**
+     * ADR-046 P2 切片 2.3c:批量消费入口(公共,所有 worker 子类共用)。仅当 {@code batch.worker.batch-claim.enabled=true} 时
+     * autoStartup,用批量 container factory 一次收 K 条交 {@link #doConsumeBatch}(claim-batch + 逐 partition
+     * 执行,CLAIM 往返 O(N)→O(N/K))。
+     */
+    @KafkaListener(
+            id = "#{__listener.listenerId()}-batch",
+            topicPattern = "#{__listener.topicPattern()}",
+            groupId = "#{__listener.consumerGroupId()}",
+            containerFactory = "batchKafkaListenerContainerFactory",
+            autoStartup = "${batch.worker.batch-claim.enabled:false}")
+    public void consumeBatch(List<String> payloads, Acknowledgment acknowledgment) {
+        if (doConsumeBatch(payloads)) {
+            acknowledgment.acknowledge();
+        } else {
+            acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
         }
-        log.debug(
-            "{} task processed: taskId={}, success={}, message={}",
-            workerConfiguration().workerType(),
-            result.taskId(),
-            result.success(),
-            SwallowedExceptionLogger.safeMessage(result.message()));
+    }
+
+    /**
+     * P1: 改为构造器注入(原 @Value field injection 违反 docs/agent-baseline.md #3)。
+     *
+     * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
+     * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。
+     */
+    private final TaskConsumerBackpressureController backpressure;
+
+    private final TaskConsumerBatchExecutionCoordinator batchExecution;
+
+    // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
+    // 注入不到时 topicPattern() 走默认 PATTERN 行为。
+    private WorkerKafkaSubscribeProperties subscribeProperties;
+
+    private BatchKafkaTopicNamespace topicNamespace = new BatchKafkaTopicNamespace("");
+
+    protected AbstractTaskConsumer(
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            WorkerConcurrencyProperties concurrencyProperties) {
+        this.backpressure = new TaskConsumerBackpressureController(
+                kafkaListenerEndpointRegistry,
+                meterRegistryProvider,
+                concurrencyProperties.getMaxConcurrentTasks(),
+                () -> workerConfiguration().workerType());
+        this.batchExecution = new TaskConsumerBatchExecutionCoordinator(
+                () -> workerConfiguration().workerType(),
+                this::taskDispatchExecutor,
+                this::accepts,
+                this::publishToDlqSafely);
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.subscribeProperties = applicationContext
+                .getBeanProvider(WorkerKafkaSubscribeProperties.class)
+                .getIfAvailable();
+        this.topicNamespace = applicationContext
+                .getBeanProvider(BatchKafkaTopicNamespace.class)
+                .getIfAvailable(() -> new BatchKafkaTopicNamespace(""));
+    }
+
+    /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
+    @PostConstruct
+    void initSemaphore() {
+        backpressure.initialize();
+    }
+
+    /** 当前正在执行的 task 数，供 worker heartbeat 上报容量占用。 */
+    @Override
+    public int currentLoad() {
+        return backpressure.currentLoad();
+    }
+
+    @Override
+    public void setPlatformDraining(boolean draining) {
+        backpressure.setPlatformDraining(draining, listenerId(), batchListenerId());
+    }
+
+    /**
+     * 由子类的 {@code @KafkaListener} 方法调用。
+     *
+     * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
+     */
+    protected boolean doConsume(String payload) {
+        if (backpressure.isPlatformDraining()) {
+            return false;
+        }
+        Semaphore sem = backpressure.semaphore();
+        boolean acquired = sem.tryAcquire();
+        if (!acquired) {
+            // 背压：当实例内并发达到上限时，暂停拉取新消息。
+            // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程长期停滞导致 rebalance 风险）。
+            backpressure.pause(listenerId());
+            return false;
+        }
+        // C-2.2: 所有 acquired=true 之后的出口（包括 JSON 解析异常 / accepts 失败 / 业务异常）
+        // 都必须经过 finally 释放 permit。之前 try 从 executor 调用才起，
+        // 导致 JsonUtils.fromJson 抛异常时 permit 泄漏，多次触发后信号量耗尽 → 背压失效。
+        TaskDispatchMessage message = null;
+        try {
+            message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+            WorkerRegistration registration = workerLoop().ensureStarted();
+            if (!accepts(message, registration)) {
+                return true;
+            }
+            injectMdc(message, registration);
+            try {
+                // P1 fix(be-kafka-rls):tenantId 非空且非占位时绑 RLS holder,让 biz DS 事务起点把
+                // app.tenant_id 推到 PG session,触发 RLS policy。tenantId=null/"unknown" 不绑
+                // (让 RLS Phase B 严格策略拒绝,防伪造)。accepts() 已校验非空 → 此处一般不会为 null,但保留双保险。
+                final TaskDispatchMessage finalMessage = message;
+                final WorkerRegistration finalRegistration = registration;
+                String tenantId = finalMessage.tenantId();
+                WorkerExecutionResult result;
+                boolean hasKnownTenantIdentity = EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId);
+                if (hasKnownTenantIdentity) {
+                    result = RlsTenantContextHolder.runWithTenant(
+                            tenantId,
+                            () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
+                } else {
+                    result = taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId());
+                }
+                if (result == null) {
+                    log.info(
+                            "{} task skipped after claim check: taskId={}",
+                            workerConfiguration().workerType(),
+                            message.taskId());
+                    return true;
+                }
+                log.debug(
+                        "{} task processed: taskId={}, success={}, message={}",
+                        workerConfiguration().workerType(),
+                        result.taskId(),
+                        result.success(),
+                        SwallowedExceptionLogger.safeMessage(result.message()));
+                return true;
+            } catch (Exception ex) {
+                // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
+                // 5xx / 网络异常通常因 orchestrator rolling restart / DB 短暂不可达，要走 listener 自然重试；
+                // 进 DLQ 的话静默把任务丢到死信里，触发任务卡住（lease reclaim 回退，但是 detection 延迟大）。
+                if (isTransientOrchestratorFailure(ex)) {
+                    log.warn(
+                            "{} task transient failure (5xx/network) — NOT entering DLQ, will retry: taskId={},"
+                                    + " error={}",
+                            workerConfiguration().workerType(),
+                            message.taskId(),
+                            SwallowedExceptionLogger.summary(ex));
+                    return false; // 由 consume() 显式 nack，Kafka 回退 offset 后重投
+                }
+                // 不可恢复 / 业务 4xx → DLQ + commit offset
+                log.error(
+                        "{} task execution failed — publishing to DLQ: taskId={}, error={}",
+                        workerConfiguration().workerType(),
+                        message.taskId(),
+                        SwallowedExceptionLogger.summary(ex));
+                // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
+                if (!publishToDlqSafely(payload, ex.getMessage())) {
+                    // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
+                    log.error(
+                            "{} failed to write to the DLQ; offset will not be committed so the message can be redelivered: taskId={}",
+                            workerConfiguration().workerType(),
+                            message.taskId());
+                    return false;
+                }
+                return true;
+            }
+        } catch (Exception parseOrStartupEx) {
+            // 解析 / ensureStarted 阶段的异常：payload 无法反序列化或 worker 未起来。
+            // 送 DLQ 避免毒丸阻塞队列；若 DLQ 也异常退出则 return false 让 Kafka 重投。
+            log.error(
+                    "{} pre-dispatch failed — publishing to DLQ: error={}",
+                    workerConfiguration().workerType(),
+                    SwallowedExceptionLogger.summary(parseOrStartupEx));
+            return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
+        } finally {
+            // 无论处理成功/失败/抛异常，都必须释放 permit；
+            // 若之前触发过 pause，则在释放后尝试恢复消费。
+            sem.release();
+            backpressure.resumeIfPaused(listenerId());
+            BatchMdc.removeAll(
+                    StructuredLogField.TENANT_ID,
+                    StructuredLogField.TRACE_ID,
+                    StructuredLogField.TASK_ID,
+                    StructuredLogField.JOB_INSTANCE_ID,
+                    StructuredLogField.WORKFLOW_RUN_ID,
+                    StructuredLogField.PARTITION_ID,
+                    StructuredLogField.BATCH_DAY,
+                    StructuredLogField.ATTEMPT,
+                    StructuredLogField.TOPIC,
+                    StructuredLogField.WORKER_TYPE,
+                    StructuredLogField.WORKER_ID,
+                    StructuredLogField.RUN_MODE);
+        }
+    }
+
+    /**
+     * ADR-046 P2 切片 2.3c:批量消费 —— 一次 Kafka poll 攒 K 条 payload,经 {@code claim-batch} 一次认领、 逐 partition
+     * 独立执行(沿用 per-task 执行/上报),控制面 CLAIM 往返 O(N)→O(N/K)。由子类的**批量** {@code @KafkaListener}(仅 {@code
+     * batch.worker.batch-claim.enabled=true} 时启动)调用;flag 关时无调用方。
+     *
+     * <p>语义对齐单条 {@link #doConsume}:背压一次取 n 个 permit(取不满 → pause + 不提交,整批重投); 跨 tenant 按租户分组分别绑 RLS(单
+     * tenant 语义,严禁整批混绑);**offset 仅整批成功后提交** (返回 true);transient(5xx/网络)→ 不提交、整批重投;不可恢复 → 逐条进 DLQ 后提交。
+     * 批内**部分认领**由 {@link TaskDispatchExecutor#executeBatch} 逐项处理(没领到的跳过)。
+     *
+     * @return true=提交整批 offset;false=不提交(Kafka 重投整批,靠 partition 幂等去重已成功项)
+     */
+    protected boolean doConsumeBatch(List<String> payloads) {
+        if (payloads == null || payloads.isEmpty()) {
+            return true;
+        }
+        if (backpressure.isPlatformDraining()) {
+            return false;
+        }
+        Semaphore sem = backpressure.semaphore();
+        int n = payloads.size();
+        if (!sem.tryAcquire(n)) {
+            // 背压:实例内并发不足以吃下整批 → 暂停拉取,不提交,等容量恢复后重投。
+            backpressure.pause(batchListenerId());
+            return false;
+        }
+        String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
+        BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
+        try {
+            WorkerRegistration registration = workerLoop().ensureStarted();
+            return batchExecution.process(payloads, registration);
+        } catch (Exception ex) {
+            if (isTransientOrchestratorFailure(ex)) {
+                log.warn(
+                        "{} batch transient failure (5xx/network) — NOT committing, will retry whole batch:"
+                                + " size={}, error={}",
+                        workerConfiguration().workerType(),
+                        n,
+                        SwallowedExceptionLogger.summary(ex));
+                return false; // 由 consumeBatch() 显式 nack，整批回退后重投
+            }
+            // 不可恢复 → 逐条进 DLQ 后提交(避免整批卡住);任一 DLQ 写失败则不提交、整批重投
+            log.error(
+                    "{} batch execution failed — publishing {} payloads to DLQ: error={}",
+                    workerConfiguration().workerType(),
+                    n,
+                    SwallowedExceptionLogger.summary(ex));
+            boolean allDlq = true;
+            for (String payload : payloads) {
+                if (!publishToDlqSafely(payload, ex.getMessage())) {
+                    allDlq = false;
+                }
+            }
+            return allDlq;
+        } finally {
+            sem.release(n);
+            backpressure.resumeIfPaused(batchListenerId());
+            BatchMdc.removeAll(
+                    StructuredLogField.TENANT_ID,
+                    StructuredLogField.TRACE_ID,
+                    StructuredLogField.TASK_ID,
+                    StructuredLogField.JOB_INSTANCE_ID,
+                    StructuredLogField.WORKFLOW_RUN_ID,
+                    StructuredLogField.PARTITION_ID,
+                    StructuredLogField.BATCH_DAY,
+                    StructuredLogField.ATTEMPT,
+                    StructuredLogField.TOPIC,
+                    StructuredLogField.WORKER_TYPE,
+                    StructuredLogField.WORKER_ID,
+                    StructuredLogField.RUN_MODE);
+        }
+    }
+
+    /**
+     * R1-P2-7 / S1-7：判定异常是否为 orchestrator transient 故障（5xx / 网络层），不该进 DLQ。
+     *
+     * <p>覆盖：
+     *
+     * <ul>
+     *   <li>{@code HttpServerErrorException}（4xx Spring 包装类是 ClientError，不在此范畴）— orchestrator 5xx
+     *   <li>{@code ResourceAccessException} — 网络层异常（连接拒绝 / 读超时 / DNS 失败）
+     *   <li>{@code ConnectException} / {@code SocketTimeoutException} 通过 cause chain 找到
+     * </ul>
+     *
+     * <p>其它（4xx 业务拒绝、序列化错误、代码缺陷 RuntimeException）按"不可恢复"走 DLQ。
+     */
+    private boolean isTransientOrchestratorFailure(Throwable t) {
+        return TaskConsumerFailurePolicy.isTransientOrchestratorFailure(t);
+    }
+
+    /** #4-3: 安全发布到 DLQ，返回是否成功。DLQ 写入失败时返回 false，调用方据此决定是否提交偏移量。 */
+    private boolean publishToDlqSafely(String payload, String errorMessage) {
+        DeadLetterPublisher dlq = deadLetterPublisher();
+        if (dlq == null) {
+            return true; // 无 DLQ 配置，视为成功（避免无限重投递）
+        }
+        try {
+            dlq.publish(
+                    payload,
+                    workerConfiguration().topic(),
+                    workerConfiguration().workerType(),
+                    SwallowedExceptionLogger.safeMessage(errorMessage, DLQ_ERROR_MESSAGE_MAX_LENGTH));
+            return true;
+        } catch (Exception dlqEx) {
+            log.error(
+                    "{} failed to publish to the DLQ: dlqError={}",
+                    workerConfiguration().workerType(),
+                    SwallowedExceptionLogger.summary(dlqEx));
+            return false;
+        }
+    }
+
+    private void injectMdc(TaskDispatchMessage message, WorkerRegistration registration) {
+        TaskMessageMdc.putMessageFields(message);
+        String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
+        BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
+        BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
+        BatchMdc.put(
+                StructuredLogField.WORKER_ID, EmptyChecks.isNull(registration) ? null : registration.getWorkerId());
+        // P1-2.2:RUN_MODE 不再注入到 pre-claim MDC(payload 已从 message 移除);
+        // worker 业务 pipeline 通过 ExecutionContext.attributes 拿 run_mode(由
+        // DefaultTaskExecutionWrapper 在 claim 后注入),业务日志依然能看到。
+    }
+
+    /**
+     * 返回该消费者监听的 Kafka topic 列表；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
+     * #{__listener.topics()}} 引用。
+     *
+     * <p>P2-5 之后已废弃 — 推荐用 {@link #topicPattern()} 代替；保留本方法兼容老子类（{@code @KafkaListener(topics=...)}） 仅
+     * SINGLE 模式下能匹配 producer 端实际写出的 topic。
+     */
+    public String[] topics() {
+        return TaskConsumerRoutingPolicy.topics(workerConfiguration(), topicNamespace);
+    }
+
+    /**
+     * P2-5 worker 端 Kafka pattern 适配：用宽松 regex 同时匹配 SINGLE / TENANT / PRIORITY 三种 producer 输出的 topic
+     * 形态。Kafka client 按 {@code metadata.max.age.ms} 周期重新发现匹配 topic，新增 tenant / priority 后缀 topic 会自动被
+     * worker 拾取。
+     *
+     * <p>匹配规则（base = 例如 {@code batch.task.dispatch.import}）：
+     *
+     * <ul>
+     *   <li>{@code base}（exact）：SINGLE 模式 producer 写出的固定 topic
+     *   <li>{@code base.node.{ourWorkerCode}}（exact）：直达分发 topic（粘性路由）
+     *   <li>{@code base.<single-segment>}（一段后缀，不含 dot）：TENANT 后缀（{@code .default-tenant}） / PRIORITY
+     *       后缀（{@code .high}）
+     * </ul>
+     *
+     * <p><b>不匹配</b> {@code base.node.{otherWorkerCode}} —— 直达 topic 是双段后缀，由 {@code .[^.]+} 排除。
+     *
+     * @return Kafka topic 正则 pattern（已转义 base 中的点；调用方直接传给 {@code @KafkaListener.topicPattern}）
+     */
+    public String topicPattern() {
+        return TaskConsumerRoutingPolicy.topicPattern(workerConfiguration(), subscribeProperties, topicNamespace);
+    }
+
+    /**
+     * 返回 Kafka 消费者组 ID；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
+     * #{__listener.consumerGroupId()}} 引用。
+     */
+    public String consumerGroupId() {
+        String configuredConsumerGroupId = workerConfiguration().consumerGroupId();
+        return topicNamespace.consumerGroup(configuredConsumerGroupId);
+    }
+
+    private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {
+        if (message == null) {
+            return false;
+        }
+        // M-12: 分发前校验必填字段，防止下游 NPE
+        if (message.taskId() == null || message.tenantId() == null || message.workerType() == null) {
+            log.warn(
+                    "malformed dispatch message dropped — missing required fields: taskId={}, tenantId={},"
+                            + " workerType={}",
+                    message.taskId(),
+                    message.tenantId(),
+                    message.workerType());
+            return false;
+        }
+        return TaskConsumerRoutingPolicy.accepts(
+                message, registration, workerConfiguration(), this::acceptsConfiguredTenantScope);
+    }
+
+    /**
+     * P2-13 软 tenant 隔离：{@code cfg.tenantId()} 声明特定租户时只接受该租户派发；{@link #SHARED_TENANT_WILDCARD} /
+     * blank 表示通配。子类可覆盖（例如 Import worker E2E 多租户并发）。
+     */
+    protected boolean acceptsConfiguredTenantScope(WorkerConfiguration cfg, TaskDispatchMessage message) {
+        String configuredTenant = cfg.tenantId();
+        boolean configuredTenantConflictsWithMessage = EmptyChecks.isNotNull(configuredTenant)
+                && !configuredTenant.isBlank()
+                && !SHARED_TENANT_WILDCARD.equalsIgnoreCase(configuredTenant)
+                && !configuredTenant.equalsIgnoreCase(message.tenantId());
+        if (configuredTenantConflictsWithMessage) {
+            log.debug(
+                    "worker rejecting cross-tenant task: configuredTenant={}, messageTenant={}, taskId={}",
+                    configuredTenant,
+                    message.tenantId(),
+                    message.taskId());
+            return false;
+        }
         return true;
-      } catch (Exception ex) {
-        // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
-        // 5xx / 网络异常通常因 orchestrator rolling restart / DB 短暂不可达，要走 listener 自然重试；
-        // 进 DLQ 的话静默把任务丢到死信里，触发任务卡住（lease reclaim 回退，但是 detection 延迟大）。
-        if (isTransientOrchestratorFailure(ex)) {
-          log.warn(
-              "{} task transient failure (5xx/network) — NOT entering DLQ, will retry: taskId={},"
-                  + " error={}",
-              workerConfiguration().workerType(),
-              message.taskId(),
-              SwallowedExceptionLogger.summary(ex));
-          return false; // 由 consume() 显式 nack，Kafka 回退 offset 后重投
-        }
-        // 不可恢复 / 业务 4xx → DLQ + commit offset
-        log.error(
-            "{} task execution failed — publishing to DLQ: taskId={}, error={}",
-            workerConfiguration().workerType(),
-            message.taskId(),
-            SwallowedExceptionLogger.summary(ex));
-        // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
-        if (!publishToDlqSafely(payload, ex.getMessage())) {
-          // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
-          log.error(
-              "{} failed to write to the DLQ; offset will not be committed so the message can be redelivered: taskId={}",
-              workerConfiguration().workerType(),
-              message.taskId());
-          return false;
-        }
-        return true;
-      }
-    } catch (Exception parseOrStartupEx) {
-      // 解析 / ensureStarted 阶段的异常：payload 无法反序列化或 worker 未起来。
-      // 送 DLQ 避免毒丸阻塞队列；若 DLQ 也异常退出则 return false 让 Kafka 重投。
-      log.error(
-          "{} pre-dispatch failed — publishing to DLQ: error={}",
-          workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(parseOrStartupEx));
-      return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
-    } finally {
-      // 无论处理成功/失败/抛异常，都必须释放 permit；
-      // 若之前触发过 pause，则在释放后尝试恢复消费。
-      sem.release();
-      backpressure.resumeIfPaused(listenerId());
-      BatchMdc.removeAll(
-          StructuredLogField.TENANT_ID,
-          StructuredLogField.TRACE_ID,
-          StructuredLogField.TASK_ID,
-          StructuredLogField.JOB_INSTANCE_ID,
-          StructuredLogField.WORKFLOW_RUN_ID,
-          StructuredLogField.PARTITION_ID,
-          StructuredLogField.BATCH_DAY,
-          StructuredLogField.ATTEMPT,
-          StructuredLogField.TOPIC,
-          StructuredLogField.WORKER_TYPE,
-          StructuredLogField.WORKER_ID,
-          StructuredLogField.RUN_MODE);
     }
-  }
 
-  /**
-   * ADR-046 P2 切片 2.3c:批量消费 —— 一次 Kafka poll 攒 K 条 payload,经 {@code claim-batch} 一次认领、 逐 partition
-   * 独立执行(沿用 per-task 执行/上报),控制面 CLAIM 往返 O(N)→O(N/K)。由子类的**批量** {@code @KafkaListener}(仅 {@code
-   * batch.worker.batch-claim.enabled=true} 时启动)调用;flag 关时无调用方。
-   *
-   * <p>语义对齐单条 {@link #doConsume}:背压一次取 n 个 permit(取不满 → pause + 不提交,整批重投); 跨 tenant 按租户分组分别绑 RLS(单
-   * tenant 语义,严禁整批混绑);**offset 仅整批成功后提交** (返回 true);transient(5xx/网络)→ 不提交、整批重投;不可恢复 → 逐条进 DLQ 后提交。
-   * 批内**部分认领**由 {@link TaskDispatchExecutor#executeBatch} 逐项处理(没领到的跳过)。
-   *
-   * @return true=提交整批 offset;false=不提交(Kafka 重投整批,靠 partition 幂等去重已成功项)
-   */
-  protected boolean doConsumeBatch(List<String> payloads) {
-    if (payloads == null || payloads.isEmpty()) {
-      return true;
-    }
-    if (backpressure.isPlatformDraining()) {
-      return false;
-    }
-    Semaphore sem = backpressure.semaphore();
-    int n = payloads.size();
-    if (!sem.tryAcquire(n)) {
-      // 背压:实例内并发不足以吃下整批 → 暂停拉取,不提交,等容量恢复后重投。
-      backpressure.pause(batchListenerId());
-      return false;
-    }
-    String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
-    BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
-    try {
-      WorkerRegistration registration = workerLoop().ensureStarted();
-      return batchExecution.process(payloads, registration);
-    } catch (Exception ex) {
-      if (isTransientOrchestratorFailure(ex)) {
-        log.warn(
-            "{} batch transient failure (5xx/network) — NOT committing, will retry whole batch:"
-                + " size={}, error={}",
-            workerConfiguration().workerType(),
-            n,
-            SwallowedExceptionLogger.summary(ex));
-        return false; // 由 consumeBatch() 显式 nack，整批回退后重投
-      }
-      // 不可恢复 → 逐条进 DLQ 后提交(避免整批卡住);任一 DLQ 写失败则不提交、整批重投
-      log.error(
-          "{} batch execution failed — publishing {} payloads to DLQ: error={}",
-          workerConfiguration().workerType(),
-          n,
-          SwallowedExceptionLogger.summary(ex));
-      boolean allDlq = true;
-      for (String payload : payloads) {
-        if (!publishToDlqSafely(payload, ex.getMessage())) {
-          allDlq = false;
-        }
-      }
-      return allDlq;
-    } finally {
-      sem.release(n);
-      backpressure.resumeIfPaused(batchListenerId());
-      BatchMdc.removeAll(
-          StructuredLogField.TENANT_ID,
-          StructuredLogField.TRACE_ID,
-          StructuredLogField.TASK_ID,
-          StructuredLogField.JOB_INSTANCE_ID,
-          StructuredLogField.WORKFLOW_RUN_ID,
-          StructuredLogField.PARTITION_ID,
-          StructuredLogField.BATCH_DAY,
-          StructuredLogField.ATTEMPT,
-          StructuredLogField.TOPIC,
-          StructuredLogField.WORKER_TYPE,
-          StructuredLogField.WORKER_ID,
-          StructuredLogField.RUN_MODE);
-    }
-  }
-
-  /**
-   * R1-P2-7 / S1-7：判定异常是否为 orchestrator transient 故障（5xx / 网络层），不该进 DLQ。
-   *
-   * <p>覆盖：
-   *
-   * <ul>
-   *   <li>{@code HttpServerErrorException}（4xx Spring 包装类是 ClientError，不在此范畴）— orchestrator 5xx
-   *   <li>{@code ResourceAccessException} — 网络层异常（连接拒绝 / 读超时 / DNS 失败）
-   *   <li>{@code ConnectException} / {@code SocketTimeoutException} 通过 cause chain 找到
-   * </ul>
-   *
-   * <p>其它（4xx 业务拒绝、序列化错误、代码缺陷 RuntimeException）按"不可恢复"走 DLQ。
-   */
-  private boolean isTransientOrchestratorFailure(Throwable t) {
-    return TaskConsumerFailurePolicy.isTransientOrchestratorFailure(t);
-  }
-
-  /** #4-3: 安全发布到 DLQ，返回是否成功。DLQ 写入失败时返回 false，调用方据此决定是否提交偏移量。 */
-  private boolean publishToDlqSafely(String payload, String errorMessage) {
-    DeadLetterPublisher dlq = deadLetterPublisher();
-    if (dlq == null) {
-      return true; // 无 DLQ 配置，视为成功（避免无限重投递）
-    }
-    try {
-      dlq.publish(
-          payload,
-          workerConfiguration().topic(),
-          workerConfiguration().workerType(),
-          SwallowedExceptionLogger.safeMessage(errorMessage, DLQ_ERROR_MESSAGE_MAX_LENGTH));
-      return true;
-    } catch (Exception dlqEx) {
-      log.error(
-          "{} failed to publish to the DLQ: dlqError={}",
-          workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(dlqEx));
-      return false;
-    }
-  }
-
-  private void injectMdc(TaskDispatchMessage message, WorkerRegistration registration) {
-    TaskMessageMdc.putMessageFields(message);
-    String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
-    BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
-    BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
-    BatchMdc.put(
-        StructuredLogField.WORKER_ID,
-        EmptyChecks.isNull(registration) ? null : registration.getWorkerId());
-    // P1-2.2:RUN_MODE 不再注入到 pre-claim MDC(payload 已从 message 移除);
-    // worker 业务 pipeline 通过 ExecutionContext.attributes 拿 run_mode(由
-    // DefaultTaskExecutionWrapper 在 claim 后注入),业务日志依然能看到。
-  }
-
-  /**
-   * 返回该消费者监听的 Kafka topic 列表；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
-   * #{__listener.topics()}} 引用。
-   *
-   * <p>P2-5 之后已废弃 — 推荐用 {@link #topicPattern()} 代替；保留本方法兼容老子类（{@code @KafkaListener(topics=...)}） 仅
-   * SINGLE 模式下能匹配 producer 端实际写出的 topic。
-   */
-  public String[] topics() {
-    return TaskConsumerRoutingPolicy.topics(workerConfiguration(), topicNamespace);
-  }
-
-  /**
-   * P2-5 worker 端 Kafka pattern 适配：用宽松 regex 同时匹配 SINGLE / TENANT / PRIORITY 三种 producer 输出的 topic
-   * 形态。Kafka client 按 {@code metadata.max.age.ms} 周期重新发现匹配 topic，新增 tenant / priority 后缀 topic 会自动被
-   * worker 拾取。
-   *
-   * <p>匹配规则（base = 例如 {@code batch.task.dispatch.import}）：
-   *
-   * <ul>
-   *   <li>{@code base}（exact）：SINGLE 模式 producer 写出的固定 topic
-   *   <li>{@code base.node.{ourWorkerCode}}（exact）：直达分发 topic（粘性路由）
-   *   <li>{@code base.<single-segment>}（一段后缀，不含 dot）：TENANT 后缀（{@code .default-tenant}） / PRIORITY
-   *       后缀（{@code .high}）
-   * </ul>
-   *
-   * <p><b>不匹配</b> {@code base.node.{otherWorkerCode}} —— 直达 topic 是双段后缀，由 {@code .[^.]+} 排除。
-   *
-   * @return Kafka topic 正则 pattern（已转义 base 中的点；调用方直接传给 {@code @KafkaListener.topicPattern}）
-   */
-  public String topicPattern() {
-    return TaskConsumerRoutingPolicy.topicPattern(
-        workerConfiguration(), subscribeProperties, topicNamespace);
-  }
-
-  /**
-   * 返回 Kafka 消费者组 ID；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
-   * #{__listener.consumerGroupId()}} 引用。
-   */
-  public String consumerGroupId() {
-    String configuredConsumerGroupId = workerConfiguration().consumerGroupId();
-    return topicNamespace.consumerGroup(configuredConsumerGroupId);
-  }
-
-  private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {
-    if (message == null) {
-      return false;
-    }
-    // M-12: 分发前校验必填字段，防止下游 NPE
-    if (message.taskId() == null || message.tenantId() == null || message.workerType() == null) {
-      log.warn(
-          "malformed dispatch message dropped — missing required fields: taskId={}, tenantId={},"
-              + " workerType={}",
-          message.taskId(),
-          message.tenantId(),
-          message.workerType());
-      return false;
-    }
-    return TaskConsumerRoutingPolicy.accepts(
-        message, registration, workerConfiguration(), this::acceptsConfiguredTenantScope);
-  }
-
-  /**
-   * P2-13 软 tenant 隔离：{@code cfg.tenantId()} 声明特定租户时只接受该租户派发；{@link #SHARED_TENANT_WILDCARD} /
-   * blank 表示通配。子类可覆盖（例如 Import worker E2E 多租户并发）。
-   */
-  protected boolean acceptsConfiguredTenantScope(
-      WorkerConfiguration cfg, TaskDispatchMessage message) {
-    String configuredTenant = cfg.tenantId();
-    boolean configuredTenantConflictsWithMessage = EmptyChecks.isNotNull(configuredTenant)
-        && !configuredTenant.isBlank()
-        && !SHARED_TENANT_WILDCARD.equalsIgnoreCase(configuredTenant)
-        && !configuredTenant.equalsIgnoreCase(message.tenantId());
-    if (configuredTenantConflictsWithMessage) {
-      log.debug(
-          "worker rejecting cross-tenant task: configuredTenant={}, messageTenant={}, taskId={}",
-          configuredTenant,
-          message.tenantId(),
-          message.taskId());
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * 共享 worker pool 通配标识 — cfg.tenantId() 等于此值时, worker 接受所有 tenant 的消息. 与 orch 端 {@code
-   * batch.resource-scheduler.shared-tenant-fallback} 配置协议对齐.
-   */
-  protected static final String SHARED_TENANT_WILDCARD = "default-tenant";
+    /**
+     * 共享 worker pool 通配标识 — cfg.tenantId() 等于此值时, worker 接受所有 tenant 的消息. 与 orch 端 {@code
+     * batch.resource-scheduler.shared-tenant-fallback} 配置协议对齐.
+     */
+    protected static final String SHARED_TENANT_WILDCARD = "default-tenant";
 }

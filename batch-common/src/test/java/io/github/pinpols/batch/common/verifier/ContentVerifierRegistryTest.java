@@ -16,135 +16,125 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("内容校验器注册表:按作业类型与阶段筛选、执行指标记录与异常兜底")
 class ContentVerifierRegistryTest {
 
-  @Test
-  @DisplayName("按作业类型与阶段筛选校验器,阶段无关项保留而不匹配类型落选")
-  void shouldFilterByJobTypeAndStage_whenResolvingVerifiers() {
-    ContentVerifier exportAlways =
-        new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), null, VerifyResult.pass());
-    ContentVerifier exportFetchOnly = new StubVerifier(
-        "EXPORT_FETCH_ROW", Set.of(JobType.EXPORT), "EXPORT_FETCH", VerifyResult.pass());
-    ContentVerifier importOnly =
-        new StubVerifier("IMPORT_SCHEMA", Set.of(JobType.IMPORT), null, VerifyResult.pass());
+    @Test
+    @DisplayName("按作业类型与阶段筛选校验器,阶段无关项保留而不匹配类型落选")
+    void shouldFilterByJobTypeAndStage_whenResolvingVerifiers() {
+        ContentVerifier exportAlways =
+                new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), null, VerifyResult.pass());
+        ContentVerifier exportFetchOnly =
+                new StubVerifier("EXPORT_FETCH_ROW", Set.of(JobType.EXPORT), "EXPORT_FETCH", VerifyResult.pass());
+        ContentVerifier importOnly =
+                new StubVerifier("IMPORT_SCHEMA", Set.of(JobType.IMPORT), null, VerifyResult.pass());
 
-    ContentVerifierRegistry registry = new ContentVerifierRegistry(
-        providerOf(exportAlways, exportFetchOnly, importOnly), providerOf(/* no meter */ ));
+        ContentVerifierRegistry registry = new ContentVerifierRegistry(
+                providerOf(exportAlways, exportFetchOnly, importOnly), providerOf(/* no meter */ ));
 
-    assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FETCH").stream()
-            .map(ContentVerifier::code))
-        .containsExactlyInAnyOrder("EXPORT_NON_EMPTY", "EXPORT_FETCH_ROW");
-    assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FINALIZE").stream()
-            .map(ContentVerifier::code))
-        .containsExactly("EXPORT_NON_EMPTY");
-    assertThat(registry.verifiersFor(JobType.IMPORT, null).stream().map(ContentVerifier::code))
-        .containsExactly("IMPORT_SCHEMA");
-    assertThat(registry.verifiersFor(JobType.DISPATCH, "ANY").stream()).isEmpty();
-  }
-
-  @Test
-  @DisplayName("校验失败时记录耗时计时器与失败计数,并原样返回失败结果")
-  void shouldRecordTimerAndFailureCounter_whenVerifierFails() {
-    StubVerifier failing = new StubVerifier(
-        "EXPORT_NON_EMPTY",
-        Set.of(JobType.EXPORT),
-        null,
-        VerifyResult.fail("EXPORT_FILE_EMPTY", "no rows"));
-    SimpleMeterRegistry meter = new SimpleMeterRegistry();
-    ContentVerifierRegistry registry =
-        new ContentVerifierRegistry(providerOf(failing), providerOf(meter));
-
-    VerifyResult result = registry.run(failing, sampleContext());
-
-    assertThat(result.passed()).isFalse();
-    assertThat(result.code()).isEqualTo("EXPORT_FILE_EMPTY");
-    assertThat(meter
-            .find("batch.verifier.duration")
-            .tag("code", "EXPORT_NON_EMPTY")
-            .tag("outcome", "fail")
-            .timer())
-        .isNotNull();
-    assertThat(meter
-            .find("batch.verifier.failures")
-            .tag("code", "EXPORT_NON_EMPTY")
-            .tag("reason", "EXPORT_FILE_EMPTY")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
-
-  @Test
-  @DisplayName("校验器抛异常时吞掉异常并记录错误结局")
-  void shouldRecordErrorOutcome_whenVerifierThrows() {
-    ContentVerifier throwing = new ContentVerifier() {
-      @Override
-      public String code() {
-        return "BAD";
-      }
-
-      @Override
-      public Set<JobType> appliesTo() {
-        return Set.of(JobType.EXPORT);
-      }
-
-      @Override
-      public VerifyResult verify(VerifyContext context) {
-        throw new IllegalStateException("boom");
-      }
-    };
-    SimpleMeterRegistry meter = new SimpleMeterRegistry();
-    ContentVerifierRegistry registry =
-        new ContentVerifierRegistry(providerOf(throwing), providerOf(meter));
-
-    VerifyResult result = registry.run(throwing, sampleContext());
-
-    assertThat(result.passed()).isFalse();
-    assertThat(result.code()).isEqualTo("BAD_EXCEPTION");
-    assertThat(meter
-            .find("batch.verifier.duration")
-            .tag("outcome", "error")
-            .timer()
-            .count())
-        .isEqualTo(1L);
-  }
-
-  @Test
-  @DisplayName("缺少指标注册表时校验照常执行且不影响结果")
-  void shouldRunNormally_whenMeterRegistryIsAbsent() {
-    ContentVerifier verifier =
-        new StubVerifier("OK", Set.of(JobType.IMPORT), null, VerifyResult.pass());
-    ContentVerifierRegistry registry =
-        new ContentVerifierRegistry(providerOf(verifier), providerOf(/* no meter */ ));
-
-    VerifyResult result = registry.run(verifier, sampleContext());
-
-    assertThat(result.passed()).isTrue();
-  }
-
-  private static VerifyContext sampleContext() {
-    return VerifyContext.builder()
-        .tenantId("t1")
-        .jobType(JobType.EXPORT)
-        .jobInstanceId(100L)
-        .taskId(200L)
-        .stageCode("EXPORT_FETCH")
-        .payload(Map.of("fileId", 999L))
-        .build();
-  }
-
-  @SafeVarargs
-  @SuppressWarnings("unchecked")
-  private static <T> ObjectProvider<T> providerOf(T... beans) {
-    ObjectProvider<T> provider = (ObjectProvider<T>) mock(ObjectProvider.class);
-    when(provider.orderedStream()).thenAnswer(invocation -> Stream.of(beans));
-    when(provider.getIfAvailable()).thenReturn(beans.length == 0 ? null : beans[0]);
-    return provider;
-  }
-
-  private record StubVerifier(
-      String code, Set<JobType> appliesTo, String stageCode, VerifyResult resultToReturn)
-      implements ContentVerifier {
-    @Override
-    public VerifyResult verify(VerifyContext context) {
-      return resultToReturn;
+        assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FETCH").stream()
+                        .map(ContentVerifier::code))
+                .containsExactlyInAnyOrder("EXPORT_NON_EMPTY", "EXPORT_FETCH_ROW");
+        assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FINALIZE").stream()
+                        .map(ContentVerifier::code))
+                .containsExactly("EXPORT_NON_EMPTY");
+        assertThat(registry.verifiersFor(JobType.IMPORT, null).stream().map(ContentVerifier::code))
+                .containsExactly("IMPORT_SCHEMA");
+        assertThat(registry.verifiersFor(JobType.DISPATCH, "ANY").stream()).isEmpty();
     }
-  }
+
+    @Test
+    @DisplayName("校验失败时记录耗时计时器与失败计数,并原样返回失败结果")
+    void shouldRecordTimerAndFailureCounter_whenVerifierFails() {
+        StubVerifier failing = new StubVerifier(
+                "EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), null, VerifyResult.fail("EXPORT_FILE_EMPTY", "no rows"));
+        SimpleMeterRegistry meter = new SimpleMeterRegistry();
+        ContentVerifierRegistry registry = new ContentVerifierRegistry(providerOf(failing), providerOf(meter));
+
+        VerifyResult result = registry.run(failing, sampleContext());
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.code()).isEqualTo("EXPORT_FILE_EMPTY");
+        assertThat(meter.find("batch.verifier.duration")
+                        .tag("code", "EXPORT_NON_EMPTY")
+                        .tag("outcome", "fail")
+                        .timer())
+                .isNotNull();
+        assertThat(meter.find("batch.verifier.failures")
+                        .tag("code", "EXPORT_NON_EMPTY")
+                        .tag("reason", "EXPORT_FILE_EMPTY")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("校验器抛异常时吞掉异常并记录错误结局")
+    void shouldRecordErrorOutcome_whenVerifierThrows() {
+        ContentVerifier throwing = new ContentVerifier() {
+            @Override
+            public String code() {
+                return "BAD";
+            }
+
+            @Override
+            public Set<JobType> appliesTo() {
+                return Set.of(JobType.EXPORT);
+            }
+
+            @Override
+            public VerifyResult verify(VerifyContext context) {
+                throw new IllegalStateException("boom");
+            }
+        };
+        SimpleMeterRegistry meter = new SimpleMeterRegistry();
+        ContentVerifierRegistry registry = new ContentVerifierRegistry(providerOf(throwing), providerOf(meter));
+
+        VerifyResult result = registry.run(throwing, sampleContext());
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.code()).isEqualTo("BAD_EXCEPTION");
+        assertThat(meter.find("batch.verifier.duration")
+                        .tag("outcome", "error")
+                        .timer()
+                        .count())
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("缺少指标注册表时校验照常执行且不影响结果")
+    void shouldRunNormally_whenMeterRegistryIsAbsent() {
+        ContentVerifier verifier = new StubVerifier("OK", Set.of(JobType.IMPORT), null, VerifyResult.pass());
+        ContentVerifierRegistry registry =
+                new ContentVerifierRegistry(providerOf(verifier), providerOf(/* no meter */ ));
+
+        VerifyResult result = registry.run(verifier, sampleContext());
+
+        assertThat(result.passed()).isTrue();
+    }
+
+    private static VerifyContext sampleContext() {
+        return VerifyContext.builder()
+                .tenantId("t1")
+                .jobType(JobType.EXPORT)
+                .jobInstanceId(100L)
+                .taskId(200L)
+                .stageCode("EXPORT_FETCH")
+                .payload(Map.of("fileId", 999L))
+                .build();
+    }
+
+    @SafeVarargs
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> providerOf(T... beans) {
+        ObjectProvider<T> provider = (ObjectProvider<T>) mock(ObjectProvider.class);
+        when(provider.orderedStream()).thenAnswer(invocation -> Stream.of(beans));
+        when(provider.getIfAvailable()).thenReturn(beans.length == 0 ? null : beans[0]);
+        return provider;
+    }
+
+    private record StubVerifier(String code, Set<JobType> appliesTo, String stageCode, VerifyResult resultToReturn)
+            implements ContentVerifier {
+        @Override
+        public VerifyResult verify(VerifyContext context) {
+            return resultToReturn;
+        }
+    }
 }

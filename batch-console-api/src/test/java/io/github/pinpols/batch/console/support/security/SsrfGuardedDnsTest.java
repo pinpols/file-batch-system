@@ -23,46 +23,46 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SsrfGuardedDnsTest {
 
-  @Mock
-  private BatchSecurityProperties securityProperties;
+    @Mock
+    private BatchSecurityProperties securityProperties;
 
-  private SsrfGuardedDns dns;
+    private SsrfGuardedDns dns;
 
-  @Test
-  @DisplayName("校验通过后只返回被校验的那一个公网地址")
-  void shouldReturnExactlyTheSingleValidatedPublicIp() throws Exception {
-    when(securityProperties.isBypassMode()).thenReturn(false);
+    @Test
+    @DisplayName("校验通过后只返回被校验的那一个公网地址")
+    void shouldReturnExactlyTheSingleValidatedPublicIp() throws Exception {
+        when(securityProperties.isBypassMode()).thenReturn(false);
 
-    // 用公网 IP 字面量,避免单测依赖真实 DNS;校验通过后应原样返回该地址。
-    List<InetAddress> resolved = dns.lookup("93.184.216.34");
+        // 用公网 IP 字面量,避免单测依赖真实 DNS;校验通过后应原样返回该地址。
+        List<InetAddress> resolved = dns.lookup("93.184.216.34");
 
-    // I2 修复:只返回一个 IP(guard 校验的那个),客户端无从连到组内另一个(公网+内网混合)地址。
-    assertThat(resolved).hasSize(1);
-    assertThat(resolved.get(0).getHostAddress()).isEqualTo("93.184.216.34");
-  }
+        // I2 修复:只返回一个 IP(guard 校验的那个),客户端无从连到组内另一个(公网+内网混合)地址。
+        assertThat(resolved).hasSize(1);
+        assertThat(resolved.get(0).getHostAddress()).isEqualTo("93.184.216.34");
+    }
 
-  @Test
-  @DisplayName("解析回环地址时抛出受限地址异常")
-  void shouldBlockInternalAddress() {
-    when(securityProperties.isBypassMode()).thenReturn(false);
+    @Test
+    @DisplayName("解析回环地址时抛出受限地址异常")
+    void shouldBlockInternalAddress() {
+        when(securityProperties.isBypassMode()).thenReturn(false);
 
-    assertThatThrownBy(() -> dns.lookup("127.0.0.1")).isInstanceOf(BlockedAddressException.class);
-  }
+        assertThatThrownBy(() -> dns.lookup("127.0.0.1")).isInstanceOf(BlockedAddressException.class);
+    }
 
-  @Test
-  @DisplayName("放行开关打开时不做校验, 回环地址也原样返回")
-  void shouldDelegateToSystemResolverWhenBypassMode() throws Exception {
-    when(securityProperties.isBypassMode()).thenReturn(true);
+    @Test
+    @DisplayName("放行开关打开时不做校验, 回环地址也原样返回")
+    void shouldDelegateToSystemResolverWhenBypassMode() throws Exception {
+        when(securityProperties.isBypassMode()).thenReturn(true);
 
-    // bypass(非 prod 联调):不校验,回环也放行。
-    List<InetAddress> resolved = dns.lookup("127.0.0.1");
+        // bypass(非 prod 联调):不校验,回环也放行。
+        List<InetAddress> resolved = dns.lookup("127.0.0.1");
 
-    assertThat(resolved).isNotEmpty();
-    assertThat(resolved.get(0).getHostAddress()).isEqualTo("127.0.0.1");
-  }
+        assertThat(resolved).isNotEmpty();
+        assertThat(resolved.get(0).getHostAddress()).isEqualTo("127.0.0.1");
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    dns = new SsrfGuardedDns(securityProperties);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        dns = new SsrfGuardedDns(securityProperties);
+    }
 }

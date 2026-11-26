@@ -4,11 +4,8 @@ import java.util.List;
 
 /** 配置项被作业引用的依赖关系。 */
 public record ConfigDependenciesResponse(
-    String configType,
-    String configCode,
-    List<DependentJobResponse> dependentJobs,
-    int dependentJobCount) {
+        String configType, String configCode, List<DependentJobResponse> dependentJobs, int dependentJobCount) {
 
-  /** 引用配置项的作业摘要。 */
-  public record DependentJobResponse(Long id, String code, String name) {}
+    /** 引用配置项的作业摘要。 */
+    public record DependentJobResponse(Long id, String code, String name) {}
 }

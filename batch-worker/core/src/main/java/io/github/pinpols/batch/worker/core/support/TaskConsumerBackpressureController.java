@@ -23,138 +23,137 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 @Slf4j
 final class TaskConsumerBackpressureController {
 
-  private final KafkaListenerEndpointRegistry listenerRegistry;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final int maxConcurrentTasks;
-  private final Supplier<String> workerTypeSupplier;
-  private final AtomicReference<Semaphore> semaphore = new AtomicReference<>();
-  private final AtomicBoolean platformDraining = new AtomicBoolean();
-  private final AtomicReference<Counter> pauseCounter = new AtomicReference<>();
-  private final AtomicReference<Counter> resumeCounter = new AtomicReference<>();
+    private final KafkaListenerEndpointRegistry listenerRegistry;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final int maxConcurrentTasks;
+    private final Supplier<String> workerTypeSupplier;
+    private final AtomicReference<Semaphore> semaphore = new AtomicReference<>();
+    private final AtomicBoolean platformDraining = new AtomicBoolean();
+    private final AtomicReference<Counter> pauseCounter = new AtomicReference<>();
+    private final AtomicReference<Counter> resumeCounter = new AtomicReference<>();
 
-  TaskConsumerBackpressureController(
-      KafkaListenerEndpointRegistry listenerRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      int maxConcurrentTasks,
-      Supplier<String> workerTypeSupplier) {
-    this.listenerRegistry = listenerRegistry;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.maxConcurrentTasks = maxConcurrentTasks;
-    this.workerTypeSupplier = workerTypeSupplier;
-  }
-
-  void initialize() {
-    ensureSemaphore();
-  }
-
-  Semaphore semaphore() {
-    return ensureSemaphore();
-  }
-
-  int currentLoad() {
-    Semaphore current = semaphore.get();
-    if (current == null) {
-      return 0;
+    TaskConsumerBackpressureController(
+            KafkaListenerEndpointRegistry listenerRegistry,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            int maxConcurrentTasks,
+            Supplier<String> workerTypeSupplier) {
+        this.listenerRegistry = listenerRegistry;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.maxConcurrentTasks = maxConcurrentTasks;
+        this.workerTypeSupplier = workerTypeSupplier;
     }
-    int inFlight = maxConcurrentTasks - current.availablePermits();
-    return Math.max(0, inFlight);
-  }
 
-  boolean isPlatformDraining() {
-    return platformDraining.get();
-  }
-
-  void setPlatformDraining(boolean draining, String... containerIds) {
-    platformDraining.set(draining);
-    for (String containerId : containerIds) {
-      if (draining) {
-        pause(containerId);
-      } else {
-        resumeIfPaused(containerId);
-      }
+    void initialize() {
+        ensureSemaphore();
     }
-  }
 
-  void pause(String containerId) {
-    MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
-    if (container == null) {
-      return;
+    Semaphore semaphore() {
+        return ensureSemaphore();
     }
-    try {
-      if (!container.isPauseRequested()) {
-        container.pause();
-        Counter counter = pauseCounter.get();
-        if (counter != null) {
-          counter.increment();
+
+    int currentLoad() {
+        Semaphore current = semaphore.get();
+        if (current == null) {
+            return 0;
         }
-      }
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("failed to pause container: listenerId={}, error={}", containerId, causeSummary, ex);
+        int inFlight = maxConcurrentTasks - current.availablePermits();
+        return Math.max(0, inFlight);
     }
-  }
 
-  void resumeIfPaused(String containerId) {
-    Semaphore current = semaphore.get();
-    boolean taskConsumptionIsBackpressured = platformDraining.get()
-        || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0);
-    if (taskConsumptionIsBackpressured) {
-      return;
+    boolean isPlatformDraining() {
+        return platformDraining.get();
     }
-    MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
-    if (EmptyChecks.isNull(container)) {
-      return;
-    }
-    try {
-      if (container.isPauseRequested()) {
-        container.resume();
-        Counter counter = resumeCounter.get();
-        if (counter != null) {
-          counter.increment();
+
+    void setPlatformDraining(boolean draining, String... containerIds) {
+        platformDraining.set(draining);
+        for (String containerId : containerIds) {
+            if (draining) {
+                pause(containerId);
+            } else {
+                resumeIfPaused(containerId);
+            }
         }
-      }
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "failed to resume container: listenerId={}, error={}", containerId, causeSummary, ex);
     }
-  }
 
-  private Semaphore ensureSemaphore() {
-    Semaphore current = semaphore.get();
-    if (current != null) {
-      return current;
+    void pause(String containerId) {
+        MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
+        if (container == null) {
+            return;
+        }
+        try {
+            if (!container.isPauseRequested()) {
+                container.pause();
+                Counter counter = pauseCounter.get();
+                if (counter != null) {
+                    counter.increment();
+                }
+            }
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("failed to pause container: listenerId={}, error={}", containerId, causeSummary, ex);
+        }
     }
-    synchronized (this) {
-      current = semaphore.get();
-      if (current == null) {
-        int permits = Math.max(1, maxConcurrentTasks);
-        current = new Semaphore(permits);
-        semaphore.set(current);
-        registerMetrics(current);
-      }
-      return current;
-    }
-  }
 
-  private void registerMetrics(Semaphore current) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    void resumeIfPaused(String containerId) {
+        Semaphore current = semaphore.get();
+        boolean taskConsumptionIsBackpressured =
+                platformDraining.get() || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0);
+        if (taskConsumptionIsBackpressured) {
+            return;
+        }
+        MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
+        if (EmptyChecks.isNull(container)) {
+            return;
+        }
+        try {
+            if (container.isPauseRequested()) {
+                container.resume();
+                Counter counter = resumeCounter.get();
+                if (counter != null) {
+                    counter.increment();
+                }
+            }
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("failed to resume container: listenerId={}, error={}", containerId, causeSummary, ex);
+        }
     }
-    String workerType = workerTypeSupplier.get();
-    registry.gauge(
-        "batch.worker.semaphore.available",
-        Tags.of("workerType", workerType),
-        current,
-        Semaphore::availablePermits);
-    pauseCounter.set(Counter.builder("batch.worker.consumer.pause.total")
-        .description("Kafka listener pause events caused by exhausted worker permits")
-        .tag("workerType", workerType)
-        .register(registry));
-    resumeCounter.set(Counter.builder("batch.worker.consumer.resume.total")
-        .description("Kafka listener resume events after worker permits became available")
-        .tag("workerType", workerType)
-        .register(registry));
-  }
+
+    private Semaphore ensureSemaphore() {
+        Semaphore current = semaphore.get();
+        if (current != null) {
+            return current;
+        }
+        synchronized (this) {
+            current = semaphore.get();
+            if (current == null) {
+                int permits = Math.max(1, maxConcurrentTasks);
+                current = new Semaphore(permits);
+                semaphore.set(current);
+                registerMetrics(current);
+            }
+            return current;
+        }
+    }
+
+    private void registerMetrics(Semaphore current) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        String workerType = workerTypeSupplier.get();
+        registry.gauge(
+                "batch.worker.semaphore.available",
+                Tags.of("workerType", workerType),
+                current,
+                Semaphore::availablePermits);
+        pauseCounter.set(Counter.builder("batch.worker.consumer.pause.total")
+                .description("Kafka listener pause events caused by exhausted worker permits")
+                .tag("workerType", workerType)
+                .register(registry));
+        resumeCounter.set(Counter.builder("batch.worker.consumer.resume.total")
+                .description("Kafka listener resume events after worker permits became available")
+                .tag("workerType", workerType)
+                .register(registry));
+    }
 }

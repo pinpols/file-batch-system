@@ -18,34 +18,29 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAu
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 
 @SpringBootApplication(
-    scanBasePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"},
-    exclude = {
-      DataRedisRepositoriesAutoConfiguration.class,
-      HttpRequestMdcAutoConfiguration.class,
-      OpenAiAudioSpeechAutoConfiguration.class,
-      OpenAiAudioTranscriptionAutoConfiguration.class,
-      OpenAiDecisionAutoConfiguration.class,
-      OpenAiEmbeddingAutoConfiguration.class,
-      OpenAiImageAutoConfiguration.class,
-      OpenAiModerationAutoConfiguration.class
-    },
-    excludeName =
-        "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration")
+        scanBasePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"},
+        exclude = {
+            DataRedisRepositoriesAutoConfiguration.class,
+            HttpRequestMdcAutoConfiguration.class,
+            OpenAiAudioSpeechAutoConfiguration.class,
+            OpenAiAudioTranscriptionAutoConfiguration.class,
+            OpenAiDecisionAutoConfiguration.class,
+            OpenAiEmbeddingAutoConfiguration.class,
+            OpenAiImageAutoConfiguration.class,
+            OpenAiModerationAutoConfiguration.class
+        },
+        excludeName = "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration")
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
-@MapperScan({
-  "io.github.pinpols.batch.console.domain.**.mapper",
-  "io.github.pinpols.batch.common.mapper"
-})
-@ConfigurationPropertiesScan(
-    basePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"})
+@MapperScan({"io.github.pinpols.batch.console.domain.**.mapper", "io.github.pinpols.batch.common.mapper"})
+@ConfigurationPropertiesScan(basePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"})
 /** Console API 服务启动入口。 */
 public class BatchConsoleApiApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(BatchConsoleApiApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(BatchConsoleApiApplication.class, args);
+    }
 }

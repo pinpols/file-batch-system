@@ -27,97 +27,81 @@ import org.springframework.core.env.Environment;
 
 /** 业务数据源配置，装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。 */
 @Configuration(value = "importWorkerBusinessDataSourceConfiguration", proxyBeanMethods = false)
-@EnableConfigurationProperties({
-  BusinessDataSourceProperties.class,
-  BusinessRoutingProperties.class,
-  RlsProperties.class
+@EnableConfigurationProperties({BusinessDataSourceProperties.class, BusinessRoutingProperties.class, RlsProperties.class
 })
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "importBusinessHikariConfig")
-  @ConfigurationProperties("batch.datasource.business.hikari")
-  public HikariConfig importBusinessHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "importBusinessHikariConfig")
+    @ConfigurationProperties("batch.datasource.business.hikari")
+    public HikariConfig importBusinessHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "importBusinessDataSource", destroyMethod = "close")
-  public DataSource importBusinessDataSource(
-      BusinessDataSourceProperties properties,
-      BusinessRoutingProperties routingProperties,
-      BusinessTenantPlacementMapper placementMapper,
-      @Qualifier("importBusinessHikariConfig") HikariConfig hikariConfig) {
-    String appName = ApplicationNameProvider.resolve(environment, "batch-worker-import");
-    return WorkerDataSourceSupport.buildBusinessDataSource(
-        hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
-  }
+    @Bean(name = "importBusinessDataSource", destroyMethod = "close")
+    public DataSource importBusinessDataSource(
+            BusinessDataSourceProperties properties,
+            BusinessRoutingProperties routingProperties,
+            BusinessTenantPlacementMapper placementMapper,
+            @Qualifier("importBusinessHikariConfig") HikariConfig hikariConfig) {
+        String appName = ApplicationNameProvider.resolve(environment, "batch-worker-import");
+        return WorkerDataSourceSupport.buildBusinessDataSource(
+                hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
+    }
 
-  @Bean(name = "importBusinessSqlSessionFactory")
-  public SqlSessionFactory importBusinessSqlSessionFactory(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) throws Exception {
-    return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(importBusinessDataSource);
-  }
+    @Bean(name = "importBusinessSqlSessionFactory")
+    public SqlSessionFactory importBusinessSqlSessionFactory(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) throws Exception {
+        return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(importBusinessDataSource);
+    }
 
-  @Bean(name = "importBusinessSqlSessionTemplate")
-  public SqlSessionTemplate importBusinessSqlSessionTemplate(
-      @Qualifier("importBusinessSqlSessionFactory")
-          SqlSessionFactory importBusinessSqlSessionFactory) {
-    return new SqlSessionTemplate(importBusinessSqlSessionFactory);
-  }
+    @Bean(name = "importBusinessSqlSessionTemplate")
+    public SqlSessionTemplate importBusinessSqlSessionTemplate(
+            @Qualifier("importBusinessSqlSessionFactory") SqlSessionFactory importBusinessSqlSessionFactory) {
+        return new SqlSessionTemplate(importBusinessSqlSessionFactory);
+    }
 
-  /**
-   * RLS 闭世界健康探针 —— import worker 也直接读写 biz 库，与 process 同等守护（缺 ENABLE/FORCE/合规 policy 即 DOWN）。默认开，经
-   * {@code batch.business.rls.health-check.enabled=false} 关（测试库未跑 rls-phase-a）。
-   */
-  @Bean(name = "importRlsPolicyHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public RlsPolicyHealthIndicator importRlsPolicyHealthIndicator(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(
-        importBusinessDataSource, rlsProperties);
-  }
+    /**
+     * RLS 闭世界健康探针 —— import worker 也直接读写 biz 库，与 process 同等守护（缺 ENABLE/FORCE/合规 policy 即 DOWN）。默认开，经
+     * {@code batch.business.rls.health-check.enabled=false} 关（测试库未跑 rls-phase-a）。
+     */
+    @Bean(name = "importRlsPolicyHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public RlsPolicyHealthIndicator importRlsPolicyHealthIndicator(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(importBusinessDataSource, rlsProperties);
+    }
 
-  /** 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启；测试库必须显式关闭。 */
-  @Bean(name = "importRlsStartupFailFastCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "importBusinessDataSource")
-  public RlsStartupFailFastCheck importRlsStartupFailFastCheck(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(
-        importBusinessDataSource, rlsProperties);
-  }
+    /** 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启；测试库必须显式关闭。 */
+    @Bean(name = "importRlsStartupFailFastCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "importBusinessDataSource")
+    public RlsStartupFailFastCheck importRlsStartupFailFastCheck(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(importBusinessDataSource, rlsProperties);
+    }
 
-  @Bean(name = "importBusinessDataSourceRoleHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public BusinessDataSourceRoleHealthIndicator importBusinessDataSourceRoleHealthIndicator(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(
-        importBusinessDataSource);
-  }
+    @Bean(name = "importBusinessDataSourceRoleHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public BusinessDataSourceRoleHealthIndicator importBusinessDataSourceRoleHealthIndicator(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(importBusinessDataSource);
+    }
 
-  @Bean(name = "importBusinessDataSourceRoleStartupCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "importBusinessDataSource")
-  public BusinessDataSourceRoleStartupCheck importBusinessDataSourceRoleStartupCheck(
-      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(
-        importBusinessDataSource);
-  }
+    @Bean(name = "importBusinessDataSourceRoleStartupCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "importBusinessDataSource")
+    public BusinessDataSourceRoleStartupCheck importBusinessDataSourceRoleStartupCheck(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(importBusinessDataSource);
+    }
 }

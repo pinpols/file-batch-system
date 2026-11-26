@@ -8,19 +8,19 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FileGroupExpectationDefinitionMapper {
 
-  int upsert(FileGroupExpectationDefinitionUpsertParam parameters);
+    int upsert(FileGroupExpectationDefinitionUpsertParam parameters);
 
-  int delete(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("workflowDefinitionId") Long workflowDefinitionId,
-      @Param("fileGroupCode") String fileGroupCode);
+    int delete(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("workflowDefinitionId") Long workflowDefinitionId,
+            @Param("fileGroupCode") String fileGroupCode);
 
-  List<FileGroupExpectationDefinition> selectEnabledByCalendar(
-      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+    List<FileGroupExpectationDefinition> selectEnabledByCalendar(
+            @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
-  List<FileGroupUploadTarget> selectEnabledUploadTargets(@Param("tenantId") String tenantId);
+    List<FileGroupUploadTarget> selectEnabledUploadTargets(@Param("tenantId") String tenantId);
 
-  List<FileGroupUploadTarget> selectEnabledUploadTargetsByGroup(
-      @Param("tenantId") String tenantId, @Param("fileGroupCode") String fileGroupCode);
+    List<FileGroupUploadTarget> selectEnabledUploadTargetsByGroup(
+            @Param("tenantId") String tenantId, @Param("fileGroupCode") String fileGroupCode);
 }

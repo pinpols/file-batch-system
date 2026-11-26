@@ -32,72 +32,67 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "batch.console.captcha.provider", havingValue = "cloudflare")
 public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-  private final CaptchaProperties properties;
-  private final ObjectMapper objectMapper;
-  private final OutboundHttpTransport httpTransport;
+    private final CaptchaProperties properties;
+    private final ObjectMapper objectMapper;
+    private final OutboundHttpTransport httpTransport;
 
-  public CloudflareTurnstileVerifier(
-      CaptchaProperties properties,
-      ObjectMapper objectMapper,
-      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
-    this.properties = properties;
-    this.objectMapper = objectMapper;
-    this.httpTransport = httpTransport;
-  }
-
-  @Override
-  public CaptchaResult verify(String token, String clientIp) {
-    if (token == null || token.isBlank()) {
-      return CaptchaResult.fail("missing token");
+    public CloudflareTurnstileVerifier(
+            CaptchaProperties properties,
+            ObjectMapper objectMapper,
+            @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.httpTransport = httpTransport;
     }
-    StringBuilder body = new StringBuilder();
-    body.append("secret=").append(encode(properties.getSecretKey()));
-    body.append("&response=").append(encode(token));
-    if (clientIp != null && !clientIp.isBlank()) {
-      body.append("&remoteip=").append(encode(clientIp));
+
+    @Override
+    public CaptchaResult verify(String token, String clientIp) {
+        if (token == null || token.isBlank()) {
+            return CaptchaResult.fail("missing token");
+        }
+        StringBuilder body = new StringBuilder();
+        body.append("secret=").append(encode(properties.getSecretKey()));
+        body.append("&response=").append(encode(token));
+        if (clientIp != null && !clientIp.isBlank()) {
+            body.append("&remoteip=").append(encode(clientIp));
+        }
+        try {
+            String json = postForm(properties.getCloudflareVerifyEndpoint(), body.toString());
+            JsonNode root = objectMapper.readTree(json);
+            if (root.path("success").asBoolean(false)) {
+                return CaptchaResult.ok();
+            }
+            JsonNode errorCodes = root.path("error-codes");
+            return CaptchaResult.fail("turnstile rejected: " + errorCodes.toString());
+        } catch (Exception ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            // 净化:只打异常类型/消息,绝不打 token(用户可控)或 secret。
+            log.warn("captcha turnstile verify error: ip={}", CaptchaCrypto.sanitizeForLog(clientIp), ex);
+            return CaptchaResult.fail("turnstile verify error");
+        }
     }
-    try {
-      String json = postForm(properties.getCloudflareVerifyEndpoint(), body.toString());
-      JsonNode root = objectMapper.readTree(json);
-      if (root.path("success").asBoolean(false)) {
-        return CaptchaResult.ok();
-      }
-      JsonNode errorCodes = root.path("error-codes");
-      return CaptchaResult.fail("turnstile rejected: " + errorCodes.toString());
-    } catch (Exception ex) {
-      if (ex instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      // 净化:只打异常类型/消息,绝不打 token(用户可控)或 secret。
-      log.warn("captcha turnstile verify error: ip={}", CaptchaCrypto.sanitizeForLog(clientIp), ex);
-      return CaptchaResult.fail("turnstile verify error");
+
+    /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
+    protected String postForm(String url, String body) throws IOException, InterruptedException {
+        OutboundHttpContent httpContent =
+                new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
+        OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
+                url, Map.of(), httpContent, CONNECT_TIMEOUT, REQUEST_TIMEOUT, OutboundAddressPolicy.GUARDED);
+        OutboundHttpResponse response = httpTransport.execute(httpRequest);
+        return response.body();
     }
-  }
 
-  /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
-  protected String postForm(String url, String body) throws IOException, InterruptedException {
-    OutboundHttpContent httpContent =
-        new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
-    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
-        url,
-        Map.of(),
-        httpContent,
-        CONNECT_TIMEOUT,
-        REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED);
-    OutboundHttpResponse response = httpTransport.execute(httpRequest);
-    return response.body();
-  }
+    @Override
+    public String provider() {
+        return "cloudflare";
+    }
 
-  @Override
-  public String provider() {
-    return "cloudflare";
-  }
-
-  private static String encode(String value) {
-    return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
-  }
+    private static String encode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
 }

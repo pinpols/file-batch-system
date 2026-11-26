@@ -18,23 +18,22 @@ import org.junit.jupiter.api.Test;
 @DisplayName("派送通道 Mapper 状态默认方法：传递具名参数并固定健康状态")
 class DispatchChannelHealthMapperStatusTest {
 
-  @Test
-  @DisplayName("成功与失败写入保留参数对象并绑定各自的固定状态")
-  void shouldPassTypedParamsAndFixHealthStatuses() {
-    DispatchChannelHealthMapper mapper =
-        mock(DispatchChannelHealthMapper.class, CALLS_REAL_METHODS);
-    doReturn(1).when(mapper).upsertSuccessWithStatus(any(), any());
-    doReturn(1).when(mapper).upsertFailureAndBumpWithStatuses(any(), any(), any());
-    Timestamp now = Timestamp.valueOf("2026-10-27 00:00:00");
-    DispatchChannelHealthSuccessParam success = new DispatchChannelHealthSuccessParam(
-        "tenant-a", "channel-a", "API", now, now, "ok", "success-evidence");
-    DispatchChannelHealthFailureParam failure = new DispatchChannelHealthFailureParam(
-        "tenant-a", "channel-a", "API", now, now, 5, "timeout", "failure-evidence");
+    @Test
+    @DisplayName("成功与失败写入保留参数对象并绑定各自的固定状态")
+    void shouldPassTypedParamsAndFixHealthStatuses() {
+        DispatchChannelHealthMapper mapper = mock(DispatchChannelHealthMapper.class, CALLS_REAL_METHODS);
+        doReturn(1).when(mapper).upsertSuccessWithStatus(any(), any());
+        doReturn(1).when(mapper).upsertFailureAndBumpWithStatuses(any(), any(), any());
+        Timestamp now = Timestamp.valueOf("2026-10-27 00:00:00");
+        DispatchChannelHealthSuccessParam success = new DispatchChannelHealthSuccessParam(
+                "tenant-a", "channel-a", "API", now, now, "ok", "success-evidence");
+        DispatchChannelHealthFailureParam failure = new DispatchChannelHealthFailureParam(
+                "tenant-a", "channel-a", "API", now, now, 5, "timeout", "failure-evidence");
 
-    assertThat(mapper.upsertSuccess(success)).isEqualTo(1);
-    assertThat(mapper.upsertFailureAndBump(failure)).isEqualTo(1);
+        assertThat(mapper.upsertSuccess(success)).isEqualTo(1);
+        assertThat(mapper.upsertFailureAndBump(failure)).isEqualTo(1);
 
-    verify(mapper).upsertSuccessWithStatus(same(success), eq("HEALTHY"));
-    verify(mapper).upsertFailureAndBumpWithStatuses(same(failure), eq("DEGRADED"), eq("UNHEALTHY"));
-  }
+        verify(mapper).upsertSuccessWithStatus(same(success), eq("HEALTHY"));
+        verify(mapper).upsertFailureAndBumpWithStatuses(same(failure), eq("DEGRADED"), eq("UNHEALTHY"));
+    }
 }

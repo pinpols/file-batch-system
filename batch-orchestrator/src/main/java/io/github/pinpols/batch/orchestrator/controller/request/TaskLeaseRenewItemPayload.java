@@ -7,5 +7,4 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * with {@code POST /internal/tasks/{taskId}/renew} claim body (ADR-014 invocation id).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaskLeaseRenewItemPayload(
-    String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+public record TaskLeaseRenewItemPayload(String tenantId, Long taskId, String workerId, String partitionInvocationId) {}

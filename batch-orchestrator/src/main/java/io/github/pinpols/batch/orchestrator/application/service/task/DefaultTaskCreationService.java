@@ -34,257 +34,245 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DefaultTaskCreationService implements TaskCreationService {
 
-  private static final Set<String> OWNERSHIP_CONSTRAINTS = Set.of(
-      "fk_job_task_instance_tenant_date",
-      "fk_job_task_partition_tenant_instance",
-      "fk_job_step_task_ownership");
+    private static final Set<String> OWNERSHIP_CONSTRAINTS = Set.of(
+            "fk_job_task_instance_tenant_date", "fk_job_task_partition_tenant_instance", "fk_job_step_task_ownership");
 
-  private final JobTaskMapper jobTaskMapper;
-  private final JobStepInstanceMapper jobStepInstanceMapper;
-  private final RelatedFileReferenceValidator relatedFileReferenceValidator;
+    private final JobTaskMapper jobTaskMapper;
+    private final JobStepInstanceMapper jobStepInstanceMapper;
+    private final RelatedFileReferenceValidator relatedFileReferenceValidator;
 
-  @Override
-  @Transactional
-  public JobTaskEntity createTask(JobTaskEntity task) {
-    validateForCreate(task);
-    try {
-      jobTaskMapper.insert(task);
-      createStepInstance(task);
-      return task;
-    } catch (RuntimeException failure) {
-      throw translateOwnershipConflict(failure);
-    }
-  }
-
-  /**
-   * PERF(5.1): 批量创建 —— task 一次多行 INSERT（生成 id 按序回填）+ step 镜像一次多行 INSERT。
-   *
-   * <p>与逐条 {@link #createTask} 的语义差异仅一处：step 镜像不再做 selectByJobTaskId 幂等预检 —— 批量路径的 task id
-   * 是本事务内刚生成的，不可能已存在 step 镜像；单条路径（重复调用场景可达）保留预检。
-   */
-  @Override
-  @Transactional
-  public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
-    if (EmptyChecks.isEmpty(tasks)) {
-      return EmptyChecks.isNull(tasks) ? List.of() : tasks;
-    }
-    // 先整批校验再写：任何一项非法（task_type 缺失）整批不落库，避免半批状态。
-    for (JobTaskEntity task : tasks) {
-      validateForCreate(task);
-    }
-    try {
-      // R2:按固定 chunk 切批,防单条多行 INSERT 的绑定参数越 PG 65535 上限整批回滚。
-      // useGeneratedKeys 通过 subList 视图回填,id 落回原 tasks 对应位置(顺序正确)。
-      BatchInsertChunks.insertInChunks(
-          tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
-      List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
-      for (JobTaskEntity task : tasks) {
-        if (EmptyChecks.isNull(task.getId())) {
-          continue;
+    @Override
+    @Transactional
+    public JobTaskEntity createTask(JobTaskEntity task) {
+        validateForCreate(task);
+        try {
+            jobTaskMapper.insert(task);
+            createStepInstance(task);
+            return task;
+        } catch (RuntimeException failure) {
+            throw translateOwnershipConflict(failure);
         }
-        stepInstances.add(buildStepInstance(task));
-      }
-      if (EmptyChecks.isNotEmpty(stepInstances)) {
-        BatchInsertChunks.insertInChunks(
-            stepInstances,
-            BatchInsertChunks.DEFAULT_CHUNK_SIZE,
-            jobStepInstanceMapper::insertBatch);
-      }
-      return tasks;
-    } catch (RuntimeException failure) {
-      throw translateOwnershipConflict(failure);
     }
-  }
 
-  private static RuntimeException translateOwnershipConflict(RuntimeException failure) {
-    for (Throwable current = failure;
-        EmptyChecks.isNotNull(current);
-        current = current.getCause()) {
-      if (current instanceof PSQLException sql && "23503".equals(sql.getSQLState())) {
-        ServerErrorMessage error = sql.getServerErrorMessage();
-        String constraint = EmptyChecks.isNull(error) ? null : error.getConstraint();
-        boolean isTaskOwnershipConstraintViolation =
-            EmptyChecks.isNotBlank(constraint) && OWNERSHIP_CONSTRAINTS.contains(constraint);
-        if (isTaskOwnershipConstraintViolation) {
-          return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
+    /**
+     * PERF(5.1): 批量创建 —— task 一次多行 INSERT（生成 id 按序回填）+ step 镜像一次多行 INSERT。
+     *
+     * <p>与逐条 {@link #createTask} 的语义差异仅一处：step 镜像不再做 selectByJobTaskId 幂等预检 —— 批量路径的 task id
+     * 是本事务内刚生成的，不可能已存在 step 镜像；单条路径（重复调用场景可达）保留预检。
+     */
+    @Override
+    @Transactional
+    public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
+        if (EmptyChecks.isEmpty(tasks)) {
+            return EmptyChecks.isNull(tasks) ? List.of() : tasks;
         }
-      }
-      if (current == current.getCause()) {
-        break;
-      }
+        // 先整批校验再写：任何一项非法（task_type 缺失）整批不落库，避免半批状态。
+        for (JobTaskEntity task : tasks) {
+            validateForCreate(task);
+        }
+        try {
+            // R2:按固定 chunk 切批,防单条多行 INSERT 的绑定参数越 PG 65535 上限整批回滚。
+            // useGeneratedKeys 通过 subList 视图回填,id 落回原 tasks 对应位置(顺序正确)。
+            BatchInsertChunks.insertInChunks(tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
+            List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
+            for (JobTaskEntity task : tasks) {
+                if (EmptyChecks.isNull(task.getId())) {
+                    continue;
+                }
+                stepInstances.add(buildStepInstance(task));
+            }
+            if (EmptyChecks.isNotEmpty(stepInstances)) {
+                BatchInsertChunks.insertInChunks(
+                        stepInstances, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobStepInstanceMapper::insertBatch);
+            }
+            return tasks;
+        } catch (RuntimeException failure) {
+            throw translateOwnershipConflict(failure);
+        }
     }
-    return failure;
-  }
 
-  private void validateForCreate(JobTaskEntity task) {
-    if (EmptyChecks.isNotNull(task) && EmptyChecks.isNull(task.getVersion())) {
-      task.setVersion(0L);
+    private static RuntimeException translateOwnershipConflict(RuntimeException failure) {
+        for (Throwable current = failure; EmptyChecks.isNotNull(current); current = current.getCause()) {
+            if (current instanceof PSQLException sql && "23503".equals(sql.getSQLState())) {
+                ServerErrorMessage error = sql.getServerErrorMessage();
+                String constraint = EmptyChecks.isNull(error) ? null : error.getConstraint();
+                boolean isTaskOwnershipConstraintViolation =
+                        EmptyChecks.isNotBlank(constraint) && OWNERSHIP_CONSTRAINTS.contains(constraint);
+                if (isTaskOwnershipConstraintViolation) {
+                    return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
+                }
+            }
+            if (current == current.getCause()) {
+                break;
+            }
+        }
+        return failure;
     }
-    // R7 log-audit defensive：job_task.task_type 列 NOT NULL，但历史发现 workflow
-    // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
-    // 导致 TriggerLaunchConsumer 无限循环。上游 DefaultWorkflowNodeDispatchService 已经
-    // fail-fast，这里再加一层回退，把 DB 抛错前置成业务异常，错误信息更可读。
-    boolean taskTypeMissingFromPresentTask =
-        EmptyChecks.isNotNull(task) && EmptyChecks.isBlank(task.getTaskType());
-    if (taskTypeMissingFromPresentTask) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.job_task.task_type_required",
-          task.getJobInstanceId());
-    }
-    if (EmptyChecks.isNotNull(task)) {
-      if (EmptyChecks.isNull(task.getJobInstanceBizDate())) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            "error.job_task.instance_biz_date_required",
-            task.getJobInstanceId());
-      }
-      String tenantId = task.getTenantId();
-      Long relatedFileId = resolveRelatedFileId(task);
-      relatedFileReferenceValidator.validate(tenantId, relatedFileId);
-    }
-  }
 
-  private void createStepInstance(JobTaskEntity task) {
-    if (EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getId())) {
-      return;
+    private void validateForCreate(JobTaskEntity task) {
+        if (EmptyChecks.isNotNull(task) && EmptyChecks.isNull(task.getVersion())) {
+            task.setVersion(0L);
+        }
+        // R7 log-audit defensive：job_task.task_type 列 NOT NULL，但历史发现 workflow
+        // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
+        // 导致 TriggerLaunchConsumer 无限循环。上游 DefaultWorkflowNodeDispatchService 已经
+        // fail-fast，这里再加一层回退，把 DB 抛错前置成业务异常，错误信息更可读。
+        boolean taskTypeMissingFromPresentTask = EmptyChecks.isNotNull(task) && EmptyChecks.isBlank(task.getTaskType());
+        if (taskTypeMissingFromPresentTask) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, "error.job_task.task_type_required", task.getJobInstanceId());
+        }
+        if (EmptyChecks.isNotNull(task)) {
+            if (EmptyChecks.isNull(task.getJobInstanceBizDate())) {
+                throw BizException.of(
+                        ResultCode.INVALID_ARGUMENT,
+                        "error.job_task.instance_biz_date_required",
+                        task.getJobInstanceId());
+            }
+            String tenantId = task.getTenantId();
+            Long relatedFileId = resolveRelatedFileId(task);
+            relatedFileReferenceValidator.validate(tenantId, relatedFileId);
+        }
     }
-    JobStepInstanceEntity existing =
-        jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
-    if (EmptyChecks.isNotNull(existing)) {
-      return;
-    }
-    jobStepInstanceMapper.insert(buildStepInstance(task));
-  }
 
-  private JobStepInstanceEntity buildStepInstance(JobTaskEntity task) {
-    JobStepInstanceEntity stepInstance = new JobStepInstanceEntity();
-    stepInstance.setTenantId(task.getTenantId());
-    stepInstance.setJobInstanceId(task.getJobInstanceId());
-    stepInstance.setJobPartitionId(task.getJobPartitionId());
-    stepInstance.setJobTaskId(task.getId());
-    String stepCode = resolveStepCode(task);
-    stepInstance.setStepCode(stepCode);
-    String stepType = resolveStepType(task);
-    stepInstance.setStepType(stepType);
-    stepInstance.setStepStatus(task.getTaskStatus());
-    stepInstance.setRetryCount(0);
-    Long relatedFileId = resolveRelatedFileId(task);
-    stepInstance.setRelatedFileId(relatedFileId);
-    stepInstance.setVersion(0L);
-    return stepInstance;
-  }
+    private void createStepInstance(JobTaskEntity task) {
+        if (EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getId())) {
+            return;
+        }
+        JobStepInstanceEntity existing = jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
+        if (EmptyChecks.isNotNull(existing)) {
+            return;
+        }
+        jobStepInstanceMapper.insert(buildStepInstance(task));
+    }
 
-  private String resolveStepCode(JobTaskEntity task) {
-    String workflowNodeCode = payloadStringValue(
-        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
-    if (EmptyChecks.isNotBlank(workflowNodeCode)) {
-      return workflowNodeCode;
+    private JobStepInstanceEntity buildStepInstance(JobTaskEntity task) {
+        JobStepInstanceEntity stepInstance = new JobStepInstanceEntity();
+        stepInstance.setTenantId(task.getTenantId());
+        stepInstance.setJobInstanceId(task.getJobInstanceId());
+        stepInstance.setJobPartitionId(task.getJobPartitionId());
+        stepInstance.setJobTaskId(task.getId());
+        String stepCode = resolveStepCode(task);
+        stepInstance.setStepCode(stepCode);
+        String stepType = resolveStepType(task);
+        stepInstance.setStepType(stepType);
+        stepInstance.setStepStatus(task.getTaskStatus());
+        stepInstance.setRetryCount(0);
+        Long relatedFileId = resolveRelatedFileId(task);
+        stepInstance.setRelatedFileId(relatedFileId);
+        stepInstance.setVersion(0L);
+        return stepInstance;
     }
-    String taskType = EmptyChecks.isNull(task) ? null : task.getTaskType();
-    Integer taskSeq = EmptyChecks.isNull(task) ? null : task.getTaskSeq();
-    boolean hasTaskType = EmptyChecks.isNotBlank(taskType);
-    int sequence = EmptyChecks.isNull(taskSeq) ? 1 : taskSeq;
-    if (hasTaskType) {
-      return taskType + ":" + sequence;
-    }
-    return "EXECUTION:" + sequence;
-  }
 
-  private String resolveStepType(JobTaskEntity task) {
-    String workflowNodeType = payloadStringValue(
-        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeType");
-    if (EmptyChecks.isNotBlank(workflowNodeType)) {
-      return workflowNodeType;
+    private String resolveStepCode(JobTaskEntity task) {
+        String workflowNodeCode =
+                payloadStringValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
+        if (EmptyChecks.isNotBlank(workflowNodeCode)) {
+            return workflowNodeCode;
+        }
+        String taskType = EmptyChecks.isNull(task) ? null : task.getTaskType();
+        Integer taskSeq = EmptyChecks.isNull(task) ? null : task.getTaskSeq();
+        boolean hasTaskType = EmptyChecks.isNotBlank(taskType);
+        int sequence = EmptyChecks.isNull(taskSeq) ? 1 : taskSeq;
+        if (hasTaskType) {
+            return taskType + ":" + sequence;
+        }
+        return "EXECUTION:" + sequence;
     }
-    return EmptyChecks.isNull(task) ? "EXECUTION" : task.getTaskType();
-  }
 
-  private Long resolveRelatedFileId(JobTaskEntity task) {
-    if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
-      String payload = task.getTaskPayload();
-      if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
-        return payloadLongValue(payload, "bundleSourceFileId");
-      }
-      if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
-        return payloadLongValue(payload, "fileId");
-      }
+    private String resolveStepType(JobTaskEntity task) {
+        String workflowNodeType =
+                payloadStringValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeType");
+        if (EmptyChecks.isNotBlank(workflowNodeType)) {
+            return workflowNodeType;
+        }
+        return EmptyChecks.isNull(task) ? "EXECUTION" : task.getTaskType();
     }
-    String relatedFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
-    Long relatedFileId = payloadLongValue(relatedFilePayload, "relatedFileId");
-    String filePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
-    Long fileId = payloadLongValue(filePayload, "fileId");
-    String sourceFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
-    Long sourceFileId = payloadLongValue(sourceFilePayload, "sourceFileId");
-    return firstPositiveLong(relatedFileId, fileId, sourceFileId);
-  }
 
-  @SuppressWarnings("unchecked")
-  private String payloadStringValue(String payloadJson, String fieldName) {
-    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
-      return null;
+    private Long resolveRelatedFileId(JobTaskEntity task) {
+        if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+            String payload = task.getTaskPayload();
+            if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+                return payloadLongValue(payload, "bundleSourceFileId");
+            }
+            if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+                return payloadLongValue(payload, "fileId");
+            }
+        }
+        String relatedFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+        Long relatedFileId = payloadLongValue(relatedFilePayload, "relatedFileId");
+        String filePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+        Long fileId = payloadLongValue(filePayload, "fileId");
+        String sourceFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+        Long sourceFileId = payloadLongValue(sourceFilePayload, "sourceFileId");
+        return firstPositiveLong(relatedFileId, fileId, sourceFileId);
     }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
 
-      return null;
-    }
-    return null;
-  }
+    @SuppressWarnings("unchecked")
+    private String payloadStringValue(String payloadJson, String fieldName) {
+        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                Object value = ((Map<String, Object>) payloadMap).get(fieldName);
+                return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+            }
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(
+                    DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
 
-  @SuppressWarnings("unchecked")
-  private Long payloadLongValue(String payloadJson, String fieldName) {
-    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
-      return null;
+            return null;
+        }
+        return null;
     }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return toPositiveLong(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
 
-      return null;
-    }
-    return null;
-  }
+    @SuppressWarnings("unchecked")
+    private Long payloadLongValue(String payloadJson, String fieldName) {
+        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                Object value = ((Map<String, Object>) payloadMap).get(fieldName);
+                return toPositiveLong(value);
+            }
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(
+                    DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
 
-  private Long toPositiveLong(Object candidate) {
-    if (EmptyChecks.isNull(candidate)) {
-      return null;
+            return null;
+        }
+        return null;
     }
-    String rawText = String.valueOf(candidate);
-    String text = rawText.trim();
-    if (EmptyChecks.isEmpty(text)) {
-      return null;
-    }
-    try {
-      long value = Long.parseLong(text);
-      return value > 0 ? value : null;
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          DefaultTaskCreationService.class, "catch:NumberFormatException", ignored);
 
-      return null;
-    }
-  }
+    private Long toPositiveLong(Object candidate) {
+        if (EmptyChecks.isNull(candidate)) {
+            return null;
+        }
+        String rawText = String.valueOf(candidate);
+        String text = rawText.trim();
+        if (EmptyChecks.isEmpty(text)) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(DefaultTaskCreationService.class, "catch:NumberFormatException", ignored);
 
-  private Long firstPositiveLong(Long... candidates) {
-    for (Long candidate : candidates) {
-      if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
-        return candidate;
-      }
+            return null;
+        }
     }
-    return null;
-  }
+
+    private Long firstPositiveLong(Long... candidates) {
+        for (Long candidate : candidates) {
+            if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
+                return candidate;
+            }
+        }
+        return null;
+    }
 }

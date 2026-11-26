@@ -7,11 +7,11 @@ package io.github.pinpols.batch.console.domain.ops.view.cluster;
  */
 public record DeliveryStatusCountView(String deliveryStatus, Long cnt) {
 
-  public String getDeliveryStatus() {
-    return deliveryStatus;
-  }
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
 
-  public Long getCnt() {
-    return cnt;
-  }
+    public Long getCnt() {
+        return cnt;
+    }
 }

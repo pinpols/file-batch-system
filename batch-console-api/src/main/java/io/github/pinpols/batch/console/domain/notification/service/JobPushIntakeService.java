@@ -28,101 +28,92 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class JobPushIntakeService {
-  private final ConsolePushProperties properties;
-  private final ConsolePushSubscriptionMapper subscriptions;
-  private final JobPushDeliveryMapper deliveries;
+    private final ConsolePushProperties properties;
+    private final ConsolePushSubscriptionMapper subscriptions;
+    private final JobPushDeliveryMapper deliveries;
 
-  @Transactional(transactionManager = "transactionManager", propagation = Propagation.MANDATORY)
-  public void accept(String tenant, String eventKey, Map<String, Object> job) {
-    Object rawOperator = job.get("operatorId");
-    if (EmptyChecks.isNotNull(rawOperator) && !(rawOperator instanceof String)) {
-      throw new IllegalArgumentException("invalid Job terminal operator identity");
+    @Transactional(transactionManager = "transactionManager", propagation = Propagation.MANDATORY)
+    public void accept(String tenant, String eventKey, Map<String, Object> job) {
+        Object rawOperator = job.get("operatorId");
+        if (EmptyChecks.isNotNull(rawOperator) && !(rawOperator instanceof String)) {
+            throw new IllegalArgumentException("invalid Job terminal operator identity");
+        }
+        String operator = (String) rawOperator;
+        JobInstanceStatus state = JobInstanceStatus.fromCodeOrNull((String) job.get("instanceStatus"));
+        if (EmptyChecks.isNull(state)) throw new IllegalArgumentException("invalid Job terminal status");
+        long jobId = ((Number) job.get("jobInstanceId")).longValue();
+        String eventType = "JOB_" + job.get("instanceStatus");
+        String decision = Boolean.TRUE.equals(job.get("dryRun")) || state.isDryRunTerminal()
+                ? "DRY_RUN"
+                : !properties.isEnabled() || !properties.getJobNotify().isEnabled()
+                        ? "DISABLED"
+                        : EmptyChecks.isBlank(operator) ? "NO_OPERATOR" : "QUEUED";
+        List<ConsolePushSubscriptionEntity> devices =
+                "QUEUED".equals(decision) ? subscriptions.findByTenantAndUser(tenant, operator) : List.of();
+        if ("QUEUED".equals(decision) && EmptyChecks.isEmpty(Objects.requireNonNull(devices)))
+            decision = "NO_SUBSCRIPTIONS";
+        for (ConsolePushSubscriptionEntity device : devices) {
+            boolean deviceDoesNotMatchFrozenJobOperator = !tenant.equals(device.getTenantId())
+                    || !operator.equals(device.getUsername())
+                    || EmptyChecks.isNull(device.getId())
+                    || device.getId() <= 0;
+            if (deviceDoesNotMatchFrozenJobOperator) {
+                throw new IllegalStateException("Push device does not belong to the frozen Job operator");
+            }
+        }
+        Object jobCode = job.get("jobCode");
+        String title = "任务 " + jobCode + " " + statusLabel(state);
+        String body = "tenant=" + tenant + " · instance #" + jobId;
+        String tag = "job-" + digest(eventKey);
+        String url = "/m/jobs/" + jobId + "?tenantId=" + URLEncoder.encode(tenant, StandardCharsets.UTF_8);
+        PushPayload pushPayload = new PushPayload(title, body, tag, url);
+        String payload = JsonUtils.toJson(pushPayload);
+        JobPushDecisionInsertParam decisionParam =
+                new JobPushDecisionInsertParam(tenant, eventKey, jobId, operator, decision, eventType, payload);
+        if (deliveries.insertDecision(decisionParam) != 1) {
+            throw new IllegalStateException("first Job Push decision was not inserted");
+        }
+        for (ConsolePushSubscriptionEntity device : devices) {
+            JobPushDeviceInsertParam deviceParam = new JobPushDeviceInsertParam(
+                    tenant, eventKey, jobId, operator, device.getId(), fingerprint(device), eventType, payload);
+            if (deliveries.insertDevice(deviceParam) != 1) {
+                throw new IllegalStateException("first Job Push device intention was not inserted");
+            }
+        }
     }
-    String operator = (String) rawOperator;
-    JobInstanceStatus state = JobInstanceStatus.fromCodeOrNull((String) job.get("instanceStatus"));
-    if (EmptyChecks.isNull(state))
-      throw new IllegalArgumentException("invalid Job terminal status");
-    long jobId = ((Number) job.get("jobInstanceId")).longValue();
-    String eventType = "JOB_" + job.get("instanceStatus");
-    String decision = Boolean.TRUE.equals(job.get("dryRun")) || state.isDryRunTerminal()
-        ? "DRY_RUN"
-        : !properties.isEnabled() || !properties.getJobNotify().isEnabled()
-            ? "DISABLED"
-            : EmptyChecks.isBlank(operator) ? "NO_OPERATOR" : "QUEUED";
-    List<ConsolePushSubscriptionEntity> devices =
-        "QUEUED".equals(decision) ? subscriptions.findByTenantAndUser(tenant, operator) : List.of();
-    if ("QUEUED".equals(decision) && EmptyChecks.isEmpty(Objects.requireNonNull(devices)))
-      decision = "NO_SUBSCRIPTIONS";
-    for (ConsolePushSubscriptionEntity device : devices) {
-      boolean deviceDoesNotMatchFrozenJobOperator = !tenant.equals(device.getTenantId())
-          || !operator.equals(device.getUsername())
-          || EmptyChecks.isNull(device.getId())
-          || device.getId() <= 0;
-      if (deviceDoesNotMatchFrozenJobOperator) {
-        throw new IllegalStateException("Push device does not belong to the frozen Job operator");
-      }
-    }
-    Object jobCode = job.get("jobCode");
-    String title = "任务 " + jobCode + " " + statusLabel(state);
-    String body = "tenant=" + tenant + " · instance #" + jobId;
-    String tag = "job-" + digest(eventKey);
-    String url =
-        "/m/jobs/" + jobId + "?tenantId=" + URLEncoder.encode(tenant, StandardCharsets.UTF_8);
-    PushPayload pushPayload = new PushPayload(title, body, tag, url);
-    String payload = JsonUtils.toJson(pushPayload);
-    JobPushDecisionInsertParam decisionParam = new JobPushDecisionInsertParam(
-        tenant, eventKey, jobId, operator, decision, eventType, payload);
-    if (deliveries.insertDecision(decisionParam) != 1) {
-      throw new IllegalStateException("first Job Push decision was not inserted");
-    }
-    for (ConsolePushSubscriptionEntity device : devices) {
-      JobPushDeviceInsertParam deviceParam = new JobPushDeviceInsertParam(
-          tenant,
-          eventKey,
-          jobId,
-          operator,
-          device.getId(),
-          fingerprint(device),
-          eventType,
-          payload);
-      if (deliveries.insertDevice(deviceParam) != 1) {
-        throw new IllegalStateException("first Job Push device intention was not inserted");
-      }
-    }
-  }
 
-  static String fingerprint(ConsolePushSubscriptionEntity device) {
-    List<Object> fingerprintFields = List.of(
-        device.getTenantId(),
-        device.getUsername(),
-        device.getId(),
-        device.getEndpoint(),
-        device.getP256dhKey(),
-        device.getAuthSecret());
-    String serializedFingerprint = JsonUtils.toJson(fingerprintFields);
-    return digest(serializedFingerprint);
-  }
-
-  /** 推送标题只描述终态结果；其余状态原样展示状态码，便于排查上游数据。 */
-  private static String statusLabel(JobInstanceStatus state) {
-    return switch (state) {
-      case SUCCESS -> "已成功";
-      case FAILED -> "已失败";
-      case PARTIAL_FAILED -> "部分失败";
-      case CANCELLED -> "已取消";
-      case TERMINATED -> "已终止";
-      default -> state.code();
-    };
-  }
-
-  private static String digest(String value) {
-    try {
-      MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] inputBytes = value.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = sha256.digest(inputBytes);
-      return HexFormat.of().formatHex(digest);
-    } catch (NoSuchAlgorithmException impossible) {
-      throw new IllegalStateException("SHA-256 unavailable", impossible);
+    static String fingerprint(ConsolePushSubscriptionEntity device) {
+        List<Object> fingerprintFields = List.of(
+                device.getTenantId(),
+                device.getUsername(),
+                device.getId(),
+                device.getEndpoint(),
+                device.getP256dhKey(),
+                device.getAuthSecret());
+        String serializedFingerprint = JsonUtils.toJson(fingerprintFields);
+        return digest(serializedFingerprint);
     }
-  }
+
+    /** 推送标题只描述终态结果；其余状态原样展示状态码，便于排查上游数据。 */
+    private static String statusLabel(JobInstanceStatus state) {
+        return switch (state) {
+            case SUCCESS -> "已成功";
+            case FAILED -> "已失败";
+            case PARTIAL_FAILED -> "部分失败";
+            case CANCELLED -> "已取消";
+            case TERMINATED -> "已终止";
+            default -> state.code();
+        };
+    }
+
+    private static String digest(String value) {
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] inputBytes = value.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = sha256.digest(inputBytes);
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 unavailable", impossible);
+        }
+    }
 }

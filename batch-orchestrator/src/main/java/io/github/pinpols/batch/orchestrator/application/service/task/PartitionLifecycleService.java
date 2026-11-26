@@ -13,24 +13,18 @@ import java.util.List;
  */
 public interface PartitionLifecycleService {
 
-  default List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId) {
-    return createPartitions(plan, jobInstanceId, PartitionStatus.CREATED.code());
-  }
+    default List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId) {
+        return createPartitions(plan, jobInstanceId, PartitionStatus.CREATED.code());
+    }
 
-  List<JobPartitionEntity> createPartitions(
-      SchedulePlan plan, Long jobInstanceId, String initialStatus);
+    List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId, String initialStatus);
 
-  JobPartitionEntity claimPartition(
-      String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt);
+    JobPartitionEntity claimPartition(String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt);
 
-  JobPartitionEntity renewLease(
-      String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt);
+    JobPartitionEntity renewLease(String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt);
 
-  int reclaimExpiredPartitions(String tenantId);
+    int reclaimExpiredPartitions(String tenantId);
 
-  boolean releaseForDispatch(
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      String fromPartitionStatus,
-      String fromTaskStatus);
+    boolean releaseForDispatch(
+            JobPartitionEntity partition, JobTaskEntity task, String fromPartitionStatus, String fromTaskStatus);
 }

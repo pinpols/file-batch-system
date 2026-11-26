@@ -47,116 +47,114 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleTenantController {
 
-  private final ConsoleTenantApplicationService tenantService;
-  private final ConsoleTenantReadinessService readinessService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTenantApplicationService tenantService;
+    private final ConsoleTenantReadinessService readinessService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
-      @RequestParam(required = false) String keyword,
-      @RequestParam(required = false) String status,
-      @RequestParam(defaultValue = "1") int pageNo,
-      @RequestParam(defaultValue = "20") int pageSize) {
-    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-    return responseFactory.success(tenantService.listTenants(keyword, status, pageRequest));
-  }
-
-  @GetMapping("/{tenantId}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
-    return responseFactory.success(tenantService.getTenant(tenantId));
-  }
-
-  /**
-   * 租户就绪自检(只读):扫该租户 template / channel / queue / job 配置闭环,返回 blocking / warning 清单。
-   *
-   * <p>ADR-026 dry-run 边界:本端点只看「配置完整性 / 会不会跑」(模板关键字段空、渠道凭据缺、queue_code 悬空),
-   * **不看**业务结果对不对(不执行取数、不比对数据),落在 ADR-026 √ 一侧。
-   */
-  @GetMapping("/{tenantId}/readiness")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<TenantReadinessResponse> readiness(@PathVariable String tenantId) {
-    return responseFactory.success(readinessService.check(tenantId));
-  }
-
-  @PostMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "tenant.create",
-      aggregateType = "tenant",
-      aggregateId = "#request.tenantId",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ProvisionTenantResponse> create(
-      @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
-    CreateTenantCommand createCommand = new CreateTenantCommand(
-        request.getTenantId(),
-        request.getTenantName(),
-        request.getDescription(),
-        request.getUsername(),
-        request.getPassword(),
-        resolveOperator(authentication));
-    ConfigInitOption initOption =
-        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
-    return responseFactory.success(tenantService.provisionTenant(createCommand, initOption));
-  }
-
-  @PostMapping("/batch")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(action = "tenant.batchCreate", aggregateType = "tenant", recordParams = false)
-  public CommonResponse<BatchCreateTenantsResponse> batchCreate(
-      @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
-    String operator = resolveOperator(authentication);
-    List<TenantSpec> specs = request.getTenants().stream()
-        .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
-        .toList();
-    BatchCreateTenantCommand batchCommand = new BatchCreateTenantCommand(
-        specs, request.getUsernamePrefix(), request.getPassword(), operator);
-    ConfigInitOption initOption =
-        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
-    return responseFactory.success(tenantService.batchCreateTenants(batchCommand, initOption));
-  }
-
-  @PutMapping("/{tenantId}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "tenant.update",
-      aggregateType = "tenant",
-      aggregateId = "#tenantId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleTenantResponse> update(
-      @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
-    ConsoleTenantResponse updatedTenant =
-        tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription());
-    return responseFactory.success(updatedTenant);
-  }
-
-  @PostMapping("/{tenantId}/suspend")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "tenant.suspend",
-      aggregateType = "tenant",
-      aggregateId = "#tenantId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
-    return responseFactory.success(tenantService.suspendTenant(tenantId));
-  }
-
-  @PostMapping("/{tenantId}/activate")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "tenant.activate",
-      aggregateType = "tenant",
-      aggregateId = "#tenantId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
-    return responseFactory.success(tenantService.activateTenant(tenantId));
-  }
-
-  private String resolveOperator(Authentication authentication) {
-    if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
-      return p.username();
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PageRequest pageRequest = new PageRequest(pageNo, pageSize);
+        return responseFactory.success(tenantService.listTenants(keyword, status, pageRequest));
     }
-    return authentication != null ? authentication.getName() : "system";
-  }
+
+    @GetMapping("/{tenantId}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
+        return responseFactory.success(tenantService.getTenant(tenantId));
+    }
+
+    /**
+     * 租户就绪自检(只读):扫该租户 template / channel / queue / job 配置闭环,返回 blocking / warning 清单。
+     *
+     * <p>ADR-026 dry-run 边界:本端点只看「配置完整性 / 会不会跑」(模板关键字段空、渠道凭据缺、queue_code 悬空),
+     * **不看**业务结果对不对(不执行取数、不比对数据),落在 ADR-026 √ 一侧。
+     */
+    @GetMapping("/{tenantId}/readiness")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<TenantReadinessResponse> readiness(@PathVariable String tenantId) {
+        return responseFactory.success(readinessService.check(tenantId));
+    }
+
+    @PostMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "tenant.create",
+            aggregateType = "tenant",
+            aggregateId = "#request.tenantId",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ProvisionTenantResponse> create(
+            @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
+        CreateTenantCommand createCommand = new CreateTenantCommand(
+                request.getTenantId(),
+                request.getTenantName(),
+                request.getDescription(),
+                request.getUsername(),
+                request.getPassword(),
+                resolveOperator(authentication));
+        ConfigInitOption initOption = new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
+        return responseFactory.success(tenantService.provisionTenant(createCommand, initOption));
+    }
+
+    @PostMapping("/batch")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(action = "tenant.batchCreate", aggregateType = "tenant", recordParams = false)
+    public CommonResponse<BatchCreateTenantsResponse> batchCreate(
+            @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
+        String operator = resolveOperator(authentication);
+        List<TenantSpec> specs = request.getTenants().stream()
+                .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
+                .toList();
+        BatchCreateTenantCommand batchCommand =
+                new BatchCreateTenantCommand(specs, request.getUsernamePrefix(), request.getPassword(), operator);
+        ConfigInitOption initOption = new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
+        return responseFactory.success(tenantService.batchCreateTenants(batchCommand, initOption));
+    }
+
+    @PutMapping("/{tenantId}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "tenant.update",
+            aggregateType = "tenant",
+            aggregateId = "#tenantId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleTenantResponse> update(
+            @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
+        ConsoleTenantResponse updatedTenant =
+                tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription());
+        return responseFactory.success(updatedTenant);
+    }
+
+    @PostMapping("/{tenantId}/suspend")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "tenant.suspend",
+            aggregateType = "tenant",
+            aggregateId = "#tenantId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
+        return responseFactory.success(tenantService.suspendTenant(tenantId));
+    }
+
+    @PostMapping("/{tenantId}/activate")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "tenant.activate",
+            aggregateType = "tenant",
+            aggregateId = "#tenantId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
+        return responseFactory.success(tenantService.activateTenant(tenantId));
+    }
+
+    private String resolveOperator(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
+            return p.username();
+        }
+        return authentication != null ? authentication.getName() : "system";
+    }
 }

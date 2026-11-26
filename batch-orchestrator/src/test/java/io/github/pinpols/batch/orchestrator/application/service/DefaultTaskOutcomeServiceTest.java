@@ -73,400 +73,382 @@ import org.springframework.context.ApplicationEventPublisher;
 @DisplayName("任务结果服务: 结果应用的前置校验, 锁顺序与终态提升口径")
 class DefaultTaskOutcomeServiceTest {
 
-  @Mock
-  JobInstanceMapper jobInstanceMapper;
+    @Mock
+    JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  JobPartitionMapper jobPartitionMapper;
+    @Mock
+    JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  JobTaskMapper jobTaskMapper;
+    @Mock
+    JobTaskMapper jobTaskMapper;
 
-  @Mock
-  JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  FailureClassifier failureClassifier;
+    @Mock
+    FailureClassifier failureClassifier;
 
-  @Mock
-  TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    TriggerRequestMapper triggerRequestMapper;
 
-  @Mock
-  WorkflowNodeMapper workflowNodeMapper;
+    @Mock
+    WorkflowNodeMapper workflowNodeMapper;
 
-  @Mock
-  WorkflowRunMapper workflowRunMapper;
+    @Mock
+    WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  WorkflowNodeRunMapper workflowNodeRunMapper;
+    @Mock
+    WorkflowNodeRunMapper workflowNodeRunMapper;
 
-  @Mock
-  RetryGovernanceService retryGovernanceService;
+    @Mock
+    RetryGovernanceService retryGovernanceService;
 
-  @Mock
-  LifecycleEventMapper<Object> lifecycleEventMapper;
+    @Mock
+    LifecycleEventMapper<Object> lifecycleEventMapper;
 
-  @Mock
-  WorkflowDagService workflowDagService;
+    @Mock
+    WorkflowDagService workflowDagService;
 
-  @Mock
-  WorkflowTerminalOutboxService workflowTerminalOutboxService;
+    @Mock
+    WorkflowTerminalOutboxService workflowTerminalOutboxService;
 
-  @SuppressWarnings("rawtypes")
-  @Mock
-  ObjectProvider workflowNodeDispatchServiceProvider;
+    @SuppressWarnings("rawtypes")
+    @Mock
+    ObjectProvider workflowNodeDispatchServiceProvider;
 
-  @Mock
-  JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
+    @Mock
+    JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
 
-  private DefaultTaskOutcomeService service;
-  private SimpleMeterRegistry meterRegistry;
+    private DefaultTaskOutcomeService service;
+    private SimpleMeterRegistry meterRegistry;
 
-  @BeforeEach
-  @SuppressWarnings("unchecked")
-  void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
-        jobInstanceMapper,
-        jobPartitionMapper,
-        jobTaskMapper,
-        jobStepInstanceMapper,
-        triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    Dependencies collaborators = new Dependencies(
-        retryGovernanceService,
-        lifecycleEventMapper,
-        workflowDagService,
-        workflowNodeDispatchServiceProvider,
-        workflowTerminalOutboxService,
-        mock(VerifierFailureOutboxService.class),
-        meterRegistry,
-        jobInstanceTerminalChildStateReconciler,
-        mock(ResultVersionWriter.class),
-        mock(BatchDayReplayTerminalReconciler.class),
-        failureClassifier,
-        mock(JobLifecycleMetricsRecorder.class),
-        mock(CountContinuityOutboxService.class),
-        mock(ApplicationEventPublisher.class),
-        mock(SecretPayloadProtector.class));
-    service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
-  }
+    @BeforeEach
+    @SuppressWarnings("unchecked")
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+                jobInstanceMapper, jobPartitionMapper, jobTaskMapper, jobStepInstanceMapper, triggerRequestMapper);
+        OrchestratorWorkflowMappers workflowMappers =
+                new OrchestratorWorkflowMappers(workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+        Dependencies collaborators = new Dependencies(
+                retryGovernanceService,
+                lifecycleEventMapper,
+                workflowDagService,
+                workflowNodeDispatchServiceProvider,
+                workflowTerminalOutboxService,
+                mock(VerifierFailureOutboxService.class),
+                meterRegistry,
+                jobInstanceTerminalChildStateReconciler,
+                mock(ResultVersionWriter.class),
+                mock(BatchDayReplayTerminalReconciler.class),
+                failureClassifier,
+                mock(JobLifecycleMetricsRecorder.class),
+                mock(CountContinuityOutboxService.class),
+                mock(ApplicationEventPublisher.class),
+                mock(SecretPayloadProtector.class));
+        service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
+    }
 
-  @Test
-  @DisplayName("任务查询不到结果上下文时返回空, 不产生副作用")
-  void applyTaskOutcome_taskNotFound_returnsNull() {
-    when(jobTaskMapper.selectOutcomePersistenceContext(anyString(), anyLong())).thenReturn(null);
+    @Test
+    @DisplayName("任务查询不到结果上下文时返回空, 不产生副作用")
+    void applyTaskOutcome_taskNotFound_returnsNull() {
+        when(jobTaskMapper.selectOutcomePersistenceContext(anyString(), anyLong()))
+                .thenReturn(null);
 
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder().tenantId("t1").taskId(99L).success(true).build();
-    var result = service.applyTaskOutcome(command);
-    assertThat(result).isNull();
-  }
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(99L)
+                .success(true)
+                .build();
+        var result = service.applyTaskOutcome(command);
+        assertThat(result).isNull();
+    }
 
-  @Test
-  @DisplayName("租户标识为空时返回空, 不产生副作用")
-  void applyTaskOutcome_nullTenantId_returnsNull() {
-    when(jobTaskMapper.selectOutcomePersistenceContext(null, 1L)).thenReturn(null);
+    @Test
+    @DisplayName("租户标识为空时返回空, 不产生副作用")
+    void applyTaskOutcome_nullTenantId_returnsNull() {
+        when(jobTaskMapper.selectOutcomePersistenceContext(null, 1L)).thenReturn(null);
 
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder().taskId(1L).success(true).build();
-    var result = service.applyTaskOutcome(command);
-    assertThat(result).isNull();
-  }
+        TaskOutcomeCommand command =
+                TaskOutcomeCommand.builder().taskId(1L).success(true).build();
+        var result = service.applyTaskOutcome(command);
+        assertThat(result).isNull();
+    }
 
-  /** ADR-014：worker 上报的 invocation 与分区当前值不一致 → CONFLICT，防止过期 worker 推进状态。 */
-  @Test
-  @DisplayName("分片调用次数与结果不匹配时抛出业务异常并给出提示键")
-  void applyTaskOutcome_partitionInvocationMismatch_throwsBizException() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(1L);
-    task.setTenantId("t1");
-    task.setJobInstanceId(10L);
-    task.setJobPartitionId(99L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setAssignedWorkerCode("w1");
-    task.setVersion(1L);
+    /** ADR-014：worker 上报的 invocation 与分区当前值不一致 → CONFLICT，防止过期 worker 推进状态。 */
+    @Test
+    @DisplayName("分片调用次数与结果不匹配时抛出业务异常并给出提示键")
+    void applyTaskOutcome_partitionInvocationMismatch_throwsBizException() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(1L);
+        task.setTenantId("t1");
+        task.setJobInstanceId(10L);
+        task.setJobPartitionId(99L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("w1");
+        task.setVersion(1L);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setCurrentInvocationId("inv-db");
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setCurrentInvocationId("inv-db");
 
-    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
-        .thenReturn(persistenceContext(task, partition));
+        when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L)).thenReturn(persistenceContext(task, partition));
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .workerId("w1")
-        .success(true)
-        .partitionInvocationId("inv-stale-worker")
-        .build();
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(1L)
+                .workerId("w1")
+                .success(true)
+                .partitionInvocationId("inv-stale-worker")
+                .build();
 
-    assertThatThrownBy(() -> service.applyTaskOutcome(command))
-        .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getMessageKey())
-            .isEqualTo("error.task.invocation_mismatch"));
-  }
+        assertThatThrownBy(() -> service.applyTaskOutcome(command))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex ->
+                        assertThat(((BizException) ex).getMessageKey()).isEqualTo("error.task.invocation_mismatch"));
+    }
 
-  @Test
-  @DisplayName("分片计数使用带锁的查询方法, 且接口上存在该方法签名")
-  void applyTaskOutcome_selectByQueryForUpdate_usedForPartitionCounting() throws Exception {
-    // R3-P0-7：之前的实现只 reflection-check 方法存在性，没有任何业务逻辑断言。
-    // 真正测 CAS 分区计数需要构造完整 partition+task+jobInstance mock 链，超出单测范畴
-    // （参见 RequiresNewTransactionBoundaryIntegrationTest 集成测试覆盖）。
-    // 这里把断言改成"验证 selectByQueryForUpdate 在 JobTaskMapper 接口上存在"，
-    // 至少 contract-test 级地保护方法签名（mapper xml ↔ Java interface 漂移会被 javac 接住）。
-    var partitionMethod = JobPartitionMapper.class.getDeclaredMethod(
-        "selectByQueryForUpdate", JobPartitionQuery.class);
-    assertThat(partitionMethod).isNotNull();
-    assertThat(partitionMethod.getReturnType()).isAssignableFrom(List.class);
-  }
+    @Test
+    @DisplayName("分片计数使用带锁的查询方法, 且接口上存在该方法签名")
+    void applyTaskOutcome_selectByQueryForUpdate_usedForPartitionCounting() throws Exception {
+        // R3-P0-7：之前的实现只 reflection-check 方法存在性，没有任何业务逻辑断言。
+        // 真正测 CAS 分区计数需要构造完整 partition+task+jobInstance mock 链，超出单测范畴
+        // （参见 RequiresNewTransactionBoundaryIntegrationTest 集成测试覆盖）。
+        // 这里把断言改成"验证 selectByQueryForUpdate 在 JobTaskMapper 接口上存在"，
+        // 至少 contract-test 级地保护方法签名（mapper xml ↔ Java interface 漂移会被 javac 接住）。
+        var partitionMethod =
+                JobPartitionMapper.class.getDeclaredMethod("selectByQueryForUpdate", JobPartitionQuery.class);
+        assertThat(partitionMethod).isNotNull();
+        assertThat(partitionMethod.getReturnType()).isAssignableFrom(List.class);
+    }
 
-  /**
-   * 死锁回归守护：成功 outcome 必须先对 (tenantId, jobInstanceId) 取事务级 advisory lock，再依次写 task 和
-   * partition。任何 outcome 在等待实例锁时都不能持有业务行锁，否则实例收敛可能反向等待该行并形成锁环。
-   */
-  @Test
-  @DisplayName("写任务与分片前先取实例级咨询锁, 锁顺序为实例, 任务, 分片")
-  void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeTaskAndPartitionWrites() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(1L);
-    task.setTenantId("t1");
-    task.setJobInstanceId(10L);
-    task.setJobPartitionId(99L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setAssignedWorkerCode("w1");
-    task.setVersion(1L);
+    /**
+     * 死锁回归守护：成功 outcome 必须先对 (tenantId, jobInstanceId) 取事务级 advisory lock，再依次写 task 和
+     * partition。任何 outcome 在等待实例锁时都不能持有业务行锁，否则实例收敛可能反向等待该行并形成锁环。
+     */
+    @Test
+    @DisplayName("写任务与分片前先取实例级咨询锁, 锁顺序为实例, 任务, 分片")
+    void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeTaskAndPartitionWrites() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(1L);
+        task.setTenantId("t1");
+        task.setJobInstanceId(10L);
+        task.setJobPartitionId(99L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("w1");
+        task.setVersion(1L);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(99L);
-    partition.setTenantId("t1");
-    partition.setJobInstanceId(10L);
-    partition.setPartitionStatus(PartitionStatus.RUNNING.code()); // 未完成 → 非终态,流程短
-    partition.setVersion(1L);
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(99L);
+        partition.setTenantId("t1");
+        partition.setJobInstanceId(10L);
+        partition.setPartitionStatus(PartitionStatus.RUNNING.code()); // 未完成 → 非终态,流程短
+        partition.setVersion(1L);
 
-    JobInstanceEntity progressedInstance = new JobInstanceEntity();
-    progressedInstance.setId(10L);
-    progressedInstance.setTenantId("t1");
-    progressedInstance.setInstanceStatus("RUNNING");
-    progressedInstance.setVersion(2L);
-    progressedInstance.setExpectedPartitionCount(2);
-    progressedInstance.setSuccessPartitionCount(1);
-    progressedInstance.setFailedPartitionCount(0);
-    progressedInstance.setDryRun(false);
+        JobInstanceEntity progressedInstance = new JobInstanceEntity();
+        progressedInstance.setId(10L);
+        progressedInstance.setTenantId("t1");
+        progressedInstance.setInstanceStatus("RUNNING");
+        progressedInstance.setVersion(2L);
+        progressedInstance.setExpectedPartitionCount(2);
+        progressedInstance.setSuccessPartitionCount(1);
+        progressedInstance.setFailedPartitionCount(0);
+        progressedInstance.setDryRun(false);
 
-    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
-        .thenReturn(persistenceContext(task, partition));
-    when(jobTaskMapper.finishTask(any())).thenReturn(task);
-    when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
-        .thenReturn(progressedInstance);
-    when(lifecycleEventMapper.map(any(), anyString()))
-        .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
-    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+        when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L)).thenReturn(persistenceContext(task, partition));
+        when(jobTaskMapper.finishTask(any())).thenReturn(task);
+        when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any())).thenReturn(progressedInstance);
+        when(lifecycleEventMapper.map(any(), anyString())).thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
+        when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .workerId("w1")
-        .success(true)
-        .build();
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(1L)
+                .workerId("w1")
+                .success(true)
+                .build();
 
-    JobTaskEntity outcome = service.applyTaskOutcome(command);
+        JobTaskEntity outcome = service.applyTaskOutcome(command);
 
-    assertThat(outcome).isSameAs(task);
-    verify(jobTaskMapper, times(2)).selectOutcomePersistenceContext("t1", 1L);
-    verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
-    verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
-    verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
+        assertThat(outcome).isSameAs(task);
+        verify(jobTaskMapper, times(2)).selectOutcomePersistenceContext("t1", 1L);
+        verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
+        verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
+        verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
 
-    InOrder inOrder = inOrder(jobInstanceMapper, jobTaskMapper, jobPartitionMapper);
-    // 统一锁序必须是 instance advisory lock -> task -> partition。
-    inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
-    inOrder.verify(jobTaskMapper).finishTask(any());
-    ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
-        ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
-    inOrder
-        .verify(jobPartitionMapper)
-        .markTerminalStatusAndLoadInstance(partitionStatusCaptor.capture());
-    verify(jobInstanceMapper, never()).selectById("t1", 10L);
-    assertThat(partitionStatusCaptor.getValue().getOutputSummary())
-        .contains("\"taskId\":1", "\"success\":true");
-    verify(jobPartitionMapper, never()).updateOutputSummary(anyString(), anyLong(), any(), any());
-    // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
-    assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
-        .isEqualTo(1L);
-  }
+        InOrder inOrder = inOrder(jobInstanceMapper, jobTaskMapper, jobPartitionMapper);
+        // 统一锁序必须是 instance advisory lock -> task -> partition。
+        inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
+        inOrder.verify(jobTaskMapper).finishTask(any());
+        ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
+                ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
+        inOrder.verify(jobPartitionMapper).markTerminalStatusAndLoadInstance(partitionStatusCaptor.capture());
+        verify(jobInstanceMapper, never()).selectById("t1", 10L);
+        assertThat(partitionStatusCaptor.getValue().getOutputSummary()).contains("\"taskId\":1", "\"success\":true");
+        verify(jobPartitionMapper, never()).updateOutputSummary(anyString(), anyLong(), any(), any());
+        // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
+        assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
+                .isEqualTo(1L);
+    }
 
-  @Test
-  @DisplayName("非幂等执行已开始后失败回报归为外部结果未知且不按普通错误重试")
-  void applyTaskOutcome_nonIdempotentStartedFailure_blocksAutomaticRetry() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(1L);
-    task.setTenantId("t1");
-    task.setJobInstanceId(10L);
-    task.setJobPartitionId(99L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setAssignedWorkerCode("w1");
-    task.setVersion(1L);
-    task.setNonIdempotentStartedAt(Instant.parse("2026-10-21T00:00:00Z"));
+    @Test
+    @DisplayName("非幂等执行已开始后失败回报归为外部结果未知且不按普通错误重试")
+    void applyTaskOutcome_nonIdempotentStartedFailure_blocksAutomaticRetry() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(1L);
+        task.setTenantId("t1");
+        task.setJobInstanceId(10L);
+        task.setJobPartitionId(99L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("w1");
+        task.setVersion(1L);
+        task.setNonIdempotentStartedAt(Instant.parse("2026-10-21T00:00:00Z"));
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(99L);
-    partition.setTenantId("t1");
-    partition.setJobInstanceId(10L);
-    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
-    partition.setCurrentInvocationId("inv-1");
-    partition.setVersion(1L);
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(99L);
+        partition.setTenantId("t1");
+        partition.setJobInstanceId(10L);
+        partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+        partition.setCurrentInvocationId("inv-1");
+        partition.setVersion(1L);
 
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(10L);
-    instance.setTenantId("t1");
-    instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(10L);
+        instance.setTenantId("t1");
+        instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
 
-    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
-        .thenReturn(persistenceContext(task, partition));
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
-    when(jobTaskMapper.finishTask(any())).thenReturn(task);
-    when(lifecycleEventMapper.map(any(), anyString()))
-        .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
-    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
-    when(retryGovernanceService.scheduleRetryIfNecessary(
-            any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString()))
-        .thenReturn(false);
-    when(failureClassifier.classify(FailureClass.UNKNOWN.code(), null))
-        .thenReturn(FailureClass.UNKNOWN);
+        when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L)).thenReturn(persistenceContext(task, partition));
+        when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+        when(jobTaskMapper.finishTask(any())).thenReturn(task);
+        when(lifecycleEventMapper.map(any(), anyString())).thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
+        when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+        when(retryGovernanceService.scheduleRetryIfNecessary(
+                        any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString()))
+                .thenReturn(false);
+        when(failureClassifier.classify(FailureClass.UNKNOWN.code(), null)).thenReturn(FailureClass.UNKNOWN);
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .workerId("w1")
-        .success(false)
-        .errorCode("HTTP_TIMEOUT")
-        .errorMessage("remote request timed out")
-        .failureClass("TRANSIENT")
-        .partitionInvocationId("inv-1")
-        .build();
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(1L)
+                .workerId("w1")
+                .success(false)
+                .errorCode("HTTP_TIMEOUT")
+                .errorMessage("remote request timed out")
+                .failureClass("TRANSIENT")
+                .partitionInvocationId("inv-1")
+                .build();
 
-    service.applyTaskOutcome(command);
+        service.applyTaskOutcome(command);
 
-    ArgumentCaptor<FinishTaskParam> finishCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
-    verify(jobTaskMapper).finishTask(finishCaptor.capture());
-    assertThat(finishCaptor.getValue().getErrorCode())
-        .isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    assertThat(finishCaptor.getValue().getFailureClass()).isEqualTo(FailureClass.UNKNOWN.code());
-    verify(retryGovernanceService)
-        .scheduleRetryIfNecessary(
-            any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString());
-  }
+        ArgumentCaptor<FinishTaskParam> finishCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
+        verify(jobTaskMapper).finishTask(finishCaptor.capture());
+        assertThat(finishCaptor.getValue().getErrorCode()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+        assertThat(finishCaptor.getValue().getFailureClass()).isEqualTo(FailureClass.UNKNOWN.code());
+        verify(retryGovernanceService)
+                .scheduleRetryIfNecessary(
+                        any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString());
+    }
 
-  @Test
-  @DisplayName("全部分片成功后把停留失败的实例提升为成功终态")
-  void applyTaskOutcome_promotesStaleFailedInstanceWhenAllPartitionsSucceeded() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(1L);
-    task.setTenantId("t1");
-    task.setJobInstanceId(10L);
-    task.setJobPartitionId(99L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setAssignedWorkerCode("w1");
-    task.setVersion(1L);
+    @Test
+    @DisplayName("全部分片成功后把停留失败的实例提升为成功终态")
+    void applyTaskOutcome_promotesStaleFailedInstanceWhenAllPartitionsSucceeded() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(1L);
+        task.setTenantId("t1");
+        task.setJobInstanceId(10L);
+        task.setJobPartitionId(99L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("w1");
+        task.setVersion(1L);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(99L);
-    partition.setTenantId("t1");
-    partition.setJobInstanceId(10L);
-    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
-    partition.setVersion(1L);
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(99L);
+        partition.setTenantId("t1");
+        partition.setJobInstanceId(10L);
+        partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+        partition.setVersion(1L);
 
-    JobInstanceEntity progressedInstance = new JobInstanceEntity();
-    progressedInstance.setId(10L);
-    progressedInstance.setTenantId("t1");
-    progressedInstance.setInstanceStatus("FAILED");
-    progressedInstance.setVersion(3L);
-    progressedInstance.setExpectedPartitionCount(1);
-    progressedInstance.setSuccessPartitionCount(1);
-    progressedInstance.setFailedPartitionCount(0);
-    progressedInstance.setDryRun(false);
+        JobInstanceEntity progressedInstance = new JobInstanceEntity();
+        progressedInstance.setId(10L);
+        progressedInstance.setTenantId("t1");
+        progressedInstance.setInstanceStatus("FAILED");
+        progressedInstance.setVersion(3L);
+        progressedInstance.setExpectedPartitionCount(1);
+        progressedInstance.setSuccessPartitionCount(1);
+        progressedInstance.setFailedPartitionCount(0);
+        progressedInstance.setDryRun(false);
 
-    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
-        .thenReturn(persistenceContext(task, partition));
-    when(jobTaskMapper.finishTask(any())).thenReturn(task);
-    when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
-        .thenReturn(progressedInstance);
-    when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
-        .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L, 0L, 0L));
-    when(lifecycleEventMapper.map(any(), anyString()))
-        .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
-    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+        when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L)).thenReturn(persistenceContext(task, partition));
+        when(jobTaskMapper.finishTask(any())).thenReturn(task);
+        when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any())).thenReturn(progressedInstance);
+        when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
+                .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L, 0L, 0L));
+        when(lifecycleEventMapper.map(any(), anyString()))
+                .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
+        when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .workerId("w1")
-        .success(true)
-        .build();
-    service.applyTaskOutcome(command);
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(1L)
+                .workerId("w1")
+                .success(true)
+                .build();
+        service.applyTaskOutcome(command);
 
-    ArgumentCaptor<UpdateInstanceProgressParam> captor =
-        ArgumentCaptor.forClass(UpdateInstanceProgressParam.class);
-    verify(jobInstanceMapper).updateProgress(captor.capture());
-    verify(jobInstanceMapper, never()).selectById("t1", 10L);
-    assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
-  }
+        ArgumentCaptor<UpdateInstanceProgressParam> captor = ArgumentCaptor.forClass(UpdateInstanceProgressParam.class);
+        verify(jobInstanceMapper).updateProgress(captor.capture());
+        verify(jobInstanceMapper, never()).selectById("t1", 10L);
+        assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
+    }
 
-  @Test
-  @DisplayName("平台取消的任务回报 Worker 取消码时落取消终态且不安排重试")
-  void applyTaskOutcome_platformCancellation_isCancelledWithoutRetry() {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(1L);
-    task.setTenantId("t1");
-    task.setJobInstanceId(10L);
-    task.setJobPartitionId(99L);
-    task.setTaskStatus(TaskStatus.RUNNING.code());
-    task.setCancelRequested(true);
-    task.setAssignedWorkerCode("w1");
-    task.setVersion(1L);
+    @Test
+    @DisplayName("平台取消的任务回报 Worker 取消码时落取消终态且不安排重试")
+    void applyTaskOutcome_platformCancellation_isCancelledWithoutRetry() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(1L);
+        task.setTenantId("t1");
+        task.setJobInstanceId(10L);
+        task.setJobPartitionId(99L);
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setCancelRequested(true);
+        task.setAssignedWorkerCode("w1");
+        task.setVersion(1L);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(99L);
-    partition.setTenantId("t1");
-    partition.setJobInstanceId(10L);
-    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
-    partition.setVersion(1L);
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(99L);
+        partition.setTenantId("t1");
+        partition.setJobInstanceId(10L);
+        partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+        partition.setVersion(1L);
 
-    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
-        .thenReturn(persistenceContext(task, partition));
-    when(jobTaskMapper.finishTask(any())).thenReturn(task);
+        when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L)).thenReturn(persistenceContext(task, partition));
+        when(jobTaskMapper.finishTask(any())).thenReturn(task);
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .workerId("w1")
-        .success(false)
-        .errorCode("WORKER_EXECUTION_CANCELLED")
-        .failureClass("UNKNOWN")
-        .build();
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("t1")
+                .taskId(1L)
+                .workerId("w1")
+                .success(false)
+                .errorCode("WORKER_EXECUTION_CANCELLED")
+                .failureClass("UNKNOWN")
+                .build();
 
-    service.applyTaskOutcome(command);
+        service.applyTaskOutcome(command);
 
-    ArgumentCaptor<FinishTaskParam> taskCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
-    verify(jobTaskMapper).finishTask(taskCaptor.capture());
-    assertThat(taskCaptor.getValue().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED.code());
-    assertThat(taskCaptor.getValue().getFailureClass()).isNull();
-    verify(retryGovernanceService, never())
-        .scheduleRetryIfNecessary(any(), any(), any(), any(), any());
-    ArgumentCaptor<MarkPartitionStatusParam> partitionCaptor =
-        ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
-    verify(jobPartitionMapper).markTerminalStatusAndLoadInstance(partitionCaptor.capture());
-    assertThat(partitionCaptor.getValue().getPartitionStatus())
-        .isEqualTo(PartitionStatus.FAILED.code());
-  }
+        ArgumentCaptor<FinishTaskParam> taskCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
+        verify(jobTaskMapper).finishTask(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED.code());
+        assertThat(taskCaptor.getValue().getFailureClass()).isNull();
+        verify(retryGovernanceService, never()).scheduleRetryIfNecessary(any(), any(), any(), any(), any());
+        ArgumentCaptor<MarkPartitionStatusParam> partitionCaptor =
+                ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
+        verify(jobPartitionMapper).markTerminalStatusAndLoadInstance(partitionCaptor.capture());
+        assertThat(partitionCaptor.getValue().getPartitionStatus()).isEqualTo(PartitionStatus.FAILED.code());
+    }
 
-  private static TaskOutcomePersistenceContext persistenceContext(
-      JobTaskEntity task, JobPartitionEntity partition) {
-    TaskOutcomePersistenceContext context = new TaskOutcomePersistenceContext();
-    context.setTask(task);
-    context.setPartition(partition);
-    return context;
-  }
+    private static TaskOutcomePersistenceContext persistenceContext(JobTaskEntity task, JobPartitionEntity partition) {
+        TaskOutcomePersistenceContext context = new TaskOutcomePersistenceContext();
+        context.setTask(task);
+        context.setPartition(partition);
+        return context;
+    }
 }

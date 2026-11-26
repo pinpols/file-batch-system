@@ -11,6 +11,5 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
  */
 public interface WorkerSelector {
 
-  WorkerRouteModel select(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue, Integer priority);
+    WorkerRouteModel select(ResourceSchedulingRequest request, ResourceQueueEntity queue, Integer priority);
 }

@@ -10,36 +10,35 @@ import java.util.Objects;
 /** 批次日告警详情共用的基础字段。 */
 final class BatchDayAlertDetails {
 
-  private BatchDayAlertDetails() {}
+    private BatchDayAlertDetails() {}
 
-  static Map<String, Object> base(LaunchRequest request, String reasonCode) {
-    return base(request, null, reasonCode);
-  }
+    static Map<String, Object> base(LaunchRequest request, String reasonCode) {
+        return base(request, null, reasonCode);
+    }
 
-  static Map<String, Object> base(
-      LaunchRequest request, TriggerRequestEntity triggerRequest, String reasonCode) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("tenantId", request.tenantId());
-    detail.put("jobCode", request.jobCode());
-    detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    if (EmptyChecks.isNotNull(request.workflowDefinitionId())) {
-      detail.put("workflowDefinitionId", request.workflowDefinitionId().toString());
+    static Map<String, Object> base(LaunchRequest request, TriggerRequestEntity triggerRequest, String reasonCode) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("tenantId", request.tenantId());
+        detail.put("jobCode", request.jobCode());
+        detail.put(
+                "bizDate", request.bizDate() == null ? null : request.bizDate().toString());
+        if (EmptyChecks.isNotNull(request.workflowDefinitionId())) {
+            detail.put("workflowDefinitionId", request.workflowDefinitionId().toString());
+        }
+        if (EmptyChecks.isNotNull(triggerRequest) && EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
+            detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId().toString());
+        }
+        boolean requestHasParentWorkflowNode = EmptyChecks.isNotNull(triggerRequest)
+                && EmptyChecks.isNotNull(triggerRequest.getParentNodeCode())
+                && !EmptyChecks.isBlank(Objects.requireNonNull(triggerRequest.getParentNodeCode()));
+        if (requestHasParentWorkflowNode) {
+            detail.put("nodeCode", triggerRequest.getParentNodeCode());
+        }
+        detail.put("requestId", request.requestId());
+        detail.put(
+                "triggerType",
+                request.triggerType() == null ? null : request.triggerType().code());
+        detail.put("reasonCode", reasonCode);
+        return detail;
     }
-    if (EmptyChecks.isNotNull(triggerRequest)
-        && EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
-      detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId().toString());
-    }
-    boolean requestHasParentWorkflowNode = EmptyChecks.isNotNull(triggerRequest)
-        && EmptyChecks.isNotNull(triggerRequest.getParentNodeCode())
-        && !EmptyChecks.isBlank(Objects.requireNonNull(triggerRequest.getParentNodeCode()));
-    if (requestHasParentWorkflowNode) {
-      detail.put("nodeCode", triggerRequest.getParentNodeCode());
-    }
-    detail.put("requestId", request.requestId());
-    detail.put(
-        "triggerType",
-        request.triggerType() == null ? null : request.triggerType().code());
-    detail.put("reasonCode", reasonCode);
-    return detail;
-  }
 }

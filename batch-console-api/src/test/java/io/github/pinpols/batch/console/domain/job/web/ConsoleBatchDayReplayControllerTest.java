@@ -49,88 +49,81 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBatchDayReplayControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestratorProxy;
+    @Mock
+    private ConsoleOrchestratorPort orchestratorProxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
-            orchestratorProxy,
-            new ConsoleBatchDayReplayApprovalService(orchestratorProxy),
-            responseFactory,
-            requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
-  }
-
-  @Test
-  @DisplayName("两类审批忽略伪造审批人，重复提交仍使用当前认证主体")
-  void shouldUseAuthenticatedApproverForBothPathsAndRetries() throws Exception {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            principal, "token", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
-    when(orchestratorProxy.replayOperationApprove(55L, "t1", "alice"))
-        .thenReturn(CommonResponse.success(null));
-    when(orchestratorProxy.batchDayReplayApprove(66L, "t1", "alice"))
-        .thenReturn(CommonResponse.success(null));
-
-    for (int i = 0; i < 2; i++) {
-      mockMvc
-          .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
-              .param("tenantId", "t1")
-              .param("approver", "forged")
-              .header("Idempotency-Key", "idem-approve"))
-          .andExpect(status().isOk());
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
+                        orchestratorProxy,
+                        new ConsoleBatchDayReplayApprovalService(orchestratorProxy),
+                        responseFactory,
+                        requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .build();
     }
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions/66/approve")
-            .param("tenantId", "t1")
-            .param("approver", "forged")
-            .header("Idempotency-Key", "idem-session"))
-        .andExpect(status().isOk());
-    verify(orchestratorProxy, times(2)).replayOperationApprove(55L, "t1", "alice");
-    verify(orchestratorProxy).batchDayReplayApprove(66L, "t1", "alice");
-  }
 
-  @Test
-  @DisplayName("无认证主体时拒绝审批且不调用编排层")
-  void shouldRejectApprovalWithoutAuthenticatedPrincipal() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
-            .param("tenantId", "t1")
-            .param("approver", "forged")
-            .header("Idempotency-Key", "idem-approve"))
-        .andExpect(status().isUnauthorized());
-    verify(orchestratorProxy, never()).replayOperationApprove(any(), any(), any());
-  }
+    @AfterEach
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("提交报文完整绑定为类型化请求后委托下游, 各字段取值与报文一致")
-  void shouldDeserializeTypedBodyAndDelegate_whenSubmitRequestComplete() throws Exception {
-    when(orchestratorProxy.batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class)))
-        .thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions")
-            .header("Idempotency-Key", "idem-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("两类审批忽略伪造审批人，重复提交仍使用当前认证主体")
+    void shouldUseAuthenticatedApproverForBothPathsAndRetries() throws Exception {
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        principal, "token", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        when(orchestratorProxy.replayOperationApprove(55L, "t1", "alice")).thenReturn(CommonResponse.success(null));
+        when(orchestratorProxy.batchDayReplayApprove(66L, "t1", "alice")).thenReturn(CommonResponse.success(null));
+
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+                            .param("tenantId", "t1")
+                            .param("approver", "forged")
+                            .header("Idempotency-Key", "idem-approve"))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions/66/approve")
+                        .param("tenantId", "t1")
+                        .param("approver", "forged")
+                        .header("Idempotency-Key", "idem-session"))
+                .andExpect(status().isOk());
+        verify(orchestratorProxy, times(2)).replayOperationApprove(55L, "t1", "alice");
+        verify(orchestratorProxy).batchDayReplayApprove(66L, "t1", "alice");
+    }
+
+    @Test
+    @DisplayName("无认证主体时拒绝审批且不调用编排层")
+    void shouldRejectApprovalWithoutAuthenticatedPrincipal() throws Exception {
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+                        .param("tenantId", "t1")
+                        .param("approver", "forged")
+                        .header("Idempotency-Key", "idem-approve"))
+                .andExpect(status().isUnauthorized());
+        verify(orchestratorProxy, never()).replayOperationApprove(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("提交报文完整绑定为类型化请求后委托下游, 各字段取值与报文一致")
+    void shouldDeserializeTypedBodyAndDelegate_whenSubmitRequestComplete() throws Exception {
+        when(orchestratorProxy.batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class)))
+                .thenReturn(CommonResponse.success(null));
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions")
+                        .header("Idempotency-Key", "idem-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId":"tb",
                       "calendarCode":"CAL-CN",
@@ -143,68 +136,65 @@ class ConsoleBatchDayReplayControllerTest {
                       "autoApprove":false
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<BatchDayReplaySubmitRequest> requestCaptor =
-        ArgumentCaptor.forClass(BatchDayReplaySubmitRequest.class);
-    verify(orchestratorProxy).batchDayReplaySubmit(requestCaptor.capture());
-    BatchDayReplaySubmitRequest forwarded = requestCaptor.getValue();
-    assertThat(forwarded.getTenantId()).isEqualTo("tb");
-    assertThat(forwarded.getCalendarCode()).isEqualTo("CAL-CN");
-    assertThat(forwarded.getBizDate()).isEqualTo("2026-07-01");
-    assertThat(forwarded.getScope()).isEqualTo("SUBSET_JOB_CODES");
-    assertThat(forwarded.getJobCodes()).containsExactly("JOB-A", "JOB-B");
-    assertThat(forwarded.getResultPolicy()).isEqualTo("CREATE_NEW_VERSION");
-    assertThat(forwarded.getReason()).isEqualTo("rerun after fix");
-    assertThat(forwarded.getRequestedBy()).isEqualTo("ops-1");
-    assertThat(forwarded.getAutoApprove()).isFalse();
-  }
+        ArgumentCaptor<BatchDayReplaySubmitRequest> requestCaptor =
+                ArgumentCaptor.forClass(BatchDayReplaySubmitRequest.class);
+        verify(orchestratorProxy).batchDayReplaySubmit(requestCaptor.capture());
+        BatchDayReplaySubmitRequest forwarded = requestCaptor.getValue();
+        assertThat(forwarded.getTenantId()).isEqualTo("tb");
+        assertThat(forwarded.getCalendarCode()).isEqualTo("CAL-CN");
+        assertThat(forwarded.getBizDate()).isEqualTo("2026-07-01");
+        assertThat(forwarded.getScope()).isEqualTo("SUBSET_JOB_CODES");
+        assertThat(forwarded.getJobCodes()).containsExactly("JOB-A", "JOB-B");
+        assertThat(forwarded.getResultPolicy()).isEqualTo("CREATE_NEW_VERSION");
+        assertThat(forwarded.getReason()).isEqualTo("rerun after fix");
+        assertThat(forwarded.getRequestedBy()).isEqualTo("ops-1");
+        assertThat(forwarded.getAutoApprove()).isFalse();
+    }
 
-  @Test
-  @DisplayName("entry 恢复使用已认证操作者并转发租户、原因")
-  void shouldForwardFailedSubmissionRetryWithAuthenticatedOperator() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata(
-            "req-1", "trace-1", "tenant-a", "operator-a", "idem-retry", "127.0.0.1"));
-    when(orchestratorProxy.batchDayReplayRetryFailedSubmission(
-            31L, 77L, "tenant-a", "operator-a", "confirmed no request was created"))
-        .thenReturn(CommonResponse.success(null));
+    @Test
+    @DisplayName("entry 恢复使用已认证操作者并转发租户、原因")
+    void shouldForwardFailedSubmissionRetryWithAuthenticatedOperator() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata(
+                        "req-1", "trace-1", "tenant-a", "operator-a", "idem-retry", "127.0.0.1"));
+        when(orchestratorProxy.batchDayReplayRetryFailedSubmission(
+                        31L, 77L, "tenant-a", "operator-a", "confirmed no request was created"))
+                .thenReturn(CommonResponse.success(null));
 
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions/31/entries/77/retry-submission")
-            .header("Idempotency-Key", "idem-retry")
-            .queryParam("tenantId", "tenant-a")
-            .queryParam("reason", "confirmed no request was created"))
-        .andExpect(status().isOk());
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions/31/entries/77/retry-submission")
+                        .header("Idempotency-Key", "idem-retry")
+                        .queryParam("tenantId", "tenant-a")
+                        .queryParam("reason", "confirmed no request was created"))
+                .andExpect(status().isOk());
 
-    verify(orchestratorProxy)
-        .batchDayReplayRetryFailedSubmission(
-            31L, 77L, "tenant-a", "operator-a", "confirmed no request was created");
-  }
+        verify(orchestratorProxy)
+                .batchDayReplayRetryFailedSubmission(
+                        31L, 77L, "tenant-a", "operator-a", "confirmed no request was created");
+    }
 
-  @Test
-  @DisplayName("必填字段缺失时返回参数错误, 且不触达下游端口")
-  void shouldRejectSubmit_whenRequiredFieldsMissing() throws Exception {
-    // calendarCode/bizDate/scope/reason/requestedBy @NotBlank —— 缺失直接 400,不触达 orchestrator。
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions")
-            .header("Idempotency-Key", "idem-2")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\"}"))
-        .andExpect(status().isBadRequest());
-    verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
-  }
+    @Test
+    @DisplayName("必填字段缺失时返回参数错误, 且不触达下游端口")
+    void shouldRejectSubmit_whenRequiredFieldsMissing() throws Exception {
+        // calendarCode/bizDate/scope/reason/requestedBy @NotBlank —— 缺失直接 400,不触达 orchestrator。
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions")
+                        .header("Idempotency-Key", "idem-2")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"ta\"}"))
+                .andExpect(status().isBadRequest());
+        verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
+    }
 
-  @Test
-  @DisplayName("预览报文绑定后委托下游, 返回成功响应")
-  void shouldDelegatePreviewRequest_whenBodyTyped() throws Exception {
-    when(orchestratorProxy.batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class)))
-        .thenReturn(CommonResponse.success(null));
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions/preview")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("预览报文绑定后委托下游, 返回成功响应")
+    void shouldDelegatePreviewRequest_whenBodyTyped() throws Exception {
+        when(orchestratorProxy.batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class)))
+                .thenReturn(CommonResponse.success(null));
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions/preview")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "calendarCode":"CAL-CN",
                       "bizDate":"2026-07-01",
@@ -213,19 +203,18 @@ class ConsoleBatchDayReplayControllerTest {
                       "requestedBy":"ops-1"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(orchestratorProxy).batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class));
-  }
+        verify(orchestratorProxy).batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class));
+    }
 
-  @Test
-  @DisplayName("日期区间预览绑定闭区间与范围配置后委托 operation 端口")
-  void shouldDelegateDateRangePreview_whenBodyTyped() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/operations/date-range/preview")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("日期区间预览绑定闭区间与范围配置后委托 operation 端口")
+    void shouldDelegateDateRangePreview_whenBodyTyped() throws Exception {
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/operations/date-range/preview")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "calendarCode":"CAL-CN",
                       "fromDate":"2026-07-01",
@@ -236,56 +225,51 @@ class ConsoleBatchDayReplayControllerTest {
                       "autoApprove":false
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<BatchDayReplayRangeRequest> requestCaptor =
-        ArgumentCaptor.forClass(BatchDayReplayRangeRequest.class);
-    verify(orchestratorProxy).batchDayReplayRangePreview(requestCaptor.capture());
-    BatchDayReplayRangeRequest forwarded = requestCaptor.getValue();
-    assertThat(forwarded.getCalendarCode()).isEqualTo("CAL-CN");
-    assertThat(forwarded.getFromDate()).isEqualTo("2026-07-01");
-    assertThat(forwarded.getThroughDate()).isEqualTo("2026-07-03");
-    assertThat(forwarded.getScope()).isEqualTo("ALL_FAILED");
-  }
+        ArgumentCaptor<BatchDayReplayRangeRequest> requestCaptor =
+                ArgumentCaptor.forClass(BatchDayReplayRangeRequest.class);
+        verify(orchestratorProxy).batchDayReplayRangePreview(requestCaptor.capture());
+        BatchDayReplayRangeRequest forwarded = requestCaptor.getValue();
+        assertThat(forwarded.getCalendarCode()).isEqualTo("CAL-CN");
+        assertThat(forwarded.getFromDate()).isEqualTo("2026-07-01");
+        assertThat(forwarded.getThroughDate()).isEqualTo("2026-07-03");
+        assertThat(forwarded.getScope()).isEqualTo("ALL_FAILED");
+    }
 
-  @Test
-  @DisplayName("区间操作历史使用显式租户和条数委托下游")
-  void shouldDelegateOperationHistory_whenTenantAndLimitProvided() throws Exception {
-    when(orchestratorProxy.replayOperationList(any(), anyInt()))
-        .thenReturn(CommonResponse.success(List.of()));
-    mockMvc
-        .perform(get("/api/console/ops/batch-day-replay/operations")
-            .param("tenantId", "tenant-a")
-            .param("limit", "25"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    @Test
+    @DisplayName("区间操作历史使用显式租户和条数委托下游")
+    void shouldDelegateOperationHistory_whenTenantAndLimitProvided() throws Exception {
+        when(orchestratorProxy.replayOperationList(any(), anyInt())).thenReturn(CommonResponse.success(List.of()));
+        mockMvc.perform(get("/api/console/ops/batch-day-replay/operations")
+                        .param("tenantId", "tenant-a")
+                        .param("limit", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(orchestratorProxy).replayOperationList("tenant-a", 25);
-  }
+        verify(orchestratorProxy).replayOperationList("tenant-a", 25);
+    }
 
-  @Test
-  @DisplayName("区间操作详情读取每日子 session 并按租户委托下游")
-  void shouldDelegateOperationSessions_whenOperationAndTenantProvided() throws Exception {
-    when(orchestratorProxy.replayOperationSessions(any(), any()))
-        .thenReturn(CommonResponse.success(List.of()));
-    mockMvc
-        .perform(get("/api/console/ops/batch-day-replay/operations/70/sessions")
-            .param("tenantId", "tenant-a"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    @Test
+    @DisplayName("区间操作详情读取每日子 session 并按租户委托下游")
+    void shouldDelegateOperationSessions_whenOperationAndTenantProvided() throws Exception {
+        when(orchestratorProxy.replayOperationSessions(any(), any())).thenReturn(CommonResponse.success(List.of()));
+        mockMvc.perform(get("/api/console/ops/batch-day-replay/operations/70/sessions")
+                        .param("tenantId", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(orchestratorProxy).replayOperationSessions(70L, "tenant-a");
-  }
+        verify(orchestratorProxy).replayOperationSessions(70L, "tenant-a");
+    }
 
-  @Test
-  @DisplayName("业务日期格式不合法时返回参数错误, 且不触达下游端口")
-  void shouldRejectSubmit_whenBizDateMalformed() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/batch-day-replay/sessions")
-            .header("Idempotency-Key", "idem-3")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("业务日期格式不合法时返回参数错误, 且不触达下游端口")
+    void shouldRejectSubmit_whenBizDateMalformed() throws Exception {
+        mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions")
+                        .header("Idempotency-Key", "idem-3")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "calendarCode":"CAL-CN",
                       "bizDate":"2026/07/01",
@@ -294,7 +278,7 @@ class ConsoleBatchDayReplayControllerTest {
                       "requestedBy":"ops-1"
                     }
                     """))
-        .andExpect(status().isBadRequest());
-    verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
-  }
+                .andExpect(status().isBadRequest());
+        verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
+    }
 }

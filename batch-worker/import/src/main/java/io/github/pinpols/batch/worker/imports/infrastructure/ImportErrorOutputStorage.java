@@ -36,57 +36,47 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ImportErrorOutputStorage {
 
-  private final S3StorageProperties s3StorageProperties;
-  private final BatchObjectStore objectStore;
+    private final S3StorageProperties s3StorageProperties;
+    private final BatchObjectStore objectStore;
 
-  public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
-    boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
-        || !Texts.hasText(fileId)
-        || badRecords == null
-        || EmptyChecks.isEmpty(badRecords);
-    if (errorOutputInputIsIncomplete) {
-      return null;
-    }
-    String objectKey = BatchFileConstants.ERROR_OUTPUT_PREFIX
-        + tenantId
-        + "/"
-        + fileId
-        + "/"
-        + fileId
-        + ".error.jsonl";
-    Path spool = null;
-    try {
-      spool = PrivateTempFiles.createTempFile("import-error-", ".jsonl");
-      try (BufferedWriter writer = Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
-        for (ImportBadRecord badRecord : badRecords) {
-          String badRecordJson = JsonUtils.toJson(badRecord);
-          writer.write(badRecordJson);
-          writer.write('\n');
+    public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
+        boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
+                || !Texts.hasText(fileId)
+                || badRecords == null
+                || EmptyChecks.isEmpty(badRecords);
+        if (errorOutputInputIsIncomplete) {
+            return null;
         }
-      }
-      long size = Files.size(spool);
-      try (InputStream in = Files.newInputStream(spool)) {
-        objectStore.put(
-            s3StorageProperties.getBucket(),
-            objectKey,
-            in,
-            size,
-            BatchFileConstants.CONTENT_TYPE_NDJSON);
-      }
-      return objectKey;
-    } catch (Exception exception) {
-      throw new IllegalStateException("failed to write import error output", exception);
-    } finally {
-      if (spool != null) {
+        String objectKey =
+                BatchFileConstants.ERROR_OUTPUT_PREFIX + tenantId + "/" + fileId + "/" + fileId + ".error.jsonl";
+        Path spool = null;
         try {
-          Files.deleteIfExists(spool);
-        } catch (IOException ignored) {
-          SwallowedExceptionLogger.warn(
-              ImportErrorOutputStorage.class, "catch:IOException", ignored);
+            spool = PrivateTempFiles.createTempFile("import-error-", ".jsonl");
+            try (BufferedWriter writer = Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
+                for (ImportBadRecord badRecord : badRecords) {
+                    String badRecordJson = JsonUtils.toJson(badRecord);
+                    writer.write(badRecordJson);
+                    writer.write('\n');
+                }
+            }
+            long size = Files.size(spool);
+            try (InputStream in = Files.newInputStream(spool)) {
+                objectStore.put(
+                        s3StorageProperties.getBucket(), objectKey, in, size, BatchFileConstants.CONTENT_TYPE_NDJSON);
+            }
+            return objectKey;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to write import error output", exception);
+        } finally {
+            if (spool != null) {
+                try {
+                    Files.deleteIfExists(spool);
+                } catch (IOException ignored) {
+                    SwallowedExceptionLogger.warn(ImportErrorOutputStorage.class, "catch:IOException", ignored);
 
-          // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
+                    // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
+                }
+            }
         }
-      }
     }
-  }
 }

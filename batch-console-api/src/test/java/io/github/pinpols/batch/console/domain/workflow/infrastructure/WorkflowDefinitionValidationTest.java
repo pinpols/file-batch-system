@@ -36,182 +36,177 @@ import org.junit.jupiter.api.Test;
 @DisplayName("编排定义保存前校验: 作业节点关联与条件边表达式约束")
 class WorkflowDefinitionValidationTest {
 
-  private static final String TENANT = "t1";
-  private static final long DEF_ID = 100L;
+    private static final String TENANT = "t1";
+    private static final long DEF_ID = 100L;
 
-  private WorkflowDefinitionMapper definitionMapper;
-  private WorkflowNodeMapper nodeMapper;
-  private WorkflowEdgeMapper edgeMapper;
-  private JobDefinitionMapper jobDefinitionMapper;
-  private ConsoleTenantGuard tenantGuard;
-  private DefaultWorkflowDefinitionService service;
+    private WorkflowDefinitionMapper definitionMapper;
+    private WorkflowNodeMapper nodeMapper;
+    private WorkflowEdgeMapper edgeMapper;
+    private JobDefinitionMapper jobDefinitionMapper;
+    private ConsoleTenantGuard tenantGuard;
+    private DefaultWorkflowDefinitionService service;
 
-  @BeforeEach
-  void setUp() {
-    definitionMapper = mock(WorkflowDefinitionMapper.class);
-    nodeMapper = mock(WorkflowNodeMapper.class);
-    edgeMapper = mock(WorkflowEdgeMapper.class);
-    jobDefinitionMapper = mock(JobDefinitionMapper.class);
-    tenantGuard = mock(ConsoleTenantGuard.class);
-    when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
+    @BeforeEach
+    void setUp() {
+        definitionMapper = mock(WorkflowDefinitionMapper.class);
+        nodeMapper = mock(WorkflowNodeMapper.class);
+        edgeMapper = mock(WorkflowEdgeMapper.class);
+        jobDefinitionMapper = mock(JobDefinitionMapper.class);
+        tenantGuard = mock(ConsoleTenantGuard.class);
+        when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
-    def.setId(DEF_ID);
-    def.setTenantId(TENANT);
-    when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
+        WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+        def.setId(DEF_ID);
+        def.setTenantId(TENANT);
+        when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
 
-    WorkflowDefinitionVersionMapper versionMapper = mock(WorkflowDefinitionVersionMapper.class);
-    service = new DefaultWorkflowDefinitionService(
-        definitionMapper,
-        nodeMapper,
-        edgeMapper,
-        versionMapper,
-        mock(ConsoleRealtimeEventPort.class),
-        tenantGuard,
-        mock(ConsoleConfigCacheInvalidationService.class),
-        mock(WorkflowDesignLockService.class),
-        mock(WorkflowDagValidator.class),
-        new WorkflowDefinitionResponseAssembler(),
-        new WorkflowDefinitionWriteSupport(
-            nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
-        new WorkflowDefinitionDagInspector(jobDefinitionMapper),
-        mock(JobResourceAssignmentGuard.class),
-        jobDefinitionMapper,
-        mock(BusinessCalendarMapper.class));
-  }
+        WorkflowDefinitionVersionMapper versionMapper = mock(WorkflowDefinitionVersionMapper.class);
+        service = new DefaultWorkflowDefinitionService(
+                definitionMapper,
+                nodeMapper,
+                edgeMapper,
+                versionMapper,
+                mock(ConsoleRealtimeEventPort.class),
+                tenantGuard,
+                mock(ConsoleConfigCacheInvalidationService.class),
+                mock(WorkflowDesignLockService.class),
+                mock(WorkflowDagValidator.class),
+                new WorkflowDefinitionResponseAssembler(),
+                new WorkflowDefinitionWriteSupport(nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
+                new WorkflowDefinitionDagInspector(jobDefinitionMapper),
+                mock(JobResourceAssignmentGuard.class),
+                jobDefinitionMapper,
+                mock(BusinessCalendarMapper.class));
+    }
 
-  @Test
-  @DisplayName("作业节点缺少关联作业编码时校验不通过, 并指出该节点")
-  void shouldFailWhenJobNodeMissingRelatedJobCode() {
-    stub(
-        List.of(node("n1", "START"), node("n2", "JOB", null), node("n3", "END")),
-        List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
+    @Test
+    @DisplayName("作业节点缺少关联作业编码时校验不通过, 并指出该节点")
+    void shouldFailWhenJobNodeMissingRelatedJobCode() {
+        stub(
+                List.of(node("n1", "START"), node("n2", "JOB", null), node("n3", "END")),
+                List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isFalse();
-    assertThat(result.errors()).anyMatch(e -> e.contains("JOB node missing related_job_code: n2"));
-  }
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).anyMatch(e -> e.contains("JOB node missing related_job_code: n2"));
+    }
 
-  @Test
-  @DisplayName("作业节点关联的作业定义不存在时校验不通过, 并报出该作业编码")
-  void shouldFailWhenJobNodeReferencesNonExistentJobDefinition() {
-    stub(
-        List.of(node("n1", "START"), node("n2", "JOB", "GHOST_JOB"), node("n3", "END")),
-        List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "GHOST_JOB")).thenReturn(null);
+    @Test
+    @DisplayName("作业节点关联的作业定义不存在时校验不通过, 并报出该作业编码")
+    void shouldFailWhenJobNodeReferencesNonExistentJobDefinition() {
+        stub(
+                List.of(node("n1", "START"), node("n2", "JOB", "GHOST_JOB"), node("n3", "END")),
+                List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
+        when(jobDefinitionMapper.selectByUniqueKey(TENANT, "GHOST_JOB")).thenReturn(null);
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isFalse();
-    assertThat(result.errors())
-        .anyMatch(e -> e.contains("references non-existent job_definition: GHOST_JOB"));
-  }
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).anyMatch(e -> e.contains("references non-existent job_definition: GHOST_JOB"));
+    }
 
-  @Test
-  @DisplayName("作业节点关联的作业定义已停用时校验不通过, 并报出该作业编码")
-  void shouldFailWhenJobNodeReferencesDisabledJobDefinition() {
-    JobDefinitionView disabled = new JobDefinitionView();
-    disabled.setEnabled(false);
-    stub(
-        List.of(node("n1", "START"), node("n2", "JOB", "DISABLED_JOB"), node("n3", "END")),
-        List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "DISABLED_JOB")).thenReturn(disabled);
+    @Test
+    @DisplayName("作业节点关联的作业定义已停用时校验不通过, 并报出该作业编码")
+    void shouldFailWhenJobNodeReferencesDisabledJobDefinition() {
+        JobDefinitionView disabled = new JobDefinitionView();
+        disabled.setEnabled(false);
+        stub(
+                List.of(node("n1", "START"), node("n2", "JOB", "DISABLED_JOB"), node("n3", "END")),
+                List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
+        when(jobDefinitionMapper.selectByUniqueKey(TENANT, "DISABLED_JOB")).thenReturn(disabled);
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isFalse();
-    assertThat(result.errors())
-        .anyMatch(e -> e.contains("references disabled job_definition: DISABLED_JOB"));
-  }
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).anyMatch(e -> e.contains("references disabled job_definition: DISABLED_JOB"));
+    }
 
-  @Test
-  @DisplayName("作业节点关联的作业定义已启用时校验通过且无错误项")
-  void shouldPassWhenJobNodeReferencesEnabledJobDefinition() {
-    JobDefinitionView enabled = new JobDefinitionView();
-    enabled.setEnabled(true);
-    stub(
-        List.of(node("n1", "START"), node("n2", "JOB", "GOOD_JOB"), node("n3", "END")),
-        List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "GOOD_JOB")).thenReturn(enabled);
+    @Test
+    @DisplayName("作业节点关联的作业定义已启用时校验通过且无错误项")
+    void shouldPassWhenJobNodeReferencesEnabledJobDefinition() {
+        JobDefinitionView enabled = new JobDefinitionView();
+        enabled.setEnabled(true);
+        stub(
+                List.of(node("n1", "START"), node("n2", "JOB", "GOOD_JOB"), node("n3", "END")),
+                List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "ALWAYS")));
+        when(jobDefinitionMapper.selectByUniqueKey(TENANT, "GOOD_JOB")).thenReturn(enabled);
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isTrue();
-    assertThat(result.errors()).isEmpty();
-  }
+        assertThat(result.valid()).isTrue();
+        assertThat(result.errors()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("条件边缺少条件表达式时校验不通过, 并报出该边的两端节点")
-  void shouldFailWhenConditionEdgeMissingConditionExpr() {
-    stub(
-        List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
-        List.of(
-            edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "CONDITION", null) // missing expr
-            ));
+    @Test
+    @DisplayName("条件边缺少条件表达式时校验不通过, 并报出该边的两端节点")
+    void shouldFailWhenConditionEdgeMissingConditionExpr() {
+        stub(
+                List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
+                List.of(
+                        edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "CONDITION", null) // missing expr
+                        ));
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isFalse();
-    assertThat(result.errors())
-        .anyMatch(e -> e.contains("CONDITION edge missing condition_expr: n2 -> n3"));
-  }
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).anyMatch(e -> e.contains("CONDITION edge missing condition_expr: n2 -> n3"));
+    }
 
-  @Test
-  @DisplayName("条件边带条件表达式时校验通过且无错误项")
-  void shouldPassWhenConditionEdgeHasConditionExpr() {
-    stub(
-        List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
-        List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "CONDITION", "x > 0")));
+    @Test
+    @DisplayName("条件边带条件表达式时校验通过且无错误项")
+    void shouldPassWhenConditionEdgeHasConditionExpr() {
+        stub(
+                List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
+                List.of(edge("n1", "n2", "ALWAYS"), edge("n2", "n3", "CONDITION", "x > 0")));
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isTrue();
-    assertThat(result.errors()).isEmpty();
-  }
+        assertThat(result.valid()).isTrue();
+        assertThat(result.errors()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("成功与失败类型边不要求填写条件表达式, 校验通过")
-  void shouldNotRequireConditionExprForOtherEdgeTypes() {
-    stub(
-        List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
-        List.of(edge("n1", "n2", "SUCCESS"), edge("n2", "n3", "FAILURE")));
+    @Test
+    @DisplayName("成功与失败类型边不要求填写条件表达式, 校验通过")
+    void shouldNotRequireConditionExprForOtherEdgeTypes() {
+        stub(
+                List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
+                List.of(edge("n1", "n2", "SUCCESS"), edge("n2", "n3", "FAILURE")));
 
-    DagValidationResult result = service.validate(DEF_ID, TENANT);
+        DagValidationResult result = service.validate(DEF_ID, TENANT);
 
-    assertThat(result.valid()).isTrue();
-  }
+        assertThat(result.valid()).isTrue();
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private void stub(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
-    when(nodeMapper.selectByQuery(any())).thenReturn(nodes);
-    when(edgeMapper.selectByQuery(any())).thenReturn(edges);
-  }
+    private void stub(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
+        when(nodeMapper.selectByQuery(any())).thenReturn(nodes);
+        when(edgeMapper.selectByQuery(any())).thenReturn(edges);
+    }
 
-  private static WorkflowNodeEntity node(String code, String type) {
-    return node(code, type, null);
-  }
+    private static WorkflowNodeEntity node(String code, String type) {
+        return node(code, type, null);
+    }
 
-  private static WorkflowNodeEntity node(String code, String type, String relatedJobCode) {
-    WorkflowNodeEntity n = new WorkflowNodeEntity();
-    n.setNodeCode(code);
-    n.setNodeType(type);
-    n.setRelatedJobCode(relatedJobCode);
-    return n;
-  }
+    private static WorkflowNodeEntity node(String code, String type, String relatedJobCode) {
+        WorkflowNodeEntity n = new WorkflowNodeEntity();
+        n.setNodeCode(code);
+        n.setNodeType(type);
+        n.setRelatedJobCode(relatedJobCode);
+        return n;
+    }
 
-  private static WorkflowEdgeEntity edge(String from, String to, String edgeType) {
-    return edge(from, to, edgeType, null);
-  }
+    private static WorkflowEdgeEntity edge(String from, String to, String edgeType) {
+        return edge(from, to, edgeType, null);
+    }
 
-  private static WorkflowEdgeEntity edge(
-      String from, String to, String edgeType, String conditionExpr) {
-    WorkflowEdgeEntity e = new WorkflowEdgeEntity();
-    e.setFromNodeCode(from);
-    e.setToNodeCode(to);
-    e.setEdgeType(edgeType);
-    e.setConditionExpr(conditionExpr);
-    return e;
-  }
+    private static WorkflowEdgeEntity edge(String from, String to, String edgeType, String conditionExpr) {
+        WorkflowEdgeEntity e = new WorkflowEdgeEntity();
+        e.setFromNodeCode(from);
+        e.setToNodeCode(to);
+        e.setEdgeType(edgeType);
+        e.setConditionExpr(conditionExpr);
+        return e;
+    }
 }

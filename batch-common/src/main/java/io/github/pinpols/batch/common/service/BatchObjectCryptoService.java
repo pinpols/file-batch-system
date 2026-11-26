@@ -35,270 +35,268 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class BatchObjectCryptoService {
 
-  /** 偷看头部用的回退缓冲字节数：远大于 8 字节魔数，给版本头扩展留空间。 */
-  private static final int HEADER_PUSHBACK_BUFFER_BYTES = 64;
+    /** 偷看头部用的回退缓冲字节数：远大于 8 字节魔数，给版本头扩展留空间。 */
+    private static final int HEADER_PUSHBACK_BUFFER_BYTES = 64;
 
-  private static final byte[] MAGIC = "BATCHENC".getBytes(StandardCharsets.US_ASCII);
-  private static final byte VERSION = 1;
-  private static final int GCM_TAG_BITS = 128;
-  private static final int GCM_IV_BYTES = 12;
-  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final byte[] MAGIC = "BATCHENC".getBytes(StandardCharsets.US_ASCII);
+    private static final byte VERSION = 1;
+    private static final int GCM_TAG_BITS = 128;
+    private static final int GCM_IV_BYTES = 12;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-  private final BatchSecurityProperties securityProperties;
-  private final BatchKmsProperties kmsProperties;
+    private final BatchSecurityProperties securityProperties;
+    private final BatchKmsProperties kmsProperties;
 
-  public BatchObjectCryptoService(
-      BatchSecurityProperties securityProperties, BatchKmsProperties kmsProperties) {
-    this.securityProperties = securityProperties;
-    this.kmsProperties = kmsProperties;
-  }
+    public BatchObjectCryptoService(BatchSecurityProperties securityProperties, BatchKmsProperties kmsProperties) {
+        this.securityProperties = securityProperties;
+        this.kmsProperties = kmsProperties;
+    }
 
-  public boolean isBypassMode() {
-    return securityProperties.isBypassMode();
-  }
+    public boolean isBypassMode() {
+        return securityProperties.isBypassMode();
+    }
 
-  public boolean shouldEncrypt(Map<String, Object> security) {
-    boolean bypassMode = securityProperties.isBypassMode();
-    if (bypassMode) {
-      return false;
-    }
-    Object configuredEncryption =
-        EmptyChecks.isNull(security) ? null : security.get("content_encryption_enabled");
-    return truthy(configuredEncryption);
-  }
-
-  public String resolveKeyRef(Map<String, Object> security) {
-    if (security != null) {
-      Object keyRef = security.get("encryption_key_ref");
-      if (keyRef != null && Texts.hasText(String.valueOf(keyRef))) {
-        return String.valueOf(keyRef);
-      }
-    }
-    return kmsProperties.getDefaultKeyRef();
-  }
-
-  public byte[] encrypt(byte[] plaintext, String keyRef) {
-    if (plaintext == null) {
-      return null;
-    }
-    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-      encrypt(new ByteArrayInputStream(plaintext), outputStream, keyRef);
-      return outputStream.toByteArray();
-    } catch (IOException exception) {
-      throw new IllegalStateException("failed to encrypt bytes", exception);
-    }
-  }
-
-  public byte[] decrypt(byte[] content) {
-    boolean contentDoesNotNeedDecryption = EmptyChecks.isEmpty(content) || !isEncrypted(content);
-    if (contentDoesNotNeedDecryption) {
-      return content;
-    }
-    try (InputStream inputStream = decryptIfNeeded(new ByteArrayInputStream(content))) {
-      return inputStream.readAllBytes();
-    } catch (IOException exception) {
-      throw new IllegalStateException("failed to decrypt bytes", exception);
-    }
-  }
-
-  /**
-   * 加密产物的线格式（字节序）：
-   *
-   * <pre>
-   *   MAGIC(8B) | VERSION(1B) | keyRef(UTF-8 长度前缀) | ivLen(1B) | IV(12B) | ciphertext+GCM_TAG
-   * </pre>
-   *
-   * keyRef 写入归一化值（trim 或回落 defaultKeyRef），解密时用于从 KMS 查找对应密钥， 支持轮转：旧文件携带旧 keyRef，新文件携带新
-   * keyRef，两套密钥可并存。
-   */
-  public void encrypt(InputStream plainInput, OutputStream encryptedOutput, String keyRef) {
-    if (plainInput == null || encryptedOutput == null) {
-      throw new IllegalArgumentException("plainInput and encryptedOutput are required");
-    }
-    try {
-      byte[] iv = new byte[GCM_IV_BYTES];
-      SECURE_RANDOM.nextBytes(iv);
-      Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
-      byte[] encryptionKeyBytes = resolveKeyBytes(keyRef);
-      SecretKeySpec encryptionKey = new SecretKeySpec(encryptionKeyBytes, CryptoAlgorithms.AES);
-      GCMParameterSpec encryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
-      cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, encryptionParameters);
-      DataOutputStream dataOutput = new DataOutputStream(encryptedOutput);
-      dataOutput.write(MAGIC);
-      dataOutput.writeByte(VERSION);
-      String persistedKeyRef = normalizedKeyRef(keyRef);
-      dataOutput.writeUTF(persistedKeyRef);
-      dataOutput.writeByte(iv.length);
-      dataOutput.write(iv);
-      dataOutput.flush();
-      try (CipherOutputStream cipherOutput = new CipherOutputStream(encryptedOutput, cipher)) {
-        plainInput.transferTo(cipherOutput);
-      }
-    } catch (RuntimeException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw new IllegalStateException("failed to encrypt content", exception);
-    }
-  }
-
-  /**
-   * ⚠2 (2026-05-03): 流式解密 Path → Path. 之前 decrypt(byte[]) 走 readAllBytes() → 100 MB 输入会让堆瞬间峰值 200
-   * MB (input + output 双倍). 这条路径只走 Files.copy 级别 IO, 完成后调用方可释放原 byte[] 引用 GC.
-   *
-   * <p>调用方典型用法 (PreprocessStep): 当 rawBytes.length > spool 阈值且 isEncrypted 时, 先
-   * Files.write(rawBytes, temp) → rawBytes=null → decrypt(temp, decrypted) →
-   * Files.readAllBytes(decrypted), 最终堆峰值降为单 100 MB.
-   */
-  public Path decrypt(Path source, Path target) {
-    if (source == null || target == null) {
-      throw new IllegalArgumentException("source and target are required");
-    }
-    try (InputStream raw = Files.newInputStream(source);
-        InputStream decrypted = decryptIfNeeded(raw);
-        OutputStream out = Files.newOutputStream(target)) {
-      decrypted.transferTo(out);
-      return target;
-    } catch (IOException exception) {
-      throw new IllegalStateException("failed to decrypt file", exception);
-    }
-  }
-
-  /** 公开 magic byte 探测 (流式解密前置判断). 返回 true 说明 byte[] 是 BATCHENC 加密格式. */
-  public boolean isEncryptedContent(byte[] content) {
-    return content != null && content.length > 0 && isEncrypted(content);
-  }
-
-  public Path encrypt(Path source, Path target, String keyRef) {
-    if (source == null || target == null) {
-      throw new IllegalArgumentException("source and target are required");
-    }
-    try (InputStream inputStream = Files.newInputStream(source);
-        OutputStream outputStream = Files.newOutputStream(target)) {
-      encrypt(inputStream, outputStream, keyRef);
-      return target;
-    } catch (IOException exception) {
-      throw new IllegalStateException("failed to encrypt file", exception);
-    }
-  }
-
-  /**
-   * 流式解密：若流前缀匹配魔数则返回 {@link CipherInputStream}，否则透传明文。
-   *
-   * <p><b>S-1.1 调用契约</b>：返回的流<b>必须被完整读取后 close</b>（或用 try-with-resources），close 时 GCM 底层会校验尾部 16B
-   * tag，不匹配则抛异常。若调用方仅读部分数据后丢弃、未 close，则 tag 验证不触发，完整性保证失效。<b>生产环境严禁裸用该方法的返回值不 close</b>。
-   *
-   * <p>推荐模式：
-   *
-   * <pre>{@code
-   * try (InputStream in = cryptoService.decryptIfNeeded(raw)) {
-   *   consume(in);  // 读完后 try-with-resources 自动 close 触发 tag 校验
-   * }
-   * }</pre>
-   *
-   * <p>本方法已保证<b>setup 异常路径</b>必关闭底层 {@code inputStream}（之前存在 Cipher 初始化异常 但 inputStream 泄漏的窗口）。
-   */
-  public InputStream decryptIfNeeded(InputStream inputStream) {
-    if (inputStream == null) {
-      return InputStream.nullInputStream();
-    }
-    // S-1.1: setup 过程中任何异常都要关闭底层流，避免对象存储连接 / 文件句柄泄漏。
-    // 返回成功后的 close 由调用方负责（CipherInputStream.close 会级联 close 底层流 + 校验 GCM tag）。
-    InputStreamCloseGuard closeGuard = new InputStreamCloseGuard(inputStream);
-    try (closeGuard) {
-      // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
-      // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
-      PushbackInputStream pushbackInputStream =
-          new PushbackInputStream(inputStream, HEADER_PUSHBACK_BUFFER_BYTES);
-      closeGuard.replace(pushbackInputStream);
-      byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
-      if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {
-        if (magic.length > 0) {
-          pushbackInputStream.unread(magic);
+    public boolean shouldEncrypt(Map<String, Object> security) {
+        boolean bypassMode = securityProperties.isBypassMode();
+        if (bypassMode) {
+            return false;
         }
-        closeGuard.release();
-        return pushbackInputStream;
-      }
-      int version = pushbackInputStream.read();
-      if (version != VERSION) {
-        throw new IllegalStateException("unsupported encrypted object version: " + version);
-      }
-      DataInputStream dataInputStream = new DataInputStream(pushbackInputStream);
-      String keyRef = dataInputStream.readUTF();
-      int ivLength = dataInputStream.readUnsignedByte();
-      byte[] iv = dataInputStream.readNBytes(ivLength);
-      Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
-      byte[] decryptionKeyBytes = resolveKeyBytes(keyRef);
-      SecretKeySpec decryptionKey = new SecretKeySpec(decryptionKeyBytes, CryptoAlgorithms.AES);
-      GCMParameterSpec decryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
-      cipher.init(Cipher.DECRYPT_MODE, decryptionKey, decryptionParameters);
-      CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
-      closeGuard.release();
-      return cipherInputStream;
-    } catch (Exception exception) {
-      throw new IllegalStateException("failed to open decrypted stream", exception);
-    }
-  }
-
-  private static final class InputStreamCloseGuard implements AutoCloseable {
-    private InputStream inputStream;
-    private boolean released;
-
-    private InputStreamCloseGuard(InputStream inputStream) {
-      this.inputStream = inputStream;
+        Object configuredEncryption = EmptyChecks.isNull(security) ? null : security.get("content_encryption_enabled");
+        return truthy(configuredEncryption);
     }
 
-    private void replace(InputStream replacement) {
-      this.inputStream = replacement;
+    public String resolveKeyRef(Map<String, Object> security) {
+        if (security != null) {
+            Object keyRef = security.get("encryption_key_ref");
+            if (keyRef != null && Texts.hasText(String.valueOf(keyRef))) {
+                return String.valueOf(keyRef);
+            }
+        }
+        return kmsProperties.getDefaultKeyRef();
     }
 
-    private void release() {
-      this.released = true;
+    public byte[] encrypt(byte[] plaintext, String keyRef) {
+        if (plaintext == null) {
+            return null;
+        }
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            encrypt(new ByteArrayInputStream(plaintext), outputStream, keyRef);
+            return outputStream.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to encrypt bytes", exception);
+        }
     }
 
-    @Override
-    public void close() {
-      if (released || inputStream == null) {
-        return;
-      }
-      try {
-        inputStream.close();
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(BatchObjectCryptoService.class, "catch:Exception", ignored);
-
-        // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
-      }
+    public byte[] decrypt(byte[] content) {
+        boolean contentDoesNotNeedDecryption = EmptyChecks.isEmpty(content) || !isEncrypted(content);
+        if (contentDoesNotNeedDecryption) {
+            return content;
+        }
+        try (InputStream inputStream = decryptIfNeeded(new ByteArrayInputStream(content))) {
+            return inputStream.readAllBytes();
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to decrypt bytes", exception);
+        }
     }
-  }
 
-  private byte[] resolveKeyBytes(String keyRef) {
-    String resolvedKeyRef = normalizedKeyRef(keyRef);
-    String base64 = kmsProperties.getKeys().get(resolvedKeyRef);
-    if (!Texts.hasText(base64)) {
-      throw new IllegalStateException("missing kms key material for keyRef=" + resolvedKeyRef);
+    /**
+     * 加密产物的线格式（字节序）：
+     *
+     * <pre>
+     *   MAGIC(8B) | VERSION(1B) | keyRef(UTF-8 长度前缀) | ivLen(1B) | IV(12B) | ciphertext+GCM_TAG
+     * </pre>
+     *
+     * keyRef 写入归一化值（trim 或回落 defaultKeyRef），解密时用于从 KMS 查找对应密钥， 支持轮转：旧文件携带旧 keyRef，新文件携带新
+     * keyRef，两套密钥可并存。
+     */
+    public void encrypt(InputStream plainInput, OutputStream encryptedOutput, String keyRef) {
+        if (plainInput == null || encryptedOutput == null) {
+            throw new IllegalArgumentException("plainInput and encryptedOutput are required");
+        }
+        try {
+            byte[] iv = new byte[GCM_IV_BYTES];
+            SECURE_RANDOM.nextBytes(iv);
+            Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
+            byte[] encryptionKeyBytes = resolveKeyBytes(keyRef);
+            SecretKeySpec encryptionKey = new SecretKeySpec(encryptionKeyBytes, CryptoAlgorithms.AES);
+            GCMParameterSpec encryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, encryptionParameters);
+            DataOutputStream dataOutput = new DataOutputStream(encryptedOutput);
+            dataOutput.write(MAGIC);
+            dataOutput.writeByte(VERSION);
+            String persistedKeyRef = normalizedKeyRef(keyRef);
+            dataOutput.writeUTF(persistedKeyRef);
+            dataOutput.writeByte(iv.length);
+            dataOutput.write(iv);
+            dataOutput.flush();
+            try (CipherOutputStream cipherOutput = new CipherOutputStream(encryptedOutput, cipher)) {
+                plainInput.transferTo(cipherOutput);
+            }
+        } catch (RuntimeException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to encrypt content", exception);
+        }
     }
-    return Base64.getDecoder().decode(base64);
-  }
 
-  private String normalizedKeyRef(String keyRef) {
-    return Texts.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
-  }
+    /**
+     * ⚠2 (2026-05-03): 流式解密 Path → Path. 之前 decrypt(byte[]) 走 readAllBytes() → 100 MB 输入会让堆瞬间峰值 200
+     * MB (input + output 双倍). 这条路径只走 Files.copy 级别 IO, 完成后调用方可释放原 byte[] 引用 GC.
+     *
+     * <p>调用方典型用法 (PreprocessStep): 当 rawBytes.length > spool 阈值且 isEncrypted 时, 先
+     * Files.write(rawBytes, temp) → rawBytes=null → decrypt(temp, decrypted) →
+     * Files.readAllBytes(decrypted), 最终堆峰值降为单 100 MB.
+     */
+    public Path decrypt(Path source, Path target) {
+        if (source == null || target == null) {
+            throw new IllegalArgumentException("source and target are required");
+        }
+        try (InputStream raw = Files.newInputStream(source);
+                InputStream decrypted = decryptIfNeeded(raw);
+                OutputStream out = Files.newOutputStream(target)) {
+            decrypted.transferTo(out);
+            return target;
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to decrypt file", exception);
+        }
+    }
 
-  private boolean truthy(Object value) {
-    if (value instanceof Boolean bool) {
-      return bool;
+    /** 公开 magic byte 探测 (流式解密前置判断). 返回 true 说明 byte[] 是 BATCHENC 加密格式. */
+    public boolean isEncryptedContent(byte[] content) {
+        return content != null && content.length > 0 && isEncrypted(content);
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value));
-  }
 
-  private boolean isEncrypted(byte[] content) {
-    if (content.length < MAGIC.length) {
-      return false;
+    public Path encrypt(Path source, Path target, String keyRef) {
+        if (source == null || target == null) {
+            throw new IllegalArgumentException("source and target are required");
+        }
+        try (InputStream inputStream = Files.newInputStream(source);
+                OutputStream outputStream = Files.newOutputStream(target)) {
+            encrypt(inputStream, outputStream, keyRef);
+            return target;
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to encrypt file", exception);
+        }
     }
-    for (int index = 0; index < MAGIC.length; index++) {
-      if (content[index] != MAGIC[index]) {
-        return false;
-      }
+
+    /**
+     * 流式解密：若流前缀匹配魔数则返回 {@link CipherInputStream}，否则透传明文。
+     *
+     * <p><b>S-1.1 调用契约</b>：返回的流<b>必须被完整读取后 close</b>（或用 try-with-resources），close 时 GCM 底层会校验尾部 16B
+     * tag，不匹配则抛异常。若调用方仅读部分数据后丢弃、未 close，则 tag 验证不触发，完整性保证失效。<b>生产环境严禁裸用该方法的返回值不 close</b>。
+     *
+     * <p>推荐模式：
+     *
+     * <pre>{@code
+     * try (InputStream in = cryptoService.decryptIfNeeded(raw)) {
+     *   consume(in);  // 读完后 try-with-resources 自动 close 触发 tag 校验
+     * }
+     * }</pre>
+     *
+     * <p>本方法已保证<b>setup 异常路径</b>必关闭底层 {@code inputStream}（之前存在 Cipher 初始化异常 但 inputStream 泄漏的窗口）。
+     */
+    public InputStream decryptIfNeeded(InputStream inputStream) {
+        if (inputStream == null) {
+            return InputStream.nullInputStream();
+        }
+        // S-1.1: setup 过程中任何异常都要关闭底层流，避免对象存储连接 / 文件句柄泄漏。
+        // 返回成功后的 close 由调用方负责（CipherInputStream.close 会级联 close 底层流 + 校验 GCM tag）。
+        InputStreamCloseGuard closeGuard = new InputStreamCloseGuard(inputStream);
+        try (closeGuard) {
+            // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
+            // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
+            PushbackInputStream pushbackInputStream =
+                    new PushbackInputStream(inputStream, HEADER_PUSHBACK_BUFFER_BYTES);
+            closeGuard.replace(pushbackInputStream);
+            byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
+            if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {
+                if (magic.length > 0) {
+                    pushbackInputStream.unread(magic);
+                }
+                closeGuard.release();
+                return pushbackInputStream;
+            }
+            int version = pushbackInputStream.read();
+            if (version != VERSION) {
+                throw new IllegalStateException("unsupported encrypted object version: " + version);
+            }
+            DataInputStream dataInputStream = new DataInputStream(pushbackInputStream);
+            String keyRef = dataInputStream.readUTF();
+            int ivLength = dataInputStream.readUnsignedByte();
+            byte[] iv = dataInputStream.readNBytes(ivLength);
+            Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
+            byte[] decryptionKeyBytes = resolveKeyBytes(keyRef);
+            SecretKeySpec decryptionKey = new SecretKeySpec(decryptionKeyBytes, CryptoAlgorithms.AES);
+            GCMParameterSpec decryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+            cipher.init(Cipher.DECRYPT_MODE, decryptionKey, decryptionParameters);
+            CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
+            closeGuard.release();
+            return cipherInputStream;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to open decrypted stream", exception);
+        }
     }
-    return true;
-  }
+
+    private static final class InputStreamCloseGuard implements AutoCloseable {
+        private InputStream inputStream;
+        private boolean released;
+
+        private InputStreamCloseGuard(InputStream inputStream) {
+            this.inputStream = inputStream;
+        }
+
+        private void replace(InputStream replacement) {
+            this.inputStream = replacement;
+        }
+
+        private void release() {
+            this.released = true;
+        }
+
+        @Override
+        public void close() {
+            if (released || inputStream == null) {
+                return;
+            }
+            try {
+                inputStream.close();
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(BatchObjectCryptoService.class, "catch:Exception", ignored);
+
+                // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
+            }
+        }
+    }
+
+    private byte[] resolveKeyBytes(String keyRef) {
+        String resolvedKeyRef = normalizedKeyRef(keyRef);
+        String base64 = kmsProperties.getKeys().get(resolvedKeyRef);
+        if (!Texts.hasText(base64)) {
+            throw new IllegalStateException("missing kms key material for keyRef=" + resolvedKeyRef);
+        }
+        return Base64.getDecoder().decode(base64);
+    }
+
+    private String normalizedKeyRef(String keyRef) {
+        return Texts.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
+    }
+
+    private boolean truthy(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && "true".equalsIgnoreCase(String.valueOf(value));
+    }
+
+    private boolean isEncrypted(byte[] content) {
+        if (content.length < MAGIC.length) {
+            return false;
+        }
+        for (int index = 0; index < MAGIC.length; index++) {
+            if (content[index] != MAGIC[index]) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

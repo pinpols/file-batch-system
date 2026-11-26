@@ -69,358 +69,351 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RequiredArgsConstructor
 public class AuditAspect {
 
-  /** 审计失败原因长度上限，对应 console_operation_audit.error_message VARCHAR(1024)（V130）。 */
-  private static final int AUDIT_ERROR_MESSAGE_MAX_LENGTH = 1024;
+    /** 审计失败原因长度上限，对应 console_operation_audit.error_message VARCHAR(1024)（V130）。 */
+    private static final int AUDIT_ERROR_MESSAGE_MAX_LENGTH = 1024;
 
-  private static final int MAX_PARAMS_JSON_BYTES = 2048;
+    private static final int MAX_PARAMS_JSON_BYTES = 2048;
 
-  /** 参数超长时保留的预览最小长度。 */
-  private static final int PARAMS_PREVIEW_MIN_LENGTH = 64;
+    /** 参数超长时保留的预览最小长度。 */
+    private static final int PARAMS_PREVIEW_MIN_LENGTH = 64;
 
-  /** 参数超长时为包装字段（_truncated、_originalLength、_keys）预留的长度。 */
-  private static final int PARAMS_PREVIEW_ENVELOPE_RESERVE = 64;
+    /** 参数超长时为包装字段（_truncated、_originalLength、_keys）预留的长度。 */
+    private static final int PARAMS_PREVIEW_ENVELOPE_RESERVE = 64;
 
-  private final OperationAuditMapper mapper;
-  private final ObjectMapper objectMapper;
-  private final PlatformTransactionManager transactionManager;
-  private final ConsoleUsageRecorder usageDailyRecorder;
-  private final ConsoleUsageProjectionDispatcher usageProjectionDispatcher;
+    private final OperationAuditMapper mapper;
+    private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
+    private final ConsoleUsageRecorder usageDailyRecorder;
+    private final ConsoleUsageProjectionDispatcher usageProjectionDispatcher;
 
-  private final ExpressionParser spel = new SpelExpressionParser();
-  private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
+    private final ExpressionParser spel = new SpelExpressionParser();
+    private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
 
-  /**
-   * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用, 避免每次失败路径在 {@link
-   * #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
-   */
-  private TransactionTemplate requiresNewTemplate;
+    /**
+     * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用, 避免每次失败路径在 {@link
+     * #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
+     */
+    private TransactionTemplate requiresNewTemplate;
 
-  @PostConstruct
-  void initTransactionTemplate() {
-    TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
-    tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    this.requiresNewTemplate = tmpl;
-  }
-
-  @Around("@annotation(io.github.pinpols.batch.console.shared.audit.AuditAction)")
-  public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
-    MethodSignature sig = (MethodSignature) pjp.getSignature();
-    Method method = sig.getMethod();
-    AuditAction ann = method.getAnnotation(AuditAction.class);
-    if (ann == null) return pjp.proceed();
-
-    String aggregateId = resolveAggregateId(ann, method, pjp.getArgs());
-    // P0(2026-06-03 audit-tenant):ROLE_ADMIN 跨租操作 principal.tenantId() 为 null,
-    // 之前默认回退到 "system",导致审计行 tenant_id="system" 而非目标租户,取证查询漏。
-    // 在调用 record 前先按 targetTenantParam 解析目标租户,作为最高优先级覆盖。
-    String targetTenantId = resolveTargetTenant(ann, method, pjp.getArgs());
-    // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 写入数据库,
-    // 避免 password / 加密载荷 / 明文密钥泄露到审计表
-    String paramsJson = ann.recordParams() ? serializeParams(method, pjp.getArgs()) : null;
-
-    try {
-      Object result = pjp.proceed();
-      recordAudit(ann, aggregateId, targetTenantId, paramsJson, null, null);
-      return result;
-    } catch (Throwable ex) {
-      // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
-      // 写失败本身只 warn,不影响业务 exception 继续抛出。
-      String errorCode = resolveErrorCode(ex);
-      String errorMsg = ex.getMessage();
-      recordInNewTransaction(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg);
-      throw ex;
+    @PostConstruct
+    void initTransactionTemplate() {
+        TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
+        tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.requiresNewTemplate = tmpl;
     }
-  }
 
-  /**
-   * 用 PROPAGATION_REQUIRES_NEW 新开事务写 FAILED 审计,避免被业务事务回滚带走。 失败本身捕获并抑制(warn) — 业务异常已在 catch 外被
-   * rethrow,审计写不写都不影响业务路径。
-   */
-  private void recordInNewTransaction(
-      AuditAction ann,
-      String aggregateId,
-      String targetTenantId,
-      String paramsJson,
-      String errorCode,
-      String errorMsg) {
-    try {
-      requiresNewTemplate.executeWithoutResult(
-          status -> recordAudit(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg));
-    } catch (Exception writeFail) {
-      log.warn(
-          "[audit] FAILED audit write also failed action={} aggregateId={}",
-          ann.action(),
-          aggregateId,
-          writeFail);
-    }
-  }
+    @Around("@annotation(io.github.pinpols.batch.console.shared.audit.AuditAction)")
+    public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
+        MethodSignature sig = (MethodSignature) pjp.getSignature();
+        Method method = sig.getMethod();
+        AuditAction ann = method.getAnnotation(AuditAction.class);
+        if (ann == null) return pjp.proceed();
 
-  /** 业务异常抽取 errorCode:BizException 走 ResultCode.name(),其他 → 异常类 simpleName。 */
-  private static String resolveErrorCode(Throwable ex) {
-    if (ex instanceof BizException biz && biz.getCode() != null) {
-      return biz.getCode().name();
-    }
-    return ex.getClass().getSimpleName();
-  }
+        String aggregateId = resolveAggregateId(ann, method, pjp.getArgs());
+        // P0(2026-06-03 audit-tenant):ROLE_ADMIN 跨租操作 principal.tenantId() 为 null,
+        // 之前默认回退到 "system",导致审计行 tenant_id="system" 而非目标租户,取证查询漏。
+        // 在调用 record 前先按 targetTenantParam 解析目标租户,作为最高优先级覆盖。
+        String targetTenantId = resolveTargetTenant(ann, method, pjp.getArgs());
+        // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 写入数据库,
+        // 避免 password / 加密载荷 / 明文密钥泄露到审计表
+        String paramsJson = ann.recordParams() ? serializeParams(method, pjp.getArgs()) : null;
 
-  private void recordAudit(
-      AuditAction ann,
-      String aggregateId,
-      String targetTenantId,
-      String paramsJson,
-      String errorCode,
-      String errorMsg) {
-    try {
-      OperatorInfo op = currentOperator(targetTenantId);
-      RequestInfo req = currentRequest();
-      // 具名字段保持审计事件契约，避免按位置核对可选字段。
-      // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
-      OperationAuditEvent event = OperationAuditEvent.builder()
-          .tenantId(op.tenantId())
-          .aggregateType(ann.aggregateType())
-          .aggregateId(aggregateId)
-          .action(ann.action())
-          .operatorId(op.operatorId())
-          .operatorRole(op.operatorRole())
-          .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
-          .errorCode(errorCode)
-          .errorMessage(truncate(errorMsg, AUDIT_ERROR_MESSAGE_MAX_LENGTH))
-          .paramsJson(paramsJson)
-          .traceId(req.traceId())
-          .requestId(req.requestId())
-          .ipHash(req.ipHash())
-          .uaHash(req.uaHash())
-          .eventVersion(1)
-          .createdAt(Instant.now())
-          .build();
-      mapper.insert(event);
-      recordUsageAfterCommit(event);
-    } catch (Exception e) {
-      // 审计写失败不能拖垮业务事务 —— 业务侧已经做完了真正的事,这里只是留痕
-      log.warn("[audit] insert failed action={}", ann.action(), e);
-    }
-  }
-
-  /**
-   * 审计事务提交后把派生使用率交给有界异步线程池：afterCommit 仍绑定审计连接，同线程再开使用量事务会再借一个连接；
-   * 异步执行让审计线程先归还连接，队列满时丢弃派生写（审计仍是事实源）。
-   */
-  private void recordUsageAfterCommit(OperationAuditEvent event) {
-    Runnable recorder = () -> {
-      try {
-        usageDailyRecorder.record(
-            event.tenantId(),
-            event.action(),
-            "SUCCESS".equalsIgnoreCase(event.result()),
-            event.createdAt());
-      } catch (Exception usageFailure) {
-        // 使用率是派生数据，写失败只记录告警，不能回滚真实业务或操作审计。
-        log.warn("[usage] daily aggregate write failed action={}", event.action(), usageFailure);
-      }
-    };
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          usageProjectionDispatcher.submit(recorder);
+        try {
+            Object result = pjp.proceed();
+            recordAudit(ann, aggregateId, targetTenantId, paramsJson, null, null);
+            return result;
+        } catch (Throwable ex) {
+            // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
+            // 写失败本身只 warn,不影响业务 exception 继续抛出。
+            String errorCode = resolveErrorCode(ex);
+            String errorMsg = ex.getMessage();
+            recordInNewTransaction(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg);
+            throw ex;
         }
-      });
-    } else {
-      usageProjectionDispatcher.submit(recorder);
     }
-  }
 
-  private static String truncate(String s, int max) {
-    if (s == null) return null;
-    return s.length() <= max ? s : s.substring(0, max);
-  }
+    /**
+     * 用 PROPAGATION_REQUIRES_NEW 新开事务写 FAILED 审计,避免被业务事务回滚带走。 失败本身捕获并抑制(warn) — 业务异常已在 catch 外被
+     * rethrow,审计写不写都不影响业务路径。
+     */
+    private void recordInNewTransaction(
+            AuditAction ann,
+            String aggregateId,
+            String targetTenantId,
+            String paramsJson,
+            String errorCode,
+            String errorMsg) {
+        try {
+            requiresNewTemplate.executeWithoutResult(
+                    status -> recordAudit(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg));
+        } catch (Exception writeFail) {
+            log.warn(
+                    "[audit] FAILED audit write also failed action={} aggregateId={}",
+                    ann.action(),
+                    aggregateId,
+                    writeFail);
+        }
+    }
 
-  /** SpEL 求 aggregateId,失败回退「-」。 */
-  private String resolveAggregateId(AuditAction ann, Method method, Object[] args) {
-    String expr = ann.aggregateId();
-    if (expr == null || expr.isEmpty()) return "-";
-    try {
-      // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
-      // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
-      // 仅允许属性 / 索引 / 算术 / 实例方法。
-      SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
-              DataBindingPropertyAccessor.forReadOnlyAccess())
-          .withInstanceMethods()
-          .build();
-      String[] names = paramNameDiscoverer.getParameterNames(method);
-      if (names != null) {
+    /** 业务异常抽取 errorCode:BizException 走 ResultCode.name(),其他 → 异常类 simpleName。 */
+    private static String resolveErrorCode(Throwable ex) {
+        if (ex instanceof BizException biz && biz.getCode() != null) {
+            return biz.getCode().name();
+        }
+        return ex.getClass().getSimpleName();
+    }
+
+    private void recordAudit(
+            AuditAction ann,
+            String aggregateId,
+            String targetTenantId,
+            String paramsJson,
+            String errorCode,
+            String errorMsg) {
+        try {
+            OperatorInfo op = currentOperator(targetTenantId);
+            RequestInfo req = currentRequest();
+            // 具名字段保持审计事件契约，避免按位置核对可选字段。
+            // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
+            OperationAuditEvent event = OperationAuditEvent.builder()
+                    .tenantId(op.tenantId())
+                    .aggregateType(ann.aggregateType())
+                    .aggregateId(aggregateId)
+                    .action(ann.action())
+                    .operatorId(op.operatorId())
+                    .operatorRole(op.operatorRole())
+                    .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
+                    .errorCode(errorCode)
+                    .errorMessage(truncate(errorMsg, AUDIT_ERROR_MESSAGE_MAX_LENGTH))
+                    .paramsJson(paramsJson)
+                    .traceId(req.traceId())
+                    .requestId(req.requestId())
+                    .ipHash(req.ipHash())
+                    .uaHash(req.uaHash())
+                    .eventVersion(1)
+                    .createdAt(Instant.now())
+                    .build();
+            mapper.insert(event);
+            recordUsageAfterCommit(event);
+        } catch (Exception e) {
+            // 审计写失败不能拖垮业务事务 —— 业务侧已经做完了真正的事,这里只是留痕
+            log.warn("[audit] insert failed action={}", ann.action(), e);
+        }
+    }
+
+    /**
+     * 审计事务提交后把派生使用率交给有界异步线程池：afterCommit 仍绑定审计连接，同线程再开使用量事务会再借一个连接；
+     * 异步执行让审计线程先归还连接，队列满时丢弃派生写（审计仍是事实源）。
+     */
+    private void recordUsageAfterCommit(OperationAuditEvent event) {
+        Runnable recorder = () -> {
+            try {
+                usageDailyRecorder.record(
+                        event.tenantId(),
+                        event.action(),
+                        "SUCCESS".equalsIgnoreCase(event.result()),
+                        event.createdAt());
+            } catch (Exception usageFailure) {
+                // 使用率是派生数据，写失败只记录告警，不能回滚真实业务或操作审计。
+                log.warn("[usage] daily aggregate write failed action={}", event.action(), usageFailure);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    usageProjectionDispatcher.submit(recorder);
+                }
+            });
+        } else {
+            usageProjectionDispatcher.submit(recorder);
+        }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return null;
+        return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    /** SpEL 求 aggregateId,失败回退「-」。 */
+    private String resolveAggregateId(AuditAction ann, Method method, Object[] args) {
+        String expr = ann.aggregateId();
+        if (expr == null || expr.isEmpty()) return "-";
+        try {
+            // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
+            // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
+            // 仅允许属性 / 索引 / 算术 / 实例方法。
+            SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
+                            DataBindingPropertyAccessor.forReadOnlyAccess())
+                    .withInstanceMethods()
+                    .build();
+            String[] names = paramNameDiscoverer.getParameterNames(method);
+            if (names != null) {
+                for (int i = 0; i < names.length && i < args.length; i++) {
+                    ctx.setVariable(names[i], args[i]);
+                }
+            }
+            Expression e = spel.parseExpression(expr);
+            Object v = e.getValue(ctx);
+            return v == null ? "-" : String.valueOf(v);
+        } catch (Exception ex) {
+            log.warn("[audit] aggregateId SpEL '{}' eval failed: {}", expr, SwallowedExceptionLogger.summary(ex));
+            return "-";
+        }
+    }
+
+    /**
+     * 把方法非框架参数序列化成 JSON 摘要。框架类型(HttpServletRequest / Authentication / Pageable /
+     * MultipartFile)跳过,避免循环引用和大对象。
+     */
+    private String serializeParams(Method method, Object[] args) {
+        String[] names = paramNameDiscoverer.getParameterNames(method);
+        if (names == null) return null;
+        Map<String, Object> snapshot = new LinkedHashMap<>();
         for (int i = 0; i < names.length && i < args.length; i++) {
-          ctx.setVariable(names[i], args[i]);
+            Object arg = args[i];
+            if (arg == null) continue;
+            if (isFrameworkParam(arg)) continue;
+            snapshot.put(names[i], arg);
         }
-      }
-      Expression e = spel.parseExpression(expr);
-      Object v = e.getValue(ctx);
-      return v == null ? "-" : String.valueOf(v);
-    } catch (Exception ex) {
-      log.warn(
-          "[audit] aggregateId SpEL '{}' eval failed: {}",
-          expr,
-          SwallowedExceptionLogger.summary(ex));
-      return "-";
-    }
-  }
-
-  /**
-   * 把方法非框架参数序列化成 JSON 摘要。框架类型(HttpServletRequest / Authentication / Pageable /
-   * MultipartFile)跳过,避免循环引用和大对象。
-   */
-  private String serializeParams(Method method, Object[] args) {
-    String[] names = paramNameDiscoverer.getParameterNames(method);
-    if (names == null) return null;
-    Map<String, Object> snapshot = new LinkedHashMap<>();
-    for (int i = 0; i < names.length && i < args.length; i++) {
-      Object arg = args[i];
-      if (arg == null) continue;
-      if (isFrameworkParam(arg)) continue;
-      snapshot.put(names[i], arg);
-    }
-    if (snapshot.isEmpty()) return null;
-    try {
-      JsonNode redactedSnapshot = AuditParamRedactor.toRedactedTree(objectMapper, snapshot);
-      String json = objectMapper.writeValueAsString(redactedSnapshot);
-      if (json.length() <= MAX_PARAMS_JSON_BYTES) {
-        return json;
-      }
-      // 超长截断:原 substring 拼 `","_trunc":1}` 可能截在字符串转义/数组/对象中间,
-      // 写 jsonb 直接 invalid_text_representation → 审计静默丢失。
-      // 改为构造合法 JSON,保留 preview(纯文本字段)+ 显式标记 truncated=true
-      int previewLen = Math.max(
-          PARAMS_PREVIEW_MIN_LENGTH, MAX_PARAMS_JSON_BYTES - PARAMS_PREVIEW_ENVELOPE_RESERVE);
-      String preview = json.substring(0, Math.min(previewLen, json.length()));
-      Map<String, Object> truncated = new LinkedHashMap<>();
-      truncated.put("_truncated", true);
-      truncated.put("_originalLength", json.length());
-      truncated.put("_preview", preview);
-      truncated.put("_keys", new ArrayList<>(snapshot.keySet()));
-      return objectMapper.writeValueAsString(truncated);
-    } catch (Exception e) {
-      return null;
-    }
-  }
-
-  private boolean isFrameworkParam(Object arg) {
-    String cls = arg.getClass().getName();
-    return arg instanceof HttpServletRequest
-        || arg instanceof Authentication
-        || cls.startsWith("org.springframework.web.multipart.")
-        || cls.startsWith("org.springframework.data.domain.Pageable");
-  }
-
-  /**
-   * console_operation_audit.tenant_id NOT NULL。
-   *
-   * <p>解析链(从高到低):
-   *
-   * <ol>
-   *   <li>{@code targetTenantId} —— {@link AuditAction#targetTenantParam()} 显式声明的目标租户,适用于
-   *       ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id
-   *       是被改的租户而非 "system"
-   *   <li>{@code principal.tenantId()} —— 普通租户用户的会话租户
-   *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的回退
-   *   <li>{@code "system"} 字面值回退 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行
-   * </ol>
-   */
-  private OperatorInfo currentOperator(String targetTenantId) {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
-      String tenantId = resolveTenantFallback(targetTenantId, null);
-      return new OperatorInfo(null, null, tenantId);
-    }
-    String role = p.authorities() == null || p.authorities().isEmpty()
-        ? null
-        : p.authorities().iterator().next();
-    String username = p.username();
-    String principalTenantId = p.tenantId();
-    String tenantId = resolveTenantFallback(targetTenantId, principalTenantId);
-    return new OperatorInfo(username, role, tenantId);
-  }
-
-  private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {
-    if (targetTenantId != null && !targetTenantId.isBlank()) {
-      return targetTenantId;
-    }
-    if (principalTenantId != null && !principalTenantId.isBlank()) {
-      return principalTenantId;
-    }
-    String mdcTenant = MDC.get("tenant");
-    if (mdcTenant != null && !mdcTenant.isBlank()) {
-      return mdcTenant;
-    }
-    return "system";
-  }
-
-  /**
-   * 按 {@link AuditAction#targetTenantParam()} 求值得到目标租户 ID。支持两种写法:
-   *
-   * <ul>
-   *   <li>SpEL 表达式(以 {@code #} 开头):{@code "#tenantId"} / {@code "#request.tenantId"}
-   *   <li>纯参数名(无 {@code #}):{@code "tenantId"} —— 直接按参数名取入参值
-   * </ul>
-   *
-   * <p>留空 / 求值失败 / 求值为 null → 返回 null(由 {@link #resolveTenantFallback} 继续往下找 principal/MDC/system)。
-   * 失败只 warn 不抛,绝不拖垮业务路径。
-   */
-  private String resolveTargetTenant(AuditAction ann, Method method, Object[] args) {
-    String expr = ann.targetTenantParam();
-    if (expr == null || expr.isEmpty()) return null;
-    try {
-      String[] names = paramNameDiscoverer.getParameterNames(method);
-      if (expr.startsWith("#")) {
-        SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
-                DataBindingPropertyAccessor.forReadOnlyAccess())
-            .withInstanceMethods()
-            .build();
-        if (names != null) {
-          for (int i = 0; i < names.length && i < args.length; i++) {
-            ctx.setVariable(names[i], args[i]);
-          }
+        if (snapshot.isEmpty()) return null;
+        try {
+            JsonNode redactedSnapshot = AuditParamRedactor.toRedactedTree(objectMapper, snapshot);
+            String json = objectMapper.writeValueAsString(redactedSnapshot);
+            if (json.length() <= MAX_PARAMS_JSON_BYTES) {
+                return json;
+            }
+            // 超长截断:原 substring 拼 `","_trunc":1}` 可能截在字符串转义/数组/对象中间,
+            // 写 jsonb 直接 invalid_text_representation → 审计静默丢失。
+            // 改为构造合法 JSON,保留 preview(纯文本字段)+ 显式标记 truncated=true
+            int previewLen =
+                    Math.max(PARAMS_PREVIEW_MIN_LENGTH, MAX_PARAMS_JSON_BYTES - PARAMS_PREVIEW_ENVELOPE_RESERVE);
+            String preview = json.substring(0, Math.min(previewLen, json.length()));
+            Map<String, Object> truncated = new LinkedHashMap<>();
+            truncated.put("_truncated", true);
+            truncated.put("_originalLength", json.length());
+            truncated.put("_preview", preview);
+            truncated.put("_keys", new ArrayList<>(snapshot.keySet()));
+            return objectMapper.writeValueAsString(truncated);
+        } catch (Exception e) {
+            return null;
         }
-        Object v = spel.parseExpression(expr).getValue(ctx);
-        return v == null ? null : String.valueOf(v);
-      }
-      // 纯参数名形式:按名匹配方法参数
-      if (names != null) {
-        for (int i = 0; i < names.length && i < args.length; i++) {
-          if (expr.equals(names[i])) {
-            return args[i] == null ? null : String.valueOf(args[i]);
-          }
+    }
+
+    private boolean isFrameworkParam(Object arg) {
+        String cls = arg.getClass().getName();
+        return arg instanceof HttpServletRequest
+                || arg instanceof Authentication
+                || cls.startsWith("org.springframework.web.multipart.")
+                || cls.startsWith("org.springframework.data.domain.Pageable");
+    }
+
+    /**
+     * console_operation_audit.tenant_id NOT NULL。
+     *
+     * <p>解析链(从高到低):
+     *
+     * <ol>
+     *   <li>{@code targetTenantId} —— {@link AuditAction#targetTenantParam()} 显式声明的目标租户,适用于
+     *       ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id
+     *       是被改的租户而非 "system"
+     *   <li>{@code principal.tenantId()} —— 普通租户用户的会话租户
+     *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的回退
+     *   <li>{@code "system"} 字面值回退 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行
+     * </ol>
+     */
+    private OperatorInfo currentOperator(String targetTenantId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
+            String tenantId = resolveTenantFallback(targetTenantId, null);
+            return new OperatorInfo(null, null, tenantId);
         }
-      }
-      return null;
-    } catch (Exception ex) {
-      log.warn(
-          "[audit] targetTenantParam '{}' eval failed: {}",
-          expr,
-          SwallowedExceptionLogger.summary(ex));
-      return null;
+        String role = p.authorities() == null || p.authorities().isEmpty()
+                ? null
+                : p.authorities().iterator().next();
+        String username = p.username();
+        String principalTenantId = p.tenantId();
+        String tenantId = resolveTenantFallback(targetTenantId, principalTenantId);
+        return new OperatorInfo(username, role, tenantId);
     }
-  }
 
-  private RequestInfo currentRequest() {
-    String traceId = MDC.get("traceId");
-    String requestId = MDC.get("requestId");
-    String ipHash = null;
-    String uaHash = null;
-    try {
-      ServletRequestAttributes attrs =
-          (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-      if (attrs != null) {
-        HttpServletRequest req = attrs.getRequest();
-        ipHash = Hashes.sha256Short(req.getRemoteAddr());
-        uaHash = Hashes.sha256Short(req.getHeader("User-Agent"));
-      }
-    } catch (Exception ignored) {
-      // request context 取不到不影响审计写入
+    private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {
+        if (targetTenantId != null && !targetTenantId.isBlank()) {
+            return targetTenantId;
+        }
+        if (principalTenantId != null && !principalTenantId.isBlank()) {
+            return principalTenantId;
+        }
+        String mdcTenant = MDC.get("tenant");
+        if (mdcTenant != null && !mdcTenant.isBlank()) {
+            return mdcTenant;
+        }
+        return "system";
     }
-    return new RequestInfo(traceId, requestId, ipHash, uaHash);
-  }
 
-  private record OperatorInfo(String operatorId, String operatorRole, String tenantId) {}
+    /**
+     * 按 {@link AuditAction#targetTenantParam()} 求值得到目标租户 ID。支持两种写法:
+     *
+     * <ul>
+     *   <li>SpEL 表达式(以 {@code #} 开头):{@code "#tenantId"} / {@code "#request.tenantId"}
+     *   <li>纯参数名(无 {@code #}):{@code "tenantId"} —— 直接按参数名取入参值
+     * </ul>
+     *
+     * <p>留空 / 求值失败 / 求值为 null → 返回 null(由 {@link #resolveTenantFallback} 继续往下找 principal/MDC/system)。
+     * 失败只 warn 不抛,绝不拖垮业务路径。
+     */
+    private String resolveTargetTenant(AuditAction ann, Method method, Object[] args) {
+        String expr = ann.targetTenantParam();
+        if (expr == null || expr.isEmpty()) return null;
+        try {
+            String[] names = paramNameDiscoverer.getParameterNames(method);
+            if (expr.startsWith("#")) {
+                SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
+                                DataBindingPropertyAccessor.forReadOnlyAccess())
+                        .withInstanceMethods()
+                        .build();
+                if (names != null) {
+                    for (int i = 0; i < names.length && i < args.length; i++) {
+                        ctx.setVariable(names[i], args[i]);
+                    }
+                }
+                Object v = spel.parseExpression(expr).getValue(ctx);
+                return v == null ? null : String.valueOf(v);
+            }
+            // 纯参数名形式:按名匹配方法参数
+            if (names != null) {
+                for (int i = 0; i < names.length && i < args.length; i++) {
+                    if (expr.equals(names[i])) {
+                        return args[i] == null ? null : String.valueOf(args[i]);
+                    }
+                }
+            }
+            return null;
+        } catch (Exception ex) {
+            log.warn("[audit] targetTenantParam '{}' eval failed: {}", expr, SwallowedExceptionLogger.summary(ex));
+            return null;
+        }
+    }
 
-  private record RequestInfo(String traceId, String requestId, String ipHash, String uaHash) {}
+    private RequestInfo currentRequest() {
+        String traceId = MDC.get("traceId");
+        String requestId = MDC.get("requestId");
+        String ipHash = null;
+        String uaHash = null;
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest req = attrs.getRequest();
+                ipHash = Hashes.sha256Short(req.getRemoteAddr());
+                uaHash = Hashes.sha256Short(req.getHeader("User-Agent"));
+            }
+        } catch (Exception ignored) {
+            // request context 取不到不影响审计写入
+        }
+        return new RequestInfo(traceId, requestId, ipHash, uaHash);
+    }
+
+    private record OperatorInfo(String operatorId, String operatorRole, String tenantId) {}
+
+    private record RequestInfo(String traceId, String requestId, String ipHash, String uaHash) {}
 }

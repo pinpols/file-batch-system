@@ -40,58 +40,55 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleNotificationControllerTest {
 
-  @Mock
-  private ConsoleNotificationApplicationService applicationService;
+    @Mock
+    private ConsoleNotificationApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleNotificationController(applicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleNotificationController(applicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("按租户返回渠道清单, 响应字段保持下划线命名")
-  void shouldListChannels() throws Exception {
-    // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
-    // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
-    when(applicationService.listChannels("t1"))
-        .thenReturn(List.of(ConsoleNotificationChannelResponse.from(new NotificationChannelRow(
-            1L, "t1", "mail-1", "mail-1", "EMAIL", null, true, null, null, null, null))));
+    @Test
+    @DisplayName("按租户返回渠道清单, 响应字段保持下划线命名")
+    void shouldListChannels() throws Exception {
+        // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
+        // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
+        when(applicationService.listChannels("t1"))
+                .thenReturn(List.of(ConsoleNotificationChannelResponse.from(new NotificationChannelRow(
+                        1L, "t1", "mail-1", "mail-1", "EMAIL", null, true, null, null, null, null))));
 
-    mockMvc
-        .perform(get("/api/console/notifications/channels").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].channel_code").value("mail-1"));
-  }
+        mockMvc.perform(get("/api/console/notifications/channels").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].channel_code").value("mail-1"));
+    }
 
-  @Test
-  @DisplayName("创建订阅规则时字段逐一绑定到请求对象, 未给的作业编码过滤为空")
-  void shouldCreateRule() throws Exception {
-    mockMvc
-        .perform(post("/api/console/notifications/rules")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "idem-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("创建订阅规则时字段逐一绑定到请求对象, 未给的作业编码过滤为空")
+    void shouldCreateRule() throws Exception {
+        mockMvc.perform(post("/api/console/notifications/rules")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "idem-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "ruleName":"high-priority",
                       "channelCode":"mail-1",
@@ -100,31 +97,30 @@ class ConsoleNotificationControllerTest {
                       "enabled":true
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<SubscriptionRuleUpsertRequest> captor =
-        ArgumentCaptor.forClass(SubscriptionRuleUpsertRequest.class);
-    verify(applicationService).createRule(eq("t1"), captor.capture());
-    SubscriptionRuleUpsertRequest req = captor.getValue();
-    assertThat(req.getRuleName()).isEqualTo("high-priority");
-    assertThat(req.getChannelCode()).isEqualTo("mail-1");
-    assertThat(req.getEventTypes()).isEqualTo("JOB_FAILED,JOB_TIMEOUT");
-    assertThat(req.getSeverityFilter()).isEqualTo("HIGH");
-    assertThat(req.getJobCodeFilter()).isNull();
-    assertThat(req.getEnabled()).isTrue();
-  }
+        ArgumentCaptor<SubscriptionRuleUpsertRequest> captor =
+                ArgumentCaptor.forClass(SubscriptionRuleUpsertRequest.class);
+        verify(applicationService).createRule(eq("t1"), captor.capture());
+        SubscriptionRuleUpsertRequest req = captor.getValue();
+        assertThat(req.getRuleName()).isEqualTo("high-priority");
+        assertThat(req.getChannelCode()).isEqualTo("mail-1");
+        assertThat(req.getEventTypes()).isEqualTo("JOB_FAILED,JOB_TIMEOUT");
+        assertThat(req.getSeverityFilter()).isEqualTo("HIGH");
+        assertThat(req.getJobCodeFilter()).isNull();
+        assertThat(req.getEnabled()).isTrue();
+    }
 
-  @Test
-  @DisplayName("创建渠道按类型化请求体绑定字段, 未给启用标记时默认为启用")
-  void shouldCreateChannelWithTypedBodyAndDefaultEnabled() throws Exception {
-    // 反序列化守护:JSON 字段名与旧 Map 消费键逐一对应;enabled 缺省为 true。
-    mockMvc
-        .perform(post("/api/console/notifications/channels")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "idem-2")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("创建渠道按类型化请求体绑定字段, 未给启用标记时默认为启用")
+    void shouldCreateChannelWithTypedBodyAndDefaultEnabled() throws Exception {
+        // 反序列化守护:JSON 字段名与旧 Map 消费键逐一对应;enabled 缺省为 true。
+        mockMvc.perform(post("/api/console/notifications/channels")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "idem-2")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "channelCode":"mail-1",
                       "channelName":"Mail One",
@@ -132,43 +128,41 @@ class ConsoleNotificationControllerTest {
                       "configJson":"{\\"to\\":\\"ops@example.com\\"}"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<NotificationChannelUpsertRequest> captor =
-        ArgumentCaptor.forClass(NotificationChannelUpsertRequest.class);
-    verify(applicationService).createChannel(eq("t1"), captor.capture());
-    NotificationChannelUpsertRequest req = captor.getValue();
-    assertThat(req.getChannelCode()).isEqualTo("mail-1");
-    assertThat(req.getChannelName()).isEqualTo("Mail One");
-    assertThat(req.getChannelType()).isEqualTo("EMAIL");
-    assertThat(req.getConfigJson()).isEqualTo("{\"to\":\"ops@example.com\"}");
-    assertThat(req.getEnabled()).isTrue();
-  }
+        ArgumentCaptor<NotificationChannelUpsertRequest> captor =
+                ArgumentCaptor.forClass(NotificationChannelUpsertRequest.class);
+        verify(applicationService).createChannel(eq("t1"), captor.capture());
+        NotificationChannelUpsertRequest req = captor.getValue();
+        assertThat(req.getChannelCode()).isEqualTo("mail-1");
+        assertThat(req.getChannelName()).isEqualTo("Mail One");
+        assertThat(req.getChannelType()).isEqualTo("EMAIL");
+        assertThat(req.getConfigJson()).isEqualTo("{\"to\":\"ops@example.com\"}");
+        assertThat(req.getEnabled()).isTrue();
+    }
 
-  @Test
-  @DisplayName("创建渠道缺少渠道编码时返回参数错误, 不调用应用服务")
-  void shouldRejectChannelCreateWithoutChannelCode() throws Exception {
-    mockMvc
-        .perform(post("/api/console/notifications/channels")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "idem-3")
-            .contentType(APPLICATION_JSON)
-            .content("{\"channelName\":\"Mail One\",\"channelType\":\"EMAIL\"}"))
-        .andExpect(status().isBadRequest());
-    verify(applicationService, never()).createChannel(eq("t1"), any());
-  }
+    @Test
+    @DisplayName("创建渠道缺少渠道编码时返回参数错误, 不调用应用服务")
+    void shouldRejectChannelCreateWithoutChannelCode() throws Exception {
+        mockMvc.perform(post("/api/console/notifications/channels")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "idem-3")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"channelName\":\"Mail One\",\"channelType\":\"EMAIL\"}"))
+                .andExpect(status().isBadRequest());
+        verify(applicationService, never()).createChannel(eq("t1"), any());
+    }
 
-  @Test
-  @DisplayName("更新渠道不要求请求体带渠道编码, 以路径参数为准")
-  void shouldUpdateChannelWithoutChannelCodeInBody() throws Exception {
-    // 兼容守护:update body 不要求 channelCode(路径参数为准),字段名与旧 Map 消费键一致。
-    mockMvc
-        .perform(put("/api/console/notifications/channels/mail-1")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "idem-4")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("更新渠道不要求请求体带渠道编码, 以路径参数为准")
+    void shouldUpdateChannelWithoutChannelCodeInBody() throws Exception {
+        // 兼容守护:update body 不要求 channelCode(路径参数为准),字段名与旧 Map 消费键一致。
+        mockMvc.perform(put("/api/console/notifications/channels/mail-1")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "idem-4")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "channelName":"Mail Renamed",
                       "channelType":"WEBHOOK",
@@ -176,28 +170,27 @@ class ConsoleNotificationControllerTest {
                       "enabled":false
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<NotificationChannelUpdateRequest> captor =
-        ArgumentCaptor.forClass(NotificationChannelUpdateRequest.class);
-    verify(applicationService).updateChannel(eq("t1"), eq("mail-1"), captor.capture());
-    NotificationChannelUpdateRequest req = captor.getValue();
-    assertThat(req.getChannelName()).isEqualTo("Mail Renamed");
-    assertThat(req.getChannelType()).isEqualTo("WEBHOOK");
-    assertThat(req.getEnabled()).isFalse();
-  }
+        ArgumentCaptor<NotificationChannelUpdateRequest> captor =
+                ArgumentCaptor.forClass(NotificationChannelUpdateRequest.class);
+        verify(applicationService).updateChannel(eq("t1"), eq("mail-1"), captor.capture());
+        NotificationChannelUpdateRequest req = captor.getValue();
+        assertThat(req.getChannelName()).isEqualTo("Mail Renamed");
+        assertThat(req.getChannelType()).isEqualTo("WEBHOOK");
+        assertThat(req.getEnabled()).isFalse();
+    }
 
-  @Test
-  @DisplayName("创建规则缺少规则名称时返回参数错误, 不调用应用服务")
-  void shouldRejectRuleCreateWithoutRuleName() throws Exception {
-    mockMvc
-        .perform(post("/api/console/notifications/rules")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "idem-5")
-            .contentType(APPLICATION_JSON)
-            .content("{\"channelCode\":\"mail-1\",\"eventTypes\":\"JOB_FAILED\"}"))
-        .andExpect(status().isBadRequest());
-    verify(applicationService, never()).createRule(eq("t1"), any());
-  }
+    @Test
+    @DisplayName("创建规则缺少规则名称时返回参数错误, 不调用应用服务")
+    void shouldRejectRuleCreateWithoutRuleName() throws Exception {
+        mockMvc.perform(post("/api/console/notifications/rules")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "idem-5")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"channelCode\":\"mail-1\",\"eventTypes\":\"JOB_FAILED\"}"))
+                .andExpect(status().isBadRequest());
+        verify(applicationService, never()).createRule(eq("t1"), any());
+    }
 }

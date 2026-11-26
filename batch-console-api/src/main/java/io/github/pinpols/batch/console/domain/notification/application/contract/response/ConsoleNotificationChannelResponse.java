@@ -22,49 +22,49 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleNotificationChannelResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("channel_code") String channelCode,
-    @JsonProperty("channel_name") String channelName,
-    @JsonProperty("channel_type") String channelType,
-    @JsonProperty("config_json") Object configJson,
-    Boolean enabled,
-    @JsonProperty("created_by") String createdBy,
-    @JsonProperty("updated_by") String updatedBy,
-    @JsonProperty("created_at") Instant createdAt,
-    @JsonProperty("updated_at") Instant updatedAt) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("channel_code") String channelCode,
+        @JsonProperty("channel_name") String channelName,
+        @JsonProperty("channel_type") String channelType,
+        @JsonProperty("config_json") Object configJson,
+        Boolean enabled,
+        @JsonProperty("created_by") String createdBy,
+        @JsonProperty("updated_by") String updatedBy,
+        @JsonProperty("created_at") Instant createdAt,
+        @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleNotificationChannelResponse from(NotificationChannelRow row) {
-    if (row == null) {
-      return null;
+    public static ConsoleNotificationChannelResponse from(NotificationChannelRow row) {
+        if (row == null) {
+            return null;
+        }
+        return ConsoleNotificationChannelResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .channelCode(row.channelCode())
+                .channelName(row.channelName())
+                .channelType(row.channelType())
+                .configJson(safeConfig(row.configJson()))
+                .enabled(row.enabled())
+                .createdBy(row.createdBy())
+                .updatedBy(row.updatedBy())
+                .createdAt(row.createdAt())
+                .updatedAt(row.updatedAt())
+                .build();
     }
-    return ConsoleNotificationChannelResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .channelCode(row.channelCode())
-        .channelName(row.channelName())
-        .channelType(row.channelType())
-        .configJson(safeConfig(row.configJson()))
-        .enabled(row.enabled())
-        .createdBy(row.createdBy())
-        .updatedBy(row.updatedBy())
-        .createdAt(row.createdAt())
-        .updatedAt(row.updatedAt())
-        .build();
-  }
 
-  private static Object safeConfig(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
+    private static Object safeConfig(Object value) {
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        try {
+            Object parsed = value instanceof String json ? JsonUtils.fromJson(json, Object.class) : value;
+            if (parsed instanceof String) {
+                return SecretMasking.MASKED_VALUE;
+            }
+            return SecretMasking.maskSensitiveValue(parsed, Set.of("url"));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
-    try {
-      Object parsed = value instanceof String json ? JsonUtils.fromJson(json, Object.class) : value;
-      if (parsed instanceof String) {
-        return SecretMasking.MASKED_VALUE;
-      }
-      return SecretMasking.maskSensitiveValue(parsed, Set.of("url"));
-    } catch (IllegalArgumentException ignored) {
-      return null;
-    }
-  }
 }

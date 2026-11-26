@@ -19,9 +19,9 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = ValidBizDateValidator.class)
 public @interface ValidBizDate {
 
-  String message() default "bizDate format invalid (expected yyyy-MM-dd)";
+    String message() default "bizDate format invalid (expected yyyy-MM-dd)";
 
-  Class<?>[] groups() default {};
+    Class<?>[] groups() default {};
 
-  Class<? extends Payload>[] payload() default {};
+    Class<? extends Payload>[] payload() default {};
 }

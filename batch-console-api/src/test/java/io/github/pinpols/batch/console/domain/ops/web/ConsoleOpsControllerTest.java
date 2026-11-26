@@ -47,138 +47,127 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleOpsControllerTest {
 
-  @Mock
-  private ConsoleOpsSummaryPort opsApplicationService;
+    @Mock
+    private ConsoleOpsSummaryPort opsApplicationService;
 
-  @Mock
-  private ConsoleOutboxOpsApplicationService outboxOpsService;
+    @Mock
+    private ConsoleOutboxOpsApplicationService outboxOpsService;
 
-  @Mock
-  private ConsoleKafkaLagQueryPort kafkaLagQueryService;
+    @Mock
+    private ConsoleKafkaLagQueryPort kafkaLagQueryService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsController(
-            opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
-
-  @Test
-  @DisplayName("汇总查询:返回成功响应并回填租户与各项计数")
-  void shouldReturn200AndCommonResponseStructureOnSuccess() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(opsApplicationService.summary(anyString()))
-        .thenReturn(ConsoleOpsSummaryResponse.builder()
-            .tenantId("t1")
-            .pendingApprovals(1L)
-            .openAlerts(2L)
-            .criticalAlerts(3L)
-            .runningJobs(4L)
-            .failedJobs(5L)
-            .slaBreaches(6L)
-            .onlineWorkers(7L)
-            .drainingWorkers(8L)
-            .offlineWorkers(9L)
-            .outboxRetryBacklog(10L)
-            .outboxDeliveryFailures(11L)
-            .build());
-
-    mockMvc
-        .perform(get("/api/console/ops/summary").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.tenantId").value("t1"))
-        .andExpect(jsonPath("$.data.pendingApprovals").value(1))
-        .andExpect(jsonPath("$.data.openAlerts").value(2))
-        .andExpect(jsonPath("$.data.criticalAlerts").value(3));
-  }
-
-  @Test
-  @DisplayName("重投接口精确接收超过 JS 安全整数的 64 位事件 ID")
-  void shouldPreserveLongIds_whenRepublishingOutbox() throws Exception {
-    List<Long> ids = List.of(9007199254740993L, Long.MAX_VALUE);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(outboxOpsService.republish("t1", ids))
-        .thenReturn(new ConsoleOutboxRepublishResponse("t1", 2, 1));
-    mockMvc
-        .perform(post("/api/console/ops/outbox/republish")
-            .param("tenantId", "t1")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("[9007199254740993,9223372036854775807]"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.resetCount").value(1));
-    verify(outboxOpsService).republish("t1", ids);
-  }
-
-  @Test
-  @DisplayName("读权限:汇总方法的授权注解包含租户用户角色")
-  void shouldAllowTenantUserToReadSummary() throws Exception {
-    PreAuthorize authorization = ConsoleOpsController.class
-        .getMethod("summary", String.class)
-        .getAnnotation(PreAuthorize.class);
-
-    assertThat(authorization.value()).contains("ROLE_TENANT_USER");
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "ROLE_AUDITOR,false",
-    "ROLE_TENANT_USER,false",
-    "ROLE_ADMIN,true",
-    "ROLE_TENANT_ADMIN,true"
-  })
-  @DisplayName("真实方法鉴权：只读角色不能清理或重投，管理员写权限保留")
-  void shouldEnforceOutboxWriteAuthorization(String role, boolean allowed) {
-    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-      context.register(MethodSecurityConfiguration.class);
-      context.registerBean(
-          ConsoleOpsController.class,
-          () -> new ConsoleOpsController(
-              opsApplicationService,
-              outboxOpsService,
-              new ConsoleResponseFactory(requestMetadataResolver),
-              kafkaLagQueryService));
-      context.refresh();
-      ConsoleOpsController secured = context.getBean(ConsoleOpsController.class);
-      List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
-      SecurityContextHolder.getContext()
-          .setAuthentication(
-              UsernamePasswordAuthenticationToken.authenticated("operator", "unused", authorities));
-      List<Long> eventIds = List.of(41L);
-      if (allowed) {
-        secured.outboxCleanup("t1", 7);
-        secured.outboxRepublish("t1", eventIds);
-        verify(outboxOpsService).cleanup("t1", 7);
-        verify(outboxOpsService).republish("t1", eventIds);
-      } else {
-        assertThatThrownBy(() -> secured.outboxCleanup("t1", 7))
-            .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> secured.outboxRepublish("t1", eventIds))
-            .isInstanceOf(AccessDeniedException.class);
-        verifyNoInteractions(outboxOpsService);
-      }
-    } finally {
-      SecurityContextHolder.clearContext();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsController(
+                        opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
     }
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableMethodSecurity
-  static class MethodSecurityConfiguration {}
+    @Test
+    @DisplayName("汇总查询:返回成功响应并回填租户与各项计数")
+    void shouldReturn200AndCommonResponseStructureOnSuccess() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(opsApplicationService.summary(anyString()))
+                .thenReturn(ConsoleOpsSummaryResponse.builder()
+                        .tenantId("t1")
+                        .pendingApprovals(1L)
+                        .openAlerts(2L)
+                        .criticalAlerts(3L)
+                        .runningJobs(4L)
+                        .failedJobs(5L)
+                        .slaBreaches(6L)
+                        .onlineWorkers(7L)
+                        .drainingWorkers(8L)
+                        .offlineWorkers(9L)
+                        .outboxRetryBacklog(10L)
+                        .outboxDeliveryFailures(11L)
+                        .build());
+
+        mockMvc.perform(get("/api/console/ops/summary").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.tenantId").value("t1"))
+                .andExpect(jsonPath("$.data.pendingApprovals").value(1))
+                .andExpect(jsonPath("$.data.openAlerts").value(2))
+                .andExpect(jsonPath("$.data.criticalAlerts").value(3));
+    }
+
+    @Test
+    @DisplayName("重投接口精确接收超过 JS 安全整数的 64 位事件 ID")
+    void shouldPreserveLongIds_whenRepublishingOutbox() throws Exception {
+        List<Long> ids = List.of(9007199254740993L, Long.MAX_VALUE);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(outboxOpsService.republish("t1", ids)).thenReturn(new ConsoleOutboxRepublishResponse("t1", 2, 1));
+        mockMvc.perform(post("/api/console/ops/outbox/republish")
+                        .param("tenantId", "t1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("[9007199254740993,9223372036854775807]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.resetCount").value(1));
+        verify(outboxOpsService).republish("t1", ids);
+    }
+
+    @Test
+    @DisplayName("读权限:汇总方法的授权注解包含租户用户角色")
+    void shouldAllowTenantUserToReadSummary() throws Exception {
+        PreAuthorize authorization =
+                ConsoleOpsController.class.getMethod("summary", String.class).getAnnotation(PreAuthorize.class);
+
+        assertThat(authorization.value()).contains("ROLE_TENANT_USER");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ROLE_AUDITOR,false", "ROLE_TENANT_USER,false", "ROLE_ADMIN,true", "ROLE_TENANT_ADMIN,true"})
+    @DisplayName("真实方法鉴权：只读角色不能清理或重投，管理员写权限保留")
+    void shouldEnforceOutboxWriteAuthorization(String role, boolean allowed) {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(MethodSecurityConfiguration.class);
+            context.registerBean(
+                    ConsoleOpsController.class,
+                    () -> new ConsoleOpsController(
+                            opsApplicationService,
+                            outboxOpsService,
+                            new ConsoleResponseFactory(requestMetadataResolver),
+                            kafkaLagQueryService));
+            context.refresh();
+            ConsoleOpsController secured = context.getBean(ConsoleOpsController.class);
+            List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
+            SecurityContextHolder.getContext()
+                    .setAuthentication(
+                            UsernamePasswordAuthenticationToken.authenticated("operator", "unused", authorities));
+            List<Long> eventIds = List.of(41L);
+            if (allowed) {
+                secured.outboxCleanup("t1", 7);
+                secured.outboxRepublish("t1", eventIds);
+                verify(outboxOpsService).cleanup("t1", 7);
+                verify(outboxOpsService).republish("t1", eventIds);
+            } else {
+                assertThatThrownBy(() -> secured.outboxCleanup("t1", 7)).isInstanceOf(AccessDeniedException.class);
+                assertThatThrownBy(() -> secured.outboxRepublish("t1", eventIds))
+                        .isInstanceOf(AccessDeniedException.class);
+                verifyNoInteractions(outboxOpsService);
+            }
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableMethodSecurity
+    static class MethodSecurityConfiguration {}
 }

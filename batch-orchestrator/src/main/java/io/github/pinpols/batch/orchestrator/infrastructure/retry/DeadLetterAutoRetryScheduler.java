@@ -22,23 +22,23 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DeadLetterAutoRetryScheduler {
 
-  private final RetryGovernanceService retryGovernanceService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+    private final RetryGovernanceService retryGovernanceService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-  @Scheduled(fixedDelayString = "${batch.retry.dead-letter-poll-interval-millis:30000}")
-  @SchedulerLock(name = "dead_letter_auto_retry", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  public void poll() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.retry.dead-letter-poll-interval-millis:30000}")
+    @SchedulerLock(name = "dead_letter_auto_retry", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void poll() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            retryGovernanceService.autoRetryDueDeadLetters();
+        } finally {
+            running.set(false);
+        }
     }
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      retryGovernanceService.autoRetryDueDeadLetters();
-    } finally {
-      running.set(false);
-    }
-  }
 }

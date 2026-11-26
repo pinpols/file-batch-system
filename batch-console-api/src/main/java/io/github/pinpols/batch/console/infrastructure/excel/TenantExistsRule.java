@@ -19,40 +19,40 @@ import java.util.Set;
  */
 public final class TenantExistsRule {
 
-  private TenantExistsRule() {}
+    private TenantExistsRule() {}
 
-  /**
-   * @param referencedTenantIds 来自所有 sheet 的 tenant_id 唯一集合
-   * @param existingTenantIds batch.tenant 表已存在(任何 status)的 tenant_id 集合
-   * @return 缺失租户的 issue 列表
-   */
-  public static List<WorkbookIssue> validate(
-      Collection<String> referencedTenantIds, Collection<String> existingTenantIds) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    if (referencedTenantIds == null || referencedTenantIds.isEmpty()) {
-      return issues;
+    /**
+     * @param referencedTenantIds 来自所有 sheet 的 tenant_id 唯一集合
+     * @param existingTenantIds batch.tenant 表已存在(任何 status)的 tenant_id 集合
+     * @return 缺失租户的 issue 列表
+     */
+    public static List<WorkbookIssue> validate(
+            Collection<String> referencedTenantIds, Collection<String> existingTenantIds) {
+        List<WorkbookIssue> issues = new ArrayList<>();
+        if (referencedTenantIds == null || referencedTenantIds.isEmpty()) {
+            return issues;
+        }
+        Set<String> existing = existingTenantIds == null ? Set.of() : new HashSet<>(existingTenantIds);
+        Set<String> missing = new LinkedHashSet<>();
+        for (String t : referencedTenantIds) {
+            if (t == null || t.isBlank()) {
+                continue;
+            }
+            if (!existing.contains(t)) {
+                missing.add(t);
+            }
+        }
+        for (String t : missing) {
+            issues.add(new WorkbookIssue(
+                    ConfigPackageExcelValidator.JOB_SHEET,
+                    0,
+                    ConfigPackageExcelValidator.COL_TENANT_ID,
+                    "tenant_id '"
+                            + t
+                            + "' is referenced by fixture but missing from batch.tenant "
+                            + "(reconciler/scheduler will skip CRON jobs); insert it via "
+                            + "test-data/sim/sim-e2e-bootstrap.sql or tenant create API"));
+        }
+        return issues;
     }
-    Set<String> existing = existingTenantIds == null ? Set.of() : new HashSet<>(existingTenantIds);
-    Set<String> missing = new LinkedHashSet<>();
-    for (String t : referencedTenantIds) {
-      if (t == null || t.isBlank()) {
-        continue;
-      }
-      if (!existing.contains(t)) {
-        missing.add(t);
-      }
-    }
-    for (String t : missing) {
-      issues.add(new WorkbookIssue(
-          ConfigPackageExcelValidator.JOB_SHEET,
-          0,
-          ConfigPackageExcelValidator.COL_TENANT_ID,
-          "tenant_id '"
-              + t
-              + "' is referenced by fixture but missing from batch.tenant "
-              + "(reconciler/scheduler will skip CRON jobs); insert it via "
-              + "test-data/sim/sim-e2e-bootstrap.sql or tenant create API"));
-    }
-    return issues;
-  }
 }

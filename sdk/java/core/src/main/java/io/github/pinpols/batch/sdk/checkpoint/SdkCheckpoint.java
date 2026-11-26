@@ -23,13 +23,13 @@ import java.util.Optional;
  */
 public interface SdkCheckpoint {
 
-  /** 启动时读回上次断点;首次运行返回 {@link Optional#empty()}。 */
-  Optional<SdkCheckpointState> load(String taskId);
+    /** 启动时读回上次断点;首次运行返回 {@link Optional#empty()}。 */
+    Optional<SdkCheckpointState> load(String taskId);
 
-  /**
-   * 保存断点。
-   *
-   * <p><b>必须与业务数据同事务</b>(见接口注释)。实现若涉及 I/O,抛出运行时异常即可,模板会把整批回滚并落 fail 终态。
-   */
-  void save(String taskId, SdkCheckpointState state);
+    /**
+     * 保存断点。
+     *
+     * <p><b>必须与业务数据同事务</b>(见接口注释)。实现若涉及 I/O,抛出运行时异常即可,模板会把整批回滚并落 fail 终态。
+     */
+    void save(String taskId, SdkCheckpointState state);
 }

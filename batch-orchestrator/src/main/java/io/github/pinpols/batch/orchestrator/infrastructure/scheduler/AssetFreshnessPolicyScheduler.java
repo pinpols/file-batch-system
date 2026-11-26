@@ -15,22 +15,19 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AssetFreshnessPolicyScheduler {
 
-  private final AssetFreshnessPolicyService freshnessPolicyService;
-  private final AssetFreshnessPolicyProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AssetFreshnessPolicyService freshnessPolicyService;
+    private final AssetFreshnessPolicyProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.asset-freshness.scan-interval-millis:60000}")
-  @SchedulerLock(
-      name = "asset_freshness_policy_scan",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT15S")
-  public void scan() {
-    if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.asset-freshness.scan-interval-millis:60000}")
+    @SchedulerLock(name = "asset_freshness_policy_scan", lockAtMostFor = "PT5M", lockAtLeastFor = "PT15S")
+    public void scan() {
+        if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
+            return;
+        }
+        int emitted = freshnessPolicyService.scanDuePolicies(properties.getBatchLimit());
+        if (emitted > 0) {
+            log.warn("Asset freshness scan emitted {} alert(s)", emitted);
+        }
     }
-    int emitted = freshnessPolicyService.scanDuePolicies(properties.getBatchLimit());
-    if (emitted > 0) {
-      log.warn("Asset freshness scan emitted {} alert(s)", emitted);
-    }
-  }
 }

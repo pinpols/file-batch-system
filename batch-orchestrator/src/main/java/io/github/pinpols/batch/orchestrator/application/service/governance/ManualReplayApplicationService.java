@@ -10,17 +10,17 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ManualReplayApplicationService {
 
-  private final RetryGovernanceService retryGovernanceService;
+    private final RetryGovernanceService retryGovernanceService;
 
-  public String replayTask(String tenantId, Long taskId) {
-    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "task", taskId);
-    retryGovernanceService.retryTask(tenantId, taskId, eventKey);
-    return IdGenerator.newBusinessNo("rpl");
-  }
+    public String replayTask(String tenantId, Long taskId) {
+        String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "task", taskId);
+        retryGovernanceService.retryTask(tenantId, taskId, eventKey);
+        return IdGenerator.newBusinessNo("rpl");
+    }
 
-  public String replayPartition(String tenantId, Long partitionId) {
-    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "partition", partitionId);
-    retryGovernanceService.retryPartition(tenantId, partitionId, eventKey);
-    return IdGenerator.newBusinessNo("rpl");
-  }
+    public String replayPartition(String tenantId, Long partitionId) {
+        String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "partition", partitionId);
+        retryGovernanceService.retryPartition(tenantId, partitionId, eventKey);
+        return IdGenerator.newBusinessNo("rpl");
+    }
 }

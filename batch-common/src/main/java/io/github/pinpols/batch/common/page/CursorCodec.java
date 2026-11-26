@@ -23,42 +23,42 @@ import java.util.Map;
 @SuppressWarnings("java:S2583")
 public final class CursorCodec {
 
-  private CursorCodec() {}
+    private CursorCodec() {}
 
-  /** 把排序键 map 编码成 base64(JSON) token。空 map 返回 null。 */
-  public static String encode(Map<String, Object> sortKey) {
-    if (sortKey == null || sortKey.isEmpty()) {
-      return null;
+    /** 把排序键 map 编码成 base64(JSON) token。空 map 返回 null。 */
+    public static String encode(Map<String, Object> sortKey) {
+        if (sortKey == null || sortKey.isEmpty()) {
+            return null;
+        }
+        String json = JsonUtils.toJson(sortKey);
+        Base64.Encoder urlEncoder = Base64.getUrlEncoder();
+        Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
+        byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
+        return encoderWithoutPadding.encodeToString(jsonBytes);
     }
-    String json = JsonUtils.toJson(sortKey);
-    Base64.Encoder urlEncoder = Base64.getUrlEncoder();
-    Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
-    byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
-    return encoderWithoutPadding.encodeToString(jsonBytes);
-  }
 
-  /**
-   * 解码 token。任何失败(null / blank / 非 base64 / 非 JSON / 非对象)都返回 empty map。
-   *
-   * <p>empty map 本身不保证 SQL 返回空列表；调用方不得将损坏 token 静默解释为有效首页游标。
-   */
-  public static Map<String, Object> decode(String token) {
-    if (token == null || token.isBlank()) {
-      return Collections.emptyMap();
+    /**
+     * 解码 token。任何失败(null / blank / 非 base64 / 非 JSON / 非对象)都返回 empty map。
+     *
+     * <p>empty map 本身不保证 SQL 返回空列表；调用方不得将损坏 token 静默解释为有效首页游标。
+     */
+    public static Map<String, Object> decode(String token) {
+        if (token == null || token.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            byte[] bytes = Base64.getUrlDecoder().decode(token);
+            String json = new String(bytes, StandardCharsets.UTF_8);
+            Map<?, ?> raw = JsonUtils.fromJson(json, Map.class);
+            if (raw == null) return Collections.emptyMap();
+            // 强转 Map<String, Object>;Jackson 反序列化 JSON 对象的 key 永远是 String
+            @SuppressWarnings("unchecked")
+            Map<String, Object> typed = (Map<String, Object>) raw;
+            return typed;
+        } catch (RuntimeException ex) {
+            // base64 / JSON 解码异常,以及任何 cursor 损坏情况统一安全降级
+            SwallowedExceptionLogger.info(CursorCodec.class, "catch:decode-cursor", ex);
+            return Collections.emptyMap();
+        }
     }
-    try {
-      byte[] bytes = Base64.getUrlDecoder().decode(token);
-      String json = new String(bytes, StandardCharsets.UTF_8);
-      Map<?, ?> raw = JsonUtils.fromJson(json, Map.class);
-      if (raw == null) return Collections.emptyMap();
-      // 强转 Map<String, Object>;Jackson 反序列化 JSON 对象的 key 永远是 String
-      @SuppressWarnings("unchecked")
-      Map<String, Object> typed = (Map<String, Object>) raw;
-      return typed;
-    } catch (RuntimeException ex) {
-      // base64 / JSON 解码异常,以及任何 cursor 损坏情况统一安全降级
-      SwallowedExceptionLogger.info(CursorCodec.class, "catch:decode-cursor", ex);
-      return Collections.emptyMap();
-    }
-  }
 }

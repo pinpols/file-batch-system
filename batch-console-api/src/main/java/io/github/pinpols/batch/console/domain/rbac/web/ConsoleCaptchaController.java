@@ -26,24 +26,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleCaptchaController {
 
-  private final CaptchaProperties captchaProperties;
-  private final LoginProtectionProperties loginProtectionProperties;
-  private final ConsoleResponseFactory responseFactory;
+    private final CaptchaProperties captchaProperties;
+    private final LoginProtectionProperties loginProtectionProperties;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** FE 拉取验证码配置:provider + 公开 siteKey + 登录防护是否开启。绝不下发 secretKey。 */
-  @GetMapping("/config")
-  public CommonResponse<ConsoleCaptchaConfigResponse> config() {
-    ConsoleCaptchaConfigResponse captchaConfig = new ConsoleCaptchaConfigResponse(
-        captchaProperties.getProvider(),
-        captchaProperties.getSiteKey(),
-        loginProtectionProperties.isEnabled());
-    return responseFactory.success(captchaConfig);
-  }
+    /** FE 拉取验证码配置:provider + 公开 siteKey + 登录防护是否开启。绝不下发 secretKey。 */
+    @GetMapping("/config")
+    public CommonResponse<ConsoleCaptchaConfigResponse> config() {
+        ConsoleCaptchaConfigResponse captchaConfig = new ConsoleCaptchaConfigResponse(
+                captchaProperties.getProvider(), captchaProperties.getSiteKey(), loginProtectionProperties.isEnabled());
+        return responseFactory.success(captchaConfig);
+    }
 
-  /** 兼容旧路由；当前验证码实现不使用此挑战接口，也不会生成或存储挑战。 */
-  @Deprecated
-  @GetMapping("/challenge")
-  public CommonResponse<Void> deprecatedChallenge() {
-    throw BizException.of(ResultCode.NOT_FOUND, "error.auth.captcha_unavailable");
-  }
+    /** 兼容旧路由；当前验证码实现不使用此挑战接口，也不会生成或存储挑战。 */
+    @Deprecated
+    @GetMapping("/challenge")
+    public CommonResponse<Void> deprecatedChallenge() {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.auth.captcha_unavailable");
+    }
 }

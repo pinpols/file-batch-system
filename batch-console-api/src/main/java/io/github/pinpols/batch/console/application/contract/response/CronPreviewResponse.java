@@ -11,5 +11,4 @@ import java.util.List;
  * @param nextRuns ISO-8601 UTC 时间字符串列表,按时间升序;无下次触发(如固定日期已过)时为空
  * @param timezone 用于计算的时区 ID(IANA),如 "Asia/Shanghai";valid=false 时为 null
  */
-public record CronPreviewResponse(
-    String expr, boolean valid, String error, List<String> nextRuns, String timezone) {}
+public record CronPreviewResponse(String expr, boolean valid, String error, List<String> nextRuns, String timezone) {}

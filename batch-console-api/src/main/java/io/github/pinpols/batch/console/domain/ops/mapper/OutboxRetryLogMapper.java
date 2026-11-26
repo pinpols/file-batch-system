@@ -7,10 +7,9 @@ import org.apache.ibatis.annotations.Param;
 
 public interface OutboxRetryLogMapper {
 
-  List<OutboxRetryLogRow> selectByQuery(OutboxRetryLogQuery query);
+    List<OutboxRetryLogRow> selectByQuery(OutboxRetryLogQuery query);
 
-  long countByQuery(OutboxRetryLogQuery query);
+    long countByQuery(OutboxRetryLogQuery query);
 
-  long countByStatuses(
-      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+    long countByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 }

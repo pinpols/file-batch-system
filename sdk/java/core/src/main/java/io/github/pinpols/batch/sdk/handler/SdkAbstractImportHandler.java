@@ -17,35 +17,32 @@ import java.util.stream.Stream;
 // S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，允许租户实现抛任意受检异常；
 // 收窄为具体异常会破坏已接入租户的编译兼容性。
 @SuppressWarnings("java:S112")
-public abstract class SdkAbstractImportHandler<R>
-    extends SdkAbstractTypedImportHandler<Map<String, Object>, Void, R> {
+public abstract class SdkAbstractImportHandler<R> extends SdkAbstractTypedImportHandler<Map<String, Object>, Void, R> {
 
-  /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。 */
-  protected abstract void openSource(SdkTaskContext ctx) throws Exception;
+    /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。 */
+    protected abstract void openSource(SdkTaskContext ctx) throws Exception;
 
-  /**
-   * 返回行流(逐行解析)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} / {@code InputStream}
-   * 在读完或异常时都释放;租户可直接返 {@code jdbcTemplate.queryForStream(...)} / {@code Files.lines(...)}。
-   */
-  protected abstract Stream<R> readRows(SdkTaskContext ctx) throws Exception;
+    /**
+     * 返回行流(逐行解析)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} / {@code InputStream}
+     * 在读完或异常时都释放;租户可直接返 {@code jdbcTemplate.queryForStream(...)} / {@code Files.lines(...)}。
+     */
+    protected abstract Stream<R> readRows(SdkTaskContext ctx) throws Exception;
 
-  /** 批量写入租户自家目标表。 */
-  protected abstract void loadBatch(SdkTaskContext ctx, List<R> batch) throws Exception;
+    /** 批量写入租户自家目标表。 */
+    protected abstract void loadBatch(SdkTaskContext ctx, List<R> batch) throws Exception;
 
-  @Override
-  protected final void openSource(Map<String, Object> input, SdkTaskContext ctx) throws Exception {
-    openSource(ctx);
-  }
+    @Override
+    protected final void openSource(Map<String, Object> input, SdkTaskContext ctx) throws Exception {
+        openSource(ctx);
+    }
 
-  @Override
-  protected final Stream<R> readRows(Map<String, Object> input, SdkTaskContext ctx)
-      throws Exception {
-    return readRows(ctx);
-  }
+    @Override
+    protected final Stream<R> readRows(Map<String, Object> input, SdkTaskContext ctx) throws Exception {
+        return readRows(ctx);
+    }
 
-  @Override
-  protected final void loadBatch(Map<String, Object> input, SdkTaskContext ctx, List<R> batch)
-      throws Exception {
-    loadBatch(ctx, batch);
-  }
+    @Override
+    protected final void loadBatch(Map<String, Object> input, SdkTaskContext ctx, List<R> batch) throws Exception {
+        loadBatch(ctx, batch);
+    }
 }

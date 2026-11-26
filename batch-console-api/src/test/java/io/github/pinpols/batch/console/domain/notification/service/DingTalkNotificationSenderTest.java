@@ -16,122 +16,119 @@ import org.junit.jupiter.api.Test;
 @DisplayName("钉钉群机器人发送器: 渠道识别, 响应码判定与地址安全拦截")
 class DingTalkNotificationSenderTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  private NotificationMessage message(String configJson) {
-    WebhookEventPayload payload =
-        new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
-    return new NotificationMessage(
-        "tenant-a", "ch-dingtalk", "DINGTALK", configJson, payload, "{\"jobId\":\"J1\"}");
-  }
+    private NotificationMessage message(String configJson) {
+        WebhookEventPayload payload =
+                new WebhookEventPayload("tenant-a", "JOB_FAILED", "jobs", "c1", Instant.EPOCH, null);
+        return new NotificationMessage(
+                "tenant-a", "ch-dingtalk", "DINGTALK", configJson, payload, "{\"jobId\":\"J1\"}");
+    }
 
-  @Test
-  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
-  void shouldSupportDingTalkCaseInsensitively() {
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, failOnRequest());
+    @Test
+    @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+    void shouldSupportDingTalkCaseInsensitively() {
+        DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, failOnRequest());
 
-    assertThat(sender.supports("DINGTALK")).isTrue();
-    assertThat(sender.supports("dingtalk")).isTrue();
-    assertThat(sender.supports("DingTalk")).isTrue();
-    assertThat(sender.supports("WEBHOOK")).isFalse();
-    assertThat(sender.supports(null)).isFalse();
-  }
+        assertThat(sender.supports("DINGTALK")).isTrue();
+        assertThat(sender.supports("dingtalk")).isTrue();
+        assertThat(sender.supports("DingTalk")).isTrue();
+        assertThat(sender.supports("WEBHOOK")).isFalse();
+        assertThat(sender.supports(null)).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少机器人地址时直接失败, 不发起网络请求且无响应状态")
-  void shouldFailWithoutNetworkCall_whenUrlMissing() {
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, failOnRequest());
+    @Test
+    @DisplayName("缺少机器人地址时直接失败, 不发起网络请求且无响应状态")
+    void shouldFailWithoutNetworkCall_whenUrlMissing() {
+        DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, failOnRequest());
 
-    WebhookDeliveryResult result = sender.send(message("{}"));
+        WebhookDeliveryResult result = sender.send(message("{}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isNull();
-    assertThat(result.errorSummary()).isEqualTo("missing dingtalk url");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isNull();
+        assertThat(result.errorSummary()).isEqualTo("missing dingtalk url");
+    }
 
-  @Test
-  @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
-  void shouldSucceed_whenErrorCodeZero() {
-    AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
-    DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, request -> {
-      captured.set(request);
-      return new OutboundHttpResponse(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
-    });
+    @Test
+    @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
+    void shouldSucceed_whenErrorCodeZero() {
+        AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
+        DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, request -> {
+            captured.set(request);
+            return new OutboundHttpResponse(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
+        });
 
-    WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
+        WebhookDeliveryResult result =
+                sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
 
-    assertThat(result.success()).isTrue();
-    assertThat(captured.get().body()).contains("\"msgtype\":\"text\"").contains("JOB_FAILED");
-    assertThat(captured.get().addressPolicy()).isEqualTo(OutboundAddressPolicy.GUARDED);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(captured.get().body()).contains("\"msgtype\":\"text\"").contains("JOB_FAILED");
+        assertThat(captured.get().addressPolicy()).isEqualTo(OutboundAddressPolicy.GUARDED);
+    }
 
-  @Test
-  @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
-  void shouldFail_whenErrorCodeNotZero() {
-    DingTalkNotificationSender sender = new DingTalkNotificationSender(
-        objectMapper,
-        request -> new OutboundHttpResponse(
-            200, "{\"errcode\":310000,\"errmsg\":\"keywords not in content\"}"));
+    @Test
+    @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
+    void shouldFail_whenErrorCodeNotZero() {
+        DingTalkNotificationSender sender = new DingTalkNotificationSender(
+                objectMapper,
+                request ->
+                        new OutboundHttpResponse(200, "{\"errcode\":310000,\"errmsg\":\"keywords not in content\"}"));
 
-    WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
+        WebhookDeliveryResult result =
+                sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isEqualTo(200);
-    assertThat(result.errorSummary()).isEqualTo("dingtalk errcode=310000");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isEqualTo(200);
+        assertThat(result.errorSummary()).isEqualTo("dingtalk errcode=310000");
+    }
 
-  @Test
-  @DisplayName("配置加签密钥时地址追加时间戳与签名, 签名不回显密钥")
-  void shouldAppendTimestampAndSign_whenSecretConfigured() {
-    AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, request -> {
-          captured.set(request);
-          return new OutboundHttpResponse(200, "{\"errcode\":0}");
-        }) {
-          @Override
-          protected long epochMillis() {
-            return 1_700_000_000_000L;
-          }
-        };
+    @Test
+    @DisplayName("配置加签密钥时地址追加时间戳与签名, 签名不回显密钥")
+    void shouldAppendTimestampAndSign_whenSecretConfigured() {
+        AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
+        DingTalkNotificationSender sender =
+                new DingTalkNotificationSender(objectMapper, request -> {
+                    captured.set(request);
+                    return new OutboundHttpResponse(200, "{\"errcode\":0}");
+                }) {
+                    @Override
+                    protected long epochMillis() {
+                        return 1_700_000_000_000L;
+                    }
+                };
 
-    WebhookDeliveryResult result = sender.send(message(
-        "{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\",\"secret\":\"SEC123\"}"));
+        WebhookDeliveryResult result = sender.send(
+                message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\",\"secret\":\"SEC123\"}"));
 
-    assertThat(result.success()).isTrue();
-    String sentUrl = captured.get().uri().toString();
-    assertThat(sentUrl).contains("timestamp=1700000000000").contains("&sign=");
-    String sign = sentUrl.substring(sentUrl.indexOf("&sign=") + "&sign=".length());
-    assertThat(sign).isNotBlank().doesNotContain("SEC123");
-  }
+        assertThat(result.success()).isTrue();
+        String sentUrl = captured.get().uri().toString();
+        assertThat(sentUrl).contains("timestamp=1700000000000").contains("&sign=");
+        String sign = sentUrl.substring(sentUrl.indexOf("&sign=") + "&sign=".length());
+        assertThat(sign).isNotBlank().doesNotContain("SEC123");
+    }
 
-  @Test
-  @DisplayName("域名解析到内网回环时在建连前拦截, 失败原因指向地址被拦")
-  void shouldBlockAddress_whenHostResolvesToInternal() {
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
+    @Test
+    @DisplayName("域名解析到内网回环时在建连前拦截, 失败原因指向地址被拦")
+    void shouldBlockAddress_whenHostResolvesToInternal() {
+        DingTalkNotificationSender sender =
+                new DingTalkNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
-    WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://localhost/robot/send?access_token=t\"}"));
+        WebhookDeliveryResult result =
+                sender.send(message("{\"url\":\"https://localhost/robot/send?access_token=t\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).contains("BlockedAddressException");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).contains("BlockedAddressException");
+    }
 
-  @Test
-  @DisplayName("地址为字面量元数据内网地址时直接拦截, 不发起真实请求")
-  void shouldBlockAddress_whenUrlIsLiteralInternalIp() {
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
+    @Test
+    @DisplayName("地址为字面量元数据内网地址时直接拦截, 不发起真实请求")
+    void shouldBlockAddress_whenUrlIsLiteralInternalIp() {
+        DingTalkNotificationSender sender =
+                new DingTalkNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
-    WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
+        WebhookDeliveryResult result = sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).contains("BlockedAddressException");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).contains("BlockedAddressException");
+    }
 }

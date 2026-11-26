@@ -35,139 +35,140 @@ import org.springframework.security.web.csrf.DefaultCsrfToken;
 @DisplayName("控制台安全配置与认证过滤器: 租户白名单,开放模式与令牌 cookie 取值")
 class ConsoleSecurityConfigurationTest {
 
-  private ConsoleSecurityProperties properties;
-  private BatchSecurityProperties batchSecurityProperties;
-  private ConsoleAuthenticationFilter filter;
-  private ConsoleSessionRegistry sessionRegistry;
-  private ConsoleJwtService jwtService;
+    private ConsoleSecurityProperties properties;
+    private BatchSecurityProperties batchSecurityProperties;
+    private ConsoleAuthenticationFilter filter;
+    private ConsoleSessionRegistry sessionRegistry;
+    private ConsoleJwtService jwtService;
 
-  @BeforeEach
-  void setUp() {
-    properties = new ConsoleSecurityProperties();
-    properties.setEnabled(true);
-    properties.setJwtIssuer("batch-console-api");
-    properties.setJwtSecret("console-jwt-secret");
-    properties.setDefaultTenantId("tenant-a");
-    properties.setAllowedTenants(new ArrayList<>(List.of("tenant-a")));
-    properties.setDefaultAuthorities(new ArrayList<>(List.of("ROLE_ADMIN", "ROLE_AUDITOR")));
+    @BeforeEach
+    void setUp() {
+        properties = new ConsoleSecurityProperties();
+        properties.setEnabled(true);
+        properties.setJwtIssuer("batch-console-api");
+        properties.setJwtSecret("console-jwt-secret");
+        properties.setDefaultTenantId("tenant-a");
+        properties.setAllowedTenants(new ArrayList<>(List.of("tenant-a")));
+        properties.setDefaultAuthorities(new ArrayList<>(List.of("ROLE_ADMIN", "ROLE_AUDITOR")));
 
-    batchSecurityProperties = new BatchSecurityProperties();
-    batchSecurityProperties.setBypassMode(false);
-    sessionRegistry = mock(ConsoleSessionRegistry.class);
-    Environment environment = mock(Environment.class);
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
-    jwtService = new ConsoleJwtService(properties, sessionRegistry, environment);
-    filter = new ConsoleAuthenticationFilter(
-        properties,
-        batchSecurityProperties,
-        jwtService,
-        new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()),
-        mock(SseTicketService.class));
-    SecurityContextHolder.clearContext();
-  }
+        batchSecurityProperties = new BatchSecurityProperties();
+        batchSecurityProperties.setBypassMode(false);
+        sessionRegistry = mock(ConsoleSessionRegistry.class);
+        Environment environment = mock(Environment.class);
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+        jwtService = new ConsoleJwtService(properties, sessionRegistry, environment);
+        filter = new ConsoleAuthenticationFilter(
+                properties,
+                batchSecurityProperties,
+                jwtService,
+                new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()),
+                mock(SseTicketService.class));
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("旁路模式下租户不在允许列表内,返回禁止且不进入过滤器链")
-  void shouldRejectTenantOutsideAllowedListInBypassMode() throws Exception {
-    batchSecurityProperties.setBypassMode(true);
-    MockHttpServletRequest request = baseRequest();
-    request.addHeader(properties.getTenantHeader(), "tenant-b");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    AtomicBoolean chainCalled = new AtomicBoolean(false);
+    @Test
+    @DisplayName("旁路模式下租户不在允许列表内,返回禁止且不进入过滤器链")
+    void shouldRejectTenantOutsideAllowedListInBypassMode() throws Exception {
+        batchSecurityProperties.setBypassMode(true);
+        MockHttpServletRequest request = baseRequest();
+        request.addHeader(properties.getTenantHeader(), "tenant-b");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-    filter.doFilter(request, response, noOpChain(chainCalled));
+        filter.doFilter(request, response, noOpChain(chainCalled));
 
-    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
-    assertThat(readBody(response)).contains("\"code\":\"FORBIDDEN\"");
-    assertThat(chainCalled).isFalse();
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-  }
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+        assertThat(readBody(response)).contains("\"code\":\"FORBIDDEN\"");
+        assertThat(chainCalled).isFalse();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
 
-  @Test
-  @DisplayName("测试环境开放模式下未带令牌入站,以管理员身份通过认证")
-  void shouldAuthenticateAsAdminInTestingOpenModeWithoutToken() throws Exception {
-    batchSecurityProperties.setBypassMode(true);
-    MockHttpServletRequest request = baseRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    AtomicBoolean chainCalled = new AtomicBoolean(false);
+    @Test
+    @DisplayName("测试环境开放模式下未带令牌入站,以管理员身份通过认证")
+    void shouldAuthenticateAsAdminInTestingOpenModeWithoutToken() throws Exception {
+        batchSecurityProperties.setBypassMode(true);
+        MockHttpServletRequest request = baseRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-    filter.doFilter(request, response, new FilterChain() {
-      @Override
-      public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
-        chainCalled.set(true);
-        ConsolePrincipal principal = (ConsolePrincipal)
-            SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        assertThat(principal.authorities()).contains("ROLE_ADMIN");
-      }
-    });
+        filter.doFilter(request, response, new FilterChain() {
+            @Override
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+                chainCalled.set(true);
+                ConsolePrincipal principal = (ConsolePrincipal)
+                        SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                assertThat(principal.authorities()).contains("ROLE_ADMIN");
+            }
+        });
 
-    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-    assertThat(chainCalled).isTrue();
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-  }
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+        assertThat(chainCalled).isTrue();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
 
-  @Test
-  @DisplayName("仅携带受保护 cookie 形式的令牌时,认证出用户名与租户")
-  void shouldAuthenticateWithHttpOnlyCookie() throws Exception {
-    // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
-    String token =
-        jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
-    when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
+    @Test
+    @DisplayName("仅携带受保护 cookie 形式的令牌时,认证出用户名与租户")
+    void shouldAuthenticateWithHttpOnlyCookie() throws Exception {
+        // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
+        String token = jwtService
+                .issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L)
+                .accessToken();
+        when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
-    MockHttpServletRequest request = baseRequest();
-    request.setCookies(new Cookie("batch_console_token", token));
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    AtomicBoolean chainCalled = new AtomicBoolean(false);
+        MockHttpServletRequest request = baseRequest();
+        request.setCookies(new Cookie("batch_console_token", token));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-    filter.doFilter(request, response, new FilterChain() {
-      @Override
-      public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
-        chainCalled.set(true);
-        ConsolePrincipal principal = (ConsolePrincipal)
-            SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        assertThat(principal.username()).isEqualTo("bob");
-        assertThat(principal.tenantId()).isEqualTo("tenant-a");
-      }
-    });
+        filter.doFilter(request, response, new FilterChain() {
+            @Override
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+                chainCalled.set(true);
+                ConsolePrincipal principal = (ConsolePrincipal)
+                        SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                assertThat(principal.username()).isEqualTo("bob");
+                assertThat(principal.tenantId()).isEqualTo("tenant-a");
+            }
+        });
 
-    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-    assertThat(chainCalled).isTrue();
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-  }
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+        assertThat(chainCalled).isTrue();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
 
-  @Test
-  @DisplayName("跨站令牌可从请求头取值,且与 cookie 中的值一致")
-  void shouldAcceptCookieTokenValueFromAxiosHeader() {
-    String tokenValue = "csrf-token-from-cookie";
-    MockHttpServletRequest request = baseRequest();
-    request.addHeader("X-XSRF-TOKEN", tokenValue);
+    @Test
+    @DisplayName("跨站令牌可从请求头取值,且与 cookie 中的值一致")
+    void shouldAcceptCookieTokenValueFromAxiosHeader() {
+        String tokenValue = "csrf-token-from-cookie";
+        MockHttpServletRequest request = baseRequest();
+        request.addHeader("X-XSRF-TOKEN", tokenValue);
 
-    String resolved = ConsoleSecurityConfiguration.csrfTokenRequestHandler()
-        .resolveCsrfTokenValue(request, new DefaultCsrfToken("X-XSRF-TOKEN", "_csrf", tokenValue));
+        String resolved = ConsoleSecurityConfiguration.csrfTokenRequestHandler()
+                .resolveCsrfTokenValue(request, new DefaultCsrfToken("X-XSRF-TOKEN", "_csrf", tokenValue));
 
-    assertThat(resolved).isEqualTo(tokenValue);
-  }
+        assertThat(resolved).isEqualTo(tokenValue);
+    }
 
-  private MockHttpServletRequest baseRequest() {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setMethod("GET");
-    request.setRequestURI("/api/console/ping");
-    request.addHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, "req-001");
-    request.addHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, "trace-001");
-    request.setRemoteAddr("127.0.0.1");
-    return request;
-  }
+    private MockHttpServletRequest baseRequest() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("GET");
+        request.setRequestURI("/api/console/ping");
+        request.addHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, "req-001");
+        request.addHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, "trace-001");
+        request.setRemoteAddr("127.0.0.1");
+        return request;
+    }
 
-  private FilterChain noOpChain(AtomicBoolean chainCalled) {
-    return new FilterChain() {
-      @Override
-      public void doFilter(ServletRequest request, ServletResponse response) {
-        chainCalled.set(true);
-      }
-    };
-  }
+    private FilterChain noOpChain(AtomicBoolean chainCalled) {
+        return new FilterChain() {
+            @Override
+            public void doFilter(ServletRequest request, ServletResponse response) {
+                chainCalled.set(true);
+            }
+        };
+    }
 
-  private String readBody(MockHttpServletResponse response) throws Exception {
-    return response.getContentAsString(StandardCharsets.UTF_8);
-  }
+    private String readBody(MockHttpServletResponse response) throws Exception {
+        return response.getContentAsString(StandardCharsets.UTF_8);
+    }
 }

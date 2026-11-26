@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface RetryScheduleMapper {
 
-  List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
+    List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
 
-  long countByQuery(RetryScheduleQuery query);
+    long countByQuery(RetryScheduleQuery query);
 }

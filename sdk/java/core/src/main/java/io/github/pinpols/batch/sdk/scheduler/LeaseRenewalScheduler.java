@@ -25,116 +25,115 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class LeaseRenewalScheduler implements AutoCloseable {
 
-  private final BatchPlatformClientConfig config;
-  private final PlatformHttpClient httpClient;
-  private final TaskDispatcher dispatcher;
-  private final ScheduledExecutorService scheduler;
+    private final BatchPlatformClientConfig config;
+    private final PlatformHttpClient httpClient;
+    private final TaskDispatcher dispatcher;
+    private final ScheduledExecutorService scheduler;
 
-  public LeaseRenewalScheduler(
-      BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
-    this(config, httpClient, dispatcher, defaultScheduler());
-  }
-
-  // 包内可见 — 单测注入 mock ScheduledExecutorService 验证 fixed-delay vs fixed-rate
-  LeaseRenewalScheduler(
-      BatchPlatformClientConfig config,
-      PlatformHttpClient httpClient,
-      TaskDispatcher dispatcher,
-      ScheduledExecutorService scheduler) {
-    this.config = config;
-    this.httpClient = httpClient;
-    this.dispatcher = dispatcher;
-    this.scheduler = scheduler;
-  }
-
-  private static ScheduledExecutorService defaultScheduler() {
-    return Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "batch-sdk-lease-renewal");
-      t.setDaemon(true);
-      return t;
-    });
-  }
-
-  public void start() {
-    long intervalMs = config.getLeaseRenewInterval().toMillis();
-    // fixed-delay:与 HeartbeatScheduler 一致,避免 tick 卡顿后(HTTP 5xx 重试 ~3s)追赶式积压
-    // 把下一轮立即追发出去导致内存耗尽 / orchestrator 雪崩。
-    // 见 docs/archive/review/sdk-code-deep-review-2026-06-02.md §3 / TOP #6
-    scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
-    log.info("LeaseRenewalScheduler started: interval={}ms (fixed-delay)", intervalMs);
-  }
-
-  void tick() {
-    try {
-      Set<Long> ids = dispatcher.inFlightTaskIds();
-      if (ids.isEmpty()) return;
-      for (Long taskId : ids) {
-        renewOne(taskId);
-      }
-    } catch (Exception outer) {
-      log.warn("lease renewal tick failed: {}", ExceptionLogSummary.of(outer));
+    public LeaseRenewalScheduler(
+            BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
+        this(config, httpClient, dispatcher, defaultScheduler());
     }
-  }
 
-  /**
-   * 续约单个 task,并消费 renew response:
-   *
-   * <ul>
-   *   <li>{@code cancelRequested=true}(运维 cancel / ORCH-P4-2 超时)→ 翻转该 task 取消信号,handler 主动停。
-   *   <li>lease 被回收(404 / 410)→ task 已被平台回收重派,同样翻转取消信号让本地副本停,避免双跑。
-   *   <li>其它失败 → warn,下轮再试(或自然走完 dispatcher 流程)。
-   * </ul>
-   */
-  private void renewOne(Long taskId) {
-    try {
-      // body 对齐 TaskHeartbeatRequest(tenantId/workerId/partitionInvocationId/details)
-      Map<String, Object> body = new HashMap<>();
-      body.put("tenantId", config.getTenantId());
-      body.put("workerId", config.getWorkerCode());
-      // 分区任务必须带 partitionInvocationId:平台 R3-P1-10 缺它直接 renewLease=false→409→不续租→分区任务双跑。
-      String partitionInvocationId = dispatcher.partitionInvocation(taskId);
-      if (partitionInvocationId != null) {
-        body.put("partitionInvocationId", partitionInvocationId);
-      }
-      Map<String, Object> details = dispatcher.progressSnapshot(taskId);
-      if (details != null) {
-        body.put("details", details); // SDK-P4-2:handler reportProgress 快照,落 job_task
-      }
-      PlatformHttpClient.TaskRenewResponse resp = httpClient.renew(taskId, body);
-      if (resp != null && resp.cancelRequested()) {
-        dispatcher.markCancelled(taskId, "platform-cancel");
-      }
-    } catch (PlatformHttpException httpEx) {
-      if (httpEx.statusCode() == 404 || httpEx.statusCode() == 410) {
-        log.warn(
-            "lease revoked for taskId={} (HTTP {}), signalling stop", taskId, httpEx.statusCode());
-        dispatcher.markCancelled(taskId, "lease-revoked");
-      } else {
-        log.warn("renew failed for taskId={} (HTTP {})", taskId, httpEx.statusCode());
-      }
-    } catch (Exception t) {
-      log.warn("renew failed for taskId={}: {}", taskId, ExceptionLogSummary.of(t));
+    // 包内可见 — 单测注入 mock ScheduledExecutorService 验证 fixed-delay vs fixed-rate
+    LeaseRenewalScheduler(
+            BatchPlatformClientConfig config,
+            PlatformHttpClient httpClient,
+            TaskDispatcher dispatcher,
+            ScheduledExecutorService scheduler) {
+        this.config = config;
+        this.httpClient = httpClient;
+        this.dispatcher = dispatcher;
+        this.scheduler = scheduler;
     }
-  }
 
-  @Override
-  public void close() {
-    close(Duration.ofSeconds(5));
-  }
-
-  /** 在调用方分配的停机预算内关闭 scheduler。 */
-  public void close(Duration timeout) {
-    log.info("LeaseRenewalScheduler stopping");
-    scheduler.shutdown();
-    try {
-      long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
-      long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
-      if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
-        scheduler.shutdownNow();
-      }
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      scheduler.shutdownNow();
+    private static ScheduledExecutorService defaultScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "batch-sdk-lease-renewal");
+            t.setDaemon(true);
+            return t;
+        });
     }
-  }
+
+    public void start() {
+        long intervalMs = config.getLeaseRenewInterval().toMillis();
+        // fixed-delay:与 HeartbeatScheduler 一致,避免 tick 卡顿后(HTTP 5xx 重试 ~3s)追赶式积压
+        // 把下一轮立即追发出去导致内存耗尽 / orchestrator 雪崩。
+        // 见 docs/archive/review/sdk-code-deep-review-2026-06-02.md §3 / TOP #6
+        scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+        log.info("LeaseRenewalScheduler started: interval={}ms (fixed-delay)", intervalMs);
+    }
+
+    void tick() {
+        try {
+            Set<Long> ids = dispatcher.inFlightTaskIds();
+            if (ids.isEmpty()) return;
+            for (Long taskId : ids) {
+                renewOne(taskId);
+            }
+        } catch (Exception outer) {
+            log.warn("lease renewal tick failed: {}", ExceptionLogSummary.of(outer));
+        }
+    }
+
+    /**
+     * 续约单个 task,并消费 renew response:
+     *
+     * <ul>
+     *   <li>{@code cancelRequested=true}(运维 cancel / ORCH-P4-2 超时)→ 翻转该 task 取消信号,handler 主动停。
+     *   <li>lease 被回收(404 / 410)→ task 已被平台回收重派,同样翻转取消信号让本地副本停,避免双跑。
+     *   <li>其它失败 → warn,下轮再试(或自然走完 dispatcher 流程)。
+     * </ul>
+     */
+    private void renewOne(Long taskId) {
+        try {
+            // body 对齐 TaskHeartbeatRequest(tenantId/workerId/partitionInvocationId/details)
+            Map<String, Object> body = new HashMap<>();
+            body.put("tenantId", config.getTenantId());
+            body.put("workerId", config.getWorkerCode());
+            // 分区任务必须带 partitionInvocationId:平台 R3-P1-10 缺它直接 renewLease=false→409→不续租→分区任务双跑。
+            String partitionInvocationId = dispatcher.partitionInvocation(taskId);
+            if (partitionInvocationId != null) {
+                body.put("partitionInvocationId", partitionInvocationId);
+            }
+            Map<String, Object> details = dispatcher.progressSnapshot(taskId);
+            if (details != null) {
+                body.put("details", details); // SDK-P4-2:handler reportProgress 快照,落 job_task
+            }
+            PlatformHttpClient.TaskRenewResponse resp = httpClient.renew(taskId, body);
+            if (resp != null && resp.cancelRequested()) {
+                dispatcher.markCancelled(taskId, "platform-cancel");
+            }
+        } catch (PlatformHttpException httpEx) {
+            if (httpEx.statusCode() == 404 || httpEx.statusCode() == 410) {
+                log.warn("lease revoked for taskId={} (HTTP {}), signalling stop", taskId, httpEx.statusCode());
+                dispatcher.markCancelled(taskId, "lease-revoked");
+            } else {
+                log.warn("renew failed for taskId={} (HTTP {})", taskId, httpEx.statusCode());
+            }
+        } catch (Exception t) {
+            log.warn("renew failed for taskId={}: {}", taskId, ExceptionLogSummary.of(t));
+        }
+    }
+
+    @Override
+    public void close() {
+        close(Duration.ofSeconds(5));
+    }
+
+    /** 在调用方分配的停机预算内关闭 scheduler。 */
+    public void close(Duration timeout) {
+        log.info("LeaseRenewalScheduler stopping");
+        scheduler.shutdown();
+        try {
+            long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+            long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
+            if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            scheduler.shutdownNow();
+        }
+    }
 }

@@ -25,39 +25,38 @@ import java.util.regex.Pattern;
  */
 public final class CredentialEnvResolver {
 
-  /** {@code ${ENV_NAME}},ENV_NAME 全大写 + 下划线(POSIX env 习惯),大括号必选。 */
-  private static final Pattern ENV_REF = Pattern.compile("^\\$\\{([A-Z][A-Z0-9_]*)\\}$");
+    /** {@code ${ENV_NAME}},ENV_NAME 全大写 + 下划线(POSIX env 习惯),大括号必选。 */
+    private static final Pattern ENV_REF = Pattern.compile("^\\$\\{([A-Z][A-Z0-9_]*)\\}$");
 
-  private CredentialEnvResolver() {}
+    private CredentialEnvResolver() {}
 
-  /** 用进程环境变量({@link System#getenv})解析。生产调用入口。 */
-  public static String resolve(String raw) {
-    return resolve(raw, System::getenv);
-  }
+    /** 用进程环境变量({@link System#getenv})解析。生产调用入口。 */
+    public static String resolve(String raw) {
+        return resolve(raw, System::getenv);
+    }
 
-  /**
-   * 用给定 lookup 解析(便于单测注入)。
-   *
-   * @param raw 凭据原始值(可能是 envRef 或明文)
-   * @param envLookup env 变量名 → 值的查找(null 表示未定义)
-   * @return envRef → 解析后的真实值;非 envRef → 原样返回
-   * @throws BizException envRef 形态合法但部署环境未定义该变量
-   */
-  static String resolve(String raw, UnaryOperator<String> envLookup) {
-    if (raw == null) {
-      return null;
+    /**
+     * 用给定 lookup 解析(便于单测注入)。
+     *
+     * @param raw 凭据原始值(可能是 envRef 或明文)
+     * @param envLookup env 变量名 → 值的查找(null 表示未定义)
+     * @return envRef → 解析后的真实值;非 envRef → 原样返回
+     * @throws BizException envRef 形态合法但部署环境未定义该变量
+     */
+    static String resolve(String raw, UnaryOperator<String> envLookup) {
+        if (raw == null) {
+            return null;
+        }
+        Matcher matcher = ENV_REF.matcher(raw);
+        if (!matcher.matches()) {
+            // 明文或非 envRef 形态:兼容期原样放行,不破坏现有配置。
+            return raw;
+        }
+        String name = matcher.group(1);
+        String value = envLookup.apply(name);
+        if (value == null || value.isEmpty()) {
+            throw BizException.of(ResultCode.CREDENTIAL_REF_UNRESOLVED, "error.credential.env_ref_unresolved", name);
+        }
+        return value;
     }
-    Matcher matcher = ENV_REF.matcher(raw);
-    if (!matcher.matches()) {
-      // 明文或非 envRef 形态:兼容期原样放行,不破坏现有配置。
-      return raw;
-    }
-    String name = matcher.group(1);
-    String value = envLookup.apply(name);
-    if (value == null || value.isEmpty()) {
-      throw BizException.of(
-          ResultCode.CREDENTIAL_REF_UNRESOLVED, "error.credential.env_ref_unresolved", name);
-    }
-    return value;
-  }
 }

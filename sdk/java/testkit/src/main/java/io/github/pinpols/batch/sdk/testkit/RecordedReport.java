@@ -16,9 +16,9 @@ import java.util.Map;
  * @param raw 原始 report body(其它字段断言用)
  */
 public record RecordedReport(
-    Long taskId,
-    boolean success,
-    String message,
-    Map<String, Object> outputs,
-    String errorCode,
-    Map<String, Object> raw) {}
+        Long taskId,
+        boolean success,
+        String message,
+        Map<String, Object> outputs,
+        String errorCode,
+        Map<String, Object> raw) {}

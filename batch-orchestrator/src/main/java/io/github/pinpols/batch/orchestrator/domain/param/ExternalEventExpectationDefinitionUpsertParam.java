@@ -6,10 +6,10 @@ import lombok.Builder;
 /** 绑定一次upsert操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
 @Builder
 public record ExternalEventExpectationDefinitionUpsertParam(
-    String tenantId,
-    String calendarCode,
-    Long workflowDefinitionId,
-    String eventCode,
-    LocalTime expectedLocalTime,
-    LocalTime dueLocalTime,
-    boolean enabled) {}
+        String tenantId,
+        String calendarCode,
+        Long workflowDefinitionId,
+        String eventCode,
+        LocalTime expectedLocalTime,
+        LocalTime dueLocalTime,
+        boolean enabled) {}

@@ -11,11 +11,9 @@ import java.util.Map;
  */
 public sealed interface TaskExecutionResult {
 
-  record Success(
-      String highWaterMarkOut, Map<String, Object> outputs, List<VerifierFailure> verifierFailures)
-      implements TaskExecutionResult {}
+    record Success(String highWaterMarkOut, Map<String, Object> outputs, List<VerifierFailure> verifierFailures)
+            implements TaskExecutionResult {}
 
-  record Failure(
-      String errorCode, String errorMessage, String errorKey, String errorArgs, String failureClass)
-      implements TaskExecutionResult {}
+    record Failure(String errorCode, String errorMessage, String errorKey, String errorArgs, String failureClass)
+            implements TaskExecutionResult {}
 }

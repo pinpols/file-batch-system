@@ -20,51 +20,51 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("自定义任务类型查询:租户解析前置, 列表与计数返回查询结果, 详情缺失时抛业务异常")
 class ConsoleCustomTaskTypeQueryServiceTest {
 
-  @Mock
-  private CustomTaskTypeMapper mapper;
+    @Mock
+    private CustomTaskTypeMapper mapper;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  private ConsoleCustomTaskTypeQueryService service;
+    private ConsoleCustomTaskTypeQueryService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new ConsoleCustomTaskTypeQueryService(mapper, tenantGuard);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new ConsoleCustomTaskTypeQueryService(mapper, tenantGuard);
+    }
 
-  @Test
-  @DisplayName("有效列表:先解析租户再查询, 返回该租户的全部有效类型")
-  void shouldResolveTenantBeforeQuery_whenListingActiveTypes() {
-    CustomTaskTypeView entity = entity("tenant_tx_import");
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
-    when(mapper.selectActiveByTenant("tx")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("有效列表:先解析租户再查询, 返回该租户的全部有效类型")
+    void shouldResolveTenantBeforeQuery_whenListingActiveTypes() {
+        CustomTaskTypeView entity = entity("tenant_tx_import");
+        when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
+        when(mapper.selectActiveByTenant("tx")).thenReturn(List.of(entity));
 
-    assertThat(service.listActive("tx")).containsExactly(entity);
-  }
+        assertThat(service.listActive("tx")).containsExactly(entity);
+    }
 
-  @Test
-  @DisplayName("有效计数:先解析租户再统计, 返回计数结果")
-  void shouldResolveTenantBeforeQuery_whenCountingActiveTypes() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
-    when(mapper.countActiveByTenant("tx")).thenReturn(3L);
+    @Test
+    @DisplayName("有效计数:先解析租户再统计, 返回计数结果")
+    void shouldResolveTenantBeforeQuery_whenCountingActiveTypes() {
+        when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
+        when(mapper.countActiveByTenant("tx")).thenReturn(3L);
 
-    assertThat(service.countActive("tx")).isEqualTo(3L);
-  }
+        assertThat(service.countActive("tx")).isEqualTo(3L);
+    }
 
-  @Test
-  @DisplayName("详情缺失:未命中记录时抛出业务异常")
-  void shouldThrowBizException_whenDetailMissing() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
-    when(mapper.selectByTenantAndCode("tx", "missing")).thenReturn(null);
+    @Test
+    @DisplayName("详情缺失:未命中记录时抛出业务异常")
+    void shouldThrowBizException_whenDetailMissing() {
+        when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
+        when(mapper.selectByTenantAndCode("tx", "missing")).thenReturn(null);
 
-    assertThatThrownBy(() -> service.detail("tx", "missing")).isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service.detail("tx", "missing")).isInstanceOf(BizException.class);
+    }
 
-  private CustomTaskTypeView entity(String code) {
-    CustomTaskTypeView entity = new CustomTaskTypeView();
-    entity.setTaskTypeCode(code);
-    entity.setStatus("ACTIVE");
-    return entity;
-  }
+    private CustomTaskTypeView entity(String code) {
+        CustomTaskTypeView entity = new CustomTaskTypeView();
+        entity.setTaskTypeCode(code);
+        entity.setStatus("ACTIVE");
+        return entity;
+    }
 }

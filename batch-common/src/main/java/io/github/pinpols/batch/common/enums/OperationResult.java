@@ -8,9 +8,9 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum OperationResult implements DictEnum {
-  SUCCESS("SUCCESS", "成功"),
-  FAILED("FAILED", "失败");
+    SUCCESS("SUCCESS", "成功"),
+    FAILED("FAILED", "失败");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

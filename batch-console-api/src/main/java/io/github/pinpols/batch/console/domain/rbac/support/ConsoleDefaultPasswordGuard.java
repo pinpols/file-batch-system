@@ -27,60 +27,57 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConsoleDefaultPasswordGuard {
 
-  /** 出厂内置账号(V52 seed),与 V174 标记 must_change_password=true 的集合一致。 */
-  static final List<String> BUILTIN_USERNAMES = List.of("admin", "auditor", "config-admin");
+    /** 出厂内置账号(V52 seed),与 V174 标记 must_change_password=true 的集合一致。 */
+    static final List<String> BUILTIN_USERNAMES = List.of("admin", "auditor", "config-admin");
 
-  /** V52 / 文档公示的出厂明文密码。 */
-  @SuppressWarnings("java:S2068")
-  static final String FACTORY_DEFAULT_PASSWORD = "admin123";
+    /** V52 / 文档公示的出厂明文密码。 */
+    @SuppressWarnings("java:S2068")
+    static final String FACTORY_DEFAULT_PASSWORD = "admin123";
 
-  private final ConsoleUserAccountMapper userAccountMapper;
-  private final ConsolePasswordHasher passwordHasher;
-  private final Environment environment;
+    private final ConsoleUserAccountMapper userAccountMapper;
+    private final ConsolePasswordHasher passwordHasher;
+    private final Environment environment;
 
-  public ConsoleDefaultPasswordGuard(
-      ConsoleUserAccountMapper userAccountMapper,
-      ConsolePasswordHasher passwordHasher,
-      Environment environment) {
-    this.userAccountMapper = userAccountMapper;
-    this.passwordHasher = passwordHasher;
-    this.environment = environment;
-  }
-
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkBuiltinDefaultPasswords() {
-    List<ConsoleUserAccountEntity> accounts =
-        userAccountMapper.selectBuiltinSystemAccounts(BUILTIN_USERNAMES);
-    List<String> stillDefault = accounts.stream()
-        .filter(a -> usesFactoryDefault(a.getPasswordHash()))
-        .map(ConsoleUserAccountEntity::getUsername)
-        .toList();
-    if (stillDefault.isEmpty()) {
-      return;
+    public ConsoleDefaultPasswordGuard(
+            ConsoleUserAccountMapper userAccountMapper, ConsolePasswordHasher passwordHasher, Environment environment) {
+        this.userAccountMapper = userAccountMapper;
+        this.passwordHasher = passwordHasher;
+        this.environment = environment;
     }
-    boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
-    if (productionMode) {
-      throw new IllegalStateException("FATAL: built-in console account "
-          + stillDefault
-          + " still uses the factory default password admin123; production startup is forbidden."
-          + " Change the password through reset-password / change-password before deployment");
-    }
-    log.warn(
-        "Non-production profile: built-in console account {} still uses the factory default password admin123;"
-            + " the console will recommend a password change. Production deployment must change it"
-            + " (production profiles fail fast)",
-        stillDefault);
-  }
 
-  private boolean usesFactoryDefault(String passwordHash) {
-    if (passwordHash == null || passwordHash.isBlank()) {
-      return false;
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkBuiltinDefaultPasswords() {
+        List<ConsoleUserAccountEntity> accounts = userAccountMapper.selectBuiltinSystemAccounts(BUILTIN_USERNAMES);
+        List<String> stillDefault = accounts.stream()
+                .filter(a -> usesFactoryDefault(a.getPasswordHash()))
+                .map(ConsoleUserAccountEntity::getUsername)
+                .toList();
+        if (stillDefault.isEmpty()) {
+            return;
+        }
+        boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
+        if (productionMode) {
+            throw new IllegalStateException("FATAL: built-in console account "
+                    + stillDefault
+                    + " still uses the factory default password admin123; production startup is forbidden."
+                    + " Change the password through reset-password / change-password before deployment");
+        }
+        log.warn(
+                "Non-production profile: built-in console account {} still uses the factory default password admin123;"
+                        + " the console will recommend a password change. Production deployment must change it"
+                        + " (production profiles fail fast)",
+                stillDefault);
     }
-    try {
-      return passwordHasher.matches(FACTORY_DEFAULT_PASSWORD, passwordHash);
-    } catch (RuntimeException ignored) {
-      // 非 Argon2 / 异常 hash 不视为出厂默认,交由其他校验处理。
-      return false;
+
+    private boolean usesFactoryDefault(String passwordHash) {
+        if (passwordHash == null || passwordHash.isBlank()) {
+            return false;
+        }
+        try {
+            return passwordHasher.matches(FACTORY_DEFAULT_PASSWORD, passwordHash);
+        } catch (RuntimeException ignored) {
+            // 非 Argon2 / 异常 hash 不视为出厂默认,交由其他校验处理。
+            return false;
+        }
     }
-  }
 }

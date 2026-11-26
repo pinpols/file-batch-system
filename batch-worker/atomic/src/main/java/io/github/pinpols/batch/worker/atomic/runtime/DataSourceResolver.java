@@ -6,5 +6,5 @@ import javax.sql.DataSource;
 @FunctionalInterface
 public interface DataSourceResolver {
 
-  DataSource resolve(String beanName);
+    DataSource resolve(String beanName);
 }

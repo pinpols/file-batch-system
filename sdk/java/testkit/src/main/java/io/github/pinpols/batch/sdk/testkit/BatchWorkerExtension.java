@@ -14,37 +14,36 @@ import org.junit.jupiter.api.extension.ParameterResolver;
  *
  * <p>broker 启动有秒级开销,所以选类级生命周期(同类多个 {@code @Test} 复用同一假平台);录制容器在每个测试间不自动清空, 测试用不同 taskId 隔离即可。
  */
-public final class BatchWorkerExtension
-    implements BeforeAllCallback, AfterAllCallback, ParameterResolver {
+public final class BatchWorkerExtension implements BeforeAllCallback, AfterAllCallback, ParameterResolver {
 
-  private static final Namespace NAMESPACE = Namespace.create(BatchWorkerExtension.class);
-  private static final String KEY = "fake-batch-platform";
+    private static final Namespace NAMESPACE = Namespace.create(BatchWorkerExtension.class);
+    private static final String KEY = "fake-batch-platform";
 
-  @Override
-  public void beforeAll(ExtensionContext context) {
-    store(context).put(KEY, FakeBatchPlatform.start());
-  }
-
-  @Override
-  public void afterAll(ExtensionContext context) {
-    FakeBatchPlatform platform = store(context).remove(KEY, FakeBatchPlatform.class);
-    if (platform != null) {
-      platform.close();
+    @Override
+    public void beforeAll(ExtensionContext context) {
+        store(context).put(KEY, FakeBatchPlatform.start());
     }
-  }
 
-  @Override
-  public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext context) {
-    return parameterContext.getParameter().getType() == FakeBatchPlatform.class;
-  }
+    @Override
+    public void afterAll(ExtensionContext context) {
+        FakeBatchPlatform platform = store(context).remove(KEY, FakeBatchPlatform.class);
+        if (platform != null) {
+            platform.close();
+        }
+    }
 
-  @Override
-  public Object resolveParameter(ParameterContext parameterContext, ExtensionContext context) {
-    return store(context).get(KEY, FakeBatchPlatform.class);
-  }
+    @Override
+    public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext context) {
+        return parameterContext.getParameter().getType() == FakeBatchPlatform.class;
+    }
 
-  // 类级 store:beforeAll/afterAll 在类 context 写入;方法级 resolveParameter 经 store 层级向上查到。
-  private static Store store(ExtensionContext context) {
-    return context.getStore(NAMESPACE);
-  }
+    @Override
+    public Object resolveParameter(ParameterContext parameterContext, ExtensionContext context) {
+        return store(context).get(KEY, FakeBatchPlatform.class);
+    }
+
+    // 类级 store:beforeAll/afterAll 在类 context 写入;方法级 resolveParameter 经 store 层级向上查到。
+    private static Store store(ExtensionContext context) {
+        return context.getStore(NAMESPACE);
+    }
 }

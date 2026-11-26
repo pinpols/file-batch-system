@@ -21,26 +21,25 @@ import org.springframework.stereotype.Component;
 @Order(1000)
 public class StubRemoteFilesystemDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  private final DispatchRuntimeProperties runtimeProperties;
+    private final DispatchRuntimeProperties runtimeProperties;
 
-  public StubRemoteFilesystemDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
-    this.runtimeProperties = runtimeProperties;
-  }
+    public StubRemoteFilesystemDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
+        this.runtimeProperties = runtimeProperties;
+    }
 
-  private static final Set<String> SUPPORTED_TYPES = Set.of(FileChannelType.NAS.code());
+    private static final Set<String> SUPPORTED_TYPES = Set.of(FileChannelType.NAS.code());
 
-  private static final String STUB_DETAIL =
-      "Dedicated channel adapter not implemented; envelope written for operations (see"
-          + " transportStub on JSON).";
+    private static final String STUB_DETAIL =
+            "Dedicated channel adapter not implemented; envelope written for operations (see"
+                    + " transportStub on JSON).";
 
-  @Override
-  public boolean supports(String channelType) {
-    return channelType != null && SUPPORTED_TYPES.contains(channelType.toUpperCase());
-  }
+    @Override
+    public boolean supports(String channelType) {
+        return channelType != null && SUPPORTED_TYPES.contains(channelType.toUpperCase());
+    }
 
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-        command, true, STUB_DETAIL, runtimeProperties);
-  }
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        return LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, true, STUB_DETAIL, runtimeProperties);
+    }
 }

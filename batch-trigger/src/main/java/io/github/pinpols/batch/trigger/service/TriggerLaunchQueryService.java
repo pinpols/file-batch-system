@@ -32,85 +32,80 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 final class TriggerLaunchQueryService {
 
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final ExternalEventDeliveryMapper externalEventDeliveryMapper;
-  private final PlatformTransactionManager transactionManager;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final ExternalEventDeliveryMapper externalEventDeliveryMapper;
+    private final PlatformTransactionManager transactionManager;
 
-  ExternalEventLaunchStatus findExternalEventStatus(
-      String tenantId, String eventSource, String idempotencyKey) {
-    if (EmptyChecks.isBlank(tenantId)
-        || EmptyChecks.isBlank(eventSource)
-        || EmptyChecks.isBlank(idempotencyKey)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    ExternalEventLaunchStatus findExternalEventStatus(String tenantId, String eventSource, String idempotencyKey) {
+        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(eventSource) || EmptyChecks.isBlank(idempotencyKey)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+        }
+        return RlsTenantContextHolder.runWithTenant(
+                tenantId, () -> findExternalEventStatusInTenant(tenantId, eventSource, idempotencyKey));
     }
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId, () -> findExternalEventStatusInTenant(tenantId, eventSource, idempotencyKey));
-  }
 
-  private ExternalEventLaunchStatus findExternalEventStatusInTenant(
-      String tenantId, String eventSource, String idempotencyKey) {
-    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-    return transaction.execute(
-        ignored -> loadExternalEventStatus(tenantId, eventSource, idempotencyKey));
-  }
-
-  private ExternalEventLaunchStatus loadExternalEventStatus(
-      String tenantId, String eventSource, String idempotencyKey) {
-    externalEventDeliveryMapper.setTenantContext(tenantId);
-    ExternalEventDeliveryEntity delivery =
-        externalEventDeliveryMapper.selectByAlias(tenantId, eventSource, idempotencyKey);
-    Guard.requireFound(delivery, "external event delivery not found");
-    List<ExternalEventTargetStatus> targets = externalEventDeliveryMapper.selectTargetStatuses(
-        tenantId, eventSource, delivery.getEventId());
-    Instant updatedAt = targets.stream()
-        .map(ExternalEventTargetStatus::updatedAt)
-        .filter(Objects::nonNull)
-        .max(Comparator.naturalOrder())
-        .orElse(delivery.getCreatedAt());
-    return new ExternalEventLaunchStatus(
-        delivery.getRequestId(),
-        delivery.getEventSource(),
-        delivery.getEventId(),
-        delivery.getEventCode(),
-        delivery.getBizDate(),
-        delivery.getTraceId(),
-        targets,
-        updatedAt);
-  }
-
-  /** 原租户与请求键下只读核验，不检查当前 Workflow 配置，也不接纳新请求。 */
-  LaunchResponse verifyCatchUpSubmission(LaunchRequest expected, String idempotencyKey) {
-    return RlsTenantContextHolder.runWithTenant(expected.tenantId(), () -> {
-      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-      transaction.setReadOnly(true);
-      return transaction.execute(ignored -> {
-        externalEventDeliveryMapper.setTenantContext(expected.tenantId());
-        TriggerRequestEntity existing =
-            triggerRequestMapper.selectByTenantAndDedupKey(expected.tenantId(), idempotencyKey);
-        Guard.requireFound(existing, "launch request not found");
-        TriggerCatchUpIdentity.requireMatchingIfCatchUp(existing, expected);
-        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-      });
-    });
-  }
-
-  TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey) {
-    return findLaunchStatus(tenantId, idempotencyKey, null);
-  }
-
-  TriggerLaunchStatus findLaunchStatus(
-      String tenantId, String idempotencyKey, String externalEventSource) {
-    if (EmptyChecks.isBlank(tenantId)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
+    private ExternalEventLaunchStatus findExternalEventStatusInTenant(
+            String tenantId, String eventSource, String idempotencyKey) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        return transaction.execute(ignored -> loadExternalEventStatus(tenantId, eventSource, idempotencyKey));
     }
-    if (EmptyChecks.isBlank(idempotencyKey)) {
-      throw BizException.of(
-          ResultCode.MISSING_IDEMPOTENCY_KEY,
-          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
-          ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
+
+    private ExternalEventLaunchStatus loadExternalEventStatus(
+            String tenantId, String eventSource, String idempotencyKey) {
+        externalEventDeliveryMapper.setTenantContext(tenantId);
+        ExternalEventDeliveryEntity delivery =
+                externalEventDeliveryMapper.selectByAlias(tenantId, eventSource, idempotencyKey);
+        Guard.requireFound(delivery, "external event delivery not found");
+        List<ExternalEventTargetStatus> targets =
+                externalEventDeliveryMapper.selectTargetStatuses(tenantId, eventSource, delivery.getEventId());
+        Instant updatedAt = targets.stream()
+                .map(ExternalEventTargetStatus::updatedAt)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(delivery.getCreatedAt());
+        return new ExternalEventLaunchStatus(
+                delivery.getRequestId(),
+                delivery.getEventSource(),
+                delivery.getEventId(),
+                delivery.getEventCode(),
+                delivery.getBizDate(),
+                delivery.getTraceId(),
+                targets,
+                updatedAt);
     }
-    TriggerLaunchStatus status =
-        triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey, externalEventSource);
-    return Guard.requireFound(status, "launch request not found");
-  }
+
+    /** 原租户与请求键下只读核验，不检查当前 Workflow 配置，也不接纳新请求。 */
+    LaunchResponse verifyCatchUpSubmission(LaunchRequest expected, String idempotencyKey) {
+        return RlsTenantContextHolder.runWithTenant(expected.tenantId(), () -> {
+            TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.setReadOnly(true);
+            return transaction.execute(ignored -> {
+                externalEventDeliveryMapper.setTenantContext(expected.tenantId());
+                TriggerRequestEntity existing =
+                        triggerRequestMapper.selectByTenantAndDedupKey(expected.tenantId(), idempotencyKey);
+                Guard.requireFound(existing, "launch request not found");
+                TriggerCatchUpIdentity.requireMatchingIfCatchUp(existing, expected);
+                return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
+            });
+        });
+    }
+
+    TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey) {
+        return findLaunchStatus(tenantId, idempotencyKey, null);
+    }
+
+    TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey, String externalEventSource) {
+        if (EmptyChecks.isBlank(tenantId)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
+        }
+        if (EmptyChecks.isBlank(idempotencyKey)) {
+            throw BizException.of(
+                    ResultCode.MISSING_IDEMPOTENCY_KEY,
+                    ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
+                    ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
+        }
+        TriggerLaunchStatus status =
+                triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey, externalEventSource);
+        return Guard.requireFound(status, "launch request not found");
+    }
 }

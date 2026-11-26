@@ -34,112 +34,110 @@ import org.mockito.quality.Strictness;
 @DisplayName("导入模板加密类型的写入校验")
 class ImportEncryptTypeTemplateValidationTest {
 
-  @Mock
-  FileTemplateConfigMapper mapper;
+    @Mock
+    FileTemplateConfigMapper mapper;
 
-  @Mock
-  ConsoleTenantGuard tenantGuard;
+    @Mock
+    ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    ConsoleRequestMetadataResolver metadataResolver;
 
-  private DefaultConsoleFileTemplateApplicationService service;
+    private DefaultConsoleFileTemplateApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultConsoleFileTemplateApplicationService(
-        mapper, tenantGuard, metadataResolver, new ObjectMapper());
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req", "trace", "t1", "tester", "idem", "127.0.0.1"));
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultConsoleFileTemplateApplicationService(
+                mapper, tenantGuard, metadataResolver, new ObjectMapper());
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req", "trace", "t1", "tester", "idem", "127.0.0.1"));
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"PGP", "CUSTOM", "pgp"})
-  @DisplayName("创建启用的导入模板时拒绝运行时不支持的加密类型")
-  void shouldRejectUnsupportedEncryptType_whenCreatingEnabledImportTemplate(String encryptType) {
-    FileTemplateCreateRequest request = createRequest("IMPORT", true, encryptType);
-    assertThatThrownBy(() -> service.create(request)).isInstanceOf(BizException.class);
-    verify(mapper, never()).upsertFileTemplateConfig(any());
-  }
+    @ParameterizedTest
+    @ValueSource(strings = {"PGP", "CUSTOM", "pgp"})
+    @DisplayName("创建启用的导入模板时拒绝运行时不支持的加密类型")
+    void shouldRejectUnsupportedEncryptType_whenCreatingEnabledImportTemplate(String encryptType) {
+        FileTemplateCreateRequest request = createRequest("IMPORT", true, encryptType);
+        assertThatThrownBy(() -> service.create(request)).isInstanceOf(BizException.class);
+        verify(mapper, never()).upsertFileTemplateConfig(any());
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"NONE", "AES"})
-  @DisplayName("创建启用的导入模板时允许 NONE 与 AES，且不查询流水线")
-  void shouldAllowImplicitlySupportedEncryptType(String encryptType) {
-    service.create(createRequest("IMPORT", true, encryptType));
-    verify(mapper).upsertFileTemplateConfig(any());
-    verify(mapper, never()).hasPreprocessPipeline(anyString(), anyString(), anyInt());
-  }
+    @ParameterizedTest
+    @ValueSource(strings = {"NONE", "AES"})
+    @DisplayName("创建启用的导入模板时允许 NONE 与 AES，且不查询流水线")
+    void shouldAllowImplicitlySupportedEncryptType(String encryptType) {
+        service.create(createRequest("IMPORT", true, encryptType));
+        verify(mapper).upsertFileTemplateConfig(any());
+        verify(mapper, never()).hasPreprocessPipeline(anyString(), anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("未填写加密类型时按默认值放行")
-  void shouldAllowBlankEncryptType() {
-    service.create(createRequest("IMPORT", true, null));
-    verify(mapper).upsertFileTemplateConfig(any());
-  }
+    @Test
+    @DisplayName("未填写加密类型时按默认值放行")
+    void shouldAllowBlankEncryptType() {
+        service.create(createRequest("IMPORT", true, null));
+        verify(mapper).upsertFileTemplateConfig(any());
+    }
 
-  @Test
-  @DisplayName("导出模板与未启用草稿不受影响")
-  void shouldAllowExportTemplateAndDisabledDraft() {
-    service.create(createRequest("EXPORT", true, "PGP"));
-    service.create(createRequest("IMPORT", false, "PGP"));
-    verify(mapper, times(2)).upsertFileTemplateConfig(any());
-  }
+    @Test
+    @DisplayName("导出模板与未启用草稿不受影响")
+    void shouldAllowExportTemplateAndDisabledDraft() {
+        service.create(createRequest("EXPORT", true, "PGP"));
+        service.create(createRequest("IMPORT", false, "PGP"));
+        verify(mapper, times(2)).upsertFileTemplateConfig(any());
+    }
 
-  @Test
-  @DisplayName("已配置显式预处理流水线的导入模板允许更新")
-  void shouldAllowUpdate_whenExplicitPipelineExists() {
-    when(mapper.selectById("t1", 1L)).thenReturn(existing(true, "PGP"));
-    when(mapper.hasPreprocessPipeline("t1", "test", 1)).thenReturn(true);
-    FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
-    request.setTenantId("t1");
-    request.setDescription("changed");
-    service.update(1L, request);
-    verify(mapper).upsertFileTemplateConfig(any());
-  }
+    @Test
+    @DisplayName("已配置显式预处理流水线的导入模板允许更新")
+    void shouldAllowUpdate_whenExplicitPipelineExists() {
+        when(mapper.selectById("t1", 1L)).thenReturn(existing(true, "PGP"));
+        when(mapper.hasPreprocessPipeline("t1", "test", 1)).thenReturn(true);
+        FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
+        request.setTenantId("t1");
+        request.setDescription("changed");
+        service.update(1L, request);
+        verify(mapper).upsertFileTemplateConfig(any());
+    }
 
-  @Test
-  @DisplayName("没有显式流水线时更新为 PGP 被拒绝")
-  void shouldRejectUpdate_whenSwitchingToPgpWithoutPipeline() {
-    when(mapper.selectById("t1", 1L)).thenReturn(existing(true, "NONE"));
-    FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
-    request.setTenantId("t1");
-    request.setEncryptType("PGP");
-    assertThatThrownBy(() -> service.update(1L, request)).isInstanceOf(BizException.class);
-    verify(mapper, never()).upsertFileTemplateConfig(any());
-  }
+    @Test
+    @DisplayName("没有显式流水线时更新为 PGP 被拒绝")
+    void shouldRejectUpdate_whenSwitchingToPgpWithoutPipeline() {
+        when(mapper.selectById("t1", 1L)).thenReturn(existing(true, "NONE"));
+        FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
+        request.setTenantId("t1");
+        request.setEncryptType("PGP");
+        assertThatThrownBy(() -> service.update(1L, request)).isInstanceOf(BizException.class);
+        verify(mapper, never()).upsertFileTemplateConfig(any());
+    }
 
-  @Test
-  @DisplayName("启用没有显式流水线的 PGP 导入模板被拒绝")
-  void shouldRejectEnable_whenPgpWithoutPipeline() {
-    when(mapper.selectById("t1", 1L)).thenReturn(existing(false, "PGP"));
-    assertThatThrownBy(() -> service.toggle(1L, "t1", true)).isInstanceOf(BizException.class);
-    verify(mapper, never()).toggleEnabledIfUnchanged(any());
-  }
+    @Test
+    @DisplayName("启用没有显式流水线的 PGP 导入模板被拒绝")
+    void shouldRejectEnable_whenPgpWithoutPipeline() {
+        when(mapper.selectById("t1", 1L)).thenReturn(existing(false, "PGP"));
+        assertThatThrownBy(() -> service.toggle(1L, "t1", true)).isInstanceOf(BizException.class);
+        verify(mapper, never()).toggleEnabledIfUnchanged(any());
+    }
 
-  private static FileTemplateCreateRequest createRequest(
-      String templateType, boolean enabled, String encryptType) {
-    FileTemplateCreateRequest request = new FileTemplateCreateRequest();
-    request.setTenantId("t1");
-    request.setTemplateCode("test");
-    request.setTemplateType(templateType);
-    request.setFileFormatType("DELIMITED");
-    request.setEnabled(enabled);
-    request.setEncryptType(encryptType);
-    return request;
-  }
+    private static FileTemplateCreateRequest createRequest(String templateType, boolean enabled, String encryptType) {
+        FileTemplateCreateRequest request = new FileTemplateCreateRequest();
+        request.setTenantId("t1");
+        request.setTemplateCode("test");
+        request.setTemplateType(templateType);
+        request.setFileFormatType("DELIMITED");
+        request.setEnabled(enabled);
+        request.setEncryptType(encryptType);
+        return request;
+    }
 
-  private static FileTemplateConfigQueryView existing(boolean enabled, String encryptType) {
-    return FileTemplateConfigQueryView.builder()
-        .id(1L)
-        .templateCode("test")
-        .version(1)
-        .templateType("IMPORT")
-        .fileFormatType("DELIMITED")
-        .encryptType(encryptType)
-        .enabled(enabled)
-        .build();
-  }
+    private static FileTemplateConfigQueryView existing(boolean enabled, String encryptType) {
+        return FileTemplateConfigQueryView.builder()
+                .id(1L)
+                .templateCode("test")
+                .version(1)
+                .templateType("IMPORT")
+                .fileFormatType("DELIMITED")
+                .encryptType(encryptType)
+                .enabled(enabled)
+                .build();
+    }
 }

@@ -35,115 +35,115 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("流程终态出箱服务: 终态白名单判定与终态事件落库")
 class WorkflowTerminalOutboxServiceTest {
 
-  @Mock
-  private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private DomainEventPublisher domainEventPublisher;
 
-  private WorkflowTerminalOutboxService service;
-  private ReplayOperationMapper replayOperationMapper;
+    private WorkflowTerminalOutboxService service;
+    private ReplayOperationMapper replayOperationMapper;
 
-  @BeforeEach
-  void setUp() {
-    replayOperationMapper = mock(ReplayOperationMapper.class);
-    service = new WorkflowTerminalOutboxService(
-        domainEventPublisher, replayOperationMapper, mock(WorkflowLaunchWaitResumeTrigger.class));
-  }
+    @BeforeEach
+    void setUp() {
+        replayOperationMapper = mock(ReplayOperationMapper.class);
+        service = new WorkflowTerminalOutboxService(
+                domainEventPublisher, replayOperationMapper, mock(WorkflowLaunchWaitResumeTrigger.class));
+    }
 
-  // ===== isTerminal =====
+    // ===== isTerminal =====
 
-  @Test
-  @DisplayName("isTerminal: SUCCESS / FAILED / TERMINATED / *_DRY_RUN 都是终态")
-  void shouldBeTerminal_whenStatusInTerminalWhitelist() {
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code()))
-        .isTrue();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code()))
-        .isTrue();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.TERMINATED.code()))
-        .isTrue();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS_DRY_RUN.code()))
-        .isTrue();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED_DRY_RUN.code()))
-        .isTrue();
-  }
+    @Test
+    @DisplayName("isTerminal: SUCCESS / FAILED / TERMINATED / *_DRY_RUN 都是终态")
+    void shouldBeTerminal_whenStatusInTerminalWhitelist() {
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code()))
+                .isTrue();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code()))
+                .isTrue();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.TERMINATED.code()))
+                .isTrue();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS_DRY_RUN.code()))
+                .isTrue();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED_DRY_RUN.code()))
+                .isTrue();
+    }
 
-  @Test
-  @DisplayName("isTerminal: RUNNING / CREATED / null / 未知 → 非终态")
-  void shouldBeNonTerminal_whenStatusRunningCreatedOrUnknown() {
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.RUNNING.code()))
-        .isFalse();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.CREATED.code()))
-        .isFalse();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(null)).isFalse();
-    assertThat(WorkflowTerminalOutboxService.isTerminal("UNKNOWN")).isFalse();
-  }
+    @Test
+    @DisplayName("isTerminal: RUNNING / CREATED / null / 未知 → 非终态")
+    void shouldBeNonTerminal_whenStatusRunningCreatedOrUnknown() {
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.RUNNING.code()))
+                .isFalse();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.CREATED.code()))
+                .isFalse();
+        assertThat(WorkflowTerminalOutboxService.isTerminal(null)).isFalse();
+        assertThat(WorkflowTerminalOutboxService.isTerminal("UNKNOWN")).isFalse();
+    }
 
-  // ===== writeTerminalEvent =====
+    // ===== writeTerminalEvent =====
 
-  @Test
-  @DisplayName("workflowRun=null → 不写表")
-  void shouldSkip_whenWorkflowRunMissing() {
-    service.writeTerminalEvent(null, WorkflowRunStatus.SUCCESS.code(), Instant.now());
-    verify(domainEventPublisher, never()).publish(any());
-  }
+    @Test
+    @DisplayName("workflowRun=null → 不写表")
+    void shouldSkip_whenWorkflowRunMissing() {
+        service.writeTerminalEvent(null, WorkflowRunStatus.SUCCESS.code(), Instant.now());
+        verify(domainEventPublisher, never()).publish(any());
+    }
 
-  @Test
-  @DisplayName("非终态 status → 不写表(白名单守护)")
-  void shouldSkip_whenStatusNotTerminal() {
-    service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
-    verify(domainEventPublisher, never()).publish(any());
-    verify(replayOperationMapper, never()).updateWorkflowTargetOutcome(any());
-  }
+    @Test
+    @DisplayName("非终态 status → 不写表(白名单守护)")
+    void shouldSkip_whenStatusNotTerminal() {
+        service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
+        verify(domainEventPublisher, never()).publish(any());
+        verify(replayOperationMapper, never()).updateWorkflowTargetOutcome(any());
+    }
 
-  @Test
-  @DisplayName("SUCCESS 终态 → 落 outbox + payload/aggregate/event_type 完整")
-  void shouldPublishTerminalEvent_whenStatusIsSuccess() {
-    WorkflowRunEntity run = workflowRun();
-    Instant finished = Instant.parse("2026-05-20T10:00:00Z");
-    service.writeTerminalEvent(run, WorkflowRunStatus.SUCCESS.code(), finished);
+    @Test
+    @DisplayName("SUCCESS 终态 → 落 outbox + payload/aggregate/event_type 完整")
+    void shouldPublishTerminalEvent_whenStatusIsSuccess() {
+        WorkflowRunEntity run = workflowRun();
+        Instant finished = Instant.parse("2026-05-20T10:00:00Z");
+        service.writeTerminalEvent(run, WorkflowRunStatus.SUCCESS.code(), finished);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    DomainEvent event = cap.getValue();
-    assertThat(event.aggregateType()).isEqualTo("WORKFLOW_RUN");
-    assertThat(event.eventType()).isEqualTo("WORKFLOW_TERMINAL");
-    assertThat(event.aggregateId()).isEqualTo(100L);
-    assertThat(event.eventKey()).isEqualTo("ta:workflow:100:terminal");
-    assertThat(event.tenantId()).isEqualTo("ta");
-    assertThat(event.payload())
-        .containsEntry("schemaVersion", "v2")
-        .containsEntry("runStatus", "SUCCESS")
-        .containsEntry("workflowRunId", 100L)
-        .containsEntry("finishedAt", "2026-05-20T10:00:00Z");
-    ArgumentCaptor<ReplayOperationWorkflowOutcomeParam> outcomeCaptor =
-        ArgumentCaptor.forClass(ReplayOperationWorkflowOutcomeParam.class);
-    verify(replayOperationMapper).updateWorkflowTargetOutcome(outcomeCaptor.capture());
-    ReplayOperationWorkflowOutcomeParam outcome = outcomeCaptor.getValue();
-    assertThat(outcome.workflowRunId()).isEqualTo(100L);
-    assertThat(outcome.status()).isEqualTo("SUCCEEDED");
-    assertThat(outcome.succeededCount()).isEqualTo(1);
-    assertThat(outcome.failedCount()).isZero();
-    assertThat(outcome.inFlightCount()).isZero();
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        DomainEvent event = cap.getValue();
+        assertThat(event.aggregateType()).isEqualTo("WORKFLOW_RUN");
+        assertThat(event.eventType()).isEqualTo("WORKFLOW_TERMINAL");
+        assertThat(event.aggregateId()).isEqualTo(100L);
+        assertThat(event.eventKey()).isEqualTo("ta:workflow:100:terminal");
+        assertThat(event.tenantId()).isEqualTo("ta");
+        assertThat(event.payload())
+                .containsEntry("schemaVersion", "v2")
+                .containsEntry("runStatus", "SUCCESS")
+                .containsEntry("workflowRunId", 100L)
+                .containsEntry("finishedAt", "2026-05-20T10:00:00Z");
+        ArgumentCaptor<ReplayOperationWorkflowOutcomeParam> outcomeCaptor =
+                ArgumentCaptor.forClass(ReplayOperationWorkflowOutcomeParam.class);
+        verify(replayOperationMapper).updateWorkflowTargetOutcome(outcomeCaptor.capture());
+        ReplayOperationWorkflowOutcomeParam outcome = outcomeCaptor.getValue();
+        assertThat(outcome.workflowRunId()).isEqualTo(100L);
+        assertThat(outcome.status()).isEqualTo("SUCCEEDED");
+        assertThat(outcome.succeededCount()).isEqualTo(1);
+        assertThat(outcome.failedCount()).isZero();
+        assertThat(outcome.inFlightCount()).isZero();
+    }
 
-  @Test
-  @DisplayName("finishedAt=null → payload.finishedAt 为 null,不抛")
-  void shouldPublishWithNullFinishedAt_whenFinishedAtMissing() {
-    WorkflowRunEntity run = workflowRun();
-    service.writeTerminalEvent(run, WorkflowRunStatus.FAILED.code(), null);
+    @Test
+    @DisplayName("finishedAt=null → payload.finishedAt 为 null,不抛")
+    void shouldPublishWithNullFinishedAt_whenFinishedAtMissing() {
+        WorkflowRunEntity run = workflowRun();
+        service.writeTerminalEvent(run, WorkflowRunStatus.FAILED.code(), null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload()).containsEntry("finishedAt", null);
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().payload()).containsEntry("finishedAt", null);
+    }
 
-  // ===== fixtures =====
+    // ===== fixtures =====
 
-  private WorkflowRunEntity workflowRun() {
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setId(100L);
-    run.setTenantId("ta");
-    run.setWorkflowDefinitionId(50L);
-    run.setRelatedJobInstanceId(200L);
-    run.setTraceId("trace-xx");
-    return run;
-  }
+    private WorkflowRunEntity workflowRun() {
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setId(100L);
+        run.setTenantId("ta");
+        run.setWorkflowDefinitionId(50L);
+        run.setRelatedJobInstanceId(200L);
+        run.setTraceId("trace-xx");
+        return run;
+    }
 }

@@ -37,306 +37,304 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2259")
 public class BatchDayGateService {
 
-  private static final String POLICY_ALLOW_OVERLAP = "ALLOW_OVERLAP";
-  private static final String POLICY_WAIT_PREVIOUS_DAY = "WAIT_PREVIOUS_DAY";
-  private static final String POLICY_REJECT_IF_PREVIOUS_OPEN = "REJECT_IF_PREVIOUS_OPEN";
+    private static final String POLICY_ALLOW_OVERLAP = "ALLOW_OVERLAP";
+    private static final String POLICY_WAIT_PREVIOUS_DAY = "WAIT_PREVIOUS_DAY";
+    private static final String POLICY_REJECT_IF_PREVIOUS_OPEN = "REJECT_IF_PREVIOUS_OPEN";
 
-  private final OrchestratorConfigCacheService configCacheService;
-  private final BatchDayInstanceMapper batchDayInstanceMapper;
-  private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final JobExecutionLogMapper jobExecutionLogMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final AlertEventService alertEventService;
+    private final OrchestratorConfigCacheService configCacheService;
+    private final BatchDayInstanceMapper batchDayInstanceMapper;
+    private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final JobExecutionLogMapper jobExecutionLogMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final AlertEventService alertEventService;
 
-  public GateDecision evaluateAndApply(
-      LaunchRequest request,
-      LaunchValidationService.LaunchLoadResult loaded,
-      Map<String, Object> effectiveParams,
-      String traceId) {
-    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {
-      return GateDecision.allow();
-    }
-    JobDefinitionView job = loaded.jobDefinition();
-    if (EmptyChecks.isNull(job)) {
-      return GateDecision.allow();
-    }
-    String calendarCode = loaded.effectiveCalendarCode();
-    if (!Texts.hasText(calendarCode) || EmptyChecks.isNull(request.bizDate())) {
-      return GateDecision.allow();
-    }
-    // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
-    if (!isFrozenBypassTrigger(request.triggerType())) {
-      BatchDayInstanceEntity currentDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-          request.tenantId(), calendarCode, request.bizDate());
-      if (currentDay != null && Boolean.TRUE.equals(currentDay.frozen())) {
-        String reason = "BATCH_DAY_FROZEN";
-        reject(request, loaded.triggerRequest(), currentDay, reason);
-        return GateDecision.reject(reason);
-      }
-    }
-    String configuredDependencyScope = job.previousDayDependencyScope();
-    String scope = normalize(configuredDependencyScope, "INHERIT");
-    if ("NONE".equals(scope)) {
-      return GateDecision.allow();
-    }
-    BusinessCalendarEntity calendar =
-        configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
-    String policy;
-    if ("INHERIT".equals(scope)) {
-      String configuredRolloverPolicy =
-          EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
-      policy = normalize(configuredRolloverPolicy, POLICY_ALLOW_OVERLAP);
-    } else {
-      policy = POLICY_WAIT_PREVIOUS_DAY;
-    }
-    if (POLICY_ALLOW_OVERLAP.equals(policy)) {
-      return GateDecision.allow();
-    }
-    LocalDate prevBizDate = request.bizDate().minusDays(1);
-    BatchDayInstanceEntity previous = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-        request.tenantId(), calendarCode, prevBizDate);
-    // SAME_JOB / SAME_JOB_GROUP 细粒度: 在 batch_day_instance 之外, 还要看
-    // job_instance 维度的实际终态(防止 calendar 已 SETTLED 但同组某 job 上一日还在 RUNNING)。
-    boolean usesFineGrainedDependencyScope =
-        "SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope);
-    if (usesFineGrainedDependencyScope) {
-      String fineReason = checkFineGrainedDependency(scope, request, job, prevBizDate);
-      if (fineReason != null) {
-        if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
-          reject(request, loaded.triggerRequest(), previous, fineReason);
-          return GateDecision.reject(fineReason);
+    public GateDecision evaluateAndApply(
+            LaunchRequest request,
+            LaunchValidationService.LaunchLoadResult loaded,
+            Map<String, Object> effectiveParams,
+            String traceId) {
+        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {
+            return GateDecision.allow();
         }
-        waitLaunch(
-            request, loaded.triggerRequest(), effectiveParams, traceId, previous, fineReason);
-        return GateDecision.waiting(fineReason);
-      }
-      // 细粒度通过 → 不再用 batch_day_instance 维度卡住, 即使日历级是 IN_FLIGHT 也允许
-      return GateDecision.allow();
-    }
-    if (previous == null || isPreviousDayReleasable(previous.dayStatus())) {
-      return GateDecision.allow();
-    }
-    String reason = "PREVIOUS_BATCH_DAY_NOT_CLOSED";
-    if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
-      reject(request, loaded.triggerRequest(), previous, reason);
-      return GateDecision.reject(reason);
-    }
-    waitLaunch(request, loaded.triggerRequest(), effectiveParams, traceId, previous, reason);
-    return GateDecision.waiting(reason);
-  }
-
-  /**
-   * SAME_JOB / SAME_JOB_GROUP 细粒度检查。
-   *
-   * <p>非 null 返回值表示阻塞原因(同 job 或同组前一日仍有非终态实例); null 表示通过。
-   */
-  private String checkFineGrainedDependency(
-      String scope, LaunchRequest request, JobDefinitionView job, LocalDate prevBizDate) {
-    if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
-      int active = jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
-          request.tenantId(), job.jobGroupCode(), prevBizDate);
-      return active > 0 ? "PREVIOUS_JOB_GROUP_NOT_CLOSED" : null;
-    }
-    // SAME_JOB, 或 SAME_JOB_GROUP 但未配组(降级为 SAME_JOB)
-    int active = jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
-        request.tenantId(), request.jobCode(), prevBizDate);
-    return active > 0 ? "PREVIOUS_JOB_NOT_CLOSED" : null;
-  }
-
-  private boolean isPreviousDayReleasable(String status) {
-    String normalized = normalize(status, "");
-    return "SETTLED".equals(normalized)
-        || "SKIPPED".equals(normalized)
-        || "MANUAL_RELEASED".equals(normalized);
-  }
-
-  private void waitLaunch(
-      LaunchRequest request,
-      TriggerRequestEntity triggerRequest,
-      Map<String, Object> effectiveParams,
-      String traceId,
-      BatchDayInstanceEntity previous,
-      String reason) {
-    LaunchRequestIdentityGuard.requirePending(request, triggerRequest);
-    Instant now = dateTimeSupport.nowInstant();
-    String payload = buildLaunchPayload(request, effectiveParams);
-    BatchDayWaitingLaunchEntity waiting = BatchDayWaitingLaunchEntity.builder()
-        .tenantId(request.tenantId())
-        .calendarCode(previous.calendarCode())
-        .jobCode(request.jobCode())
-        .bizDate(request.bizDate())
-        .requestId(request.requestId())
-        .traceId(traceId)
-        .triggerType(
-            request.triggerType() == null ? null : request.triggerType().code())
-        .waitReason(reason)
-        .launchPayload(payload)
-        .waitStatus(BatchDayWaitingLaunchMapper.WaitStatus.WAITING.name())
-        .createdAt(now)
-        .updatedAt(now)
-        .build();
-    waitingLaunchMapper.insert(waiting);
-    int updated = triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), TriggerRequestStatus.WAITING.code(), null);
-    if (updated == 0) {
-      log.warn(
-          "updateAcceptance(WAITING) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
-    }
-    appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);
-    emitGateAlert(request, triggerRequest, previous, GateAlertKind.WAITING, reason, traceId);
-  }
-
-  private void reject(
-      LaunchRequest request,
-      TriggerRequestEntity triggerRequest,
-      BatchDayInstanceEntity previous,
-      String reason) {
-    int updated = triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
-    if (updated == 0) {
-      log.warn(
-          "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
-    }
-    appendAuditLog(request, previous, "BATCH_DAY_GATE_REJECT", reason, request.traceId());
-    emitGateAlert(
-        request, triggerRequest, previous, GateAlertKind.REJECTED, reason, request.traceId());
-  }
-
-  /** 等待与拒绝使用固定级别，避免告警类型和严重性错配。 */
-  private enum GateAlertKind {
-    WAITING,
-    REJECTED
-  }
-
-  private void emitGateAlert(
-      LaunchRequest request,
-      TriggerRequestEntity triggerRequest,
-      BatchDayInstanceEntity previous,
-      GateAlertKind kind,
-      String reason,
-      String traceId) {
-    String alertType = "BATCH_DAY_GATE_" + kind.name();
-    String severity = kind == GateAlertKind.WAITING ? "WARN" : "ERROR";
-    Map<String, Object> detail = BatchDayAlertDetails.base(request, triggerRequest, reason);
-    if (previous != null) {
-      detail.put("calendarCode", previous.calendarCode());
-      detail.put(
-          "previousBizDate",
-          previous.bizDate() == null ? null : previous.bizDate().toString());
-      detail.put("previousDayStatus", previous.dayStatus());
-    }
-    String resourceKey = request.tenantId()
-        + ":"
-        + (previous == null ? "" : previous.calendarCode() + ":")
-        + request.jobCode()
-        + ":"
-        + (request.bizDate() == null ? "" : request.bizDate());
-    String serializedDetail = JsonUtils.toJson(detail);
-    AlertEmitCommand emitRequest = AlertEmitCommand.builder()
-        .tenantId(request.tenantId())
-        .serviceName("batch-orchestrator")
-        .alertType(alertType)
-        .severity(severity)
-        .title("batch day gate " + alertType.toLowerCase(Locale.ROOT) + ": " + reason)
-        .detailJson(serializedDetail)
-        .resourceKey(resourceKey)
-        .traceId(traceId)
-        .build();
-    alertEventService.emit(emitRequest);
-  }
-
-  private String buildLaunchPayload(LaunchRequest request, Map<String, Object> effectiveParams) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("tenantId", request.tenantId());
-    payload.put("jobCode", request.jobCode());
-    payload.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    payload.put(
-        "triggerType",
-        request.triggerType() == null ? null : request.triggerType().code());
-    payload.put("requestId", request.requestId());
-    payload.put("traceId", request.traceId());
-    payload.put("params", request.params());
-    payload.put("effectiveParams", effectiveParams);
-    payload.put(
-        "dataIntervalStart",
-        request.dataIntervalStart() == null ? null : request.dataIntervalStart().toString());
-    payload.put(
-        "dataIntervalEnd",
-        request.dataIntervalEnd() == null ? null : request.dataIntervalEnd().toString());
-    return JsonUtils.toJson(payload);
-  }
-
-  private void appendAuditLog(
-      LaunchRequest request,
-      BatchDayInstanceEntity previous,
-      String operation,
-      String reason,
-      String traceId) {
-    JobExecutionLogEntity audit = new JobExecutionLogEntity();
-    audit.setTenantId(request.tenantId());
-    audit.setJobInstanceId(null);
-    audit.setJobPartitionId(null);
-    audit.setLogLevel("INFO");
-    audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
-    audit.setTraceId(traceId);
-    audit.setMessage(operation);
-    audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    Map<String, Object> extra = new LinkedHashMap<>();
-    extra.put("jobCode", request.jobCode());
-    extra.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    extra.put(
-        "previousBizDate",
-        previous.bizDate() == null ? null : previous.bizDate().toString());
-    extra.put("calendarCode", previous.calendarCode());
-    extra.put("previousDayStatus", previous.dayStatus());
-    extra.put("reasonCode", reason);
-    extra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM);
-    extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-    String extraJson = JsonUtils.toJson(extra);
-    audit.setExtraJson(extraJson);
-    jobExecutionLogMapper.insert(audit);
-  }
-
-  @SuppressWarnings("java:S2259")
-  private String normalize(String value, String defaultValue) {
-    if (!Texts.hasText(value)) {
-      return defaultValue;
-    }
-    String trimmedValue = value.trim();
-    return trimmedValue.toUpperCase(Locale.ROOT);
-  }
-
-  private boolean isFrozenBypassTrigger(TriggerType triggerType) {
-    return triggerType == TriggerType.CATCH_UP || triggerType == TriggerType.RERUN;
-  }
-
-  public record GateDecision(GateDecisionType type, String reasonCode) {
-    static GateDecision allow() {
-      return new GateDecision(GateDecisionType.ALLOW, null);
+        JobDefinitionView job = loaded.jobDefinition();
+        if (EmptyChecks.isNull(job)) {
+            return GateDecision.allow();
+        }
+        String calendarCode = loaded.effectiveCalendarCode();
+        if (!Texts.hasText(calendarCode) || EmptyChecks.isNull(request.bizDate())) {
+            return GateDecision.allow();
+        }
+        // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
+        if (!isFrozenBypassTrigger(request.triggerType())) {
+            BatchDayInstanceEntity currentDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+                    request.tenantId(), calendarCode, request.bizDate());
+            if (currentDay != null && Boolean.TRUE.equals(currentDay.frozen())) {
+                String reason = "BATCH_DAY_FROZEN";
+                reject(request, loaded.triggerRequest(), currentDay, reason);
+                return GateDecision.reject(reason);
+            }
+        }
+        String configuredDependencyScope = job.previousDayDependencyScope();
+        String scope = normalize(configuredDependencyScope, "INHERIT");
+        if ("NONE".equals(scope)) {
+            return GateDecision.allow();
+        }
+        BusinessCalendarEntity calendar =
+                configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
+        String policy;
+        if ("INHERIT".equals(scope)) {
+            String configuredRolloverPolicy = EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
+            policy = normalize(configuredRolloverPolicy, POLICY_ALLOW_OVERLAP);
+        } else {
+            policy = POLICY_WAIT_PREVIOUS_DAY;
+        }
+        if (POLICY_ALLOW_OVERLAP.equals(policy)) {
+            return GateDecision.allow();
+        }
+        LocalDate prevBizDate = request.bizDate().minusDays(1);
+        BatchDayInstanceEntity previous =
+                batchDayInstanceMapper.selectByTenantCalendarBizDate(request.tenantId(), calendarCode, prevBizDate);
+        // SAME_JOB / SAME_JOB_GROUP 细粒度: 在 batch_day_instance 之外, 还要看
+        // job_instance 维度的实际终态(防止 calendar 已 SETTLED 但同组某 job 上一日还在 RUNNING)。
+        boolean usesFineGrainedDependencyScope = "SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope);
+        if (usesFineGrainedDependencyScope) {
+            String fineReason = checkFineGrainedDependency(scope, request, job, prevBizDate);
+            if (fineReason != null) {
+                if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
+                    reject(request, loaded.triggerRequest(), previous, fineReason);
+                    return GateDecision.reject(fineReason);
+                }
+                waitLaunch(request, loaded.triggerRequest(), effectiveParams, traceId, previous, fineReason);
+                return GateDecision.waiting(fineReason);
+            }
+            // 细粒度通过 → 不再用 batch_day_instance 维度卡住, 即使日历级是 IN_FLIGHT 也允许
+            return GateDecision.allow();
+        }
+        if (previous == null || isPreviousDayReleasable(previous.dayStatus())) {
+            return GateDecision.allow();
+        }
+        String reason = "PREVIOUS_BATCH_DAY_NOT_CLOSED";
+        if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
+            reject(request, loaded.triggerRequest(), previous, reason);
+            return GateDecision.reject(reason);
+        }
+        waitLaunch(request, loaded.triggerRequest(), effectiveParams, traceId, previous, reason);
+        return GateDecision.waiting(reason);
     }
 
-    static GateDecision waiting(String reasonCode) {
-      return new GateDecision(GateDecisionType.WAIT, reasonCode);
+    /**
+     * SAME_JOB / SAME_JOB_GROUP 细粒度检查。
+     *
+     * <p>非 null 返回值表示阻塞原因(同 job 或同组前一日仍有非终态实例); null 表示通过。
+     */
+    private String checkFineGrainedDependency(
+            String scope, LaunchRequest request, JobDefinitionView job, LocalDate prevBizDate) {
+        if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
+            int active = jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
+                    request.tenantId(), job.jobGroupCode(), prevBizDate);
+            return active > 0 ? "PREVIOUS_JOB_GROUP_NOT_CLOSED" : null;
+        }
+        // SAME_JOB, 或 SAME_JOB_GROUP 但未配组(降级为 SAME_JOB)
+        int active = jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
+                request.tenantId(), request.jobCode(), prevBizDate);
+        return active > 0 ? "PREVIOUS_JOB_NOT_CLOSED" : null;
     }
 
-    static GateDecision reject(String reasonCode) {
-      return new GateDecision(GateDecisionType.REJECT, reasonCode);
+    private boolean isPreviousDayReleasable(String status) {
+        String normalized = normalize(status, "");
+        return "SETTLED".equals(normalized) || "SKIPPED".equals(normalized) || "MANUAL_RELEASED".equals(normalized);
     }
 
-    boolean allowed() {
-      return type == GateDecisionType.ALLOW;
+    private void waitLaunch(
+            LaunchRequest request,
+            TriggerRequestEntity triggerRequest,
+            Map<String, Object> effectiveParams,
+            String traceId,
+            BatchDayInstanceEntity previous,
+            String reason) {
+        LaunchRequestIdentityGuard.requirePending(request, triggerRequest);
+        Instant now = dateTimeSupport.nowInstant();
+        String payload = buildLaunchPayload(request, effectiveParams);
+        BatchDayWaitingLaunchEntity waiting = BatchDayWaitingLaunchEntity.builder()
+                .tenantId(request.tenantId())
+                .calendarCode(previous.calendarCode())
+                .jobCode(request.jobCode())
+                .bizDate(request.bizDate())
+                .requestId(request.requestId())
+                .traceId(traceId)
+                .triggerType(
+                        request.triggerType() == null
+                                ? null
+                                : request.triggerType().code())
+                .waitReason(reason)
+                .launchPayload(payload)
+                .waitStatus(BatchDayWaitingLaunchMapper.WaitStatus.WAITING.name())
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        waitingLaunchMapper.insert(waiting);
+        int updated = triggerRequestMapper.updateAcceptance(
+                request.tenantId(), request.requestId(), TriggerRequestStatus.WAITING.code(), null);
+        if (updated == 0) {
+            log.warn(
+                    "updateAcceptance(WAITING) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
+                    request.tenantId(),
+                    request.requestId());
+        }
+        appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);
+        emitGateAlert(request, triggerRequest, previous, GateAlertKind.WAITING, reason, traceId);
     }
-  }
 
-  public enum GateDecisionType {
-    ALLOW,
-    WAIT,
-    REJECT
-  }
+    private void reject(
+            LaunchRequest request,
+            TriggerRequestEntity triggerRequest,
+            BatchDayInstanceEntity previous,
+            String reason) {
+        int updated = triggerRequestMapper.updateAcceptance(
+                request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+        if (updated == 0) {
+            log.warn(
+                    "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
+                    request.tenantId(),
+                    request.requestId());
+        }
+        appendAuditLog(request, previous, "BATCH_DAY_GATE_REJECT", reason, request.traceId());
+        emitGateAlert(request, triggerRequest, previous, GateAlertKind.REJECTED, reason, request.traceId());
+    }
+
+    /** 等待与拒绝使用固定级别，避免告警类型和严重性错配。 */
+    private enum GateAlertKind {
+        WAITING,
+        REJECTED
+    }
+
+    private void emitGateAlert(
+            LaunchRequest request,
+            TriggerRequestEntity triggerRequest,
+            BatchDayInstanceEntity previous,
+            GateAlertKind kind,
+            String reason,
+            String traceId) {
+        String alertType = "BATCH_DAY_GATE_" + kind.name();
+        String severity = kind == GateAlertKind.WAITING ? "WARN" : "ERROR";
+        Map<String, Object> detail = BatchDayAlertDetails.base(request, triggerRequest, reason);
+        if (previous != null) {
+            detail.put("calendarCode", previous.calendarCode());
+            detail.put(
+                    "previousBizDate",
+                    previous.bizDate() == null ? null : previous.bizDate().toString());
+            detail.put("previousDayStatus", previous.dayStatus());
+        }
+        String resourceKey = request.tenantId()
+                + ":"
+                + (previous == null ? "" : previous.calendarCode() + ":")
+                + request.jobCode()
+                + ":"
+                + (request.bizDate() == null ? "" : request.bizDate());
+        String serializedDetail = JsonUtils.toJson(detail);
+        AlertEmitCommand emitRequest = AlertEmitCommand.builder()
+                .tenantId(request.tenantId())
+                .serviceName("batch-orchestrator")
+                .alertType(alertType)
+                .severity(severity)
+                .title("batch day gate " + alertType.toLowerCase(Locale.ROOT) + ": " + reason)
+                .detailJson(serializedDetail)
+                .resourceKey(resourceKey)
+                .traceId(traceId)
+                .build();
+        alertEventService.emit(emitRequest);
+    }
+
+    private String buildLaunchPayload(LaunchRequest request, Map<String, Object> effectiveParams) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", request.tenantId());
+        payload.put("jobCode", request.jobCode());
+        payload.put(
+                "bizDate", request.bizDate() == null ? null : request.bizDate().toString());
+        payload.put(
+                "triggerType",
+                request.triggerType() == null ? null : request.triggerType().code());
+        payload.put("requestId", request.requestId());
+        payload.put("traceId", request.traceId());
+        payload.put("params", request.params());
+        payload.put("effectiveParams", effectiveParams);
+        payload.put(
+                "dataIntervalStart",
+                request.dataIntervalStart() == null
+                        ? null
+                        : request.dataIntervalStart().toString());
+        payload.put(
+                "dataIntervalEnd",
+                request.dataIntervalEnd() == null
+                        ? null
+                        : request.dataIntervalEnd().toString());
+        return JsonUtils.toJson(payload);
+    }
+
+    private void appendAuditLog(
+            LaunchRequest request, BatchDayInstanceEntity previous, String operation, String reason, String traceId) {
+        JobExecutionLogEntity audit = new JobExecutionLogEntity();
+        audit.setTenantId(request.tenantId());
+        audit.setJobInstanceId(null);
+        audit.setJobPartitionId(null);
+        audit.setLogLevel("INFO");
+        audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+        audit.setTraceId(traceId);
+        audit.setMessage(operation);
+        audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("jobCode", request.jobCode());
+        extra.put(
+                "bizDate", request.bizDate() == null ? null : request.bizDate().toString());
+        extra.put(
+                "previousBizDate",
+                previous.bizDate() == null ? null : previous.bizDate().toString());
+        extra.put("calendarCode", previous.calendarCode());
+        extra.put("previousDayStatus", previous.dayStatus());
+        extra.put("reasonCode", reason);
+        extra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+        String extraJson = JsonUtils.toJson(extra);
+        audit.setExtraJson(extraJson);
+        jobExecutionLogMapper.insert(audit);
+    }
+
+    @SuppressWarnings("java:S2259")
+    private String normalize(String value, String defaultValue) {
+        if (!Texts.hasText(value)) {
+            return defaultValue;
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isFrozenBypassTrigger(TriggerType triggerType) {
+        return triggerType == TriggerType.CATCH_UP || triggerType == TriggerType.RERUN;
+    }
+
+    public record GateDecision(GateDecisionType type, String reasonCode) {
+        static GateDecision allow() {
+            return new GateDecision(GateDecisionType.ALLOW, null);
+        }
+
+        static GateDecision waiting(String reasonCode) {
+            return new GateDecision(GateDecisionType.WAIT, reasonCode);
+        }
+
+        static GateDecision reject(String reasonCode) {
+            return new GateDecision(GateDecisionType.REJECT, reasonCode);
+        }
+
+        boolean allowed() {
+            return type == GateDecisionType.ALLOW;
+        }
+    }
+
+    public enum GateDecisionType {
+        ALLOW,
+        WAIT,
+        REJECT
+    }
 }

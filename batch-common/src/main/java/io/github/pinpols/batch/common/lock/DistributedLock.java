@@ -51,18 +51,18 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface DistributedLock {
 
-  /** 锁 key 的 SpEL 表达式;以方法参数为根。空字符串 = 使用方法签名(类名#方法名)作 key。 */
-  String key() default "";
+    /** 锁 key 的 SpEL 表达式;以方法参数为根。空字符串 = 使用方法签名(类名#方法名)作 key。 */
+    String key() default "";
 
-  /** key 前缀,避免不同业务域 key 撞车。默认按方法所在类的简单名。 */
-  String prefix() default "";
+    /** key 前缀,避免不同业务域 key 撞车。默认按方法所在类的简单名。 */
+    String prefix() default "";
 
-  /** 持有锁的最大时长(秒);超时自动释放,防止业务卡住永久持锁。默认 30 秒。 */
-  long leaseSeconds() default 30;
+    /** 持有锁的最大时长(秒);超时自动释放,防止业务卡住永久持锁。默认 30 秒。 */
+    long leaseSeconds() default 30;
 
-  /** 至少持有锁的时长(秒);ShedLock 防止任务还没真做完锁就被另一节点抢走。默认 0(等于实际方法执行时长)。 */
-  long atLeastSeconds() default 0;
+    /** 至少持有锁的时长(秒);ShedLock 防止任务还没真做完锁就被另一节点抢走。默认 0(等于实际方法执行时长)。 */
+    long atLeastSeconds() default 0;
 
-  /** 抢锁失败时是否抛异常。false = 静默跳过(仅适合幂等任务)。 */
-  boolean throwOnFailure() default true;
+    /** 抢锁失败时是否抛异常。false = 静默跳过(仅适合幂等任务)。 */
+    boolean throwOnFailure() default true;
 }

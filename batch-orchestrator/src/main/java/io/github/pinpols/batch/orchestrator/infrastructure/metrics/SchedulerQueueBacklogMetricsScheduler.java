@@ -25,64 +25,59 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SchedulerQueueBacklogMetricsScheduler {
 
-  private final JobPartitionMapper jobPartitionMapper;
-  private final MeterRegistry meterRegistry;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final MeterRegistry meterRegistry;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  private final AtomicLong createdPartitions = new AtomicLong();
-  private final AtomicLong waitingPartitions = new AtomicLong();
-  private final AtomicLong readyPartitions = new AtomicLong();
-  private final AtomicLong runningPartitions = new AtomicLong();
-  private final AtomicLong retryingPartitions = new AtomicLong();
-  private final AtomicLong queuedPartitions = new AtomicLong();
-  private final AtomicLong oldestWaitingSeconds = new AtomicLong();
+    private final AtomicLong createdPartitions = new AtomicLong();
+    private final AtomicLong waitingPartitions = new AtomicLong();
+    private final AtomicLong readyPartitions = new AtomicLong();
+    private final AtomicLong runningPartitions = new AtomicLong();
+    private final AtomicLong retryingPartitions = new AtomicLong();
+    private final AtomicLong queuedPartitions = new AtomicLong();
+    private final AtomicLong oldestWaitingSeconds = new AtomicLong();
 
-  @PostConstruct
-  void initializeMeters() {
-    meterRegistry.gauge("batch.orchestrator.scheduler.queue.created.partitions", createdPartitions);
-    meterRegistry.gauge("batch.orchestrator.scheduler.queue.waiting.partitions", waitingPartitions);
-    meterRegistry.gauge("batch.orchestrator.scheduler.queue.ready.partitions", readyPartitions);
-    meterRegistry.gauge("batch.orchestrator.scheduler.queue.running.partitions", runningPartitions);
-    meterRegistry.gauge(
-        "batch.orchestrator.scheduler.queue.retrying.partitions", retryingPartitions);
-    meterRegistry.gauge("batch.orchestrator.scheduler.queue.queued.partitions", queuedPartitions);
-    meterRegistry.gauge(
-        "batch.orchestrator.scheduler.queue.oldest_wait.seconds", oldestWaitingSeconds);
-  }
-
-  @Scheduled(fixedDelayString = "${batch.metrics.scheduler-queue.poll-interval-millis:30000}")
-  @SchedulerLock(
-      name = "scheduler_queue_backlog_metrics",
-      lockAtMostFor = "PT1M",
-      lockAtLeastFor = "PT10S")
-  public void sample() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void initializeMeters() {
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.created.partitions", createdPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.waiting.partitions", waitingPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.ready.partitions", readyPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.running.partitions", runningPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.retrying.partitions", retryingPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.queued.partitions", queuedPartitions);
+        meterRegistry.gauge("batch.orchestrator.scheduler.queue.oldest_wait.seconds", oldestWaitingSeconds);
     }
-    try {
-      JobPartitionGlobalQueueBacklogSummaryQuery jobPartitionGlobalQueueBacklogSummaryQuery =
-          JobPartitionGlobalQueueBacklogSummaryQuery.builder()
-              .createdStatus(PartitionStatus.CREATED.code())
-              .waitingStatus(PartitionStatus.WAITING.code())
-              .readyStatus(PartitionStatus.READY.code())
-              .runningStatus(PartitionStatus.RUNNING.code())
-              .retryingStatus(PartitionStatus.RETRYING.code())
-              .build();
-      QueuePartitionBacklogStats stats = jobPartitionMapper.summarizeGlobalQueueBacklog(
-          jobPartitionGlobalQueueBacklogSummaryQuery);
-      if (stats == null) {
-        stats = new QueuePartitionBacklogStats("ALL", 0, 0, 0, 0, 0, 0);
-      }
-      createdPartitions.set(stats.createdPartitions());
-      waitingPartitions.set(stats.waitingPartitions());
-      readyPartitions.set(stats.readyPartitions());
-      runningPartitions.set(stats.runningPartitions());
-      retryingPartitions.set(stats.retryingPartitions());
-      queuedPartitions.set(stats.queuedPartitions());
-      oldestWaitingSeconds.set(stats.oldestWaitingSeconds());
-    } catch (RuntimeException ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("scheduler queue backlog metrics sampling failed: {}", causeSummary);
+
+    @Scheduled(fixedDelayString = "${batch.metrics.scheduler-queue.poll-interval-millis:30000}")
+    @SchedulerLock(name = "scheduler_queue_backlog_metrics", lockAtMostFor = "PT1M", lockAtLeastFor = "PT10S")
+    public void sample() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        try {
+            JobPartitionGlobalQueueBacklogSummaryQuery jobPartitionGlobalQueueBacklogSummaryQuery =
+                    JobPartitionGlobalQueueBacklogSummaryQuery.builder()
+                            .createdStatus(PartitionStatus.CREATED.code())
+                            .waitingStatus(PartitionStatus.WAITING.code())
+                            .readyStatus(PartitionStatus.READY.code())
+                            .runningStatus(PartitionStatus.RUNNING.code())
+                            .retryingStatus(PartitionStatus.RETRYING.code())
+                            .build();
+            QueuePartitionBacklogStats stats =
+                    jobPartitionMapper.summarizeGlobalQueueBacklog(jobPartitionGlobalQueueBacklogSummaryQuery);
+            if (stats == null) {
+                stats = new QueuePartitionBacklogStats("ALL", 0, 0, 0, 0, 0, 0);
+            }
+            createdPartitions.set(stats.createdPartitions());
+            waitingPartitions.set(stats.waitingPartitions());
+            readyPartitions.set(stats.readyPartitions());
+            runningPartitions.set(stats.runningPartitions());
+            retryingPartitions.set(stats.retryingPartitions());
+            queuedPartitions.set(stats.queuedPartitions());
+            oldestWaitingSeconds.set(stats.oldestWaitingSeconds());
+        } catch (RuntimeException ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("scheduler queue backlog metrics sampling failed: {}", causeSummary);
+        }
     }
-  }
 }

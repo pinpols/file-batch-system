@@ -21,75 +21,75 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultLifecycleEventMapper<T> implements LifecycleEventMapper<T> {
 
-  private static final Set<String> TERMINAL_STATES = LifecycleStatusCatalog.allTerminalStates();
+    private static final Set<String> TERMINAL_STATES = LifecycleStatusCatalog.allTerminalStates();
 
-  @Override
-  public StateTransition map(T target, String event) {
-    String fromState = resolveState(target);
-    String normalizedEvent = normalizeEvent(event);
-    String toState = resolveToState(fromState, normalizedEvent);
-    return new StateTransition(fromState, normalizedEvent, toState);
-  }
+    @Override
+    public StateTransition map(T target, String event) {
+        String fromState = resolveState(target);
+        String normalizedEvent = normalizeEvent(event);
+        String toState = resolveToState(fromState, normalizedEvent);
+        return new StateTransition(fromState, normalizedEvent, toState);
+    }
 
-  private String resolveState(T target) {
-    if (target instanceof String status && Texts.hasText(status)) {
-      return status;
+    private String resolveState(T target) {
+        if (target instanceof String status && Texts.hasText(status)) {
+            return status;
+        }
+        if (target instanceof Enum<?> enumValue) {
+            return enumValue.name();
+        }
+        if (target instanceof Stateful stateful && Texts.hasText(stateful.getStatus())) {
+            return stateful.getStatus();
+        }
+        String targetType =
+                EmptyChecks.isNull(target) ? "null" : target.getClass().getName();
+        throw new IllegalArgumentException(
+                "Cannot resolve lifecycle status from " + targetType + ": use String, Enum or Stateful");
     }
-    if (target instanceof Enum<?> enumValue) {
-      return enumValue.name();
-    }
-    if (target instanceof Stateful stateful && Texts.hasText(stateful.getStatus())) {
-      return stateful.getStatus();
-    }
-    String targetType = EmptyChecks.isNull(target) ? "null" : target.getClass().getName();
-    throw new IllegalArgumentException(
-        "Cannot resolve lifecycle status from " + targetType + ": use String, Enum or Stateful");
-  }
 
-  private String normalizeEvent(String event) {
-    if (!Texts.hasText(event)) {
-      return "NOOP";
+    private String normalizeEvent(String event) {
+        if (!Texts.hasText(event)) {
+            return "NOOP";
+        }
+        String trimmedEvent = event.trim();
+        return trimmedEvent.toUpperCase(Locale.ROOT);
     }
-    String trimmedEvent = event.trim();
-    return trimmedEvent.toUpperCase(Locale.ROOT);
-  }
 
-  private String resolveToState(String fromState, String event) {
-    String candidate =
-        switch (event) {
-          case "READY" -> "READY";
-          case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
-          case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
-          case "SUCCESS_DRY_RUN" -> "SUCCESS_DRY_RUN";
-          case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
-          case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
-          case "FAILED_DRY_RUN" -> "FAILED_DRY_RUN";
-          case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
-          case "SKIP", "SKIPPED" -> "SKIPPED";
-          case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;
-          default -> resolveSelfTransitionOrFail(fromState, event);
-        };
-    return guardTerminal(fromState, event, candidate);
-  }
-
-  private String resolveSelfTransitionOrFail(String fromState, String event) {
-    if (fromState.equalsIgnoreCase(event)) {
-      return fromState;
+    private String resolveToState(String fromState, String event) {
+        String candidate =
+                switch (event) {
+                    case "READY" -> "READY";
+                    case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
+                    case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
+                    case "SUCCESS_DRY_RUN" -> "SUCCESS_DRY_RUN";
+                    case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
+                    case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
+                    case "FAILED_DRY_RUN" -> "FAILED_DRY_RUN";
+                    case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
+                    case "SKIP", "SKIPPED" -> "SKIPPED";
+                    case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;
+                    default -> resolveSelfTransitionOrFail(fromState, event);
+                };
+        return guardTerminal(fromState, event, candidate);
     }
-    throw new IllegalArgumentException(
-        "Unsupported lifecycle event '" + event + "' from state '" + fromState + "'");
-  }
 
-  private String guardTerminal(String fromState, String event, String candidate) {
-    if (!TERMINAL_STATES.contains(fromState) || candidate.equals(fromState)) {
-      return candidate;
+    private String resolveSelfTransitionOrFail(String fromState, String event) {
+        if (fromState.equalsIgnoreCase(event)) {
+            return fromState;
+        }
+        throw new IllegalArgumentException(
+                "Unsupported lifecycle event '" + event + "' from state '" + fromState + "'");
     }
-    log.warn(
-        "lifecycle mapper refuses transition from terminal: fromState={}, event={},"
-            + " refusedTarget={}",
-        fromState,
-        event,
-        candidate);
-    return fromState;
-  }
+
+    private String guardTerminal(String fromState, String event, String candidate) {
+        if (!TERMINAL_STATES.contains(fromState) || candidate.equals(fromState)) {
+            return candidate;
+        }
+        log.warn(
+                "lifecycle mapper refuses transition from terminal: fromState={}, event={}," + " refusedTarget={}",
+                fromState,
+                event,
+                candidate);
+        return fromState;
+    }
 }

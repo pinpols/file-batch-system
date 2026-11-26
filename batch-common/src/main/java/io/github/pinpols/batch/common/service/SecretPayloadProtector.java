@@ -13,53 +13,53 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecretPayloadProtector {
 
-  public static final String FORMAT = "BATCHENC_BASE64_V1";
+    public static final String FORMAT = "BATCHENC_BASE64_V1";
 
-  private final BatchObjectCryptoService cryptoService;
+    private final BatchObjectCryptoService cryptoService;
 
-  public String protect(String plaintextJson) {
-    if (!Texts.hasText(plaintextJson)) {
-      throw new IllegalArgumentException("secretPayloadJson is required");
+    public String protect(String plaintextJson) {
+        if (!Texts.hasText(plaintextJson)) {
+            throw new IllegalArgumentException("secretPayloadJson is required");
+        }
+        byte[] plaintext = plaintextJson.getBytes(StandardCharsets.UTF_8);
+        byte[] encrypted = cryptoService.encrypt(plaintext, null);
+        String encodedPayload = Base64.getEncoder().encodeToString(encrypted);
+        EncryptedSecretEnvelope envelope = new EncryptedSecretEnvelope(FORMAT, encodedPayload);
+        return JsonUtils.toJson(envelope);
     }
-    byte[] plaintext = plaintextJson.getBytes(StandardCharsets.UTF_8);
-    byte[] encrypted = cryptoService.encrypt(plaintext, null);
-    String encodedPayload = Base64.getEncoder().encodeToString(encrypted);
-    EncryptedSecretEnvelope envelope = new EncryptedSecretEnvelope(FORMAT, encodedPayload);
-    return JsonUtils.toJson(envelope);
-  }
 
-  /** 解密受保护的密钥 JSON。仅供受信任的运行时适配器调用，调用方不得记录返回值。 */
-  public String reveal(String protectedJson) {
-    return reveal(protectedJson, false);
-  }
+    /** 解密受保护的密钥 JSON。仅供受信任的运行时适配器调用，调用方不得记录返回值。 */
+    public String reveal(String protectedJson) {
+        return reveal(protectedJson, false);
+    }
 
-  /** Replay 配置快照必须实际使用认证加密；不接受仅作 Base64 包装的明文。 */
-  public String revealEncrypted(String protectedJson) {
-    return reveal(protectedJson, true);
-  }
+    /** Replay 配置快照必须实际使用认证加密；不接受仅作 Base64 包装的明文。 */
+    public String revealEncrypted(String protectedJson) {
+        return reveal(protectedJson, true);
+    }
 
-  private String reveal(String protectedJson, boolean requireEncrypted) {
-    if (!Texts.hasText(protectedJson)) {
-      throw new IllegalArgumentException("protected secret payload is required");
+    private String reveal(String protectedJson, boolean requireEncrypted) {
+        if (!Texts.hasText(protectedJson)) {
+            throw new IllegalArgumentException("protected secret payload is required");
+        }
+        Object parsed = JsonUtils.fromJson(protectedJson, new TypeReference<Object>() {});
+        if (!(parsed instanceof Map<?, ?> envelope) || !FORMAT.equals(envelope.get("format"))) {
+            throw new IllegalArgumentException("unsupported protected secret payload format");
+        }
+        Object ciphertext = envelope.get("ciphertext");
+        if (!(ciphertext instanceof String encoded) || EmptyChecks.isBlank(encoded)) {
+            throw new IllegalArgumentException("protected secret ciphertext is missing");
+        }
+        Base64.Decoder decoder = Base64.getDecoder();
+        byte[] ciphertextBytes = decoder.decode(encoded);
+        boolean requiredCiphertextIsNotEncrypted =
+                requireEncrypted && !cryptoService.isEncryptedContent(ciphertextBytes);
+        if (requiredCiphertextIsNotEncrypted) {
+            throw new IllegalArgumentException("protected payload must contain authenticated ciphertext");
+        }
+        byte[] decrypted = cryptoService.decrypt(ciphertextBytes);
+        return new String(decrypted, StandardCharsets.UTF_8);
     }
-    Object parsed = JsonUtils.fromJson(protectedJson, new TypeReference<Object>() {});
-    if (!(parsed instanceof Map<?, ?> envelope) || !FORMAT.equals(envelope.get("format"))) {
-      throw new IllegalArgumentException("unsupported protected secret payload format");
-    }
-    Object ciphertext = envelope.get("ciphertext");
-    if (!(ciphertext instanceof String encoded) || EmptyChecks.isBlank(encoded)) {
-      throw new IllegalArgumentException("protected secret ciphertext is missing");
-    }
-    Base64.Decoder decoder = Base64.getDecoder();
-    byte[] ciphertextBytes = decoder.decode(encoded);
-    boolean requiredCiphertextIsNotEncrypted =
-        requireEncrypted && !cryptoService.isEncryptedContent(ciphertextBytes);
-    if (requiredCiphertextIsNotEncrypted) {
-      throw new IllegalArgumentException("protected payload must contain authenticated ciphertext");
-    }
-    byte[] decrypted = cryptoService.decrypt(ciphertextBytes);
-    return new String(decrypted, StandardCharsets.UTF_8);
-  }
 
-  record EncryptedSecretEnvelope(String format, String ciphertext) {}
+    record EncryptedSecretEnvelope(String format, String ciphertext) {}
 }

@@ -12,15 +12,15 @@ package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
  */
 public record ProcessingPosition(String positionMarker, long processedCount, boolean completed) {
 
-  private static final ProcessingPosition EMPTY = new ProcessingPosition(null, 0L, false);
+    private static final ProcessingPosition EMPTY = new ProcessingPosition(null, 0L, false);
 
-  /** 无位点(首次跑或表中无该 (instance, stage) 行)。 */
-  public static ProcessingPosition empty() {
-    return EMPTY;
-  }
+    /** 无位点(首次跑或表中无该 (instance, stage) 行)。 */
+    public static ProcessingPosition empty() {
+        return EMPTY;
+    }
 
-  /** 已完成且不携带 marker 的快照；不适用于需要 marker 校验恢复身份的阶段。 */
-  public static ProcessingPosition completed(long processedCount) {
-    return new ProcessingPosition(null, processedCount, true);
-  }
+    /** 已完成且不携带 marker 的快照；不适用于需要 marker 校验恢复身份的阶段。 */
+    public static ProcessingPosition completed(long processedCount) {
+        return new ProcessingPosition(null, processedCount, true);
+    }
 }

@@ -26,18 +26,18 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("工作流运行筛选与租户隔离")
 class WorkflowRunRequestQueryIntegrationTest {
-  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
-  private static SqlSessionFactory sessions;
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
+    private static SqlSessionFactory sessions;
 
-  @BeforeAll
-  static void setUp() throws Exception {
-    POSTGRES.start();
-    PGSimpleDataSource dataSource = new PGSimpleDataSource();
-    dataSource.setURL(POSTGRES.getJdbcUrl());
-    dataSource.setUser(POSTGRES.getUsername());
-    dataSource.setPassword(POSTGRES.getPassword());
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-    String fixtures = """
+    @BeforeAll
+    static void setUp() throws Exception {
+        POSTGRES.start();
+        PGSimpleDataSource dataSource = new PGSimpleDataSource();
+        dataSource.setURL(POSTGRES.getJdbcUrl());
+        dataSource.setUser(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        String fixtures = """
         create schema batch;
         create table batch.trigger_request (
           id bigint primary key, tenant_id text not null, request_id text not null,
@@ -70,110 +70,108 @@ class WorkflowRunRequestQueryIntegrationTest {
           (19, 'tenant-e', 5, 105, 'RUNNING'), (20, 'tenant-e', 4, 107, 'SUCCESS'),
           (21, 'tenant-f', 6, 108, 'SUCCESS');
         """;
-    jdbc.execute(fixtures);
-    Configuration configuration = new Configuration(
-        new Environment("workflow-request-it", new JdbcTransactionFactory(), dataSource));
-    for (String resource : List.of("mapper/CommonFragments.xml", "mapper/WorkflowRunMapper.xml")) {
-      try (var input = Resources.getResourceAsStream(resource)) {
-        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments())
-            .parse();
-      }
+        jdbc.execute(fixtures);
+        Configuration configuration =
+                new Configuration(new Environment("workflow-request-it", new JdbcTransactionFactory(), dataSource));
+        for (String resource : List.of("mapper/CommonFragments.xml", "mapper/WorkflowRunMapper.xml")) {
+            try (var input = Resources.getResourceAsStream(resource)) {
+                new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+            }
+        }
+        sessions = new SqlSessionFactoryBuilder().build(configuration);
     }
-    sessions = new SqlSessionFactoryBuilder().build(configuration);
-  }
 
-  @AfterAll
-  static void tearDown() {
-    POSTGRES.stop();
-  }
-
-  @Test
-  @DisplayName("请求标识筛选仅返回当前租户的运行及对应总数")
-  void requestFilter_shouldMatchTenantAndCount() {
-    try (SqlSession session = sessions.openSession()) {
-      WorkflowRunMapper mapper = session.getMapper(WorkflowRunMapper.class);
-      WorkflowRunQuery tenantA = query("tenant-a", "same-request");
-      WorkflowRunQuery tenantB = query("tenant-b", "same-request");
-      assertThat(mapper.selectByQuery(tenantA)).extracting("id").containsExactly(11L);
-      assertThat(mapper.countByQuery(tenantA)).isEqualTo(1);
-      assertThat(mapper.selectByQuery(tenantB)).extracting("id").containsExactly(12L);
-      assertThat(mapper.countByQuery(tenantB)).isEqualTo(1);
-      WorkflowRunQuery waiting = query("tenant-a", "waiting-request");
-      assertThat(mapper.selectByQuery(waiting)).isEmpty();
-      assertThat(mapper.countByQuery(waiting)).isZero();
-      WorkflowRunQuery legacy = query("tenant-a", null);
-      assertThat(mapper.selectByQuery(legacy)).extracting("id").containsExactly(11L);
-      assertThat(mapper.countByQuery(legacy)).isEqualTo(1);
+    @AfterAll
+    static void tearDown() {
+        POSTGRES.stop();
     }
-  }
 
-  @Test
-  @DisplayName("工作流编码筛选包含当前租户内的所有定义版本")
-  void workflowCodeFilter_shouldIncludeAllVersionsWithinTenant() {
-    try (SqlSession session = sessions.openSession()) {
-      Map<String, Object> query = Map.of(
-          "tenantId", "tenant-c", "workflowCode", "WF", "pageRequest", new PageRequest(1, 20));
-      String namespace = WorkflowRunMapper.class.getName();
-      List<WorkflowRunEntity> runs = session.selectList(namespace + ".selectByQuery", query);
-      Long total = session.selectOne(namespace + ".countByQuery", query);
-      assertThat(runs).extracting("id").containsExactly(14L, 13L);
-      assertThat(total).isEqualTo(2L);
-      Map<String, Object> selectedVersion = Map.of(
-          "tenantId",
-          "tenant-c",
-          "workflowCode",
-          "WF",
-          "workflowDefinitionId",
-          101L,
-          "pageRequest",
-          new PageRequest(1, 20));
-      List<WorkflowRunEntity> selectedRuns =
-          session.selectList(namespace + ".selectByQuery", selectedVersion);
-      Long selectedTotal = session.selectOne(namespace + ".countByQuery", selectedVersion);
-      assertThat(selectedRuns).extracting("id").containsExactly(13L);
-      assertThat(selectedTotal).isEqualTo(1L);
+    @Test
+    @DisplayName("请求标识筛选仅返回当前租户的运行及对应总数")
+    void requestFilter_shouldMatchTenantAndCount() {
+        try (SqlSession session = sessions.openSession()) {
+            WorkflowRunMapper mapper = session.getMapper(WorkflowRunMapper.class);
+            WorkflowRunQuery tenantA = query("tenant-a", "same-request");
+            WorkflowRunQuery tenantB = query("tenant-b", "same-request");
+            assertThat(mapper.selectByQuery(tenantA)).extracting("id").containsExactly(11L);
+            assertThat(mapper.countByQuery(tenantA)).isEqualTo(1);
+            assertThat(mapper.selectByQuery(tenantB)).extracting("id").containsExactly(12L);
+            assertThat(mapper.countByQuery(tenantB)).isEqualTo(1);
+            WorkflowRunQuery waiting = query("tenant-a", "waiting-request");
+            assertThat(mapper.selectByQuery(waiting)).isEmpty();
+            assertThat(mapper.countByQuery(waiting)).isZero();
+            WorkflowRunQuery legacy = query("tenant-a", null);
+            assertThat(mapper.selectByQuery(legacy)).extracting("id").containsExactly(11L);
+            assertThat(mapper.countByQuery(legacy)).isEqualTo(1);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("工作流编码和请求标识组合筛选遵守租户与分页条件")
-  void workflowCodeAndRequestId_shouldRespectTenantAndPagination() {
-    try (SqlSession session = sessions.openSession()) {
-      WorkflowRunMapper mapper = session.getMapper(WorkflowRunMapper.class);
-      WorkflowRunQuery firstPage = WorkflowRunQuery.builder()
-          .tenantId("tenant-e")
-          .workflowCode("WF")
-          .requestId("shared-request")
-          .pageRequest(new PageRequest(1, 1))
-          .build();
-      WorkflowRunQuery secondPage = WorkflowRunQuery.builder()
-          .tenantId("tenant-e")
-          .workflowCode("WF")
-          .requestId("shared-request")
-          .pageRequest(new PageRequest(2, 1))
-          .build();
-      WorkflowRunQuery selectedVersion = WorkflowRunQuery.builder()
-          .tenantId("tenant-e")
-          .workflowDefinitionId(105L)
-          .workflowCode("WF")
-          .requestId("shared-request")
-          .pageRequest(new PageRequest(1, 20))
-          .build();
-
-      assertThat(mapper.selectByQuery(firstPage)).extracting("id").containsExactly(18L);
-      assertThat(mapper.selectByQuery(secondPage)).extracting("id").containsExactly(17L);
-      assertThat(mapper.countByQuery(firstPage)).isEqualTo(2);
-      assertThat(mapper.countByQuery(secondPage)).isEqualTo(2);
-      assertThat(mapper.selectByQuery(selectedVersion)).extracting("id").containsExactly(17L);
-      assertThat(mapper.countByQuery(selectedVersion)).isEqualTo(1);
+    @Test
+    @DisplayName("工作流编码筛选包含当前租户内的所有定义版本")
+    void workflowCodeFilter_shouldIncludeAllVersionsWithinTenant() {
+        try (SqlSession session = sessions.openSession()) {
+            Map<String, Object> query =
+                    Map.of("tenantId", "tenant-c", "workflowCode", "WF", "pageRequest", new PageRequest(1, 20));
+            String namespace = WorkflowRunMapper.class.getName();
+            List<WorkflowRunEntity> runs = session.selectList(namespace + ".selectByQuery", query);
+            Long total = session.selectOne(namespace + ".countByQuery", query);
+            assertThat(runs).extracting("id").containsExactly(14L, 13L);
+            assertThat(total).isEqualTo(2L);
+            Map<String, Object> selectedVersion = Map.of(
+                    "tenantId",
+                    "tenant-c",
+                    "workflowCode",
+                    "WF",
+                    "workflowDefinitionId",
+                    101L,
+                    "pageRequest",
+                    new PageRequest(1, 20));
+            List<WorkflowRunEntity> selectedRuns = session.selectList(namespace + ".selectByQuery", selectedVersion);
+            Long selectedTotal = session.selectOne(namespace + ".countByQuery", selectedVersion);
+            assertThat(selectedRuns).extracting("id").containsExactly(13L);
+            assertThat(selectedTotal).isEqualTo(1L);
+        }
     }
-  }
 
-  private WorkflowRunQuery query(String tenantId, String requestId) {
-    return WorkflowRunQuery.builder()
-        .tenantId(tenantId)
-        .requestId(requestId)
-        .pageRequest(new PageRequest(1, 20))
-        .build();
-  }
+    @Test
+    @DisplayName("工作流编码和请求标识组合筛选遵守租户与分页条件")
+    void workflowCodeAndRequestId_shouldRespectTenantAndPagination() {
+        try (SqlSession session = sessions.openSession()) {
+            WorkflowRunMapper mapper = session.getMapper(WorkflowRunMapper.class);
+            WorkflowRunQuery firstPage = WorkflowRunQuery.builder()
+                    .tenantId("tenant-e")
+                    .workflowCode("WF")
+                    .requestId("shared-request")
+                    .pageRequest(new PageRequest(1, 1))
+                    .build();
+            WorkflowRunQuery secondPage = WorkflowRunQuery.builder()
+                    .tenantId("tenant-e")
+                    .workflowCode("WF")
+                    .requestId("shared-request")
+                    .pageRequest(new PageRequest(2, 1))
+                    .build();
+            WorkflowRunQuery selectedVersion = WorkflowRunQuery.builder()
+                    .tenantId("tenant-e")
+                    .workflowDefinitionId(105L)
+                    .workflowCode("WF")
+                    .requestId("shared-request")
+                    .pageRequest(new PageRequest(1, 20))
+                    .build();
+
+            assertThat(mapper.selectByQuery(firstPage)).extracting("id").containsExactly(18L);
+            assertThat(mapper.selectByQuery(secondPage)).extracting("id").containsExactly(17L);
+            assertThat(mapper.countByQuery(firstPage)).isEqualTo(2);
+            assertThat(mapper.countByQuery(secondPage)).isEqualTo(2);
+            assertThat(mapper.selectByQuery(selectedVersion)).extracting("id").containsExactly(17L);
+            assertThat(mapper.countByQuery(selectedVersion)).isEqualTo(1);
+        }
+    }
+
+    private WorkflowRunQuery query(String tenantId, String requestId) {
+        return WorkflowRunQuery.builder()
+                .tenantId(tenantId)
+                .requestId(requestId)
+                .pageRequest(new PageRequest(1, 20))
+                .build();
+    }
 }

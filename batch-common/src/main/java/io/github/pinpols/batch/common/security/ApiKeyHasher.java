@@ -33,83 +33,83 @@ import javax.crypto.spec.PBEKeySpec;
  */
 public final class ApiKeyHasher {
 
-  /** OWASP 2023 cheat sheet 推荐下限。10ms 量级,worker→orchestrator 内调路径可接受。 */
-  public static final int PBKDF2_ITERATIONS = 600_000;
+    /** OWASP 2023 cheat sheet 推荐下限。10ms 量级,worker→orchestrator 内调路径可接受。 */
+    public static final int PBKDF2_ITERATIONS = 600_000;
 
-  public static final int SALT_BYTES = 16;
-  public static final int KEY_BYTES = 32;
-  public static final String PBKDF2_ALGO = "PBKDF2WithHmacSHA256";
+    public static final int SALT_BYTES = 16;
+    public static final int KEY_BYTES = 32;
+    public static final String PBKDF2_ALGO = "PBKDF2WithHmacSHA256";
 
-  public static final String ALGO_PBKDF2 = "pbkdf2";
-  public static final String ALGO_SHA256_LEGACY = "sha256";
+    public static final String ALGO_PBKDF2 = "pbkdf2";
+    public static final String ALGO_SHA256_LEGACY = "sha256";
 
-  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-  private ApiKeyHasher() {}
+    private ApiKeyHasher() {}
 
-  /** 生成 base64 编码的 16 字节随机 salt。 */
-  public static String newSalt() {
-    byte[] salt = new byte[SALT_BYTES];
-    SECURE_RANDOM.nextBytes(salt);
-    return Base64.getEncoder().encodeToString(salt);
-  }
-
-  /** 旧 SHA-256 hex hash —— 仅用于 legacy 行兼容比对,**禁用于新签发**。 */
-  public static String legacySha256Hex(String input) {
-    try {
-      MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = md.digest(encodedInput);
-      return HexFormat.of().formatHex(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 not available", e);
+    /** 生成 base64 编码的 16 字节随机 salt。 */
+    public static String newSalt() {
+        byte[] salt = new byte[SALT_BYTES];
+        SECURE_RANDOM.nextBytes(salt);
+        return Base64.getEncoder().encodeToString(salt);
     }
-  }
 
-  /** 新 KDF:返回 {@link SaltedHash} 含 salt + hash(base64),写入 (salt, key_hash, algo='pbkdf2')。 */
-  public static SaltedHash hashWithSaltKdf(String rawKey) {
-    String salt = newSalt();
-    String hash = pbkdf2(rawKey, salt);
-    return new SaltedHash(salt, hash);
-  }
-
-  /**
-   * 常量时间验证。
-   *
-   * @param rawKey 客户端原文
-   * @param storedHash DB 存的 hash(legacy 是 hex SHA-256,新算法是 base64 PBKDF2 output)
-   * @param storedSalt DB 存的 salt(legacy null);PBKDF2 必须非空
-   * @param algo {@link #ALGO_PBKDF2} 或 {@link #ALGO_SHA256_LEGACY}
-   */
-  public static boolean verify(String rawKey, String storedHash, String storedSalt, String algo) {
-    if (rawKey == null || storedHash == null || algo == null) return false;
-    String computed;
-    if (ALGO_PBKDF2.equals(algo)) {
-      if (storedSalt == null || storedSalt.isBlank()) return false;
-      computed = pbkdf2(rawKey, storedSalt);
-    } else if (ALGO_SHA256_LEGACY.equals(algo)) {
-      computed = legacySha256Hex(rawKey);
-    } else {
-      return false;
+    /** 旧 SHA-256 hex hash —— 仅用于 legacy 行兼容比对,**禁用于新签发**。 */
+    public static String legacySha256Hex(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = md.digest(encodedInput);
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
-    byte[] computedHashBytes = computed.getBytes(StandardCharsets.UTF_8);
-    byte[] storedHashBytes = storedHash.getBytes(StandardCharsets.UTF_8);
-    return MessageDigest.isEqual(computedHashBytes, storedHashBytes);
-  }
 
-  private static String pbkdf2(String raw, String saltBase64) {
-    try {
-      byte[] salt = Base64.getDecoder().decode(saltBase64);
-      KeySpec spec = new PBEKeySpec(raw.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_BYTES * 8);
-      SecretKeyFactory factory = SecretKeyFactory.getInstance(PBKDF2_ALGO);
-      SecretKey derivedKey = factory.generateSecret(spec);
-      byte[] encodedKey = derivedKey.getEncoded();
-      return Base64.getEncoder().encodeToString(encodedKey);
-    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-      throw new IllegalStateException("PBKDF2 derivation failed", e);
+    /** 新 KDF:返回 {@link SaltedHash} 含 salt + hash(base64),写入 (salt, key_hash, algo='pbkdf2')。 */
+    public static SaltedHash hashWithSaltKdf(String rawKey) {
+        String salt = newSalt();
+        String hash = pbkdf2(rawKey, salt);
+        return new SaltedHash(salt, hash);
     }
-  }
 
-  /** salt(base64) + hash(base64) pair —— 写入 (api_key.salt, api_key.key_hash) 用。 */
-  public record SaltedHash(String salt, String hash) {}
+    /**
+     * 常量时间验证。
+     *
+     * @param rawKey 客户端原文
+     * @param storedHash DB 存的 hash(legacy 是 hex SHA-256,新算法是 base64 PBKDF2 output)
+     * @param storedSalt DB 存的 salt(legacy null);PBKDF2 必须非空
+     * @param algo {@link #ALGO_PBKDF2} 或 {@link #ALGO_SHA256_LEGACY}
+     */
+    public static boolean verify(String rawKey, String storedHash, String storedSalt, String algo) {
+        if (rawKey == null || storedHash == null || algo == null) return false;
+        String computed;
+        if (ALGO_PBKDF2.equals(algo)) {
+            if (storedSalt == null || storedSalt.isBlank()) return false;
+            computed = pbkdf2(rawKey, storedSalt);
+        } else if (ALGO_SHA256_LEGACY.equals(algo)) {
+            computed = legacySha256Hex(rawKey);
+        } else {
+            return false;
+        }
+        byte[] computedHashBytes = computed.getBytes(StandardCharsets.UTF_8);
+        byte[] storedHashBytes = storedHash.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(computedHashBytes, storedHashBytes);
+    }
+
+    private static String pbkdf2(String raw, String saltBase64) {
+        try {
+            byte[] salt = Base64.getDecoder().decode(saltBase64);
+            KeySpec spec = new PBEKeySpec(raw.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_BYTES * 8);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance(PBKDF2_ALGO);
+            SecretKey derivedKey = factory.generateSecret(spec);
+            byte[] encodedKey = derivedKey.getEncoded();
+            return Base64.getEncoder().encodeToString(encodedKey);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new IllegalStateException("PBKDF2 derivation failed", e);
+        }
+    }
+
+    /** salt(base64) + hash(base64) pair —— 写入 (api_key.salt, api_key.key_hash) 用。 */
+    public record SaltedHash(String salt, String hash) {}
 }

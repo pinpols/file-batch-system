@@ -33,70 +33,68 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 public class ReservedPrefixGuard {
 
-  /** 测试 / 环境 / 系统保留前缀 — prod 拒 / 非 prod 鼓励。 */
-  public static final List<String> RESERVED_TENANT_PREFIXES =
-      List.of("e2e-", "qa-", "dev-", "local-", "test-", "_internal-");
+    /** 测试 / 环境 / 系统保留前缀 — prod 拒 / 非 prod 鼓励。 */
+    public static final List<String> RESERVED_TENANT_PREFIXES =
+            List.of("e2e-", "qa-", "dev-", "local-", "test-", "_internal-");
 
-  /** 完全保留的 tenant_id — 系统占用,任何环境都不可重名。 */
-  public static final List<String> RESERVED_TENANT_IDS = CommonConstants.RESERVED_TENANT_IDS;
+    /** 完全保留的 tenant_id — 系统占用,任何环境都不可重名。 */
+    public static final List<String> RESERVED_TENANT_IDS = CommonConstants.RESERVED_TENANT_IDS;
 
-  /**
-   * 非 prod 环境 dev fixture 白名单 —— 团队手测 / 部分 e2e 长期复用,允许无 test prefix 直接创建。 增删需评审(参考
-   * scripts/db/wipe-non-system-tenants.sql `:keep` 同步)。
-   */
-  public static final List<String> DEV_FIXTURE_TENANT_IDS = CommonConstants.DEV_FIXTURE_TENANT_IDS;
+    /**
+     * 非 prod 环境 dev fixture 白名单 —— 团队手测 / 部分 e2e 长期复用,允许无 test prefix 直接创建。 增删需评审(参考
+     * scripts/db/wipe-non-system-tenants.sql `:keep` 同步)。
+     */
+    public static final List<String> DEV_FIXTURE_TENANT_IDS = CommonConstants.DEV_FIXTURE_TENANT_IDS;
 
-  /** 资源 code 保留前缀 — 防止业务方误用系统级标识。 */
-  public static final List<String> RESERVED_CODE_PREFIXES = List.of("SYSTEM_", "INTERNAL_", "_");
+    /** 资源 code 保留前缀 — 防止业务方误用系统级标识。 */
+    public static final List<String> RESERVED_CODE_PREFIXES = List.of("SYSTEM_", "INTERNAL_", "_");
 
-  /**
-   * 校验新建租户的 tenantId。
-   *
-   * @param tenantId 待校验 ID;null/blank 直接放过(其它校验链负责必填)
-   * @param productionMode true=生产环境(拒 test prefix);false=非 prod(必须 test prefix 或白名单)
-   */
-  public static void checkTenantId(String tenantId, boolean productionMode) {
-    if (tenantId == null || tenantId.isBlank()) return;
-    String lower = tenantId.toLowerCase(Locale.ROOT);
+    /**
+     * 校验新建租户的 tenantId。
+     *
+     * @param tenantId 待校验 ID;null/blank 直接放过(其它校验链负责必填)
+     * @param productionMode true=生产环境(拒 test prefix);false=非 prod(必须 test prefix 或白名单)
+     */
+    public static void checkTenantId(String tenantId, boolean productionMode) {
+        if (tenantId == null || tenantId.isBlank()) return;
+        String lower = tenantId.toLowerCase(Locale.ROOT);
 
-    // 永远拒:RESERVED_TENANT_IDS(system / default / admin)
-    if (RESERVED_TENANT_IDS.contains(lower)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_id", tenantId);
-    }
-
-    if (productionMode) {
-      // PROD:拒 test prefix(防 test 数据污染生产)
-      for (String prefix : RESERVED_TENANT_PREFIXES) {
-        if (lower.startsWith(prefix)) {
-          throw BizException.of(
-              ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_prefix", tenantId, prefix);
+        // 永远拒:RESERVED_TENANT_IDS(system / default / admin)
+        if (RESERVED_TENANT_IDS.contains(lower)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_id", tenantId);
         }
-      }
-      return;
+
+        if (productionMode) {
+            // PROD:拒 test prefix(防 test 数据污染生产)
+            for (String prefix : RESERVED_TENANT_PREFIXES) {
+                if (lower.startsWith(prefix)) {
+                    throw BizException.of(
+                            ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_prefix", tenantId, prefix);
+                }
+            }
+            return;
+        }
+
+        // NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(防残留无主)
+        if (DEV_FIXTURE_TENANT_IDS.contains(lower)) return;
+        for (String prefix : RESERVED_TENANT_PREFIXES) {
+            if (lower.startsWith(prefix)) return;
+        }
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.non_prod_require_test_prefix", tenantId);
     }
 
-    // NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(防残留无主)
-    if (DEV_FIXTURE_TENANT_IDS.contains(lower)) return;
-    for (String prefix : RESERVED_TENANT_PREFIXES) {
-      if (lower.startsWith(prefix)) return;
+    /**
+     * 校验资源 code 不撞保留前缀。
+     *
+     * <p>仅 strict 模式生效。建议 production profile 开启,test/local 关。
+     */
+    public static void checkResourceCode(String code, boolean strict) {
+        if (!strict || code == null || code.isBlank()) return;
+        String upper = code.toUpperCase(Locale.ROOT);
+        for (String prefix : RESERVED_CODE_PREFIXES) {
+            if (upper.startsWith(prefix)) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.resource.reserved_prefix", code, prefix);
+            }
+        }
     }
-    throw BizException.of(
-        ResultCode.INVALID_ARGUMENT, "error.tenant.non_prod_require_test_prefix", tenantId);
-  }
-
-  /**
-   * 校验资源 code 不撞保留前缀。
-   *
-   * <p>仅 strict 模式生效。建议 production profile 开启,test/local 关。
-   */
-  public static void checkResourceCode(String code, boolean strict) {
-    if (!strict || code == null || code.isBlank()) return;
-    String upper = code.toUpperCase(Locale.ROOT);
-    for (String prefix : RESERVED_CODE_PREFIXES) {
-      if (upper.startsWith(prefix)) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.resource.reserved_prefix", code, prefix);
-      }
-    }
-  }
 }

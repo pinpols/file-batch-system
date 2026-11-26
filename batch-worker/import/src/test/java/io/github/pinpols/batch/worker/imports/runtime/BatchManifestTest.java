@@ -9,12 +9,12 @@ import org.junit.jupiter.api.Test;
 @DisplayName("批次清单解析单测:必需文件,按文件映射与仅导出束的判定语义")
 class BatchManifestTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  @Test
-  @DisplayName("解析 batch-manifest-v1:requiredFiles 等字段映射正确")
-  void shouldParseRequiredFiles_whenManifestIsComplete() throws Exception {
-    String json = """
+    @Test
+    @DisplayName("解析 batch-manifest-v1:requiredFiles 等字段映射正确")
+    void shouldParseRequiredFiles_whenManifestIsComplete() throws Exception {
+        String json = """
         {
           "schemaVersion": "batch-manifest-v1",
           "fileGroupCode": "region-daily",
@@ -23,37 +23,34 @@ class BatchManifestTest {
           "requiredFiles": ["region_BJ_20260620.csv", "region_SH_20260620.csv"]
         }
         """;
-    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.fileGroupCode()).isEqualTo("region-daily");
-    assertThat(m.tenantId()).isEqualTo("t1");
-    assertThat(m.requiredFiles())
-        .containsExactly("region_BJ_20260620.csv", "region_SH_20260620.csv");
-  }
+        BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+        assertThat(m.fileGroupCode()).isEqualTo("region-daily");
+        assertThat(m.tenantId()).isEqualTo("t1");
+        assertThat(m.requiredFiles()).containsExactly("region_BJ_20260620.csv", "region_SH_20260620.csv");
+    }
 
-  @Test
-  @DisplayName("未知字段忽略(前向兼容),缺省字段为 null")
-  void shouldIgnoreUnknownFields_whenRequiredFilesMissing() throws Exception {
-    BatchManifest m =
-        objectMapper.readValue("{\"fileGroupCode\":\"g\",\"future\":1}", BatchManifest.class);
-    assertThat(m.fileGroupCode()).isEqualTo("g");
-    assertThat(m.requiredFiles()).isNull();
-  }
+    @Test
+    @DisplayName("未知字段忽略(前向兼容),缺省字段为 null")
+    void shouldIgnoreUnknownFields_whenRequiredFilesMissing() throws Exception {
+        BatchManifest m = objectMapper.readValue("{\"fileGroupCode\":\"g\",\"future\":1}", BatchManifest.class);
+        assertThat(m.fileGroupCode()).isEqualTo("g");
+        assertThat(m.requiredFiles()).isNull();
+    }
 
-  @Test
-  @DisplayName("v1 清单无 fileMapping:hasFileMapping=false,向后兼容")
-  void shouldReportNoFileMapping_whenManifestIsV1() throws Exception {
-    BatchManifest m = objectMapper.readValue(
-        "{\"schemaVersion\":\"batch-manifest-v1\",\"requiredFiles\":[\"a.csv\"]}",
-        BatchManifest.class);
-    assertThat(m.fileMapping()).isNull();
-    assertThat(m.hasFileMapping()).isFalse();
-    assertThat(m.templateCodeFor("a.csv")).isEmpty();
-  }
+    @Test
+    @DisplayName("v1 清单无 fileMapping:hasFileMapping=false,向后兼容")
+    void shouldReportNoFileMapping_whenManifestIsV1() throws Exception {
+        BatchManifest m = objectMapper.readValue(
+                "{\"schemaVersion\":\"batch-manifest-v1\",\"requiredFiles\":[\"a.csv\"]}", BatchManifest.class);
+        assertThat(m.fileMapping()).isNull();
+        assertThat(m.hasFileMapping()).isFalse();
+        assertThat(m.templateCodeFor("a.csv")).isEmpty();
+    }
 
-  @Test
-  @DisplayName("v2 清单解析 fileMapping:逐文件模板映射 + 可选目标表覆盖")
-  void shouldExposeTemplateCodes_whenV2FileMappingGiven() throws Exception {
-    String json = """
+    @Test
+    @DisplayName("v2 清单解析 fileMapping:逐文件模板映射 + 可选目标表覆盖")
+    void shouldExposeTemplateCodes_whenV2FileMappingGiven() throws Exception {
+        String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-daily",
@@ -67,23 +64,23 @@ class BatchManifestTest {
           ]
         }
         """;
-    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.workflowCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
-    assertThat(m.hasFileMapping()).isTrue();
-    assertThat(m.fileMapping()).hasSize(2);
-    assertThat(m.templateCodeFor("order.csv")).contains("TPL_ORDER");
-    assertThat(m.templateCodeFor("cust.csv")).contains("TPL_CUST");
-    assertThat(m.fileMapping().get(1).targetTable()).isEqualTo("biz.customer");
-    // 未在映射里的文件 → empty
-    assertThat(m.templateCodeFor("missing.csv")).isEmpty();
-    // 导入束清单无 targetRef
-    assertThat(m.targetRefFor("order.csv")).isEmpty();
-  }
+        BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+        assertThat(m.workflowCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+        assertThat(m.hasFileMapping()).isTrue();
+        assertThat(m.fileMapping()).hasSize(2);
+        assertThat(m.templateCodeFor("order.csv")).contains("TPL_ORDER");
+        assertThat(m.templateCodeFor("cust.csv")).contains("TPL_CUST");
+        assertThat(m.fileMapping().get(1).targetTable()).isEqualTo("biz.customer");
+        // 未在映射里的文件 → empty
+        assertThat(m.templateCodeFor("missing.csv")).isEmpty();
+        // 导入束清单无 targetRef
+        assertThat(m.targetRefFor("order.csv")).isEmpty();
+    }
 
-  @Test
-  @DisplayName("v2 分发束清单解析 fileMapping:逐文件下游渠道 targetRef")
-  void shouldExposeTargetRefs_whenDispatchMappingGiven() throws Exception {
-    String json = """
+    @Test
+    @DisplayName("v2 分发束清单解析 fileMapping:逐文件下游渠道 targetRef")
+    void shouldExposeTargetRefs_whenDispatchMappingGiven() throws Exception {
+        String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "dispatch-eod",
@@ -97,27 +94,27 @@ class BatchManifestTest {
           ]
         }
         """;
-    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.workflowCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
-    assertThat(m.hasFileMapping()).isTrue();
-    assertThat(m.targetRefFor("risk.csv")).contains("CH_SFTP");
-    assertThat(m.targetRefFor("trade.csv")).contains("CH_OSS");
-    // 分发束清单无 templateCode
-    assertThat(m.templateCodeFor("risk.csv")).isEmpty();
-    assertThat(m.targetRefFor("missing.csv")).isEmpty();
-  }
+        BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+        assertThat(m.workflowCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
+        assertThat(m.hasFileMapping()).isTrue();
+        assertThat(m.targetRefFor("risk.csv")).contains("CH_SFTP");
+        assertThat(m.targetRefFor("trade.csv")).contains("CH_OSS");
+        // 分发束清单无 templateCode
+        assertThat(m.templateCodeFor("risk.csv")).isEmpty();
+        assertThat(m.targetRefFor("missing.csv")).isEmpty();
+    }
 
-  @Test
-  @DisplayName("空 fileMapping 数组:hasFileMapping=false")
-  void shouldReportNoFileMapping_whenMappingIsEmpty() throws Exception {
-    BatchManifest m = objectMapper.readValue("{\"fileMapping\":[]}", BatchManifest.class);
-    assertThat(m.hasFileMapping()).isFalse();
-  }
+    @Test
+    @DisplayName("空 fileMapping 数组:hasFileMapping=false")
+    void shouldReportNoFileMapping_whenMappingIsEmpty() throws Exception {
+        BatchManifest m = objectMapper.readValue("{\"fileMapping\":[]}", BatchManifest.class);
+        assertThat(m.hasFileMapping()).isFalse();
+    }
 
-  @Test
-  @DisplayName("manifest-only 导出束:workflowCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
-  void shouldDetectManifestOnlyExport_whenWorkflowCodeAndTemplatesPresent() throws Exception {
-    String json = """
+    @Test
+    @DisplayName("manifest-only 导出束:workflowCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
+    void shouldDetectManifestOnlyExport_whenWorkflowCodeAndTemplatesPresent() throws Exception {
+        String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "export-eod",
@@ -130,15 +127,15 @@ class BatchManifestTest {
           ]
         }
         """;
-    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.isManifestOnlyExport()).isTrue();
-    assertThat(m.exportTemplateCodes()).containsExactly("EXP_RISK", "EXP_TRADE");
-  }
+        BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+        assertThat(m.isManifestOnlyExport()).isTrue();
+        assertThat(m.exportTemplateCodes()).containsExactly("EXP_RISK", "EXP_TRADE");
+    }
 
-  @Test
-  @DisplayName("导入束清单(有 requiredFiles)不是 manifest-only 导出")
-  void shouldNotDetectManifestOnlyExport_whenRequiredFilesPresent() throws Exception {
-    String json = """
+    @Test
+    @DisplayName("导入束清单(有 requiredFiles)不是 manifest-only 导出")
+    void shouldNotDetectManifestOnlyExport_whenRequiredFilesPresent() throws Exception {
+        String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-daily",
@@ -147,20 +144,19 @@ class BatchManifestTest {
           "fileMapping": [ { "fileName": "order.csv", "templateCode": "TPL_ORDER" } ]
         }
         """;
-    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.isManifestOnlyExport()).isFalse();
-  }
+        BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+        assertThat(m.isManifestOnlyExport()).isFalse();
+    }
 
-  @Test
-  @DisplayName("无 workflowCode 或无模板 → 不是 manifest-only 导出")
-  void shouldNotDetectManifestOnlyExport_whenJobCodeOrTemplatesMissing() throws Exception {
-    BatchManifest noJob = objectMapper.readValue(
-        "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}", BatchManifest.class);
-    assertThat(noJob.isManifestOnlyExport()).isFalse();
-    BatchManifest noTpl =
-        objectMapper.readValue("{\"jobCode\":\"BUNDLE_EXPORT_X\"}", BatchManifest.class);
-    assertThat(noTpl.isManifestOnlyExport()).isFalse();
-    assertThat(noTpl.hasRetiredJobTarget()).isTrue();
-    assertThat(noTpl.exportTemplateCodes()).isEmpty();
-  }
+    @Test
+    @DisplayName("无 workflowCode 或无模板 → 不是 manifest-only 导出")
+    void shouldNotDetectManifestOnlyExport_whenJobCodeOrTemplatesMissing() throws Exception {
+        BatchManifest noJob = objectMapper.readValue(
+                "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}", BatchManifest.class);
+        assertThat(noJob.isManifestOnlyExport()).isFalse();
+        BatchManifest noTpl = objectMapper.readValue("{\"jobCode\":\"BUNDLE_EXPORT_X\"}", BatchManifest.class);
+        assertThat(noTpl.isManifestOnlyExport()).isFalse();
+        assertThat(noTpl.hasRetiredJobTarget()).isTrue();
+        assertThat(noTpl.exportTemplateCodes()).isEmpty();
+    }
 }

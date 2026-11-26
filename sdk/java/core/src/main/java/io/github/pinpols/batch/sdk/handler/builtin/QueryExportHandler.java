@@ -37,89 +37,88 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class QueryExportHandler extends SdkAbstractTaskHandler {
 
-  private final QueryExportConfig config;
-  private final DataSource dataSource;
+    private final QueryExportConfig config;
+    private final DataSource dataSource;
 
-  public QueryExportHandler(QueryExportConfig config, DataSource dataSource) {
-    this.config = Objects.requireNonNull(config, "config");
-    this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
-  }
+    public QueryExportHandler(QueryExportConfig config, DataSource dataSource) {
+        this.config = Objects.requireNonNull(config, "config");
+        this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+    }
 
-  @Override
-  public String taskType() {
-    return config.taskType();
-  }
+    @Override
+    public String taskType() {
+        return config.taskType();
+    }
 
-  @Override
-  protected SdkTaskResult doExecute(SdkTaskContext ctx) {
-    Path path = resolveOutput(ctx);
-    char delim = config.format().delimiter();
-    char quote = config.format().quote();
-    long rowCount = 0;
-    try (Connection conn = dataSource.getConnection()) {
-      conn.setAutoCommit(false);
-      try (Statement st = conn.createStatement();
-          BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-        st.setFetchSize(config.fetchSize());
-        try (ResultSet rs = st.executeQuery(config.query())) {
-          ResultSetMetaData meta = rs.getMetaData();
-          int cols = meta.getColumnCount();
-          if (config.format().header()) {
-            writeHeader(writer, meta, cols, delim, quote);
-          }
-          rowCount = writeRows(rs, writer, cols, delim, quote);
+    @Override
+    protected SdkTaskResult doExecute(SdkTaskContext ctx) {
+        Path path = resolveOutput(ctx);
+        char delim = config.format().delimiter();
+        char quote = config.format().quote();
+        long rowCount = 0;
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try (Statement st = conn.createStatement();
+                    BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+                st.setFetchSize(config.fetchSize());
+                try (ResultSet rs = st.executeQuery(config.query())) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int cols = meta.getColumnCount();
+                    if (config.format().header()) {
+                        writeHeader(writer, meta, cols, delim, quote);
+                    }
+                    rowCount = writeRows(rs, writer, cols, delim, quote);
+                }
+            }
+            conn.commit();
+        } catch (Exception ex) {
+            log.error("export failed: path={}", path, ex);
+            return SdkTaskResult.fail(ex);
         }
-      }
-      conn.commit();
-    } catch (Exception ex) {
-      log.error("export failed: path={}", path, ex);
-      return SdkTaskResult.fail(ex);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("rowCount", rowCount);
+        out.put("filePath", path.toString());
+        return SdkTaskResult.ok("exported " + rowCount + " rows", out);
     }
-    Map<String, Object> out = new LinkedHashMap<>();
-    out.put("rowCount", rowCount);
-    out.put("filePath", path.toString());
-    return SdkTaskResult.ok("exported " + rowCount + " rows", out);
-  }
 
-  private void writeHeader(
-      BufferedWriter writer, ResultSetMetaData meta, int cols, char delim, char quote)
-      throws SQLException, IOException {
-    List<String> headers = new ArrayList<>(cols);
-    for (int i = 1; i <= cols; i++) {
-      headers.add(meta.getColumnLabel(i));
+    private void writeHeader(BufferedWriter writer, ResultSetMetaData meta, int cols, char delim, char quote)
+            throws SQLException, IOException {
+        List<String> headers = new ArrayList<>(cols);
+        for (int i = 1; i <= cols; i++) {
+            headers.add(meta.getColumnLabel(i));
+        }
+        writer.write(DelimitedCodec.encode(headers, delim, quote));
+        writer.newLine();
     }
-    writer.write(DelimitedCodec.encode(headers, delim, quote));
-    writer.newLine();
-  }
 
-  /** 游标流式逐行写出,返回写出的行数。 */
-  private long writeRows(ResultSet rs, BufferedWriter writer, int cols, char delim, char quote)
-      throws SQLException, IOException {
-    long rowCount = 0;
-    while (rs.next()) {
-      List<String> values = new ArrayList<>(cols);
-      for (int i = 1; i <= cols; i++) {
-        Object o = rs.getObject(i);
-        values.add(EmptyChecks.isNull(o) ? "" : o.toString());
-      }
-      writer.write(DelimitedCodec.encode(values, delim, quote));
-      writer.newLine();
-      rowCount++;
+    /** 游标流式逐行写出,返回写出的行数。 */
+    private long writeRows(ResultSet rs, BufferedWriter writer, int cols, char delim, char quote)
+            throws SQLException, IOException {
+        long rowCount = 0;
+        while (rs.next()) {
+            List<String> values = new ArrayList<>(cols);
+            for (int i = 1; i <= cols; i++) {
+                Object o = rs.getObject(i);
+                values.add(EmptyChecks.isNull(o) ? "" : o.toString());
+            }
+            writer.write(DelimitedCodec.encode(values, delim, quote));
+            writer.newLine();
+            rowCount++;
+        }
+        return rowCount;
     }
-    return rowCount;
-  }
 
-  private Path resolveOutput(SdkTaskContext ctx) {
-    Object raw = ctx.parameters().get(config.outputPathParam());
-    if (!(raw instanceof String p) || p.isBlank()) {
-      throw new IllegalArgumentException(
-          "missing required parameter '" + config.outputPathParam() + "' (output path)");
+    private Path resolveOutput(SdkTaskContext ctx) {
+        Object raw = ctx.parameters().get(config.outputPathParam());
+        if (!(raw instanceof String p) || p.isBlank()) {
+            throw new IllegalArgumentException(
+                    "missing required parameter '" + config.outputPathParam() + "' (output path)");
+        }
+        Path path = Path.of(p);
+        Path parent = path.getParent();
+        if (parent != null && !Files.isDirectory(parent)) {
+            throw new IllegalArgumentException("output directory does not exist: " + parent);
+        }
+        return path;
     }
-    Path path = Path.of(p);
-    Path parent = path.getParent();
-    if (parent != null && !Files.isDirectory(parent)) {
-      throw new IllegalArgumentException("output directory does not exist: " + parent);
-    }
-    return path;
-  }
 }

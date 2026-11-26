@@ -15,40 +15,38 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class AlertmanagerReemitScheduler {
-  private final AlertmanagerEmitProperties properties;
-  private final AlertmanagerEmitPublisher publisher;
-  private final AlertmanagerReemitService service;
-  private final TenantDirectoryMapper tenantDirectory;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AlertmanagerEmitProperties properties;
+    private final AlertmanagerEmitPublisher publisher;
+    private final AlertmanagerReemitService service;
+    private final TenantDirectoryMapper tenantDirectory;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "#{${batch.alert.am-emit.resend-interval-seconds:60} * 1000}")
-  @SchedulerLock(name = "am_alert_reemit", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
-  public void reemit() {
-    boolean skipped = !properties.isEnabled()
-        || !publisher.isEnabled()
-        || properties.getResendIntervalSeconds() <= 0
-        || gracefulShutdown.isDraining();
-    if (skipped) {
-      return;
+    @Scheduled(fixedDelayString = "#{${batch.alert.am-emit.resend-interval-seconds:60} * 1000}")
+    @SchedulerLock(name = "am_alert_reemit", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void reemit() {
+        boolean skipped = !properties.isEnabled()
+                || !publisher.isEnabled()
+                || properties.getResendIntervalSeconds() <= 0
+                || gracefulShutdown.isDraining();
+        if (skipped) {
+            return;
+        }
+        List<String> tenants;
+        try {
+            tenants = tenantDirectory.selectAllTenantIds();
+        } catch (RuntimeException failure) {
+            SwallowedExceptionLogger.warn(AlertmanagerReemitScheduler.class, "catch:reemit-directory", failure);
+            return;
+        }
+        for (String tenant : tenants) {
+            try {
+                RlsTenantContextHolder.runWithTenant(tenant, () -> {
+                    service.reemitTenant(tenant);
+                    return null;
+                });
+            } catch (RuntimeException failure) {
+                SwallowedExceptionLogger.warn(AlertmanagerReemitScheduler.class, "catch:reemit-tenant", failure);
+            }
+        }
     }
-    List<String> tenants;
-    try {
-      tenants = tenantDirectory.selectAllTenantIds();
-    } catch (RuntimeException failure) {
-      SwallowedExceptionLogger.warn(
-          AlertmanagerReemitScheduler.class, "catch:reemit-directory", failure);
-      return;
-    }
-    for (String tenant : tenants) {
-      try {
-        RlsTenantContextHolder.runWithTenant(tenant, () -> {
-          service.reemitTenant(tenant);
-          return null;
-        });
-      } catch (RuntimeException failure) {
-        SwallowedExceptionLogger.warn(
-            AlertmanagerReemitScheduler.class, "catch:reemit-tenant", failure);
-      }
-    }
-  }
 }

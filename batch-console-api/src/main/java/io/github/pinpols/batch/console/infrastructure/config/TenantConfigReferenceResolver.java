@@ -18,166 +18,164 @@ import org.springframework.util.StringUtils;
 @Component
 public class TenantConfigReferenceResolver {
 
-  private static final Set<String> TEMPLATE_KEYS = Set.of(
-      "templateCode",
-      "template_code",
-      "fileTemplateCode",
-      "file_template_code",
-      "importTemplateCode",
-      "import_template_code",
-      "exportTemplateCode",
-      "export_template_code");
+    private static final Set<String> TEMPLATE_KEYS = Set.of(
+            "templateCode",
+            "template_code",
+            "fileTemplateCode",
+            "file_template_code",
+            "importTemplateCode",
+            "import_template_code",
+            "exportTemplateCode",
+            "export_template_code");
 
-  private static final Set<String> CHANNEL_KEYS = Set.of(
-      "channelCode",
-      "channel_code",
-      "fileChannelCode",
-      "file_channel_code",
-      "inputChannelCode",
-      "input_channel_code",
-      "outputChannelCode",
-      "output_channel_code",
-      "sourceChannelCode",
-      "source_channel_code",
-      "targetChannelCode",
-      "target_channel_code",
-      "dispatchChannelCode",
-      "dispatch_channel_code");
+    private static final Set<String> CHANNEL_KEYS = Set.of(
+            "channelCode",
+            "channel_code",
+            "fileChannelCode",
+            "file_channel_code",
+            "inputChannelCode",
+            "input_channel_code",
+            "outputChannelCode",
+            "output_channel_code",
+            "sourceChannelCode",
+            "source_channel_code",
+            "targetChannelCode",
+            "target_channel_code",
+            "dispatchChannelCode",
+            "dispatch_channel_code");
 
-  /** 仅规范化不透明 JSON 中已识别的配置引用。 */
-  public static String normalizeConfigReferences(String raw) {
-    if (EmptyChecks.isBlank(raw)) {
-      return raw;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(raw, Object.class);
-      boolean[] changed = {false};
-      Object normalized = normalizeReferenceValues(parsed, changed, false);
-      return changed[0] ? JsonUtils.toJson(normalized) : raw;
-    } catch (IllegalArgumentException ignored) {
-      return raw;
-    }
-  }
-
-  private static Object normalizeReferenceValues(
-      Object value, boolean[] changed, boolean fileArrivalSpec) {
-    if (value instanceof Map<?, ?> map) {
-      Map<String, Object> normalized = new LinkedHashMap<>();
-      map.forEach((key, entryValue) -> {
-        String name = EmptyChecks.isNull(key) ? "" : key.toString();
-        boolean exactFileArrivalChannel = fileArrivalSpec && "channelCode".equals(name);
-        if (entryValue instanceof String reference
-            && !exactFileArrivalChannel
-            && (TEMPLATE_KEYS.contains(name) || CHANNEL_KEYS.contains(name))) {
-          String canonical = CodeNormalizer.toConfigFormOrNull(reference);
-          normalized.put(name, canonical);
-          changed[0] |= !reference.equals(canonical);
-        } else {
-          boolean nestedFileArrivalSpec =
-              "sensor_spec".equals(name) && "FILE_ARRIVAL".equals(map.get("sensor_type"));
-          normalized.put(
-              name, normalizeReferenceValues(entryValue, changed, nestedFileArrivalSpec));
+    /** 仅规范化不透明 JSON 中已识别的配置引用。 */
+    public static String normalizeConfigReferences(String raw) {
+        if (EmptyChecks.isBlank(raw)) {
+            return raw;
         }
-      });
-      return normalized;
-    }
-    if (value instanceof List<?> list) {
-      List<Object> normalized = new ArrayList<>(list.size());
-      for (Object item : list) {
-        normalized.add(normalizeReferenceValues(item, changed, false));
-      }
-      return normalized;
-    }
-    return value;
-  }
-
-  public References resolve(JobDefinitionSpec job, List<WorkflowDefinitionSpec> workflows) {
-    Set<String> workflowCodes = new LinkedHashSet<>();
-    Set<String> templateCodes = new LinkedHashSet<>();
-    Set<String> channelCodes = new LinkedHashSet<>();
-    Set<String> windowCodes = new LinkedHashSet<>();
-    Set<String> calendarCodes = new LinkedHashSet<>();
-
-    scanJson(job.getDefaultParams(), templateCodes, channelCodes);
-    scanJson(job.getParamSchema(), templateCodes, channelCodes);
-    addIfText(windowCodes, job.getWindowCode());
-    addIfText(calendarCodes, job.getCalendarCode());
-
-    for (WorkflowDefinitionSpec workflow : nullSafe(workflows)) {
-      addIfText(calendarCodes, workflow.getCalendarCode());
-      boolean matched = false;
-      for (WorkflowDefinitionSpec.NodeSpec node : nullSafe(workflow.getNodes())) {
-        if (job.getJobCode().equals(node.getRelatedJobCode())) {
-          matched = true;
+        try {
+            Object parsed = JsonUtils.fromJson(raw, Object.class);
+            boolean[] changed = {false};
+            Object normalized = normalizeReferenceValues(parsed, changed, false);
+            return changed[0] ? JsonUtils.toJson(normalized) : raw;
+        } catch (IllegalArgumentException ignored) {
+            return raw;
         }
-        addIfText(windowCodes, node.getWindowCode());
-        scanJson(node.getNodeParams(), templateCodes, channelCodes);
-      }
-      if (matched) {
-        addIfText(workflowCodes, workflow.getWorkflowCode());
-      }
     }
 
-    return new References(
-        List.copyOf(workflowCodes),
-        List.copyOf(templateCodes),
-        List.copyOf(channelCodes),
-        List.copyOf(windowCodes),
-        List.copyOf(calendarCodes));
-  }
-
-  private void scanJson(String raw, Set<String> templateCodes, Set<String> channelCodes) {
-    if (!StringUtils.hasText(raw)) {
-      return;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(raw, Object.class);
-      scanValue(parsed, templateCodes, channelCodes);
-    } catch (IllegalArgumentException ignored) {
-      // 旧版自由文本表达式不属于配置引用。
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private void scanValue(Object value, Set<String> templateCodes, Set<String> channelCodes) {
-    if (value instanceof Map<?, ?> map) {
-      for (Map.Entry<?, ?> entry : map.entrySet()) {
-        String key = entry.getKey() == null ? "" : entry.getKey().toString();
-        Object entryValue = entry.getValue();
-        if (TEMPLATE_KEYS.contains(key)) {
-          addIfText(templateCodes, stringValue(entryValue));
-        } else if (CHANNEL_KEYS.contains(key)) {
-          addIfText(channelCodes, stringValue(entryValue));
+    private static Object normalizeReferenceValues(Object value, boolean[] changed, boolean fileArrivalSpec) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            map.forEach((key, entryValue) -> {
+                String name = EmptyChecks.isNull(key) ? "" : key.toString();
+                boolean exactFileArrivalChannel = fileArrivalSpec && "channelCode".equals(name);
+                if (entryValue instanceof String reference
+                        && !exactFileArrivalChannel
+                        && (TEMPLATE_KEYS.contains(name) || CHANNEL_KEYS.contains(name))) {
+                    String canonical = CodeNormalizer.toConfigFormOrNull(reference);
+                    normalized.put(name, canonical);
+                    changed[0] |= !reference.equals(canonical);
+                } else {
+                    boolean nestedFileArrivalSpec =
+                            "sensor_spec".equals(name) && "FILE_ARRIVAL".equals(map.get("sensor_type"));
+                    normalized.put(name, normalizeReferenceValues(entryValue, changed, nestedFileArrivalSpec));
+                }
+            });
+            return normalized;
         }
-        scanValue(entryValue, templateCodes, channelCodes);
-      }
-      return;
+        if (value instanceof List<?> list) {
+            List<Object> normalized = new ArrayList<>(list.size());
+            for (Object item : list) {
+                normalized.add(normalizeReferenceValues(item, changed, false));
+            }
+            return normalized;
+        }
+        return value;
     }
-    if (value instanceof List<?> list) {
-      for (Object item : list) {
-        scanValue(item, templateCodes, channelCodes);
-      }
+
+    public References resolve(JobDefinitionSpec job, List<WorkflowDefinitionSpec> workflows) {
+        Set<String> workflowCodes = new LinkedHashSet<>();
+        Set<String> templateCodes = new LinkedHashSet<>();
+        Set<String> channelCodes = new LinkedHashSet<>();
+        Set<String> windowCodes = new LinkedHashSet<>();
+        Set<String> calendarCodes = new LinkedHashSet<>();
+
+        scanJson(job.getDefaultParams(), templateCodes, channelCodes);
+        scanJson(job.getParamSchema(), templateCodes, channelCodes);
+        addIfText(windowCodes, job.getWindowCode());
+        addIfText(calendarCodes, job.getCalendarCode());
+
+        for (WorkflowDefinitionSpec workflow : nullSafe(workflows)) {
+            addIfText(calendarCodes, workflow.getCalendarCode());
+            boolean matched = false;
+            for (WorkflowDefinitionSpec.NodeSpec node : nullSafe(workflow.getNodes())) {
+                if (job.getJobCode().equals(node.getRelatedJobCode())) {
+                    matched = true;
+                }
+                addIfText(windowCodes, node.getWindowCode());
+                scanJson(node.getNodeParams(), templateCodes, channelCodes);
+            }
+            if (matched) {
+                addIfText(workflowCodes, workflow.getWorkflowCode());
+            }
+        }
+
+        return new References(
+                List.copyOf(workflowCodes),
+                List.copyOf(templateCodes),
+                List.copyOf(channelCodes),
+                List.copyOf(windowCodes),
+                List.copyOf(calendarCodes));
     }
-  }
 
-  private static String stringValue(Object value) {
-    return value == null ? null : value.toString();
-  }
-
-  private static void addIfText(Set<String> values, String value) {
-    if (StringUtils.hasText(value)) {
-      values.add(value.trim());
+    private void scanJson(String raw, Set<String> templateCodes, Set<String> channelCodes) {
+        if (!StringUtils.hasText(raw)) {
+            return;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(raw, Object.class);
+            scanValue(parsed, templateCodes, channelCodes);
+        } catch (IllegalArgumentException ignored) {
+            // 旧版自由文本表达式不属于配置引用。
+        }
     }
-  }
 
-  private static <T> List<T> nullSafe(List<T> values) {
-    return values == null ? List.of() : new ArrayList<>(values);
-  }
+    @SuppressWarnings("unchecked")
+    private void scanValue(Object value, Set<String> templateCodes, Set<String> channelCodes) {
+        if (value instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = entry.getKey() == null ? "" : entry.getKey().toString();
+                Object entryValue = entry.getValue();
+                if (TEMPLATE_KEYS.contains(key)) {
+                    addIfText(templateCodes, stringValue(entryValue));
+                } else if (CHANNEL_KEYS.contains(key)) {
+                    addIfText(channelCodes, stringValue(entryValue));
+                }
+                scanValue(entryValue, templateCodes, channelCodes);
+            }
+            return;
+        }
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                scanValue(item, templateCodes, channelCodes);
+            }
+        }
+    }
 
-  public record References(
-      List<String> workflowCodes,
-      List<String> templateCodes,
-      List<String> channelCodes,
-      List<String> windowCodes,
-      List<String> calendarCodes) {}
+    private static String stringValue(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    private static void addIfText(Set<String> values, String value) {
+        if (StringUtils.hasText(value)) {
+            values.add(value.trim());
+        }
+    }
+
+    private static <T> List<T> nullSafe(List<T> values) {
+        return values == null ? List.of() : new ArrayList<>(values);
+    }
+
+    public record References(
+            List<String> workflowCodes,
+            List<String> templateCodes,
+            List<String> channelCodes,
+            List<String> windowCodes,
+            List<String> calendarCodes) {}
 }

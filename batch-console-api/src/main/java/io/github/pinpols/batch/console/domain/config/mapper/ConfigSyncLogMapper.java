@@ -8,23 +8,21 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ConfigSyncLogMapper {
 
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  List<ConfigSyncLogRow> selectByTenant(
-      @Param("tenantId") String tenantId, @Param("offset") long offset, @Param("limit") int limit);
+    List<ConfigSyncLogRow> selectByTenant(
+            @Param("tenantId") String tenantId, @Param("offset") long offset, @Param("limit") int limit);
 
-  ConfigSyncLogRow selectByIdForUpdate(
-      @Param("tenantId") String tenantId, @Param("logId") Long logId);
+    ConfigSyncLogRow selectByIdForUpdate(@Param("tenantId") String tenantId, @Param("logId") Long logId);
 
-  ConfigSyncLogRow selectByRequestKey(
-      @Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
+    ConfigSyncLogRow selectByRequestKey(
+            @Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
 
-  Long selectIdByRequestKey(
-      @Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
+    Long selectIdByRequestKey(@Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
 
-  long countByTenant(@Param("tenantId") String tenantId);
+    long countByTenant(@Param("tenantId") String tenantId);
 
-  int insert(ConfigSyncLogInsertParam params);
+    int insert(ConfigSyncLogInsertParam params);
 
-  int updateResult(ConfigSyncLogUpdateParam params);
+    int updateResult(ConfigSyncLogUpdateParam params);
 }

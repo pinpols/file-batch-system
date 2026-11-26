@@ -19,43 +19,43 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConsoleAiMetrics {
 
-  static final String TOKENS_METRIC = "batch.console.ai.tokens.total";
-  static final String REQUESTS_METRIC = "batch.console.ai.requests.total";
+    static final String TOKENS_METRIC = "batch.console.ai.tokens.total";
+    static final String REQUESTS_METRIC = "batch.console.ai.requests.total";
 
-  /** 门禁放行 + 模型成功应答。 */
-  public static final String DECISION_APPROVED = "approved";
+    /** 门禁放行 + 模型成功应答。 */
+    public static final String DECISION_APPROVED = "approved";
 
-  /** 被提示词门禁(safety / scope / disabled)拒绝。 */
-  public static final String DECISION_REJECTED = "rejected";
+    /** 被提示词门禁(safety / scope / disabled)拒绝。 */
+    public static final String DECISION_REJECTED = "rejected";
 
-  /** 命中调用限流被拒(429)。 */
-  public static final String DECISION_RATE_LIMITED = "rate_limited";
+    /** 命中调用限流被拒(429)。 */
+    public static final String DECISION_RATE_LIMITED = "rate_limited";
 
-  /** 模型调用失败 / 超时 → 优雅降级。 */
-  public static final String DECISION_FAILED = "failed";
+    /** 模型调用失败 / 超时 → 优雅降级。 */
+    public static final String DECISION_FAILED = "failed";
 
-  private final MeterRegistry meterRegistry;
+    private final MeterRegistry meterRegistry;
 
-  public ConsoleAiMetrics(MeterRegistry meterRegistry) {
-    this.meterRegistry = meterRegistry;
-  }
-
-  /** 记录一次调用消耗的 token(仅成功调用有值；null / 非正数忽略)。 */
-  public void recordTokens(Integer promptTokens, Integer completionTokens) {
-    if (promptTokens != null && promptTokens > 0) {
-      tokenCounter("prompt").increment(promptTokens);
+    public ConsoleAiMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
     }
-    if (completionTokens != null && completionTokens > 0) {
-      tokenCounter("completion").increment(completionTokens);
+
+    /** 记录一次调用消耗的 token(仅成功调用有值；null / 非正数忽略)。 */
+    public void recordTokens(Integer promptTokens, Integer completionTokens) {
+        if (promptTokens != null && promptTokens > 0) {
+            tokenCounter("prompt").increment(promptTokens);
+        }
+        if (completionTokens != null && completionTokens > 0) {
+            tokenCounter("completion").increment(completionTokens);
+        }
     }
-  }
 
-  /** 记录一次调用的结果分布(低基数 decision tag,绝不带 tenant)。 */
-  public void recordDecision(String decision) {
-    meterRegistry.counter(REQUESTS_METRIC, "decision", decision).increment();
-  }
+    /** 记录一次调用的结果分布(低基数 decision tag,绝不带 tenant)。 */
+    public void recordDecision(String decision) {
+        meterRegistry.counter(REQUESTS_METRIC, "decision", decision).increment();
+    }
 
-  private Counter tokenCounter(String type) {
-    return meterRegistry.counter(TOKENS_METRIC, "type", type);
-  }
+    private Counter tokenCounter(String type) {
+        return meterRegistry.counter(TOKENS_METRIC, "type", type);
+    }
 }

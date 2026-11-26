@@ -20,171 +20,139 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ResultVersionMapper {
 
-  enum VersionStatus {
-    PENDING,
-    EFFECTIVE,
-    SUPERSEDED,
-    ARCHIVED,
-    DRY_RUN
-  }
+    enum VersionStatus {
+        PENDING,
+        EFFECTIVE,
+        SUPERSEDED,
+        ARCHIVED,
+        DRY_RUN
+    }
 
-  record SupersedeParam(
-      String tenantId,
-      String businessKey,
-      Instant deactivatedAt,
-      String expectedStatus,
-      String targetStatus) {}
+    record SupersedeParam(
+            String tenantId, String businessKey, Instant deactivatedAt, String expectedStatus, String targetStatus) {}
 
-  record TransitionParam(
-      String tenantId,
-      Long id,
-      Instant transitionedAt,
-      String expectedStatus,
-      String targetStatus) {}
+    record TransitionParam(
+            String tenantId, Long id, Instant transitionedAt, String expectedStatus, String targetStatus) {}
 
-  record ArchiveParam(
-      String tenantId,
-      Long id,
-      Instant now,
-      boolean clearPayload,
-      String expectedStatus,
-      String targetStatus) {}
+    record ArchiveParam(
+            String tenantId, Long id, Instant now, boolean clearPayload, String expectedStatus, String targetStatus) {}
 
-  /** 新增一行 result_version。返回写入行数。 */
-  int insert(ResultVersionEntity entity);
+    /** 新增一行 result_version。返回写入行数。 */
+    int insert(ResultVersionEntity entity);
 
-  /**
-   * 新增并返回持久化后的完整行。终态热路径需要生成的 {@code id} 物化 asset partition，使用
-   * {@code INSERT ... RETURNING} 避免插入后再按 job_instance 回读一次。
-   */
-  ResultVersionEntity insertReturning(ResultVersionEntity entity);
+    /**
+     * 新增并返回持久化后的完整行。终态热路径需要生成的 {@code id} 物化 asset partition，使用
+     * {@code INSERT ... RETURNING} 避免插入后再按 job_instance 回读一次。
+     */
+    ResultVersionEntity insertReturning(ResultVersionEntity entity);
 
-  /**
-   * 对同一 (tenant_id, business_key) 的版本写入加事务级锁。
-   *
-   * <p>该锁只在当前数据库事务内有效,用于串行化 selectMaxVersionNo / supersede / insert 组合,避免并发 AUTO_LATEST 同时写
-   * EFFECTIVE 时撞 partial unique index。
-   */
-  int lockBusinessKey(@Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
+    /**
+     * 对同一 (tenant_id, business_key) 的版本写入加事务级锁。
+     *
+     * <p>该锁只在当前数据库事务内有效,用于串行化 selectMaxVersionNo / supersede / insert 组合,避免并发 AUTO_LATEST 同时写
+     * EFFECTIVE 时撞 partial unique index。
+     */
+    int lockBusinessKey(@Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
 
-  /** 按 job_instance_id 反查；同一实例最多 1 行（写入幂等保护）。 */
-  ResultVersionEntity selectByJobInstanceId(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    /** 按 job_instance_id 反查；同一实例最多 1 行（写入幂等保护）。 */
+    ResultVersionEntity selectByJobInstanceId(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  /** 拿同 (tenant_id, business_key) 当前最大 version_no；空集返回 null。 */
-  Integer selectMaxVersionNo(
-      @Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
+    /** 拿同 (tenant_id, business_key) 当前最大 version_no；空集返回 null。 */
+    Integer selectMaxVersionNo(@Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
 
-  /**
-   * 把当前 EFFECTIVE 行 CAS 推进到 SUPERSEDED。返回受影响行数（0 = 没有现存 EFFECTIVE，新版本可直接 EFFECTIVE）。
-   *
-   * <p>partial unique index 保证至多 1 行 EFFECTIVE，所以本 update 至多影响 1 行。
-   */
-  default int supersedePriorEffective(String tenantId, String businessKey, Instant deactivatedAt) {
-    SupersedeParam transition = new SupersedeParam(
-        tenantId,
-        businessKey,
-        deactivatedAt,
-        VersionStatus.EFFECTIVE.name(),
-        VersionStatus.SUPERSEDED.name());
-    return supersede(transition);
-  }
+    /**
+     * 把当前 EFFECTIVE 行 CAS 推进到 SUPERSEDED。返回受影响行数（0 = 没有现存 EFFECTIVE，新版本可直接 EFFECTIVE）。
+     *
+     * <p>partial unique index 保证至多 1 行 EFFECTIVE，所以本 update 至多影响 1 行。
+     */
+    default int supersedePriorEffective(String tenantId, String businessKey, Instant deactivatedAt) {
+        SupersedeParam transition = new SupersedeParam(
+                tenantId, businessKey, deactivatedAt, VersionStatus.EFFECTIVE.name(), VersionStatus.SUPERSEDED.name());
+        return supersede(transition);
+    }
 
-  int supersede(SupersedeParam param);
+    int supersede(SupersedeParam param);
 
-  /** 查 (tenant_id, business_key) 的当前 EFFECTIVE 行；找不到返回 null。 */
-  ResultVersionEntity selectEffective(
-      @Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
+    /** 查 (tenant_id, business_key) 的当前 EFFECTIVE 行；找不到返回 null。 */
+    ResultVersionEntity selectEffective(@Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
 
-  /** 按租户、业务键和版本号精确查询；指定版本依赖不能受版本列表分页上限影响。 */
-  ResultVersionEntity selectByBusinessKeyAndVersionNo(
-      @Param("tenantId") String tenantId,
-      @Param("businessKey") String businessKey,
-      @Param("versionNo") int versionNo);
+    /** 按租户、业务键和版本号精确查询；指定版本依赖不能受版本列表分页上限影响。 */
+    ResultVersionEntity selectByBusinessKeyAndVersionNo(
+            @Param("tenantId") String tenantId,
+            @Param("businessKey") String businessKey,
+            @Param("versionNo") int versionNo);
 
-  /** 选择不跨越正式/试运行边界的最新依赖版本。 */
-  ResultVersionEntity selectLatestCrossDayDependencyVersion(
-      @Param("tenantId") String tenantId,
-      @Param("businessKey") String businessKey,
-      @Param("dryRun") boolean dryRun);
+    /** 选择不跨越正式/试运行边界的最新依赖版本。 */
+    ResultVersionEntity selectLatestCrossDayDependencyVersion(
+            @Param("tenantId") String tenantId,
+            @Param("businessKey") String businessKey,
+            @Param("dryRun") boolean dryRun);
 
-  /** 仅当指定依赖版本属于请求的执行模式时才选择该版本。 */
-  ResultVersionEntity selectCrossDayDependencyVersion(
-      @Param("tenantId") String tenantId,
-      @Param("businessKey") String businessKey,
-      @Param("versionNo") int versionNo,
-      @Param("dryRun") boolean dryRun);
+    /** 仅当指定依赖版本属于请求的执行模式时才选择该版本。 */
+    ResultVersionEntity selectCrossDayDependencyVersion(
+            @Param("tenantId") String tenantId,
+            @Param("businessKey") String businessKey,
+            @Param("versionNo") int versionNo,
+            @Param("dryRun") boolean dryRun);
 
-  /** 列出某 business_key 的所有版本（按 version_no 倒序）；用于 console 列表 + ops 排查。 */
-  List<ResultVersionEntity> listVersionsByBusinessKey(
-      @Param("tenantId") String tenantId,
-      @Param("businessKey") String businessKey,
-      @Param("limit") int limit);
+    /** 列出某 business_key 的所有版本（按 version_no 倒序）；用于 console 列表 + ops 排查。 */
+    List<ResultVersionEntity> listVersionsByBusinessKey(
+            @Param("tenantId") String tenantId, @Param("businessKey") String businessKey, @Param("limit") int limit);
 
-  /** 按 (tenantId, id) 反查；console / promote 入口用。 */
-  ResultVersionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    /** 按 (tenantId, id) 反查；console / promote 入口用。 */
+    ResultVersionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  /** 按 (tenantId, id) 从 archive.result_version_archive 反查；lineage forensic 冷链补证用。 */
-  ResultVersionEntity selectArchivedById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    /** 按 (tenantId, id) 从 archive.result_version_archive 反查；lineage forensic 冷链补证用。 */
+    ResultVersionEntity selectArchivedById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  /**
-   * R7-A3-P1：批量按 (tenantId, ids) 反查；替代 N+1 单条循环（BatchDayReplay materialize 等）。
-   *
-   * <p>调用方必须确保 ids 非空，mybatis foreach 空列表会产生 {@code IN ()} 语法错误。
-   */
-  List<ResultVersionEntity> selectByIds(
-      @Param("tenantId") String tenantId, @Param("ids") Collection<Long> ids);
+    /**
+     * R7-A3-P1：批量按 (tenantId, ids) 反查；替代 N+1 单条循环（BatchDayReplay materialize 等）。
+     *
+     * <p>调用方必须确保 ids 非空，mybatis foreach 空列表会产生 {@code IN ()} 语法错误。
+     */
+    List<ResultVersionEntity> selectByIds(@Param("tenantId") String tenantId, @Param("ids") Collection<Long> ids);
 
-  /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
-  default int promoteToEffective(String tenantId, Long id, Instant effectiveAt) {
-    TransitionParam transition = new TransitionParam(
-        tenantId, id, effectiveAt, VersionStatus.PENDING.name(), VersionStatus.EFFECTIVE.name());
-    return promote(transition);
-  }
+    /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
+    default int promoteToEffective(String tenantId, Long id, Instant effectiveAt) {
+        TransitionParam transition = new TransitionParam(
+                tenantId, id, effectiveAt, VersionStatus.PENDING.name(), VersionStatus.EFFECTIVE.name());
+        return promote(transition);
+    }
 
-  int promote(TransitionParam param);
+    int promote(TransitionParam param);
 
-  /** PENDING → ARCHIVED 拒绝路径；不影响其它版本。 */
-  default int rejectPending(String tenantId, Long id, Instant deactivatedAt) {
-    TransitionParam transition = new TransitionParam(
-        tenantId, id, deactivatedAt, VersionStatus.PENDING.name(), VersionStatus.ARCHIVED.name());
-    return reject(transition);
-  }
+    /** PENDING → ARCHIVED 拒绝路径；不影响其它版本。 */
+    default int rejectPending(String tenantId, Long id, Instant deactivatedAt) {
+        TransitionParam transition = new TransitionParam(
+                tenantId, id, deactivatedAt, VersionStatus.PENDING.name(), VersionStatus.ARCHIVED.name());
+        return reject(transition);
+    }
 
-  int reject(TransitionParam param);
+    int reject(TransitionParam param);
 
-  /** SUPERSEDED → ARCHIVED 由 retention scheduler 推进；可选清空 payload_json。 */
-  default int archiveSuperseded(String tenantId, Long id, Instant now, boolean clearPayload) {
-    ArchiveParam transition = new ArchiveParam(
-        tenantId,
-        id,
-        now,
-        clearPayload,
-        VersionStatus.SUPERSEDED.name(),
-        VersionStatus.ARCHIVED.name());
-    return archive(transition);
-  }
+    /** SUPERSEDED → ARCHIVED 由 retention scheduler 推进；可选清空 payload_json。 */
+    default int archiveSuperseded(String tenantId, Long id, Instant now, boolean clearPayload) {
+        ArchiveParam transition = new ArchiveParam(
+                tenantId, id, now, clearPayload, VersionStatus.SUPERSEDED.name(), VersionStatus.ARCHIVED.name());
+        return archive(transition);
+    }
 
-  int archive(ArchiveParam param);
+    int archive(ArchiveParam param);
 
-  /** 找出所有 status='SUPERSEDED' 且 deactivated_at 早于 cutoff 的版本，scheduler 用。 */
-  List<ResultVersionEntity> selectSupersededOlderThan(
-      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    /** 找出所有 status='SUPERSEDED' 且 deactivated_at 早于 cutoff 的版本，scheduler 用。 */
+    List<ResultVersionEntity> selectSupersededOlderThan(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  /** 找出可从 batch 热表清理的 ARCHIVED 版本。 */
-  List<ResultVersionEntity> selectArchivedOlderThan(
-      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    /** 找出可从 batch 热表清理的 ARCHIVED 版本。 */
+    List<ResultVersionEntity> selectArchivedOlderThan(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  /** 找出超过 dry-run 独立保留期、可迁移到冷表的演练结果。 */
-  List<ResultVersionEntity> selectDryRunOlderThan(
-      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    /** 找出超过 dry-run 独立保留期、可迁移到冷表的演练结果。 */
+    List<ResultVersionEntity> selectDryRunOlderThan(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  /** 原子写入 archive 镜像并删除 batch 热表中的 DRY_RUN 结果。 */
-  int archiveAndDeleteDryRun(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("archivedAt") Instant archivedAt);
+    /** 原子写入 archive 镜像并删除 batch 热表中的 DRY_RUN 结果。 */
+    int archiveAndDeleteDryRun(
+            @Param("tenantId") String tenantId, @Param("id") Long id, @Param("archivedAt") Instant archivedAt);
 
-  /** 清理 batch 热表中的 ARCHIVED 版本；仍被 asset_partition 引用时由 SQL 保护并跳过。 */
-  int deleteArchived(@Param("tenantId") String tenantId, @Param("id") Long id);
+    /** 清理 batch 热表中的 ARCHIVED 版本；仍被 asset_partition 引用时由 SQL 保护并跳过。 */
+    int deleteArchived(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

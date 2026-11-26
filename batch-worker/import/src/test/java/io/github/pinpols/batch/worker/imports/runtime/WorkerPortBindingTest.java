@@ -30,78 +30,70 @@ import org.springframework.test.context.support.TestPropertySourceUtils;
 @DisplayName("Worker 注册使用真实绑定端口, 不混用独立管理端口")
 class WorkerPortBindingTest {
 
-  @Test
-  @DisplayName("主服务与管理服务均绑定随机端口, Worker 只注册主服务端口")
-  void shouldRegisterMainPortWithSeparateManagementServer() {
-    try (AnnotationConfigServletWebServerApplicationContext main = webContext()) {
-      WorkerLifecycleManager lifecycle = mock(WorkerLifecycleManager.class);
-      when(lifecycle.start(any())).thenAnswer(invocation -> invocation.getArgument(0));
-      main.registerBean(WorkerLifecycleManager.class, () -> lifecycle);
-      main.register(WorkerConfiguration.class);
-      main.refresh();
+    @Test
+    @DisplayName("主服务与管理服务均绑定随机端口, Worker 只注册主服务端口")
+    void shouldRegisterMainPortWithSeparateManagementServer() {
+        try (AnnotationConfigServletWebServerApplicationContext main = webContext()) {
+            WorkerLifecycleManager lifecycle = mock(WorkerLifecycleManager.class);
+            when(lifecycle.start(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            main.registerBean(WorkerLifecycleManager.class, () -> lifecycle);
+            main.register(WorkerConfiguration.class);
+            main.refresh();
 
-      try (AnnotationConfigServletWebServerApplicationContext management = webContext()) {
-        management.setParent(main);
-        management.setServerNamespace("management");
-        management.refresh();
+            try (AnnotationConfigServletWebServerApplicationContext management = webContext()) {
+                management.setParent(main);
+                management.setServerNamespace("management");
+                management.refresh();
 
-        int mainPort = main.getWebServer().getPort();
-        int managementPort = management.getWebServer().getPort();
-        assertThat(mainPort).isPositive().isNotEqualTo(managementPort);
-        assertThat(main.getEnvironment().getProperty("server.port", Integer.class))
-            .isZero();
-        assertThat(main.getEnvironment().getProperty("local.server.port", Integer.class))
-            .isEqualTo(mainPort);
-        assertThat(main.getEnvironment().getProperty("local.management.port", Integer.class))
-            .isEqualTo(managementPort);
-        assertThat(main.getBean(ImportWorkerLoop.class).ensureStarted().getPort())
-            .isEqualTo(mainPort);
-      }
+                int mainPort = main.getWebServer().getPort();
+                int managementPort = management.getWebServer().getPort();
+                assertThat(mainPort).isPositive().isNotEqualTo(managementPort);
+                assertThat(main.getEnvironment().getProperty("server.port", Integer.class))
+                        .isZero();
+                assertThat(main.getEnvironment().getProperty("local.server.port", Integer.class))
+                        .isEqualTo(mainPort);
+                assertThat(main.getEnvironment().getProperty("local.management.port", Integer.class))
+                        .isEqualTo(managementPort);
+                assertThat(main.getBean(ImportWorkerLoop.class).ensureStarted().getPort())
+                        .isEqualTo(mainPort);
+            }
+        }
     }
-  }
 
-  private static AnnotationConfigServletWebServerApplicationContext webContext() {
-    AnnotationConfigServletWebServerApplicationContext context =
-        new AnnotationConfigServletWebServerApplicationContext();
-    TestPropertySourceUtils.addInlinedPropertiesToEnvironment(context, "server.port=0");
-    new ServerPortInfoApplicationContextInitializer().initialize(context);
-    context.register(WebConfiguration.class);
-    return context;
-  }
-
-  @Configuration(proxyBeanMethods = false)
-  static class WebConfiguration {
-    @Bean
-    ServletWebServerFactory servletWebServerFactory() {
-      return new TomcatServletWebServerFactory(0);
+    private static AnnotationConfigServletWebServerApplicationContext webContext() {
+        AnnotationConfigServletWebServerApplicationContext context =
+                new AnnotationConfigServletWebServerApplicationContext();
+        TestPropertySourceUtils.addInlinedPropertiesToEnvironment(context, "server.port=0");
+        new ServerPortInfoApplicationContextInitializer().initialize(context);
+        context.register(WebConfiguration.class);
+        return context;
     }
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  static class WorkerConfiguration {
-    @Bean
-    ImportWorkerLoop importWorkerLoop(WorkerLifecycleManager lifecycle) {
-      BatchDateTimeSupport dateTime = new BatchDateTimeSupport(
-          Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-      ImportWorkerConfiguration configuration = new ImportWorkerConfiguration(
-          "IMPORT-TEST",
-          "IMPORT",
-          "ta",
-          15_000L,
-          "test-topic",
-          "test-group",
-          List.of(),
-          null,
-          false);
-      return new ImportWorkerLoop(
-          lifecycle,
-          mock(HeartbeatService.class),
-          dateTime,
-          configuration,
-          new WorkerIdentityProperties(),
-          new WorkerRegistryStartupProperties(),
-          new WorkerConcurrencyProperties(),
-          new ImportLoadPluginRegistry(List.of()));
+    @Configuration(proxyBeanMethods = false)
+    static class WebConfiguration {
+        @Bean
+        ServletWebServerFactory servletWebServerFactory() {
+            return new TomcatServletWebServerFactory(0);
+        }
     }
-  }
+
+    @Configuration(proxyBeanMethods = false)
+    static class WorkerConfiguration {
+        @Bean
+        ImportWorkerLoop importWorkerLoop(WorkerLifecycleManager lifecycle) {
+            BatchDateTimeSupport dateTime = new BatchDateTimeSupport(
+                    Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+            ImportWorkerConfiguration configuration = new ImportWorkerConfiguration(
+                    "IMPORT-TEST", "IMPORT", "ta", 15_000L, "test-topic", "test-group", List.of(), null, false);
+            return new ImportWorkerLoop(
+                    lifecycle,
+                    mock(HeartbeatService.class),
+                    dateTime,
+                    configuration,
+                    new WorkerIdentityProperties(),
+                    new WorkerRegistryStartupProperties(),
+                    new WorkerConcurrencyProperties(),
+                    new ImportLoadPluginRegistry(List.of()));
+        }
+    }
 }

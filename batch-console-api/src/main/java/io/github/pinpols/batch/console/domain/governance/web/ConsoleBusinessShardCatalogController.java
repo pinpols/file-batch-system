@@ -40,61 +40,57 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleBusinessShardCatalogController {
 
-  private final ConsoleBusinessShardCatalogService catalogService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleBusinessShardCatalogService catalogService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @GetMapping
-  public CommonResponse<List<BusinessShardCatalogResponse>> list() {
-    List<BusinessShardCatalogEntity> catalogEntries = catalogService.list();
-    List<BusinessShardCatalogResponse> responses =
-        catalogEntries.stream().map(BusinessShardCatalogResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping
+    public CommonResponse<List<BusinessShardCatalogResponse>> list() {
+        List<BusinessShardCatalogEntity> catalogEntries = catalogService.list();
+        List<BusinessShardCatalogResponse> responses =
+                catalogEntries.stream().map(BusinessShardCatalogResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  @PutMapping
-  @AuditAction(
-      action = "shard_catalog.upsert",
-      aggregateType = "shard_catalog",
-      aggregateId = "#request.placementKey")
-  public CommonResponse<Void> upsert(@Valid @RequestBody UpsertShardCatalogRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    BusinessShardCatalogUpsertCommand command = BusinessShardCatalogUpsertCommand.builder()
-        .placementKey(request.placementKey())
-        .host(request.host())
-        .port(request.port())
-        .dbName(request.dbName())
-        .secretRef(request.secretRef())
-        .poolMaxSize(request.poolMaxSize())
-        .enabled(request.enabled())
-        .description(request.description())
-        .operator(operator)
-        .build();
-    catalogService.upsert(command);
-    return responseFactory.success(null);
-  }
+    @PutMapping
+    @AuditAction(
+            action = "shard_catalog.upsert",
+            aggregateType = "shard_catalog",
+            aggregateId = "#request.placementKey")
+    public CommonResponse<Void> upsert(@Valid @RequestBody UpsertShardCatalogRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        BusinessShardCatalogUpsertCommand command = BusinessShardCatalogUpsertCommand.builder()
+                .placementKey(request.placementKey())
+                .host(request.host())
+                .port(request.port())
+                .dbName(request.dbName())
+                .secretRef(request.secretRef())
+                .poolMaxSize(request.poolMaxSize())
+                .enabled(request.enabled())
+                .description(request.description())
+                .operator(operator)
+                .build();
+        catalogService.upsert(command);
+        return responseFactory.success(null);
+    }
 
-  @DeleteMapping("/{placementKey}")
-  @AuditAction(
-      action = "shard_catalog.delete",
-      aggregateType = "shard_catalog",
-      aggregateId = "#placementKey")
-  public CommonResponse<Void> delete(
-      @PathVariable("placementKey") @NotBlank @Size(max = 64) String placementKey) {
-    catalogService.delete(placementKey);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/{placementKey}")
+    @AuditAction(action = "shard_catalog.delete", aggregateType = "shard_catalog", aggregateId = "#placementKey")
+    public CommonResponse<Void> delete(@PathVariable("placementKey") @NotBlank @Size(max = 64) String placementKey) {
+        catalogService.delete(placementKey);
+        return responseFactory.success(null);
+    }
 
-  /** 只登记位置 + 状态,**禁带账密**(凭据走 secrets,secretRef 仅引用名)。 */
-  record UpsertShardCatalogRequest(
-      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
-      String placementKey,
+    /** 只登记位置 + 状态,**禁带账密**(凭据走 secrets,secretRef 仅引用名)。 */
+    record UpsertShardCatalogRequest(
+            @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
+            String placementKey,
 
-      @NotBlank @Size(max = 255) String host,
-      @Min(1) @Max(65535) int port,
-      @NotBlank @Size(max = 64) String dbName,
-      @Size(max = 128) String secretRef,
-      @Min(1) Integer poolMaxSize,
-      boolean enabled,
-      @Size(max = 512) String description) {}
+            @NotBlank @Size(max = 255) String host,
+            @Min(1) @Max(65535) int port,
+            @NotBlank @Size(max = 64) String dbName,
+            @Size(max = 128) String secretRef,
+            @Min(1) Integer poolMaxSize,
+            boolean enabled,
+            @Size(max = 512) String description) {}
 }

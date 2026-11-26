@@ -12,16 +12,16 @@ import lombok.Builder;
  */
 @Builder
 public record AssetPartitionSnapshot(
-    String tenantId,
-    String assetCode,
-    LocalDate bizDate,
-    String partitionKey,
-    String businessKey,
-    String freshnessStatus,
-    Integer versionNo,
-    Long jobInstanceId,
-    Instant effectiveAt,
-    String payloadStorage,
-    String payloadJson,
-    String payloadRef,
-    Long resultVersionId) {}
+        String tenantId,
+        String assetCode,
+        LocalDate bizDate,
+        String partitionKey,
+        String businessKey,
+        String freshnessStatus,
+        Integer versionNo,
+        Long jobInstanceId,
+        Instant effectiveAt,
+        String payloadStorage,
+        String payloadJson,
+        String payloadRef,
+        Long resultVersionId) {}

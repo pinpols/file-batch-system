@@ -5,10 +5,10 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
  * 使用本地文件。
  */
 public enum WorkerReportOutboxStorage {
-  SQLITE,
-  PLATFORM_PG;
+    SQLITE,
+    PLATFORM_PG;
 
-  public WorkerReportOutboxDialect dialect() {
-    return this == SQLITE ? WorkerReportOutboxDialect.SQLITE : WorkerReportOutboxDialect.POSTGRESQL;
-  }
+    public WorkerReportOutboxDialect dialect() {
+        return this == SQLITE ? WorkerReportOutboxDialect.SQLITE : WorkerReportOutboxDialect.POSTGRESQL;
+    }
 }

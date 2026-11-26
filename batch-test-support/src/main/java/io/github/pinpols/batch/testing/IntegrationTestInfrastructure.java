@@ -19,157 +19,151 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 final class IntegrationTestInfrastructure {
 
-  /** 测试对象存储后端选择：{@code -Dbatch.test.storage.backend=s3|filesystem}，默认 s3。 */
-  static final String BACKEND_PROPERTY = "batch.test.storage.backend";
+    /** 测试对象存储后端选择：{@code -Dbatch.test.storage.backend=s3|filesystem}，默认 s3。 */
+    static final String BACKEND_PROPERTY = "batch.test.storage.backend";
 
-  static final String BACKEND_S3 = "s3";
-  static final String BACKEND_FILESYSTEM = "filesystem";
-  static final String DEFAULT_OBJECT_STORE_BUCKET = "batch-test";
+    static final String BACKEND_S3 = "s3";
+    static final String BACKEND_FILESYSTEM = "filesystem";
+    static final String DEFAULT_OBJECT_STORE_BUCKET = "batch-test";
 
-  private static final String FS_PRESIGN_SECRET = "test-fs-presign-secret-0123456789abcdef";
-  private static final String FS_DOWNLOAD_BASE_URL =
-      "http://localhost/api/console/files/fs-download";
-  private static final Path FS_ROOT = createTempRoot();
+    private static final String FS_PRESIGN_SECRET = "test-fs-presign-secret-0123456789abcdef";
+    private static final String FS_DOWNLOAD_BASE_URL = "http://localhost/api/console/files/fs-download";
+    private static final Path FS_ROOT = createTempRoot();
 
-  private static final String DEFAULT_KMS_KEY_REF = "DEFAULT_TEST";
-  private static final String DEFAULT_KMS_KEY_MATERIAL = "AAAAAAAAAAAAAAAAAAAAAA==";
+    private static final String DEFAULT_KMS_KEY_REF = "DEFAULT_TEST";
+    private static final String DEFAULT_KMS_KEY_MATERIAL = "AAAAAAAAAAAAAAAAAAAAAA==";
 
-  private IntegrationTestInfrastructure() {}
+    private IntegrationTestInfrastructure() {}
 
-  /** 容器作为同一测试环境的端点集合；文件系统后端允许对象存储端点为空。 */
-  record InfrastructureEndpoints(
-      PostgreSQLContainer platformPostgres,
-      PostgreSQLContainer businessPostgres,
-      KafkaContainer kafka,
-      TestObjectStoreEndpoint objectStore,
-      GenericContainer<?> redis) {
-    InfrastructureEndpoints {
-      Objects.requireNonNull(platformPostgres, "platformPostgres");
-      Objects.requireNonNull(businessPostgres, "businessPostgres");
-      Objects.requireNonNull(kafka, "kafka");
-      Objects.requireNonNull(redis, "redis");
+    /** 容器作为同一测试环境的端点集合；文件系统后端允许对象存储端点为空。 */
+    record InfrastructureEndpoints(
+            PostgreSQLContainer platformPostgres,
+            PostgreSQLContainer businessPostgres,
+            KafkaContainer kafka,
+            TestObjectStoreEndpoint objectStore,
+            GenericContainer<?> redis) {
+        InfrastructureEndpoints {
+            Objects.requireNonNull(platformPostgres, "platformPostgres");
+            Objects.requireNonNull(businessPostgres, "businessPostgres");
+            Objects.requireNonNull(kafka, "kafka");
+            Objects.requireNonNull(redis, "redis");
+        }
+
+        @Override
+        public String toString() {
+            return "InfrastructureEndpoints[redacted]";
+        }
     }
 
-    @Override
-    public String toString() {
-      return "InfrastructureEndpoints[redacted]";
+    static void registerDynamicProperties(
+            DynamicPropertyRegistry registry, InfrastructureEndpoints endpoints, boolean securityBypassMode) {
+        registerPlatformDatabaseProperties(registry, endpoints.platformPostgres());
+        registerKafkaProperties(registry, endpoints.kafka());
+        registerBusinessDatabaseProperties(registry, endpoints.businessPostgres());
+        registerObjectStoreProperties(registry, endpoints.objectStore());
+        registerRedisProperties(registry, endpoints.redis());
+        registerSecurityProperties(registry, securityBypassMode);
     }
-  }
 
-  static void registerDynamicProperties(
-      DynamicPropertyRegistry registry,
-      InfrastructureEndpoints endpoints,
-      boolean securityBypassMode) {
-    registerPlatformDatabaseProperties(registry, endpoints.platformPostgres());
-    registerKafkaProperties(registry, endpoints.kafka());
-    registerBusinessDatabaseProperties(registry, endpoints.businessPostgres());
-    registerObjectStoreProperties(registry, endpoints.objectStore());
-    registerRedisProperties(registry, endpoints.redis());
-    registerSecurityProperties(registry, securityBypassMode);
-  }
-
-  static void registerPlatformDatabaseProperties(
-      DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("spring.datasource.driver-class-name", postgres::getDriverClassName);
-    // 单 JVM 多 Spring 上下文复用同一 PG 时,Hikari 默认 10 连接 × N 上下文易触达 PG 默认 ~100 上限 (too many clients)。
-    registry.add("spring.datasource.hikari.maximum-pool-size", () -> "20");
-    registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
-    // 各模块 contextLoads 都会在独立 PG 上执行完整 Flyway；V198 的并发索引迁移可能超过平台库
-    // 生产默认的 60 秒空闲事务保护。测试基础设施只放宽初始化窗口，不改变生产配置。
-    registry.add("batch.datasource.pg-session.platform.idle-in-transaction-timeout", () -> "10m");
-    // V198 使用 CREATE INDEX CONCURRENTLY；测试上下文必须与生产 Flyway 使用同一 session lock 语义。
-    registry.add("spring.flyway.postgresql.transactional-lock", () -> false);
-    registry.add("spring.flyway.enabled", () -> true);
-    registry.add("spring.flyway.default-schema", () -> "batch");
-    registry.add("spring.flyway.schemas", () -> "batch,quartz");
-  }
-
-  static void registerKafkaProperties(DynamicPropertyRegistry registry, KafkaContainer kafka) {
-    registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-  }
-
-  static void registerBusinessDatabaseProperties(
-      DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
-    registry.add("batch.datasource.business.url", postgres::getJdbcUrl);
-    registry.add("batch.datasource.business.username", postgres::getUsername);
-    registry.add("batch.datasource.business.password", postgres::getPassword);
-    registry.add("batch.datasource.business.schema", () -> "biz");
-  }
-
-  static void registerObjectStoreProperties(
-      DynamicPropertyRegistry registry, TestObjectStoreEndpoint objectStore) {
-    if (isFilesystemBackend()) {
-      // bucket 名仍由 S3 配置提供：guard 与 S3ExportStorage 用它做对象命名空间
-      registry.add("batch.storage.backend", () -> BACKEND_FILESYSTEM);
-      registry.add("batch.storage.filesystem.root", () -> FS_ROOT.toString());
-      registry.add("batch.storage.filesystem.download-base-url", () -> FS_DOWNLOAD_BASE_URL);
-      registry.add("batch.storage.filesystem.presign-secret", () -> FS_PRESIGN_SECRET);
-      registry.add("batch.storage.s3.bucket", IntegrationTestInfrastructure::objectStoreBucket);
-      // 共享 JVM 内从既有 S3 基线切换需要一次性 cutover-id；全新 DB 首启仅记 baseline，忽略该值
-      registry.add("batch.storage.backend-guard.cutover-id", () -> "test-fs-" + UUID.randomUUID());
-      return;
+    static void registerPlatformDatabaseProperties(DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.driver-class-name", postgres::getDriverClassName);
+        // 单 JVM 多 Spring 上下文复用同一 PG 时,Hikari 默认 10 连接 × N 上下文易触达 PG 默认 ~100 上限 (too many clients)。
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "20");
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
+        // 各模块 contextLoads 都会在独立 PG 上执行完整 Flyway；V198 的并发索引迁移可能超过平台库
+        // 生产默认的 60 秒空闲事务保护。测试基础设施只放宽初始化窗口，不改变生产配置。
+        registry.add("batch.datasource.pg-session.platform.idle-in-transaction-timeout", () -> "10m");
+        // V198 使用 CREATE INDEX CONCURRENTLY；测试上下文必须与生产 Flyway 使用同一 session lock 语义。
+        registry.add("spring.flyway.postgresql.transactional-lock", () -> false);
+        registry.add("spring.flyway.enabled", () -> true);
+        registry.add("spring.flyway.default-schema", () -> "batch");
+        registry.add("spring.flyway.schemas", () -> "batch,quartz");
     }
-    if (EmptyChecks.isNull(objectStore)) {
-      throw new IllegalStateException("S3-compatible test object store endpoint is not configured");
+
+    static void registerKafkaProperties(DynamicPropertyRegistry registry, KafkaContainer kafka) {
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     }
-    registry.add("batch.storage.backend", () -> BACKEND_S3);
-    registry.add("batch.storage.s3.endpoint", objectStore::getEndpoint);
-    registry.add("batch.storage.s3.access-key", objectStore::getAccessKey);
-    registry.add("batch.storage.s3.secret-key", objectStore::getSecretKey);
-    registry.add("batch.storage.s3.bucket", objectStore::getDefaultBucket);
-    registry.add("batch.storage.s3.region", objectStore::getRegion);
-    registry.add("batch.storage.s3.path-style-enabled", objectStore::isPathStyleEnabled);
-  }
 
-  static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {
-    registry.add("spring.data.redis.host", redis::getHost);
-    registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-  }
-
-  static void registerSecurityProperties(DynamicPropertyRegistry registry) {
-    registerSecurityProperties(registry, true);
-  }
-
-  static void registerSecurityProperties(DynamicPropertyRegistry registry, boolean bypassMode) {
-    registry.add("batch.security.bypass-mode", () -> bypassMode);
-    registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
-    registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
-    // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean
-    registry.add("batch.worker.drain.heartbeat-timeout-scheduler-enabled", () -> "false");
-    registry.add("batch.partition-lease.reclaim-scheduler-enabled", () -> "false");
-  }
-
-  static String storageBackend() {
-    return System.getProperty(BACKEND_PROPERTY, BACKEND_S3).trim().toLowerCase();
-  }
-
-  static boolean isFilesystemBackend() {
-    return BACKEND_FILESYSTEM.equals(storageBackend());
-  }
-
-  static String objectStoreBucket() {
-    return System.getProperty("batch.test.storage.bucket", DEFAULT_OBJECT_STORE_BUCKET)
-        .trim();
-  }
-
-  static Path filesystemRoot() {
-    return FS_ROOT;
-  }
-
-  static String filesystemPresignSecret() {
-    return FS_PRESIGN_SECRET;
-  }
-
-  @SuppressWarnings("java:S5443")
-  private static Path createTempRoot() {
-    try {
-      // 测试文件系统根只在当前构建进程内使用，且由 JDK 创建为随机私有目录。
-      return Files.createTempDirectory("batch-test-fs-root-");
-    } catch (IOException ex) {
-      throw new UncheckedIOException(ex);
+    static void registerBusinessDatabaseProperties(DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
+        registry.add("batch.datasource.business.url", postgres::getJdbcUrl);
+        registry.add("batch.datasource.business.username", postgres::getUsername);
+        registry.add("batch.datasource.business.password", postgres::getPassword);
+        registry.add("batch.datasource.business.schema", () -> "biz");
     }
-  }
+
+    static void registerObjectStoreProperties(DynamicPropertyRegistry registry, TestObjectStoreEndpoint objectStore) {
+        if (isFilesystemBackend()) {
+            // bucket 名仍由 S3 配置提供：guard 与 S3ExportStorage 用它做对象命名空间
+            registry.add("batch.storage.backend", () -> BACKEND_FILESYSTEM);
+            registry.add("batch.storage.filesystem.root", () -> FS_ROOT.toString());
+            registry.add("batch.storage.filesystem.download-base-url", () -> FS_DOWNLOAD_BASE_URL);
+            registry.add("batch.storage.filesystem.presign-secret", () -> FS_PRESIGN_SECRET);
+            registry.add("batch.storage.s3.bucket", IntegrationTestInfrastructure::objectStoreBucket);
+            // 共享 JVM 内从既有 S3 基线切换需要一次性 cutover-id；全新 DB 首启仅记 baseline，忽略该值
+            registry.add("batch.storage.backend-guard.cutover-id", () -> "test-fs-" + UUID.randomUUID());
+            return;
+        }
+        if (EmptyChecks.isNull(objectStore)) {
+            throw new IllegalStateException("S3-compatible test object store endpoint is not configured");
+        }
+        registry.add("batch.storage.backend", () -> BACKEND_S3);
+        registry.add("batch.storage.s3.endpoint", objectStore::getEndpoint);
+        registry.add("batch.storage.s3.access-key", objectStore::getAccessKey);
+        registry.add("batch.storage.s3.secret-key", objectStore::getSecretKey);
+        registry.add("batch.storage.s3.bucket", objectStore::getDefaultBucket);
+        registry.add("batch.storage.s3.region", objectStore::getRegion);
+        registry.add("batch.storage.s3.path-style-enabled", objectStore::isPathStyleEnabled);
+    }
+
+    static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+    }
+
+    static void registerSecurityProperties(DynamicPropertyRegistry registry) {
+        registerSecurityProperties(registry, true);
+    }
+
+    static void registerSecurityProperties(DynamicPropertyRegistry registry, boolean bypassMode) {
+        registry.add("batch.security.bypass-mode", () -> bypassMode);
+        registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
+        registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
+        // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean
+        registry.add("batch.worker.drain.heartbeat-timeout-scheduler-enabled", () -> "false");
+        registry.add("batch.partition-lease.reclaim-scheduler-enabled", () -> "false");
+    }
+
+    static String storageBackend() {
+        return System.getProperty(BACKEND_PROPERTY, BACKEND_S3).trim().toLowerCase();
+    }
+
+    static boolean isFilesystemBackend() {
+        return BACKEND_FILESYSTEM.equals(storageBackend());
+    }
+
+    static String objectStoreBucket() {
+        return System.getProperty("batch.test.storage.bucket", DEFAULT_OBJECT_STORE_BUCKET)
+                .trim();
+    }
+
+    static Path filesystemRoot() {
+        return FS_ROOT;
+    }
+
+    static String filesystemPresignSecret() {
+        return FS_PRESIGN_SECRET;
+    }
+
+    @SuppressWarnings("java:S5443")
+    private static Path createTempRoot() {
+        try {
+            // 测试文件系统根只在当前构建进程内使用，且由 JDK 创建为随机私有目录。
+            return Files.createTempDirectory("batch-test-fs-root-");
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
 }

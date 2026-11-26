@@ -12,12 +12,12 @@ import lombok.Data;
 @Data
 public class WorkerFingerprintRow {
 
-  private Long id;
-  private String tenantId;
-  private String workerCode;
-  private String buildId;
-  private String processId;
-  private String sdkVersion;
-  private String status;
-  private Instant heartbeatAt;
+    private Long id;
+    private String tenantId;
+    private String workerCode;
+    private String buildId;
+    private String processId;
+    private String sdkVersion;
+    private String status;
+    private Instant heartbeatAt;
 }

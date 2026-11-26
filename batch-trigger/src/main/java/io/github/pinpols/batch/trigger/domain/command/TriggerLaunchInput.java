@@ -9,14 +9,14 @@ import lombok.Builder;
 /** 触发用例接收的输入字段。 */
 @Builder(toBuilder = true)
 public record TriggerLaunchInput(
-    String tenantId,
-    Long workflowDefinitionId,
-    LocalDate bizDate,
-    TriggerType triggerType,
-    Map<String, Object> params,
-    Instant dataIntervalStart,
-    Instant dataIntervalEnd,
-    Boolean dryRun,
-    String externalEventCode,
-    String externalEventSource,
-    String externalEventId) {}
+        String tenantId,
+        Long workflowDefinitionId,
+        LocalDate bizDate,
+        TriggerType triggerType,
+        Map<String, Object> params,
+        Instant dataIntervalStart,
+        Instant dataIntervalEnd,
+        Boolean dryRun,
+        String externalEventCode,
+        String externalEventSource,
+        String externalEventId) {}

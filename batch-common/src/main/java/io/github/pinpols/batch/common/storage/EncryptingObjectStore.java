@@ -27,158 +27,152 @@ import java.util.Collection;
  */
 public class EncryptingObjectStore implements BatchObjectStore {
 
-  /**
-   * 未指定时加密前允许整体放入内存的字节数上限（32 MiB），
-   * 与 batch.storage.encryption.max-in-memory-encrypt-bytes 默认值一致。
-   */
-  private static final long DEFAULT_MAX_IN_MEMORY_BYTES = 32L * 1024 * 1024;
+    /**
+     * 未指定时加密前允许整体放入内存的字节数上限（32 MiB），
+     * 与 batch.storage.encryption.max-in-memory-encrypt-bytes 默认值一致。
+     */
+    private static final long DEFAULT_MAX_IN_MEMORY_BYTES = 32L * 1024 * 1024;
 
-  private final BatchObjectStore delegate;
-  private final BatchObjectCryptoService cryptoService;
-  private final BatchSecurityProperties securityProperties;
-  private final String defaultKeyRef;
-  private final long maxInMemoryEncryptBytes;
+    private final BatchObjectStore delegate;
+    private final BatchObjectCryptoService cryptoService;
+    private final BatchSecurityProperties securityProperties;
+    private final String defaultKeyRef;
+    private final long maxInMemoryEncryptBytes;
 
-  public EncryptingObjectStore(
-      BatchObjectStore delegate,
-      BatchObjectCryptoService cryptoService,
-      BatchSecurityProperties securityProperties,
-      String defaultKeyRef) {
-    this(delegate, cryptoService, securityProperties, defaultKeyRef, DEFAULT_MAX_IN_MEMORY_BYTES);
-  }
-
-  public EncryptingObjectStore(
-      BatchObjectStore delegate,
-      BatchObjectCryptoService cryptoService,
-      BatchSecurityProperties securityProperties,
-      String defaultKeyRef,
-      long maxInMemoryEncryptBytes) {
-    this.delegate = delegate;
-    this.cryptoService = cryptoService;
-    this.securityProperties = securityProperties;
-    this.defaultKeyRef = defaultKeyRef;
-    this.maxInMemoryEncryptBytes = Math.max(1L, maxInMemoryEncryptBytes);
-  }
-
-  @Override
-  public void put(String bucket, String key, InputStream in, long size, String contentType) {
-    if (securityProperties.isBypassMode()) {
-      delegate.put(bucket, key, in, size, contentType);
-      return;
+    public EncryptingObjectStore(
+            BatchObjectStore delegate,
+            BatchObjectCryptoService cryptoService,
+            BatchSecurityProperties securityProperties,
+            String defaultKeyRef) {
+        this(delegate, cryptoService, securityProperties, defaultKeyRef, DEFAULT_MAX_IN_MEMORY_BYTES);
     }
-    if (size < 0 || size > maxInMemoryEncryptBytes) {
-      throw new ObjectStoreException(
-          "encrypted object store put exceeds in-memory encryption limit: bucket=%s, key=%s, size=%d, limit=%d"
-              .formatted(bucket, key, size, maxInMemoryEncryptBytes));
+
+    public EncryptingObjectStore(
+            BatchObjectStore delegate,
+            BatchObjectCryptoService cryptoService,
+            BatchSecurityProperties securityProperties,
+            String defaultKeyRef,
+            long maxInMemoryEncryptBytes) {
+        this.delegate = delegate;
+        this.cryptoService = cryptoService;
+        this.securityProperties = securityProperties;
+        this.defaultKeyRef = defaultKeyRef;
+        this.maxInMemoryEncryptBytes = Math.max(1L, maxInMemoryEncryptBytes);
     }
-    ExactSizeInputStream bounded = ExactSizeInputStream.exactAndBounded(
-        in, "encrypted", bucket, key, size, maxInMemoryEncryptBytes);
-    // BATCHENC 加密产物体积与明文不等长（含 magic + header + GCM tag），且 InputStream 路径不易预先知道密文长度。
-    // 此处先全量加密到内存缓冲再以确切 size 写入 delegate；明文 ≤ 几十 MB 场景（export / dispatch 错误集等）足够，
-    // 与现有 cryptoService.encrypt(byte[]) 范式保持一致。
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    cryptoService.encrypt(bounded, out, defaultKeyRef);
-    bounded.verifyFullyRead();
-    byte[] ciphertext = out.toByteArray();
-    try (InputStream wrapped = new ByteArrayInputStream(ciphertext)) {
-      delegate.put(bucket, key, wrapped, ciphertext.length, contentType);
-    } catch (IOException ex) {
-      throw new ObjectStoreException(
-          "encrypting object store put failed to close ciphertext stream: bucket="
-              + bucket
-              + ", key="
-              + key,
-          ex);
+
+    @Override
+    public void put(String bucket, String key, InputStream in, long size, String contentType) {
+        if (securityProperties.isBypassMode()) {
+            delegate.put(bucket, key, in, size, contentType);
+            return;
+        }
+        if (size < 0 || size > maxInMemoryEncryptBytes) {
+            throw new ObjectStoreException(
+                    "encrypted object store put exceeds in-memory encryption limit: bucket=%s, key=%s, size=%d, limit=%d"
+                            .formatted(bucket, key, size, maxInMemoryEncryptBytes));
+        }
+        ExactSizeInputStream bounded =
+                ExactSizeInputStream.exactAndBounded(in, "encrypted", bucket, key, size, maxInMemoryEncryptBytes);
+        // BATCHENC 加密产物体积与明文不等长（含 magic + header + GCM tag），且 InputStream 路径不易预先知道密文长度。
+        // 此处先全量加密到内存缓冲再以确切 size 写入 delegate；明文 ≤ 几十 MB 场景（export / dispatch 错误集等）足够，
+        // 与现有 cryptoService.encrypt(byte[]) 范式保持一致。
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        cryptoService.encrypt(bounded, out, defaultKeyRef);
+        bounded.verifyFullyRead();
+        byte[] ciphertext = out.toByteArray();
+        try (InputStream wrapped = new ByteArrayInputStream(ciphertext)) {
+            delegate.put(bucket, key, wrapped, ciphertext.length, contentType);
+        } catch (IOException ex) {
+            throw new ObjectStoreException(
+                    "encrypting object store put failed to close ciphertext stream: bucket=" + bucket + ", key=" + key,
+                    ex);
+        }
     }
-  }
 
-  @Override
-  public void copy(String bucket, String srcKey, String dstKey) {
-    delegate.copy(bucket, srcKey, dstKey);
-  }
-
-  @Override
-  public void delete(String bucket, String key) {
-    delegate.delete(bucket, key);
-  }
-
-  @Override
-  public void deleteMany(String bucket, Collection<String> keys) {
-    delegate.deleteMany(bucket, keys);
-  }
-
-  @Override
-  public InputStream get(String bucket, String key) {
-    InputStream raw = delegate.get(bucket, key);
-    if (securityProperties.isBypassMode()) {
-      return raw;
+    @Override
+    public void copy(String bucket, String srcKey, String dstKey) {
+        delegate.copy(bucket, srcKey, dstKey);
     }
-    return cryptoService.decryptIfNeeded(raw);
-  }
 
-  @Override
-  public InputStream getFrom(String bucket, String key, long offset) {
-    // §5 ⚠：AES-GCM 整对象加密，密文 offset ≠ 明文 offset；range 读拿不到有意义的明文。
-    // 即便 bypass-mode 也不放行——避免误用（contract 一致比 bypass 透传更重要）。
-    throw new UnsupportedOperationException(
-        "range read (getFrom) is not supported on encrypted object store: bucket="
-            + bucket
-            + ", key="
-            + key);
-  }
+    @Override
+    public void delete(String bucket, String key) {
+        delegate.delete(bucket, key);
+    }
 
-  @Override
-  public boolean supportsRangeRead() {
-    // 与 getFrom 抛 UnsupportedOperationException 对称:整对象加密,密文 offset ≠ 明文 offset。
-    // 调用方(如 PreprocessStep range-slice)据此回退整份顺序流。
-    return false;
-  }
+    @Override
+    public void deleteMany(String bucket, Collection<String> keys) {
+        delegate.deleteMany(bucket, keys);
+    }
 
-  /**
-   * ⚠ 返回的是<b>存储层(密文)字节数</b>,不等于明文字节数(BATCHENC 含 magic + header + GCM tag)。
-   * 仅可用于「对象是否存在/近似大小」判断;<b>严禁</b>当明文长度做 offset/切片计算 (切片入口已由 {@link #supportsRangeRead()} 关死)。
-   */
-  @Override
-  public long statSize(String bucket, String key) {
-    return delegate.statSize(bucket, key);
-  }
+    @Override
+    public InputStream get(String bucket, String key) {
+        InputStream raw = delegate.get(bucket, key);
+        if (securityProperties.isBypassMode()) {
+            return raw;
+        }
+        return cryptoService.decryptIfNeeded(raw);
+    }
 
-  @Override
-  public boolean exists(String bucket, String key) {
-    return delegate.exists(bucket, key);
-  }
+    @Override
+    public InputStream getFrom(String bucket, String key, long offset) {
+        // §5 ⚠：AES-GCM 整对象加密，密文 offset ≠ 明文 offset；range 读拿不到有意义的明文。
+        // 即便 bypass-mode 也不放行——避免误用（contract 一致比 bypass 透传更重要）。
+        throw new UnsupportedOperationException(
+                "range read (getFrom) is not supported on encrypted object store: bucket=" + bucket + ", key=" + key);
+    }
 
-  @Override
-  public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
-    return delegate.list(bucket, prefix, afterMarker, maxKeys);
-  }
+    @Override
+    public boolean supportsRangeRead() {
+        // 与 getFrom 抛 UnsupportedOperationException 对称:整对象加密,密文 offset ≠ 明文 offset。
+        // 调用方(如 PreprocessStep range-slice)据此回退整份顺序流。
+        return false;
+    }
 
-  /**
-   * ⚠ presign 返回的是存储层原文的直链——对加密对象,终端用户拿到的是<b>密文</b>。 加密文件的下载必须走 console 代理路径(服务端 {@link #get}
-   * 解密后回传, 见 {@code DefaultFileGovernanceService} 按 {@code content_encryption_enabled} 的路由);
-   * 此处保留透传是因为装饰层下可能存在历史/外部写入的明文对象,对它们 presign 仍合法。
-   */
-  @Override
-  public String presign(String bucket, String key, Duration ttl) {
-    return delegate.presign(bucket, key, ttl);
-  }
+    /**
+     * ⚠ 返回的是<b>存储层(密文)字节数</b>,不等于明文字节数(BATCHENC 含 magic + header + GCM tag)。
+     * 仅可用于「对象是否存在/近似大小」判断;<b>严禁</b>当明文长度做 offset/切片计算 (切片入口已由 {@link #supportsRangeRead()} 关死)。
+     */
+    @Override
+    public long statSize(String bucket, String key) {
+        return delegate.statSize(bucket, key);
+    }
 
-  /**
-   * ⚠ 加密装饰层<b>不支持</b> PUT 预签名直传:presign 直传会绕过本层加密、把<b>明文</b>写进存储,破坏「落库即密文」约束。 加密对象的上传必须走服务端 {@link
-   * #put}(此处加密后再交 delegate)。
-   */
-  @Override
-  public boolean supportsPresignPut() {
-    return false;
-  }
+    @Override
+    public boolean exists(String bucket, String key) {
+        return delegate.exists(bucket, key);
+    }
 
-  @Override
-  public String presignPut(String bucket, String key, Duration ttl, String contentType) {
-    throw new UnsupportedOperationException(
-        "presignPut is disabled on encrypted object store (would bypass encryption and store"
-            + " plaintext): bucket="
-            + bucket
-            + ", key="
-            + key);
-  }
+    @Override
+    public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
+        return delegate.list(bucket, prefix, afterMarker, maxKeys);
+    }
+
+    /**
+     * ⚠ presign 返回的是存储层原文的直链——对加密对象,终端用户拿到的是<b>密文</b>。 加密文件的下载必须走 console 代理路径(服务端 {@link #get}
+     * 解密后回传, 见 {@code DefaultFileGovernanceService} 按 {@code content_encryption_enabled} 的路由);
+     * 此处保留透传是因为装饰层下可能存在历史/外部写入的明文对象,对它们 presign 仍合法。
+     */
+    @Override
+    public String presign(String bucket, String key, Duration ttl) {
+        return delegate.presign(bucket, key, ttl);
+    }
+
+    /**
+     * ⚠ 加密装饰层<b>不支持</b> PUT 预签名直传:presign 直传会绕过本层加密、把<b>明文</b>写进存储,破坏「落库即密文」约束。 加密对象的上传必须走服务端 {@link
+     * #put}(此处加密后再交 delegate)。
+     */
+    @Override
+    public boolean supportsPresignPut() {
+        return false;
+    }
+
+    @Override
+    public String presignPut(String bucket, String key, Duration ttl, String contentType) {
+        throw new UnsupportedOperationException(
+                "presignPut is disabled on encrypted object store (would bypass encryption and store"
+                        + " plaintext): bucket="
+                        + bucket
+                        + ", key="
+                        + key);
+    }
 }

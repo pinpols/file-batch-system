@@ -71,394 +71,381 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Service
 public class ConsoleJwtService {
 
-  /** 绑定漂移日志的抑制窗口：同一组合在窗口内只记一次 WARN。 */
-  private static final Duration DRIFT_LOG_SUPPRESS_WINDOW = Duration.ofMinutes(5);
+    /** 绑定漂移日志的抑制窗口：同一组合在窗口内只记一次 WARN。 */
+    private static final Duration DRIFT_LOG_SUPPRESS_WINDOW = Duration.ofMinutes(5);
 
-  /** 绑定漂移日志抑制器最多记住的组合数。 */
-  private static final int DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES = 10_000;
+    /** 绑定漂移日志抑制器最多记住的组合数。 */
+    private static final int DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES = 10_000;
 
-  /** jwt-secret 最短字符数：HS256 要求至少 256 bit，即 32 个 ASCII 字符。 */
-  private static final int MIN_JWT_SECRET_LENGTH = 32;
+    /** jwt-secret 最短字符数：HS256 要求至少 256 bit，即 32 个 ASCII 字符。 */
+    private static final int MIN_JWT_SECRET_LENGTH = 32;
 
-  private static final String TOKEN_TYPE = "console_access";
-  private static final String CLAIM_TENANT_ID = "tenantId";
-  private static final String CLAIM_AUTHORITIES = "authorities";
-  private static final String CLAIM_TOKEN_TYPE = "tokenType";
-  private static final String CLAIM_SESSION_VERSION = "sessionVersion";
-  private static final String CLAIM_JTI = "jti";
-  private static final String CLAIM_IP_HASH = "ipHash";
-  private static final String CLAIM_UA_HASH = "uaHash";
+    private static final String TOKEN_TYPE = "console_access";
+    private static final String CLAIM_TENANT_ID = "tenantId";
+    private static final String CLAIM_AUTHORITIES = "authorities";
+    private static final String CLAIM_TOKEN_TYPE = "tokenType";
+    private static final String CLAIM_SESSION_VERSION = "sessionVersion";
+    private static final String CLAIM_JTI = "jti";
+    private static final String CLAIM_IP_HASH = "ipHash";
+    private static final String CLAIM_UA_HASH = "uaHash";
 
-  private final ConsoleSecurityProperties properties;
-  private final ConsoleSessionRegistry sessionRegistry;
-  private final Environment environment;
+    private final ConsoleSecurityProperties properties;
+    private final ConsoleSessionRegistry sessionRegistry;
+    private final Environment environment;
 
-  /**
-   * P1(2026-05-23 audit / docs/agent-baseline.md §编码细则 #3):撤销名单存储可选依赖改 {@link ObjectProvider}
-   * 构造器注入。authenticate() / revoke() 内每次调用 {@link ObjectProvider#getIfAvailable()},非 Spring 单测场景或存储启动失败时返回
-   * null, 与之前 Redis 不存在时跳过撤销名单的降级路径一致。
-   */
-  private final ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider;
+    /**
+     * P1(2026-05-23 audit / docs/agent-baseline.md §编码细则 #3):撤销名单存储可选依赖改 {@link ObjectProvider}
+     * 构造器注入。authenticate() / revoke() 内每次调用 {@link ObjectProvider#getIfAvailable()},非 Spring 单测场景或存储启动失败时返回
+     * null, 与之前 Redis 不存在时跳过撤销名单的降级路径一致。
+     */
+    private final ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider;
 
-  @Autowired
-  public ConsoleJwtService(
-      ConsoleSecurityProperties properties,
-      ConsoleSessionRegistry sessionRegistry,
-      Environment environment,
-      ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider) {
-    this.properties = properties;
-    this.sessionRegistry = sessionRegistry;
-    this.environment = environment;
-    this.tokenRevocationStoreProvider = tokenRevocationStoreProvider;
-  }
-
-  /** 非 Spring 单测构造器:无 Redis,等价 ObjectProvider 永远返回 null。 */
-  public ConsoleJwtService(
-      ConsoleSecurityProperties properties,
-      ConsoleSessionRegistry sessionRegistry,
-      Environment environment) {
-    this(properties, sessionRegistry, environment, EmptyRevocationStoreProvider.INSTANCE);
-  }
-
-  /** 非 Spring 测试场景下提供空 {@link ObjectProvider},{@code getIfAvailable()} 始终返回 null。 */
-  private static final class EmptyRevocationStoreProvider
-      implements ObjectProvider<ConsoleTokenRevocationStore> {
-    static final EmptyRevocationStoreProvider INSTANCE = new EmptyRevocationStoreProvider();
-
-    @Override
-    public ConsoleTokenRevocationStore getObject() {
-      throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
+    @Autowired
+    public ConsoleJwtService(
+            ConsoleSecurityProperties properties,
+            ConsoleSessionRegistry sessionRegistry,
+            Environment environment,
+            ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider) {
+        this.properties = properties;
+        this.sessionRegistry = sessionRegistry;
+        this.environment = environment;
+        this.tokenRevocationStoreProvider = tokenRevocationStoreProvider;
     }
 
-    @Override
-    public ConsoleTokenRevocationStore getObject(Object... args) {
-      throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
+    /** 非 Spring 单测构造器:无 Redis,等价 ObjectProvider 永远返回 null。 */
+    public ConsoleJwtService(
+            ConsoleSecurityProperties properties, ConsoleSessionRegistry sessionRegistry, Environment environment) {
+        this(properties, sessionRegistry, environment, EmptyRevocationStoreProvider.INSTANCE);
     }
 
-    @Override
-    public ConsoleTokenRevocationStore getIfAvailable() {
-      return null;
+    /** 非 Spring 测试场景下提供空 {@link ObjectProvider},{@code getIfAvailable()} 始终返回 null。 */
+    private static final class EmptyRevocationStoreProvider implements ObjectProvider<ConsoleTokenRevocationStore> {
+        static final EmptyRevocationStoreProvider INSTANCE = new EmptyRevocationStoreProvider();
+
+        @Override
+        public ConsoleTokenRevocationStore getObject() {
+            throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
+        }
+
+        @Override
+        public ConsoleTokenRevocationStore getObject(Object... args) {
+            throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
+        }
+
+        @Override
+        public ConsoleTokenRevocationStore getIfAvailable() {
+            return null;
+        }
+
+        @Override
+        public ConsoleTokenRevocationStore getIfUnique() {
+            return null;
+        }
     }
 
-    @Override
-    public ConsoleTokenRevocationStore getIfUnique() {
-      return null;
-    }
-  }
+    // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
+    // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复产生日志噪音(实测一轮 e2e 8000+ 行噪音)。
+    // 10k 上限够覆盖任何合理量级会话规模。
+    private final Cache<String, Boolean> driftLogSuppressor = Caffeine.newBuilder()
+            .expireAfterWrite(DRIFT_LOG_SUPPRESS_WINDOW)
+            .maximumSize(DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES)
+            .build();
 
-  // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
-  // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复产生日志噪音(实测一轮 e2e 8000+ 行噪音)。
-  // 10k 上限够覆盖任何合理量级会话规模。
-  private final Cache<String, Boolean> driftLogSuppressor = Caffeine.newBuilder()
-      .expireAfterWrite(DRIFT_LOG_SUPPRESS_WINDOW)
-      .maximumSize(DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES)
-      .build();
+    // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
+    // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
+    // AtomicReference：fallback 路径 encoder()/decoder() 是懒初始化模式,需要安全发布构造完成的对象。
+    private final AtomicReference<NimbusJwtEncoder> cachedEncoder = new AtomicReference<>();
+    private final AtomicReference<JwtDecoder> cachedDecoder = new AtomicReference<>();
 
-  // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
-  // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
-  // AtomicReference：fallback 路径 encoder()/decoder() 是懒初始化模式,需要安全发布构造完成的对象。
-  private final AtomicReference<NimbusJwtEncoder> cachedEncoder = new AtomicReference<>();
-  private final AtomicReference<JwtDecoder> cachedDecoder = new AtomicReference<>();
+    @PostConstruct
+    void validateSecuritySecrets() {
+        if (isProductionProfile()) {
+            String jwtSecret = properties.getJwtSecret();
+            if (!Texts.hasText(jwtSecret)) {
+                throw new IllegalStateException(
+                        "FATAL: batch.console.security.jwt-secret is empty; production requires a real secret injected through an environment variable or secret manager");
+            }
+            String lower = jwtSecret.toLowerCase(Locale.ROOT);
+            if (lower.contains("change-me") || lower.contains("change_me")) {
+                throw new IllegalStateException(
+                        "FATAL: batch.console.security.jwt-secret still contains the default placeholder; "
+                                + "production requires a real secret injected through an environment variable or secret manager");
+            }
+            // P1-8：jwt-secret 长度强度回退（HS256 最小 256 bit / 32 ASCII 字符）
+            if (jwtSecret.length() < MIN_JWT_SECRET_LENGTH) {
+                throw new IllegalStateException(
+                        "FATAL: batch.console.security.jwt-secret is shorter than 32 characters; HS256 secret is too weak");
+            }
+        } else {
+            // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
+            // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
+            String jwtSecret = properties.getJwtSecret();
+            String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
+            boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
+                    || lower.contains("change-me")
+                    || lower.contains("change_me")
+                    || jwtSecret.length() < MIN_JWT_SECRET_LENGTH;
+            if (jwtSecretIsEmptyOrWeak) {
+                log.warn(
+                        "Non-production profile: batch.console.security.jwt-secret still uses a default or weak secret; inject a real secret via env / "
+                                + "secret manager with at least 32 characters (production-like profiles fail fast)");
+            }
+        }
+        SecretKey key = signingKey();
+        JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
+        NimbusJwtEncoder encoder = new NimbusJwtEncoder(encoderSecret);
+        this.cachedEncoder.set(encoder);
+        JwtDecoder decoder = buildDecoder(key);
+        this.cachedDecoder.set(decoder);
+    }
 
-  @PostConstruct
-  void validateSecuritySecrets() {
-    if (isProductionProfile()) {
-      String jwtSecret = properties.getJwtSecret();
-      if (!Texts.hasText(jwtSecret)) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret is empty; production requires a real secret injected through an environment variable or secret manager");
-      }
-      String lower = jwtSecret.toLowerCase(Locale.ROOT);
-      if (lower.contains("change-me") || lower.contains("change_me")) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret still contains the default placeholder; "
-                + "production requires a real secret injected through an environment variable or secret manager");
-      }
-      // P1-8：jwt-secret 长度强度回退（HS256 最小 256 bit / 32 ASCII 字符）
-      if (jwtSecret.length() < MIN_JWT_SECRET_LENGTH) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret is shorter than 32 characters; HS256 secret is too weak");
-      }
-    } else {
-      // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
-      // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
-      String jwtSecret = properties.getJwtSecret();
-      String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
-      boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
-          || lower.contains("change-me")
-          || lower.contains("change_me")
-          || jwtSecret.length() < MIN_JWT_SECRET_LENGTH;
-      if (jwtSecretIsEmptyOrWeak) {
-        log.warn(
-            "Non-production profile: batch.console.security.jwt-secret still uses a default or weak secret; inject a real secret via env / "
-                + "secret manager with at least 32 characters (production-like profiles fail fast)");
-      }
+    /**
+     * R4-P2-6：提取 decoder 构建逻辑，让 @PostConstruct 路径和 decoder() lazy-init fallback 共用同一套构造， 包括 clock
+     * skew validator。之前 lazy fallback 不带 skew validator，test/非-Spring 场景行为漂移。
+     */
+    private JwtDecoder buildDecoder(SecretKey key) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+        decoder.setJwtValidator(new JwtTimestampValidator(effectiveClockSkew()));
+        return decoder;
     }
-    SecretKey key = signingKey();
-    JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
-    NimbusJwtEncoder encoder = new NimbusJwtEncoder(encoderSecret);
-    this.cachedEncoder.set(encoder);
-    JwtDecoder decoder = buildDecoder(key);
-    this.cachedDecoder.set(decoder);
-  }
 
-  /**
-   * R4-P2-6：提取 decoder 构建逻辑，让 @PostConstruct 路径和 decoder() lazy-init fallback 共用同一套构造， 包括 clock
-   * skew validator。之前 lazy fallback 不带 skew validator，test/非-Spring 场景行为漂移。
-   */
-  private JwtDecoder buildDecoder(SecretKey key) {
-    NimbusJwtDecoder decoder =
-        NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-    decoder.setJwtValidator(new JwtTimestampValidator(effectiveClockSkew()));
-    return decoder;
-  }
+    private Duration effectiveClockSkew() {
+        Duration skew = properties.getJwtClockSkew();
+        return EmptyChecks.isNull(skew) || skew.isNegative() ? Duration.ofMinutes(1) : skew;
+    }
 
-  private Duration effectiveClockSkew() {
-    Duration skew = properties.getJwtClockSkew();
-    return EmptyChecks.isNull(skew) || skew.isNegative() ? Duration.ofMinutes(1) : skew;
-  }
+    private boolean isProductionProfile() {
+        return BatchProfileSupport.isProductionProfile(environment);
+    }
 
-  private boolean isProductionProfile() {
-    return BatchProfileSupport.isProductionProfile(environment);
-  }
+    /** 签发访问令牌及过期时间。 */
+    public ConsoleAuthTokenResponse issueToken(String username, String tenantId, Set<String> authorities) {
+        long sessionVersion = sessionRegistry.currentSessionVersion(username, tenantId);
+        return issueToken(username, tenantId, authorities, sessionVersion);
+    }
 
-  /** 签发访问令牌及过期时间。 */
-  public ConsoleAuthTokenResponse issueToken(
-      String username, String tenantId, Set<String> authorities) {
-    long sessionVersion = sessionRegistry.currentSessionVersion(username, tenantId);
-    return issueToken(username, tenantId, authorities, sessionVersion);
-  }
+    /** 签发访问令牌及过期时间。 */
+    // S2259 无法识别 EmptyChecks.isNotNull(currentRequest) 对请求访问的保护。
+    @SuppressWarnings({"java:S2259", "java:S2589"})
+    public ConsoleAuthTokenResponse issueToken(
+            String username, String tenantId, Set<String> authorities, long sessionVersion) {
+        Guard.requireText(username, "username is required");
+        if (!Texts.hasText(tenantId)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
+        }
+        if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.invalid_role_set");
+        }
+        Instant issuedAt = BatchDateTimeSupport.utcNow();
+        Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
+        UUID tokenId = UUID.randomUUID();
+        String jti = tokenId.toString();
+        HttpServletRequest currentRequest = currentRequest();
+        JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
+                .issuer(properties.getJwtIssuer())
+                .subject(username)
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .id(jti)
+                .claim(CLAIM_TENANT_ID, tenantId)
+                .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
+                .claim(CLAIM_SESSION_VERSION, sessionVersion)
+                .claim(CLAIM_JTI, jti)
+                .claim(CLAIM_AUTHORITIES, List.copyOf(authorities));
+        if (EmptyChecks.isNotNull(currentRequest)) {
+            String ipHash = hashClientIp(currentRequest);
+            String uaHash = hashUserAgent(currentRequest);
+            // 两个 hash 均来自 Hashes.sha256Short（声明 @Nullable）：User-Agent 头可缺失、RemoteAddr
+            // 极端场景也可能缺失，null 时不写入 claim 是防御性必要检查，Sonar 的 servlet 模型误判恒非空。
+            if (EmptyChecks.isNotNull(ipHash)) {
+                claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
+            }
+            if (EmptyChecks.isNotNull(uaHash)) {
+                claimsBuilder.claim(CLAIM_UA_HASH, uaHash);
+            }
+        }
+        JwtClaimsSet claims = claimsBuilder.build();
+        String token = encoder()
+                .encode(JwtEncoderParameters.from(
+                        JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims))
+                .getTokenValue();
+        return new ConsoleAuthTokenResponse(
+                token, "Bearer", issuedAt, expiresAt, username, tenantId, new LinkedHashSet<>(authorities), false);
+    }
 
-  /** 签发访问令牌及过期时间。 */
-  // S2259 无法识别 EmptyChecks.isNotNull(currentRequest) 对请求访问的保护。
-  @SuppressWarnings({"java:S2259", "java:S2589"})
-  public ConsoleAuthTokenResponse issueToken(
-      String username, String tenantId, Set<String> authorities, long sessionVersion) {
-    Guard.requireText(username, "username is required");
-    if (!Texts.hasText(tenantId)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
+    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 结果的空值保护。
+    @SuppressWarnings("java:S2259")
+    public ConsolePrincipal authenticate(String token) {
+        Jwt jwt = decoder().decode(token);
+        String issuer = jwt.getClaimAsString("iss");
+        if (!properties.getJwtIssuer().equals(issuer)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+        }
+        String tokenType = jwt.getClaimAsString(CLAIM_TOKEN_TYPE);
+        if (!TOKEN_TYPE.equals(tokenType)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+        }
+        String username = jwt.getSubject();
+        String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
+        Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
+        boolean singleSessionIsNotCurrent = properties.isSingleSessionEnabled()
+                && (EmptyChecks.isNull(sessionVersion)
+                        || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion));
+        if (singleSessionIsNotCurrent) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+        }
+        // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
+        String jti = jwt.getClaimAsString(CLAIM_JTI);
+        ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
+        boolean tokenIsRevoked =
+                EmptyChecks.isNotNull(jti) && EmptyChecks.isNotNull(revocationStore) && revocationStore.isRevoked(jti);
+        if (tokenIsRevoked) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+        }
+        // P2-2:IP/UA 软绑定。签发时绑定 hash,异地异机访问只打 WARN(不 deny)— 移动网 IP 抖动 / UA
+        // 升级会误伤,真要 deny 需配合风控规则。空 claim = 旧 token 兼容,跳过比对。
+        auditClientBindingDrift(jwt, username, tenantId);
+        List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
+        if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+        }
+        return new ConsolePrincipal(username, tenantId, new LinkedHashSet<>(authorities));
     }
-    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.invalid_role_set");
-    }
-    Instant issuedAt = BatchDateTimeSupport.utcNow();
-    Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
-    UUID tokenId = UUID.randomUUID();
-    String jti = tokenId.toString();
-    HttpServletRequest currentRequest = currentRequest();
-    JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
-        .issuer(properties.getJwtIssuer())
-        .subject(username)
-        .issuedAt(issuedAt)
-        .expiresAt(expiresAt)
-        .id(jti)
-        .claim(CLAIM_TENANT_ID, tenantId)
-        .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
-        .claim(CLAIM_SESSION_VERSION, sessionVersion)
-        .claim(CLAIM_JTI, jti)
-        .claim(CLAIM_AUTHORITIES, List.copyOf(authorities));
-    if (EmptyChecks.isNotNull(currentRequest)) {
-      String ipHash = hashClientIp(currentRequest);
-      String uaHash = hashUserAgent(currentRequest);
-      // 两个 hash 均来自 Hashes.sha256Short（声明 @Nullable）：User-Agent 头可缺失、RemoteAddr
-      // 极端场景也可能缺失，null 时不写入 claim 是防御性必要检查，Sonar 的 servlet 模型误判恒非空。
-      if (EmptyChecks.isNotNull(ipHash)) {
-        claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
-      }
-      if (EmptyChecks.isNotNull(uaHash)) {
-        claimsBuilder.claim(CLAIM_UA_HASH, uaHash);
-      }
-    }
-    JwtClaimsSet claims = claimsBuilder.build();
-    String token = encoder()
-        .encode(JwtEncoderParameters.from(
-            JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims))
-        .getTokenValue();
-    return new ConsoleAuthTokenResponse(
-        token,
-        "Bearer",
-        issuedAt,
-        expiresAt,
-        username,
-        tenantId,
-        new LinkedHashSet<>(authorities),
-        false);
-  }
 
-  // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 结果的空值保护。
-  @SuppressWarnings("java:S2259")
-  public ConsolePrincipal authenticate(String token) {
-    Jwt jwt = decoder().decode(token);
-    String issuer = jwt.getClaimAsString("iss");
-    if (!properties.getJwtIssuer().equals(issuer)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+    /**
+     * 把当前令牌加入撤销名单，保留至令牌的有效期及时间容忍期结束。调用方为登出接口。
+     */
+    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
+    @SuppressWarnings("java:S2259")
+    public void revoke(String token) {
+        ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
+        if (EmptyChecks.isNull(revocationStore)) {
+            return;
+        }
+        Jwt jwt;
+        try {
+            jwt = decoder().decode(token);
+        } catch (RuntimeException ignored) {
+            return; // 解析失败的 token 没必要再 revoke
+        }
+        String jti = jwt.getClaimAsString(CLAIM_JTI);
+        if (EmptyChecks.isNull(jti)) {
+            return; // 旧版 token 无 jti,跳过
+        }
+        Instant exp = jwt.getExpiresAt();
+        if (EmptyChecks.isNull(exp)) {
+            return;
+        }
+        Duration remaining =
+                Duration.between(BatchDateTimeSupport.utcNow(), exp).plus(effectiveClockSkew());
+        if (remaining.isNegative()) {
+            return;
+        }
+        // 解码器在容忍期终点仍接受令牌，秒级 TTL 需要覆盖该边界。
+        long ttlSeconds = Math.addExact(remaining.getSeconds(), 1);
+        revocationStore.revoke(jti, Duration.ofSeconds(ttlSeconds));
     }
-    String tokenType = jwt.getClaimAsString(CLAIM_TOKEN_TYPE);
-    if (!TOKEN_TYPE.equals(tokenType)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-    }
-    String username = jwt.getSubject();
-    String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
-    Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
-    boolean singleSessionIsNotCurrent = properties.isSingleSessionEnabled()
-        && (EmptyChecks.isNull(sessionVersion)
-            || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion));
-    if (singleSessionIsNotCurrent) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-    }
-    // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
-    String jti = jwt.getClaimAsString(CLAIM_JTI);
-    ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
-    boolean tokenIsRevoked = EmptyChecks.isNotNull(jti)
-        && EmptyChecks.isNotNull(revocationStore)
-        && revocationStore.isRevoked(jti);
-    if (tokenIsRevoked) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-    }
-    // P2-2:IP/UA 软绑定。签发时绑定 hash,异地异机访问只打 WARN(不 deny)— 移动网 IP 抖动 / UA
-    // 升级会误伤,真要 deny 需配合风控规则。空 claim = 旧 token 兼容,跳过比对。
-    auditClientBindingDrift(jwt, username, tenantId);
-    List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
-    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-    }
-    return new ConsolePrincipal(username, tenantId, new LinkedHashSet<>(authorities));
-  }
 
-  /**
-   * 把当前令牌加入撤销名单，保留至令牌的有效期及时间容忍期结束。调用方为登出接口。
-   */
-  // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
-  @SuppressWarnings("java:S2259")
-  public void revoke(String token) {
-    ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
-    if (EmptyChecks.isNull(revocationStore)) {
-      return;
+    private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
+        HttpServletRequest req = currentRequest();
+        if (EmptyChecks.isNull(req)) {
+            return;
+        }
+        String storedIp = jwt.getClaimAsString(CLAIM_IP_HASH);
+        String storedUa = jwt.getClaimAsString(CLAIM_UA_HASH);
+        if (EmptyChecks.isNull(storedIp) && EmptyChecks.isNull(storedUa)) {
+            return;
+        }
+        String currentIp = hashClientIp(req);
+        String currentUa = hashUserAgent(req);
+        boolean tokenIpHasChanged =
+                EmptyChecks.isNotNull(storedIp) && EmptyChecks.isNotNull(currentIp) && !storedIp.equals(currentIp);
+        if (tokenIpHasChanged) {
+            // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 产生日志噪音
+            String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
+            if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
+                driftLogSuppressor.put(key, Boolean.TRUE);
+                log.warn(
+                        "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
+                        username,
+                        tenantId);
+            }
+        }
+        boolean tokenUserAgentHasChanged =
+                EmptyChecks.isNotNull(storedUa) && EmptyChecks.isNotNull(currentUa) && !storedUa.equals(currentUa);
+        if (tokenUserAgentHasChanged) {
+            String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
+            if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
+                driftLogSuppressor.put(key, Boolean.TRUE);
+                log.warn(
+                        "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",
+                        username,
+                        tenantId);
+            }
+        }
     }
-    Jwt jwt;
-    try {
-      jwt = decoder().decode(token);
-    } catch (RuntimeException ignored) {
-      return; // 解析失败的 token 没必要再 revoke
-    }
-    String jti = jwt.getClaimAsString(CLAIM_JTI);
-    if (EmptyChecks.isNull(jti)) {
-      return; // 旧版 token 无 jti,跳过
-    }
-    Instant exp = jwt.getExpiresAt();
-    if (EmptyChecks.isNull(exp)) {
-      return;
-    }
-    Duration remaining =
-        Duration.between(BatchDateTimeSupport.utcNow(), exp).plus(effectiveClockSkew());
-    if (remaining.isNegative()) {
-      return;
-    }
-    // 解码器在容忍期终点仍接受令牌，秒级 TTL 需要覆盖该边界。
-    long ttlSeconds = Math.addExact(remaining.getSeconds(), 1);
-    revocationStore.revoke(jti, Duration.ofSeconds(ttlSeconds));
-  }
 
-  private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
-    HttpServletRequest req = currentRequest();
-    if (EmptyChecks.isNull(req)) {
-      return;
+    private HttpServletRequest currentRequest() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
+            return attrs.getRequest();
+        }
+        return null;
     }
-    String storedIp = jwt.getClaimAsString(CLAIM_IP_HASH);
-    String storedUa = jwt.getClaimAsString(CLAIM_UA_HASH);
-    if (EmptyChecks.isNull(storedIp) && EmptyChecks.isNull(storedUa)) {
-      return;
-    }
-    String currentIp = hashClientIp(req);
-    String currentUa = hashUserAgent(req);
-    boolean tokenIpHasChanged = EmptyChecks.isNotNull(storedIp)
-        && EmptyChecks.isNotNull(currentIp)
-        && !storedIp.equals(currentIp);
-    if (tokenIpHasChanged) {
-      // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 产生日志噪音
-      String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
-      if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
-        driftLogSuppressor.put(key, Boolean.TRUE);
-        log.warn(
-            "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
-            username,
-            tenantId);
-      }
-    }
-    boolean tokenUserAgentHasChanged = EmptyChecks.isNotNull(storedUa)
-        && EmptyChecks.isNotNull(currentUa)
-        && !storedUa.equals(currentUa);
-    if (tokenUserAgentHasChanged) {
-      String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
-      if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
-        driftLogSuppressor.put(key, Boolean.TRUE);
-        log.warn(
-            "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",
-            username,
-            tenantId);
-      }
-    }
-  }
 
-  private HttpServletRequest currentRequest() {
-    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
-      return attrs.getRequest();
+    private String hashClientIp(HttpServletRequest req) {
+        // 软绑定不信任 XFF(即便 trustForwardedHeaders=true 也只取 RemoteAddr 防伪造):
+        // 这里是审计用途,假 XFF 反而让攻击者主动选定 token 绑定的 hash。
+        return Hashes.sha256Short(req.getRemoteAddr());
     }
-    return null;
-  }
 
-  private String hashClientIp(HttpServletRequest req) {
-    // 软绑定不信任 XFF(即便 trustForwardedHeaders=true 也只取 RemoteAddr 防伪造):
-    // 这里是审计用途,假 XFF 反而让攻击者主动选定 token 绑定的 hash。
-    return Hashes.sha256Short(req.getRemoteAddr());
-  }
+    private String hashUserAgent(HttpServletRequest req) {
+        return Hashes.sha256Short(req.getHeader("User-Agent"));
+    }
 
-  private String hashUserAgent(HttpServletRequest req) {
-    return Hashes.sha256Short(req.getHeader("User-Agent"));
-  }
-
-  private NimbusJwtEncoder encoder() {
-    NimbusJwtEncoder e = cachedEncoder.get();
-    if (e == null) {
-      // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的回退初始化（同 SecretKey 多次构造无副作用）
-      synchronized (this) {
-        e = cachedEncoder.get();
+    private NimbusJwtEncoder encoder() {
+        NimbusJwtEncoder e = cachedEncoder.get();
         if (e == null) {
-          SecretKey key = signingKey();
-          JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
-          e = new NimbusJwtEncoder(encoderSecret);
-          cachedEncoder.set(e);
+            // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的回退初始化（同 SecretKey 多次构造无副作用）
+            synchronized (this) {
+                e = cachedEncoder.get();
+                if (e == null) {
+                    SecretKey key = signingKey();
+                    JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
+                    e = new NimbusJwtEncoder(encoderSecret);
+                    cachedEncoder.set(e);
+                }
+            }
         }
-      }
+        return e;
     }
-    return e;
-  }
 
-  private JwtDecoder decoder() {
-    JwtDecoder d = cachedDecoder.get();
-    if (d == null) {
-      synchronized (this) {
-        d = cachedDecoder.get();
+    private JwtDecoder decoder() {
+        JwtDecoder d = cachedDecoder.get();
         if (d == null) {
-          // R4-P2-6：fallback 路径走 buildDecoder，与 @PostConstruct 一致带 clock skew validator
-          SecretKey key = signingKey();
-          d = buildDecoder(key);
-          cachedDecoder.set(d);
+            synchronized (this) {
+                d = cachedDecoder.get();
+                if (d == null) {
+                    // R4-P2-6：fallback 路径走 buildDecoder，与 @PostConstruct 一致带 clock skew validator
+                    SecretKey key = signingKey();
+                    d = buildDecoder(key);
+                    cachedDecoder.set(d);
+                }
+            }
         }
-      }
+        return d;
     }
-    return d;
-  }
 
-  private SecretKey signingKey() {
-    try {
-      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      String jwtSecret = properties.getJwtSecret();
-      byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-      byte[] keyBytes = digest.digest(secretBytes);
-      return new SecretKeySpec(keyBytes, CryptoAlgorithms.HMAC_SHA256);
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("SHA-256 is not available", exception);
+    private SecretKey signingKey() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            String jwtSecret = properties.getJwtSecret();
+            byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+            byte[] keyBytes = digest.digest(secretBytes);
+            return new SecretKeySpec(keyBytes, CryptoAlgorithms.HMAC_SHA256);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
-  }
 }

@@ -21,22 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/notifications")
 @RequiredArgsConstructor
 public class ConsoleNotificationRoutePreviewController {
-  private final NotificationRoutePreviewService service;
-  private final ConsoleResponseFactory responseFactory;
+    private final NotificationRoutePreviewService service;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/route-preview")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Preview> preview(
-      @RequestParam @NotBlank String tenantId,
-      @RequestParam
-          @NotBlank
-          @Size(max = 128)
-          @Pattern(
-              regexp =
-                  "(?i)JOB_SUCCESS|JOB_FAILED|WORKFLOW_SUCCESS|WORKFLOW_FAILED|ALERT_ESCALATED")
-          String eventType,
-      @RequestParam(required = false) @Size(max = 128) String severity,
-      @RequestParam(required = false) @Size(max = 128) String jobCode) {
-    return responseFactory.success(service.preview(tenantId, eventType, severity, jobCode));
-  }
+    @GetMapping("/route-preview")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Preview> preview(
+            @RequestParam @NotBlank String tenantId,
+            @RequestParam
+                    @NotBlank
+                    @Size(max = 128)
+                    @Pattern(regexp = "(?i)JOB_SUCCESS|JOB_FAILED|WORKFLOW_SUCCESS|WORKFLOW_FAILED|ALERT_ESCALATED")
+                    String eventType,
+            @RequestParam(required = false) @Size(max = 128) String severity,
+            @RequestParam(required = false) @Size(max = 128) String jobCode) {
+        return responseFactory.success(service.preview(tenantId, eventType, severity, jobCode));
+    }
 }

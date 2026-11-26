@@ -42,388 +42,345 @@ import org.mockito.Mockito;
 @DisplayName("文件到达分组治理流程,验证必需文件集为空,到达状态与原因未变,成员校验未通过及触发失败等分支的更新与跳过边界")
 class FileGovernanceArrivalGroupGuardTest {
 
-  private FileGovernanceRepository repository;
-  private FileGovernanceProperties properties;
-  private BundleArrivalLauncher bundleArrivalLauncher;
-  private FileGovernanceScheduler scheduler;
-  private SimpleMeterRegistry meterRegistry;
+    private FileGovernanceRepository repository;
+    private FileGovernanceProperties properties;
+    private BundleArrivalLauncher bundleArrivalLauncher;
+    private FileGovernanceScheduler scheduler;
+    private SimpleMeterRegistry meterRegistry;
 
-  @BeforeEach
-  void setUp() {
-    repository = mock(FileGovernanceRepository.class);
-    properties = mock(FileGovernanceProperties.class, Mockito.RETURNS_DEEP_STUBS);
-    when(properties.getArrival().isEnabled()).thenReturn(true);
-    when(properties.getArrival().getBatchSize()).thenReturn(100);
-    when(properties.getArrival().isTriggerOnComplete()).thenReturn(true);
-    when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
+    @BeforeEach
+    void setUp() {
+        repository = mock(FileGovernanceRepository.class);
+        properties = mock(FileGovernanceProperties.class, Mockito.RETURNS_DEEP_STUBS);
+        when(properties.getArrival().isEnabled()).thenReturn(true);
+        when(properties.getArrival().getBatchSize()).thenReturn(100);
+        when(properties.getArrival().isTriggerOnComplete()).thenReturn(true);
+        when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
 
-    bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
-    meterRegistry = new SimpleMeterRegistry();
-    when(repository.selectArrivalGroupBacklogMetrics())
-        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L));
-    when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
-        .thenReturn(1);
-    scheduler = new FileGovernanceScheduler(
-        repository,
-        mock(S3GovernanceStorage.class),
-        properties,
-        mock(FileGovernanceMetricsCacheService.class),
-        meterRegistry,
-        bundleArrivalLauncher);
-    scheduler.initializeMeters();
-  }
+        bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
+        meterRegistry = new SimpleMeterRegistry();
+        when(repository.selectArrivalGroupBacklogMetrics())
+                .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L));
+        when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
+                .thenReturn(1);
+        scheduler = new FileGovernanceScheduler(
+                repository,
+                mock(S3GovernanceStorage.class),
+                properties,
+                mock(FileGovernanceMetricsCacheService.class),
+                meterRegistry,
+                bundleArrivalLauncher);
+        scheduler.initializeMeters();
+    }
 
-  @Test
-  @DisplayName("等待组指标读取全量持久化聚合,候选页为空时也不会误报零")
-  void shouldRefreshArrivalGroupBacklogFromDatabaseAggregate() {
-    when(repository.selectArrivalGroupBacklogMetrics())
-        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(37L, 9_200L));
+    @Test
+    @DisplayName("等待组指标读取全量持久化聚合,候选页为空时也不会误报零")
+    void shouldRefreshArrivalGroupBacklogFromDatabaseAggregate() {
+        when(repository.selectArrivalGroupBacklogMetrics())
+                .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(37L, 9_200L));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    assertThat(
-            meterRegistry.get("batch.file.arrival.group.waiting.count").gauge().value())
-        .isEqualTo(37.0);
-    assertThat(meterRegistry
-            .get("batch.file.arrival.group.oldest_wait.seconds")
-            .gauge()
-            .value())
-        .isEqualTo(9_200.0);
-  }
+        assertThat(meterRegistry
+                        .get("batch.file.arrival.group.waiting.count")
+                        .gauge()
+                        .value())
+                .isEqualTo(37.0);
+        assertThat(meterRegistry
+                        .get("batch.file.arrival.group.oldest_wait.seconds")
+                        .gauge()
+                        .value())
+                .isEqualTo(9_200.0);
+    }
 
-  @Test
-  @DisplayName("全局到达组扫描按候选租户执行文件更新和审计并清理上下文")
-  void shouldScopeGlobalArrivalGroupWritesToCandidateTenant() {
-    Map<String, Object> tenantA = waitingCandidate(6101L, "tenant-a", "group-a");
-    Map<String, Object> tenantB = waitingCandidate(6102L, "tenant-b", "group-b");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(tenantA, tenantB)));
-    List<String> writeContexts = new ArrayList<>();
-    when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
-        .thenAnswer(invocation -> {
-          writeContexts.add(RlsTenantContextHolder.get());
-          return 1;
-        });
-    doAnswer(invocation -> {
-          writeContexts.add(RlsTenantContextHolder.get());
-          return null;
-        })
-        .when(repository)
-        .appendAudit(any());
+    @Test
+    @DisplayName("全局到达组扫描按候选租户执行文件更新和审计并清理上下文")
+    void shouldScopeGlobalArrivalGroupWritesToCandidateTenant() {
+        Map<String, Object> tenantA = waitingCandidate(6101L, "tenant-a", "group-a");
+        Map<String, Object> tenantB = waitingCandidate(6102L, "tenant-b", "group-b");
+        when(repository.selectArrivalGovernanceCandidates(anyInt()))
+                .thenReturn(candidateViews(List.of(tenantA, tenantB)));
+        List<String> writeContexts = new ArrayList<>();
+        when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    writeContexts.add(RlsTenantContextHolder.get());
+                    return 1;
+                });
+        doAnswer(invocation -> {
+                    writeContexts.add(RlsTenantContextHolder.get());
+                    return null;
+                })
+                .when(repository)
+                .appendAudit(any());
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    assertThat(writeContexts)
-        .containsExactlyInAnyOrder("tenant-a", "tenant-a", "tenant-b", "tenant-b");
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(writeContexts).containsExactlyInAnyOrder("tenant-a", "tenant-a", "tenant-b", "tenant-b");
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  @Test
-  @DisplayName("必需文件集为空时既不改写到达状态也不写入审计,避免每轮空转")
-  void shouldSkipUpdateWhenRequiredFileSetIsEmpty() {
-    // 5207 类场景:有 fileGroupCode 但 requiredFileSet 为空 → 不应每 tick 更新 state
-    Map<String, Object> file =
-        baseFile(5207L, "report.fw", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("必需文件集为空时既不改写到达状态也不写入审计,避免每轮空转")
+    void shouldSkipUpdateWhenRequiredFileSetIsEmpty() {
+        // 5207 类场景:有 fileGroupCode 但 requiredFileSet 为空 → 不应每 tick 更新 state
+        Map<String, Object> file = baseFile(5207L, "report.fw", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, never())
-        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
-    verify(repository, never()).appendAudit(any());
-  }
+        verify(repository, never()).updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
+        verify(repository, never()).appendAudit(any());
+    }
 
-  @Test
-  @DisplayName("到达状态与原因已与目标一致时跳过改写与审计,避免稳态下重复写入")
-  void shouldSkipUpdateWhenStateAndReasonAreUnchanged() {
-    // 状态稳态:state + reason 已与目标一致(WAITING_ARRIVAL + WAITING_REQUIRED_FILES),
-    // 即使 requiredFileSet 非空 + 文件未到齐,update 也应跳过避免 db / 日志噪声
-    Map<String, Object> file =
-        baseFile(5210L, "missing-trigger.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "missing-trigger.csv,companion.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("到达状态与原因已与目标一致时跳过改写与审计,避免稳态下重复写入")
+    void shouldSkipUpdateWhenStateAndReasonAreUnchanged() {
+        // 状态稳态:state + reason 已与目标一致(WAITING_ARRIVAL + WAITING_REQUIRED_FILES),
+        // 即使 requiredFileSet 非空 + 文件未到齐,update 也应跳过避免 db / 日志噪声
+        Map<String, Object> file = baseFile(5210L, "missing-trigger.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "missing-trigger.csv,companion.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, never())
-        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
-    verify(repository, never()).appendAudit(any());
-  }
+        verify(repository, never()).updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
+        verify(repository, never()).appendAudit(any());
+    }
 
-  @Test
-  @DisplayName("必需文件齐备且到达即触发开启时,到达状态改写一次并写入一条审计")
-  void shouldUpdateWhenStateChanges() {
-    // 文件齐全 + triggerOnComplete=true → state 由 WAITING_ARRIVAL 升 TRIGGERED,update 必须发生
-    Map<String, Object> file =
-        baseFile(5300L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("必需文件齐备且到达即触发开启时,到达状态改写一次并写入一条审计")
+    void shouldUpdateWhenStateChanges() {
+        // 文件齐全 + triggerOnComplete=true → state 由 WAITING_ARRIVAL 升 TRIGGERED,update 必须发生
+        Map<String, Object> file = baseFile(5300L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1))
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5300L), any());
-    verify(repository, times(1)).appendAudit(any());
-  }
+        verify(repository, times(1)).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5300L), any());
+        verify(repository, times(1)).appendAudit(any());
+    }
 
-  @Test
-  @DisplayName("开启校验要求时,成员缺少校验值则不放行,保持等待并标记待校验")
-  void shouldHoldWhenRequireVerifiedAndMemberMissingChecksum() {
-    // require-verified=true:文件名虽齐,但成员 checksum_type=NONE(无 manifest 背书)→ 不放行,保持等待
-    when(properties.getArrival().isRequireVerified()).thenReturn(true);
-    Map<String, Object> file =
-        baseFile(5400L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    file.put("checksum_type", "NONE");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("开启校验要求时,成员缺少校验值则不放行,保持等待并标记待校验")
+    void shouldHoldWhenRequireVerifiedAndMemberMissingChecksum() {
+        // require-verified=true:文件名虽齐,但成员 checksum_type=NONE(无 manifest 背书)→ 不放行,保持等待
+        when(properties.getArrival().isRequireVerified()).thenReturn(true);
+        Map<String, Object> file = baseFile(5400L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        file.put("checksum_type", "NONE");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5400L), captor.capture());
-    assertThat(captor.getValue()).containsEntry("arrivalState", "WAITING_ARRIVAL");
-    assertThat(captor.getValue()).containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
-  }
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5400L), captor.capture());
+        assertThat(captor.getValue()).containsEntry("arrivalState", "WAITING_ARRIVAL");
+        assertThat(captor.getValue()).containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
+    }
 
-  @Test
-  @DisplayName("开启校验要求时,只有原始对象已校验才正常触发")
-  void shouldTriggerWhenRequireVerifiedAndAllMembersHaveChecksum() {
-    // checksum_type 只是期望值;只有 scanner 已验证实际字节并持久化 VERIFIED 才可触发。
-    when(properties.getArrival().isRequireVerified()).thenReturn(true);
-    Map<String, Object> file =
-        baseFile(5401L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    file.put("checksum_type", "SHA-256");
-    file.put("metadata_json", "{\"integrityState\":\"VERIFIED\"}");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("开启校验要求时,只有原始对象已校验才正常触发")
+    void shouldTriggerWhenRequireVerifiedAndAllMembersHaveChecksum() {
+        // checksum_type 只是期望值;只有 scanner 已验证实际字节并持久化 VERIFIED 才可触发。
+        when(properties.getArrival().isRequireVerified()).thenReturn(true);
+        Map<String, Object> file = baseFile(5401L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        file.put("checksum_type", "SHA-256");
+        file.put("metadata_json", "{\"integrityState\":\"VERIFIED\"}");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5401L), captor.capture());
-    assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
-  }
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5401L), captor.capture());
+        assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
+    }
 
-  @Test
-  @DisplayName("开启校验要求时,结构化元数据中的已验证状态可直接放行")
-  void shouldTriggerWhenIntegrityStateIsStoredAsStructuredMetadata() {
-    when(properties.getArrival().isRequireVerified()).thenReturn(true);
-    Map<String, Object> file =
-        baseFile(5402L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    file.put("metadata_json", Map.of("integrityState", "VERIFIED"));
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("开启校验要求时,结构化元数据中的已验证状态可直接放行")
+    void shouldTriggerWhenIntegrityStateIsStoredAsStructuredMetadata() {
+        when(properties.getArrival().isRequireVerified()).thenReturn(true);
+        Map<String, Object> file = baseFile(5402L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        file.put("metadata_json", Map.of("integrityState", "VERIFIED"));
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5402L), captor.capture());
-    assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
-  }
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5402L), captor.capture());
+        assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
+    }
 
-  @Test
-  @DisplayName("开启校验要求时,损坏的元数据 JSON 按未验证处理而不放行")
-  void shouldHoldWhenIntegrityMetadataJsonIsMalformed() {
-    when(properties.getArrival().isRequireVerified()).thenReturn(true);
-    Map<String, Object> file =
-        baseFile(5403L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    file.put("metadata_json", "{not-json");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("开启校验要求时,损坏的元数据 JSON 按未验证处理而不放行")
+    void shouldHoldWhenIntegrityMetadataJsonIsMalformed() {
+        when(properties.getArrival().isRequireVerified()).thenReturn(true);
+        Map<String, Object> file = baseFile(5403L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        file.put("metadata_json", "{not-json");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5403L), captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("arrivalState", "WAITING_ARRIVAL")
-        .containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
-  }
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5403L), captor.capture());
+        assertThat(captor.getValue())
+                .containsEntry("arrivalState", "WAITING_ARRIVAL")
+                .containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
+    }
 
-  @Test
-  @DisplayName("束启动等待批次日时不误报触发,批次日恢复后即使到达期限已过仍归因真实结果")
-  void shouldTrackDurableWaiting_whenBundleLaunchIsDeferred() {
-    Map<String, Object> file =
-        baseFile(5501L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
-    when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
-        .thenReturn(
-            BundleArrivalLauncher.LaunchOutcome.WAITING,
-            BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
-    scheduler.manageFileArrivalGroups();
-    ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(
-            eq("default-tenant"), eq(5501L), metadata.capture());
-    assertThat(metadata.getValue())
-        .containsEntry("arrivalState", "WAITING_ARRIVAL")
-        .containsEntry("arrivalReason", "BUNDLE_LAUNCH_WAITING");
-    file.put("arrival_reason", "BUNDLE_LAUNCH_WAITING");
-    file.put("latest_tolerable_time", "2020-01-01T00:00:00Z");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
-    scheduler.manageFileArrivalGroups();
-    verify(repository, times(2))
-        .updateArrivalGroupMetadataIfNonTerminal(
-            eq("default-tenant"), eq(5501L), metadata.capture());
-    assertThat(metadata.getValue()).containsEntry("arrivalState", "TRIGGERED");
-  }
+    @Test
+    @DisplayName("束启动等待批次日时不误报触发,批次日恢复后即使到达期限已过仍归因真实结果")
+    void shouldTrackDurableWaiting_whenBundleLaunchIsDeferred() {
+        Map<String, Object> file = baseFile(5501L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
+        when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
+                .thenReturn(BundleArrivalLauncher.LaunchOutcome.WAITING, BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
+        scheduler.manageFileArrivalGroups();
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5501L), metadata.capture());
+        assertThat(metadata.getValue())
+                .containsEntry("arrivalState", "WAITING_ARRIVAL")
+                .containsEntry("arrivalReason", "BUNDLE_LAUNCH_WAITING");
+        file.put("arrival_reason", "BUNDLE_LAUNCH_WAITING");
+        file.put("latest_tolerable_time", "2020-01-01T00:00:00Z");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
+        scheduler.manageFileArrivalGroups();
+        verify(repository, times(2))
+                .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5501L), metadata.capture());
+        assertThat(metadata.getValue()).containsEntry("arrivalState", "TRIGGERED");
+    }
 
-  @Test
-  @DisplayName("束启动被拒绝时进入人工处理状态,不计作已触发")
-  void shouldRequireManualConfirmation_whenBundleLaunchIsRejected() {
-    Map<String, Object> file =
-        baseFile(5502L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
-    when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
-        .thenReturn(BundleArrivalLauncher.LaunchOutcome.REJECTED);
-    scheduler.manageFileArrivalGroups();
-    ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
-    verify(repository)
-        .updateArrivalGroupMetadataIfNonTerminal(
-            eq("default-tenant"), eq(5502L), metadata.capture());
-    assertThat(metadata.getValue())
-        .containsEntry("arrivalState", "WAITING_MANUAL_CONFIRM")
-        .containsEntry("arrivalReason", "BUNDLE_LAUNCH_REJECTED");
-  }
+    @Test
+    @DisplayName("束启动被拒绝时进入人工处理状态,不计作已触发")
+    void shouldRequireManualConfirmation_whenBundleLaunchIsRejected() {
+        Map<String, Object> file = baseFile(5502L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
+        when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
+                .thenReturn(BundleArrivalLauncher.LaunchOutcome.REJECTED);
+        scheduler.manageFileArrivalGroups();
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
+        verify(repository).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5502L), metadata.capture());
+        assertThat(metadata.getValue())
+                .containsEntry("arrivalState", "WAITING_MANUAL_CONFIRM")
+                .containsEntry("arrivalReason", "BUNDLE_LAUNCH_REJECTED");
+    }
 
-  @Test
-  @DisplayName("同一到达组的触发过程抛出异常时不改写状态与审计,以便下一轮重试")
-  void shouldKeepBundleGroupRetryableWhenLaunchFails() {
-    Map<String, Object> file =
-        baseFile(5500L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
-    when(bundleArrivalLauncher.launchIfBundle(eq("default-tenant"), eq("test-group"), any()))
-        .thenThrow(new IllegalStateException("launch failed"));
+    @Test
+    @DisplayName("同一到达组的触发过程抛出异常时不改写状态与审计,以便下一轮重试")
+    void shouldKeepBundleGroupRetryableWhenLaunchFails() {
+        Map<String, Object> file = baseFile(5500L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
+        when(bundleArrivalLauncher.launchIfBundle(eq("default-tenant"), eq("test-group"), any()))
+                .thenThrow(new IllegalStateException("launch failed"));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, never())
-        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
-    verify(repository, never()).appendAudit(any());
-  }
+        verify(repository, never()).updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
+        verify(repository, never()).appendAudit(any());
+    }
 
-  @Test
-  @DisplayName("同一到达组编码按业务日期分组,两个业务日期的文件各自独立推进")
-  void shouldPartitionSameArrivalGroupCodeByBizDate() {
-    Map<String, Object> today =
-        baseFile(5600L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    today.put("biz_date", "2026-06-21");
-    today.put("required_file_set", "ready.csv");
-    Map<String, Object> yesterday =
-        baseFile(5601L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    yesterday.put("biz_date", "2026-06-20");
-    yesterday.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(today, yesterday)));
+    @Test
+    @DisplayName("同一到达组编码按业务日期分组,两个业务日期的文件各自独立推进")
+    void shouldPartitionSameArrivalGroupCodeByBizDate() {
+        Map<String, Object> today = baseFile(5600L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        today.put("biz_date", "2026-06-21");
+        today.put("required_file_set", "ready.csv");
+        Map<String, Object> yesterday = baseFile(5601L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        yesterday.put("biz_date", "2026-06-20");
+        yesterday.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt()))
+                .thenReturn(candidateViews(List.of(today, yesterday)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1))
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5600L), any());
-    verify(repository, times(1))
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5601L), any());
-  }
+        verify(repository, times(1)).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5600L), any());
+        verify(repository, times(1)).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5601L), any());
+    }
 
-  @Test
-  @DisplayName("业务日期缺失时仍按同一分组推进到达状态")
-  void shouldStillTriggerArrivalGroupWhenBizDateMissing() {
-    Map<String, Object> file =
-        baseFile(5700L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
-    file.remove("biz_date");
-    file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(candidateViews(List.of(file)));
+    @Test
+    @DisplayName("业务日期缺失时仍按同一分组推进到达状态")
+    void shouldStillTriggerArrivalGroupWhenBizDateMissing() {
+        Map<String, Object> file = baseFile(5700L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+        file.remove("biz_date");
+        file.put("required_file_set", "ready.csv");
+        when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(candidateViews(List.of(file)));
 
-    scheduler.manageFileArrivalGroups();
+        scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1))
-        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5700L), any());
-  }
+        verify(repository, times(1)).updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5700L), any());
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private static List<FileGovernanceArrivalViews.ArrivalCandidateView> candidateViews(
-      List<Map<String, Object>> rows) {
-    return rows.stream()
-        .map(row -> FileGovernanceArrivalViews.arrivalCandidate(candidateRow(row)))
-        .toList();
-  }
+    private static List<FileGovernanceArrivalViews.ArrivalCandidateView> candidateViews(
+            List<Map<String, Object>> rows) {
+        return rows.stream()
+                .map(row -> FileGovernanceArrivalViews.arrivalCandidate(candidateRow(row)))
+                .toList();
+    }
 
-  private static FileGovernanceViews.ArrivalCandidateRow candidateRow(Map<String, Object> row) {
-    return new FileGovernanceViews.ArrivalCandidateRow(
-        (Long) row.get("id"),
-        text(row.get("tenant_id")),
-        text(row.get("checksum_type")),
-        text(row.get("file_name")),
-        bizDate(row.get("biz_date")),
-        text(row.get("file_status")),
-        null,
-        null,
-        row.get("metadata_json"),
-        text(row.get("file_group_code")),
-        text(row.get("wait_file_group_mode")),
-        text(row.get("required_file_set")),
-        text(row.get("arrival_timeout_action")),
-        text(row.get("arrival_state")),
-        text(row.get("arrival_reason")),
-        text(row.get("expected_arrival_time")),
-        text(row.get("latest_tolerable_time")),
-        text(row.get("trigger_on_complete")));
-  }
+    private static FileGovernanceViews.ArrivalCandidateRow candidateRow(Map<String, Object> row) {
+        return new FileGovernanceViews.ArrivalCandidateRow(
+                (Long) row.get("id"),
+                text(row.get("tenant_id")),
+                text(row.get("checksum_type")),
+                text(row.get("file_name")),
+                bizDate(row.get("biz_date")),
+                text(row.get("file_status")),
+                null,
+                null,
+                row.get("metadata_json"),
+                text(row.get("file_group_code")),
+                text(row.get("wait_file_group_mode")),
+                text(row.get("required_file_set")),
+                text(row.get("arrival_timeout_action")),
+                text(row.get("arrival_state")),
+                text(row.get("arrival_reason")),
+                text(row.get("expected_arrival_time")),
+                text(row.get("latest_tolerable_time")),
+                text(row.get("trigger_on_complete")));
+    }
 
-  private static String text(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
+    private static String text(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
 
-  private static LocalDate bizDate(Object value) {
-    return value == null ? null : LocalDate.parse(String.valueOf(value));
-  }
+    private static LocalDate bizDate(Object value) {
+        return value == null ? null : LocalDate.parse(String.valueOf(value));
+    }
 
-  private static Map<String, Object> baseFile(
-      long id, String fileName, String arrivalState, String arrivalReason) {
-    Map<String, Object> file = new LinkedHashMap<>();
-    file.put("id", id);
-    file.put("tenant_id", "default-tenant");
-    file.put("biz_date", "2026-06-21");
-    file.put("file_name", fileName);
-    file.put("file_status", FileStatus.RECEIVED.code());
-    file.put("file_group_code", "test-group");
-    file.put("wait_file_group_mode", "ALL_OF");
-    file.put("arrival_timeout_action", "MANUAL_CONFIRM");
-    file.put("arrival_state", arrivalState);
-    file.put("arrival_reason", arrivalReason);
-    file.put("trigger_on_complete", "true");
-    return file;
-  }
+    private static Map<String, Object> baseFile(long id, String fileName, String arrivalState, String arrivalReason) {
+        Map<String, Object> file = new LinkedHashMap<>();
+        file.put("id", id);
+        file.put("tenant_id", "default-tenant");
+        file.put("biz_date", "2026-06-21");
+        file.put("file_name", fileName);
+        file.put("file_status", FileStatus.RECEIVED.code());
+        file.put("file_group_code", "test-group");
+        file.put("wait_file_group_mode", "ALL_OF");
+        file.put("arrival_timeout_action", "MANUAL_CONFIRM");
+        file.put("arrival_state", arrivalState);
+        file.put("arrival_reason", arrivalReason);
+        file.put("trigger_on_complete", "true");
+        return file;
+    }
 
-  private static Map<String, Object> waitingCandidate(long id, String tenantId, String groupCode) {
-    Map<String, Object> file = baseFile(id, "present.csv", "WAITING_ARRIVAL", "OLD_REASON");
-    file.put("tenant_id", tenantId);
-    file.put("file_group_code", groupCode);
-    file.put("required_file_set", "missing.csv");
-    return file;
-  }
+    private static Map<String, Object> waitingCandidate(long id, String tenantId, String groupCode) {
+        Map<String, Object> file = baseFile(id, "present.csv", "WAITING_ARRIVAL", "OLD_REASON");
+        file.put("tenant_id", tenantId);
+        file.put("file_group_code", groupCode);
+        file.put("required_file_set", "missing.csv");
+        return file;
+    }
 }

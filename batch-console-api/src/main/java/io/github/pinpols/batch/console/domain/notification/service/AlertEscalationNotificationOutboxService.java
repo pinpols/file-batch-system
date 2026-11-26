@@ -16,50 +16,49 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AlertEscalationNotificationOutboxService {
 
-  private final AlertEventMapper alertEventMapper;
-  private final AlertEscalationNotificationOutboxMapper outboxMapper;
+    private final AlertEventMapper alertEventMapper;
+    private final AlertEscalationNotificationOutboxMapper outboxMapper;
 
-  /**
-   * 在同一事务内抢占告警升级通知所有权并写入通知 outbox。
-   *
-   * <p>只有 {@code markEscalationNotified} CAS 成功的实例才会插入 outbox；CAS 失败表示告警已被 ACK、关闭或其它实例抢先处理。
-   */
-  @Transactional
-  public boolean enqueue(
-      AlertEventEntity alert,
-      String stream,
-      String eventType,
-      AlertEscalationNotifier.AlertEscalationNotifyPayload payload) {
-    int tier = zeroIfNull(alert.getEscalationTier());
-    int notifiedTier = zeroIfNull(alert.getEscalationNotifiedTier());
-    if (tier <= notifiedTier) {
-      return false;
+    /**
+     * 在同一事务内抢占告警升级通知所有权并写入通知 outbox。
+     *
+     * <p>只有 {@code markEscalationNotified} CAS 成功的实例才会插入 outbox；CAS 失败表示告警已被 ACK、关闭或其它实例抢先处理。
+     */
+    @Transactional
+    public boolean enqueue(
+            AlertEventEntity alert,
+            String stream,
+            String eventType,
+            AlertEscalationNotifier.AlertEscalationNotifyPayload payload) {
+        int tier = zeroIfNull(alert.getEscalationTier());
+        int notifiedTier = zeroIfNull(alert.getEscalationNotifiedTier());
+        if (tier <= notifiedTier) {
+            return false;
+        }
+        int marked = alertEventMapper.markEscalationNotified(alert.getTenantId(), alert.getId(), notifiedTier, tier);
+        if (marked == 0) {
+            return false;
+        }
+        AlertEscalationNotificationOutboxEntity row = new AlertEscalationNotificationOutboxEntity();
+        row.setTenantId(alert.getTenantId());
+        row.setAlertEventId(alert.getId());
+        row.setEscalationTier(tier);
+        row.setStream(stream);
+        row.setEventType(eventType);
+        String payloadJson = JsonUtils.toJson(payload);
+        row.setPayloadJson(payloadJson);
+        row.setPublishStatus(OutboxPublishStatus.NEW.code());
+        row.setAttemptCount(0);
+        row.setNextPublishAt(BatchDateTimeSupport.utcNow());
+        int inserted = outboxMapper.insert(row);
+        if (inserted != 1) {
+            throw new IllegalStateException(
+                    "alert escalation notification outbox insert affected " + inserted + " rows");
+        }
+        return true;
     }
-    int marked = alertEventMapper.markEscalationNotified(
-        alert.getTenantId(), alert.getId(), notifiedTier, tier);
-    if (marked == 0) {
-      return false;
-    }
-    AlertEscalationNotificationOutboxEntity row = new AlertEscalationNotificationOutboxEntity();
-    row.setTenantId(alert.getTenantId());
-    row.setAlertEventId(alert.getId());
-    row.setEscalationTier(tier);
-    row.setStream(stream);
-    row.setEventType(eventType);
-    String payloadJson = JsonUtils.toJson(payload);
-    row.setPayloadJson(payloadJson);
-    row.setPublishStatus(OutboxPublishStatus.NEW.code());
-    row.setAttemptCount(0);
-    row.setNextPublishAt(BatchDateTimeSupport.utcNow());
-    int inserted = outboxMapper.insert(row);
-    if (inserted != 1) {
-      throw new IllegalStateException(
-          "alert escalation notification outbox insert affected " + inserted + " rows");
-    }
-    return true;
-  }
 
-  private static int zeroIfNull(Integer value) {
-    return EmptyChecks.isNull(value) ? 0 : value;
-  }
+    private static int zeroIfNull(Integer value) {
+        return EmptyChecks.isNull(value) ? 0 : value;
+    }
 }

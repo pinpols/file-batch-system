@@ -9,41 +9,41 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /** 资源队列调度、公平性和并发配额参数。 */
 public class ResourceSchedulerProperties {
 
-  private int waitingDispatchBatchSize = 100;
-  private long waitingDispatchIntervalMillis = 10000L;
-  /** 任务终态提交后是否合并触发一次 WAITING 队列重派。 */
-  private boolean waitingDispatchKickEnabled = true;
-  /** 合并触发的延迟，避免 report 提交瞬间与连接归还争用。 */
-  private long waitingDispatchKickDelayMillis = 250L;
+    private int waitingDispatchBatchSize = 100;
+    private long waitingDispatchIntervalMillis = 10000L;
+    /** 任务终态提交后是否合并触发一次 WAITING 队列重派。 */
+    private boolean waitingDispatchKickEnabled = true;
+    /** 合并触发的延迟，避免 report 提交瞬间与连接归还争用。 */
+    private long waitingDispatchKickDelayMillis = 250L;
 
-  private int quotaResetSlidingWindowHours = 24;
-  private long quotaResetScanIntervalMillis = 60000L;
-  private boolean quotaResetEnabled = true;
+    private int quotaResetSlidingWindowHours = 24;
+    private long quotaResetScanIntervalMillis = 60000L;
+    private boolean quotaResetEnabled = true;
 
-  /** 全局活跃作业上限。生产环境必须为正数；本地 profile 可显式设 0 关闭。 */
-  private long globalMaxRunningJobs = 1000;
+    /** 全局活跃作业上限。生产环境必须为正数；本地 profile 可显式设 0 关闭。 */
+    private long globalMaxRunningJobs = 1000;
 
-  /**
-   * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,峰值流量不误拒正常请求）;设
-   * REJECT 可恢复旧的硬拒默认。仅作用于「未显式配策略」的租户,显式配了的以租户策略为准。
-   */
-  private QuotaExceededStrategy defaultExceededStrategy = QuotaExceededStrategy.QUEUE_DEFER;
+    /**
+     * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,峰值流量不误拒正常请求）;设
+     * REJECT 可恢复旧的硬拒默认。仅作用于「未显式配策略」的租户,显式配了的以租户策略为准。
+     */
+    private QuotaExceededStrategy defaultExceededStrategy = QuotaExceededStrategy.QUEUE_DEFER;
 
-  /**
-   * 共享 worker 池的 fallback 租户。当某租户的目标 workerGroup 下没有 ONLINE worker 时， selector 会退到此租户再查一次——仅用于本地联调
-   * / 共享 dev 环境，生产不设置。 空值（默认）禁用 fallback，严格保留 docs/agent-baseline.md §多租户隔离 的原语义。
-   */
-  private String sharedTenantFallback = "";
+    /**
+     * 共享 worker 池的 fallback 租户。当某租户的目标 workerGroup 下没有 ONLINE worker 时， selector 会退到此租户再查一次——仅用于本地联调
+     * / 共享 dev 环境，生产不设置。 空值（默认）禁用 fallback，严格保留 docs/agent-baseline.md §多租户隔离 的原语义。
+     */
+    private String sharedTenantFallback = "";
 
-  /** WAITING 分片公平调度 aging 开关。开启后等待越久 fairnessScore 越高，避免长期饥饿。 */
-  private boolean priorityAgingEnabled = true;
+    /** WAITING 分片公平调度 aging 开关。开启后等待越久 fairnessScore 越高，避免长期饥饿。 */
+    private boolean priorityAgingEnabled = true;
 
-  /** 每等待多少秒增加一次 aging 分数。值 <= 0 时回退为 60 秒。 */
-  private long priorityAgingStepSeconds = 60;
+    /** 每等待多少秒增加一次 aging 分数。值 <= 0 时回退为 60 秒。 */
+    private long priorityAgingStepSeconds = 60;
 
-  /** 每个 aging step 增加的 fairnessScore。 */
-  private long priorityAgingBonusPerStep = 250;
+    /** 每个 aging step 增加的 fairnessScore。 */
+    private long priorityAgingBonusPerStep = 250;
 
-  /** 单个分片 aging 加分上限，防止极老任务永久压过显式高优先级任务。 */
-  private long priorityAgingMaxBonus = 20_000;
+    /** 单个分片 aging 加分上限，防止极老任务永久压过显式高优先级任务。 */
+    private long priorityAgingMaxBonus = 20_000;
 }

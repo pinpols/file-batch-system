@@ -64,503 +64,478 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SuppressWarnings("java:S2583")
 public class BundleArrivalLauncher {
 
-  /**
-   * 可读 requestId 的长度上限，对应 trigger_request.request_id VARCHAR(128)
-   * （V5__create_runtime_tables.sql）；超长时改用哈希形式。
-   */
-  private static final int READABLE_REQUEST_ID_MAX_LENGTH = 128;
+    /**
+     * 可读 requestId 的长度上限，对应 trigger_request.request_id VARCHAR(128)
+     * （V5__create_runtime_tables.sql）；超长时改用哈希形式。
+     */
+    private static final int READABLE_REQUEST_ID_MAX_LENGTH = 128;
 
-  private static final String META_BUNDLE_WORKFLOW_CODE = "bundleWorkflowCode";
-  private static final String META_BUNDLE_TEMPLATE_CODE = "bundleTemplateCode";
-  // ADR-046 Phase3:分发束 per-file 绑定下游渠道(channel_code),落 file_record metadata.bundleTargetRef。
-  private static final String META_BUNDLE_TARGET_REF = "bundleTargetRef";
-  // ADR-046 Phase3:导出束「manifest-only」——一条 trigger 记录的 metadata 携带导出模板 code 列表(导出无源文件,
-  // 一个声明展成 N 个 partition),scanner 落 metadata.bundleExportTemplates。
-  private static final String META_BUNDLE_EXPORT_TEMPLATES = "bundleExportTemplates";
+    private static final String META_BUNDLE_WORKFLOW_CODE = "bundleWorkflowCode";
+    private static final String META_BUNDLE_TEMPLATE_CODE = "bundleTemplateCode";
+    // ADR-046 Phase3:分发束 per-file 绑定下游渠道(channel_code),落 file_record metadata.bundleTargetRef。
+    private static final String META_BUNDLE_TARGET_REF = "bundleTargetRef";
+    // ADR-046 Phase3:导出束「manifest-only」——一条 trigger 记录的 metadata 携带导出模板 code 列表(导出无源文件,
+    // 一个声明展成 N 个 partition),scanner 落 metadata.bundleExportTemplates。
+    private static final String META_BUNDLE_EXPORT_TEMPLATES = "bundleExportTemplates";
 
-  private final ObjectProvider<WorkflowRunLaunchService> workflowRunLaunchServiceProvider;
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
-  private final BatchDayInstanceMapper batchDayInstanceMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final PlatformTransactionManager transactionManager;
+    private final ObjectProvider<WorkflowRunLaunchService> workflowRunLaunchServiceProvider;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
+    private final BatchDayInstanceMapper batchDayInstanceMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final PlatformTransactionManager transactionManager;
 
-  public BundleArrivalLauncher(
-      ObjectProvider<WorkflowRunLaunchService> workflowRunLaunchServiceProvider,
-      TriggerRequestMapper triggerRequestMapper,
-      ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper,
-      BatchDayInstanceMapper batchDayInstanceMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper,
-      PlatformTransactionManager transactionManager) {
-    this.workflowRunLaunchServiceProvider = workflowRunLaunchServiceProvider;
-    this.triggerRequestMapper = triggerRequestMapper;
-    this.expectedWorkOccurrenceMapper = expectedWorkOccurrenceMapper;
-    this.batchDayInstanceMapper = batchDayInstanceMapper;
-    this.workflowDefinitionMapper = workflowDefinitionMapper;
-    this.transactionManager = transactionManager;
-  }
-
-  public enum LaunchOutcome {
-    NOT_BUNDLE,
-    LAUNCHED,
-    WAITING,
-    REJECTED
-  }
-
-  /** 到达组满足条件时调用;非束组(无 bundleWorkflowCode)直接返回,不发 launch。 */
-  public LaunchOutcome launchIfBundle(
-      String tenantId,
-      String fileGroupCode,
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-    if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
-      return LaunchOutcome.NOT_BUNDLE;
+    public BundleArrivalLauncher(
+            ObjectProvider<WorkflowRunLaunchService> workflowRunLaunchServiceProvider,
+            TriggerRequestMapper triggerRequestMapper,
+            ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper,
+            BatchDayInstanceMapper batchDayInstanceMapper,
+            WorkflowDefinitionMapper workflowDefinitionMapper,
+            PlatformTransactionManager transactionManager) {
+        this.workflowRunLaunchServiceProvider = workflowRunLaunchServiceProvider;
+        this.triggerRequestMapper = triggerRequestMapper;
+        this.expectedWorkOccurrenceMapper = expectedWorkOccurrenceMapper;
+        this.batchDayInstanceMapper = batchDayInstanceMapper;
+        this.workflowDefinitionMapper = workflowDefinitionMapper;
+        this.transactionManager = transactionManager;
     }
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId, () -> launchIfBundleForTenant(tenantId, fileGroupCode, groupFiles));
-  }
 
-  private LaunchOutcome launchIfBundleForTenant(
-      String tenantId,
-      String fileGroupCode,
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-    BundleLaunchCandidate candidate = collectCandidate(tenantId, fileGroupCode, groupFiles);
-    if (EmptyChecks.isNull(candidate.bundleWorkflowCode())) {
-      return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
+    public enum LaunchOutcome {
+        NOT_BUNDLE,
+        LAUNCHED,
+        WAITING,
+        REJECTED
     }
-    validateCandidate(tenantId, fileGroupCode, candidate);
-    return launchCandidate(tenantId, fileGroupCode, candidate);
-  }
 
-  private BundleLaunchCandidate collectCandidate(
-      String tenantId,
-      String fileGroupCode,
-      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-    String bundleWorkflowCode = null;
-    LocalDate bizDate = null;
-    List<Map<String, Object>> bundleFiles = new ArrayList<>();
-    boolean bindingWithoutWorkflowCode = false;
-    boolean workflowCodedMemberWithoutBinding = false;
-    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
-      Map<String, Object> meta = parseMetadata(file.metadataJson());
-      String workflowCode = text(meta.get(META_BUNDLE_WORKFLOW_CODE));
-      String templateCode = text(meta.get(META_BUNDLE_TEMPLATE_CODE));
-      String targetRef = text(meta.get(META_BUNDLE_TARGET_REF));
-      List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
-      bundleWorkflowCode =
-          mergeWorkflowCode(tenantId, fileGroupCode, bundleWorkflowCode, workflowCode);
-      bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
-      boolean workflowIsMissingForExportTargets = EmptyChecks.isNull(workflowCode)
-          && (!EmptyChecks.isEmpty(exportTemplates)
-              || EmptyChecks.isNotNull(templateCode)
-              || EmptyChecks.isNotNull(targetRef));
-      if (workflowIsMissingForExportTargets) {
-        bindingWithoutWorkflowCode = true;
-      }
-      boolean emittedBinding = appendBundleBindings(
-          bundleFiles, file.fileId(), templateCode, targetRef, exportTemplates);
-      if (EmptyChecks.isNotNull(workflowCode) && !emittedBinding) {
-        workflowCodedMemberWithoutBinding = true;
-      }
+    /** 到达组满足条件时调用;非束组(无 bundleWorkflowCode)直接返回,不发 launch。 */
+    public LaunchOutcome launchIfBundle(
+            String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
+        if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
+            return LaunchOutcome.NOT_BUNDLE;
+        }
+        return RlsTenantContextHolder.runWithTenant(
+                tenantId, () -> launchIfBundleForTenant(tenantId, fileGroupCode, groupFiles));
     }
-    return new BundleLaunchCandidate(
-        bundleWorkflowCode,
-        bizDate,
-        bundleFiles,
-        bindingWithoutWorkflowCode,
-        workflowCodedMemberWithoutBinding);
-  }
 
-  private static String mergeWorkflowCode(
-      String tenantId, String fileGroupCode, String existingWorkflowCode, String workflowCode) {
-    if (EmptyChecks.isNull(workflowCode)) {
-      return existingWorkflowCode;
+    private LaunchOutcome launchIfBundleForTenant(
+            String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
+        BundleLaunchCandidate candidate = collectCandidate(tenantId, fileGroupCode, groupFiles);
+        if (EmptyChecks.isNull(candidate.bundleWorkflowCode())) {
+            return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
+        }
+        validateCandidate(tenantId, fileGroupCode, candidate);
+        return launchCandidate(tenantId, fileGroupCode, candidate);
     }
-    if (EmptyChecks.isNull(existingWorkflowCode)) {
-      return workflowCode;
-    }
-    if (!existingWorkflowCode.equals(workflowCode)) {
-      throw new IllegalStateException("bundle arrival group mixes bundleWorkflowCode: tenantId="
-          + tenantId
-          + ", fileGroupCode="
-          + fileGroupCode);
-    }
-    return existingWorkflowCode;
-  }
 
-  private static LocalDate mergeBizDate(
-      String tenantId, String fileGroupCode, LocalDate existingBizDate, LocalDate fileBizDate) {
-    if (fileBizDate == null) {
-      return existingBizDate;
+    private BundleLaunchCandidate collectCandidate(
+            String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
+        String bundleWorkflowCode = null;
+        LocalDate bizDate = null;
+        List<Map<String, Object>> bundleFiles = new ArrayList<>();
+        boolean bindingWithoutWorkflowCode = false;
+        boolean workflowCodedMemberWithoutBinding = false;
+        for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+            Map<String, Object> meta = parseMetadata(file.metadataJson());
+            String workflowCode = text(meta.get(META_BUNDLE_WORKFLOW_CODE));
+            String templateCode = text(meta.get(META_BUNDLE_TEMPLATE_CODE));
+            String targetRef = text(meta.get(META_BUNDLE_TARGET_REF));
+            List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
+            bundleWorkflowCode = mergeWorkflowCode(tenantId, fileGroupCode, bundleWorkflowCode, workflowCode);
+            bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
+            boolean workflowIsMissingForExportTargets = EmptyChecks.isNull(workflowCode)
+                    && (!EmptyChecks.isEmpty(exportTemplates)
+                            || EmptyChecks.isNotNull(templateCode)
+                            || EmptyChecks.isNotNull(targetRef));
+            if (workflowIsMissingForExportTargets) {
+                bindingWithoutWorkflowCode = true;
+            }
+            boolean emittedBinding =
+                    appendBundleBindings(bundleFiles, file.fileId(), templateCode, targetRef, exportTemplates);
+            if (EmptyChecks.isNotNull(workflowCode) && !emittedBinding) {
+                workflowCodedMemberWithoutBinding = true;
+            }
+        }
+        return new BundleLaunchCandidate(
+                bundleWorkflowCode,
+                bizDate,
+                bundleFiles,
+                bindingWithoutWorkflowCode,
+                workflowCodedMemberWithoutBinding);
     }
-    if (existingBizDate == null) {
-      return fileBizDate;
-    }
-    if (!existingBizDate.equals(fileBizDate)) {
-      throw new IllegalStateException("bundle arrival group mixes bizDate: tenantId="
-          + tenantId
-          + ", fileGroupCode="
-          + fileGroupCode);
-    }
-    return existingBizDate;
-  }
 
-  private static boolean appendBundleBindings(
-      List<Map<String, Object>> bundleFiles,
-      Long fileId,
-      String templateCode,
-      String targetRef,
-      List<String> exportTemplates) {
-    if (!exportTemplates.isEmpty()) {
-      for (String tpl : exportTemplates) {
+    private static String mergeWorkflowCode(
+            String tenantId, String fileGroupCode, String existingWorkflowCode, String workflowCode) {
+        if (EmptyChecks.isNull(workflowCode)) {
+            return existingWorkflowCode;
+        }
+        if (EmptyChecks.isNull(existingWorkflowCode)) {
+            return workflowCode;
+        }
+        if (!existingWorkflowCode.equals(workflowCode)) {
+            throw new IllegalStateException("bundle arrival group mixes bundleWorkflowCode: tenantId="
+                    + tenantId
+                    + ", fileGroupCode="
+                    + fileGroupCode);
+        }
+        return existingWorkflowCode;
+    }
+
+    private static LocalDate mergeBizDate(
+            String tenantId, String fileGroupCode, LocalDate existingBizDate, LocalDate fileBizDate) {
+        if (fileBizDate == null) {
+            return existingBizDate;
+        }
+        if (existingBizDate == null) {
+            return fileBizDate;
+        }
+        if (!existingBizDate.equals(fileBizDate)) {
+            throw new IllegalStateException(
+                    "bundle arrival group mixes bizDate: tenantId=" + tenantId + ", fileGroupCode=" + fileGroupCode);
+        }
+        return existingBizDate;
+    }
+
+    private static boolean appendBundleBindings(
+            List<Map<String, Object>> bundleFiles,
+            Long fileId,
+            String templateCode,
+            String targetRef,
+            List<String> exportTemplates) {
+        if (!exportTemplates.isEmpty()) {
+            for (String tpl : exportTemplates) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("templateCode", tpl);
+                bundleFiles.add(entry);
+            }
+            return true;
+        }
+        boolean bundleBindingIsIncomplete =
+                EmptyChecks.isNull(fileId) || (EmptyChecks.isNull(templateCode) && EmptyChecks.isNull(targetRef));
+        if (bundleBindingIsIncomplete) {
+            return false;
+        }
         Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("templateCode", tpl);
+        entry.put("sourceFileId", fileId);
+        if (templateCode != null) {
+            entry.put("templateCode", templateCode);
+        }
+        if (targetRef != null) {
+            entry.put("targetRef", targetRef);
+        }
         bundleFiles.add(entry);
-      }
-      return true;
-    }
-    boolean bundleBindingIsIncomplete = EmptyChecks.isNull(fileId)
-        || (EmptyChecks.isNull(templateCode) && EmptyChecks.isNull(targetRef));
-    if (bundleBindingIsIncomplete) {
-      return false;
-    }
-    Map<String, Object> entry = new LinkedHashMap<>();
-    entry.put("sourceFileId", fileId);
-    if (templateCode != null) {
-      entry.put("templateCode", templateCode);
-    }
-    if (targetRef != null) {
-      entry.put("targetRef", targetRef);
-    }
-    bundleFiles.add(entry);
-    return true;
-  }
-
-  private void validateCandidate(
-      String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
-    if (candidate.bindingWithoutWorkflowCode()) {
-      throw new IllegalStateException(
-          "bundle arrival group has binding without bundleWorkflowCode: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode);
-    }
-    if (candidate.workflowCodedMemberWithoutBinding()) {
-      throw new IllegalStateException(
-          "bundle arrival group has bundle member without usable binding: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode
-              + ", workflowCode="
-              + candidate.bundleWorkflowCode());
-    }
-    if (candidate.bizDate() == null) {
-      throw new IllegalStateException("bundle arrival group missing bizDate: tenantId="
-          + tenantId
-          + ", fileGroupCode="
-          + fileGroupCode);
-    }
-    if (candidate.bundleFiles().isEmpty()) {
-      throw new IllegalStateException(
-          "bundle arrival group has bundleWorkflowCode but no usable bundle binding: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode
-              + ", workflowCode="
-              + candidate.bundleWorkflowCode());
-    }
-  }
-
-  private LaunchOutcome launchCandidate(
-      String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
-    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-        tenantId, candidate.bundleWorkflowCode(), true);
-    if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
-      throw new IllegalStateException("bundle target has no enabled managed Workflow: tenantId="
-          + tenantId
-          + ", workflowCode="
-          + candidate.bundleWorkflowCode());
-    }
-    String calendarCode = workflow.calendarCode();
-    if (!Texts.hasText(calendarCode)) {
-      throw new IllegalStateException("bundle target Workflow has no business calendar: tenantId="
-          + tenantId
-          + ", workflowCode="
-          + candidate.bundleWorkflowCode());
-    }
-    if (!registerArrivalOccurrence(
-        tenantId, calendarCode, workflow.id(), fileGroupCode, candidate.bizDate())) {
-      log.warn(
-          "reject late bundle arrival for terminal batch day: tenantId={}, calendarCode={},"
-              + " bizDate={}, fileGroupCode={}",
-          tenantId,
-          calendarCode,
-          candidate.bizDate(),
-          fileGroupCode);
-      return LaunchOutcome.REJECTED;
-    }
-    // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
-    String requestId = requestId(tenantId, workflow.id(), fileGroupCode, candidate.bizDate());
-    LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
-    if (EmptyChecks.isNotNull(existingOutcome)) {
-      markExpectedWorkSatisfied(
-          tenantId, workflow, fileGroupCode, candidate, requestId, existingOutcome);
-      return existingOutcome;
-    }
-    String traceId = IdGenerator.newTraceId();
-    // 与同仓库其它内部 launcher(ChildJobLaunchSupport / DefaultCompensationService /
-    // BatchDaySettleScheduler)保持一致:先把 trigger_request 落成 ACCEPTED,DefaultLaunchService 才能接受
-    // 这个 requestId —— 否则 load() 按 requestId 查不到行直接抛 error.trigger.request_not_found,到达组每轮
-    // sweep 重试、束永不 launch。insertIfAbsent 的 (tenant_id, request_id) 冲突忽略即幂等回退。
-    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
-    triggerRequest.setTenantId(tenantId);
-    triggerRequest.setRequestId(requestId);
-    triggerRequest.setTriggerType(TriggerType.EVENT.code());
-    triggerRequest.setWorkflowDefinitionId(workflow.id());
-    triggerRequest.setBizDate(candidate.bizDate());
-    triggerRequest.setDedupKey(tenantId + ":" + requestId);
-    triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
-    triggerRequest.setTraceId(traceId);
-    triggerRequestMapper.insertIfAbsent(triggerRequest);
-
-    // 并发扫描可能已推进同一请求;等待载荷由批次日恢复流程负责,不能再次登记。
-    existingOutcome = persistedOutcome(tenantId, requestId);
-    if (EmptyChecks.isNotNull(existingOutcome)) {
-      return existingOutcome;
+        return true;
     }
 
-    LaunchRequest request = LaunchRequest.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflow.id())
-        .bizDate(candidate.bizDate())
-        .triggerType(TriggerType.EVENT)
-        .requestId(requestId)
-        .traceId(traceId)
-        .params(Map.of("bundleFiles", candidate.bundleFiles()))
-        .build();
-    LaunchResponse response = workflowRunLaunchServiceProvider.getObject().launch(request);
-    LaunchOutcome outcome = EmptyChecks.isNotNull(response) && Texts.hasText(response.instanceNo())
-        ? LaunchOutcome.LAUNCHED
-        : persistedOutcome(tenantId, requestId);
-    if (EmptyChecks.isNull(outcome)) {
-      throw new IllegalStateException("bundle launch returned no instance or durable outcome");
+    private void validateCandidate(String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
+        if (candidate.bindingWithoutWorkflowCode()) {
+            throw new IllegalStateException("bundle arrival group has binding without bundleWorkflowCode: tenantId="
+                    + tenantId
+                    + ", fileGroupCode="
+                    + fileGroupCode);
+        }
+        if (candidate.workflowCodedMemberWithoutBinding()) {
+            throw new IllegalStateException("bundle arrival group has bundle member without usable binding: tenantId="
+                    + tenantId
+                    + ", fileGroupCode="
+                    + fileGroupCode
+                    + ", workflowCode="
+                    + candidate.bundleWorkflowCode());
+        }
+        if (candidate.bizDate() == null) {
+            throw new IllegalStateException(
+                    "bundle arrival group missing bizDate: tenantId=" + tenantId + ", fileGroupCode=" + fileGroupCode);
+        }
+        if (candidate.bundleFiles().isEmpty()) {
+            throw new IllegalStateException(
+                    "bundle arrival group has bundleWorkflowCode but no usable bundle binding: tenantId="
+                            + tenantId
+                            + ", fileGroupCode="
+                            + fileGroupCode
+                            + ", workflowCode="
+                            + candidate.bundleWorkflowCode());
+        }
     }
-    markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, outcome);
-    log.info(
-        "bundle arrival outcome={}: tenantId={}, fileGroupCode={}, workflowCode={}, fileCount={},"
-            + " bizDate={}, requestId={}",
-        outcome,
-        tenantId,
-        fileGroupCode,
-        candidate.bundleWorkflowCode(),
-        candidate.bundleFiles().size(),
-        candidate.bizDate(),
-        requestId);
-    return outcome;
-  }
 
-  private boolean registerArrivalOccurrence(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String fileGroupCode,
-      LocalDate bizDate) {
-    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-    Boolean registered = transaction.execute(status -> {
-      expectedWorkOccurrenceMapper.setTenantContext(tenantId);
-      batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
-      BatchDayInstanceEntity batchDay =
-          batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
-      if (isTerminal(batchDay)) {
-        return false;
-      }
-      ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
-          ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-              .tenantId(tenantId)
-              .calendarCode(calendarCode)
-              .bizDate(bizDate)
-              .workflowDefinitionId(workflowDefinitionId)
-              .sourceType("FILE_GROUP")
-              .sourceKey(fileGroupCode)
-              .expectedAt(BatchDateTimeSupport.utcNow())
-              .dueAt(null)
-              .build();
-      expectedWorkOccurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
-          expectedWorkOccurrenceTransitionStatusByGenerationParam =
-              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-                  .tenantId(tenantId)
-                  .calendarCode(calendarCode)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .sourceType("FILE_GROUP")
-                  .sourceKey(fileGroupCode)
-                  .bizDate(bizDate)
-                  .generation(null)
-                  .expectedStatus("EXPECTED")
-                  .newStatus("ARRIVED")
-                  .triggerRequestId(null)
-                  .build();
-      expectedWorkOccurrenceMapper.transitionStatus(
-          expectedWorkOccurrenceTransitionStatusByGenerationParam);
-      return true;
-    });
-    return Boolean.TRUE.equals(registered);
-  }
+    private LaunchOutcome launchCandidate(String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
+        WorkflowDefinitionView workflow = workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+                tenantId, candidate.bundleWorkflowCode(), true);
+        if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
+            throw new IllegalStateException("bundle target has no enabled managed Workflow: tenantId="
+                    + tenantId
+                    + ", workflowCode="
+                    + candidate.bundleWorkflowCode());
+        }
+        String calendarCode = workflow.calendarCode();
+        if (!Texts.hasText(calendarCode)) {
+            throw new IllegalStateException("bundle target Workflow has no business calendar: tenantId="
+                    + tenantId
+                    + ", workflowCode="
+                    + candidate.bundleWorkflowCode());
+        }
+        if (!registerArrivalOccurrence(tenantId, calendarCode, workflow.id(), fileGroupCode, candidate.bizDate())) {
+            log.warn(
+                    "reject late bundle arrival for terminal batch day: tenantId={}, calendarCode={},"
+                            + " bizDate={}, fileGroupCode={}",
+                    tenantId,
+                    calendarCode,
+                    candidate.bizDate(),
+                    fileGroupCode);
+            return LaunchOutcome.REJECTED;
+        }
+        // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
+        String requestId = requestId(tenantId, workflow.id(), fileGroupCode, candidate.bizDate());
+        LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
+        if (EmptyChecks.isNotNull(existingOutcome)) {
+            markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, existingOutcome);
+            return existingOutcome;
+        }
+        String traceId = IdGenerator.newTraceId();
+        // 与同仓库其它内部 launcher(ChildJobLaunchSupport / DefaultCompensationService /
+        // BatchDaySettleScheduler)保持一致:先把 trigger_request 落成 ACCEPTED,DefaultLaunchService 才能接受
+        // 这个 requestId —— 否则 load() 按 requestId 查不到行直接抛 error.trigger.request_not_found,到达组每轮
+        // sweep 重试、束永不 launch。insertIfAbsent 的 (tenant_id, request_id) 冲突忽略即幂等回退。
+        TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+        triggerRequest.setTenantId(tenantId);
+        triggerRequest.setRequestId(requestId);
+        triggerRequest.setTriggerType(TriggerType.EVENT.code());
+        triggerRequest.setWorkflowDefinitionId(workflow.id());
+        triggerRequest.setBizDate(candidate.bizDate());
+        triggerRequest.setDedupKey(tenantId + ":" + requestId);
+        triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
+        triggerRequest.setTraceId(traceId);
+        triggerRequestMapper.insertIfAbsent(triggerRequest);
 
-  private static boolean isTerminal(BatchDayInstanceEntity batchDay) {
-    if (EmptyChecks.isNull(batchDay)) {
-      return false;
-    }
-    String status = batchDay.dayStatus();
-    return "SETTLED".equals(status)
-        || "FAILED".equals(status)
-        || "SKIPPED".equals(status)
-        || "MANUAL_RELEASED".equals(status);
-  }
+        // 并发扫描可能已推进同一请求;等待载荷由批次日恢复流程负责,不能再次登记。
+        existingOutcome = persistedOutcome(tenantId, requestId);
+        if (EmptyChecks.isNotNull(existingOutcome)) {
+            return existingOutcome;
+        }
 
-  private void markExpectedWorkSatisfied(
-      String tenantId,
-      WorkflowDefinitionView workflow,
-      String fileGroupCode,
-      BundleLaunchCandidate candidate,
-      String requestId,
-      LaunchOutcome outcome) {
-    String calendarCode = workflow.calendarCode();
-    Long workflowDefinitionId = workflow.id();
-    boolean bundleLaunchNeedsNoCalendarRegistration = !Texts.hasText(calendarCode)
-        || (outcome != LaunchOutcome.LAUNCHED && outcome != LaunchOutcome.WAITING);
-    if (bundleLaunchNeedsNoCalendarRegistration) {
-      return;
+        LaunchRequest request = LaunchRequest.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflow.id())
+                .bizDate(candidate.bizDate())
+                .triggerType(TriggerType.EVENT)
+                .requestId(requestId)
+                .traceId(traceId)
+                .params(Map.of("bundleFiles", candidate.bundleFiles()))
+                .build();
+        LaunchResponse response = workflowRunLaunchServiceProvider.getObject().launch(request);
+        LaunchOutcome outcome = EmptyChecks.isNotNull(response) && Texts.hasText(response.instanceNo())
+                ? LaunchOutcome.LAUNCHED
+                : persistedOutcome(tenantId, requestId);
+        if (EmptyChecks.isNull(outcome)) {
+            throw new IllegalStateException("bundle launch returned no instance or durable outcome");
+        }
+        markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, outcome);
+        log.info(
+                "bundle arrival outcome={}: tenantId={}, fileGroupCode={}, workflowCode={}, fileCount={},"
+                        + " bizDate={}, requestId={}",
+                outcome,
+                tenantId,
+                fileGroupCode,
+                candidate.bundleWorkflowCode(),
+                candidate.bundleFiles().size(),
+                candidate.bizDate(),
+                requestId);
+        return outcome;
     }
-    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-    transaction.executeWithoutResult(status -> {
-      expectedWorkOccurrenceMapper.setTenantContext(tenantId);
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
-          expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
-              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-                  .tenantId(tenantId)
-                  .calendarCode(calendarCode)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .sourceType("FILE_GROUP")
-                  .sourceKey(fileGroupCode)
-                  .bizDate(candidate.bizDate())
-                  .generation(null)
-                  .expectedStatus("ARRIVED")
-                  .newStatus("SATISFIED")
-                  .triggerRequestId(requestId)
-                  .build();
-      expectedWorkOccurrenceMapper.transitionStatus(
-          expectedWorkOccurrenceTransitionStatusByGenerationParam2);
-    });
-  }
 
-  private LaunchOutcome persistedOutcome(String tenantId, String requestId) {
-    TriggerRequestEntity existing =
-        triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
-    if (EmptyChecks.isNull(existing)) {
-      return null;
+    private boolean registerArrivalOccurrence(
+            String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode, LocalDate bizDate) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        Boolean registered = transaction.execute(status -> {
+            expectedWorkOccurrenceMapper.setTenantContext(tenantId);
+            batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
+            BatchDayInstanceEntity batchDay =
+                    batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
+            if (isTerminal(batchDay)) {
+                return false;
+            }
+            ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
+                    ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+                            .tenantId(tenantId)
+                            .calendarCode(calendarCode)
+                            .bizDate(bizDate)
+                            .workflowDefinitionId(workflowDefinitionId)
+                            .sourceType("FILE_GROUP")
+                            .sourceKey(fileGroupCode)
+                            .expectedAt(BatchDateTimeSupport.utcNow())
+                            .dueAt(null)
+                            .build();
+            expectedWorkOccurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
+            ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+                    expectedWorkOccurrenceTransitionStatusByGenerationParam =
+                            ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                                    .tenantId(tenantId)
+                                    .calendarCode(calendarCode)
+                                    .workflowDefinitionId(workflowDefinitionId)
+                                    .sourceType("FILE_GROUP")
+                                    .sourceKey(fileGroupCode)
+                                    .bizDate(bizDate)
+                                    .generation(null)
+                                    .expectedStatus("EXPECTED")
+                                    .newStatus("ARRIVED")
+                                    .triggerRequestId(null)
+                                    .build();
+            expectedWorkOccurrenceMapper.transitionStatus(expectedWorkOccurrenceTransitionStatusByGenerationParam);
+            return true;
+        });
+        return Boolean.TRUE.equals(registered);
     }
-    TriggerRequestStatus status = TriggerRequestStatus.fromCodeOrNull(existing.getRequestStatus());
-    if (status == TriggerRequestStatus.WAITING) {
-      return LaunchOutcome.WAITING;
-    }
-    if (status == TriggerRequestStatus.LAUNCHED) {
-      return LaunchOutcome.LAUNCHED;
-    }
-    boolean requestWasNotAcceptedForLaunch = status == TriggerRequestStatus.REJECTED
-        || status == TriggerRequestStatus.GIVE_UP
-        || status == TriggerRequestStatus.DUPLICATE;
-    if (requestWasNotAcceptedForLaunch) {
-      return LaunchOutcome.REJECTED;
-    }
-    return null;
-  }
 
-  private static String requestId(
-      String tenantId, Long workflowDefinitionId, String fileGroupCode, LocalDate bizDate) {
-    String readable = "bundle-arrival-" + tenantId + "-" + workflowDefinitionId + "-"
-        + fileGroupCode + "-" + bizDate;
-    if (readable.length() <= READABLE_REQUEST_ID_MAX_LENGTH) {
-      return readable;
+    private static boolean isTerminal(BatchDayInstanceEntity batchDay) {
+        if (EmptyChecks.isNull(batchDay)) {
+            return false;
+        }
+        String status = batchDay.dayStatus();
+        return "SETTLED".equals(status)
+                || "FAILED".equals(status)
+                || "SKIPPED".equals(status)
+                || "MANUAL_RELEASED".equals(status);
     }
-    List<String> identityComponents =
-        List.of(tenantId, workflowDefinitionId.toString(), fileGroupCode, bizDate.toString());
-    String identity = JsonUtils.toJson(identityComponents);
-    try {
-      MessageDigest sha256Digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] identityBytes = identity.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = sha256Digest.digest(identityBytes);
-      String digestHex = HexFormat.of().formatHex(digest);
-      return "bundle-arrival-sha256-" + digestHex;
-    } catch (NoSuchAlgorithmException unavailable) {
-      throw new IllegalStateException("SHA-256 unavailable", unavailable);
-    }
-  }
 
-  private record BundleLaunchCandidate(
-      String bundleWorkflowCode,
-      LocalDate bizDate,
-      List<Map<String, Object>> bundleFiles,
-      boolean bindingWithoutWorkflowCode,
-      boolean workflowCodedMemberWithoutBinding) {}
+    private void markExpectedWorkSatisfied(
+            String tenantId,
+            WorkflowDefinitionView workflow,
+            String fileGroupCode,
+            BundleLaunchCandidate candidate,
+            String requestId,
+            LaunchOutcome outcome) {
+        String calendarCode = workflow.calendarCode();
+        Long workflowDefinitionId = workflow.id();
+        boolean bundleLaunchNeedsNoCalendarRegistration =
+                !Texts.hasText(calendarCode) || (outcome != LaunchOutcome.LAUNCHED && outcome != LaunchOutcome.WAITING);
+        if (bundleLaunchNeedsNoCalendarRegistration) {
+            return;
+        }
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(status -> {
+            expectedWorkOccurrenceMapper.setTenantContext(tenantId);
+            ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+                    expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
+                            ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                                    .tenantId(tenantId)
+                                    .calendarCode(calendarCode)
+                                    .workflowDefinitionId(workflowDefinitionId)
+                                    .sourceType("FILE_GROUP")
+                                    .sourceKey(fileGroupCode)
+                                    .bizDate(candidate.bizDate())
+                                    .generation(null)
+                                    .expectedStatus("ARRIVED")
+                                    .newStatus("SATISFIED")
+                                    .triggerRequestId(requestId)
+                                    .build();
+            expectedWorkOccurrenceMapper.transitionStatus(expectedWorkOccurrenceTransitionStatusByGenerationParam2);
+        });
+    }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> parseMetadata(Object metadataJson) {
-    // metadata_json 来自 selectArrivalGroupFiles 的 resultType="map":PG jsonb 列经 JDBC 回来是
-    // org.postgresql.util.PGobject(不是 String)。只认 String 会让本方法恒返回空表 → bundleWorkflowCode 读不到
-    // → 静默 NOT_BUNDLE、到达组永不 launch(无日志无异常)。故用仓库既有 PostgresqlJsonbTexts 归一化。
-    String json =
-        metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
-    if (EmptyChecks.isBlank(json)) {
-      return Map.of();
+    private LaunchOutcome persistedOutcome(String tenantId, String requestId) {
+        TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
+        if (EmptyChecks.isNull(existing)) {
+            return null;
+        }
+        TriggerRequestStatus status = TriggerRequestStatus.fromCodeOrNull(existing.getRequestStatus());
+        if (status == TriggerRequestStatus.WAITING) {
+            return LaunchOutcome.WAITING;
+        }
+        if (status == TriggerRequestStatus.LAUNCHED) {
+            return LaunchOutcome.LAUNCHED;
+        }
+        boolean requestWasNotAcceptedForLaunch = status == TriggerRequestStatus.REJECTED
+                || status == TriggerRequestStatus.GIVE_UP
+                || status == TriggerRequestStatus.DUPLICATE;
+        if (requestWasNotAcceptedForLaunch) {
+            return LaunchOutcome.REJECTED;
+        }
+        return null;
     }
-    try {
-      Map<String, Object> parsed = JsonUtils.fromJson(json, Map.class);
-      return parsed == null ? Map.of() : parsed;
-    } catch (RuntimeException ex) {
-      return Map.of();
-    }
-  }
 
-  private static String text(Object value) {
-    if (value == null) {
-      return null;
+    private static String requestId(
+            String tenantId, Long workflowDefinitionId, String fileGroupCode, LocalDate bizDate) {
+        String readable =
+                "bundle-arrival-" + tenantId + "-" + workflowDefinitionId + "-" + fileGroupCode + "-" + bizDate;
+        if (readable.length() <= READABLE_REQUEST_ID_MAX_LENGTH) {
+            return readable;
+        }
+        List<String> identityComponents =
+                List.of(tenantId, workflowDefinitionId.toString(), fileGroupCode, bizDate.toString());
+        String identity = JsonUtils.toJson(identityComponents);
+        try {
+            MessageDigest sha256Digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] identityBytes = identity.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = sha256Digest.digest(identityBytes);
+            String digestHex = HexFormat.of().formatHex(digest);
+            return "bundle-arrival-sha256-" + digestHex;
+        } catch (NoSuchAlgorithmException unavailable) {
+            throw new IllegalStateException("SHA-256 unavailable", unavailable);
+        }
     }
-    String rawText = String.valueOf(value);
-    String trimmedText = rawText.trim();
-    return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedText)) ? null : trimmedText;
-  }
 
-  /** 把 metadata 里的「字符串列表」字段(如 bundleExportTemplates)归一成非空 trim 后的 List;非 List / 空 → 空表。 */
-  private static List<String> textList(Object value) {
-    if (!(value instanceof List<?> list)) {
-      return List.of();
-    }
-    List<String> result = new ArrayList<>();
-    for (Object item : list) {
-      String s = text(item);
-      if (s != null) {
-        result.add(s);
-      }
-    }
-    return result;
-  }
+    private record BundleLaunchCandidate(
+            String bundleWorkflowCode,
+            LocalDate bizDate,
+            List<Map<String, Object>> bundleFiles,
+            boolean bindingWithoutWorkflowCode,
+            boolean workflowCodedMemberWithoutBinding) {}
 
-  private static LocalDate toLocalDate(Object value) {
-    if (value instanceof LocalDate d) {
-      return d;
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseMetadata(Object metadataJson) {
+        // metadata_json 来自 selectArrivalGroupFiles 的 resultType="map":PG jsonb 列经 JDBC 回来是
+        // org.postgresql.util.PGobject(不是 String)。只认 String 会让本方法恒返回空表 → bundleWorkflowCode 读不到
+        // → 静默 NOT_BUNDLE、到达组永不 launch(无日志无异常)。故用仓库既有 PostgresqlJsonbTexts 归一化。
+        String json = metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
+        if (EmptyChecks.isBlank(json)) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> parsed = JsonUtils.fromJson(json, Map.class);
+            return parsed == null ? Map.of() : parsed;
+        } catch (RuntimeException ex) {
+            return Map.of();
+        }
     }
-    if (value instanceof Date sqlDate) {
-      return sqlDate.toLocalDate();
+
+    private static String text(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        String trimmedText = rawText.trim();
+        return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedText)) ? null : trimmedText;
     }
-    if (value == null) {
-      return null;
+
+    /** 把 metadata 里的「字符串列表」字段(如 bundleExportTemplates)归一成非空 trim 后的 List;非 List / 空 → 空表。 */
+    private static List<String> textList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (Object item : list) {
+            String s = text(item);
+            if (s != null) {
+                result.add(s);
+            }
+        }
+        return result;
     }
-    try {
-      String dateText = String.valueOf(value);
-      String trimmedDateText = dateText.trim();
-      return LocalDate.parse(trimmedDateText);
-    } catch (RuntimeException ignored) {
-      return null;
+
+    private static LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate d) {
+            return d;
+        }
+        if (value instanceof Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            String dateText = String.valueOf(value);
+            String trimmedDateText = dateText.trim();
+            return LocalDate.parse(trimmedDateText);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
-  }
 }

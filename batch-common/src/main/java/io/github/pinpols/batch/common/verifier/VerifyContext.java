@@ -19,14 +19,14 @@ import lombok.Builder;
  */
 @Builder
 public record VerifyContext(
-    String tenantId,
-    JobType jobType,
-    Long jobInstanceId,
-    Long taskId,
-    String stageCode,
-    Map<String, Object> payload) {
+        String tenantId,
+        JobType jobType,
+        Long jobInstanceId,
+        Long taskId,
+        String stageCode,
+        Map<String, Object> payload) {
 
-  public Object property(String key) {
-    return payload == null ? null : payload.get(key);
-  }
+    public Object property(String key) {
+        return payload == null ? null : payload.get(key);
+    }
 }

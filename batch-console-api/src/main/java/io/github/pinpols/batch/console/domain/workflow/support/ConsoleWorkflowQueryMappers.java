@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleWorkflowQueryMappers {
 
-  public final WorkflowDefinitionMapper workflowDefinitionMapper;
-  public final WorkflowNodeMapper workflowNodeMapper;
-  public final WorkflowEdgeMapper workflowEdgeMapper;
-  public final WorkflowRunMapper workflowRunMapper;
-  public final WorkflowNodeRunMapper workflowNodeRunMapper;
+    public final WorkflowDefinitionMapper workflowDefinitionMapper;
+    public final WorkflowNodeMapper workflowNodeMapper;
+    public final WorkflowEdgeMapper workflowEdgeMapper;
+    public final WorkflowRunMapper workflowRunMapper;
+    public final WorkflowNodeRunMapper workflowNodeRunMapper;
 }

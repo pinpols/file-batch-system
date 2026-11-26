@@ -26,49 +26,48 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("持久等待内部查询参数绑定")
 class PersistentWaitReadInternalControllerTest {
 
-  @Mock
-  private PersistentWaitReadService service;
+    @Mock
+    private PersistentWaitReadService service;
 
-  @Test
-  @DisplayName("保留既有查询参数名称并解析业务日区间")
-  void shouldBindExistingQueryParameters() throws Exception {
-    when(service.list(any())).thenReturn(new PersistentWaitPage(List.of(), 2, 15, 0));
-    MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersistentWaitReadInternalController(service))
-        .build();
+    @Test
+    @DisplayName("保留既有查询参数名称并解析业务日区间")
+    void shouldBindExistingQueryParameters() throws Exception {
+        when(service.list(any())).thenReturn(new PersistentWaitPage(List.of(), 2, 15, 0));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersistentWaitReadInternalController(service))
+                .build();
 
-    mvc.perform(get("/internal/ops/persistent-waits")
-            .param("tenantId", "tenant-a")
-            .param("waitType", "READINESS")
-            .param("waitStatus", "PENDING")
-            .param("workflowDefinitionId", "42")
-            .param("bizDateFrom", "2026-10-01")
-            .param("bizDateTo", "2026-10-26")
-            .param("pageNo", "2")
-            .param("pageSize", "15"))
-        .andExpect(status().isOk());
+        mvc.perform(get("/internal/ops/persistent-waits")
+                        .param("tenantId", "tenant-a")
+                        .param("waitType", "READINESS")
+                        .param("waitStatus", "PENDING")
+                        .param("workflowDefinitionId", "42")
+                        .param("bizDateFrom", "2026-10-01")
+                        .param("bizDateTo", "2026-10-26")
+                        .param("pageNo", "2")
+                        .param("pageSize", "15"))
+                .andExpect(status().isOk());
 
-    ArgumentCaptor<PersistentWaitReadQuery> query =
-        ArgumentCaptor.forClass(PersistentWaitReadQuery.class);
-    verify(service).list(query.capture());
-    assertThat(query.getValue())
-        .isEqualTo(new PersistentWaitReadQuery(
-            "tenant-a",
-            "READINESS",
-            "PENDING",
-            42L,
-            LocalDate.of(2026, 10, 1),
-            LocalDate.of(2026, 10, 26),
-            2,
-            15));
-  }
+        ArgumentCaptor<PersistentWaitReadQuery> query = ArgumentCaptor.forClass(PersistentWaitReadQuery.class);
+        verify(service).list(query.capture());
+        assertThat(query.getValue())
+                .isEqualTo(new PersistentWaitReadQuery(
+                        "tenant-a",
+                        "READINESS",
+                        "PENDING",
+                        42L,
+                        LocalDate.of(2026, 10, 1),
+                        LocalDate.of(2026, 10, 26),
+                        2,
+                        15));
+    }
 
-  @Test
-  @DisplayName("缺少租户参数时拒绝内部查询")
-  void shouldRejectMissingTenant() throws Exception {
-    MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersistentWaitReadInternalController(service))
-        .build();
+    @Test
+    @DisplayName("缺少租户参数时拒绝内部查询")
+    void shouldRejectMissingTenant() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersistentWaitReadInternalController(service))
+                .build();
 
-    mvc.perform(get("/internal/ops/persistent-waits")).andExpect(status().isBadRequest());
-    verifyNoInteractions(service);
-  }
+        mvc.perform(get("/internal/ops/persistent-waits")).andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
 }

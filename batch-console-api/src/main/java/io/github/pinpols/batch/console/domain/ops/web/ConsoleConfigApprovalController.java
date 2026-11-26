@@ -29,40 +29,40 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleConfigApprovalController {
 
-  private final ConsoleConfigApprovalApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleConfigApprovalApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/releases/{releaseId}/submit-approval")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<ConsoleConfigApprovalDetailResponse> submitApproval(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long releaseId,
-      @Valid @RequestBody ConfigReleaseApprovalSubmitRequest request) {
-    return responseFactory.success(applicationService.submit(releaseId, request));
-  }
+    @PostMapping("/releases/{releaseId}/submit-approval")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<ConsoleConfigApprovalDetailResponse> submitApproval(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long releaseId,
+            @Valid @RequestBody ConfigReleaseApprovalSubmitRequest request) {
+        return responseFactory.success(applicationService.submit(releaseId, request));
+    }
 
-  @GetMapping("/releases/{releaseId}/approval")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleConfigApprovalDetailResponse> approvalDetail(
-      @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.detail(tenantId, releaseId));
-  }
+    @GetMapping("/releases/{releaseId}/approval")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleConfigApprovalDetailResponse> approvalDetail(
+            @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.detail(tenantId, releaseId));
+    }
 
-  @PostMapping("/approvals/{approvalId}/approve")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<ConsoleConfigApprovalDetailResponse> approve(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long approvalId,
-      @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(applicationService.approve(approvalId, request));
-  }
+    @PostMapping("/approvals/{approvalId}/approve")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<ConsoleConfigApprovalDetailResponse> approve(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long approvalId,
+            @Valid @RequestBody ConfigApprovalActionRequest request) {
+        return responseFactory.success(applicationService.approve(approvalId, request));
+    }
 
-  @PostMapping("/approvals/{approvalId}/reject")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<ConsoleConfigApprovalDetailResponse> reject(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long approvalId,
-      @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(applicationService.reject(approvalId, request));
-  }
+    @PostMapping("/approvals/{approvalId}/reject")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<ConsoleConfigApprovalDetailResponse> reject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long approvalId,
+            @Valid @RequestBody ConfigApprovalActionRequest request) {
+        return responseFactory.success(applicationService.reject(approvalId, request));
+    }
 }

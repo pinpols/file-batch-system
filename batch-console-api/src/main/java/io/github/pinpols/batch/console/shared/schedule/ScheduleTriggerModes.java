@@ -11,41 +11,41 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
  */
 public final class ScheduleTriggerModes {
 
-  private ScheduleTriggerModes() {}
+    private ScheduleTriggerModes() {}
 
-  /** 调度类型对应的默认触发模式。 */
-  public static String defaultFor(String scheduleType) {
-    if (EmptyChecks.isNull(scheduleType)) {
-      return "MANUAL";
+    /** 调度类型对应的默认触发模式。 */
+    public static String defaultFor(String scheduleType) {
+        if (EmptyChecks.isNull(scheduleType)) {
+            return "MANUAL";
+        }
+        return switch (scheduleType) {
+            case "CRON", "FIXED_RATE" -> "SCHEDULED";
+            case "EVENT" -> "EVENT";
+            default -> "MANUAL";
+        };
     }
-    return switch (scheduleType) {
-      case "CRON", "FIXED_RATE" -> "SCHEDULED";
-      case "EVENT" -> "EVENT";
-      default -> "MANUAL";
-    };
-  }
 
-  /** 触发模式是否与调度类型兼容；触发模式为空视为兼容（由 {@link #resolve} 补默认值）。 */
-  public static boolean isCompatible(String scheduleType, String triggerMode) {
-    if (EmptyChecks.isBlank(triggerMode)) {
-      return true;
+    /** 触发模式是否与调度类型兼容；触发模式为空视为兼容（由 {@link #resolve} 补默认值）。 */
+    public static boolean isCompatible(String scheduleType, String triggerMode) {
+        if (EmptyChecks.isBlank(triggerMode)) {
+            return true;
+        }
+        if ("MIXED".equals(triggerMode)) {
+            return true;
+        }
+        String type = EmptyChecks.isNull(scheduleType) ? "MANUAL" : scheduleType;
+        return switch (type) {
+            case "CRON", "FIXED_RATE" -> "SCHEDULED".equals(triggerMode);
+            case "EVENT" -> "EVENT".equals(triggerMode);
+            default -> "MANUAL".equals(triggerMode) || "API".equals(triggerMode);
+        };
     }
-    if ("MIXED".equals(triggerMode)) {
-      return true;
-    }
-    String type = EmptyChecks.isNull(scheduleType) ? "MANUAL" : scheduleType;
-    return switch (type) {
-      case "CRON", "FIXED_RATE" -> "SCHEDULED".equals(triggerMode);
-      case "EVENT" -> "EVENT".equals(triggerMode);
-      default -> "MANUAL".equals(triggerMode) || "API".equals(triggerMode);
-    };
-  }
 
-  /** 兼容时保留原值，空值或不兼容时取调度类型的默认触发模式。 */
-  public static String resolve(String scheduleType, String triggerMode) {
-    if (EmptyChecks.isNotBlank(triggerMode) && isCompatible(scheduleType, triggerMode)) {
-      return triggerMode;
+    /** 兼容时保留原值，空值或不兼容时取调度类型的默认触发模式。 */
+    public static String resolve(String scheduleType, String triggerMode) {
+        if (EmptyChecks.isNotBlank(triggerMode) && isCompatible(scheduleType, triggerMode)) {
+            return triggerMode;
+        }
+        return defaultFor(scheduleType);
     }
-    return defaultFor(scheduleType);
-  }
 }

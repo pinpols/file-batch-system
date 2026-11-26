@@ -34,84 +34,84 @@ import org.springframework.web.bind.annotation.RestController;
 @DisplayName("接口契约守护: 控制器端点统一返回响应信封, 事务注解只允许放在服务层方法上")
 class ConsoleApiContractArchTest {
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.console..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.console..");
 
-  /** 端点方法允许的返回类型:统一信封 + 二进制/流式响应的框架类型 + void。 */
-  private static final Set<String> ALLOWED_RETURN_TYPES = Set.of(
-      CommonResponse.class.getName(),
-      "org.springframework.http.ResponseEntity",
-      "org.springframework.web.servlet.mvc.method.annotation.SseEmitter",
-      "void");
+    /** 端点方法允许的返回类型:统一信封 + 二进制/流式响应的框架类型 + void。 */
+    private static final Set<String> ALLOWED_RETURN_TYPES = Set.of(
+            CommonResponse.class.getName(),
+            "org.springframework.http.ResponseEntity",
+            "org.springframework.web.servlet.mvc.method.annotation.SseEmitter",
+            "void");
 
-  /** 直接或元注解标了 @RequestMapping(含 @GetMapping/@PostMapping 等)的方法即 HTTP 端点。 */
-  private static final DescribedPredicate<JavaMethod> ARE_ENDPOINT_METHODS =
-      new DescribedPredicate<>("are HTTP endpoint methods") {
-        @Override
-        public boolean test(JavaMethod method) {
-          return method.isAnnotatedWith(RequestMapping.class)
-              || method.isMetaAnnotatedWith(RequestMapping.class);
-        }
-      };
+    /** 直接或元注解标了 @RequestMapping(含 @GetMapping/@PostMapping 等)的方法即 HTTP 端点。 */
+    private static final DescribedPredicate<JavaMethod> ARE_ENDPOINT_METHODS =
+            new DescribedPredicate<>("are HTTP endpoint methods") {
+                @Override
+                public boolean test(JavaMethod method) {
+                    return method.isAnnotatedWith(RequestMapping.class)
+                            || method.isMetaAnnotatedWith(RequestMapping.class);
+                }
+            };
 
-  private static final ArchCondition<JavaMethod> RETURN_ALLOWED_TYPE =
-      new ArchCondition<>("return CommonResponse / ResponseEntity / SseEmitter / void") {
-        @Override
-        public void check(JavaMethod method, ConditionEvents events) {
-          String returnType = method.getRawReturnType().getFullName();
-          if (!ALLOWED_RETURN_TYPES.contains(returnType)) {
-            events.add(SimpleConditionEvent.violated(
-                method,
-                String.format(
-                    "%s 返回 %s,违反 docs/agent-baseline.md #6(应返 CommonResponse;下载/流式才用"
-                        + " ResponseEntity/SseEmitter)",
-                    method.getFullName(), returnType)));
-          }
-        }
-      };
+    private static final ArchCondition<JavaMethod> RETURN_ALLOWED_TYPE =
+            new ArchCondition<>("return CommonResponse / ResponseEntity / SseEmitter / void") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    String returnType = method.getRawReturnType().getFullName();
+                    if (!ALLOWED_RETURN_TYPES.contains(returnType)) {
+                        events.add(SimpleConditionEvent.violated(
+                                method,
+                                String.format(
+                                        "%s 返回 %s,违反 docs/agent-baseline.md #6(应返 CommonResponse;下载/流式才用"
+                                                + " ResponseEntity/SseEmitter)",
+                                        method.getFullName(), returnType)));
+                    }
+                }
+            };
 
-  @Test
-  @DisplayName("控制器端点方法只能返回统一信封, 二进制下载与流式响应的框架类型除外")
-  void shouldReturnUnifiedEnvelope_whenMethodIsControllerEndpoint() {
-    methods()
-        .that()
-        .areDeclaredInClassesThat()
-        .areAnnotatedWith(RestController.class)
-        .and(ARE_ENDPOINT_METHODS)
-        .should(RETURN_ALLOWED_TYPE)
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("控制器端点方法只能返回统一信封, 二进制下载与流式响应的框架类型除外")
+    void shouldReturnUnifiedEnvelope_whenMethodIsControllerEndpoint() {
+        methods()
+                .that()
+                .areDeclaredInClassesThat()
+                .areAnnotatedWith(RestController.class)
+                .and(ARE_ENDPOINT_METHODS)
+                .should(RETURN_ALLOWED_TYPE)
+                .check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("控制器与映射器的方法上不得标注事务注解, 事务边界只属于服务层")
-  void shouldRejectTransactionalMethod_whenDeclaredInControllerOrMapper() {
-    noMethods()
-        .that()
-        .areAnnotatedWith(Transactional.class)
-        .should()
-        .beDeclaredInClassesThat(isControllerOrMapper())
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("控制器与映射器的方法上不得标注事务注解, 事务边界只属于服务层")
+    void shouldRejectTransactionalMethod_whenDeclaredInControllerOrMapper() {
+        noMethods()
+                .that()
+                .areAnnotatedWith(Transactional.class)
+                .should()
+                .beDeclaredInClassesThat(isControllerOrMapper())
+                .check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("控制器与映射器类型上不得整类标注事务注解, 避免事务范围失控")
-  void shouldRejectTransactionalClass_whenControllerOrMapper() {
-    noClasses()
-        .that(isControllerOrMapper())
-        .should()
-        .beAnnotatedWith(Transactional.class)
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("控制器与映射器类型上不得整类标注事务注解, 避免事务范围失控")
+    void shouldRejectTransactionalClass_whenControllerOrMapper() {
+        noClasses()
+                .that(isControllerOrMapper())
+                .should()
+                .beAnnotatedWith(Transactional.class)
+                .check(CLASSES);
+    }
 
-  private static DescribedPredicate<JavaClass> isControllerOrMapper() {
-    return new DescribedPredicate<>("are @Controller/@RestController or *Mapper") {
-      @Override
-      public boolean test(JavaClass clazz) {
-        return clazz.isAnnotatedWith(RestController.class)
-            || clazz.isAnnotatedWith(Controller.class)
-            || clazz.getSimpleName().endsWith("Mapper");
-      }
-    };
-  }
+    private static DescribedPredicate<JavaClass> isControllerOrMapper() {
+        return new DescribedPredicate<>("are @Controller/@RestController or *Mapper") {
+            @Override
+            public boolean test(JavaClass clazz) {
+                return clazz.isAnnotatedWith(RestController.class)
+                        || clazz.isAnnotatedWith(Controller.class)
+                        || clazz.getSimpleName().endsWith("Mapper");
+            }
+        };
+    }
 }

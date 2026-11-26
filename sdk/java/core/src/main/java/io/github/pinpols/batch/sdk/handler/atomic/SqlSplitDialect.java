@@ -32,59 +32,56 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 record SqlSplitDialect(boolean mysql, boolean backslashEscapes, boolean ansiQuotes) {
 
-  /** PostgreSQL 规则;也是未知方言的默认值。 */
-  static final SqlSplitDialect POSTGRESQL = new SqlSplitDialect(false, false, false);
+    /** PostgreSQL 规则;也是未知方言的默认值。 */
+    static final SqlSplitDialect POSTGRESQL = new SqlSplitDialect(false, false, false);
 
-  private static final String SQL_MODE_QUERY = "select @@SESSION.sql_mode";
+    private static final String SQL_MODE_QUERY = "select @@SESSION.sql_mode";
 
-  /** 按 MySQL 会话 {@code sql_mode} 文本构造 MySQL 规则;空值视为默认模式。 */
-  static SqlSplitDialect mysql(String sqlMode) {
-    String normalizedMode = EmptyChecks.isNull(sqlMode) ? "" : sqlMode.toUpperCase(Locale.ROOT);
-    List<String> modes = List.of(normalizedMode.split(","));
-    return new SqlSplitDialect(
-        true, !modes.contains("NO_BACKSLASH_ESCAPES"), modes.contains("ANSI_QUOTES"));
-  }
-
-  /** 读取连接的产品名决定方言;MySQL 家族再读取一次会话 {@code sql_mode}。 */
-  static SqlSplitDialect detect(Connection conn) {
-    String productName;
-    try {
-      DatabaseMetaData meta = conn.getMetaData();
-      productName = EmptyChecks.isNull(meta) ? null : meta.getDatabaseProductName();
-    } catch (SQLException ex) {
-      log.warn(
-          "read database product name failed, splitting SQL with PostgreSQL rules: {}",
-          ExceptionLogSummary.of(ex));
-      return POSTGRESQL;
+    /** 按 MySQL 会话 {@code sql_mode} 文本构造 MySQL 规则;空值视为默认模式。 */
+    static SqlSplitDialect mysql(String sqlMode) {
+        String normalizedMode = EmptyChecks.isNull(sqlMode) ? "" : sqlMode.toUpperCase(Locale.ROOT);
+        List<String> modes = List.of(normalizedMode.split(","));
+        return new SqlSplitDialect(true, !modes.contains("NO_BACKSLASH_ESCAPES"), modes.contains("ANSI_QUOTES"));
     }
-    return isMySqlFamily(productName) ? mysql(readSqlMode(conn)) : POSTGRESQL;
-  }
 
-  /** 按本方言把 SQL 文本切成语句列表。 */
-  List<String> split(String sql) {
-    return mysql
-        ? MySqlStatementSplitter.split(sql, backslashEscapes, ansiQuotes)
-        : SqlAtomicHandler.splitStatements(sql);
-  }
-
-  private static boolean isMySqlFamily(String productName) {
-    if (EmptyChecks.isNull(productName)) {
-      return false;
+    /** 读取连接的产品名决定方言;MySQL 家族再读取一次会话 {@code sql_mode}。 */
+    static SqlSplitDialect detect(Connection conn) {
+        String productName;
+        try {
+            DatabaseMetaData meta = conn.getMetaData();
+            productName = EmptyChecks.isNull(meta) ? null : meta.getDatabaseProductName();
+        } catch (SQLException ex) {
+            log.warn(
+                    "read database product name failed, splitting SQL with PostgreSQL rules: {}",
+                    ExceptionLogSummary.of(ex));
+            return POSTGRESQL;
+        }
+        return isMySqlFamily(productName) ? mysql(readSqlMode(conn)) : POSTGRESQL;
     }
-    String normalizedName = productName.toLowerCase(Locale.ROOT);
-    return normalizedName.contains("mysql") || normalizedName.contains("mariadb");
-  }
 
-  /** 读取失败或无结果时返回空串,即按 MySQL 默认模式切分。 */
-  private static String readSqlMode(Connection conn) {
-    try (Statement st = conn.createStatement();
-        ResultSet rs = st.executeQuery(SQL_MODE_QUERY)) {
-      return rs.next() ? rs.getString(1) : "";
-    } catch (SQLException ex) {
-      log.warn(
-          "read MySQL sql_mode failed, assuming default backslash escapes: {}",
-          ExceptionLogSummary.of(ex));
-      return "";
+    /** 按本方言把 SQL 文本切成语句列表。 */
+    List<String> split(String sql) {
+        return mysql
+                ? MySqlStatementSplitter.split(sql, backslashEscapes, ansiQuotes)
+                : SqlAtomicHandler.splitStatements(sql);
     }
-  }
+
+    private static boolean isMySqlFamily(String productName) {
+        if (EmptyChecks.isNull(productName)) {
+            return false;
+        }
+        String normalizedName = productName.toLowerCase(Locale.ROOT);
+        return normalizedName.contains("mysql") || normalizedName.contains("mariadb");
+    }
+
+    /** 读取失败或无结果时返回空串,即按 MySQL 默认模式切分。 */
+    private static String readSqlMode(Connection conn) {
+        try (Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(SQL_MODE_QUERY)) {
+            return rs.next() ? rs.getString(1) : "";
+        } catch (SQLException ex) {
+            log.warn("read MySQL sql_mode failed, assuming default backslash escapes: {}", ExceptionLogSummary.of(ex));
+            return "";
+        }
+    }
 }

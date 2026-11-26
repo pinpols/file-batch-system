@@ -24,68 +24,68 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProcessPublishedCountVerifier implements ContentVerifier {
 
-  @Override
-  public String code() {
-    return "PROCESS_PUBLISHED_COUNT";
-  }
+    @Override
+    public String code() {
+        return "PROCESS_PUBLISHED_COUNT";
+    }
 
-  @Override
-  public Set<JobType> appliesTo() {
-    return Set.of(JobType.PROCESS);
-  }
+    @Override
+    public Set<JobType> appliesTo() {
+        return Set.of(JobType.PROCESS);
+    }
 
-  @Override
-  public VerifyResult verify(VerifyContext context) {
-    Object raw = context.property(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
-    if (EmptyChecks.isNull(raw)) {
-      // worker 未上报；不属于本 verifier 的判定范围
-      return VerifyResult.pass();
+    @Override
+    public VerifyResult verify(VerifyContext context) {
+        Object raw = context.property(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
+        if (EmptyChecks.isNull(raw)) {
+            // worker 未上报；不属于本 verifier 的判定范围
+            return VerifyResult.pass();
+        }
+        long count = toLong(raw);
+        if (count > 0) {
+            return VerifyResult.pass();
+        }
+        Object processedRaw = context.property(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT);
+        if (isZero(processedRaw)) {
+            // 无输入行时没有可发布结果，不能把空批次误判为发布失败。
+            return VerifyResult.pass();
+        }
+        // evidence 键随 VerifyResult 透传到告警 payload，与 attributes 键同名同义，按既有约定复用同一常量。
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, count);
+        evidence.put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, processedRaw);
+        evidence.put(NodeOutputKeys.BATCH_KEY, context.property(NodeOutputKeys.BATCH_KEY));
+        return VerifyResult.fail(
+                "PROCESS_PUBLISHED_ZERO", "PROCESS task reported success but publishedCount=0", evidence);
     }
-    long count = toLong(raw);
-    if (count > 0) {
-      return VerifyResult.pass();
-    }
-    Object processedRaw = context.property(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT);
-    if (isZero(processedRaw)) {
-      // 无输入行时没有可发布结果，不能把空批次误判为发布失败。
-      return VerifyResult.pass();
-    }
-    // evidence 键随 VerifyResult 透传到告警 payload，与 attributes 键同名同义，按既有约定复用同一常量。
-    Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, count);
-    evidence.put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, processedRaw);
-    evidence.put(NodeOutputKeys.BATCH_KEY, context.property(NodeOutputKeys.BATCH_KEY));
-    return VerifyResult.fail(
-        "PROCESS_PUBLISHED_ZERO", "PROCESS task reported success but publishedCount=0", evidence);
-  }
 
-  private static long toLong(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue();
+    private static long toLong(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            String rawCountText = value.toString();
+            String countText = rawCountText.trim();
+            return Long.parseLong(countText);
+        } catch (NumberFormatException ignored) {
+            return -1L;
+        }
     }
-    try {
-      String rawCountText = value.toString();
-      String countText = rawCountText.trim();
-      return Long.parseLong(countText);
-    } catch (NumberFormatException ignored) {
-      return -1L;
-    }
-  }
 
-  private static boolean isZero(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue() == 0;
+    private static boolean isZero(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue() == 0;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return false;
+        }
+        try {
+            String rawCountText = value.toString();
+            String countText = rawCountText.trim();
+            long parsedCount = Long.parseLong(countText);
+            return parsedCount == 0;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    try {
-      String rawCountText = value.toString();
-      String countText = rawCountText.trim();
-      long parsedCount = Long.parseLong(countText);
-      return parsedCount == 0;
-    } catch (NumberFormatException ignored) {
-      return false;
-    }
-  }
 }

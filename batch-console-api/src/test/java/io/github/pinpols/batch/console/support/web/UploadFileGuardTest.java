@@ -12,13 +12,13 @@ import org.springframework.web.multipart.MultipartFile;
 @DisplayName("上传文件守卫：文件名校验")
 class UploadFileGuardTest {
 
-  @Test
-  @DisplayName("原始文件名为空时返回业务校验异常")
-  void shouldRejectMissingFilenameWithoutNullPointerException() {
-    MultipartFile file = mock(MultipartFile.class);
-    when(file.isEmpty()).thenReturn(false);
-    when(file.getOriginalFilename()).thenReturn(null);
+    @Test
+    @DisplayName("原始文件名为空时返回业务校验异常")
+    void shouldRejectMissingFilenameWithoutNullPointerException() {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getOriginalFilename()).thenReturn(null);
 
-    assertThatThrownBy(() -> UploadFileGuard.requireCsv(file)).isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> UploadFileGuard.requireCsv(file)).isInstanceOf(BizException.class);
+    }
 }

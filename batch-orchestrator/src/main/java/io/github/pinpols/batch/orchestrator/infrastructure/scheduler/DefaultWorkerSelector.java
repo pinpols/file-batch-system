@@ -47,217 +47,210 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultWorkerSelector implements WorkerSelector {
 
-  // A-3.2 a: 指标名对齐 batch.scheduler.* 前缀，和现有 scheduler 指标共面板
-  private static final String METRIC_NO_MATCH = "batch.scheduler.worker_selection.no_match";
+    // A-3.2 a: 指标名对齐 batch.scheduler.* 前缀，和现有 scheduler 指标共面板
+    private static final String METRIC_NO_MATCH = "batch.scheduler.worker_selection.no_match";
 
-  // 同一 (tenant, group, reason) 的 no-match 在 30s 内只 WARN 一次,避免单个长期失配把日志冲掉。
-  // 指标侧仍按调用次数累加,Grafana 看趋势不受影响。
-  private static final Duration NO_MATCH_LOG_COOLDOWN = Duration.ofSeconds(30);
+    // 同一 (tenant, group, reason) 的 no-match 在 30s 内只 WARN 一次,避免单个长期失配把日志冲掉。
+    // 指标侧仍按调用次数累加,Grafana 看趋势不受影响。
+    private static final Duration NO_MATCH_LOG_COOLDOWN = Duration.ofSeconds(30);
 
-  private final ThrottledLogger noMatchLogThrottle = new ThrottledLogger(NO_MATCH_LOG_COOLDOWN);
+    private final ThrottledLogger noMatchLogThrottle = new ThrottledLogger(NO_MATCH_LOG_COOLDOWN);
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final ResourceSchedulerProperties resourceSchedulerProperties;
-  private final ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final ResourceSchedulerProperties resourceSchedulerProperties;
+    private final ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
 
-  public DefaultWorkerSelector(
-      WorkerRegistryMapper workerRegistryMapper,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ResourceSchedulerProperties resourceSchedulerProperties,
-      ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider) {
-    this.workerRegistryMapper = workerRegistryMapper;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.resourceSchedulerProperties = resourceSchedulerProperties;
-    this.workerRegistryCacheProvider = workerRegistryCacheProvider;
-  }
-
-  @Override
-  public WorkerRouteModel select(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue, Integer priority) {
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setWorkerType(EmptyChecks.isNull(request) ? null : request.getWorkerType());
-    route.setPriority(priority);
-    String routeResourceProfile = resolveResourceProfile(request, queue);
-    route.setResourceProfile(routeResourceProfile);
-    if (EmptyChecks.isNull(request) || !Texts.hasText(request.getTenantId())) {
-      route.setAvailable(false);
-      return route;
+    public DefaultWorkerSelector(
+            WorkerRegistryMapper workerRegistryMapper,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ResourceSchedulerProperties resourceSchedulerProperties,
+            ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider) {
+        this.workerRegistryMapper = workerRegistryMapper;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.resourceSchedulerProperties = resourceSchedulerProperties;
+        this.workerRegistryCacheProvider = workerRegistryCacheProvider;
     }
-    // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较回退，
-    // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
-    String requestedWorkerGroup = resolveWorkerGroup(request, queue);
-    String workerGroup = CodeNormalizer.toUpperOrNull(requestedWorkerGroup);
-    List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
-    String resourceProfile = resolveResourceProfile(request, queue);
-    WorkerRegistryEntity selected =
-        pickBest(candidates, request.getRequiredCapability(), resourceProfile);
 
-    // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
-    // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
-    // 生产 profile 不应设置此配置，以保留 docs/agent-baseline.md §多租户隔离 的原严格语义。
-    String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
-    boolean fallbackTenantSelectionIsNeeded = EmptyChecks.isNull(selected)
-        && Texts.hasText(fallbackTenant)
-        && !fallbackTenant.equals(request.getTenantId());
-    if (fallbackTenantSelectionIsNeeded) {
-      List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
-      WorkerRegistryEntity fallbackSelected =
-          pickBest(fallbackCandidates, request.getRequiredCapability(), resourceProfile);
-      if (EmptyChecks.isNotNull(fallbackSelected)) {
-        log.debug(
-            "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
-                + " workerGroup={}, workerCode={}",
-            request.getTenantId(),
-            fallbackTenant,
-            workerGroup,
-            fallbackSelected.workerCode());
-        route.setWorkerCode(fallbackSelected.routingCode());
+    @Override
+    public WorkerRouteModel select(ResourceSchedulingRequest request, ResourceQueueEntity queue, Integer priority) {
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setWorkerType(EmptyChecks.isNull(request) ? null : request.getWorkerType());
+        route.setPriority(priority);
+        String routeResourceProfile = resolveResourceProfile(request, queue);
+        route.setResourceProfile(routeResourceProfile);
+        if (EmptyChecks.isNull(request) || !Texts.hasText(request.getTenantId())) {
+            route.setAvailable(false);
+            return route;
+        }
+        // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较回退，
+        // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
+        String requestedWorkerGroup = resolveWorkerGroup(request, queue);
+        String workerGroup = CodeNormalizer.toUpperOrNull(requestedWorkerGroup);
+        List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
+        String resourceProfile = resolveResourceProfile(request, queue);
+        WorkerRegistryEntity selected = pickBest(candidates, request.getRequiredCapability(), resourceProfile);
+
+        // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
+        // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
+        // 生产 profile 不应设置此配置，以保留 docs/agent-baseline.md §多租户隔离 的原严格语义。
+        String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
+        boolean fallbackTenantSelectionIsNeeded = EmptyChecks.isNull(selected)
+                && Texts.hasText(fallbackTenant)
+                && !fallbackTenant.equals(request.getTenantId());
+        if (fallbackTenantSelectionIsNeeded) {
+            List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
+            WorkerRegistryEntity fallbackSelected =
+                    pickBest(fallbackCandidates, request.getRequiredCapability(), resourceProfile);
+            if (EmptyChecks.isNotNull(fallbackSelected)) {
+                log.debug(
+                        "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
+                                + " workerGroup={}, workerCode={}",
+                        request.getTenantId(),
+                        fallbackTenant,
+                        workerGroup,
+                        fallbackSelected.workerCode());
+                route.setWorkerCode(fallbackSelected.routingCode());
+                route.setAvailable(true);
+                return route;
+            }
+        }
+
+        if (EmptyChecks.isNull(selected)) {
+            // A-3.2 a: 空集不再静默阻塞——记 WARN + 计数，让 Grafana / 告警能发现：
+            //   - candidates.isEmpty 说明整组 worker 下线（或 workerGroup 配错）
+            //   - resourceTag 全不匹配说明 queue 配置与 worker 实际 tag 失配
+            // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
+            String reason =
+                    EmptyChecks.isEmpty(candidates) ? "no_online_workers_in_group" : "no_worker_matches_resource_tag";
+            String throttleKey = request.getTenantId() + '|' + workerGroup + '|' + reason;
+            ThrottledLogger.Decision decision = noMatchLogThrottle.evaluate(throttleKey);
+            if (decision.shouldLog()) {
+                log.warn(
+                        "worker selection returned no match: tenantId={}, workerGroup={}, resourceProfile={},"
+                                + " candidates={}, reason={}, suppressedSincePrevious={} — task will block in"
+                                + " WAITING until operator intervenes",
+                        request.getTenantId(),
+                        workerGroup,
+                        resourceProfile,
+                        candidates.size(),
+                        reason,
+                        decision.suppressedSincePrevious());
+            }
+            incrementNoMatchCounter(request, resourceProfile, reason);
+            route.setAvailable(false);
+            return route;
+        }
+        route.setWorkerCode(selected.routingCode());
         route.setAvailable(true);
         return route;
-      }
     }
 
-    if (EmptyChecks.isNull(selected)) {
-      // A-3.2 a: 空集不再静默阻塞——记 WARN + 计数，让 Grafana / 告警能发现：
-      //   - candidates.isEmpty 说明整组 worker 下线（或 workerGroup 配错）
-      //   - resourceTag 全不匹配说明 queue 配置与 worker 实际 tag 失配
-      // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
-      String reason = EmptyChecks.isEmpty(candidates)
-          ? "no_online_workers_in_group"
-          : "no_worker_matches_resource_tag";
-      String throttleKey = request.getTenantId() + '|' + workerGroup + '|' + reason;
-      ThrottledLogger.Decision decision = noMatchLogThrottle.evaluate(throttleKey);
-      if (decision.shouldLog()) {
-        log.warn(
-            "worker selection returned no match: tenantId={}, workerGroup={}, resourceProfile={},"
-                + " candidates={}, reason={}, suppressedSincePrevious={} — task will block in"
-                + " WAITING until operator intervenes",
-            request.getTenantId(),
-            workerGroup,
-            resourceProfile,
-            candidates.size(),
-            reason,
-            decision.suppressedSincePrevious());
-      }
-      incrementNoMatchCounter(request, resourceProfile, reason);
-      route.setAvailable(false);
-      return route;
+    private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
+        Supplier<List<WorkerRegistryEntity>> loader = () -> Texts.hasText(workerGroup)
+                ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
+                        tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
+                : workerRegistryMapper.selectByTenantAndStatus(tenantId, WorkerRegistryStatus.ONLINE.code());
+        WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
+        if (cache == null) { // empty-check: allow - Sonar S2259
+            return loader.get();
+        }
+        return cache.getOrLoad(tenantId, workerGroup, loader);
     }
-    route.setWorkerCode(selected.routingCode());
-    route.setAvailable(true);
-    return route;
-  }
 
-  private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
-    Supplier<List<WorkerRegistryEntity>> loader = () -> Texts.hasText(workerGroup)
-        ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
-            tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
-        : workerRegistryMapper.selectByTenantAndStatus(
-            tenantId, WorkerRegistryStatus.ONLINE.code());
-    WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
-    if (cache == null) { // empty-check: allow - Sonar S2259
-      return loader.get();
+    private WorkerRegistryEntity pickBest(
+            List<WorkerRegistryEntity> candidates, String requiredCapability, String resourceProfile) {
+        Comparator<WorkerRegistryEntity> workerPriority = Comparator.comparingInt(
+                        DefaultWorkerSelector::currentLoadOrZero)
+                .thenComparing(WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder()));
+        return candidates.stream()
+                .filter(candidate -> !Texts.hasText(requiredCapability)
+                        || capabilityTagsContain(candidate.capabilityTags(), requiredCapability))
+                .filter(candidate -> matchesResourceProfile(candidate, resourceProfile))
+                // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
+                // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
+                .filter(DefaultWorkerSelector::hasCapacity)
+                .min(workerPriority)
+                .orElse(null);
     }
-    return cache.getOrLoad(tenantId, workerGroup, loader);
-  }
 
-  private WorkerRegistryEntity pickBest(
-      List<WorkerRegistryEntity> candidates, String requiredCapability, String resourceProfile) {
-    Comparator<WorkerRegistryEntity> workerPriority = Comparator.comparingInt(
-            DefaultWorkerSelector::currentLoadOrZero)
-        .thenComparing(
-            WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder()));
-    return candidates.stream()
-        .filter(candidate -> !Texts.hasText(requiredCapability)
-            || capabilityTagsContain(candidate.capabilityTags(), requiredCapability))
-        .filter(candidate -> matchesResourceProfile(candidate, resourceProfile))
-        // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
-        // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
-        .filter(DefaultWorkerSelector::hasCapacity)
-        .min(workerPriority)
-        .orElse(null);
-  }
+    private static int currentLoadOrZero(WorkerRegistryEntity worker) {
+        return Objects.requireNonNullElse(worker.currentLoad(), 0);
+    }
 
-  private static int currentLoadOrZero(WorkerRegistryEntity worker) {
-    return Objects.requireNonNullElse(worker.currentLoad(), 0);
-  }
+    /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据回退) 视为无上限通过. */
+    private static boolean hasCapacity(WorkerRegistryEntity r) {
+        Integer max = r.maxConcurrent();
+        if (EmptyChecks.isNull(max) || max <= 0) {
+            return true; // 没配置 = 无上限 (向后兼容)
+        }
+        int current = currentLoadOrZero(r);
+        return current < max;
+    }
 
-  /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据回退) 视为无上限通过. */
-  private static boolean hasCapacity(WorkerRegistryEntity r) {
-    Integer max = r.maxConcurrent();
-    if (EmptyChecks.isNull(max) || max <= 0) {
-      return true; // 没配置 = 无上限 (向后兼容)
+    private void incrementNoMatchCounter(ResourceSchedulingRequest request, String resourceProfile, String reason) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        Counter.builder(METRIC_NO_MATCH)
+                .tags(Tags.of(
+                        "tenantId",
+                        String.valueOf(request.getTenantId()),
+                        "workerType",
+                        String.valueOf(request.getWorkerType()),
+                        "resourceTag",
+                        EmptyChecks.isNull(resourceProfile) ? "none" : resourceProfile,
+                        "reason",
+                        reason))
+                .register(registry)
+                .increment();
     }
-    int current = currentLoadOrZero(r);
-    return current < max;
-  }
 
-  private void incrementNoMatchCounter(
-      ResourceSchedulingRequest request, String resourceProfile, String reason) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    private boolean matchesResourceProfile(WorkerRegistryEntity candidate, String resourceProfile) {
+        if (!Texts.hasText(resourceProfile)) {
+            return true;
+        }
+        if (resourceProfile.equalsIgnoreCase(candidate.resourceTag())) {
+            return true;
+        }
+        return capabilityTagsContain(candidate.capabilityTags(), resourceProfile);
     }
-    Counter.builder(METRIC_NO_MATCH)
-        .tags(Tags.of(
-            "tenantId",
-            String.valueOf(request.getTenantId()),
-            "workerType",
-            String.valueOf(request.getWorkerType()),
-            "resourceTag",
-            EmptyChecks.isNull(resourceProfile) ? "none" : resourceProfile,
-            "reason",
-            reason))
-        .register(registry)
-        .increment();
-  }
 
-  private boolean matchesResourceProfile(WorkerRegistryEntity candidate, String resourceProfile) {
-    if (!Texts.hasText(resourceProfile)) {
-      return true;
+    private boolean capabilityTagsContain(JsonbString tags, String required) {
+        if (EmptyChecks.isNull(tags) || !Texts.hasText(tags.getValue())) {
+            return false;
+        }
+        String[] parsed;
+        try {
+            parsed = JsonUtils.fromJson(tags.getValue(), String[].class);
+        } catch (RuntimeException ex) {
+            // capability_tags 约定是 JSON 数组；非数组或畸形 JSON 视为无能力，不让畸形数据阻塞 selector。
+            log.warn("invalid capability_tags JSON on worker: {}", tags.getValue(), ex);
+            return false;
+        }
+        if (EmptyChecks.isNull(parsed)) {
+            return false;
+        }
+        for (String tag : parsed) {
+            if (EmptyChecks.isNotNull(tag) && required.equalsIgnoreCase(tag)) {
+                return true;
+            }
+        }
+        return false;
     }
-    if (resourceProfile.equalsIgnoreCase(candidate.resourceTag())) {
-      return true;
-    }
-    return capabilityTagsContain(candidate.capabilityTags(), resourceProfile);
-  }
 
-  private boolean capabilityTagsContain(JsonbString tags, String required) {
-    if (EmptyChecks.isNull(tags) || !Texts.hasText(tags.getValue())) {
-      return false;
+    private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        if (EmptyChecks.isNotNull(request) && Texts.hasText(request.getWorkerGroup())) {
+            return request.getWorkerGroup();
+        }
+        return EmptyChecks.isNull(queue) ? null : queue.workerGroup();
     }
-    String[] parsed;
-    try {
-      parsed = JsonUtils.fromJson(tags.getValue(), String[].class);
-    } catch (RuntimeException ex) {
-      // capability_tags 约定是 JSON 数组；非数组或畸形 JSON 视为无能力，不让畸形数据阻塞 selector。
-      log.warn("invalid capability_tags JSON on worker: {}", tags.getValue(), ex);
-      return false;
-    }
-    if (EmptyChecks.isNull(parsed)) {
-      return false;
-    }
-    for (String tag : parsed) {
-      if (EmptyChecks.isNotNull(tag) && required.equalsIgnoreCase(tag)) {
-        return true;
-      }
-    }
-    return false;
-  }
 
-  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (EmptyChecks.isNotNull(request) && Texts.hasText(request.getWorkerGroup())) {
-      return request.getWorkerGroup();
+    private String resolveResourceProfile(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        if (EmptyChecks.isNotNull(request) && Texts.hasText(request.getResourceProfile())) {
+            return request.getResourceProfile();
+        }
+        return EmptyChecks.isNull(queue) ? null : queue.resourceTag();
     }
-    return EmptyChecks.isNull(queue) ? null : queue.workerGroup();
-  }
-
-  private String resolveResourceProfile(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (EmptyChecks.isNotNull(request) && Texts.hasText(request.getResourceProfile())) {
-      return request.getResourceProfile();
-    }
-    return EmptyChecks.isNull(queue) ? null : queue.resourceTag();
-  }
 }

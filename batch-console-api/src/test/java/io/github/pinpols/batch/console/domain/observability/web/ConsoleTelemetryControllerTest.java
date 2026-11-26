@@ -34,111 +34,104 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTelemetryControllerTest {
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleTelemetryController(responseFactory, new ConsoleTelemetryService()))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
-
-  @Test
-  @DisplayName("遥测上报:合法事件载荷返回成功")
-  void shouldAcceptEvents_whenPayloadValid() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/telemetry/events")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"page_view\",\"page\":\"/home\"}]}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-  }
-
-  @Test
-  @DisplayName("遥测日志不写入调用方提供的事件名称和页面内容")
-  void shouldNotLogCallerControlledTelemetryText() throws Exception {
-    Logger logger = (Logger) LoggerFactory.getLogger(ConsoleTelemetryController.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.start();
-    logger.addAppender(appender);
-    try {
-      mockMvc
-          .perform(
-              post("/api/console/telemetry/events")
-                  .contentType(APPLICATION_JSON)
-                  .content(
-                      "{\"app\":\"console\",\"events\":[{\"type\":\"error\",\"name\":\"secret-value\",\"page\":\"/ops?token=page-secret\"}]}"))
-          .andExpect(status().isOk());
-    } finally {
-      logger.detachAppender(appender);
-      appender.stop();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleTelemetryController(responseFactory, new ConsoleTelemetryService()))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
     }
 
-    String logged = appender.list.stream()
-        .map(ILoggingEvent::getFormattedMessage)
-        .reduce("", (left, right) -> left + right);
-    Assertions.assertThat(logged)
-        .contains("nameLength=12", "pagePresent=true")
-        .doesNotContain("secret-value", "page-secret", "token=");
-  }
+    @Test
+    @DisplayName("遥测上报:合法事件载荷返回成功")
+    void shouldAcceptEvents_whenPayloadValid() throws Exception {
+        mockMvc.perform(
+                        post("/api/console/telemetry/events")
+                                .contentType(APPLICATION_JSON)
+                                .content(
+                                        "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"page_view\",\"page\":\"/home\"}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+    }
 
-  @Test
-  @DisplayName("遥测上报:兼容有界的扩展事件类型")
-  void shouldAccept_whenEventTypeIsBoundedExtension() throws Exception {
-    mockMvc
-        .perform(post("/api/console/telemetry/events")
-            .contentType(APPLICATION_JSON)
-            .content(
-                "{\"app\":\"console\",\"events\":[{\"type\":\"custom\",\"name\":\"page_view\"}]}"))
-        .andExpect(status().isOk());
-  }
+    @Test
+    @DisplayName("遥测日志不写入调用方提供的事件名称和页面内容")
+    void shouldNotLogCallerControlledTelemetryText() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(ConsoleTelemetryController.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            mockMvc.perform(
+                            post("/api/console/telemetry/events")
+                                    .contentType(APPLICATION_JSON)
+                                    .content(
+                                            "{\"app\":\"console\",\"events\":[{\"type\":\"error\",\"name\":\"secret-value\",\"page\":\"/ops?token=page-secret\"}]}"))
+                    .andExpect(status().isOk());
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
 
-  @Test
-  @DisplayName("遥测上报:事件列表为空时返回参数非法")
-  void shouldReject_whenEventsListEmpty() throws Exception {
-    mockMvc
-        .perform(post("/api/console/telemetry/events")
-            .contentType(APPLICATION_JSON)
-            .content("{\"app\":\"console\",\"events\":[]}"))
-        .andExpect(status().isBadRequest());
-  }
+        String logged = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .reduce("", (left, right) -> left + right);
+        Assertions.assertThat(logged)
+                .contains("nameLength=12", "pagePresent=true")
+                .doesNotContain("secret-value", "page-secret", "token=");
+    }
 
-  @Test
-  @DisplayName("遥测上报:缺少应用标识字段时返回参数非法")
-  void shouldReject_whenAppFieldMissing() throws Exception {
-    mockMvc
-        .perform(post("/api/console/telemetry/events")
-            .contentType(APPLICATION_JSON)
-            .content("{\"events\":[{\"type\":\"info\",\"name\":\"x\"}]}"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("遥测上报:兼容有界的扩展事件类型")
+    void shouldAccept_whenEventTypeIsBoundedExtension() throws Exception {
+        mockMvc.perform(post("/api/console/telemetry/events")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"app\":\"console\",\"events\":[{\"type\":\"custom\",\"name\":\"page_view\"}]}"))
+                .andExpect(status().isOk());
+    }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "{\"app\":\"console\",\"events\":[null]}",
-        "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"view\"},null]}"
-      })
-  @DisplayName("遥测事件数组包含空元素时返回参数错误，不能进入控制器空指针路径")
-  void shouldRejectNullEvent_whenListContainsNull(String payload) throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/telemetry/events").contentType(APPLICATION_JSON).content(payload))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("遥测上报:事件列表为空时返回参数非法")
+    void shouldReject_whenEventsListEmpty() throws Exception {
+        mockMvc.perform(post("/api/console/telemetry/events")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"app\":\"console\",\"events\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("遥测上报:缺少应用标识字段时返回参数非法")
+    void shouldReject_whenAppFieldMissing() throws Exception {
+        mockMvc.perform(post("/api/console/telemetry/events")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"events\":[{\"type\":\"info\",\"name\":\"x\"}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"app\":\"console\",\"events\":[null]}",
+                "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"view\"},null]}"
+            })
+    @DisplayName("遥测事件数组包含空元素时返回参数错误，不能进入控制器空指针路径")
+    void shouldRejectNullEvent_whenListContainsNull(String payload) throws Exception {
+        mockMvc.perform(post("/api/console/telemetry/events")
+                        .contentType(APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest());
+    }
 }

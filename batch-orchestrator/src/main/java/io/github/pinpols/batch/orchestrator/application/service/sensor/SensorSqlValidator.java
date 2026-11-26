@@ -25,88 +25,85 @@ import net.sf.jsqlparser.statement.select.Select;
  */
 public final class SensorSqlValidator {
 
-  private SensorSqlValidator() {}
+    private SensorSqlValidator() {}
 
-  /**
-   * sensor / DataQuality SQL 默认禁用的 PG 函数黑名单。取自单一权威源 {@link
-   * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 worker export/process 侧的 {@code
-   * SqlTemplateExportSecurityProperties} / {@code SqlTransformComputeSecurityProperties}
-   * 默认值同源，防止三侧清单再次漂移）。函数按家族前缀匹配（见 {@link SelectSqlAstValidator#findForbiddenFunctionCall}），故 {@code
-   * dblink} 一条即覆盖 {@code dblink_exec} / {@code dblink_connect} / {@code dblink_send_query} 等。
-   */
-  public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS =
-      SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS;
+    /**
+     * sensor / DataQuality SQL 默认禁用的 PG 函数黑名单。取自单一权威源 {@link
+     * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 worker export/process 侧的 {@code
+     * SqlTemplateExportSecurityProperties} / {@code SqlTransformComputeSecurityProperties}
+     * 默认值同源，防止三侧清单再次漂移）。函数按家族前缀匹配（见 {@link SelectSqlAstValidator#findForbiddenFunctionCall}），故 {@code
+     * dblink} 一条即覆盖 {@code dblink_exec} / {@code dblink_connect} / {@code dblink_send_query} 等。
+     */
+    public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS = SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS;
 
-  /**
-   * 解析校验，返回 trim 后 SQL；失败抛 IllegalArgumentException 含原因。使用 {@link #DEFAULT_FORBIDDEN_FUNCTIONS}
-   * 黑名单。
-   *
-   * @param raw 用户填的 SQL
-   * @param allowedSchemas lower-case 白名单
-   */
-  public static String validate(String raw, List<String> allowedSchemas) {
-    return validate(raw, allowedSchemas, DEFAULT_FORBIDDEN_FUNCTIONS);
-  }
+    /**
+     * 解析校验，返回 trim 后 SQL；失败抛 IllegalArgumentException 含原因。使用 {@link #DEFAULT_FORBIDDEN_FUNCTIONS}
+     * 黑名单。
+     *
+     * @param raw 用户填的 SQL
+     * @param allowedSchemas lower-case 白名单
+     */
+    public static String validate(String raw, List<String> allowedSchemas) {
+        return validate(raw, allowedSchemas, DEFAULT_FORBIDDEN_FUNCTIONS);
+    }
 
-  /**
-   * 解析校验，返回 trim 后 SQL；失败抛 IllegalArgumentException 含原因。
-   *
-   * @param raw 用户填的 SQL
-   * @param allowedSchemas lower-case 白名单
-   * @param forbiddenFunctions 禁用函数黑名单（大小写不敏感，AST 遍历比对函数节点名）
-   */
-  public static String validate(
-      String raw, List<String> allowedSchemas, List<String> forbiddenFunctions) {
-    if (!Texts.hasText(raw)) {
-      throw new IllegalArgumentException("sensor SQL is blank");
+    /**
+     * 解析校验，返回 trim 后 SQL；失败抛 IllegalArgumentException 含原因。
+     *
+     * @param raw 用户填的 SQL
+     * @param allowedSchemas lower-case 白名单
+     * @param forbiddenFunctions 禁用函数黑名单（大小写不敏感，AST 遍历比对函数节点名）
+     */
+    public static String validate(String raw, List<String> allowedSchemas, List<String> forbiddenFunctions) {
+        if (!Texts.hasText(raw)) {
+            throw new IllegalArgumentException("sensor SQL is blank");
+        }
+        String sql = raw.trim();
+        Statement statement;
+        try {
+            statement = CCJSqlParserUtil.parse(sql);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("sensor SQL parse error: " + e.getMessage(), e);
+        }
+        if (!(statement instanceof Select select)) {
+            throw new IllegalArgumentException("sensor SQL only allows SELECT/WITH, got: "
+                    + statement.getClass().getSimpleName());
+        }
+        checkNoSelectStar(select);
+        if (forbiddenFunctions != null && !forbiddenFunctions.isEmpty()) {
+            checkNoForbiddenFunctions(statement, forbiddenFunctions);
+        }
+        if (allowedSchemas != null && !allowedSchemas.isEmpty()) {
+            checkAllowedSchemas(statement, allowedSchemas);
+        }
+        return sql;
     }
-    String sql = raw.trim();
-    Statement statement;
-    try {
-      statement = CCJSqlParserUtil.parse(sql);
-    } catch (Exception e) {
-      throw new IllegalArgumentException("sensor SQL parse error: " + e.getMessage(), e);
-    }
-    if (!(statement instanceof Select select)) {
-      throw new IllegalArgumentException(
-          "sensor SQL only allows SELECT/WITH, got: " + statement.getClass().getSimpleName());
-    }
-    checkNoSelectStar(select);
-    if (forbiddenFunctions != null && !forbiddenFunctions.isEmpty()) {
-      checkNoForbiddenFunctions(statement, forbiddenFunctions);
-    }
-    if (allowedSchemas != null && !allowedSchemas.isEmpty()) {
-      checkAllowedSchemas(statement, allowedSchemas);
-    }
-    return sql;
-  }
 
-  private static void checkNoSelectStar(Select select) {
-    if (SelectSqlAstValidator.containsSelectStar(select)) {
-      throw new IllegalArgumentException(
-          "sensor SQL forbids SELECT * / table.*; enumerate columns explicitly");
+    private static void checkNoSelectStar(Select select) {
+        if (SelectSqlAstValidator.containsSelectStar(select)) {
+            throw new IllegalArgumentException("sensor SQL forbids SELECT * / table.*; enumerate columns explicitly");
+        }
     }
-  }
 
-  private static void checkNoForbiddenFunctions(Statement stmt, List<String> forbidden) {
-    String hit = SelectSqlAstValidator.findForbiddenFunctionCall(stmt, forbidden);
-    if (hit != null) {
-      throw new IllegalArgumentException("sensor SQL calls forbidden function '" + hit + "'");
+    private static void checkNoForbiddenFunctions(Statement stmt, List<String> forbidden) {
+        String hit = SelectSqlAstValidator.findForbiddenFunctionCall(stmt, forbidden);
+        if (hit != null) {
+            throw new IllegalArgumentException("sensor SQL calls forbidden function '" + hit + "'");
+        }
     }
-  }
 
-  private static void checkAllowedSchemas(Statement stmt, List<String> allowedSchemas) {
-    SchemaViolation violation = SelectSqlAstValidator.findSchemaViolation(stmt, allowedSchemas);
-    if (violation == null) {
-      return;
+    private static void checkAllowedSchemas(Statement stmt, List<String> allowedSchemas) {
+        SchemaViolation violation = SelectSqlAstValidator.findSchemaViolation(stmt, allowedSchemas);
+        if (violation == null) {
+            return;
+        }
+        if (violation.unqualified()) {
+            throw new IllegalArgumentException(
+                    "sensor SQL requires fully-qualified schema.table, found: " + violation.violatingName());
+        }
+        throw new IllegalArgumentException("sensor SQL references disallowed schema '"
+                + violation.violatingName()
+                + "' - allowed: "
+                + allowedSchemas);
     }
-    if (violation.unqualified()) {
-      throw new IllegalArgumentException(
-          "sensor SQL requires fully-qualified schema.table, found: " + violation.violatingName());
-    }
-    throw new IllegalArgumentException("sensor SQL references disallowed schema '"
-        + violation.violatingName()
-        + "' - allowed: "
-        + allowedSchemas);
-  }
 }

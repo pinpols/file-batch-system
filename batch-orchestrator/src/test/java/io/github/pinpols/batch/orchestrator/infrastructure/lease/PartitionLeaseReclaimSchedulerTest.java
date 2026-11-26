@@ -36,226 +36,221 @@ import org.junit.jupiter.api.Test;
 @DisplayName("分区租约回收调度器:验证过期分区回收与孤儿任务扫描的委派,跳过与异常容忍行为")
 class PartitionLeaseReclaimSchedulerTest {
 
-  private JobPartitionMapper jobPartitionMapper;
-  private PartitionReclaimUnit reclaimUnit;
-  private JobTaskMapper jobTaskMapper;
-  private UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
-  private OrchestratorGracefulShutdown gracefulShutdown;
-  private PartitionLeaseProperties props;
-  private PartitionLeaseReclaimScheduler scheduler;
+    private JobPartitionMapper jobPartitionMapper;
+    private PartitionReclaimUnit reclaimUnit;
+    private JobTaskMapper jobTaskMapper;
+    private UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
+    private OrchestratorGracefulShutdown gracefulShutdown;
+    private PartitionLeaseProperties props;
+    private PartitionLeaseReclaimScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    jobPartitionMapper = mock(JobPartitionMapper.class);
-    reclaimUnit = mock(PartitionReclaimUnit.class);
-    jobTaskMapper = mock(JobTaskMapper.class);
-    unclaimedReadyDispatchUnit = mock(UnclaimedReadyDispatchUnit.class);
-    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    @BeforeEach
+    void setUp() {
+        jobPartitionMapper = mock(JobPartitionMapper.class);
+        reclaimUnit = mock(PartitionReclaimUnit.class);
+        jobTaskMapper = mock(JobTaskMapper.class);
+        unclaimedReadyDispatchUnit = mock(UnclaimedReadyDispatchUnit.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
-    props = new PartitionLeaseProperties();
-    props.setExpireSeconds(60L);
-    props.setReclaimBatchSize(500);
-    props.setOrphanSweepEnabled(true);
-    props.setOrphanSweepBatchSize(200);
-    props.setOrphanSweepGraceSeconds(120L);
-    BatchOrchestratorGovernanceProperties governance =
-        mock(BatchOrchestratorGovernanceProperties.class);
-    when(governance.partitionLease()).thenReturn(props);
+        props = new PartitionLeaseProperties();
+        props.setExpireSeconds(60L);
+        props.setReclaimBatchSize(500);
+        props.setOrphanSweepEnabled(true);
+        props.setOrphanSweepBatchSize(200);
+        props.setOrphanSweepGraceSeconds(120L);
+        BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.partitionLease()).thenReturn(props);
 
-    scheduler = new PartitionLeaseReclaimScheduler(
-        jobPartitionMapper,
-        reclaimUnit,
-        governance,
-        gracefulShutdown,
-        jobTaskMapper,
-        unclaimedReadyDispatchUnit);
-  }
+        scheduler = new PartitionLeaseReclaimScheduler(
+                jobPartitionMapper,
+                reclaimUnit,
+                governance,
+                gracefulShutdown,
+                jobTaskMapper,
+                unclaimedReadyDispatchUnit);
+    }
 
-  @Test
-  @DisplayName("没有过期分区时不做任何回收动作")
-  void shouldDoNothingWhenNoExpiredPartitions() {
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("没有过期分区时不做任何回收动作")
+    void shouldDoNothingWhenNoExpiredPartitions() {
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+                .thenReturn(List.of());
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(reclaimUnit, never()).reclaim(any());
-  }
+        verify(reclaimUnit, never()).reclaim(any());
+    }
 
-  @Test
-  @DisplayName("每个过期分区都单独委派给回收单元处理")
-  void shouldDelegateEachExpiredPartitionToReclaimUnit() {
-    JobPartitionEntity p1 = expiredPartition("t1", 1L);
-    JobPartitionEntity p2 = expiredPartition("t1", 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
-        .thenReturn(List.of(p1, p2));
+    @Test
+    @DisplayName("每个过期分区都单独委派给回收单元处理")
+    void shouldDelegateEachExpiredPartitionToReclaimUnit() {
+        JobPartitionEntity p1 = expiredPartition("t1", 1L);
+        JobPartitionEntity p2 = expiredPartition("t1", 2L);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+                .thenReturn(List.of(p1, p2));
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(reclaimUnit).reclaim(p1);
-    verify(reclaimUnit).reclaim(p2);
-  }
+        verify(reclaimUnit).reclaim(p1);
+        verify(reclaimUnit).reclaim(p2);
+    }
 
-  @Test
-  @DisplayName("跨租户过期分区各自在所属租户上下文中回收并清理上下文")
-  void shouldReclaimEachPartitionUnderItsTenantContext() {
-    JobPartitionEntity p1 = expiredPartition("t1", 1L);
-    JobPartitionEntity p2 = expiredPartition("t2", 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
-        .thenReturn(List.of(p1, p2));
-    doAnswer(invocation -> {
-          JobPartitionEntity partition = invocation.getArgument(0);
-          Assertions.assertThat(RlsTenantContextHolder.get()).isEqualTo(partition.getTenantId());
-          return null;
-        })
-        .when(reclaimUnit)
-        .reclaim(any());
+    @Test
+    @DisplayName("跨租户过期分区各自在所属租户上下文中回收并清理上下文")
+    void shouldReclaimEachPartitionUnderItsTenantContext() {
+        JobPartitionEntity p1 = expiredPartition("t1", 1L);
+        JobPartitionEntity p2 = expiredPartition("t2", 2L);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+                .thenReturn(List.of(p1, p2));
+        doAnswer(invocation -> {
+                    JobPartitionEntity partition = invocation.getArgument(0);
+                    Assertions.assertThat(RlsTenantContextHolder.get()).isEqualTo(partition.getTenantId());
+                    return null;
+                })
+                .when(reclaimUnit)
+                .reclaim(any());
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    Assertions.assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        Assertions.assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  @Test
-  @DisplayName("单个分区抛出可重试异常时仍继续回收其余分区")
-  void shouldContinueProcessingWhenSinglePartitionThrowsRetryable() {
-    JobPartitionEntity p1 = expiredPartition("t1", 1L);
-    JobPartitionEntity p2 = expiredPartition("t1", 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
-        .thenReturn(List.of(p1, p2));
-    doThrow(new ReclaimRetryableException("task version conflict"))
-        .when(reclaimUnit)
-        .reclaim(p1);
-    doNothing().when(reclaimUnit).reclaim(p2);
+    @Test
+    @DisplayName("单个分区抛出可重试异常时仍继续回收其余分区")
+    void shouldContinueProcessingWhenSinglePartitionThrowsRetryable() {
+        JobPartitionEntity p1 = expiredPartition("t1", 1L);
+        JobPartitionEntity p2 = expiredPartition("t1", 2L);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+                .thenReturn(List.of(p1, p2));
+        doThrow(new ReclaimRetryableException("task version conflict"))
+                .when(reclaimUnit)
+                .reclaim(p1);
+        doNothing().when(reclaimUnit).reclaim(p2);
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(reclaimUnit).reclaim(p1);
-    verify(reclaimUnit).reclaim(p2);
-  }
+        verify(reclaimUnit).reclaim(p1);
+        verify(reclaimUnit).reclaim(p2);
+    }
 
-  @Test
-  @DisplayName("单个分区抛出非预期异常时不中断后续分区的回收")
-  void shouldContinueProcessingWhenSinglePartitionThrowsUnexpected() {
-    JobPartitionEntity p1 = expiredPartition("t1", 1L);
-    JobPartitionEntity p2 = expiredPartition("t1", 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
-        .thenReturn(List.of(p1, p2));
-    doThrow(new RuntimeException("db down")).when(reclaimUnit).reclaim(p1);
+    @Test
+    @DisplayName("单个分区抛出非预期异常时不中断后续分区的回收")
+    void shouldContinueProcessingWhenSinglePartitionThrowsUnexpected() {
+        JobPartitionEntity p1 = expiredPartition("t1", 1L);
+        JobPartitionEntity p2 = expiredPartition("t1", 2L);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+                .thenReturn(List.of(p1, p2));
+        doThrow(new RuntimeException("db down")).when(reclaimUnit).reclaim(p1);
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(reclaimUnit).reclaim(p2);
-  }
+        verify(reclaimUnit).reclaim(p2);
+    }
 
-  @Test
-  @DisplayName("实例处于停机排空状态时既不查询也不回收")
-  void shouldSkipReclaimWhenDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("实例处于停机排空状态时既不查询也不回收")
+    void shouldSkipReclaimWhenDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(jobPartitionMapper, never()).selectExpiredLeasesGlobal(anyString(), anyString(), any());
-    verify(reclaimUnit, never()).reclaim(any());
-  }
+        verify(jobPartitionMapper, never()).selectExpiredLeasesGlobal(anyString(), anyString(), any());
+        verify(reclaimUnit, never()).reclaim(any());
+    }
 
-  @Test
-  @DisplayName("开启孤儿清理时把任务仍在运行但分区已就绪的记录委派回收")
-  void shouldRunSweeperAndDelegateOrphans() {
-    JobPartitionEntity orphan = expiredPartition("t1", 99L);
-    when(jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
-            eq(PartitionStatus.READY.code()),
-            eq(TaskStatus.RUNNING.code()),
-            any(Instant.class),
-            anyInt()))
-        .thenReturn(List.of(orphan));
+    @Test
+    @DisplayName("开启孤儿清理时把任务仍在运行但分区已就绪的记录委派回收")
+    void shouldRunSweeperAndDelegateOrphans() {
+        JobPartitionEntity orphan = expiredPartition("t1", 99L);
+        when(jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
+                        eq(PartitionStatus.READY.code()), eq(TaskStatus.RUNNING.code()), any(Instant.class), anyInt()))
+                .thenReturn(List.of(orphan));
 
-    scheduler.sweepOrphanRunningTasks();
+        scheduler.sweepOrphanRunningTasks();
 
-    verify(reclaimUnit, atLeastOnce()).reclaim(orphan);
-  }
+        verify(reclaimUnit, atLeastOnce()).reclaim(orphan);
+    }
 
-  @Test
-  @DisplayName("关闭孤儿清理时不再扫描遗留分区")
-  void shouldSkipSweeperWhenDisabled() {
-    props.setOrphanSweepEnabled(false);
+    @Test
+    @DisplayName("关闭孤儿清理时不再扫描遗留分区")
+    void shouldSkipSweeperWhenDisabled() {
+        props.setOrphanSweepEnabled(false);
 
-    scheduler.sweepOrphanRunningTasks();
+        scheduler.sweepOrphanRunningTasks();
 
-    verify(jobPartitionMapper, never())
-        .selectOrphanReadyPartitionsWithRunningTask(anyString(), anyString(), any(), anyInt());
-  }
+        verify(jobPartitionMapper, never())
+                .selectOrphanReadyPartitionsWithRunningTask(anyString(), anyString(), any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("批大小配置为 0 时以空值查询,由数据库使用默认上限")
-  void shouldPassNullBatchSizeWhenZero() {
-    props.setReclaimBatchSize(0);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("批大小配置为 0 时以空值查询,由数据库使用默认上限")
+    void shouldPassNullBatchSizeWhenZero() {
+        props.setReclaimBatchSize(0);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null))
+                .thenReturn(List.of());
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(jobPartitionMapper, atLeast(1))
-        .selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null);
-  }
+        verify(jobPartitionMapper, atLeast(1))
+                .selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null);
+    }
 
-  @Test
-  @DisplayName("单轮返回数量达到批大小上限时仍逐个完成回收且流程不中断")
-  void shouldWarnWhenBatchCeilingHit() {
-    // 简单验证：返回数量 == batchSize 时仍能正常处理（warn 走日志，不可观察，但流程不应中断）。
-    props.setReclaimBatchSize(2);
-    JobPartitionEntity p1 = expiredPartition("t1", 1L);
-    JobPartitionEntity p2 = expiredPartition("t1", 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 2))
-        .thenReturn(List.of(p1, p2));
+    @Test
+    @DisplayName("单轮返回数量达到批大小上限时仍逐个完成回收且流程不中断")
+    void shouldWarnWhenBatchCeilingHit() {
+        // 简单验证：返回数量 == batchSize 时仍能正常处理（warn 走日志，不可观察，但流程不应中断）。
+        props.setReclaimBatchSize(2);
+        JobPartitionEntity p1 = expiredPartition("t1", 1L);
+        JobPartitionEntity p2 = expiredPartition("t1", 2L);
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(
+                        PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 2))
+                .thenReturn(List.of(p1, p2));
 
-    scheduler.reclaimExpiredPartitions();
+        scheduler.reclaimExpiredPartitions();
 
-    verify(reclaimUnit, times(2)).reclaim(any());
-  }
+        verify(reclaimUnit, times(2)).reclaim(any());
+    }
 
-  @Test
-  @DisplayName("超过宽限仍未认领的 READY 任务交给重发单元，不走租约回收")
-  void shouldRedispatchUnclaimedReadyTasksWithoutLeaseReclaim() {
-    props.setUnclaimedDispatchGraceSeconds(120L);
-    props.setUnclaimedDispatchBatchSize(200);
-    JobTaskEntity task = new JobTaskEntity();
-    task.setTenantId("ta");
-    task.setId(9L);
-    when(jobTaskMapper.selectUnclaimedPublishedReady(any(), eq(200))).thenReturn(List.of(task));
+    @Test
+    @DisplayName("超过宽限仍未认领的 READY 任务交给重发单元，不走租约回收")
+    void shouldRedispatchUnclaimedReadyTasksWithoutLeaseReclaim() {
+        props.setUnclaimedDispatchGraceSeconds(120L);
+        props.setUnclaimedDispatchBatchSize(200);
+        JobTaskEntity task = new JobTaskEntity();
+        task.setTenantId("ta");
+        task.setId(9L);
+        when(jobTaskMapper.selectUnclaimedPublishedReady(any(), eq(200))).thenReturn(List.of(task));
 
-    scheduler.redispatchUnclaimedReadyTasks();
+        scheduler.redispatchUnclaimedReadyTasks();
 
-    verify(unclaimedReadyDispatchUnit).redispatch(task);
-    verify(reclaimUnit, never()).reclaim(any());
-  }
+        verify(unclaimedReadyDispatchUnit).redispatch(task);
+        verify(reclaimUnit, never()).reclaim(any());
+    }
 
-  @Test
-  @DisplayName("未认领重发关闭时不扫描")
-  void shouldSkipUnclaimedScanWhenDisabled() {
-    props.setUnclaimedDispatchEnabled(false);
+    @Test
+    @DisplayName("未认领重发关闭时不扫描")
+    void shouldSkipUnclaimedScanWhenDisabled() {
+        props.setUnclaimedDispatchEnabled(false);
 
-    scheduler.redispatchUnclaimedReadyTasks();
+        scheduler.redispatchUnclaimedReadyTasks();
 
-    verify(jobTaskMapper, never()).selectUnclaimedPublishedReady(any(), anyInt());
-  }
+        verify(jobTaskMapper, never()).selectUnclaimedPublishedReady(any(), anyInt());
+    }
 
-  // ── 辅助方法 ───────────────────────────────────────────────────────────────
+    // ── 辅助方法 ───────────────────────────────────────────────────────────────
 
-  private static JobPartitionEntity expiredPartition(String tenantId, Long partitionId) {
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setTenantId(tenantId);
-    p.setId(partitionId);
-    p.setJobInstanceId(partitionId * 10);
-    p.setVersion(0L);
-    return p;
-  }
+    private static JobPartitionEntity expiredPartition(String tenantId, Long partitionId) {
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setTenantId(tenantId);
+        p.setId(partitionId);
+        p.setJobInstanceId(partitionId * 10);
+        p.setVersion(0L);
+        return p;
+    }
 }

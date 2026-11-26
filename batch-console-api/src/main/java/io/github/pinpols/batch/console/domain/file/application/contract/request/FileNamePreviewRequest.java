@@ -10,29 +10,29 @@ import lombok.Data;
 @Data
 public class FileNamePreviewRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 512)
-  private String namingRule;
+    @Size(max = 512)
+    private String namingRule;
 
-  @NotBlank
-  @Size(max = 32)
-  private String fileFormatType;
+    @NotBlank
+    @Size(max = 32)
+    private String fileFormatType;
 
-  @Size(max = 64)
-  private String bizType;
+    @Size(max = 64)
+    private String bizType;
 
-  @ValidBizDate
-  @NotBlank
-  private String bizDate;
+    @ValidBizDate
+    @NotBlank
+    private String bizDate;
 
-  @Size(max = 128)
-  private String batchNo;
+    @Size(max = 128)
+    private String batchNo;
 
-  @Size(max = 64)
-  private String region;
+    @Size(max = 64)
+    private String region;
 
-  @Size(max = 32)
-  private String version;
+    @Size(max = 32)
+    private String version;
 }

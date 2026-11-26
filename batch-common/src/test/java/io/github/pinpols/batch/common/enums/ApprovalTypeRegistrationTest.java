@@ -17,42 +17,42 @@ import org.junit.jupiter.api.Test;
 @DisplayName("ApprovalType 枚举: 审批类型编码声明的完整性与未知编码的解析拒绝")
 class ApprovalTypeRegistrationTest {
 
-  @Test
-  @DisplayName("仓内实际写入的各类审批类型编码都能解析到枚举项,不遗漏声明")
-  void shouldDeclareAllKnownApprovalTypes() {
-    // 准备: 当前仓内实际写入 approval_command.approval_type 的全部 code(grep 验证)
-    String[] knownCodes = {
-      "CATCH_UP", "COMPENSATION", "DLQ_REPLAY", "DOWNLOAD", "SELF_SERVICE",
-    };
-    // 执行并断言
-    for (String code : knownCodes) {
-      assertThat(ApprovalType.fromCode(code))
-          .as("ApprovalType 未声明 code=%s,FE 字典 / DB 字面量校验会漏", code)
-          .isNotNull();
+    @Test
+    @DisplayName("仓内实际写入的各类审批类型编码都能解析到枚举项,不遗漏声明")
+    void shouldDeclareAllKnownApprovalTypes() {
+        // 准备: 当前仓内实际写入 approval_command.approval_type 的全部 code(grep 验证)
+        String[] knownCodes = {
+            "CATCH_UP", "COMPENSATION", "DLQ_REPLAY", "DOWNLOAD", "SELF_SERVICE",
+        };
+        // 执行并断言
+        for (String code : knownCodes) {
+            assertThat(ApprovalType.fromCode(code))
+                    .as("ApprovalType 未声明 code=%s,FE 字典 / DB 字面量校验会漏", code)
+                    .isNotNull();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("未知编码 / 空值 / 空串 一律解析为空,不误匹配已有类型")
-  void shouldReturnNull_whenCodeUnknownOrBlank() {
-    assertThat(ApprovalType.fromCode("UNKNOWN_TYPE")).isNull();
-    assertThat(ApprovalType.fromCode(null)).isNull();
-    assertThat(ApprovalType.fromCode("")).isNull();
-  }
-
-  @Test
-  @DisplayName("每项审批类型的编码与枚举名一致,且展示名称非空")
-  void shouldKeepCodeEqualToEnumName_whenEnumeratingAllTypes() {
-    for (ApprovalType type : ApprovalType.values()) {
-      assertThat(type.code()).as("code 与 enum name 必须一致(便于 DB 字面量直读)").isEqualTo(type.name());
-      assertThat(type.label()).as("label for %s", type.name()).isNotBlank();
+    @Test
+    @DisplayName("未知编码 / 空值 / 空串 一律解析为空,不误匹配已有类型")
+    void shouldReturnNull_whenCodeUnknownOrBlank() {
+        assertThat(ApprovalType.fromCode("UNKNOWN_TYPE")).isNull();
+        assertThat(ApprovalType.fromCode(null)).isNull();
+        assertThat(ApprovalType.fromCode("")).isNull();
     }
-  }
 
-  @Test
-  @DisplayName("自助服务审批类型保持声明,防止回归时被删除")
-  void shouldDeclareSelfServiceType_whenEnumScanned() {
-    // 显式锁定 SELF_SERVICE 不被回退删除(典型回归点)
-    assertThat(ApprovalType.SELF_SERVICE.code()).isEqualTo("SELF_SERVICE");
-  }
+    @Test
+    @DisplayName("每项审批类型的编码与枚举名一致,且展示名称非空")
+    void shouldKeepCodeEqualToEnumName_whenEnumeratingAllTypes() {
+        for (ApprovalType type : ApprovalType.values()) {
+            assertThat(type.code()).as("code 与 enum name 必须一致(便于 DB 字面量直读)").isEqualTo(type.name());
+            assertThat(type.label()).as("label for %s", type.name()).isNotBlank();
+        }
+    }
+
+    @Test
+    @DisplayName("自助服务审批类型保持声明,防止回归时被删除")
+    void shouldDeclareSelfServiceType_whenEnumScanned() {
+        // 显式锁定 SELF_SERVICE 不被回退删除(典型回归点)
+        assertThat(ApprovalType.SELF_SERVICE.code()).isEqualTo("SELF_SERVICE");
+    }
 }

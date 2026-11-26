@@ -35,51 +35,50 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ResultVersionController {
 
-  private final ResultVersionQueryService queryService;
-  private final ResultVersionPromoteService promoteService;
+    private final ResultVersionQueryService queryService;
+    private final ResultVersionPromoteService promoteService;
 
-  @GetMapping
-  public CommonResponse<List<ResultVersionResponse>> list(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("businessKey") String businessKey,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    List<ResultVersionEntity> versions = queryService.listVersions(tenantId, businessKey, limit);
-    List<ResultVersionResponse> responses =
-        versions.stream().map(ResultVersionResponse::from).toList();
-    return CommonResponse.success(responses);
-  }
+    @GetMapping
+    public CommonResponse<List<ResultVersionResponse>> list(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("businessKey") String businessKey,
+            @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        List<ResultVersionEntity> versions = queryService.listVersions(tenantId, businessKey, limit);
+        List<ResultVersionResponse> responses =
+                versions.stream().map(ResultVersionResponse::from).toList();
+        return CommonResponse.success(responses);
+    }
 
-  @GetMapping("/effective")
-  public CommonResponse<ResultVersionResponse> effective(
-      @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    ResultVersionEntity entity =
-        queryService.findEffective(tenantId, businessKey).orElse(null);
-    ResultVersionResponse response =
-        EmptyChecks.isNull(entity) ? null : ResultVersionResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @GetMapping("/effective")
+    public CommonResponse<ResultVersionResponse> effective(
+            @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
+        ResultVersionEntity entity =
+                queryService.findEffective(tenantId, businessKey).orElse(null);
+        ResultVersionResponse response = EmptyChecks.isNull(entity) ? null : ResultVersionResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 
-  @GetMapping("/{id}")
-  public CommonResponse<ResultVersionResponse> detail(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    ResultVersionEntity entity = queryService.getByIdOrThrow(tenantId, id);
-    ResultVersionResponse response = ResultVersionResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @GetMapping("/{id}")
+    public CommonResponse<ResultVersionResponse> detail(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        ResultVersionEntity entity = queryService.getByIdOrThrow(tenantId, id);
+        ResultVersionResponse response = ResultVersionResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 
-  @PostMapping("/{id}/promote")
-  public CommonResponse<ResultVersionResponse> promote(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    ResultVersionEntity entity = promoteService.promote(tenantId, id);
-    ResultVersionResponse response = ResultVersionResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/{id}/promote")
+    public CommonResponse<ResultVersionResponse> promote(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        ResultVersionEntity entity = promoteService.promote(tenantId, id);
+        ResultVersionResponse response = ResultVersionResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 
-  @PostMapping("/{id}/reject")
-  public CommonResponse<ResultVersionResponse> reject(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    ResultVersionEntity entity = promoteService.rejectPending(tenantId, id);
-    ResultVersionResponse response = ResultVersionResponse.from(entity);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/{id}/reject")
+    public CommonResponse<ResultVersionResponse> reject(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        ResultVersionEntity entity = promoteService.rejectPending(tenantId, id);
+        ResultVersionResponse response = ResultVersionResponse.from(entity);
+        return CommonResponse.success(response);
+    }
 }

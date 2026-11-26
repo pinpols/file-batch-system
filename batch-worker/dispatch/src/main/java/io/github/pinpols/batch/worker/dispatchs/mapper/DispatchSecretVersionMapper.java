@@ -4,6 +4,5 @@ import org.apache.ibatis.annotations.Param;
 
 public interface DispatchSecretVersionMapper {
 
-  String selectPayloadForDispatch(
-      @Param("tenantId") String tenantId, @Param("secretVersionId") Long secretVersionId);
+    String selectPayloadForDispatch(@Param("tenantId") String tenantId, @Param("secretVersionId") Long secretVersionId);
 }

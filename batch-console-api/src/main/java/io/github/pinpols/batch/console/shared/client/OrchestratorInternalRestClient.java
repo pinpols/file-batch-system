@@ -38,173 +38,148 @@ import org.springframework.web.client.RestClient;
 @Component
 public class OrchestratorInternalRestClient {
 
-  /** orchestrator-side {@code InternalAuthFilter} 期望的鉴权 header 名（保持单一字面量来源）。 */
-  public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
+    /** orchestrator-side {@code InternalAuthFilter} 期望的鉴权 header 名（保持单一字面量来源）。 */
+    public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  // RANDOM_PORT 测试在容器初始化完成后才提供 local.server.port；首次请求时构建并在后续复用。
-  private final Supplier<RestClient> clientSupplier;
+    // RANDOM_PORT 测试在容器初始化完成后才提供 local.server.port；首次请求时构建并在后续复用。
+    private final Supplier<RestClient> clientSupplier;
 
-  public OrchestratorInternalRestClient(
-      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
-      ConsoleOrchestratorClientProperties orchestratorClientProperties,
-      BatchSecurityProperties batchSecurityProperties,
-      Environment environment) {
-    this.clientSupplier = SingletonSupplier.of(() -> buildClient(
-        restClientBuilderProvider,
-        orchestratorClientProperties,
-        batchSecurityProperties,
-        environment));
-  }
-
-  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
-  public RestClient client() {
-    return clientSupplier.get();
-  }
-
-  private static RestClient buildClient(
-      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
-      ConsoleOrchestratorClientProperties orchestratorClientProperties,
-      BatchSecurityProperties batchSecurityProperties,
-      Environment environment) {
-    String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
-        environment,
-        orchestratorClientProperties.getBaseUrl(),
-        "batch.console.orchestrator.base-url");
-    Guard.requireText(baseUrl, "orchestrator base url is not configured");
-    String secret = batchSecurityProperties.getInternalSecret();
-    HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
-    Duration connectTimeout =
-        Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis());
-    httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
-    Duration readTimeout = Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis());
-    httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
-    ClientHttpRequestFactory requestFactory =
-        ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
-    RestClient.Builder builder = restClientBuilderProvider
-        .getObject()
-        .baseUrl(baseUrl)
-        .requestInterceptor(new AcceptLanguageRequestInterceptor())
-        .requestFactory(requestFactory);
-    if (Texts.hasText(secret)) {
-      builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
+    public OrchestratorInternalRestClient(
+            ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+            ConsoleOrchestratorClientProperties orchestratorClientProperties,
+            BatchSecurityProperties batchSecurityProperties,
+            Environment environment) {
+        this.clientSupplier = SingletonSupplier.of(() -> buildClient(
+                restClientBuilderProvider, orchestratorClientProperties, batchSecurityProperties, environment));
     }
-    return builder.build();
-  }
 
-  public <T> T loadApproval(String tenantId, String approvalNo, Class<T> responseType) {
-    return client()
-        .get()
-        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-        .retrieve()
-        .body(responseType);
-  }
-
-  public ApprovalDecision approveApproval(
-      String tenantId,
-      String approvalNo,
-      String operatorId,
-      String reason,
-      String requestId,
-      String traceId) {
-    ApprovalDecisionResponse response = client()
-        .post()
-        .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
-        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
-        .retrieve()
-        .body(ApprovalDecisionResponse.class);
-    return requireDecision(response, tenantId, approvalNo);
-  }
-
-  public ApprovalDecision rejectApproval(
-      String tenantId,
-      String approvalNo,
-      String operatorId,
-      String reason,
-      String requestId,
-      String traceId) {
-    ApprovalDecisionResponse response = client()
-        .post()
-        .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
-        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
-        .retrieve()
-        .body(ApprovalDecisionResponse.class);
-    return requireDecision(response, tenantId, approvalNo);
-  }
-
-  public void markApprovalExecuted(String tenantId, String approvalNo) {
-    client()
-        .post()
-        .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
-        .body(new ApprovalTenantRequest(tenantId))
-        .retrieve()
-        .toBodilessEntity();
-  }
-
-  public void rejectWorkflowNodeReplayOperation(Long operationId, String tenantId) {
-    client()
-        .post()
-        .uri("/internal/compensations/workflow-node/replay-operations/{id}/reject", operationId)
-        .body(new ApprovalTenantRequest(tenantId))
-        .retrieve()
-        .toBodilessEntity();
-  }
-
-  public void approveWorkflowRunReplayOperation(
-      Long operationId, String tenantId, String approver) {
-    client()
-        .post()
-        .uri("/internal/orchestrator/workflow-replay/operations/{id}/approve", operationId)
-        .body(new WorkflowRunReplayApprovalRequest(tenantId, approver))
-        .retrieve()
-        .toBodilessEntity();
-  }
-
-  public void rejectWorkflowRunReplayOperation(Long operationId, String tenantId) {
-    client()
-        .post()
-        .uri("/internal/orchestrator/workflow-replay/operations/{id}/reject", operationId)
-        .body(new WorkflowRunReplayRejectRequest(tenantId))
-        .retrieve()
-        .toBodilessEntity();
-  }
-
-  private ApprovalDecision requireDecision(
-      ApprovalDecisionResponse response, String tenantId, String approvalNo) {
-    ApprovalDecision decision = EmptyChecks.isNull(response) ? null : response.record();
-    if (EmptyChecks.isNull(decision) || !Texts.hasText(decision.approvalStatus())) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
+    /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
+    public RestClient client() {
+        return clientSupplier.get();
     }
-    if (!tenantId.equals(decision.tenantId()) || !approvalNo.equals(decision.approvalNo())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.approval.execution_mismatch");
+
+    private static RestClient buildClient(
+            ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+            ConsoleOrchestratorClientProperties orchestratorClientProperties,
+            BatchSecurityProperties batchSecurityProperties,
+            Environment environment) {
+        String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
+                environment, orchestratorClientProperties.getBaseUrl(), "batch.console.orchestrator.base-url");
+        Guard.requireText(baseUrl, "orchestrator base url is not configured");
+        String secret = batchSecurityProperties.getInternalSecret();
+        HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
+        Duration connectTimeout = Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis());
+        httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
+        Duration readTimeout = Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis());
+        httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
+        ClientHttpRequestFactory requestFactory =
+                ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
+        RestClient.Builder builder = restClientBuilderProvider
+                .getObject()
+                .baseUrl(baseUrl)
+                .requestInterceptor(new AcceptLanguageRequestInterceptor())
+                .requestFactory(requestFactory);
+        if (Texts.hasText(secret)) {
+            builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
+        }
+        return builder.build();
     }
-    return decision;
-  }
 
-  /** 远端返回的实际决策必须保留，HTTP 200 不代表本次决策赢得了 CAS。 */
-  @Builder
-  @JsonIgnoreProperties(ignoreUnknown = true)
-  public record ApprovalDecision(
-      String tenantId,
-      String approvalNo,
-      String approvalStatus,
-      String actionType,
-      String targetType,
-      String targetId,
-      String payloadJson,
-      String approverId,
-      String sourceIdempotencyKey) {}
+    public <T> T loadApproval(String tenantId, String approvalNo, Class<T> responseType) {
+        return client().get()
+                .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
+                .retrieve()
+                .body(responseType);
+    }
 
-  private record ApprovalDecisionResponse(ApprovalDecision record) {}
+    public ApprovalDecision approveApproval(
+            String tenantId, String approvalNo, String operatorId, String reason, String requestId, String traceId) {
+        ApprovalDecisionResponse response = client().post()
+                .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+                .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+                .retrieve()
+                .body(ApprovalDecisionResponse.class);
+        return requireDecision(response, tenantId, approvalNo);
+    }
 
-  private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
+    public ApprovalDecision rejectApproval(
+            String tenantId, String approvalNo, String operatorId, String reason, String requestId, String traceId) {
+        ApprovalDecisionResponse response = client().post()
+                .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+                .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+                .retrieve()
+                .body(ApprovalDecisionResponse.class);
+        return requireDecision(response, tenantId, approvalNo);
+    }
 
-  private record ApprovalTenantRequest(String tenantId) {}
+    public void markApprovalExecuted(String tenantId, String approvalNo) {
+        client().post()
+                .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
+                .body(new ApprovalTenantRequest(tenantId))
+                .retrieve()
+                .toBodilessEntity();
+    }
 
-  private record WorkflowRunReplayApprovalRequest(String tenantId, String approver) {}
+    public void rejectWorkflowNodeReplayOperation(Long operationId, String tenantId) {
+        client().post()
+                .uri("/internal/compensations/workflow-node/replay-operations/{id}/reject", operationId)
+                .body(new ApprovalTenantRequest(tenantId))
+                .retrieve()
+                .toBodilessEntity();
+    }
 
-  private record WorkflowRunReplayRejectRequest(String tenantId) {}
+    public void approveWorkflowRunReplayOperation(Long operationId, String tenantId, String approver) {
+        client().post()
+                .uri("/internal/orchestrator/workflow-replay/operations/{id}/approve", operationId)
+                .body(new WorkflowRunReplayApprovalRequest(tenantId, approver))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public void rejectWorkflowRunReplayOperation(Long operationId, String tenantId) {
+        client().post()
+                .uri("/internal/orchestrator/workflow-replay/operations/{id}/reject", operationId)
+                .body(new WorkflowRunReplayRejectRequest(tenantId))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    private ApprovalDecision requireDecision(ApprovalDecisionResponse response, String tenantId, String approvalNo) {
+        ApprovalDecision decision = EmptyChecks.isNull(response) ? null : response.record();
+        if (EmptyChecks.isNull(decision) || !Texts.hasText(decision.approvalStatus())) {
+            throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
+        }
+        if (!tenantId.equals(decision.tenantId()) || !approvalNo.equals(decision.approvalNo())) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.approval.execution_mismatch");
+        }
+        return decision;
+    }
+
+    /** 远端返回的实际决策必须保留，HTTP 200 不代表本次决策赢得了 CAS。 */
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ApprovalDecision(
+            String tenantId,
+            String approvalNo,
+            String approvalStatus,
+            String actionType,
+            String targetType,
+            String targetId,
+            String payloadJson,
+            String approverId,
+            String sourceIdempotencyKey) {}
+
+    private record ApprovalDecisionResponse(ApprovalDecision record) {}
+
+    private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
+
+    private record ApprovalTenantRequest(String tenantId) {}
+
+    private record WorkflowRunReplayApprovalRequest(String tenantId, String approver) {}
+
+    private record WorkflowRunReplayRejectRequest(String tenantId) {}
 }

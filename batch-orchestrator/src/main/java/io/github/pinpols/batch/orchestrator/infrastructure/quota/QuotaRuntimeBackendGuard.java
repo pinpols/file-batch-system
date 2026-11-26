@@ -18,59 +18,59 @@ import org.springframework.stereotype.Component;
 @Component
 public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
 
-  static final String FEATURE_KEY = "quota-runtime-state";
+    static final String FEATURE_KEY = "quota-runtime-state";
 
-  private final StatefulBackendGuard guard;
-  private final QuotaProperties properties;
-  private final ApplicationNameProvider applicationNameProvider;
-  private final RuntimeInfrastructureInspector infrastructureInspector;
+    private final StatefulBackendGuard guard;
+    private final QuotaProperties properties;
+    private final ApplicationNameProvider applicationNameProvider;
+    private final RuntimeInfrastructureInspector infrastructureInspector;
 
-  public QuotaRuntimeBackendGuard(
-      DataSource dataSource,
-      QuotaProperties properties,
-      ApplicationNameProvider applicationNameProvider,
-      RuntimeInfrastructureInspector infrastructureInspector) {
-    this.guard = new StatefulBackendGuard(dataSource);
-    this.properties = properties;
-    this.applicationNameProvider = applicationNameProvider;
-    this.infrastructureInspector = infrastructureInspector;
-  }
+    public QuotaRuntimeBackendGuard(
+            DataSource dataSource,
+            QuotaProperties properties,
+            ApplicationNameProvider applicationNameProvider,
+            RuntimeInfrastructureInspector infrastructureInspector) {
+        this.guard = new StatefulBackendGuard(dataSource);
+        this.properties = properties;
+        this.applicationNameProvider = applicationNameProvider;
+        this.infrastructureInspector = infrastructureInspector;
+    }
 
-  @Override
-  public void run(ApplicationArguments args) {
-    StatefulBackendGuard.DesiredBackend desired = desiredBackend();
-    StatefulBackendGuard.GuardResult result = guard.verify(desired);
-    log.info(
-        "quota runtime backend guard {}: backend={}, identity={}, generation={}",
-        result.action(),
-        desired.backend(),
-        desired.backendIdentity(),
-        result.generation());
-  }
+    @Override
+    public void run(ApplicationArguments args) {
+        StatefulBackendGuard.DesiredBackend desired = desiredBackend();
+        StatefulBackendGuard.GuardResult result = guard.verify(desired);
+        log.info(
+                "quota runtime backend guard {}: backend={}, identity={}, generation={}",
+                result.action(),
+                desired.backend(),
+                desired.backendIdentity(),
+                result.generation());
+    }
 
-  StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String configuredRuntimeStore = properties.getRuntimeStore();
-    String trimmedRuntimeStore = configuredRuntimeStore.trim();
-    String backend = trimmedRuntimeStore.toLowerCase(Locale.ROOT);
-    String identity =
-        switch (backend) {
-          case QuotaRuntimeBackends.REDIS -> infrastructureInspector.redisBackendIdentity();
-          case QuotaRuntimeBackends.DATABASE ->
-            StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
-          default ->
-            throw new IllegalStateException(
-                "unsupported batch.quota.runtime-store: " + properties.getRuntimeStore());
-        };
-    return new StatefulBackendGuard.DesiredBackend(
-        FEATURE_KEY,
-        backend,
-        identity,
-        properties.getBackendGuard().getCutoverId(),
-        applicationNameProvider.name("batch-orchestrator"));
-  }
+    StatefulBackendGuard.DesiredBackend desiredBackend() {
+        String configuredRuntimeStore = properties.getRuntimeStore();
+        String trimmedRuntimeStore = configuredRuntimeStore.trim();
+        String backend = trimmedRuntimeStore.toLowerCase(Locale.ROOT);
+        String identity =
+                switch (backend) {
+                    case QuotaRuntimeBackends.REDIS -> infrastructureInspector.redisBackendIdentity();
+                    case QuotaRuntimeBackends.DATABASE ->
+                        StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
+                    default ->
+                        throw new IllegalStateException(
+                                "unsupported batch.quota.runtime-store: " + properties.getRuntimeStore());
+                };
+        return new StatefulBackendGuard.DesiredBackend(
+                FEATURE_KEY,
+                backend,
+                identity,
+                properties.getBackendGuard().getCutoverId(),
+                applicationNameProvider.name("batch-orchestrator"));
+    }
 
-  @Override
-  public int getOrder() {
-    return HIGHEST_PRECEDENCE + 20;
-  }
+    @Override
+    public int getOrder() {
+        return HIGHEST_PRECEDENCE + 20;
+    }
 }

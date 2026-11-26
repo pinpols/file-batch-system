@@ -21,209 +21,208 @@ import lombok.Builder;
 @Builder(toBuilder = true)
 @SuppressWarnings("PMD.ExcessiveParameterList")
 public record BatchDayInstanceEntity(
-    Long id,
-    String tenantId,
-    String calendarCode,
-    LocalDate bizDate,
-    String dayStatus,
-    Instant openAt,
-    Instant cutoffAt,
-    Instant settledAt,
-    Instant slaDeadlineAt,
-    Integer lateCount,
-    Integer catchupCount,
-    String timezoneSnapshot,
-    String dstPolicySnapshot,
-    Boolean frozen,
-    String operationReason,
-    String operatedBy,
-    Instant operatedAt,
-    Long version,
-    Instant createdAt,
-    Instant updatedAt,
-    /** ADR-026 dry-run 整日演练标记；与子 job_instance.dry_run 一致。 */
-    Boolean dryRun) {
+        Long id,
+        String tenantId,
+        String calendarCode,
+        LocalDate bizDate,
+        String dayStatus,
+        Instant openAt,
+        Instant cutoffAt,
+        Instant settledAt,
+        Instant slaDeadlineAt,
+        Integer lateCount,
+        Integer catchupCount,
+        String timezoneSnapshot,
+        String dstPolicySnapshot,
+        Boolean frozen,
+        String operationReason,
+        String operatedBy,
+        Instant operatedAt,
+        Long version,
+        Instant createdAt,
+        Instant updatedAt,
+        /** ADR-026 dry-run 整日演练标记；与子 job_instance.dry_run 一致。 */
+        Boolean dryRun) {
 
-  public BatchDayInstanceEntity(
-      Long id,
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String dayStatus,
-      Instant openAt,
-      Instant cutoffAt,
-      Instant settledAt,
-      Instant slaDeadlineAt,
-      Integer lateCount,
-      Integer catchupCount,
-      String timezoneSnapshot,
-      Long version,
-      Instant createdAt,
-      Instant updatedAt) {
-    this(
-        id,
-        tenantId,
-        calendarCode,
-        bizDate,
-        dayStatus,
-        openAt,
-        cutoffAt,
-        settledAt,
-        slaDeadlineAt,
-        lateCount,
-        catchupCount,
-        timezoneSnapshot,
-        "gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET",
-        false,
-        null,
-        null,
-        null,
-        version,
-        createdAt,
-        updatedAt,
-        false);
-  }
+    public BatchDayInstanceEntity(
+            Long id,
+            String tenantId,
+            String calendarCode,
+            LocalDate bizDate,
+            String dayStatus,
+            Instant openAt,
+            Instant cutoffAt,
+            Instant settledAt,
+            Instant slaDeadlineAt,
+            Integer lateCount,
+            Integer catchupCount,
+            String timezoneSnapshot,
+            Long version,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                tenantId,
+                calendarCode,
+                bizDate,
+                dayStatus,
+                openAt,
+                cutoffAt,
+                settledAt,
+                slaDeadlineAt,
+                lateCount,
+                catchupCount,
+                timezoneSnapshot,
+                "gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET",
+                false,
+                null,
+                null,
+                null,
+                version,
+                createdAt,
+                updatedAt,
+                false);
+    }
 
-  public BatchDayInstanceEntity(
-      Long id,
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String dayStatus,
-      Instant openAt,
-      Instant cutoffAt,
-      Instant settledAt,
-      Instant slaDeadlineAt,
-      Integer lateCount,
-      Integer catchupCount,
-      String timezoneSnapshot,
-      String dstPolicySnapshot,
-      Long version,
-      Instant createdAt,
-      Instant updatedAt) {
-    this(
-        id,
-        tenantId,
-        calendarCode,
-        bizDate,
-        dayStatus,
-        openAt,
-        cutoffAt,
-        settledAt,
-        slaDeadlineAt,
-        lateCount,
-        catchupCount,
-        timezoneSnapshot,
-        dstPolicySnapshot,
-        false,
-        null,
-        null,
-        null,
-        version,
-        createdAt,
-        updatedAt,
-        false);
-  }
+    public BatchDayInstanceEntity(
+            Long id,
+            String tenantId,
+            String calendarCode,
+            LocalDate bizDate,
+            String dayStatus,
+            Instant openAt,
+            Instant cutoffAt,
+            Instant settledAt,
+            Instant slaDeadlineAt,
+            Integer lateCount,
+            Integer catchupCount,
+            String timezoneSnapshot,
+            String dstPolicySnapshot,
+            Long version,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                tenantId,
+                calendarCode,
+                bizDate,
+                dayStatus,
+                openAt,
+                cutoffAt,
+                settledAt,
+                slaDeadlineAt,
+                lateCount,
+                catchupCount,
+                timezoneSnapshot,
+                dstPolicySnapshot,
+                false,
+                null,
+                null,
+                null,
+                version,
+                createdAt,
+                updatedAt,
+                false);
+    }
 
-  public BatchDayInstanceEntity(
-      Long id,
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String dayStatus,
-      Instant openAt,
-      Instant cutoffAt,
-      Instant settledAt,
-      Instant slaDeadlineAt,
-      Integer lateCount,
-      Integer catchupCount,
-      String timezoneSnapshot,
-      Boolean frozen,
-      String operationReason,
-      String operatedBy,
-      Instant operatedAt,
-      Long version,
-      Instant createdAt,
-      Instant updatedAt) {
-    this(
-        id,
-        tenantId,
-        calendarCode,
-        bizDate,
-        dayStatus,
-        openAt,
-        cutoffAt,
-        settledAt,
-        slaDeadlineAt,
-        lateCount,
-        catchupCount,
-        timezoneSnapshot,
-        "gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET",
-        frozen,
-        operationReason,
-        operatedBy,
-        operatedAt,
-        version,
-        createdAt,
-        updatedAt,
-        false);
-  }
+    public BatchDayInstanceEntity(
+            Long id,
+            String tenantId,
+            String calendarCode,
+            LocalDate bizDate,
+            String dayStatus,
+            Instant openAt,
+            Instant cutoffAt,
+            Instant settledAt,
+            Instant slaDeadlineAt,
+            Integer lateCount,
+            Integer catchupCount,
+            String timezoneSnapshot,
+            Boolean frozen,
+            String operationReason,
+            String operatedBy,
+            Instant operatedAt,
+            Long version,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                tenantId,
+                calendarCode,
+                bizDate,
+                dayStatus,
+                openAt,
+                cutoffAt,
+                settledAt,
+                slaDeadlineAt,
+                lateCount,
+                catchupCount,
+                timezoneSnapshot,
+                "gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET",
+                frozen,
+                operationReason,
+                operatedBy,
+                operatedAt,
+                version,
+                createdAt,
+                updatedAt,
+                false);
+    }
 
-  public BatchDayInstanceEntity withSlaDeadlineAt(Instant slaDeadlineAt, Instant updatedAt) {
-    return toBuilder().slaDeadlineAt(slaDeadlineAt).updatedAt(updatedAt).build();
-  }
+    public BatchDayInstanceEntity withSlaDeadlineAt(Instant slaDeadlineAt, Instant updatedAt) {
+        return toBuilder().slaDeadlineAt(slaDeadlineAt).updatedAt(updatedAt).build();
+    }
 
-  public BatchDayInstanceEntity withLateCount(Integer lateCount, Instant updatedAt) {
-    return toBuilder().lateCount(lateCount).updatedAt(updatedAt).build();
-  }
+    public BatchDayInstanceEntity withLateCount(Integer lateCount, Instant updatedAt) {
+        return toBuilder().lateCount(lateCount).updatedAt(updatedAt).build();
+    }
 
-  public BatchDayInstanceEntity withCatchupCount(Integer catchupCount, Instant updatedAt) {
-    return toBuilder().catchupCount(catchupCount).updatedAt(updatedAt).build();
-  }
+    public BatchDayInstanceEntity withCatchupCount(Integer catchupCount, Instant updatedAt) {
+        return toBuilder().catchupCount(catchupCount).updatedAt(updatedAt).build();
+    }
 
-  public BatchDayInstanceEntity withDayStatus(String dayStatus, Instant updatedAt) {
-    return toBuilder().dayStatus(dayStatus).updatedAt(updatedAt).build();
-  }
+    public BatchDayInstanceEntity withDayStatus(String dayStatus, Instant updatedAt) {
+        return toBuilder().dayStatus(dayStatus).updatedAt(updatedAt).build();
+    }
 
-  public BatchDayInstanceEntity withCutoffAt(Instant cutoffAt, Instant updatedAt) {
-    return toBuilder().cutoffAt(cutoffAt).updatedAt(updatedAt).build();
-  }
+    public BatchDayInstanceEntity withCutoffAt(Instant cutoffAt, Instant updatedAt) {
+        return toBuilder().cutoffAt(cutoffAt).updatedAt(updatedAt).build();
+    }
 
-  public BatchDayInstanceEntity withCutoff(Instant cutoffAt, Instant updatedAt) {
-    return toBuilder()
-        .dayStatus("CUTOFF")
-        .cutoffAt(cutoffAt)
-        .updatedAt(updatedAt)
-        .build();
-  }
+    public BatchDayInstanceEntity withCutoff(Instant cutoffAt, Instant updatedAt) {
+        return toBuilder()
+                .dayStatus("CUTOFF")
+                .cutoffAt(cutoffAt)
+                .updatedAt(updatedAt)
+                .build();
+    }
 
-  public BatchDayInstanceEntity withSettled(
-      String dayStatus, Instant settledAt, Instant updatedAt) {
-    return toBuilder()
-        .dayStatus(dayStatus)
-        .settledAt(settledAt)
-        .updatedAt(updatedAt)
-        .build();
-  }
+    public BatchDayInstanceEntity withSettled(String dayStatus, Instant settledAt, Instant updatedAt) {
+        return toBuilder()
+                .dayStatus(dayStatus)
+                .settledAt(settledAt)
+                .updatedAt(updatedAt)
+                .build();
+    }
 
-  public BatchDayInstanceEntity withReopened(Instant updatedAt) {
-    return toBuilder()
-        .dayStatus("IN_FLIGHT")
-        .settledAt(null)
-        .frozen(false)
-        .updatedAt(updatedAt)
-        .build();
-  }
+    public BatchDayInstanceEntity withReopened(Instant updatedAt) {
+        return toBuilder()
+                .dayStatus("IN_FLIGHT")
+                .settledAt(null)
+                .frozen(false)
+                .updatedAt(updatedAt)
+                .build();
+    }
 
-  public BatchDayInstanceEntity withManualOperation(BatchDayManualOperation op) {
-    return toBuilder()
-        .dayStatus(op.dayStatus())
-        .frozen(op.frozen())
-        .operationReason(op.operationReason())
-        .operatedBy(op.operatedBy())
-        .operatedAt(op.operatedAt())
-        .settledAt(op.settledAt())
-        .updatedAt(op.updatedAt())
-        .build();
-  }
+    public BatchDayInstanceEntity withManualOperation(BatchDayManualOperation op) {
+        return toBuilder()
+                .dayStatus(op.dayStatus())
+                .frozen(op.frozen())
+                .operationReason(op.operationReason())
+                .operatedBy(op.operatedBy())
+                .operatedAt(op.operatedAt())
+                .settledAt(op.settledAt())
+                .updatedAt(op.updatedAt())
+                .build();
+    }
 }

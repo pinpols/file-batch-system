@@ -29,90 +29,89 @@ import org.springframework.beans.factory.BeanFactory;
 @DisplayName("原子执行器错误码填充: 失败路径的归因契约")
 class AtomicErrorCodeWiringTest {
 
-  @TempDir
-  Path tempDir;
+    @TempDir
+    Path tempDir;
 
-  private TaskContext ctx(Map<String, Object> params) {
-    return new TaskContext("t1", "j1", "ti1", "w1", params, Map.of());
-  }
+    private TaskContext ctx(Map<String, Object> params) {
+        return new TaskContext("t1", "j1", "ti1", "w1", params, Map.of());
+    }
 
-  @Test
-  @DisplayName("命令执行器缺少命令时应判失败, 并填充配置无效错误码")
-  void shouldFillConfigInvalid_whenShellCommandMissing() {
-    ShellExecutorProperties props = new ShellExecutorProperties();
-    props.setEnabled(true);
-    props.setWorkdirBase(tempDir);
-    ShellTaskExecutor executor = new ShellTaskExecutor(props);
+    @Test
+    @DisplayName("命令执行器缺少命令时应判失败, 并填充配置无效错误码")
+    void shouldFillConfigInvalid_whenShellCommandMissing() {
+        ShellExecutorProperties props = new ShellExecutorProperties();
+        props.setEnabled(true);
+        props.setWorkdirBase(tempDir);
+        ShellTaskExecutor executor = new ShellTaskExecutor(props);
 
-    TaskResult r = executor.execute(ctx(Map.of()));
+        TaskResult r = executor.execute(ctx(Map.of()));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
+    }
 
-  @Test
-  @DisplayName("命令执行器参数携带敏感凭据时应判失败, 并填充安全拒绝错误码")
-  void shouldFillSecurityRejected_whenShellParamHasCredential() {
-    ShellExecutorProperties props = new ShellExecutorProperties();
-    props.setEnabled(true);
-    props.setWorkdirBase(tempDir);
-    ShellTaskExecutor executor = new ShellTaskExecutor(props);
+    @Test
+    @DisplayName("命令执行器参数携带敏感凭据时应判失败, 并填充安全拒绝错误码")
+    void shouldFillSecurityRejected_whenShellParamHasCredential() {
+        ShellExecutorProperties props = new ShellExecutorProperties();
+        props.setEnabled(true);
+        props.setWorkdirBase(tempDir);
+        ShellTaskExecutor executor = new ShellTaskExecutor(props);
 
-    TaskResult r = executor.execute(ctx(Map.of("command", "/bin/echo", "password", "leak")));
+        TaskResult r = executor.execute(ctx(Map.of("command", "/bin/echo", "password", "leak")));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "SECURITY_REJECTED");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "SECURITY_REJECTED");
+    }
 
-  @Test
-  @DisplayName("数据库执行器缺少语句时应判失败, 并填充配置无效错误码")
-  void shouldFillConfigInvalid_whenSqlParamMissing() {
-    SqlExecutorProperties props = new SqlExecutorProperties();
-    props.setForbidOsCapableRole(false);
-    SqlTaskExecutor executor =
-        new SqlTaskExecutor(props, mock(BeanFactory.class), mock(DataSource.class));
+    @Test
+    @DisplayName("数据库执行器缺少语句时应判失败, 并填充配置无效错误码")
+    void shouldFillConfigInvalid_whenSqlParamMissing() {
+        SqlExecutorProperties props = new SqlExecutorProperties();
+        props.setForbidOsCapableRole(false);
+        SqlTaskExecutor executor = new SqlTaskExecutor(props, mock(BeanFactory.class), mock(DataSource.class));
 
-    TaskResult r = executor.execute(ctx(Map.of()));
+        TaskResult r = executor.execute(ctx(Map.of()));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
+    }
 
-  @Test
-  @DisplayName("存储过程执行器缺少过程名时应判失败, 并填充配置无效错误码")
-  void shouldFillConfigInvalid_whenProcedureMissing() {
-    StoredProcExecutorProperties props = new StoredProcExecutorProperties();
-    StoredProcTaskExecutor executor =
-        new StoredProcTaskExecutor(props, mock(BeanFactory.class), mock(DataSource.class));
+    @Test
+    @DisplayName("存储过程执行器缺少过程名时应判失败, 并填充配置无效错误码")
+    void shouldFillConfigInvalid_whenProcedureMissing() {
+        StoredProcExecutorProperties props = new StoredProcExecutorProperties();
+        StoredProcTaskExecutor executor =
+                new StoredProcTaskExecutor(props, mock(BeanFactory.class), mock(DataSource.class));
 
-    TaskResult r = executor.execute(ctx(Map.of()));
+        TaskResult r = executor.execute(ctx(Map.of()));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
+    }
 
-  @Test
-  @DisplayName("接口执行器缺少目标地址时应判失败, 并填充配置无效错误码")
-  void shouldFillConfigInvalid_whenHttpUrlMissing() {
-    HttpExecutorProperties props = new HttpExecutorProperties();
-    HttpTaskExecutor executor = new HttpTaskExecutor(props);
+    @Test
+    @DisplayName("接口执行器缺少目标地址时应判失败, 并填充配置无效错误码")
+    void shouldFillConfigInvalid_whenHttpUrlMissing() {
+        HttpExecutorProperties props = new HttpExecutorProperties();
+        HttpTaskExecutor executor = new HttpTaskExecutor(props);
 
-    TaskResult r = executor.execute(ctx(Map.of()));
+        TaskResult r = executor.execute(ctx(Map.of()));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "CONFIG_INVALID");
+    }
 
-  @Test
-  @DisplayName("接口执行器命中默认封禁主机时应判失败, 并填充安全拒绝错误码")
-  void shouldFillSecurityRejected_whenHttpHostBlocked() {
-    HttpExecutorProperties props = new HttpExecutorProperties();
-    // 默认 blockedHostPatterns 含 localhost / 169.254.169.254
-    HttpTaskExecutor executor = new HttpTaskExecutor(props);
+    @Test
+    @DisplayName("接口执行器命中默认封禁主机时应判失败, 并填充安全拒绝错误码")
+    void shouldFillSecurityRejected_whenHttpHostBlocked() {
+        HttpExecutorProperties props = new HttpExecutorProperties();
+        // 默认 blockedHostPatterns 含 localhost / 169.254.169.254
+        HttpTaskExecutor executor = new HttpTaskExecutor(props);
 
-    TaskResult r = executor.execute(ctx(Map.of("url", "http://localhost/test")));
+        TaskResult r = executor.execute(ctx(Map.of("url", "http://localhost/test")));
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "SECURITY_REJECTED");
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.output()).containsEntry(AtomicErrorCode.OUTPUT_KEY, "SECURITY_REJECTED");
+    }
 }

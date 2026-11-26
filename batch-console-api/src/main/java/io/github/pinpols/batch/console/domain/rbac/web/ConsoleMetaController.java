@@ -23,58 +23,53 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleMetaController {
 
-  private final ConsoleMetaQueryService queryService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleMetaQueryService queryService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/enums")
-  public CommonResponse<Map<String, List<ConsoleMetaEnumItem>>> enums() {
-    return responseFactory.success(queryService.enums());
-  }
+    @GetMapping("/enums")
+    public CommonResponse<Map<String, List<ConsoleMetaEnumItem>>> enums() {
+        return responseFactory.success(queryService.enums());
+    }
 
-  @GetMapping("/queues")
-  public CommonResponse<List<ConsoleMetaOption>> queues(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.queues(tenantId));
-  }
+    @GetMapping("/queues")
+    public CommonResponse<List<ConsoleMetaOption>> queues(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.queues(tenantId));
+    }
 
-  @GetMapping("/calendars")
-  public CommonResponse<List<ConsoleMetaOption>> calendars(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.calendars(tenantId));
-  }
+    @GetMapping("/calendars")
+    public CommonResponse<List<ConsoleMetaOption>> calendars(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.calendars(tenantId));
+    }
 
-  @GetMapping("/windows")
-  public CommonResponse<List<ConsoleMetaOption>> windows(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.windows(tenantId));
-  }
+    @GetMapping("/windows")
+    public CommonResponse<List<ConsoleMetaOption>> windows(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.windows(tenantId));
+    }
 
-  @GetMapping("/worker-groups")
-  public CommonResponse<List<ConsoleMetaOption>> workerGroups(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.workerGroups(tenantId));
-  }
+    @GetMapping("/worker-groups")
+    public CommonResponse<List<ConsoleMetaOption>> workerGroups(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.workerGroups(tenantId));
+    }
 
-  @GetMapping("/biz-types")
-  public CommonResponse<List<ConsoleMetaOption>> bizTypes(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.bizTypes(tenantId));
-  }
+    @GetMapping("/biz-types")
+    public CommonResponse<List<ConsoleMetaOption>> bizTypes(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.bizTypes(tenantId));
+    }
 
-  /**
-   * Pipeline 9 stages 白名单（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 一致）。 用于 FE
-   * Job配置和文件Pipeline观测使用固定阶段目录。
-   */
-  @GetMapping("/pipeline-stages")
-  public CommonResponse<Map<String, List<String>>> pipelineStages() {
-    return responseFactory.success(queryService.pipelineStages());
-  }
+    /**
+     * Pipeline 9 stages 白名单（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 一致）。 用于 FE
+     * Job配置和文件Pipeline观测使用固定阶段目录。
+     */
+    @GetMapping("/pipeline-stages")
+    public CommonResponse<Map<String, List<String>>> pipelineStages() {
+        return responseFactory.success(queryService.pipelineStages());
+    }
 
-  /**
-   * step_registry 已注册 impl_code 白名单。传 module（IMPORT / EXPORT / PROCESS / DISPATCH）按模块过滤； 缺省返回全部。
-   */
-  @GetMapping("/step-impls")
-  public CommonResponse<List<String>> stepImpls(
-      @RequestParam(value = "module", required = false) String module) {
-    return responseFactory.success(queryService.stepImpls(module));
-  }
+    /**
+     * step_registry 已注册 impl_code 白名单。传 module（IMPORT / EXPORT / PROCESS / DISPATCH）按模块过滤； 缺省返回全部。
+     */
+    @GetMapping("/step-impls")
+    public CommonResponse<List<String>> stepImpls(@RequestParam(value = "module", required = false) String module) {
+        return responseFactory.success(queryService.stepImpls(module));
+    }
 }

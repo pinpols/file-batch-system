@@ -22,15 +22,15 @@ import org.springframework.context.annotation.Configuration;
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class E2eShedLockConfiguration {
 
-  @Bean
-  public LockProvider lockProvider(
-      @Qualifier("dataSource") DataSource dataSource,
-      @Value("${batch.shedlock.auto-create:true}") boolean autoCreateTable) {
-    return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
-  }
+    @Bean
+    public LockProvider lockProvider(
+            @Qualifier("dataSource") DataSource dataSource,
+            @Value("${batch.shedlock.auto-create:true}") boolean autoCreateTable) {
+        return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
+    }
 
-  @Bean
-  public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
-    return new DefaultLockingTaskExecutor(lockProvider);
-  }
+    @Bean
+    public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+        return new DefaultLockingTaskExecutor(lockProvider);
+    }
 }

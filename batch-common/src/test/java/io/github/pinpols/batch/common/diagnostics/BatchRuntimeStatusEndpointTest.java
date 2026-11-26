@@ -19,43 +19,43 @@ import org.springframework.mock.env.MockEnvironment;
 @DisplayName("运行期状态端点:有效配置聚合与敏感值脱敏")
 class BatchRuntimeStatusEndpointTest {
 
-  @Test
-  @DisplayName("返回有效运行期状态时,内部密钥与对象存储密钥均不得出现在结果中")
-  void shouldRedactSensitiveValues_whenReportingEffectiveRuntimeStatus() {
-    MockEnvironment environment = new MockEnvironment()
-        .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-test")
-        .withProperty(StorageBackendProperties.BACKEND_KEY, "s3");
-    BatchSecurityProperties security = new BatchSecurityProperties();
-    security.setBypassMode(false);
-    security.setInternalSecret("strong-secret-that-must-not-appear");
-    S3StorageProperties s3 = new S3StorageProperties();
-    s3.setEndpoint("https://s3.example.internal:9443");
-    s3.setBucket("batch-prod");
-    s3.setAccessKey("access");
-    s3.setSecretKey("secret-that-must-not-appear");
+    @Test
+    @DisplayName("返回有效运行期状态时,内部密钥与对象存储密钥均不得出现在结果中")
+    void shouldRedactSensitiveValues_whenReportingEffectiveRuntimeStatus() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-test")
+                .withProperty(StorageBackendProperties.BACKEND_KEY, "s3");
+        BatchSecurityProperties security = new BatchSecurityProperties();
+        security.setBypassMode(false);
+        security.setInternalSecret("strong-secret-that-must-not-appear");
+        S3StorageProperties s3 = new S3StorageProperties();
+        s3.setEndpoint("https://s3.example.internal:9443");
+        s3.setBucket("batch-prod");
+        s3.setAccessKey("access");
+        s3.setSecretKey("secret-that-must-not-appear");
 
-    BatchRuntimeStatusEndpoint endpoint = new BatchRuntimeStatusEndpoint(
-        environment,
-        provider(security),
-        provider(s3),
-        provider(null),
-        provider(null),
-        Binder.get(environment)
-            .bind("batch.storage", Bindable.of(StorageBackendProperties.class))
-            .orElseGet(StorageBackendProperties::new));
+        BatchRuntimeStatusEndpoint endpoint = new BatchRuntimeStatusEndpoint(
+                environment,
+                provider(security),
+                provider(s3),
+                provider(null),
+                provider(null),
+                Binder.get(environment)
+                        .bind("batch.storage", Bindable.of(StorageBackendProperties.class))
+                        .orElseGet(StorageBackendProperties::new));
 
-    Map<String, Object> status = endpoint.status();
+        Map<String, Object> status = endpoint.status();
 
-    assertThat(status).containsEntry("application", "batch-test");
-    assertThat(status.get("storage").toString()).contains("s3.example.internal");
-    assertThat(status.toString()).doesNotContain("strong-secret-that-must-not-appear");
-    assertThat(status.toString()).doesNotContain("secret-that-must-not-appear");
-  }
+        assertThat(status).containsEntry("application", "batch-test");
+        assertThat(status.get("storage").toString()).contains("s3.example.internal");
+        assertThat(status.toString()).doesNotContain("strong-secret-that-must-not-appear");
+        assertThat(status.toString()).doesNotContain("secret-that-must-not-appear");
+    }
 
-  @SuppressWarnings("unchecked")
-  private static <T> ObjectProvider<T> provider(T value) {
-    ObjectProvider<T> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(value);
-    return provider;
-  }
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> provider(T value) {
+        ObjectProvider<T> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(value);
+        return provider;
+    }
 }

@@ -9,24 +9,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class RedisSystemParameterCacheStore implements SystemParameterCacheStore {
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  public RedisSystemParameterCacheStore(StringRedisTemplate redisTemplate) {
-    this.redisTemplate = redisTemplate;
-  }
+    public RedisSystemParameterCacheStore(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
 
-  @Override
-  public String get(String key) {
-    return redisTemplate.opsForValue().get(key);
-  }
+    @Override
+    public String get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
 
-  @Override
-  public void put(String key, String value, Duration ttl) {
-    redisTemplate.opsForValue().set(key, value, ttl);
-  }
+    @Override
+    public void put(String key, String value, Duration ttl) {
+        redisTemplate.opsForValue().set(key, value, ttl);
+    }
 
-  @Override
-  public void evict(String key) {
-    redisTemplate.delete(key);
-  }
+    @Override
+    public void evict(String key) {
+        redisTemplate.delete(key);
+    }
 }

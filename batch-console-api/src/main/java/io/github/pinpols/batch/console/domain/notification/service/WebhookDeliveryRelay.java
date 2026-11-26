@@ -56,326 +56,316 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-@ConditionalOnProperty(
-    prefix = "batch.webhook.relay",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(prefix = "batch.webhook.relay", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WebhookDeliveryRelay implements SmartLifecycle {
 
-  private static final Duration LOCK_AT_MOST = Duration.ofMinutes(2);
-  private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);
+    private static final Duration LOCK_AT_MOST = Duration.ofMinutes(2);
+    private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);
 
-  /** 退避上限,单条失败后最长 30min 后重试。 */
-  private static final long MAX_BACKOFF_SECONDS = 30L * 60L;
+    /** 退避上限,单条失败后最长 30min 后重试。 */
+    private static final long MAX_BACKOFF_SECONDS = 30L * 60L;
 
-  /** 退避基数 = dispatcher burst 完后的初次 relay 延迟,与 dispatcher 的 INITIAL_RELAY_DELAY_SECONDS 对齐。 */
-  private static final long BACKOFF_BASE_SECONDS = 5L * 60L;
+    /** 退避基数 = dispatcher burst 完后的初次 relay 延迟,与 dispatcher 的 INITIAL_RELAY_DELAY_SECONDS 对齐。 */
+    private static final long BACKOFF_BASE_SECONDS = 5L * 60L;
 
-  /** 停止时等待投递任务结束的秒数，超时后强制中断。 */
-  private static final int SHUTDOWN_AWAIT_SECONDS = 15;
+    /** 停止时等待投递任务结束的秒数，超时后强制中断。 */
+    private static final int SHUTDOWN_AWAIT_SECONDS = 15;
 
-  /** 退避指数上限，防止左移溢出；实际等待另受 MAX_BACKOFF_SECONDS 限制。 */
-  private static final int MAX_BACKOFF_EXPONENT = 10;
+    /** 退避指数上限，防止左移溢出；实际等待另受 MAX_BACKOFF_SECONDS 限制。 */
+    private static final int MAX_BACKOFF_EXPONENT = 10;
 
-  private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
-  private final WebhookDispatcher dispatcher;
-  private final LockingTaskExecutor lockingTaskExecutor;
-  private final Counter giveUpCounter;
-  private final WebhookRelayProperties properties;
-  private final TerminalNotificationDeliveryService terminalDeliveries;
-  private final TerminalNotificationArchiveService terminalArchives;
+    private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
+    private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
+    private final WebhookDispatcher dispatcher;
+    private final LockingTaskExecutor lockingTaskExecutor;
+    private final Counter giveUpCounter;
+    private final WebhookRelayProperties properties;
+    private final TerminalNotificationDeliveryService terminalDeliveries;
+    private final TerminalNotificationArchiveService terminalArchives;
 
-  private final AtomicBoolean running = new AtomicBoolean(false);
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private ScheduledExecutorService executor;
-  private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private ScheduledExecutorService executor;
+    private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
 
-  public WebhookDeliveryRelay(
-      ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
-      ConsoleWebhookSubscriptionMapper subscriptionRepository,
-      WebhookDispatcher dispatcher,
-      LockingTaskExecutor lockingTaskExecutor,
-      MeterRegistry meterRegistry,
-      WebhookRelayProperties properties,
-      TerminalNotificationDeliveryService terminalDeliveries,
-      TerminalNotificationArchiveService terminalArchives) {
-    this.deliveryLogRepository = deliveryLogRepository;
-    this.subscriptionRepository = subscriptionRepository;
-    this.dispatcher = dispatcher;
-    this.lockingTaskExecutor = lockingTaskExecutor;
-    this.properties = properties;
-    this.terminalDeliveries = terminalDeliveries;
-    this.terminalArchives = terminalArchives;
-    this.giveUpCounter = Counter.builder("batch_webhook_delivery_give_up_total")
-        .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
-        .tags(Tags.empty())
-        .register(meterRegistry);
-  }
-
-  @Override
-  public void start() {
-    if (executor != null && !executor.isShutdown()) {
-      return;
+    public WebhookDeliveryRelay(
+            ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
+            ConsoleWebhookSubscriptionMapper subscriptionRepository,
+            WebhookDispatcher dispatcher,
+            LockingTaskExecutor lockingTaskExecutor,
+            MeterRegistry meterRegistry,
+            WebhookRelayProperties properties,
+            TerminalNotificationDeliveryService terminalDeliveries,
+            TerminalNotificationArchiveService terminalArchives) {
+        this.deliveryLogRepository = deliveryLogRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.dispatcher = dispatcher;
+        this.lockingTaskExecutor = lockingTaskExecutor;
+        this.properties = properties;
+        this.terminalDeliveries = terminalDeliveries;
+        this.terminalArchives = terminalArchives;
+        this.giveUpCounter = Counter.builder("batch_webhook_delivery_give_up_total")
+                .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
+                .tags(Tags.empty())
+                .register(meterRegistry);
     }
-    stopping.set(false);
-    executor = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "webhook-delivery-relay");
-      t.setDaemon(true);
-      return t;
-    });
-    scheduledTask.set(executor.scheduleWithFixedDelay(
-        this::poll,
-        properties.getPollIntervalMillis(),
-        properties.getPollIntervalMillis(),
-        TimeUnit.MILLISECONDS));
-    log.info(
-        "WebhookDeliveryRelay started: poll={}ms batch={} absoluteMax={}",
-        properties.getPollIntervalMillis(),
-        properties.getBatchSize(),
-        properties.getAbsoluteMaxAttempts());
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  public void stopOnContextClosed(ContextClosedEvent event) {
-    stopExecutor("context-closed");
-  }
-
-  @PreDestroy
-  @Override
-  public void stop() {
-    stopExecutor("pre-destroy");
-  }
-
-  @Override
-  public boolean isRunning() {
-    return executor != null && !executor.isShutdown() && !stopping.get();
-  }
-
-  /** 先于 Redis/ShedLock 等默认 phase 组件停止，避免关闭过程中继续申请分布式锁。 */
-  @Override
-  public int getPhase() {
-    return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
-  }
-
-  private void stopExecutor(String source) {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
-    }
-    ScheduledFuture<?> task = scheduledTask.getAndSet(null);
-    if (task != null) {
-      task.cancel(true);
-    }
-    if (executor == null) {
-      return;
-    }
-    log.info("WebhookDeliveryRelay stopping: source={}", source);
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(SHUTDOWN_AWAIT_SECONDS, TimeUnit.SECONDS)) {
-        log.warn("WebhookDeliveryRelay did not shut down within 15s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      SwallowedExceptionLogger.info(WebhookDeliveryRelay.class, "catch:InterruptedException", e);
-
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  /** 单元测试可直接调用本方法跑一轮(不走自调度循环)。 */
-  public void poll() {
-    if (stopping.get()) {
-      return;
-    }
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      if (stopping.get()) {
-        return;
-      }
-      lockingTaskExecutor.executeWithLock((Runnable) this::pollAndArchiveLocked, lockConfig());
-    } catch (DataAccessException dae) {
-      if (isShutdownNoise(dae)) {
+    @Override
+    public void start() {
+        if (executor != null && !executor.isShutdown()) {
+            return;
+        }
+        stopping.set(false);
+        executor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "webhook-delivery-relay");
+            t.setDaemon(true);
+            return t;
+        });
+        scheduledTask.set(executor.scheduleWithFixedDelay(
+                this::poll,
+                properties.getPollIntervalMillis(),
+                properties.getPollIntervalMillis(),
+                TimeUnit.MILLISECONDS));
         log.info(
-            "WebhookDeliveryRelay poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(dae));
-        return;
-      }
-      log.warn(
-          "WebhookDeliveryRelay transient DB failure; retrying on the next cycle: {}",
-          dae.getMostSpecificCause() == null
-              ? SwallowedExceptionLogger.summary(dae)
-              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
-    } catch (Exception t) {
-      if (isShutdownNoise(t)) {
-        log.info(
-            "WebhookDeliveryRelay poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(t));
-        return;
-      }
-      log.error("WebhookDeliveryRelay failed", t);
-    } finally {
-      running.set(false);
-    }
-  }
-
-  static boolean isShutdownNoise(Throwable throwable) {
-    Throwable current = throwable;
-    while (current != null) {
-      String message = current.getMessage();
-      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
-          && (message.contains("LettuceConnectionFactory is STOPPING")
-              || message.contains("LettuceConnectionFactory has been STOPPED")
-              || message.contains("has been closed")
-              || message.contains("Connection pool shut down"));
-      if (isConnectionShutdownMessage) {
-        return true;
-      }
-      current = current.getCause();
-    }
-    return false;
-  }
-
-  private void pollAndArchiveLocked() {
-    pollLocked();
-    // 归档失败不能阻止本轮既有通知重试；关闭检查仍由归档服务执行。
-    terminalArchives.poll(stopping::get);
-  }
-
-  private void pollLocked() {
-    if (stopping.get()) {
-      return;
-    }
-    terminalDeliveries.poll(stopping::get);
-    Instant now = BatchDateTimeSupport.utcNow();
-    List<WebhookDeliveryLogEntity> batch =
-        deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
-    if (batch.isEmpty()) {
-      return;
-    }
-    log.debug("WebhookDeliveryRelay loaded {} events for retry", batch.size());
-    for (WebhookDeliveryLogEntity row : batch) {
-      if (stopping.get()) {
-        return;
-      }
-      try {
-        retryOne(row);
-      } catch (Exception t) {
-        // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
-        log.error(
-            "WebhookDeliveryRelay failed to retry one delivery: id={} tenantId={} subscriptionId={}",
-            row.getId(),
-            row.getTenantId(),
-            row.getSubscriptionId(),
-            t);
-      }
-    }
-  }
-
-  private void retryOne(WebhookDeliveryLogEntity row) {
-    int claimed = deliveryLogRepository.claimForRetry(row.getId());
-    if (claimed == 0) {
-      // 已被其它 relay 实例抢走或行状态已变,本轮跳过
-      return;
+                "WebhookDeliveryRelay started: poll={}ms batch={} absoluteMax={}",
+                properties.getPollIntervalMillis(),
+                properties.getBatchSize(),
+                properties.getAbsoluteMaxAttempts());
     }
 
-    Optional<WebhookSubscriptionEntity> subscription =
-        subscriptionRepository.findByTenantAndId(row.getTenantId(), row.getSubscriptionId());
-    if (subscription.isEmpty() || !Boolean.TRUE.equals(subscription.get().getEnabled())) {
-      // 订阅被删 / 禁用 → 数据问题,直接 GIVE_UP 不再重试
-      log.warn(
-          "WebhookDeliveryRelay skipped an invalid subscription: id={} tenantId={} subscriptionId={}",
-          row.getId(),
-          row.getTenantId(),
-          row.getSubscriptionId());
-      deliveryLogRepository.markGiveUp(
-          row.getId(), row.getAttempt(), row.getHttpStatus(), "subscription disabled or deleted");
-      giveUpCounter.increment();
-      return;
+    @EventListener(ContextClosedEvent.class)
+    public void stopOnContextClosed(ContextClosedEvent event) {
+        stopExecutor("context-closed");
     }
 
-    WebhookEventPayload payload;
-    try {
-      payload = JsonUtils.fromJson(row.getPayloadJson(), WebhookEventPayload.class);
-    } catch (IllegalArgumentException ex) {
-      // payload 反序列化失败 = 数据问题,不可能靠重试解决,直接 GIVE_UP
-      log.error(
-          "WebhookDeliveryRelay failed to deserialize payload; marking GIVE_UP: id={} tenantId={}",
-          row.getId(),
-          row.getTenantId(),
-          ex);
-      deliveryLogRepository.markGiveUp(
-          row.getId(),
-          row.getAttempt(),
-          row.getHttpStatus(),
-          "payload deserialization failed: " + ex.getMessage());
-      giveUpCounter.increment();
-      return;
+    @PreDestroy
+    @Override
+    public void stop() {
+        stopExecutor("pre-destroy");
     }
 
-    int nextAttempt = row.getAttempt() + 1;
-    WebhookDeliveryResult result =
-        dispatcher.attemptDelivery(subscription.get(), payload, row.getPayloadJson());
-    if (result.success()) {
-      deliveryLogRepository.markRetrySuccess(row.getId(), nextAttempt, result.httpStatus());
-      log.info(
-          "WebhookDeliveryRelay retry succeeded: id={} tenantId={} attempt={}",
-          row.getId(),
-          row.getTenantId(),
-          nextAttempt);
-      return;
+    @Override
+    public boolean isRunning() {
+        return executor != null && !executor.isShutdown() && !stopping.get();
     }
 
-    if (nextAttempt >= properties.getAbsoluteMaxAttempts()) {
-      deliveryLogRepository.markGiveUp(
-          row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
-      giveUpCounter.increment();
-      log.warn(
-          "WebhookDeliveryRelay reached the retry limit; marking GIVE_UP: id={} tenantId={} attempt={} max={}",
-          row.getId(),
-          row.getTenantId(),
-          nextAttempt,
-          properties.getAbsoluteMaxAttempts());
-      return;
+    /** 先于 Redis/ShedLock 等默认 phase 组件停止，避免关闭过程中继续申请分布式锁。 */
+    @Override
+    public int getPhase() {
+        return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
     }
 
-    Instant nextRetryAt =
-        BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
-    ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
-        ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-            .id(row.getId())
-            .attempt(nextAttempt)
-            .httpStatus(result.httpStatus())
-            .responseBody(result.errorSummary())
-            .nextRetryAt(nextRetryAt)
-            .build();
-    deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
-    log.debug(
-        "WebhookDeliveryRelay retry failed; scheduling the next attempt: id={} tenantId={} attempt={} nextRetryAt={}",
-        row.getId(),
-        row.getTenantId(),
-        nextAttempt,
-        nextRetryAt);
-  }
+    private void stopExecutor(String source) {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        ScheduledFuture<?> task = scheduledTask.getAndSet(null);
+        if (task != null) {
+            task.cancel(true);
+        }
+        if (executor == null) {
+            return;
+        }
+        log.info("WebhookDeliveryRelay stopping: source={}", source);
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(SHUTDOWN_AWAIT_SECONDS, TimeUnit.SECONDS)) {
+                log.warn("WebhookDeliveryRelay did not shut down within 15s; forcing interruption");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            SwallowedExceptionLogger.info(WebhookDeliveryRelay.class, "catch:InterruptedException", e);
 
-  /**
-   * 退避秒数 = min(MAX_BACKOFF_SECONDS, BACKOFF_BASE_SECONDS * 2^(nextAttempt - 4))。
-   *
-   * <p>nextAttempt=4(dispatcher 3 burst 后第 1 次 relay 重投失败) → 5min; nextAttempt=5 → 10min;
-   * nextAttempt=6 → 20min; nextAttempt=7+ → 30min(截断)。
-   */
-  long computeBackoffSeconds(int nextAttempt) {
-    int exponent = Math.max(0, nextAttempt - 4);
-    long backoff = BACKOFF_BASE_SECONDS << Math.min(exponent, MAX_BACKOFF_EXPONENT);
-    return Math.min(MAX_BACKOFF_SECONDS, backoff);
-  }
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
 
-  private LockConfiguration lockConfig() {
-    return new LockConfiguration(
-        BatchDateTimeSupport.utcNow(), "webhook-delivery-relay", LOCK_AT_MOST, LOCK_AT_LEAST);
-  }
+    /** 单元测试可直接调用本方法跑一轮(不走自调度循环)。 */
+    public void poll() {
+        if (stopping.get()) {
+            return;
+        }
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            if (stopping.get()) {
+                return;
+            }
+            lockingTaskExecutor.executeWithLock((Runnable) this::pollAndArchiveLocked, lockConfig());
+        } catch (DataAccessException dae) {
+            if (isShutdownNoise(dae)) {
+                log.info(
+                        "WebhookDeliveryRelay poll skipped during shutdown: {}", SwallowedExceptionLogger.summary(dae));
+                return;
+            }
+            log.warn(
+                    "WebhookDeliveryRelay transient DB failure; retrying on the next cycle: {}",
+                    dae.getMostSpecificCause() == null
+                            ? SwallowedExceptionLogger.summary(dae)
+                            : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
+        } catch (Exception t) {
+            if (isShutdownNoise(t)) {
+                log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", SwallowedExceptionLogger.summary(t));
+                return;
+            }
+            log.error("WebhookDeliveryRelay failed", t);
+        } finally {
+            running.set(false);
+        }
+    }
+
+    static boolean isShutdownNoise(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+                    && (message.contains("LettuceConnectionFactory is STOPPING")
+                            || message.contains("LettuceConnectionFactory has been STOPPED")
+                            || message.contains("has been closed")
+                            || message.contains("Connection pool shut down"));
+            if (isConnectionShutdownMessage) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void pollAndArchiveLocked() {
+        pollLocked();
+        // 归档失败不能阻止本轮既有通知重试；关闭检查仍由归档服务执行。
+        terminalArchives.poll(stopping::get);
+    }
+
+    private void pollLocked() {
+        if (stopping.get()) {
+            return;
+        }
+        terminalDeliveries.poll(stopping::get);
+        Instant now = BatchDateTimeSupport.utcNow();
+        List<WebhookDeliveryLogEntity> batch =
+                deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
+        if (batch.isEmpty()) {
+            return;
+        }
+        log.debug("WebhookDeliveryRelay loaded {} events for retry", batch.size());
+        for (WebhookDeliveryLogEntity row : batch) {
+            if (stopping.get()) {
+                return;
+            }
+            try {
+                retryOne(row);
+            } catch (Exception t) {
+                // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
+                log.error(
+                        "WebhookDeliveryRelay failed to retry one delivery: id={} tenantId={} subscriptionId={}",
+                        row.getId(),
+                        row.getTenantId(),
+                        row.getSubscriptionId(),
+                        t);
+            }
+        }
+    }
+
+    private void retryOne(WebhookDeliveryLogEntity row) {
+        int claimed = deliveryLogRepository.claimForRetry(row.getId());
+        if (claimed == 0) {
+            // 已被其它 relay 实例抢走或行状态已变,本轮跳过
+            return;
+        }
+
+        Optional<WebhookSubscriptionEntity> subscription =
+                subscriptionRepository.findByTenantAndId(row.getTenantId(), row.getSubscriptionId());
+        if (subscription.isEmpty() || !Boolean.TRUE.equals(subscription.get().getEnabled())) {
+            // 订阅被删 / 禁用 → 数据问题,直接 GIVE_UP 不再重试
+            log.warn(
+                    "WebhookDeliveryRelay skipped an invalid subscription: id={} tenantId={} subscriptionId={}",
+                    row.getId(),
+                    row.getTenantId(),
+                    row.getSubscriptionId());
+            deliveryLogRepository.markGiveUp(
+                    row.getId(), row.getAttempt(), row.getHttpStatus(), "subscription disabled or deleted");
+            giveUpCounter.increment();
+            return;
+        }
+
+        WebhookEventPayload payload;
+        try {
+            payload = JsonUtils.fromJson(row.getPayloadJson(), WebhookEventPayload.class);
+        } catch (IllegalArgumentException ex) {
+            // payload 反序列化失败 = 数据问题,不可能靠重试解决,直接 GIVE_UP
+            log.error(
+                    "WebhookDeliveryRelay failed to deserialize payload; marking GIVE_UP: id={} tenantId={}",
+                    row.getId(),
+                    row.getTenantId(),
+                    ex);
+            deliveryLogRepository.markGiveUp(
+                    row.getId(),
+                    row.getAttempt(),
+                    row.getHttpStatus(),
+                    "payload deserialization failed: " + ex.getMessage());
+            giveUpCounter.increment();
+            return;
+        }
+
+        int nextAttempt = row.getAttempt() + 1;
+        WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription.get(), payload, row.getPayloadJson());
+        if (result.success()) {
+            deliveryLogRepository.markRetrySuccess(row.getId(), nextAttempt, result.httpStatus());
+            log.info(
+                    "WebhookDeliveryRelay retry succeeded: id={} tenantId={} attempt={}",
+                    row.getId(),
+                    row.getTenantId(),
+                    nextAttempt);
+            return;
+        }
+
+        if (nextAttempt >= properties.getAbsoluteMaxAttempts()) {
+            deliveryLogRepository.markGiveUp(row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
+            giveUpCounter.increment();
+            log.warn(
+                    "WebhookDeliveryRelay reached the retry limit; marking GIVE_UP: id={} tenantId={} attempt={} max={}",
+                    row.getId(),
+                    row.getTenantId(),
+                    nextAttempt,
+                    properties.getAbsoluteMaxAttempts());
+            return;
+        }
+
+        Instant nextRetryAt = BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
+        ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
+                ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+                        .id(row.getId())
+                        .attempt(nextAttempt)
+                        .httpStatus(result.httpStatus())
+                        .responseBody(result.errorSummary())
+                        .nextRetryAt(nextRetryAt)
+                        .build();
+        deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
+        log.debug(
+                "WebhookDeliveryRelay retry failed; scheduling the next attempt: id={} tenantId={} attempt={} nextRetryAt={}",
+                row.getId(),
+                row.getTenantId(),
+                nextAttempt,
+                nextRetryAt);
+    }
+
+    /**
+     * 退避秒数 = min(MAX_BACKOFF_SECONDS, BACKOFF_BASE_SECONDS * 2^(nextAttempt - 4))。
+     *
+     * <p>nextAttempt=4(dispatcher 3 burst 后第 1 次 relay 重投失败) → 5min; nextAttempt=5 → 10min;
+     * nextAttempt=6 → 20min; nextAttempt=7+ → 30min(截断)。
+     */
+    long computeBackoffSeconds(int nextAttempt) {
+        int exponent = Math.max(0, nextAttempt - 4);
+        long backoff = BACKOFF_BASE_SECONDS << Math.min(exponent, MAX_BACKOFF_EXPONENT);
+        return Math.min(MAX_BACKOFF_SECONDS, backoff);
+    }
+
+    private LockConfiguration lockConfig() {
+        return new LockConfiguration(
+                BatchDateTimeSupport.utcNow(), "webhook-delivery-relay", LOCK_AT_MOST, LOCK_AT_LEAST);
+    }
 }

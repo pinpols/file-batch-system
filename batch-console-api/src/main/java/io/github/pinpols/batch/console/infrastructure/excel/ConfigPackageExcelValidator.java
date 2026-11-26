@@ -57,1186 +57,1128 @@ import lombok.Builder;
 @SuppressWarnings("java:S2583")
 public class ConfigPackageExcelValidator {
 
-  private static final int MAX_JOB_DEPENDENCIES = 32;
+    private static final int MAX_JOB_DEPENDENCIES = 32;
 
-  public static final String COL_TENANT_ID = ConfigPackageExcelSchema.COL_TENANT_ID;
-  public static final String COL_ENABLED = ConfigPackageExcelSchema.COL_ENABLED;
-  public static final String COL_DESCRIPTION = ConfigPackageExcelSchema.COL_DESCRIPTION;
-  public static final String COL_VERSION = ConfigPackageExcelSchema.COL_VERSION;
-  public static final String COL_BIZ_TYPE = ConfigPackageExcelSchema.COL_BIZ_TYPE;
-  public static final String COL_WORKER_GROUP = ConfigPackageExcelSchema.COL_WORKER_GROUP;
-  public static final String COL_WINDOW_CODE = ConfigPackageExcelSchema.COL_WINDOW_CODE;
-  public static final String COL_RETRY_POLICY = ConfigPackageExcelSchema.COL_RETRY_POLICY;
-  public static final String COL_RETRY_MAX_COUNT = ConfigPackageExcelSchema.COL_RETRY_MAX_COUNT;
-  public static final String COL_TIMEOUT_SECONDS = ConfigPackageExcelSchema.COL_TIMEOUT_SECONDS;
-  public static final String COL_SOFT_RUNTIME_SECONDS =
-      ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS;
-  public static final String COL_SOFT_RUNTIME_SEVERITY =
-      ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SEVERITY;
-  public static final String COL_START_GRACE_SECONDS =
-      ConfigPackageExcelSchema.COL_START_GRACE_SECONDS;
-  public static final String COL_START_GRACE_SEVERITY =
-      ConfigPackageExcelSchema.COL_START_GRACE_SEVERITY;
-  public static final String COL_COMPLETION_DEADLINE_LOCAL_TIME =
-      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME;
-  public static final String COL_COMPLETION_DEADLINE_DAY_OFFSET =
-      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET;
-  public static final String COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS =
-      ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS;
-  public static final String COL_COMPLETION_DEADLINE_SEVERITY =
-      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_SEVERITY;
-  public static final String COL_SHARD_STRATEGY = ConfigPackageExcelSchema.COL_SHARD_STRATEGY;
-  public static final String COL_EXECUTION_MODE = ConfigPackageExcelSchema.COL_EXECUTION_MODE;
-  public static final String COL_WATERMARK_FIELD = ConfigPackageExcelSchema.COL_WATERMARK_FIELD;
-  public static final String COL_JOB_CODE = ConfigPackageExcelSchema.COL_JOB_CODE;
-  public static final String COL_JOB_NAME = ConfigPackageExcelSchema.COL_JOB_NAME;
-  public static final String COL_JOB_TYPE = ConfigPackageExcelSchema.COL_JOB_TYPE;
-  public static final String COL_SCHEDULE_TYPE = ConfigPackageExcelSchema.COL_SCHEDULE_TYPE;
-  public static final String COL_SCHEDULE_EXPR = ConfigPackageExcelSchema.COL_SCHEDULE_EXPR;
-  public static final String COL_DEPENDS_ON_JOB_CODE =
-      ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODE;
-  public static final String COL_DEPENDS_ON_JOB_CODES =
-      ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODES;
-  public static final String COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS =
-      ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
-  public static final String COL_CALENDAR_CODE = ConfigPackageExcelSchema.COL_CALENDAR_CODE;
-  public static final String COL_QUEUE_CODE = ConfigPackageExcelSchema.COL_QUEUE_CODE;
-  public static final String COL_PARAM_SCHEMA = ConfigPackageExcelSchema.COL_PARAM_SCHEMA;
-  public static final String COL_CHANNEL_TYPE = ConfigPackageExcelSchema.COL_CHANNEL_TYPE;
-  public static final String COL_AUTH_TYPE = ConfigPackageExcelSchema.COL_AUTH_TYPE;
-  public static final String COL_RECEIPT_POLICY = ConfigPackageExcelSchema.COL_RECEIPT_POLICY;
-  public static final String COL_SEVERITY = ConfigPackageExcelSchema.COL_SEVERITY;
-  public static final String COL_PIPELINE_TYPE = ConfigPackageExcelSchema.COL_PIPELINE_TYPE;
-  public static final String COL_STAGE_CODE = ConfigPackageExcelSchema.COL_STAGE_CODE;
-  public static final String COL_WORKFLOW_CODE = ConfigPackageExcelSchema.COL_WORKFLOW_CODE;
-  public static final String COL_WORKFLOW_NAME = ConfigPackageExcelSchema.COL_WORKFLOW_NAME;
-  public static final String COL_WORKFLOW_TYPE = ConfigPackageExcelSchema.COL_WORKFLOW_TYPE;
-  public static final String COL_WORKFLOW_VERSION = ConfigPackageExcelSchema.COL_WORKFLOW_VERSION;
-  public static final String COL_SINGLE_JOB_CODE = ConfigPackageExcelSchema.COL_SINGLE_JOB_CODE;
-  public static final String COL_SCHEDULE_ENABLED = ConfigPackageExcelSchema.COL_SCHEDULE_ENABLED;
-  public static final String COL_TIMEZONE = ConfigPackageExcelSchema.COL_TIMEZONE;
-  public static final String COL_TRIGGER_MODE = ConfigPackageExcelSchema.COL_TRIGGER_MODE;
-  public static final String COL_NODE_CODE = ConfigPackageExcelSchema.COL_NODE_CODE;
-  public static final String COL_NODE_NAME = ConfigPackageExcelSchema.COL_NODE_NAME;
-  public static final String COL_NODE_TYPE = ConfigPackageExcelSchema.COL_NODE_TYPE;
-  public static final String COL_RELATED_JOB_CODE = ConfigPackageExcelSchema.COL_RELATED_JOB_CODE;
-  public static final String COL_NODE_PARAMS = ConfigPackageExcelSchema.COL_NODE_PARAMS;
-  public static final String COL_EDGE_TYPE = ConfigPackageExcelSchema.COL_EDGE_TYPE;
-  public static final String COL_FROM_NODE_CODE = ConfigPackageExcelSchema.COL_FROM_NODE_CODE;
-  public static final String COL_TO_NODE_CODE = ConfigPackageExcelSchema.COL_TO_NODE_CODE;
-  public static final String COL_EXECUTION_HANDLER = ConfigPackageExcelSchema.COL_EXECUTION_HANDLER;
-  public static final String COL_DEFAULT_PARAMS = ConfigPackageExcelSchema.COL_DEFAULT_PARAMS;
-  public static final String COL_CHANNEL_CODE = ConfigPackageExcelSchema.COL_CHANNEL_CODE;
-  public static final String COL_CHANNEL_NAME = ConfigPackageExcelSchema.COL_CHANNEL_NAME;
-  public static final String COL_CONFIG_JSON = ConfigPackageExcelSchema.COL_CONFIG_JSON;
-  public static final String COL_PIPELINE_NAME = ConfigPackageExcelSchema.COL_PIPELINE_NAME;
-  public static final String COL_STEP_CODE = ConfigPackageExcelSchema.COL_STEP_CODE;
-  public static final String COL_STEP_NAME = ConfigPackageExcelSchema.COL_STEP_NAME;
-  public static final String COL_IMPL_CODE = ConfigPackageExcelSchema.COL_IMPL_CODE;
-  public static final String COL_NODE_ORDER = ConfigPackageExcelSchema.COL_NODE_ORDER;
-  public static final String COL_CONDITION_EXPR = ConfigPackageExcelSchema.COL_CONDITION_EXPR;
+    public static final String COL_TENANT_ID = ConfigPackageExcelSchema.COL_TENANT_ID;
+    public static final String COL_ENABLED = ConfigPackageExcelSchema.COL_ENABLED;
+    public static final String COL_DESCRIPTION = ConfigPackageExcelSchema.COL_DESCRIPTION;
+    public static final String COL_VERSION = ConfigPackageExcelSchema.COL_VERSION;
+    public static final String COL_BIZ_TYPE = ConfigPackageExcelSchema.COL_BIZ_TYPE;
+    public static final String COL_WORKER_GROUP = ConfigPackageExcelSchema.COL_WORKER_GROUP;
+    public static final String COL_WINDOW_CODE = ConfigPackageExcelSchema.COL_WINDOW_CODE;
+    public static final String COL_RETRY_POLICY = ConfigPackageExcelSchema.COL_RETRY_POLICY;
+    public static final String COL_RETRY_MAX_COUNT = ConfigPackageExcelSchema.COL_RETRY_MAX_COUNT;
+    public static final String COL_TIMEOUT_SECONDS = ConfigPackageExcelSchema.COL_TIMEOUT_SECONDS;
+    public static final String COL_SOFT_RUNTIME_SECONDS = ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS;
+    public static final String COL_SOFT_RUNTIME_SEVERITY = ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SEVERITY;
+    public static final String COL_START_GRACE_SECONDS = ConfigPackageExcelSchema.COL_START_GRACE_SECONDS;
+    public static final String COL_START_GRACE_SEVERITY = ConfigPackageExcelSchema.COL_START_GRACE_SEVERITY;
+    public static final String COL_COMPLETION_DEADLINE_LOCAL_TIME =
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME;
+    public static final String COL_COMPLETION_DEADLINE_DAY_OFFSET =
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET;
+    public static final String COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS =
+            ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS;
+    public static final String COL_COMPLETION_DEADLINE_SEVERITY =
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_SEVERITY;
+    public static final String COL_SHARD_STRATEGY = ConfigPackageExcelSchema.COL_SHARD_STRATEGY;
+    public static final String COL_EXECUTION_MODE = ConfigPackageExcelSchema.COL_EXECUTION_MODE;
+    public static final String COL_WATERMARK_FIELD = ConfigPackageExcelSchema.COL_WATERMARK_FIELD;
+    public static final String COL_JOB_CODE = ConfigPackageExcelSchema.COL_JOB_CODE;
+    public static final String COL_JOB_NAME = ConfigPackageExcelSchema.COL_JOB_NAME;
+    public static final String COL_JOB_TYPE = ConfigPackageExcelSchema.COL_JOB_TYPE;
+    public static final String COL_SCHEDULE_TYPE = ConfigPackageExcelSchema.COL_SCHEDULE_TYPE;
+    public static final String COL_SCHEDULE_EXPR = ConfigPackageExcelSchema.COL_SCHEDULE_EXPR;
+    public static final String COL_DEPENDS_ON_JOB_CODE = ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODE;
+    public static final String COL_DEPENDS_ON_JOB_CODES = ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODES;
+    public static final String COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS =
+            ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
+    public static final String COL_CALENDAR_CODE = ConfigPackageExcelSchema.COL_CALENDAR_CODE;
+    public static final String COL_QUEUE_CODE = ConfigPackageExcelSchema.COL_QUEUE_CODE;
+    public static final String COL_PARAM_SCHEMA = ConfigPackageExcelSchema.COL_PARAM_SCHEMA;
+    public static final String COL_CHANNEL_TYPE = ConfigPackageExcelSchema.COL_CHANNEL_TYPE;
+    public static final String COL_AUTH_TYPE = ConfigPackageExcelSchema.COL_AUTH_TYPE;
+    public static final String COL_RECEIPT_POLICY = ConfigPackageExcelSchema.COL_RECEIPT_POLICY;
+    public static final String COL_SEVERITY = ConfigPackageExcelSchema.COL_SEVERITY;
+    public static final String COL_PIPELINE_TYPE = ConfigPackageExcelSchema.COL_PIPELINE_TYPE;
+    public static final String COL_STAGE_CODE = ConfigPackageExcelSchema.COL_STAGE_CODE;
+    public static final String COL_WORKFLOW_CODE = ConfigPackageExcelSchema.COL_WORKFLOW_CODE;
+    public static final String COL_WORKFLOW_NAME = ConfigPackageExcelSchema.COL_WORKFLOW_NAME;
+    public static final String COL_WORKFLOW_TYPE = ConfigPackageExcelSchema.COL_WORKFLOW_TYPE;
+    public static final String COL_WORKFLOW_VERSION = ConfigPackageExcelSchema.COL_WORKFLOW_VERSION;
+    public static final String COL_SINGLE_JOB_CODE = ConfigPackageExcelSchema.COL_SINGLE_JOB_CODE;
+    public static final String COL_SCHEDULE_ENABLED = ConfigPackageExcelSchema.COL_SCHEDULE_ENABLED;
+    public static final String COL_TIMEZONE = ConfigPackageExcelSchema.COL_TIMEZONE;
+    public static final String COL_TRIGGER_MODE = ConfigPackageExcelSchema.COL_TRIGGER_MODE;
+    public static final String COL_NODE_CODE = ConfigPackageExcelSchema.COL_NODE_CODE;
+    public static final String COL_NODE_NAME = ConfigPackageExcelSchema.COL_NODE_NAME;
+    public static final String COL_NODE_TYPE = ConfigPackageExcelSchema.COL_NODE_TYPE;
+    public static final String COL_RELATED_JOB_CODE = ConfigPackageExcelSchema.COL_RELATED_JOB_CODE;
+    public static final String COL_NODE_PARAMS = ConfigPackageExcelSchema.COL_NODE_PARAMS;
+    public static final String COL_EDGE_TYPE = ConfigPackageExcelSchema.COL_EDGE_TYPE;
+    public static final String COL_FROM_NODE_CODE = ConfigPackageExcelSchema.COL_FROM_NODE_CODE;
+    public static final String COL_TO_NODE_CODE = ConfigPackageExcelSchema.COL_TO_NODE_CODE;
+    public static final String COL_EXECUTION_HANDLER = ConfigPackageExcelSchema.COL_EXECUTION_HANDLER;
+    public static final String COL_DEFAULT_PARAMS = ConfigPackageExcelSchema.COL_DEFAULT_PARAMS;
+    public static final String COL_CHANNEL_CODE = ConfigPackageExcelSchema.COL_CHANNEL_CODE;
+    public static final String COL_CHANNEL_NAME = ConfigPackageExcelSchema.COL_CHANNEL_NAME;
+    public static final String COL_CONFIG_JSON = ConfigPackageExcelSchema.COL_CONFIG_JSON;
+    public static final String COL_PIPELINE_NAME = ConfigPackageExcelSchema.COL_PIPELINE_NAME;
+    public static final String COL_STEP_CODE = ConfigPackageExcelSchema.COL_STEP_CODE;
+    public static final String COL_STEP_NAME = ConfigPackageExcelSchema.COL_STEP_NAME;
+    public static final String COL_IMPL_CODE = ConfigPackageExcelSchema.COL_IMPL_CODE;
+    public static final String COL_NODE_ORDER = ConfigPackageExcelSchema.COL_NODE_ORDER;
+    public static final String COL_CONDITION_EXPR = ConfigPackageExcelSchema.COL_CONDITION_EXPR;
 
-  public static final String KEY_SEP_COLON = ":";
-  public static final String KEY_SEP_HASH = "#";
-  private static final String INTERNAL_ROW_NO = "__excel_row_no";
+    public static final String KEY_SEP_COLON = ":";
+    public static final String KEY_SEP_HASH = "#";
+    private static final String INTERNAL_ROW_NO = "__excel_row_no";
 
-  public static final String JOB_SHEET = "job_definition";
-  public static final String JOB_MONITORING_POLICY_SHEET =
-      ConfigPackageExcelSchema.JobMonitoringPolicy.SHEET_NAME;
-  public static final String RESOURCE_QUEUE_SHEET = ResourceQueueExcelRowParser.SHEET_NAME;
-  public static final String BUSINESS_CALENDAR_SHEET = BusinessCalendarExcelRowParser.SHEET_NAME;
-  public static final String BATCH_WINDOW_SHEET = BatchWindowExcelRowParser.SHEET_NAME;
-  public static final String CHANNEL_SHEET = "file_channel_config";
-  public static final String FILE_TEMPLATE_SHEET = FileTemplateExcelRowParser.SHEET_NAME;
-  public static final String PIPELINE_SHEET = "pipeline_definition";
-  public static final String STEP_SHEET = "pipeline_step_definition";
-  public static final String WF_DEF_SHEET = "workflow_definition";
-  public static final String WF_NODE_SHEET = "workflow_node";
-  public static final String WF_EDGE_SHEET = "workflow_edge";
-  public static final String WORKFLOW_MONITORING_POLICY_SHEET =
-      ConfigPackageExcelSchema.WorkflowMonitoringPolicy.SHEET_NAME;
+    public static final String JOB_SHEET = "job_definition";
+    public static final String JOB_MONITORING_POLICY_SHEET = ConfigPackageExcelSchema.JobMonitoringPolicy.SHEET_NAME;
+    public static final String RESOURCE_QUEUE_SHEET = ResourceQueueExcelRowParser.SHEET_NAME;
+    public static final String BUSINESS_CALENDAR_SHEET = BusinessCalendarExcelRowParser.SHEET_NAME;
+    public static final String BATCH_WINDOW_SHEET = BatchWindowExcelRowParser.SHEET_NAME;
+    public static final String CHANNEL_SHEET = "file_channel_config";
+    public static final String FILE_TEMPLATE_SHEET = FileTemplateExcelRowParser.SHEET_NAME;
+    public static final String PIPELINE_SHEET = "pipeline_definition";
+    public static final String STEP_SHEET = "pipeline_step_definition";
+    public static final String WF_DEF_SHEET = "workflow_definition";
+    public static final String WF_NODE_SHEET = "workflow_node";
+    public static final String WF_EDGE_SHEET = "workflow_edge";
+    public static final String WORKFLOW_MONITORING_POLICY_SHEET =
+            ConfigPackageExcelSchema.WorkflowMonitoringPolicy.SHEET_NAME;
 
-  public static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
-  public static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
-  public static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
-  public static final Set<String> SHARD_STRATEGIES = DictEnum.codes(ShardStrategy.class);
-  public static final Set<String> EXECUTION_MODES = DictEnum.codes(ExecutionMode.class);
-  public static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
-  public static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
-  public static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
-  public static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
-  // 用于识别并拒绝旧配置包 sheet；validate() 不会调用这些行规则。
-  public static final Map<String, Set<String>> STAGES_BY_TYPE =
-      SystemPipelineCatalog.definitions().stream()
-          .collect(Collectors.toUnmodifiableMap(
-              definition -> definition.code(), definition -> Set.copyOf(definition.stages())));
-  public static final Set<String> STAGE_CODES =
-      STAGES_BY_TYPE.values().stream().flatMap(Set::stream).collect(Collectors.toUnmodifiableSet());
-  public static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
-  public static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
-  public static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
+    public static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
+    public static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
+    public static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
+    public static final Set<String> SHARD_STRATEGIES = DictEnum.codes(ShardStrategy.class);
+    public static final Set<String> EXECUTION_MODES = DictEnum.codes(ExecutionMode.class);
+    public static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
+    public static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
+    public static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
+    public static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
+    // 用于识别并拒绝旧配置包 sheet；validate() 不会调用这些行规则。
+    public static final Map<String, Set<String>> STAGES_BY_TYPE = SystemPipelineCatalog.definitions().stream()
+            .collect(Collectors.toUnmodifiableMap(
+                    definition -> definition.code(), definition -> Set.copyOf(definition.stages())));
+    public static final Set<String> STAGE_CODES =
+            STAGES_BY_TYPE.values().stream().flatMap(Set::stream).collect(Collectors.toUnmodifiableSet());
+    public static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
+    public static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
+    public static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
 
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final BatchWindowMapper batchWindowMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final ConfigPackageExcelRowValidators rowValidators;
+    private final JobDefinitionMapper jobDefinitionMapper;
+    private final FileTemplateConfigMapper fileTemplateConfigMapper;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
+    private final BatchWindowMapper batchWindowMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final ConfigPackageExcelRowValidators rowValidators;
 
-  public ConfigPackageExcelValidator(
-      JobDefinitionMapper jobDefinitionMapper,
-      FileTemplateConfigMapper fileTemplateConfigMapper,
-      ResourceQueueMapper resourceQueueMapper,
-      BusinessCalendarMapper businessCalendarMapper,
-      BatchWindowMapper batchWindowMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper) {
-    this.jobDefinitionMapper = jobDefinitionMapper;
-    this.fileTemplateConfigMapper = fileTemplateConfigMapper;
-    this.resourceQueueMapper = resourceQueueMapper;
-    this.businessCalendarMapper = businessCalendarMapper;
-    this.batchWindowMapper = batchWindowMapper;
-    this.workflowDefinitionMapper = workflowDefinitionMapper;
-    this.rowValidators = new ConfigPackageExcelRowValidators(fileTemplateConfigMapper);
-  }
-
-  public ConfigPackageExcelValidator(
-      JobDefinitionMapper jobDefinitionMapper,
-      FileTemplateConfigMapper fileTemplateConfigMapper,
-      ResourceQueueMapper resourceQueueMapper,
-      BusinessCalendarMapper businessCalendarMapper,
-      BatchWindowMapper batchWindowMapper) {
-    this(
-        jobDefinitionMapper,
-        fileTemplateConfigMapper,
-        resourceQueueMapper,
-        businessCalendarMapper,
-        batchWindowMapper,
-        null);
-  }
-
-  public record SheetResult(
-      String sheetName,
-      int total,
-      List<Map<String, String>> validRows,
-      List<WorkbookIssue> issues) {
-    public int valid() {
-      return validRows.size();
+    public ConfigPackageExcelValidator(
+            JobDefinitionMapper jobDefinitionMapper,
+            FileTemplateConfigMapper fileTemplateConfigMapper,
+            ResourceQueueMapper resourceQueueMapper,
+            BusinessCalendarMapper businessCalendarMapper,
+            BatchWindowMapper batchWindowMapper,
+            WorkflowDefinitionMapper workflowDefinitionMapper) {
+        this.jobDefinitionMapper = jobDefinitionMapper;
+        this.fileTemplateConfigMapper = fileTemplateConfigMapper;
+        this.resourceQueueMapper = resourceQueueMapper;
+        this.businessCalendarMapper = businessCalendarMapper;
+        this.batchWindowMapper = batchWindowMapper;
+        this.workflowDefinitionMapper = workflowDefinitionMapper;
+        this.rowValidators = new ConfigPackageExcelRowValidators(fileTemplateConfigMapper);
     }
 
-    public int invalid() {
-      return total - validRows.size();
-    }
-  }
-
-  @Builder
-  @SuppressWarnings("PMD.ExcessiveParameterList") // 每个组件对应配置包固定 sheet，保持逐表校验结果的类型安全。
-  public record PackageValidationResult(
-      SheetResult resourceQueues,
-      SheetResult businessCalendars,
-      SheetResult batchWindows,
-      SheetResult jobs,
-      SheetResult jobMonitoringPolicies,
-      SheetResult channels,
-      SheetResult fileTemplates,
-      SheetResult pipelines,
-      SheetResult steps,
-      SheetResult wfDefs,
-      SheetResult wfNodes,
-      SheetResult wfEdges,
-      SheetResult workflowMonitoringPolicies,
-      List<WorkbookIssue> crossRefIssues) {
-
-    public PackageValidationResult(
-        SheetResult resourceQueues,
-        SheetResult businessCalendars,
-        SheetResult batchWindows,
-        SheetResult jobs,
-        SheetResult jobMonitoringPolicies,
-        SheetResult channels,
-        SheetResult fileTemplates,
-        SheetResult pipelines,
-        SheetResult steps,
-        SheetResult wfDefs,
-        SheetResult wfNodes,
-        SheetResult wfEdges,
-        List<WorkbookIssue> crossRefIssues) {
-      this(
-          resourceQueues,
-          businessCalendars,
-          batchWindows,
-          jobs,
-          jobMonitoringPolicies,
-          channels,
-          fileTemplates,
-          pipelines,
-          steps,
-          wfDefs,
-          wfNodes,
-          wfEdges,
-          emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
-          crossRefIssues);
+    public ConfigPackageExcelValidator(
+            JobDefinitionMapper jobDefinitionMapper,
+            FileTemplateConfigMapper fileTemplateConfigMapper,
+            ResourceQueueMapper resourceQueueMapper,
+            BusinessCalendarMapper businessCalendarMapper,
+            BatchWindowMapper batchWindowMapper) {
+        this(
+                jobDefinitionMapper,
+                fileTemplateConfigMapper,
+                resourceQueueMapper,
+                businessCalendarMapper,
+                batchWindowMapper,
+                null);
     }
 
-    public PackageValidationResult(
-        SheetResult resourceQueues,
-        SheetResult businessCalendars,
-        SheetResult batchWindows,
-        SheetResult jobs,
-        SheetResult channels,
-        SheetResult fileTemplates,
-        SheetResult pipelines,
-        SheetResult steps,
-        SheetResult wfDefs,
-        SheetResult wfNodes,
-        SheetResult wfEdges,
-        List<WorkbookIssue> crossRefIssues) {
-      this(
-          resourceQueues,
-          businessCalendars,
-          batchWindows,
-          jobs,
-          emptySheet(JOB_MONITORING_POLICY_SHEET),
-          channels,
-          fileTemplates,
-          pipelines,
-          steps,
-          wfDefs,
-          wfNodes,
-          wfEdges,
-          emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
-          crossRefIssues);
-    }
-
-    private static SheetResult emptySheet(String name) {
-      return new SheetResult(name, 0, List.of(), List.of());
-    }
-
-    public int totalInvalid() {
-      return resourceQueues.invalid()
-          + businessCalendars.invalid()
-          + batchWindows.invalid()
-          + jobs.invalid()
-          + jobMonitoringPolicies.invalid()
-          + channels.invalid()
-          + fileTemplates.invalid()
-          + pipelines.invalid()
-          + steps.invalid()
-          + wfDefs.invalid()
-          + wfNodes.invalid()
-          + wfEdges.invalid()
-          + workflowMonitoringPolicies.invalid()
-          + crossRefIssues.size();
-    }
-
-    public List<Map<String, String>> validJobs() {
-      return jobs.validRows();
-    }
-
-    public List<Map<String, String>> validJobMonitoringPolicies() {
-      return jobMonitoringPolicies.validRows();
-    }
-
-    public List<Map<String, String>> validResourceQueues() {
-      return resourceQueues.validRows();
-    }
-
-    public List<Map<String, String>> validBusinessCalendars() {
-      return businessCalendars.validRows();
-    }
-
-    public List<Map<String, String>> validBatchWindows() {
-      return batchWindows.validRows();
-    }
-
-    public List<Map<String, String>> validChannels() {
-      return channels.validRows();
-    }
-
-    public List<Map<String, String>> validFileTemplates() {
-      return fileTemplates.validRows();
-    }
-
-    public List<Map<String, String>> validWfDefs() {
-      return wfDefs.validRows();
-    }
-
-    public List<Map<String, String>> validWfNodes() {
-      return wfNodes.validRows();
-    }
-
-    public List<Map<String, String>> validWfEdges() {
-      return wfEdges.validRows();
-    }
-
-    public List<Map<String, String>> validWorkflowMonitoringPolicies() {
-      return workflowMonitoringPolicies.validRows();
-    }
-
-    public List<WorkbookIssue> allIssues() {
-      List<WorkbookIssue> all = new ArrayList<>();
-      all.addAll(resourceQueues.issues());
-      all.addAll(businessCalendars.issues());
-      all.addAll(batchWindows.issues());
-      all.addAll(jobs.issues());
-      all.addAll(jobMonitoringPolicies.issues());
-      all.addAll(channels.issues());
-      all.addAll(fileTemplates.issues());
-      all.addAll(pipelines.issues());
-      all.addAll(steps.issues());
-      all.addAll(wfDefs.issues());
-      all.addAll(wfNodes.issues());
-      all.addAll(wfEdges.issues());
-      all.addAll(workflowMonitoringPolicies.issues());
-      all.addAll(crossRefIssues);
-      return all;
-    }
-  }
-
-  @FunctionalInterface
-  private interface ExcelRowValidator {
-    void validate(Map<String, String> row, int rowNo, List<String> rowIssues);
-  }
-
-  private static SheetResult validateRows(
-      String sheetName, List<Map<String, String>> rows, ExcelRowValidator validator) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> rowIssues = new ArrayList<>();
-      validator.validate(row, rowNo, rowIssues);
-      addIssues(rowIssues, sheetName, rowNo, issues);
-      if (rowIssues.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(sheetName, rows.size(), valid, issues);
-  }
-
-  private static SheetResult retiredSheet(String sheetName, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>(rows.size());
-    int fallbackRowNo = 2;
-    for (Map<String, String> row : rows) {
-      int candidateFallbackRowNo = fallbackRowNo++;
-      int rowNo = excelRowNo(row, candidateFallbackRowNo);
-      issues.add(new WorkbookIssue(
-          sheetName, rowNo, "", "tenant Pipeline configuration sheet is retired"));
-    }
-    return new SheetResult(sheetName, rows.size(), List.of(), issues);
-  }
-
-  public PackageValidationResult validate(PackageExcelSession session) {
-    String tid = session.tenantId();
-    SheetResult resourceQueues = validateResourceQueueRows(tid, session.resourceQueueRows());
-    SheetResult businessCalendars =
-        validateBusinessCalendarRows(tid, session.businessCalendarRows());
-    SheetResult batchWindows = validateBatchWindowRows(tid, session.batchWindowRows());
-    SheetResult jobs = validateJobRows(tid, session.jobRows());
-    SheetResult jobMonitoringPolicies =
-        validateJobMonitoringPolicyRows(tid, session.jobMonitoringPolicyRows(), jobs.validRows());
-    SheetResult channels = validateChannelRows(tid, session.fileChannelRows());
-    SheetResult fileTemplates = validateFileTemplateRows(tid, session.fileTemplateRows());
-    SheetResult pipelines = retiredSheet(PIPELINE_SHEET, session.pipelineRows());
-    SheetResult steps = retiredSheet(STEP_SHEET, session.pipelineStepRows());
-    SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
-    SheetResult workflowMonitoringPolicies = validateWorkflowMonitoringPolicyRows(
-        tid, session.workflowMonitoringPolicyRows(), wfDefs.validRows());
-    SheetResult wfNodes = validateWfNodeRows(session.workflowNodeRows(), wfDefs.validRows());
-    SheetResult wfEdges =
-        validateWfEdgeRows(session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
-    ValidatedReferenceRows referenceRows = ValidatedReferenceRows.builder()
-        .resourceQueues(resourceQueues.validRows())
-        .businessCalendars(businessCalendars.validRows())
-        .batchWindows(batchWindows.validRows())
-        .jobs(jobs.validRows())
-        .fileTemplates(fileTemplates.validRows())
-        .workflowDefinitions(wfDefs.validRows())
-        .workflowNodes(wfNodes.validRows())
-        .build();
-    List<WorkbookIssue> crossIssues = validateCrossReferences(tid, referenceRows);
-    // ADR-025:Excel import 阶段静态 DAG 拓扑校验,拒绝有环/不可达/孤立终端/CONDITION 缺 expr/
-    // DSL 引用非法或非上游节点的图。复杂规则(V9/V10 GATEWAY join_mode 与 V16 WAIT sensor_spec)留 enable 时由
-    // orchestrator WorkflowGraphValidator 回退,Excel 阶段先拦截致命问题。
-    crossIssues.addAll(
-        WorkflowGraphTopologyValidator.validate(wfNodes.validRows(), wfEdges.validRows()));
-    return new PackageValidationResult(
-        resourceQueues,
-        businessCalendars,
-        batchWindows,
-        jobs,
-        jobMonitoringPolicies,
-        channels,
-        fileTemplates,
-        pipelines,
-        steps,
-        wfDefs,
-        wfNodes,
-        wfEdges,
-        workflowMonitoringPolicies,
-        crossIssues);
-  }
-
-  private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(RESOURCE_QUEUE_SHEET, rows, (row, rowNo, ri) -> {
-      QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
-        ri.add("duplicate queue_code in excel: " + queue.queueCode());
-      }
-    });
-  }
-
-  private SheetResult validateBusinessCalendarRows(
-      String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(BUSINESS_CALENDAR_SHEET, rows, (row, rowNo, ri) -> {
-      CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
-        ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
-      }
-    });
-  }
-
-  private SheetResult validateBatchWindowRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(BATCH_WINDOW_SHEET, rows, (row, rowNo, ri) -> {
-      WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
-        ri.add("duplicate window_code in excel: " + window.windowCode());
-      }
-      if (EmptyChecks.isEmpty(ri)) {
-        validateWindowSettings(window, row, ri);
-      }
-    });
-  }
-
-  /** 仅省略跨日标志且区间校验失败时回查目标；普通合法行不额外查询。 */
-  private void validateWindowSettings(
-      WindowRow window, Map<String, String> values, List<String> issues) {
-    try {
-      BatchWindowRules.validate(
-          window.timezone(), window.startTime(), window.endTime(), window.allowCrossDay());
-    } catch (BizException invalid) {
-      boolean needsExistingCrossDay =
-          !Texts.hasText(values.get(ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY))
-              && BatchWindowRules.WINDOW_RANGE_FIELD.equals(invalid.getMessageArgs()[0]);
-      if (needsExistingCrossDay) {
-        BatchWindowRow existing =
-            batchWindowMapper.selectByUniqueKey(window.tenantId(), window.windowCode());
-        if (EmptyChecks.isNotNull(existing) && Boolean.TRUE.equals(existing.allowCrossDay())) {
-          return;
+    public record SheetResult(
+            String sheetName, int total, List<Map<String, String>> validRows, List<WorkbookIssue> issues) {
+        public int valid() {
+            return validRows.size();
         }
-      }
-      // 共同规则只返回固定字段上下文，预览不回显异常原值。
-      issues.add("invalid batch window settings: " + invalid.getMessageArgs()[0]);
-    }
-  }
 
-  private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        JOB_SHEET,
-        rows,
-        (row, rowNo, ri) ->
-            ConfigPackageExcelRowValidators.validateJobRow(tenantId, row, seen, ri));
-  }
-
-  private SheetResult validateJobMonitoringPolicyRows(
-      String tenantId, List<Map<String, String>> rows, List<Map<String, String>> packageJobRows) {
-    Map<String, PolicyJobContext> packageJobs = packageJobRows.stream()
-        .filter(row -> hasText(normalize(row.get(COL_JOB_CODE))))
-        .collect(Collectors.toMap(
-            row -> {
-              String normalizedJobCode = normalize(row.get(COL_JOB_CODE));
-              return normalizedJobCode.toUpperCase(Locale.ROOT);
-            },
-            row -> {
-              String scheduleType = normalizeEnum(row.get(COL_SCHEDULE_TYPE));
-              String normalizedScheduleType = Objects.toString(scheduleType, "");
-              String dependsOnJobCode = normalize(row.get(COL_DEPENDS_ON_JOB_CODE));
-              String normalizedDependsOnJobCode = Objects.toString(dependsOnJobCode, "");
-              return new PolicyJobContext(normalizedScheduleType, normalizedDependsOnJobCode);
-            },
-            (first, ignored) -> first));
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        JOB_MONITORING_POLICY_SHEET,
-        rows,
-        (row, rowNo, rowIssues) ->
-            validateJobMonitoringPolicyRow(tenantId, packageJobs, seen, row, rowIssues));
-  }
-
-  private void validateJobMonitoringPolicyRow(
-      String tenantId,
-      Map<String, PolicyJobContext> packageJobs,
-      Set<String> seen,
-      Map<String, String> row,
-      List<String> issues) {
-    validatePolicyTenant(tenantId, row, issues);
-    PolicyJobContext jobContext = resolvePolicyJob(tenantId, packageJobs, seen, row, issues);
-    if (EmptyChecks.isNotNull(jobContext)) {
-      validateMonitoringPolicyApplicability(row, jobContext, issues);
-    }
-    validateMonitoringPolicyValues(row, issues);
-  }
-
-  private static void validatePolicyTenant(
-      String tenantId, Map<String, String> row, List<String> issues) {
-    String rowTenantId = normalize(row.get(COL_TENANT_ID));
-    if (hasText(rowTenantId) && !tenantId.equals(rowTenantId)) {
-      issues.add(COL_TENANT_ID + " must match the uploaded tenant");
-    }
-  }
-
-  private PolicyJobContext resolvePolicyJob(
-      String tenantId,
-      Map<String, PolicyJobContext> packageJobs,
-      Set<String> seen,
-      Map<String, String> row,
-      List<String> issues) {
-    String jobCode = normalize(row.get(COL_JOB_CODE));
-    if (!hasText(jobCode)) {
-      issues.add(COL_JOB_CODE + " is required");
-      return null;
-    }
-    String key = jobCode.toUpperCase(Locale.ROOT);
-    if (!seen.add(key)) {
-      issues.add("duplicate job_code in excel: " + jobCode);
-    }
-    PolicyJobContext packageJob = packageJobs.get(key);
-    if (EmptyChecks.isNotNull(packageJob)) {
-      return packageJob;
-    }
-    JobDefinitionView existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-    if (EmptyChecks.isNull(existingJob)) {
-      issues.add("job_code does not exist for tenant: " + jobCode);
-      return null;
-    }
-    return new PolicyJobContext(existingJob.getScheduleType(), existingJob.getDependsOnJobCode());
-  }
-
-  private static void validateMonitoringPolicyApplicability(
-      Map<String, String> row, PolicyJobContext job, List<String> issues) {
-    boolean cron = "CRON".equals(job.scheduleType());
-    boolean dependent = hasText(job.dependsOnJobCode());
-    Integer startGrace = parseIntegerWithoutIssue(row.get(COL_START_GRACE_SECONDS));
-    Integer dependencyWindow =
-        parseIntegerWithoutIssue(row.get(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS));
-    String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
-    String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
-    boolean hasPositiveDependencyWindow =
-        EmptyChecks.isNotNull(dependencyWindow) && dependencyWindow > 0;
-
-    boolean startGraceConfiguredForUnsupportedJob =
-        !cron && !dependent && EmptyChecks.isNotNull(startGrace) && startGrace > 0;
-    if (startGraceConfiguredForUnsupportedJob) {
-      issues.add(COL_START_GRACE_SECONDS + " is only supported for CRON or dependent jobs");
-    }
-    boolean deadlineConfiguredForUnsupportedJob = hasText(deadlineTime) && (!cron || dependent);
-    if (deadlineConfiguredForUnsupportedJob) {
-      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME
-          + " is only supported for CRON jobs without an upstream dependency");
-    }
-    boolean dependencyWindowConfiguredForNonDependentJob =
-        hasPositiveDependencyWindow && !dependent;
-    if (dependencyWindowConfiguredForNonDependentJob) {
-      issues.add(
-          COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " is only supported for dependent jobs");
-    }
-    boolean nonZeroDayOffsetConfiguredForNonCronJob =
-        !cron && hasText(dayOffset) && !"0".equals(dayOffset);
-    if (nonZeroDayOffsetConfiguredForNonCronJob) {
-      issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " is only supported for CRON jobs");
-    }
-    boolean deadlineAndDependencyWindowBothConfigured =
-        hasText(deadlineTime) && hasPositiveDependencyWindow;
-    if (deadlineAndDependencyWindowBothConfigured) {
-      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " and "
-          + COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " cannot both be configured");
-    }
-  }
-
-  private static void validateMonitoringPolicyValues(Map<String, String> row, List<String> issues) {
-    validateNonNegativeIntegerFields(row, issues);
-    validateDeadlineTime(row, issues);
-    validateDeadlineDayOffset(row, issues);
-    validateSeverityFields(row, issues);
-  }
-
-  private static void validateNonNegativeIntegerFields(
-      Map<String, String> row, List<String> issues) {
-    for (String field : List.of(
-        COL_SOFT_RUNTIME_SECONDS,
-        COL_START_GRACE_SECONDS,
-        COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS)) {
-      String value = normalize(row.get(field));
-      if (hasText(value)) {
-        parseOptionalNonNegativeInteger(value, field, issues);
-      }
-    }
-  }
-
-  private static void validateDeadlineTime(Map<String, String> row, List<String> issues) {
-    String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
-    if (hasText(deadlineTime) && !deadlineTime.matches("^(?:[01]\\d|2[0-3]):[0-5]\\d$")) {
-      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " must use HH:mm (00:00-23:59)");
-    }
-  }
-
-  private static void validateDeadlineDayOffset(Map<String, String> row, List<String> issues) {
-    String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
-    if (hasText(dayOffset) && !Set.of("0", "1").contains(dayOffset)) {
-      issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " must be 0 (same day) or 1 (next day)");
-    }
-  }
-
-  private static void validateSeverityFields(Map<String, String> row, List<String> issues) {
-    for (String field : List.of(
-        COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
-      String severity = normalizeEnum(row.get(field));
-      if (hasText(severity) && !Set.of("WARN", "ERROR", "CRITICAL").contains(severity)) {
-        issues.add(field + " must be WARN, ERROR or CRITICAL");
-      }
-    }
-  }
-
-  private record PolicyJobContext(String scheduleType, String dependsOnJobCode) {}
-
-  private static Integer parseOptionalNonNegativeInteger(
-      String value, String field, List<String> issues) {
-    String normalized = normalize(value);
-    if (!hasText(normalized)) {
-      return null;
-    }
-    try {
-      int parsed = Integer.parseInt(normalized);
-      if (parsed < 0) {
-        issues.add(field + " must be >= 0");
-        return null;
-      }
-      return parsed;
-    } catch (NumberFormatException exception) {
-      issues.add(field + " must be an integer");
-      return null;
-    }
-  }
-
-  private static Integer parseIntegerWithoutIssue(String value) {
-    try {
-      String normalized = normalize(value);
-      return hasText(normalized) ? Integer.valueOf(normalized) : null;
-    } catch (NumberFormatException exception) {
-      return null;
-    }
-  }
-
-  private SheetResult validateChannelRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        CHANNEL_SHEET,
-        rows,
-        (row, rowNo, ri) ->
-            ConfigPackageExcelRowValidators.validateChannelRow(tenantId, row, seen, ri));
-  }
-
-  private SheetResult validateFileTemplateRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(FILE_TEMPLATE_SHEET, rows, (row, rowNo, ri) -> {
-      TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      ConfigPackageExcelRowValidators.validateFormatConditionals(row, ri);
-      ConfigPackageExcelRowValidators.validateExportSql(row, ri);
-      rowValidators.validateTemplateJsonStructure(row, ri);
-      String key =
-          ConfigPackageExcelRowValidators.templateKey(template.templateCode(), template.version());
-      if (hasText(template.templateCode()) && !seen.add(key)) {
-        ri.add("duplicate template_code + version in excel: " + key);
-      }
-    });
-  }
-
-  private SheetResult validateWfDefRows(String tenantId, List<Map<String, String>> rows) {
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        WF_DEF_SHEET,
-        rows,
-        (row, rowNo, ri) ->
-            ConfigPackageExcelRowValidators.validateWfDefRow(tenantId, row, seen, ri));
-  }
-
-  private SheetResult validateWorkflowMonitoringPolicyRows(
-      String tenantId,
-      List<Map<String, String>> rows,
-      List<Map<String, String>> packageWorkflowRows) {
-    Set<String> packageWorkflowKeys = packageWorkflowRows.stream()
-        .map(row -> workflowPolicyKey(row.get(COL_WORKFLOW_CODE), row.get(COL_VERSION)))
-        .collect(Collectors.toSet());
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        WORKFLOW_MONITORING_POLICY_SHEET,
-        rows,
-        (row, rowNo, issues) ->
-            validateWorkflowMonitoringPolicyRow(tenantId, packageWorkflowKeys, seen, row, issues));
-  }
-
-  private void validateWorkflowMonitoringPolicyRow(
-      String tenantId,
-      Set<String> packageWorkflowKeys,
-      Set<String> seen,
-      Map<String, String> row,
-      List<String> issues) {
-    validatePolicyTenant(tenantId, row, issues);
-    String workflowCode = normalize(row.get(COL_WORKFLOW_CODE));
-    String versionText = normalize(row.get(COL_WORKFLOW_VERSION));
-    if (!hasText(workflowCode)) {
-      issues.add(COL_WORKFLOW_CODE + " is required");
-    }
-    Integer version = parseIntegerWithoutIssue(versionText);
-    if (EmptyChecks.isNull(version) || version <= 0) {
-      issues.add(COL_WORKFLOW_VERSION + " must be a positive integer");
-    }
-    if (hasText(workflowCode) && EmptyChecks.isNotNull(version) && version > 0) {
-      String key = workflowPolicyKey(workflowCode, versionText);
-      if (!seen.add(key)) {
-        issues.add("duplicate workflow_code + workflow_version in excel: " + key);
-      }
-      if (!packageWorkflowKeys.contains(key)) {
-        boolean workflowExists = EmptyChecks.isNotNull(workflowDefinitionMapper)
-            && EmptyChecks.isNotNull(
-                workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, version));
-        if (!workflowExists) {
-          issues.add("workflow_code + workflow_version does not exist for tenant: " + key);
+        public int invalid() {
+            return total - validRows.size();
         }
-      }
     }
-    validateMonitoringPolicyValues(row, issues);
-  }
 
-  private static String workflowPolicyKey(String workflowCode, String version) {
-    String normalizedCode = normalize(workflowCode);
-    String normalizedVersion = normalize(version);
-    Integer parsedVersion = parseIntegerWithoutIssue(normalizedVersion);
-    return Objects.toString(normalizedCode, "").toUpperCase(Locale.ROOT)
-        + KEY_SEP_COLON
-        + (EmptyChecks.isNull(parsedVersion)
-            ? Objects.toString(normalizedVersion, "")
-            : parsedVersion.toString());
-  }
+    @Builder
+    @SuppressWarnings("PMD.ExcessiveParameterList") // 每个组件对应配置包固定 sheet，保持逐表校验结果的类型安全。
+    public record PackageValidationResult(
+            SheetResult resourceQueues,
+            SheetResult businessCalendars,
+            SheetResult batchWindows,
+            SheetResult jobs,
+            SheetResult jobMonitoringPolicies,
+            SheetResult channels,
+            SheetResult fileTemplates,
+            SheetResult pipelines,
+            SheetResult steps,
+            SheetResult wfDefs,
+            SheetResult wfNodes,
+            SheetResult wfEdges,
+            SheetResult workflowMonitoringPolicies,
+            List<WorkbookIssue> crossRefIssues) {
 
-  private SheetResult validateWfNodeRows(
-      List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
-    Set<String> wfKeys = validWfDefs.stream()
-        .map(r ->
-            normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
-        .collect(Collectors.toSet());
-    Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        WF_NODE_SHEET,
-        rows,
-        (row, rowNo, ri) ->
-            ConfigPackageExcelRowValidators.validateWfNodeRow(row, wfKeys, seen, ri));
-  }
-
-  private SheetResult validateWfEdgeRows(
-      List<Map<String, String>> rows,
-      List<Map<String, String>> validWfDefs,
-      List<Map<String, String>> validNodes) {
-    Set<String> wfKeys = validWfDefs.stream()
-        .map(r ->
-            normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
-        .collect(Collectors.toSet());
-    Set<String> nodeKeys = validNodes.stream()
-        .map(r -> normalize(r.get(COL_WORKFLOW_CODE))
-            + KEY_SEP_COLON
-            + normalize(r.get(COL_WORKFLOW_VERSION))
-            + KEY_SEP_HASH
-            + normalize(r.get(COL_NODE_CODE)))
-        .collect(Collectors.toSet());
-    return validateRows(
-        WF_EDGE_SHEET,
-        rows,
-        (row, rowNo, ri) ->
-            ConfigPackageExcelRowValidators.validateWfEdgeRow(row, wfKeys, nodeKeys, ri));
-  }
-
-  /** 跨表引用只使用已通过行校验的集合，避免把原始无效行混入存在性与依赖图判断。 */
-  private List<WorkbookIssue> validateCrossReferences(
-      String tenantId, ValidatedReferenceRows rows) {
-    Set<String> jobCodesInExcel = rows.jobs().stream()
-        .map(r -> normalize(r.get(COL_JOB_CODE)))
-        .filter(Texts::hasText)
-        .collect(Collectors.toSet());
-    Set<String> fileTemplatesInExcel =
-        ConfigPackageExcelRowValidators.buildFileTemplateKeys(rows.fileTemplates());
-    Set<String> queueCodesInExcel = extractCodes(rows.resourceQueues(), COL_QUEUE_CODE);
-    Set<String> calendarCodesInExcel = rows.businessCalendars().stream()
-        .map(r -> CodeNormalizer.toConfigFormOrNull(r.get(COL_CALENDAR_CODE)))
-        .filter(Texts::hasText)
-        .collect(Collectors.toSet());
-    Set<String> windowCodesInExcel = extractCodes(rows.batchWindows(), COL_WINDOW_CODE);
-    List<WorkbookIssue> issues = new ArrayList<>();
-
-    WorkbookReferenceCodes references = new WorkbookReferenceCodes(
-        jobCodesInExcel, queueCodesInExcel, calendarCodesInExcel, windowCodesInExcel);
-    addJobDependencyIssues(tenantId, rows.jobs(), references, issues);
-    int wfDefRowNo = 2;
-    for (Map<String, String> row : rows.workflowDefinitions()) {
-      for (String refColumn : List.of(COL_SINGLE_JOB_CODE, COL_DEPENDS_ON_JOB_CODE)) {
-        String jobCode = normalize(row.get(refColumn));
-        boolean referencedJobIsMissing = hasText(jobCode)
-            && !jobCodesInExcel.contains(jobCode)
-            && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode));
-        if (referencedJobIsMissing) {
-          issues.add(new WorkbookIssue(
-              WF_DEF_SHEET,
-              wfDefRowNo,
-              refColumn,
-              refColumn + " references unknown job definition: " + jobCode));
+        public PackageValidationResult(
+                SheetResult resourceQueues,
+                SheetResult businessCalendars,
+                SheetResult batchWindows,
+                SheetResult jobs,
+                SheetResult jobMonitoringPolicies,
+                SheetResult channels,
+                SheetResult fileTemplates,
+                SheetResult pipelines,
+                SheetResult steps,
+                SheetResult wfDefs,
+                SheetResult wfNodes,
+                SheetResult wfEdges,
+                List<WorkbookIssue> crossRefIssues) {
+            this(
+                    resourceQueues,
+                    businessCalendars,
+                    batchWindows,
+                    jobs,
+                    jobMonitoringPolicies,
+                    channels,
+                    fileTemplates,
+                    pipelines,
+                    steps,
+                    wfDefs,
+                    wfNodes,
+                    wfEdges,
+                    emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
+                    crossRefIssues);
         }
-      }
-      String calendarCode = CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE));
-      boolean referencedCalendarIsMissing = Texts.hasText(calendarCode)
-          && !calendarCodesInExcel.contains(calendarCode)
-          && !businessCalendarExists(tenantId, calendarCode);
-      if (referencedCalendarIsMissing) {
-        int issueRowNo = excelRowNo(row, wfDefRowNo);
-        issues.add(new WorkbookIssue(
-            WF_DEF_SHEET,
-            issueRowNo,
-            COL_CALENDAR_CODE,
-            "calendar_code references unknown business_calendar: " + calendarCode));
-      }
-      wfDefRowNo++;
-    }
-    addTemplateReferenceIssues(
-        tenantId, JOB_SHEET, COL_DEFAULT_PARAMS, rows.jobs(), fileTemplatesInExcel, issues);
 
-    int fallbackRowNo = 2;
-    for (Map<String, String> row : rows.workflowNodes()) {
-      int wfNodeRowNo = excelRowNo(row, fallbackRowNo);
-      String relatedJob = normalize(row.get(COL_RELATED_JOB_CODE));
-      boolean relatedJobIsMissing = hasText(relatedJob)
-          && !jobCodesInExcel.contains(relatedJob)
-          && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob));
-      if (relatedJobIsMissing) {
-        issues.add(new WorkbookIssue(
-            WF_NODE_SHEET,
-            wfNodeRowNo,
-            COL_RELATED_JOB_CODE,
-            "related_job_code references unknown job definition: " + relatedJob));
-      }
-      String windowCode = normalize(row.get(COL_WINDOW_CODE));
-      boolean referencedWindowIsMissing = hasText(windowCode)
-          && !windowCodesInExcel.contains(windowCode)
-          && !batchWindowExists(tenantId, windowCode);
-      if (referencedWindowIsMissing) {
-        issues.add(new WorkbookIssue(
-            WF_NODE_SHEET,
-            wfNodeRowNo,
-            COL_WINDOW_CODE,
-            "window_code references unknown batch_window: " + windowCode));
-      }
-      fallbackRowNo++;
-    }
-    return issues;
-  }
-
-  private void addJobDependencyIssues(
-      String tenantId,
-      List<Map<String, String>> rows,
-      WorkbookReferenceCodes references,
-      List<WorkbookIssue> issues) {
-    int fallbackRowNo = 2;
-    for (Map<String, String> row : rows) {
-      int rowNo = excelRowNo(row, fallbackRowNo);
-      String queueCode = normalize(row.get(COL_QUEUE_CODE));
-      boolean referencedQueueIsMissing = hasText(queueCode)
-          && !references.queueCodes().contains(queueCode)
-          && !resourceQueueExists(tenantId, queueCode);
-      if (referencedQueueIsMissing) {
-        issues.add(new WorkbookIssue(
-            JOB_SHEET,
-            rowNo,
-            COL_QUEUE_CODE,
-            "queue_code references unknown resource_queue: " + queueCode));
-      }
-      String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
-          ? row.get(COL_DEPENDS_ON_JOB_CODES)
-          : row.get(COL_DEPENDS_ON_JOB_CODE);
-      List<String> dependencyCodes = splitDependencyCodes(configuredDependencies);
-      List<String> dependencyAlignments =
-          splitAlignmentValues(row.get(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS));
-      if (EmptyChecks.isNotEmpty(dependencyAlignments)
-          && dependencyAlignments.size() != dependencyCodes.size()) {
-        issues.add(new WorkbookIssue(
-            JOB_SHEET,
-            rowNo,
-            COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
-            "depends_on_biz_date_alignments must align positionally with depends_on_job_codes"));
-      }
-      for (String alignment : dependencyAlignments) {
-        if (!Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY").contains(alignment)) {
-          issues.add(new WorkbookIssue(
-              JOB_SHEET,
-              rowNo,
-              COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
-              "supported values are SAME_DAY and PREVIOUS_BIZ_DAY"));
-          break;
+        public PackageValidationResult(
+                SheetResult resourceQueues,
+                SheetResult businessCalendars,
+                SheetResult batchWindows,
+                SheetResult jobs,
+                SheetResult channels,
+                SheetResult fileTemplates,
+                SheetResult pipelines,
+                SheetResult steps,
+                SheetResult wfDefs,
+                SheetResult wfNodes,
+                SheetResult wfEdges,
+                List<WorkbookIssue> crossRefIssues) {
+            this(
+                    resourceQueues,
+                    businessCalendars,
+                    batchWindows,
+                    jobs,
+                    emptySheet(JOB_MONITORING_POLICY_SHEET),
+                    channels,
+                    fileTemplates,
+                    pipelines,
+                    steps,
+                    wfDefs,
+                    wfNodes,
+                    wfEdges,
+                    emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
+                    crossRefIssues);
         }
-      }
-      if (dependencyCodes.size() > MAX_JOB_DEPENDENCIES) {
-        issues.add(new WorkbookIssue(
-            JOB_SHEET,
-            rowNo,
-            COL_DEPENDS_ON_JOB_CODES,
-            "depends_on_job_codes must contain at most " + MAX_JOB_DEPENDENCIES
-                + " upstream jobs"));
-      }
-      for (String dependsOnJobCode : dependencyCodes) {
-        String normalizedJobCode = normalize(row.get(COL_JOB_CODE));
-        if (dependsOnJobCode.equals(normalizedJobCode)) {
-          issues.add(new WorkbookIssue(
-              JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job cannot depend on itself"));
-        } else if (!references.jobCodes().contains(dependsOnJobCode)
-            && EmptyChecks.isNull(
-                jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode))) {
-          issues.add(new WorkbookIssue(
-              JOB_SHEET,
-              rowNo,
-              COL_DEPENDS_ON_JOB_CODES,
-              "depends_on_job_codes references unknown job definition: " + dependsOnJobCode));
+
+        private static SheetResult emptySheet(String name) {
+            return new SheetResult(name, 0, List.of(), List.of());
         }
-      }
-      String calendarCode = CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE));
-      boolean referencedCalendarIsMissing = hasText(calendarCode)
-          && !references.calendarCodes().contains(calendarCode)
-          && !businessCalendarExists(tenantId, calendarCode);
-      if (referencedCalendarIsMissing) {
-        issues.add(new WorkbookIssue(
-            JOB_SHEET,
-            rowNo,
-            COL_CALENDAR_CODE,
-            "calendar_code references unknown business_calendar: " + calendarCode));
-      }
-      String windowCode = normalize(row.get(COL_WINDOW_CODE));
-      boolean referencedWindowIsMissing = hasText(windowCode)
-          && !references.windowCodes().contains(windowCode)
-          && !batchWindowExists(tenantId, windowCode);
-      if (referencedWindowIsMissing) {
-        issues.add(new WorkbookIssue(
-            JOB_SHEET,
-            rowNo,
-            COL_WINDOW_CODE,
-            "window_code references unknown batch_window: " + windowCode));
-      }
-      fallbackRowNo++;
-    }
-    addDependencyGraphIssues(tenantId, rows, issues);
-  }
 
-  private void addDependencyGraphIssues(
-      String tenantId, List<Map<String, String>> rows, List<WorkbookIssue> issues) {
-    Map<String, Set<String>> graph = new HashMap<>();
-    Set<String> replacedJobs = rows.stream()
-        .map(row -> normalize(row.get(COL_JOB_CODE)))
-        .filter(Texts::hasText)
-        .collect(Collectors.toSet());
-    List<JobDefinitionMapper.JobDependencyEdge> existingDependencies =
-        jobDefinitionMapper.selectAllDependencies(tenantId);
-    if (EmptyChecks.isNotNull(existingDependencies)) {
-      for (JobDefinitionMapper.JobDependencyEdge edge : existingDependencies) {
-        if (!replacedJobs.contains(edge.downstreamJobCode())) {
-          graph
-              .computeIfAbsent(edge.downstreamJobCode(), ignored -> new HashSet<>())
-              .add(edge.upstreamJobCode());
+        public int totalInvalid() {
+            return resourceQueues.invalid()
+                    + businessCalendars.invalid()
+                    + batchWindows.invalid()
+                    + jobs.invalid()
+                    + jobMonitoringPolicies.invalid()
+                    + channels.invalid()
+                    + fileTemplates.invalid()
+                    + pipelines.invalid()
+                    + steps.invalid()
+                    + wfDefs.invalid()
+                    + wfNodes.invalid()
+                    + wfEdges.invalid()
+                    + workflowMonitoringPolicies.invalid()
+                    + crossRefIssues.size();
         }
-      }
-    }
-    for (Map<String, String> row : rows) {
-      String downstream = normalize(row.get(COL_JOB_CODE));
-      String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
-          ? row.get(COL_DEPENDS_ON_JOB_CODES)
-          : row.get(COL_DEPENDS_ON_JOB_CODE);
-      graph
-          .computeIfAbsent(downstream, ignored -> new HashSet<>())
-          .addAll(splitDependencyCodes(configuredDependencies));
-    }
-    Set<String> visited = new HashSet<>();
-    for (String jobCode : graph.keySet()) {
-      if (dependencyGraphHasCycle(jobCode, graph, new HashSet<>(), visited)) {
-        int rowNo = EmptyChecks.isEmpty(rows) ? 0 : excelRowNo(rows.getFirst(), 2);
-        issues.add(new WorkbookIssue(
-            JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job dependency graph contains a cycle"));
-        break;
-      }
-    }
-  }
 
-  private static boolean dependencyGraphHasCycle(
-      String jobCode, Map<String, Set<String>> graph, Set<String> visiting, Set<String> visited) {
-    if (visiting.contains(jobCode)) {
-      return true;
-    }
-    if (!visited.add(jobCode)) {
-      return false;
-    }
-    visiting.add(jobCode);
-    for (String upstream : graph.getOrDefault(jobCode, Set.of())) {
-      if (dependencyGraphHasCycle(upstream, graph, visiting, visited)) {
-        return true;
-      }
-    }
-    visiting.remove(jobCode);
-    return false;
-  }
-
-  private static List<String> splitDependencyCodes(String configured) {
-    if (!hasText(configured)) {
-      return List.of();
-    }
-    return Arrays.stream(configured.split(","))
-        .map(String::trim)
-        .filter(ConfigPackageExcelValidator::hasText)
-        .distinct()
-        .toList();
-  }
-
-  private static List<String> splitAlignmentValues(String configured) {
-    if (!hasText(configured)) {
-      return List.of();
-    }
-    return Arrays.stream(configured.split(","))
-        .map(String::trim)
-        .filter(ConfigPackageExcelValidator::hasText)
-        .toList();
-  }
-
-  private boolean resourceQueueExists(String tenantId, String queueCode) {
-    return EmptyChecks.isNotNull(resourceQueueMapper.selectByUniqueKey(tenantId, queueCode));
-  }
-
-  private boolean businessCalendarExists(String tenantId, String calendarCode) {
-    return EmptyChecks.isNotNull(
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode));
-  }
-
-  private boolean batchWindowExists(String tenantId, String windowCode) {
-    return EmptyChecks.isNotNull(batchWindowMapper.selectByUniqueKey(tenantId, windowCode));
-  }
-
-  private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {
-    return rows.stream()
-        .map(r -> normalize(r.get(column)))
-        .filter(Texts::hasText)
-        .collect(Collectors.toSet());
-  }
-
-  private static Map<String, String> withRowNo(Map<String, String> row, int rowNo) {
-    Map<String, String> copy = new LinkedHashMap<>(row);
-    copy.put(INTERNAL_ROW_NO, String.valueOf(rowNo));
-    return copy;
-  }
-
-  static int excelRowNo(Map<String, String> row, int fallbackRowNo) {
-    String raw = row.get(INTERNAL_ROW_NO);
-    if (!Texts.hasText(raw)) {
-      return fallbackRowNo;
-    }
-    try {
-      return Integer.parseInt(raw);
-    } catch (NumberFormatException ignored) {
-      return fallbackRowNo;
-    }
-  }
-
-  private void addTemplateReferenceIssues(
-      String tenantId,
-      String sheetName,
-      String jsonColumn,
-      List<Map<String, String>> rows,
-      Set<String> fileTemplatesInExcel,
-      List<WorkbookIssue> issues) {
-    int fallbackRowNo = 2;
-    for (Map<String, String> row : rows) {
-      int rowNo = excelRowNo(row, fallbackRowNo);
-      ConfigPackageExcelRowValidators.TemplateRef ref =
-          rowValidators.extractTemplateRef(row.get(jsonColumn));
-      if (ref.hasTemplateCode()) {
-        String templateCode = ref.templateCode();
-        Integer templateVersion = ref.version();
-        String templateKey =
-            ConfigPackageExcelRowValidators.templateKey(templateCode, templateVersion);
-        boolean templateIncludedInExcel = fileTemplatesInExcel.contains(templateKey);
-        if (!templateIncludedInExcel && !rowValidators.fileTemplateExists(tenantId, ref)) {
-          issues.add(new WorkbookIssue(
-              sheetName,
-              rowNo,
-              jsonColumn,
-              "templateCode references unknown file_template_config: " + templateKey));
+        public List<Map<String, String>> validJobs() {
+            return jobs.validRows();
         }
-      }
-      fallbackRowNo++;
+
+        public List<Map<String, String>> validJobMonitoringPolicies() {
+            return jobMonitoringPolicies.validRows();
+        }
+
+        public List<Map<String, String>> validResourceQueues() {
+            return resourceQueues.validRows();
+        }
+
+        public List<Map<String, String>> validBusinessCalendars() {
+            return businessCalendars.validRows();
+        }
+
+        public List<Map<String, String>> validBatchWindows() {
+            return batchWindows.validRows();
+        }
+
+        public List<Map<String, String>> validChannels() {
+            return channels.validRows();
+        }
+
+        public List<Map<String, String>> validFileTemplates() {
+            return fileTemplates.validRows();
+        }
+
+        public List<Map<String, String>> validWfDefs() {
+            return wfDefs.validRows();
+        }
+
+        public List<Map<String, String>> validWfNodes() {
+            return wfNodes.validRows();
+        }
+
+        public List<Map<String, String>> validWfEdges() {
+            return wfEdges.validRows();
+        }
+
+        public List<Map<String, String>> validWorkflowMonitoringPolicies() {
+            return workflowMonitoringPolicies.validRows();
+        }
+
+        public List<WorkbookIssue> allIssues() {
+            List<WorkbookIssue> all = new ArrayList<>();
+            all.addAll(resourceQueues.issues());
+            all.addAll(businessCalendars.issues());
+            all.addAll(batchWindows.issues());
+            all.addAll(jobs.issues());
+            all.addAll(jobMonitoringPolicies.issues());
+            all.addAll(channels.issues());
+            all.addAll(fileTemplates.issues());
+            all.addAll(pipelines.issues());
+            all.addAll(steps.issues());
+            all.addAll(wfDefs.issues());
+            all.addAll(wfNodes.issues());
+            all.addAll(wfEdges.issues());
+            all.addAll(workflowMonitoringPolicies.issues());
+            all.addAll(crossRefIssues);
+            return all;
+        }
     }
-  }
 
-  public static String normalize(String value) {
-    return ConsoleTextSanitizer.normalize(value);
-  }
-
-  public static String normalizeEnum(String value) {
-    String n = normalize(value);
-    return n == null ? null : n.toUpperCase(Locale.ROOT);
-  }
-
-  public static boolean hasText(String value) {
-    return Texts.hasText(value);
-  }
-
-  private static void addIssues(
-      List<String> rowIssues, String sheetName, int rowNo, List<WorkbookIssue> issues) {
-    for (String msg : rowIssues) {
-      issues.add(new WorkbookIssue(sheetName, rowNo, null, msg));
-    }
-  }
-
-  /** 本次工作簿已通过行校验的引用来源；不复制或重排，保留原始 Excel 行号。 */
-  @Builder
-  private record ValidatedReferenceRows(
-      List<Map<String, String>> resourceQueues,
-      List<Map<String, String>> businessCalendars,
-      List<Map<String, String>> batchWindows,
-      List<Map<String, String>> jobs,
-      List<Map<String, String>> fileTemplates,
-      List<Map<String, String>> workflowDefinitions,
-      List<Map<String, String>> workflowNodes) {
-    private ValidatedReferenceRows {
-      Objects.requireNonNull(resourceQueues, "resourceQueues");
-      Objects.requireNonNull(businessCalendars, "businessCalendars");
-      Objects.requireNonNull(batchWindows, "batchWindows");
-      Objects.requireNonNull(jobs, "jobs");
-      Objects.requireNonNull(fileTemplates, "fileTemplates");
-      Objects.requireNonNull(workflowDefinitions, "workflowDefinitions");
-      Objects.requireNonNull(workflowNodes, "workflowNodes");
+    @FunctionalInterface
+    private interface ExcelRowValidator {
+        void validate(Map<String, String> row, int rowNo, List<String> rowIssues);
     }
 
-    @Override
-    public String toString() {
-      return "ValidatedReferenceRows[validated sheet rows]";
+    private static SheetResult validateRows(
+            String sheetName, List<Map<String, String>> rows, ExcelRowValidator validator) {
+        List<WorkbookIssue> issues = new ArrayList<>();
+        List<Map<String, String>> valid = new ArrayList<>();
+        int rowNo = 2;
+        for (Map<String, String> row : rows) {
+            List<String> rowIssues = new ArrayList<>();
+            validator.validate(row, rowNo, rowIssues);
+            addIssues(rowIssues, sheetName, rowNo, issues);
+            if (rowIssues.isEmpty()) {
+                valid.add(withRowNo(row, rowNo));
+            }
+            rowNo++;
+        }
+        return new SheetResult(sheetName, rows.size(), valid, issues);
     }
-  }
 
-  /** 同一工作簿内的有效配置编码优先于数据库回查，四类身份不能相互混用。 */
-  private record WorkbookReferenceCodes(
-      Set<String> jobCodes,
-      Set<String> queueCodes,
-      Set<String> calendarCodes,
-      Set<String> windowCodes) {
-    private WorkbookReferenceCodes {
-      Objects.requireNonNull(jobCodes, "jobCodes");
-      Objects.requireNonNull(queueCodes, "queueCodes");
-      Objects.requireNonNull(calendarCodes, "calendarCodes");
-      Objects.requireNonNull(windowCodes, "windowCodes");
+    private static SheetResult retiredSheet(String sheetName, List<Map<String, String>> rows) {
+        List<WorkbookIssue> issues = new ArrayList<>(rows.size());
+        int fallbackRowNo = 2;
+        for (Map<String, String> row : rows) {
+            int candidateFallbackRowNo = fallbackRowNo++;
+            int rowNo = excelRowNo(row, candidateFallbackRowNo);
+            issues.add(new WorkbookIssue(sheetName, rowNo, "", "tenant Pipeline configuration sheet is retired"));
+        }
+        return new SheetResult(sheetName, rows.size(), List.of(), issues);
     }
-  }
+
+    public PackageValidationResult validate(PackageExcelSession session) {
+        String tid = session.tenantId();
+        SheetResult resourceQueues = validateResourceQueueRows(tid, session.resourceQueueRows());
+        SheetResult businessCalendars = validateBusinessCalendarRows(tid, session.businessCalendarRows());
+        SheetResult batchWindows = validateBatchWindowRows(tid, session.batchWindowRows());
+        SheetResult jobs = validateJobRows(tid, session.jobRows());
+        SheetResult jobMonitoringPolicies =
+                validateJobMonitoringPolicyRows(tid, session.jobMonitoringPolicyRows(), jobs.validRows());
+        SheetResult channels = validateChannelRows(tid, session.fileChannelRows());
+        SheetResult fileTemplates = validateFileTemplateRows(tid, session.fileTemplateRows());
+        SheetResult pipelines = retiredSheet(PIPELINE_SHEET, session.pipelineRows());
+        SheetResult steps = retiredSheet(STEP_SHEET, session.pipelineStepRows());
+        SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
+        SheetResult workflowMonitoringPolicies =
+                validateWorkflowMonitoringPolicyRows(tid, session.workflowMonitoringPolicyRows(), wfDefs.validRows());
+        SheetResult wfNodes = validateWfNodeRows(session.workflowNodeRows(), wfDefs.validRows());
+        SheetResult wfEdges = validateWfEdgeRows(session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
+        ValidatedReferenceRows referenceRows = ValidatedReferenceRows.builder()
+                .resourceQueues(resourceQueues.validRows())
+                .businessCalendars(businessCalendars.validRows())
+                .batchWindows(batchWindows.validRows())
+                .jobs(jobs.validRows())
+                .fileTemplates(fileTemplates.validRows())
+                .workflowDefinitions(wfDefs.validRows())
+                .workflowNodes(wfNodes.validRows())
+                .build();
+        List<WorkbookIssue> crossIssues = validateCrossReferences(tid, referenceRows);
+        // ADR-025:Excel import 阶段静态 DAG 拓扑校验,拒绝有环/不可达/孤立终端/CONDITION 缺 expr/
+        // DSL 引用非法或非上游节点的图。复杂规则(V9/V10 GATEWAY join_mode 与 V16 WAIT sensor_spec)留 enable 时由
+        // orchestrator WorkflowGraphValidator 回退,Excel 阶段先拦截致命问题。
+        crossIssues.addAll(WorkflowGraphTopologyValidator.validate(wfNodes.validRows(), wfEdges.validRows()));
+        return new PackageValidationResult(
+                resourceQueues,
+                businessCalendars,
+                batchWindows,
+                jobs,
+                jobMonitoringPolicies,
+                channels,
+                fileTemplates,
+                pipelines,
+                steps,
+                wfDefs,
+                wfNodes,
+                wfEdges,
+                workflowMonitoringPolicies,
+                crossIssues);
+    }
+
+    private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(RESOURCE_QUEUE_SHEET, rows, (row, rowNo, ri) -> {
+            QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+            if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
+                ri.add("duplicate queue_code in excel: " + queue.queueCode());
+            }
+        });
+    }
+
+    private SheetResult validateBusinessCalendarRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(BUSINESS_CALENDAR_SHEET, rows, (row, rowNo, ri) -> {
+            CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+            if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
+                ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
+            }
+        });
+    }
+
+    private SheetResult validateBatchWindowRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(BATCH_WINDOW_SHEET, rows, (row, rowNo, ri) -> {
+            WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+            if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
+                ri.add("duplicate window_code in excel: " + window.windowCode());
+            }
+            if (EmptyChecks.isEmpty(ri)) {
+                validateWindowSettings(window, row, ri);
+            }
+        });
+    }
+
+    /** 仅省略跨日标志且区间校验失败时回查目标；普通合法行不额外查询。 */
+    private void validateWindowSettings(WindowRow window, Map<String, String> values, List<String> issues) {
+        try {
+            BatchWindowRules.validate(window.timezone(), window.startTime(), window.endTime(), window.allowCrossDay());
+        } catch (BizException invalid) {
+            boolean needsExistingCrossDay =
+                    !Texts.hasText(values.get(ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY))
+                            && BatchWindowRules.WINDOW_RANGE_FIELD.equals(invalid.getMessageArgs()[0]);
+            if (needsExistingCrossDay) {
+                BatchWindowRow existing = batchWindowMapper.selectByUniqueKey(window.tenantId(), window.windowCode());
+                if (EmptyChecks.isNotNull(existing) && Boolean.TRUE.equals(existing.allowCrossDay())) {
+                    return;
+                }
+            }
+            // 共同规则只返回固定字段上下文，预览不回显异常原值。
+            issues.add("invalid batch window settings: " + invalid.getMessageArgs()[0]);
+        }
+    }
+
+    private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                JOB_SHEET,
+                rows,
+                (row, rowNo, ri) -> ConfigPackageExcelRowValidators.validateJobRow(tenantId, row, seen, ri));
+    }
+
+    private SheetResult validateJobMonitoringPolicyRows(
+            String tenantId, List<Map<String, String>> rows, List<Map<String, String>> packageJobRows) {
+        Map<String, PolicyJobContext> packageJobs = packageJobRows.stream()
+                .filter(row -> hasText(normalize(row.get(COL_JOB_CODE))))
+                .collect(Collectors.toMap(
+                        row -> {
+                            String normalizedJobCode = normalize(row.get(COL_JOB_CODE));
+                            return normalizedJobCode.toUpperCase(Locale.ROOT);
+                        },
+                        row -> {
+                            String scheduleType = normalizeEnum(row.get(COL_SCHEDULE_TYPE));
+                            String normalizedScheduleType = Objects.toString(scheduleType, "");
+                            String dependsOnJobCode = normalize(row.get(COL_DEPENDS_ON_JOB_CODE));
+                            String normalizedDependsOnJobCode = Objects.toString(dependsOnJobCode, "");
+                            return new PolicyJobContext(normalizedScheduleType, normalizedDependsOnJobCode);
+                        },
+                        (first, ignored) -> first));
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                JOB_MONITORING_POLICY_SHEET,
+                rows,
+                (row, rowNo, rowIssues) -> validateJobMonitoringPolicyRow(tenantId, packageJobs, seen, row, rowIssues));
+    }
+
+    private void validateJobMonitoringPolicyRow(
+            String tenantId,
+            Map<String, PolicyJobContext> packageJobs,
+            Set<String> seen,
+            Map<String, String> row,
+            List<String> issues) {
+        validatePolicyTenant(tenantId, row, issues);
+        PolicyJobContext jobContext = resolvePolicyJob(tenantId, packageJobs, seen, row, issues);
+        if (EmptyChecks.isNotNull(jobContext)) {
+            validateMonitoringPolicyApplicability(row, jobContext, issues);
+        }
+        validateMonitoringPolicyValues(row, issues);
+    }
+
+    private static void validatePolicyTenant(String tenantId, Map<String, String> row, List<String> issues) {
+        String rowTenantId = normalize(row.get(COL_TENANT_ID));
+        if (hasText(rowTenantId) && !tenantId.equals(rowTenantId)) {
+            issues.add(COL_TENANT_ID + " must match the uploaded tenant");
+        }
+    }
+
+    private PolicyJobContext resolvePolicyJob(
+            String tenantId,
+            Map<String, PolicyJobContext> packageJobs,
+            Set<String> seen,
+            Map<String, String> row,
+            List<String> issues) {
+        String jobCode = normalize(row.get(COL_JOB_CODE));
+        if (!hasText(jobCode)) {
+            issues.add(COL_JOB_CODE + " is required");
+            return null;
+        }
+        String key = jobCode.toUpperCase(Locale.ROOT);
+        if (!seen.add(key)) {
+            issues.add("duplicate job_code in excel: " + jobCode);
+        }
+        PolicyJobContext packageJob = packageJobs.get(key);
+        if (EmptyChecks.isNotNull(packageJob)) {
+            return packageJob;
+        }
+        JobDefinitionView existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+        if (EmptyChecks.isNull(existingJob)) {
+            issues.add("job_code does not exist for tenant: " + jobCode);
+            return null;
+        }
+        return new PolicyJobContext(existingJob.getScheduleType(), existingJob.getDependsOnJobCode());
+    }
+
+    private static void validateMonitoringPolicyApplicability(
+            Map<String, String> row, PolicyJobContext job, List<String> issues) {
+        boolean cron = "CRON".equals(job.scheduleType());
+        boolean dependent = hasText(job.dependsOnJobCode());
+        Integer startGrace = parseIntegerWithoutIssue(row.get(COL_START_GRACE_SECONDS));
+        Integer dependencyWindow = parseIntegerWithoutIssue(row.get(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS));
+        String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
+        String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
+        boolean hasPositiveDependencyWindow = EmptyChecks.isNotNull(dependencyWindow) && dependencyWindow > 0;
+
+        boolean startGraceConfiguredForUnsupportedJob =
+                !cron && !dependent && EmptyChecks.isNotNull(startGrace) && startGrace > 0;
+        if (startGraceConfiguredForUnsupportedJob) {
+            issues.add(COL_START_GRACE_SECONDS + " is only supported for CRON or dependent jobs");
+        }
+        boolean deadlineConfiguredForUnsupportedJob = hasText(deadlineTime) && (!cron || dependent);
+        if (deadlineConfiguredForUnsupportedJob) {
+            issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME
+                    + " is only supported for CRON jobs without an upstream dependency");
+        }
+        boolean dependencyWindowConfiguredForNonDependentJob = hasPositiveDependencyWindow && !dependent;
+        if (dependencyWindowConfiguredForNonDependentJob) {
+            issues.add(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " is only supported for dependent jobs");
+        }
+        boolean nonZeroDayOffsetConfiguredForNonCronJob = !cron && hasText(dayOffset) && !"0".equals(dayOffset);
+        if (nonZeroDayOffsetConfiguredForNonCronJob) {
+            issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " is only supported for CRON jobs");
+        }
+        boolean deadlineAndDependencyWindowBothConfigured = hasText(deadlineTime) && hasPositiveDependencyWindow;
+        if (deadlineAndDependencyWindowBothConfigured) {
+            issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " and " + COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS
+                    + " cannot both be configured");
+        }
+    }
+
+    private static void validateMonitoringPolicyValues(Map<String, String> row, List<String> issues) {
+        validateNonNegativeIntegerFields(row, issues);
+        validateDeadlineTime(row, issues);
+        validateDeadlineDayOffset(row, issues);
+        validateSeverityFields(row, issues);
+    }
+
+    private static void validateNonNegativeIntegerFields(Map<String, String> row, List<String> issues) {
+        for (String field :
+                List.of(COL_SOFT_RUNTIME_SECONDS, COL_START_GRACE_SECONDS, COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS)) {
+            String value = normalize(row.get(field));
+            if (hasText(value)) {
+                parseOptionalNonNegativeInteger(value, field, issues);
+            }
+        }
+    }
+
+    private static void validateDeadlineTime(Map<String, String> row, List<String> issues) {
+        String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
+        if (hasText(deadlineTime) && !deadlineTime.matches("^(?:[01]\\d|2[0-3]):[0-5]\\d$")) {
+            issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " must use HH:mm (00:00-23:59)");
+        }
+    }
+
+    private static void validateDeadlineDayOffset(Map<String, String> row, List<String> issues) {
+        String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
+        if (hasText(dayOffset) && !Set.of("0", "1").contains(dayOffset)) {
+            issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " must be 0 (same day) or 1 (next day)");
+        }
+    }
+
+    private static void validateSeverityFields(Map<String, String> row, List<String> issues) {
+        for (String field :
+                List.of(COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
+            String severity = normalizeEnum(row.get(field));
+            if (hasText(severity) && !Set.of("WARN", "ERROR", "CRITICAL").contains(severity)) {
+                issues.add(field + " must be WARN, ERROR or CRITICAL");
+            }
+        }
+    }
+
+    private record PolicyJobContext(String scheduleType, String dependsOnJobCode) {}
+
+    private static Integer parseOptionalNonNegativeInteger(String value, String field, List<String> issues) {
+        String normalized = normalize(value);
+        if (!hasText(normalized)) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(normalized);
+            if (parsed < 0) {
+                issues.add(field + " must be >= 0");
+                return null;
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            issues.add(field + " must be an integer");
+            return null;
+        }
+    }
+
+    private static Integer parseIntegerWithoutIssue(String value) {
+        try {
+            String normalized = normalize(value);
+            return hasText(normalized) ? Integer.valueOf(normalized) : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private SheetResult validateChannelRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                CHANNEL_SHEET,
+                rows,
+                (row, rowNo, ri) -> ConfigPackageExcelRowValidators.validateChannelRow(tenantId, row, seen, ri));
+    }
+
+    private SheetResult validateFileTemplateRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(FILE_TEMPLATE_SHEET, rows, (row, rowNo, ri) -> {
+            TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+            ConfigPackageExcelRowValidators.validateFormatConditionals(row, ri);
+            ConfigPackageExcelRowValidators.validateExportSql(row, ri);
+            rowValidators.validateTemplateJsonStructure(row, ri);
+            String key = ConfigPackageExcelRowValidators.templateKey(template.templateCode(), template.version());
+            if (hasText(template.templateCode()) && !seen.add(key)) {
+                ri.add("duplicate template_code + version in excel: " + key);
+            }
+        });
+    }
+
+    private SheetResult validateWfDefRows(String tenantId, List<Map<String, String>> rows) {
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                WF_DEF_SHEET,
+                rows,
+                (row, rowNo, ri) -> ConfigPackageExcelRowValidators.validateWfDefRow(tenantId, row, seen, ri));
+    }
+
+    private SheetResult validateWorkflowMonitoringPolicyRows(
+            String tenantId, List<Map<String, String>> rows, List<Map<String, String>> packageWorkflowRows) {
+        Set<String> packageWorkflowKeys = packageWorkflowRows.stream()
+                .map(row -> workflowPolicyKey(row.get(COL_WORKFLOW_CODE), row.get(COL_VERSION)))
+                .collect(Collectors.toSet());
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                WORKFLOW_MONITORING_POLICY_SHEET,
+                rows,
+                (row, rowNo, issues) ->
+                        validateWorkflowMonitoringPolicyRow(tenantId, packageWorkflowKeys, seen, row, issues));
+    }
+
+    private void validateWorkflowMonitoringPolicyRow(
+            String tenantId,
+            Set<String> packageWorkflowKeys,
+            Set<String> seen,
+            Map<String, String> row,
+            List<String> issues) {
+        validatePolicyTenant(tenantId, row, issues);
+        String workflowCode = normalize(row.get(COL_WORKFLOW_CODE));
+        String versionText = normalize(row.get(COL_WORKFLOW_VERSION));
+        if (!hasText(workflowCode)) {
+            issues.add(COL_WORKFLOW_CODE + " is required");
+        }
+        Integer version = parseIntegerWithoutIssue(versionText);
+        if (EmptyChecks.isNull(version) || version <= 0) {
+            issues.add(COL_WORKFLOW_VERSION + " must be a positive integer");
+        }
+        if (hasText(workflowCode) && EmptyChecks.isNotNull(version) && version > 0) {
+            String key = workflowPolicyKey(workflowCode, versionText);
+            if (!seen.add(key)) {
+                issues.add("duplicate workflow_code + workflow_version in excel: " + key);
+            }
+            if (!packageWorkflowKeys.contains(key)) {
+                boolean workflowExists = EmptyChecks.isNotNull(workflowDefinitionMapper)
+                        && EmptyChecks.isNotNull(
+                                workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, version));
+                if (!workflowExists) {
+                    issues.add("workflow_code + workflow_version does not exist for tenant: " + key);
+                }
+            }
+        }
+        validateMonitoringPolicyValues(row, issues);
+    }
+
+    private static String workflowPolicyKey(String workflowCode, String version) {
+        String normalizedCode = normalize(workflowCode);
+        String normalizedVersion = normalize(version);
+        Integer parsedVersion = parseIntegerWithoutIssue(normalizedVersion);
+        return Objects.toString(normalizedCode, "").toUpperCase(Locale.ROOT)
+                + KEY_SEP_COLON
+                + (EmptyChecks.isNull(parsedVersion)
+                        ? Objects.toString(normalizedVersion, "")
+                        : parsedVersion.toString());
+    }
+
+    private SheetResult validateWfNodeRows(List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
+        Set<String> wfKeys = validWfDefs.stream()
+                .map(r -> normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+                .collect(Collectors.toSet());
+        Set<String> seen = new LinkedHashSet<>();
+        return validateRows(
+                WF_NODE_SHEET,
+                rows,
+                (row, rowNo, ri) -> ConfigPackageExcelRowValidators.validateWfNodeRow(row, wfKeys, seen, ri));
+    }
+
+    private SheetResult validateWfEdgeRows(
+            List<Map<String, String>> rows,
+            List<Map<String, String>> validWfDefs,
+            List<Map<String, String>> validNodes) {
+        Set<String> wfKeys = validWfDefs.stream()
+                .map(r -> normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+                .collect(Collectors.toSet());
+        Set<String> nodeKeys = validNodes.stream()
+                .map(r -> normalize(r.get(COL_WORKFLOW_CODE))
+                        + KEY_SEP_COLON
+                        + normalize(r.get(COL_WORKFLOW_VERSION))
+                        + KEY_SEP_HASH
+                        + normalize(r.get(COL_NODE_CODE)))
+                .collect(Collectors.toSet());
+        return validateRows(
+                WF_EDGE_SHEET,
+                rows,
+                (row, rowNo, ri) -> ConfigPackageExcelRowValidators.validateWfEdgeRow(row, wfKeys, nodeKeys, ri));
+    }
+
+    /** 跨表引用只使用已通过行校验的集合，避免把原始无效行混入存在性与依赖图判断。 */
+    private List<WorkbookIssue> validateCrossReferences(String tenantId, ValidatedReferenceRows rows) {
+        Set<String> jobCodesInExcel = rows.jobs().stream()
+                .map(r -> normalize(r.get(COL_JOB_CODE)))
+                .filter(Texts::hasText)
+                .collect(Collectors.toSet());
+        Set<String> fileTemplatesInExcel = ConfigPackageExcelRowValidators.buildFileTemplateKeys(rows.fileTemplates());
+        Set<String> queueCodesInExcel = extractCodes(rows.resourceQueues(), COL_QUEUE_CODE);
+        Set<String> calendarCodesInExcel = rows.businessCalendars().stream()
+                .map(r -> CodeNormalizer.toConfigFormOrNull(r.get(COL_CALENDAR_CODE)))
+                .filter(Texts::hasText)
+                .collect(Collectors.toSet());
+        Set<String> windowCodesInExcel = extractCodes(rows.batchWindows(), COL_WINDOW_CODE);
+        List<WorkbookIssue> issues = new ArrayList<>();
+
+        WorkbookReferenceCodes references = new WorkbookReferenceCodes(
+                jobCodesInExcel, queueCodesInExcel, calendarCodesInExcel, windowCodesInExcel);
+        addJobDependencyIssues(tenantId, rows.jobs(), references, issues);
+        int wfDefRowNo = 2;
+        for (Map<String, String> row : rows.workflowDefinitions()) {
+            for (String refColumn : List.of(COL_SINGLE_JOB_CODE, COL_DEPENDS_ON_JOB_CODE)) {
+                String jobCode = normalize(row.get(refColumn));
+                boolean referencedJobIsMissing = hasText(jobCode)
+                        && !jobCodesInExcel.contains(jobCode)
+                        && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode));
+                if (referencedJobIsMissing) {
+                    issues.add(new WorkbookIssue(
+                            WF_DEF_SHEET,
+                            wfDefRowNo,
+                            refColumn,
+                            refColumn + " references unknown job definition: " + jobCode));
+                }
+            }
+            String calendarCode = CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE));
+            boolean referencedCalendarIsMissing = Texts.hasText(calendarCode)
+                    && !calendarCodesInExcel.contains(calendarCode)
+                    && !businessCalendarExists(tenantId, calendarCode);
+            if (referencedCalendarIsMissing) {
+                int issueRowNo = excelRowNo(row, wfDefRowNo);
+                issues.add(new WorkbookIssue(
+                        WF_DEF_SHEET,
+                        issueRowNo,
+                        COL_CALENDAR_CODE,
+                        "calendar_code references unknown business_calendar: " + calendarCode));
+            }
+            wfDefRowNo++;
+        }
+        addTemplateReferenceIssues(tenantId, JOB_SHEET, COL_DEFAULT_PARAMS, rows.jobs(), fileTemplatesInExcel, issues);
+
+        int fallbackRowNo = 2;
+        for (Map<String, String> row : rows.workflowNodes()) {
+            int wfNodeRowNo = excelRowNo(row, fallbackRowNo);
+            String relatedJob = normalize(row.get(COL_RELATED_JOB_CODE));
+            boolean relatedJobIsMissing = hasText(relatedJob)
+                    && !jobCodesInExcel.contains(relatedJob)
+                    && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob));
+            if (relatedJobIsMissing) {
+                issues.add(new WorkbookIssue(
+                        WF_NODE_SHEET,
+                        wfNodeRowNo,
+                        COL_RELATED_JOB_CODE,
+                        "related_job_code references unknown job definition: " + relatedJob));
+            }
+            String windowCode = normalize(row.get(COL_WINDOW_CODE));
+            boolean referencedWindowIsMissing = hasText(windowCode)
+                    && !windowCodesInExcel.contains(windowCode)
+                    && !batchWindowExists(tenantId, windowCode);
+            if (referencedWindowIsMissing) {
+                issues.add(new WorkbookIssue(
+                        WF_NODE_SHEET,
+                        wfNodeRowNo,
+                        COL_WINDOW_CODE,
+                        "window_code references unknown batch_window: " + windowCode));
+            }
+            fallbackRowNo++;
+        }
+        return issues;
+    }
+
+    private void addJobDependencyIssues(
+            String tenantId,
+            List<Map<String, String>> rows,
+            WorkbookReferenceCodes references,
+            List<WorkbookIssue> issues) {
+        int fallbackRowNo = 2;
+        for (Map<String, String> row : rows) {
+            int rowNo = excelRowNo(row, fallbackRowNo);
+            String queueCode = normalize(row.get(COL_QUEUE_CODE));
+            boolean referencedQueueIsMissing = hasText(queueCode)
+                    && !references.queueCodes().contains(queueCode)
+                    && !resourceQueueExists(tenantId, queueCode);
+            if (referencedQueueIsMissing) {
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET,
+                        rowNo,
+                        COL_QUEUE_CODE,
+                        "queue_code references unknown resource_queue: " + queueCode));
+            }
+            String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
+                    ? row.get(COL_DEPENDS_ON_JOB_CODES)
+                    : row.get(COL_DEPENDS_ON_JOB_CODE);
+            List<String> dependencyCodes = splitDependencyCodes(configuredDependencies);
+            List<String> dependencyAlignments = splitAlignmentValues(row.get(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS));
+            if (EmptyChecks.isNotEmpty(dependencyAlignments) && dependencyAlignments.size() != dependencyCodes.size()) {
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET,
+                        rowNo,
+                        COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+                        "depends_on_biz_date_alignments must align positionally with depends_on_job_codes"));
+            }
+            for (String alignment : dependencyAlignments) {
+                if (!Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY").contains(alignment)) {
+                    issues.add(new WorkbookIssue(
+                            JOB_SHEET,
+                            rowNo,
+                            COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+                            "supported values are SAME_DAY and PREVIOUS_BIZ_DAY"));
+                    break;
+                }
+            }
+            if (dependencyCodes.size() > MAX_JOB_DEPENDENCIES) {
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET,
+                        rowNo,
+                        COL_DEPENDS_ON_JOB_CODES,
+                        "depends_on_job_codes must contain at most " + MAX_JOB_DEPENDENCIES + " upstream jobs"));
+            }
+            for (String dependsOnJobCode : dependencyCodes) {
+                String normalizedJobCode = normalize(row.get(COL_JOB_CODE));
+                if (dependsOnJobCode.equals(normalizedJobCode)) {
+                    issues.add(new WorkbookIssue(
+                            JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job cannot depend on itself"));
+                } else if (!references.jobCodes().contains(dependsOnJobCode)
+                        && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode))) {
+                    issues.add(new WorkbookIssue(
+                            JOB_SHEET,
+                            rowNo,
+                            COL_DEPENDS_ON_JOB_CODES,
+                            "depends_on_job_codes references unknown job definition: " + dependsOnJobCode));
+                }
+            }
+            String calendarCode = CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE));
+            boolean referencedCalendarIsMissing = hasText(calendarCode)
+                    && !references.calendarCodes().contains(calendarCode)
+                    && !businessCalendarExists(tenantId, calendarCode);
+            if (referencedCalendarIsMissing) {
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET,
+                        rowNo,
+                        COL_CALENDAR_CODE,
+                        "calendar_code references unknown business_calendar: " + calendarCode));
+            }
+            String windowCode = normalize(row.get(COL_WINDOW_CODE));
+            boolean referencedWindowIsMissing = hasText(windowCode)
+                    && !references.windowCodes().contains(windowCode)
+                    && !batchWindowExists(tenantId, windowCode);
+            if (referencedWindowIsMissing) {
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET,
+                        rowNo,
+                        COL_WINDOW_CODE,
+                        "window_code references unknown batch_window: " + windowCode));
+            }
+            fallbackRowNo++;
+        }
+        addDependencyGraphIssues(tenantId, rows, issues);
+    }
+
+    private void addDependencyGraphIssues(String tenantId, List<Map<String, String>> rows, List<WorkbookIssue> issues) {
+        Map<String, Set<String>> graph = new HashMap<>();
+        Set<String> replacedJobs = rows.stream()
+                .map(row -> normalize(row.get(COL_JOB_CODE)))
+                .filter(Texts::hasText)
+                .collect(Collectors.toSet());
+        List<JobDefinitionMapper.JobDependencyEdge> existingDependencies =
+                jobDefinitionMapper.selectAllDependencies(tenantId);
+        if (EmptyChecks.isNotNull(existingDependencies)) {
+            for (JobDefinitionMapper.JobDependencyEdge edge : existingDependencies) {
+                if (!replacedJobs.contains(edge.downstreamJobCode())) {
+                    graph.computeIfAbsent(edge.downstreamJobCode(), ignored -> new HashSet<>())
+                            .add(edge.upstreamJobCode());
+                }
+            }
+        }
+        for (Map<String, String> row : rows) {
+            String downstream = normalize(row.get(COL_JOB_CODE));
+            String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
+                    ? row.get(COL_DEPENDS_ON_JOB_CODES)
+                    : row.get(COL_DEPENDS_ON_JOB_CODE);
+            graph.computeIfAbsent(downstream, ignored -> new HashSet<>())
+                    .addAll(splitDependencyCodes(configuredDependencies));
+        }
+        Set<String> visited = new HashSet<>();
+        for (String jobCode : graph.keySet()) {
+            if (dependencyGraphHasCycle(jobCode, graph, new HashSet<>(), visited)) {
+                int rowNo = EmptyChecks.isEmpty(rows) ? 0 : excelRowNo(rows.getFirst(), 2);
+                issues.add(new WorkbookIssue(
+                        JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job dependency graph contains a cycle"));
+                break;
+            }
+        }
+    }
+
+    private static boolean dependencyGraphHasCycle(
+            String jobCode, Map<String, Set<String>> graph, Set<String> visiting, Set<String> visited) {
+        if (visiting.contains(jobCode)) {
+            return true;
+        }
+        if (!visited.add(jobCode)) {
+            return false;
+        }
+        visiting.add(jobCode);
+        for (String upstream : graph.getOrDefault(jobCode, Set.of())) {
+            if (dependencyGraphHasCycle(upstream, graph, visiting, visited)) {
+                return true;
+            }
+        }
+        visiting.remove(jobCode);
+        return false;
+    }
+
+    private static List<String> splitDependencyCodes(String configured) {
+        if (!hasText(configured)) {
+            return List.of();
+        }
+        return Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(ConfigPackageExcelValidator::hasText)
+                .distinct()
+                .toList();
+    }
+
+    private static List<String> splitAlignmentValues(String configured) {
+        if (!hasText(configured)) {
+            return List.of();
+        }
+        return Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(ConfigPackageExcelValidator::hasText)
+                .toList();
+    }
+
+    private boolean resourceQueueExists(String tenantId, String queueCode) {
+        return EmptyChecks.isNotNull(resourceQueueMapper.selectByUniqueKey(tenantId, queueCode));
+    }
+
+    private boolean businessCalendarExists(String tenantId, String calendarCode) {
+        return EmptyChecks.isNotNull(
+                businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode));
+    }
+
+    private boolean batchWindowExists(String tenantId, String windowCode) {
+        return EmptyChecks.isNotNull(batchWindowMapper.selectByUniqueKey(tenantId, windowCode));
+    }
+
+    private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {
+        return rows.stream()
+                .map(r -> normalize(r.get(column)))
+                .filter(Texts::hasText)
+                .collect(Collectors.toSet());
+    }
+
+    private static Map<String, String> withRowNo(Map<String, String> row, int rowNo) {
+        Map<String, String> copy = new LinkedHashMap<>(row);
+        copy.put(INTERNAL_ROW_NO, String.valueOf(rowNo));
+        return copy;
+    }
+
+    static int excelRowNo(Map<String, String> row, int fallbackRowNo) {
+        String raw = row.get(INTERNAL_ROW_NO);
+        if (!Texts.hasText(raw)) {
+            return fallbackRowNo;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ignored) {
+            return fallbackRowNo;
+        }
+    }
+
+    private void addTemplateReferenceIssues(
+            String tenantId,
+            String sheetName,
+            String jsonColumn,
+            List<Map<String, String>> rows,
+            Set<String> fileTemplatesInExcel,
+            List<WorkbookIssue> issues) {
+        int fallbackRowNo = 2;
+        for (Map<String, String> row : rows) {
+            int rowNo = excelRowNo(row, fallbackRowNo);
+            ConfigPackageExcelRowValidators.TemplateRef ref = rowValidators.extractTemplateRef(row.get(jsonColumn));
+            if (ref.hasTemplateCode()) {
+                String templateCode = ref.templateCode();
+                Integer templateVersion = ref.version();
+                String templateKey = ConfigPackageExcelRowValidators.templateKey(templateCode, templateVersion);
+                boolean templateIncludedInExcel = fileTemplatesInExcel.contains(templateKey);
+                if (!templateIncludedInExcel && !rowValidators.fileTemplateExists(tenantId, ref)) {
+                    issues.add(new WorkbookIssue(
+                            sheetName,
+                            rowNo,
+                            jsonColumn,
+                            "templateCode references unknown file_template_config: " + templateKey));
+                }
+            }
+            fallbackRowNo++;
+        }
+    }
+
+    public static String normalize(String value) {
+        return ConsoleTextSanitizer.normalize(value);
+    }
+
+    public static String normalizeEnum(String value) {
+        String n = normalize(value);
+        return n == null ? null : n.toUpperCase(Locale.ROOT);
+    }
+
+    public static boolean hasText(String value) {
+        return Texts.hasText(value);
+    }
+
+    private static void addIssues(List<String> rowIssues, String sheetName, int rowNo, List<WorkbookIssue> issues) {
+        for (String msg : rowIssues) {
+            issues.add(new WorkbookIssue(sheetName, rowNo, null, msg));
+        }
+    }
+
+    /** 本次工作簿已通过行校验的引用来源；不复制或重排，保留原始 Excel 行号。 */
+    @Builder
+    private record ValidatedReferenceRows(
+            List<Map<String, String>> resourceQueues,
+            List<Map<String, String>> businessCalendars,
+            List<Map<String, String>> batchWindows,
+            List<Map<String, String>> jobs,
+            List<Map<String, String>> fileTemplates,
+            List<Map<String, String>> workflowDefinitions,
+            List<Map<String, String>> workflowNodes) {
+        private ValidatedReferenceRows {
+            Objects.requireNonNull(resourceQueues, "resourceQueues");
+            Objects.requireNonNull(businessCalendars, "businessCalendars");
+            Objects.requireNonNull(batchWindows, "batchWindows");
+            Objects.requireNonNull(jobs, "jobs");
+            Objects.requireNonNull(fileTemplates, "fileTemplates");
+            Objects.requireNonNull(workflowDefinitions, "workflowDefinitions");
+            Objects.requireNonNull(workflowNodes, "workflowNodes");
+        }
+
+        @Override
+        public String toString() {
+            return "ValidatedReferenceRows[validated sheet rows]";
+        }
+    }
+
+    /** 同一工作簿内的有效配置编码优先于数据库回查，四类身份不能相互混用。 */
+    private record WorkbookReferenceCodes(
+            Set<String> jobCodes, Set<String> queueCodes, Set<String> calendarCodes, Set<String> windowCodes) {
+        private WorkbookReferenceCodes {
+            Objects.requireNonNull(jobCodes, "jobCodes");
+            Objects.requireNonNull(queueCodes, "queueCodes");
+            Objects.requireNonNull(calendarCodes, "calendarCodes");
+            Objects.requireNonNull(windowCodes, "windowCodes");
+        }
+    }
 }

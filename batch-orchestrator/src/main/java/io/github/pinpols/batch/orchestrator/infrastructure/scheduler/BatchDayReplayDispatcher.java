@@ -53,91 +53,90 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchDayReplayDispatcher {
 
-  private final BatchDayReplaySessionMapper sessionMapper;
-  private final BatchDayReplayEntryMapper entryMapper;
-  private final BatchDayReplayEntryExecutor entryExecutor;
-  private final BatchDayReplayTerminalReconciler terminalReconciler;
-  private final BatchDayReplayDispatchProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BatchDayReplaySessionMapper sessionMapper;
+    private final BatchDayReplayEntryMapper entryMapper;
+    private final BatchDayReplayEntryExecutor entryExecutor;
+    private final BatchDayReplayTerminalReconciler terminalReconciler;
+    private final BatchDayReplayDispatchProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
-  @SchedulerLock(
-      name = "batch_day_replay_dispatch",
-      lockAtMostFor = "${batch.replay.dispatch.lock-at-most-for:PT1M}",
-      lockAtLeastFor = "${batch.replay.dispatch.lock-at-least-for:PT15S}")
-  public void scheduledDispatch() {
-    if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
-      return;
-    }
-    List<BatchDayReplaySessionEntity> running = sessionMapper.selectByStatus(
-        BatchDayReplaySessionStatus.RUNNING.code(), properties.getSessionBatchSize());
-    if (EmptyChecks.isEmpty(running)) {
-      return;
-    }
-    for (BatchDayReplaySessionEntity session : running) {
-      if (session == null || session.id() == null) {
-        continue;
-      }
-      if (BatchDayReplayScope.OUTPUTS_ONLY.code().equals(session.scope())) {
-        // OUTPUTS_ONLY 走同步 promote 路径（BatchDayReplayService.executeOutputsOnly），dispatcher 不接管
-        continue;
-      }
-      String tenantId = session.tenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      // RLS Phase B：dispatchSession → dispatchEntry → compensationService.submit 全链路要带租户，
-      // 否则 REQUIRES_NEW entry 事务起点拿不到 app.tenant_id。try/catch 包在 runWithTenant 外以隔离单
-      // session 故障。
-      try {
-        RlsTenantContextHolder.runWithTenant(tenantId, () -> dispatchSession(session));
-      } catch (Exception failure) {
-        log.warn(
-            "batch_day_replay dispatch session error: tenantId={}, sessionId={}, msg={}",
-            session.tenantId(),
-            session.id(),
-            SwallowedExceptionLogger.summary(failure));
-      }
-    }
-  }
-
-  /**
-   * 单 session 派发循环：拉 PENDING entries 逐条调 compensationService.submit。每条 entry 走独立 REQUIRES_NEW 事务，
-   * 避免单条失败回滚整批。
-   */
-  void dispatchSession(BatchDayReplaySessionEntity session) {
-    terminalReconciler.reconcileAdmissions(session.tenantId(), session.id());
-    Instant now = BatchDateTimeSupport.utcNow();
-    entryMapper.resetStaleUnboundRunning(
-        session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);
-    List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
-        session.id(),
-        session.tenantId(),
-        BatchDayReplayEntryStatus.PENDING.code(),
-        properties.getEntryBatchSize());
-    if (EmptyChecks.isEmpty(pending)) {
-      return;
-    }
-    for (BatchDayReplayEntryEntity entry : pending) {
-      if (entry == null || entry.id() == null) {
-        continue;
-      }
-      try {
-        entryExecutor.dispatch(session, entry);
-      } catch (Exception entryFailure) {
-        try {
-          entryExecutor.markFailed(session, entry, entryFailure);
-        } catch (Exception markFailure) {
-          log.error(
-              "batch_day_replay entry failure could not be persisted: sessionId={}, entryId={},"
-                  + " jobCode={}, dispatchMsg={}, markMsg={}",
-              session.id(),
-              entry.id(),
-              entry.jobCode(),
-              SwallowedExceptionLogger.summary(entryFailure),
-              SwallowedExceptionLogger.summary(markFailure));
+    @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
+    @SchedulerLock(
+            name = "batch_day_replay_dispatch",
+            lockAtMostFor = "${batch.replay.dispatch.lock-at-most-for:PT1M}",
+            lockAtLeastFor = "${batch.replay.dispatch.lock-at-least-for:PT15S}")
+    public void scheduledDispatch() {
+        if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
+            return;
         }
-      }
+        List<BatchDayReplaySessionEntity> running = sessionMapper.selectByStatus(
+                BatchDayReplaySessionStatus.RUNNING.code(), properties.getSessionBatchSize());
+        if (EmptyChecks.isEmpty(running)) {
+            return;
+        }
+        for (BatchDayReplaySessionEntity session : running) {
+            if (session == null || session.id() == null) {
+                continue;
+            }
+            if (BatchDayReplayScope.OUTPUTS_ONLY.code().equals(session.scope())) {
+                // OUTPUTS_ONLY 走同步 promote 路径（BatchDayReplayService.executeOutputsOnly），dispatcher 不接管
+                continue;
+            }
+            String tenantId = session.tenantId();
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            // RLS Phase B：dispatchSession → dispatchEntry → compensationService.submit 全链路要带租户，
+            // 否则 REQUIRES_NEW entry 事务起点拿不到 app.tenant_id。try/catch 包在 runWithTenant 外以隔离单
+            // session 故障。
+            try {
+                RlsTenantContextHolder.runWithTenant(tenantId, () -> dispatchSession(session));
+            } catch (Exception failure) {
+                log.warn(
+                        "batch_day_replay dispatch session error: tenantId={}, sessionId={}, msg={}",
+                        session.tenantId(),
+                        session.id(),
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        }
     }
-  }
+
+    /**
+     * 单 session 派发循环：拉 PENDING entries 逐条调 compensationService.submit。每条 entry 走独立 REQUIRES_NEW 事务，
+     * 避免单条失败回滚整批。
+     */
+    void dispatchSession(BatchDayReplaySessionEntity session) {
+        terminalReconciler.reconcileAdmissions(session.tenantId(), session.id());
+        Instant now = BatchDateTimeSupport.utcNow();
+        entryMapper.resetStaleUnboundRunning(session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);
+        List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
+                session.id(),
+                session.tenantId(),
+                BatchDayReplayEntryStatus.PENDING.code(),
+                properties.getEntryBatchSize());
+        if (EmptyChecks.isEmpty(pending)) {
+            return;
+        }
+        for (BatchDayReplayEntryEntity entry : pending) {
+            if (entry == null || entry.id() == null) {
+                continue;
+            }
+            try {
+                entryExecutor.dispatch(session, entry);
+            } catch (Exception entryFailure) {
+                try {
+                    entryExecutor.markFailed(session, entry, entryFailure);
+                } catch (Exception markFailure) {
+                    log.error(
+                            "batch_day_replay entry failure could not be persisted: sessionId={}, entryId={},"
+                                    + " jobCode={}, dispatchMsg={}, markMsg={}",
+                            session.id(),
+                            entry.id(),
+                            entry.jobCode(),
+                            SwallowedExceptionLogger.summary(entryFailure),
+                            SwallowedExceptionLogger.summary(markFailure));
+                }
+            }
+        }
+    }
 }

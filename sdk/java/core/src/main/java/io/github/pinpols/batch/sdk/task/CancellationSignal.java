@@ -13,10 +13,10 @@ import lombok.Getter;
  */
 public final class CancellationSignal {
 
-  @Getter
-  private volatile boolean cancelled;
+    @Getter
+    private volatile boolean cancelled;
 
-  public void cancel() {
-    this.cancelled = true;
-  }
+    public void cancel() {
+        this.cancelled = true;
+    }
 }

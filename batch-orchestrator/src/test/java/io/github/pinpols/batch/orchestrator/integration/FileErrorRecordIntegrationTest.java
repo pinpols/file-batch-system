@@ -14,129 +14,127 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 集成测试：batch.file_error_record 表（V9 迁移）。 覆盖：插入、按 tenant+file 查询、skip 标志、raw_record JSONB。 */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("文件错误记录持久化: 单条与多条错误的写入查询,跳过标志过滤,原始记录原文存取,以及租户维度隔离")
 class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("写入单条文件错误后可按租户与文件查询到错误编码,错误阶段与未跳过标志")
-  void shouldInsertAndQueryFileErrorRecord() {
-    Long fileId = 99000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
+    @Test
+    @DisplayName("写入单条文件错误后可按租户与文件查询到错误编码,错误阶段与未跳过标志")
+    void shouldInsertAndQueryFileErrorRecord() {
+        Long fileId = 99000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
-    String insertErrorSql = """
+        String insertErrorSql = """
         insert into batch.file_error_record
             (tenant_id, file_id, error_code, error_message, error_stage, is_skipped)
         values (?, ?, 'PARSE_ERROR', 'invalid date format', 'PARSE', false)
         """;
-    jdbcTemplate.update(insertErrorSql, "t1", fileId);
+        jdbcTemplate.update(insertErrorSql, "t1", fileId);
 
-    String selectErrorsSql = """
+        String selectErrorsSql = """
         select * from batch.file_error_record where tenant_id = ? and file_id = ?
         """;
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(selectErrorsSql, "t1", fileId);
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(selectErrorsSql, "t1", fileId);
 
-    assertThat(rows).hasSize(1);
-    Map<String, Object> firstRow = rows.get(0);
-    assertThat(firstRow)
-        .containsEntry("error_code", "PARSE_ERROR")
-        .containsEntry("error_stage", "PARSE")
-        .containsEntry("is_skipped", Boolean.FALSE);
-  }
+        assertThat(rows).hasSize(1);
+        Map<String, Object> firstRow = rows.get(0);
+        assertThat(firstRow)
+                .containsEntry("error_code", "PARSE_ERROR")
+                .containsEntry("error_stage", "PARSE")
+                .containsEntry("is_skipped", Boolean.FALSE);
+    }
 
-  @Test
-  @DisplayName("同一文件可写入多条错误,按跳过标志过滤只返回被跳过的记录")
-  void shouldInsertMultipleErrorsForSameFile() {
-    Long fileId = 98000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
+    @Test
+    @DisplayName("同一文件可写入多条错误,按跳过标志过滤只返回被跳过的记录")
+    void shouldInsertMultipleErrorsForSameFile() {
+        Long fileId = 98000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
-    String insertErrorsSql = """
+        String insertErrorsSql = """
         insert into batch.file_error_record
             (tenant_id, file_id, error_code, error_message, error_stage, is_skipped, record_no)
         values
             (?, ?, 'REQUIRED_FIELD', 'customerNo is blank', 'VALIDATE', false, 1),
             (?, ?, 'INVALID_FORMAT', 'creditLimit must be numeric', 'VALIDATE', true, 2)
         """;
-    jdbcTemplate.update(insertErrorsSql, "t1", fileId, "t1", fileId);
+        jdbcTemplate.update(insertErrorsSql, "t1", fileId, "t1", fileId);
 
-    String errorCountSql = """
+        String errorCountSql = """
         select count(*) from batch.file_error_record where tenant_id = ? and file_id = ?
         """;
-    Long count = jdbcTemplate.queryForObject(errorCountSql, Long.class, "t1", fileId);
+        Long count = jdbcTemplate.queryForObject(errorCountSql, Long.class, "t1", fileId);
 
-    assertThat(count).isEqualTo(2L);
+        assertThat(count).isEqualTo(2L);
 
-    String skippedErrorsSql = """
+        String skippedErrorsSql = """
         select * from batch.file_error_record
         where tenant_id = ? and file_id = ? and is_skipped = true
         """;
-    List<Map<String, Object>> skipped = jdbcTemplate.queryForList(skippedErrorsSql, "t1", fileId);
-    assertThat(skipped).hasSize(1);
-    Map<String, Object> skippedRecord = skipped.get(0);
-    assertThat(skippedRecord).containsEntry("error_code", "INVALID_FORMAT");
-  }
+        List<Map<String, Object>> skipped = jdbcTemplate.queryForList(skippedErrorsSql, "t1", fileId);
+        assertThat(skipped).hasSize(1);
+        Map<String, Object> skippedRecord = skipped.get(0);
+        assertThat(skippedRecord).containsEntry("error_code", "INVALID_FORMAT");
+    }
 
-  @Test
-  @DisplayName("原始记录以结构化文本存储后可读回,且保留原始字段值")
-  void shouldStoreRawRecordAsJsonb() {
-    Long fileId = 97000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
-    String rawJson = "{\"customerNo\":\"C-001\",\"amount\":\"abc\"}";
+    @Test
+    @DisplayName("原始记录以结构化文本存储后可读回,且保留原始字段值")
+    void shouldStoreRawRecordAsJsonb() {
+        Long fileId = 97000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
+        String rawJson = "{\"customerNo\":\"C-001\",\"amount\":\"abc\"}";
 
-    String insertRawErrorSql = """
+        String insertRawErrorSql = """
         insert into batch.file_error_record
             (tenant_id, file_id, error_code, error_stage, is_skipped, raw_record)
         values (?, ?, 'TYPE_MISMATCH', 'VALIDATE', false, ?::jsonb)
         """;
-    jdbcTemplate.update(insertRawErrorSql, "t1", fileId, rawJson);
+        jdbcTemplate.update(insertRawErrorSql, "t1", fileId, rawJson);
 
-    String storedRawSql = """
+        String storedRawSql = """
         select raw_record::text from batch.file_error_record
         where tenant_id = ? and file_id = ?
         """;
-    String storedRaw = jdbcTemplate.queryForObject(storedRawSql, String.class, "t1", fileId);
+        String storedRaw = jdbcTemplate.queryForObject(storedRawSql, String.class, "t1", fileId);
 
-    assertThat(storedRaw).isNotBlank().contains("C-001");
-  }
+        assertThat(storedRaw).isNotBlank().contains("C-001");
+    }
 
-  @Test
-  @DisplayName("同一文件标识在不同租户下各自独立计数,互不覆盖")
-  void shouldIsolateTenantData() {
-    Long fileId = 96000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
+    @Test
+    @DisplayName("同一文件标识在不同租户下各自独立计数,互不覆盖")
+    void shouldIsolateTenantData() {
+        Long fileId = 96000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
-    String insertTenantOneErrorSql = """
+        String insertTenantOneErrorSql = """
         insert into batch.file_error_record (tenant_id, file_id, error_code, error_stage, is_skipped)
         values (?, ?, 'ERR', 'PARSE', false)
         """;
-    jdbcTemplate.update(insertTenantOneErrorSql, "t1", fileId);
+        jdbcTemplate.update(insertTenantOneErrorSql, "t1", fileId);
 
-    String insertTenantTwoErrorSql = """
+        String insertTenantTwoErrorSql = """
         insert into batch.file_error_record (tenant_id, file_id, error_code, error_stage, is_skipped)
         values (?, ?, 'ERR', 'PARSE', false)
         """;
-    jdbcTemplate.update(insertTenantTwoErrorSql, "t2", fileId);
+        jdbcTemplate.update(insertTenantTwoErrorSql, "t2", fileId);
 
-    String tenantOneErrorCountSql = """
+        String tenantOneErrorCountSql = """
         select count(*) from batch.file_error_record where tenant_id = 't1' and file_id = ?
         """;
-    Long t1Count = jdbcTemplate.queryForObject(tenantOneErrorCountSql, Long.class, fileId);
-    String tenantTwoErrorCountSql = """
+        Long t1Count = jdbcTemplate.queryForObject(tenantOneErrorCountSql, Long.class, fileId);
+        String tenantTwoErrorCountSql = """
         select count(*) from batch.file_error_record where tenant_id = 't2' and file_id = ?
         """;
-    Long t2Count = jdbcTemplate.queryForObject(tenantTwoErrorCountSql, Long.class, fileId);
+        Long t2Count = jdbcTemplate.queryForObject(tenantTwoErrorCountSql, Long.class, fileId);
 
-    assertThat(t1Count).isEqualTo(1L);
-    assertThat(t2Count).isEqualTo(1L);
-  }
+        assertThat(t1Count).isEqualTo(1L);
+        assertThat(t2Count).isEqualTo(1L);
+    }
 
-  @Test
-  @DisplayName("按错误阶段统计时候只返回对应阶段的记录数")
-  void shouldQueryByErrorStageIndex() {
-    Long fileId = 95000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
+    @Test
+    @DisplayName("按错误阶段统计时候只返回对应阶段的记录数")
+    void shouldQueryByErrorStageIndex() {
+        Long fileId = 95000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
-    String insertStageErrorsSql = """
+        String insertStageErrorsSql = """
         insert into batch.file_error_record
             (tenant_id, file_id, error_code, error_stage, is_skipped)
         values
@@ -144,21 +142,20 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
             (?, ?, 'ERR2', 'VALIDATE', false),
             (?, ?, 'ERR3', 'LOAD', false)
         """;
-    jdbcTemplate.update(insertStageErrorsSql, "t1", fileId, "t1", fileId, "t1", fileId);
+        jdbcTemplate.update(insertStageErrorsSql, "t1", fileId, "t1", fileId, "t1", fileId);
 
-    String parseErrorCountSql = """
+        String parseErrorCountSql = """
         select count(*) from batch.file_error_record
         where tenant_id = ? and file_id = ? and error_stage = 'PARSE'
         """;
-    Long parseErrors = jdbcTemplate.queryForObject(parseErrorCountSql, Long.class, "t1", fileId);
-    String validateErrorCountSql = """
+        Long parseErrors = jdbcTemplate.queryForObject(parseErrorCountSql, Long.class, "t1", fileId);
+        String validateErrorCountSql = """
         select count(*) from batch.file_error_record
         where tenant_id = ? and file_id = ? and error_stage = 'VALIDATE'
         """;
-    Long validateErrors =
-        jdbcTemplate.queryForObject(validateErrorCountSql, Long.class, "t1", fileId);
+        Long validateErrors = jdbcTemplate.queryForObject(validateErrorCountSql, Long.class, "t1", fileId);
 
-    assertThat(parseErrors).isEqualTo(1L);
-    assertThat(validateErrors).isEqualTo(1L);
-  }
+        assertThat(parseErrors).isEqualTo(1L);
+        assertThat(validateErrors).isEqualTo(1L);
+    }
 }

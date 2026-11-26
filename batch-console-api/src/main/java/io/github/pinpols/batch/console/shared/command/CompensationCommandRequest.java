@@ -9,35 +9,35 @@ import lombok.Data;
 @Data
 public class CompensationCommandRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 64, message = "compensationType too long (max 64)")
-  private String compensationType;
+    @NotBlank
+    @Size(max = 64, message = "compensationType too long (max 64)")
+    private String compensationType;
 
-  private Long targetId;
-  private String targetInstanceNo;
+    private Long targetId;
+    private String targetInstanceNo;
 
-  @Size(max = 128, message = "jobCode too long (max 128)")
-  private String jobCode;
+    @Size(max = 128, message = "jobCode too long (max 128)")
+    private String jobCode;
 
-  @ValidBizDate
-  private String bizDate;
+    @ValidBizDate
+    private String bizDate;
 
-  private String batchNo;
-  private Long relatedFileId;
-  private String channelCode;
-  private String reason;
-  private String operatorId;
-  private String approvalId;
-  private String strategy;
-  private Long sourceWorkflowRunId;
-  private Long sourceWorkflowNodeRunId;
-  private Long replayOperationId;
-  private String operationKey;
-  private String previewToken;
-  private String resultPolicy;
-  private String configVersionPolicy;
-  private Integer configVersion;
+    private String batchNo;
+    private Long relatedFileId;
+    private String channelCode;
+    private String reason;
+    private String operatorId;
+    private String approvalId;
+    private String strategy;
+    private Long sourceWorkflowRunId;
+    private Long sourceWorkflowNodeRunId;
+    private Long replayOperationId;
+    private String operationKey;
+    private String previewToken;
+    private String resultPolicy;
+    private String configVersionPolicy;
+    private Integer configVersion;
 }

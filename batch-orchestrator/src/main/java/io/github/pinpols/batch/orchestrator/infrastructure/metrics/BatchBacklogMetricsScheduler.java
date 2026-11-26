@@ -44,57 +44,55 @@ import org.springframework.stereotype.Component;
 @Lazy(false)
 public class BatchBacklogMetricsScheduler {
 
-  private static final List<String> OUTBOX_PENDING_STATUSES =
-      List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
-  private static final List<String> DLQ_PENDING_STATUSES =
-      List.of(DeadLetterReplayStatus.NEW.code(), DeadLetterReplayStatus.FAILED.code());
+    private static final List<String> OUTBOX_PENDING_STATUSES =
+            List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
+    private static final List<String> DLQ_PENDING_STATUSES =
+            List.of(DeadLetterReplayStatus.NEW.code(), DeadLetterReplayStatus.FAILED.code());
 
-  private final OutboxEventMapper outboxEventMapper;
-  private final DeadLetterTaskMapper deadLetterTaskMapper;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final MeterRegistry meterRegistry;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BacklogMetricsProperties backlogMetricsProperties;
+    private final OutboxEventMapper outboxEventMapper;
+    private final DeadLetterTaskMapper deadLetterTaskMapper;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final MeterRegistry meterRegistry;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BacklogMetricsProperties backlogMetricsProperties;
 
-  private final AtomicLong outboxPending = new AtomicLong();
-  private final AtomicLong outboxStalePublishing = new AtomicLong();
-  private final AtomicLong outboxDuplicateEventKeys = new AtomicLong();
-  private final AtomicLong dlqPending = new AtomicLong();
+    private final AtomicLong outboxPending = new AtomicLong();
+    private final AtomicLong outboxStalePublishing = new AtomicLong();
+    private final AtomicLong outboxDuplicateEventKeys = new AtomicLong();
+    private final AtomicLong dlqPending = new AtomicLong();
 
-  @PostConstruct
-  void initializeMeters() {
-    meterRegistry.gauge("batch.outbox.pending.events", outboxPending);
-    meterRegistry.gauge("batch.outbox.publishing.stale.events", outboxStalePublishing);
-    meterRegistry.gauge("batch.outbox.duplicate.event_keys", outboxDuplicateEventKeys);
-    meterRegistry.gauge("batch.dead_letter.tasks.pending", dlqPending);
-  }
-
-  @Scheduled(fixedDelayString = "${batch.metrics.backlog.poll-interval-millis:30000}")
-  @SchedulerLock(name = "batch_backlog_metrics", lockAtMostFor = "PT1M", lockAtLeastFor = "PT15S")
-  public void sample() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void initializeMeters() {
+        meterRegistry.gauge("batch.outbox.pending.events", outboxPending);
+        meterRegistry.gauge("batch.outbox.publishing.stale.events", outboxStalePublishing);
+        meterRegistry.gauge("batch.outbox.duplicate.event_keys", outboxDuplicateEventKeys);
+        meterRegistry.gauge("batch.dead_letter.tasks.pending", dlqPending);
     }
-    try {
-      outboxPending.set(outboxEventMapper.countByStatuses(OUTBOX_PENDING_STATUSES));
-      String publishingStatusCode = OutboxPublishStatus.PUBLISHING.code();
-      long publishingTimeoutSeconds = governance.outbox().getPublishingTimeoutSeconds();
-      long stalePublishingCount =
-          outboxEventMapper.countStalePublishing(publishingStatusCode, publishingTimeoutSeconds);
-      outboxStalePublishing.set(stalePublishingCount);
-      Instant duplicateDetectionSince =
-          BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow());
-      outboxDuplicateEventKeys.set(
-          outboxEventMapper.countDuplicateEventKeysSince(duplicateDetectionSince));
-      dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
-    } catch (RuntimeException ex) {
-      log.warn("batch backlog metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
-    }
-  }
 
-  private Duration duplicateDetectionWindow() {
-    long configuredWindowHours = backlogMetricsProperties.getOutboxDuplicateWindowHours();
-    long positiveWindowHours = Math.max(1, configuredWindowHours);
-    return Duration.ofHours(positiveWindowHours);
-  }
+    @Scheduled(fixedDelayString = "${batch.metrics.backlog.poll-interval-millis:30000}")
+    @SchedulerLock(name = "batch_backlog_metrics", lockAtMostFor = "PT1M", lockAtLeastFor = "PT15S")
+    public void sample() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        try {
+            outboxPending.set(outboxEventMapper.countByStatuses(OUTBOX_PENDING_STATUSES));
+            String publishingStatusCode = OutboxPublishStatus.PUBLISHING.code();
+            long publishingTimeoutSeconds = governance.outbox().getPublishingTimeoutSeconds();
+            long stalePublishingCount =
+                    outboxEventMapper.countStalePublishing(publishingStatusCode, publishingTimeoutSeconds);
+            outboxStalePublishing.set(stalePublishingCount);
+            Instant duplicateDetectionSince = BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow());
+            outboxDuplicateEventKeys.set(outboxEventMapper.countDuplicateEventKeysSince(duplicateDetectionSince));
+            dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
+        } catch (RuntimeException ex) {
+            log.warn("batch backlog metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
+        }
+    }
+
+    private Duration duplicateDetectionWindow() {
+        long configuredWindowHours = backlogMetricsProperties.getOutboxDuplicateWindowHours();
+        long positiveWindowHours = Math.max(1, configuredWindowHours);
+        return Duration.ofHours(positiveWindowHours);
+    }
 }

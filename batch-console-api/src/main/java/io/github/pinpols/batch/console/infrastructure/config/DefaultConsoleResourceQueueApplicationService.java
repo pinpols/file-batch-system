@@ -26,100 +26,93 @@ import org.springframework.stereotype.Service;
 /** {@link ConsoleResourceQueueApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleResourceQueueApplicationService
-    implements ConsoleResourceQueueApplicationService {
+public class DefaultConsoleResourceQueueApplicationService implements ConsoleResourceQueueApplicationService {
 
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final ConsoleTenantGuard tenantGuard;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final ConsoleTenantGuard tenantGuard;
 
-  @Override
-  public PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request) {
-    String resolved = tenantGuard.resolveTenant(request.tenantId());
-    String normalizedQueueCode =
-        CodeNormalizer.normalizeConfigCode(request.queueCode(), "queueCode");
-    PageRequest pageRequest = new PageRequest(request.pageNo(), request.pageSize());
-    ResourceQueueQuery query = new ResourceQueueQuery(
-        resolved, normalizedQueueCode, request.queueType(), request.enabled(), pageRequest);
-    long total = resourceQueueMapper.countByQuery(query);
-    List<ResourceQueueResponse> items = resourceQueueMapper.selectByQuery(query).stream()
-        .map(ResourceQueueResponse::from)
-        .toList();
-    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
-  }
-
-  @Override
-  public ResourceQueueResponse create(ResourceQueueCreateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String queueCode = CodeNormalizer.normalizeConfigCode(request.getQueueCode(), "queueCode");
-    ResourceQueueRow existing = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
-    if (existing != null) {
-      throw BizException.of(
-          ResultCode.CONFLICT,
-          ResultCode.CONFLICT.detailKey(),
-          "queue code already exists: " + request.getQueueCode());
+    @Override
+    public PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request) {
+        String resolved = tenantGuard.resolveTenant(request.tenantId());
+        String normalizedQueueCode = CodeNormalizer.normalizeConfigCode(request.queueCode(), "queueCode");
+        PageRequest pageRequest = new PageRequest(request.pageNo(), request.pageSize());
+        ResourceQueueQuery query = new ResourceQueueQuery(
+                resolved, normalizedQueueCode, request.queueType(), request.enabled(), pageRequest);
+        long total = resourceQueueMapper.countByQuery(query);
+        List<ResourceQueueResponse> items = resourceQueueMapper.selectByQuery(query).stream()
+                .map(ResourceQueueResponse::from)
+                .toList();
+        return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
     }
-    ResourceQueueInsertParam params = ResourceQueueInsertParam.builder()
-        .tenantId(tenantId)
-        .queueCode(queueCode)
-        .queueName(request.getQueueName())
-        .queueType(request.getQueueType())
-        .maxRunningJobs(
-            EmptyChecks.isNotNull(request.getMaxRunningJobs()) ? request.getMaxRunningJobs() : 0)
-        .maxRunningPartitions(
-            EmptyChecks.isNotNull(request.getMaxRunningPartitions())
-                ? request.getMaxRunningPartitions()
-                : 0)
-        .maxQps(EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : 0)
-        .workerGroup(request.getWorkerGroup())
-        .resourceTag(request.getResourceTag())
-        .priorityPolicy(
-            EmptyChecks.isNotNull(request.getPriorityPolicy())
-                ? request.getPriorityPolicy()
-                : "FIFO")
-        .fairShareWeight(
-            EmptyChecks.isNotNull(request.getFairShareWeight()) ? request.getFairShareWeight() : 1)
-        .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
-        .description(request.getDescription())
-        .build();
-    resourceQueueMapper.insert(params);
-    long id = params.getId();
-    ResourceQueueRow createdQueue = resourceQueueMapper.selectById(tenantId, id);
-    return ResourceQueueResponse.from(createdQueue);
-  }
 
-  @Override
-  public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ResourceQueueRow selectedQueue = resourceQueueMapper.selectById(tenantId, id);
-    ResourceQueueRow existing = Guard.requireFound(selectedQueue, "resource queue not found");
-    ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
-        .tenantId(tenantId)
-        .id(id)
-        .queueName(Nullables.coalesce(request.getQueueName(), existing.queueName()))
-        .queueType(Nullables.coalesce(request.getQueueType(), existing.queueType()))
-        .maxRunningJobs(Nullables.coalesce(request.getMaxRunningJobs(), existing.maxRunningJobs()))
-        .maxRunningPartitions(
-            Nullables.coalesce(request.getMaxRunningPartitions(), existing.maxRunningPartitions()))
-        .maxQps(Nullables.coalesce(request.getMaxQps(), existing.maxQps()))
-        .workerGroup(Nullables.coalesce(request.getWorkerGroup(), existing.workerGroup()))
-        .resourceTag(Nullables.coalesce(request.getResourceTag(), existing.resourceTag()))
-        .priorityPolicy(Nullables.coalesce(request.getPriorityPolicy(), existing.priorityPolicy()))
-        .fairShareWeight(
-            Nullables.coalesce(request.getFairShareWeight(), existing.fairShareWeight()))
-        .enabled(Nullables.coalesce(request.getEnabled(), existing.enabled()))
-        .description(Nullables.coalesce(request.getDescription(), existing.description()))
-        .build();
-    resourceQueueMapper.update(params);
-    ResourceQueueRow updatedQueue = resourceQueueMapper.selectById(tenantId, id);
-    return ResourceQueueResponse.from(updatedQueue);
-  }
-
-  @Override
-  public void toggle(Long id, String tenantId, Boolean enabled) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    int rows = resourceQueueMapper.toggleEnabled(resolved, id, enabled);
-    if (rows == 0) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.resource_queue.not_found");
+    @Override
+    public ResourceQueueResponse create(ResourceQueueCreateRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        String queueCode = CodeNormalizer.normalizeConfigCode(request.getQueueCode(), "queueCode");
+        ResourceQueueRow existing = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
+        if (existing != null) {
+            throw BizException.of(
+                    ResultCode.CONFLICT,
+                    ResultCode.CONFLICT.detailKey(),
+                    "queue code already exists: " + request.getQueueCode());
+        }
+        ResourceQueueInsertParam params = ResourceQueueInsertParam.builder()
+                .tenantId(tenantId)
+                .queueCode(queueCode)
+                .queueName(request.getQueueName())
+                .queueType(request.getQueueType())
+                .maxRunningJobs(EmptyChecks.isNotNull(request.getMaxRunningJobs()) ? request.getMaxRunningJobs() : 0)
+                .maxRunningPartitions(
+                        EmptyChecks.isNotNull(request.getMaxRunningPartitions())
+                                ? request.getMaxRunningPartitions()
+                                : 0)
+                .maxQps(EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : 0)
+                .workerGroup(request.getWorkerGroup())
+                .resourceTag(request.getResourceTag())
+                .priorityPolicy(
+                        EmptyChecks.isNotNull(request.getPriorityPolicy()) ? request.getPriorityPolicy() : "FIFO")
+                .fairShareWeight(EmptyChecks.isNotNull(request.getFairShareWeight()) ? request.getFairShareWeight() : 1)
+                .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
+                .description(request.getDescription())
+                .build();
+        resourceQueueMapper.insert(params);
+        long id = params.getId();
+        ResourceQueueRow createdQueue = resourceQueueMapper.selectById(tenantId, id);
+        return ResourceQueueResponse.from(createdQueue);
     }
-  }
+
+    @Override
+    public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ResourceQueueRow selectedQueue = resourceQueueMapper.selectById(tenantId, id);
+        ResourceQueueRow existing = Guard.requireFound(selectedQueue, "resource queue not found");
+        ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
+                .tenantId(tenantId)
+                .id(id)
+                .queueName(Nullables.coalesce(request.getQueueName(), existing.queueName()))
+                .queueType(Nullables.coalesce(request.getQueueType(), existing.queueType()))
+                .maxRunningJobs(Nullables.coalesce(request.getMaxRunningJobs(), existing.maxRunningJobs()))
+                .maxRunningPartitions(
+                        Nullables.coalesce(request.getMaxRunningPartitions(), existing.maxRunningPartitions()))
+                .maxQps(Nullables.coalesce(request.getMaxQps(), existing.maxQps()))
+                .workerGroup(Nullables.coalesce(request.getWorkerGroup(), existing.workerGroup()))
+                .resourceTag(Nullables.coalesce(request.getResourceTag(), existing.resourceTag()))
+                .priorityPolicy(Nullables.coalesce(request.getPriorityPolicy(), existing.priorityPolicy()))
+                .fairShareWeight(Nullables.coalesce(request.getFairShareWeight(), existing.fairShareWeight()))
+                .enabled(Nullables.coalesce(request.getEnabled(), existing.enabled()))
+                .description(Nullables.coalesce(request.getDescription(), existing.description()))
+                .build();
+        resourceQueueMapper.update(params);
+        ResourceQueueRow updatedQueue = resourceQueueMapper.selectById(tenantId, id);
+        return ResourceQueueResponse.from(updatedQueue);
+    }
+
+    @Override
+    public void toggle(Long id, String tenantId, Boolean enabled) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        int rows = resourceQueueMapper.toggleEnabled(resolved, id, enabled);
+        if (rows == 0) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.resource_queue.not_found");
+        }
+    }
 }

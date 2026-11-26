@@ -11,43 +11,43 @@ import lombok.Data;
 @Data
 public class BatchDayReplayRangeRequest {
 
-  @Size(max = 64)
-  private String tenantId;
+    @Size(max = 64)
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String calendarCode;
+    @NotBlank
+    @Size(max = 128)
+    private String calendarCode;
 
-  @NotBlank
-  @ValidBizDate
-  private String fromDate;
+    @NotBlank
+    @ValidBizDate
+    private String fromDate;
 
-  @NotBlank
-  @ValidBizDate
-  private String throughDate;
+    @NotBlank
+    @ValidBizDate
+    private String throughDate;
 
-  @NotBlank
-  @Size(max = 64)
-  private String scope;
+    @NotBlank
+    @Size(max = 64)
+    private String scope;
 
-  private List<@Size(max = 128) String> jobCodes;
-  private List<Long> versionIds;
-  private String resultPolicy;
-  private String configVersionPolicy;
-  private Integer configVersion;
+    private List<@Size(max = 128) String> jobCodes;
+    private List<Long> versionIds;
+    private String resultPolicy;
+    private String configVersionPolicy;
+    private Integer configVersion;
 
-  @NotBlank
-  @Size(max = 512)
-  private String reason;
+    @NotBlank
+    @Size(max = 512)
+    private String reason;
 
-  @NotBlank
-  @Size(max = 128)
-  private String requestedBy;
+    @NotBlank
+    @Size(max = 128)
+    private String requestedBy;
 
-  private Boolean autoApprove = Boolean.FALSE;
-  private String traceId;
-  private String executionMode = "REPLAY";
-  private String candidateSource = "EXISTING_INSTANCES";
-  private UUID operationKey;
-  private String previewToken;
+    private Boolean autoApprove = Boolean.FALSE;
+    private String traceId;
+    private String executionMode = "REPLAY";
+    private String candidateSource = "EXISTING_INSTANCES";
+    private UUID operationKey;
+    private String previewToken;
 }

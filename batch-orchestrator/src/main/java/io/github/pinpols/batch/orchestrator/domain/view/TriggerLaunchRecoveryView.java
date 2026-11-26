@@ -6,12 +6,12 @@ import lombok.Data;
 @Data
 public class TriggerLaunchRecoveryView {
 
-  private String tenantId;
-  private String requestId;
-  private String envelopeCiphertext;
-  private String traceId;
-  private Integer attempts;
-  private Long recoveryGeneration;
-  private String recoveryStatus;
-  private String lastErrorCode;
+    private String tenantId;
+    private String requestId;
+    private String envelopeCiphertext;
+    private String traceId;
+    private Integer attempts;
+    private Long recoveryGeneration;
+    private String recoveryStatus;
+    private String lastErrorCode;
 }

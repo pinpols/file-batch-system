@@ -41,142 +41,139 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class MaintenanceModeFilter extends OncePerRequestFilter {
 
-  /** 未设置预计恢复时间时返回的 Retry-After 秒数。 */
-  private static final long DEFAULT_RETRY_AFTER_SECONDS = 60L;
+    /** 未设置预计恢复时间时返回的 Retry-After 秒数。 */
+    private static final long DEFAULT_RETRY_AFTER_SECONDS = 60L;
 
-  /** Retry-After 秒数下限，避免临近恢复时客户端密集重试。 */
-  private static final long MIN_RETRY_AFTER_SECONDS = 30L;
+    /** Retry-After 秒数下限，避免临近恢复时客户端密集重试。 */
+    private static final long MIN_RETRY_AFTER_SECONDS = 30L;
 
-  /** 维护期间始终放行的路径(健康检查 + 维护状态本身 + 登录后探活 + admin 热更新端点)。 */
-  private static final Set<String> ALWAYS_ALLOWED = Set.of(
-      "/actuator/**",
-      // Alertmanager 出口:维护期告警仍需送达(与 actuator 同属内网基础设施端点,非租户业务写)。
-      "/internal/am-notify/**",
-      "/api/console/auth/check",
-      "/api/console/auth/logout",
-      "/api/console/system/maintenance",
-      "/api/console/admin/system/maintenance");
+    /** 维护期间始终放行的路径(健康检查 + 维护状态本身 + 登录后探活 + admin 热更新端点)。 */
+    private static final Set<String> ALWAYS_ALLOWED = Set.of(
+            "/actuator/**",
+            // Alertmanager 出口:维护期告警仍需送达(与 actuator 同属内网基础设施端点,非租户业务写)。
+            "/internal/am-notify/**",
+            "/api/console/auth/check",
+            "/api/console/auth/logout",
+            "/api/console/system/maintenance",
+            "/api/console/admin/system/maintenance");
 
-  private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
+    private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
-  private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String ROLE_ADMIN = "ROLE_ADMIN";
 
-  private final MaintenanceStateHolder stateHolder;
-  private final MaintenanceStateMetrics metrics;
-  private final ObjectMapper objectMapper;
-  private final AntPathMatcher pathMatcher = new AntPathMatcher();
+    private final MaintenanceStateHolder stateHolder;
+    private final MaintenanceStateMetrics metrics;
+    private final ObjectMapper objectMapper;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-      throws ServletException, IOException {
-    MaintenanceState state = stateHolder.current();
-    String path = request.getRequestURI();
-    boolean writeBlockedByUnavailableState = !state.sharedStateAvailable()
-        && WRITE_METHODS.contains(request.getMethod())
-        && !isAllowedPath(path);
-    if (writeBlockedByUnavailableState) {
-      metrics.recordRequest("shared_state_unavailable");
-      writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
-      return;
-    }
-    if (!state.active(Instant.now())) {
-      chain.doFilter(request, response);
-      return;
-    }
-    if (isAllowedPath(path)) {
-      chain.doFilter(request, response);
-      return;
-    }
-    boolean adminReadRequest = isAdmin() && !WRITE_METHODS.contains(request.getMethod());
-    if (adminReadRequest) {
-      // 管理员仅保留读取诊断能力；普通写操作必须继续受维护冻结约束。
-      metrics.recordRequest("admin_bypass");
-      response.setHeader("X-Maintenance", "admin-bypass");
-      chain.doFilter(request, response);
-      return;
-    }
-    boolean readOnlyRequest = state.readOnly() && !WRITE_METHODS.contains(request.getMethod());
-    if (readOnlyRequest) {
-      // 只读模式下 GET/HEAD/OPTIONS 放行;响应头标记维护中以便前端禁写按钮。
-      metrics.recordRequest("read_only");
-      response.setHeader("X-Maintenance", "read-only");
-      chain.doFilter(request, response);
-      return;
-    }
-    // 只标记已确认维护产生的拒绝；共享状态失联分支仍计入真实 HTTP 错误。
-    request.setAttribute(MaintenanceHttpObservationConvention.PLANNED_ATTRIBUTE, Boolean.TRUE);
-    writeMaintenanceResponse(response, state, null);
-  }
-
-  private boolean isAllowedPath(String path) {
-    for (String pattern : ALWAYS_ALLOWED) {
-      if (pathMatcher.match(pattern, path)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** SecurityContext 里有 ROLE_ADMIN 即旁路。Auth filter 已完成 JWT 验签,这里只读。 */
-  private boolean isAdmin() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !auth.isAuthenticated()) {
-      return false;
-    }
-    // 双重判定:authorities 直接含 ROLE_ADMIN,或 principal 是 ConsolePrincipal 且 authorities 含。
-    // 兼容 bypass-mode 注入的 anonymous 与 JWT 正常认证两种路径。
-    for (GrantedAuthority authority : auth.getAuthorities()) {
-      if (ROLE_ADMIN.equals(authority.getAuthority())) {
-        return true;
-      }
-    }
-    if (auth.getPrincipal() instanceof ConsolePrincipal p && p.authorities() != null) {
-      for (String a : p.authorities()) {
-        if (ROLE_ADMIN.equals(a)) {
-          return true;
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        MaintenanceState state = stateHolder.current();
+        String path = request.getRequestURI();
+        boolean writeBlockedByUnavailableState =
+                !state.sharedStateAvailable() && WRITE_METHODS.contains(request.getMethod()) && !isAllowedPath(path);
+        if (writeBlockedByUnavailableState) {
+            metrics.recordRequest("shared_state_unavailable");
+            writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
+            return;
         }
-      }
+        if (!state.active(Instant.now())) {
+            chain.doFilter(request, response);
+            return;
+        }
+        if (isAllowedPath(path)) {
+            chain.doFilter(request, response);
+            return;
+        }
+        boolean adminReadRequest = isAdmin() && !WRITE_METHODS.contains(request.getMethod());
+        if (adminReadRequest) {
+            // 管理员仅保留读取诊断能力；普通写操作必须继续受维护冻结约束。
+            metrics.recordRequest("admin_bypass");
+            response.setHeader("X-Maintenance", "admin-bypass");
+            chain.doFilter(request, response);
+            return;
+        }
+        boolean readOnlyRequest = state.readOnly() && !WRITE_METHODS.contains(request.getMethod());
+        if (readOnlyRequest) {
+            // 只读模式下 GET/HEAD/OPTIONS 放行;响应头标记维护中以便前端禁写按钮。
+            metrics.recordRequest("read_only");
+            response.setHeader("X-Maintenance", "read-only");
+            chain.doFilter(request, response);
+            return;
+        }
+        // 只标记已确认维护产生的拒绝；共享状态失联分支仍计入真实 HTTP 错误。
+        request.setAttribute(MaintenanceHttpObservationConvention.PLANNED_ATTRIBUTE, Boolean.TRUE);
+        writeMaintenanceResponse(response, state, null);
     }
-    return false;
-  }
 
-  private void writeMaintenanceResponse(
-      HttpServletResponse response, MaintenanceState state, String fallbackMessage)
-      throws IOException {
-    if (response.isCommitted()) {
-      return;
+    private boolean isAllowedPath(String path) {
+        for (String pattern : ALWAYS_ALLOWED) {
+            if (pathMatcher.match(pattern, path)) {
+                return true;
+            }
+        }
+        return false;
     }
-    metrics.recordRequest(state.readOnly() ? "read_only_blocked" : "blocked");
-    response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-    response.setCharacterEncoding(EncodingUtils.UTF_8);
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response.setHeader("X-Maintenance", state.readOnly() ? "read-only" : "blocked");
-    response.setHeader("X-Maintenance-Version", Long.toString(state.version()));
-    // Retry-After 给客户端 / Cloudflare / nginx 一个合理的退避值(秒)
-    long retryAfter = computeRetryAfterSeconds(state.etaAt());
-    response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfter));
 
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("maintenance", true);
-    body.put("readOnly", state.readOnly());
-    body.put("message", EmptyChecks.isNull(fallbackMessage) ? state.message() : fallbackMessage);
-    body.put("etaAt", state.etaAt() != null ? state.etaAt().toString() : null);
-    body.put("affectedServices", state.affectedServices());
-    body.put("version", state.version());
-    body.put(
-        "updatedAt",
-        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
-    objectMapper.writeValue(response.getWriter(), body);
-  }
-
-  private long computeRetryAfterSeconds(Instant eta) {
-    if (eta == null) {
-      return DEFAULT_RETRY_AFTER_SECONDS;
+    /** SecurityContext 里有 ROLE_ADMIN 即旁路。Auth filter 已完成 JWT 验签,这里只读。 */
+    private boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return false;
+        }
+        // 双重判定:authorities 直接含 ROLE_ADMIN,或 principal 是 ConsolePrincipal 且 authorities 含。
+        // 兼容 bypass-mode 注入的 anonymous 与 JWT 正常认证两种路径。
+        for (GrantedAuthority authority : auth.getAuthorities()) {
+            if (ROLE_ADMIN.equals(authority.getAuthority())) {
+                return true;
+            }
+        }
+        if (auth.getPrincipal() instanceof ConsolePrincipal p && p.authorities() != null) {
+            for (String a : p.authorities()) {
+                if (ROLE_ADMIN.equals(a)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
-    long etaEpochSecond = eta.getEpochSecond();
-    long currentEpochSecond = Instant.now().getEpochSecond();
-    long secondsUntilEta = etaEpochSecond - currentEpochSecond;
-    return Math.max(secondsUntilEta, MIN_RETRY_AFTER_SECONDS);
-  }
+
+    private void writeMaintenanceResponse(HttpServletResponse response, MaintenanceState state, String fallbackMessage)
+            throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
+        metrics.recordRequest(state.readOnly() ? "read_only_blocked" : "blocked");
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setCharacterEncoding(EncodingUtils.UTF_8);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader("X-Maintenance", state.readOnly() ? "read-only" : "blocked");
+        response.setHeader("X-Maintenance-Version", Long.toString(state.version()));
+        // Retry-After 给客户端 / Cloudflare / nginx 一个合理的退避值(秒)
+        long retryAfter = computeRetryAfterSeconds(state.etaAt());
+        response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfter));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("maintenance", true);
+        body.put("readOnly", state.readOnly());
+        body.put("message", EmptyChecks.isNull(fallbackMessage) ? state.message() : fallbackMessage);
+        body.put("etaAt", state.etaAt() != null ? state.etaAt().toString() : null);
+        body.put("affectedServices", state.affectedServices());
+        body.put("version", state.version());
+        body.put(
+                "updatedAt",
+                EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
+        objectMapper.writeValue(response.getWriter(), body);
+    }
+
+    private long computeRetryAfterSeconds(Instant eta) {
+        if (eta == null) {
+            return DEFAULT_RETRY_AFTER_SECONDS;
+        }
+        long etaEpochSecond = eta.getEpochSecond();
+        long currentEpochSecond = Instant.now().getEpochSecond();
+        long secondsUntilEta = etaEpochSecond - currentEpochSecond;
+        return Math.max(secondsUntilEta, MIN_RETRY_AFTER_SECONDS);
+    }
 }

@@ -24,90 +24,88 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LoginProtectionService {
 
-  /** 写日志前的截断长度，限制单条登录保护日志的篇幅；不对应数据库列。 */
-  private static final int LOG_VALUE_MAX_LENGTH = 200;
+    /** 写日志前的截断长度，限制单条登录保护日志的篇幅；不对应数据库列。 */
+    private static final int LOG_VALUE_MAX_LENGTH = 200;
 
-  private final LoginProtectionProperties properties;
-  private final LoginFailureTracker failureTracker;
-  private final CaptchaVerifier captchaVerifier;
+    private final LoginProtectionProperties properties;
+    private final LoginFailureTracker failureTracker;
+    private final CaptchaVerifier captchaVerifier;
 
-  /**
-   * 密码校验<b>之前</b>调用:若该账号/IP 失败计数已达阈值,则要求验证码。验证码不通过 → 抛 {@link ResultCode#CAPTCHA_REQUIRED} (FE
-   * 据此弹验证码组件)。未达阈值 / 验证码通过 / 总开关关 → 静默放行。
-   */
-  public void assertCaptchaSatisfied(String username, String clientIp, String captchaToken) {
-    if (!properties.isEnabled()) {
-      return;
+    /**
+     * 密码校验<b>之前</b>调用:若该账号/IP 失败计数已达阈值,则要求验证码。验证码不通过 → 抛 {@link ResultCode#CAPTCHA_REQUIRED} (FE
+     * 据此弹验证码组件)。未达阈值 / 验证码通过 / 总开关关 → 静默放行。
+     */
+    public void assertCaptchaSatisfied(String username, String clientIp, String captchaToken) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        long failures = failureTracker.currentFailures(username, clientIp);
+        if (failures < properties.getFailThreshold()) {
+            return;
+        }
+        CaptchaResult result = captchaVerifier.verify(captchaToken, clientIp);
+        if (!result.success()) {
+            boolean provided = captchaToken != null && !captchaToken.isBlank();
+            String sanitizedUsername = LogSanitizer.value(username);
+            String usernameForLog = truncateForLog(sanitizedUsername);
+            String sanitizedClientIp = LogSanitizer.value(clientIp);
+            String clientIpForLog = truncateForLog(sanitizedClientIp);
+            log.warn(
+                    "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
+                    usernameForLog,
+                    clientIpForLog,
+                    failures,
+                    captchaVerifier.provider(),
+                    provided,
+                    result.reason());
+            throw BizException.of(
+                    ResultCode.CAPTCHA_REQUIRED,
+                    provided ? "error.auth.captcha_failed" : "error.auth.captcha_required");
+        }
     }
-    long failures = failureTracker.currentFailures(username, clientIp);
-    if (failures < properties.getFailThreshold()) {
-      return;
-    }
-    CaptchaResult result = captchaVerifier.verify(captchaToken, clientIp);
-    if (!result.success()) {
-      boolean provided = captchaToken != null && !captchaToken.isBlank();
-      String sanitizedUsername = LogSanitizer.value(username);
-      String usernameForLog = truncateForLog(sanitizedUsername);
-      String sanitizedClientIp = LogSanitizer.value(clientIp);
-      String clientIpForLog = truncateForLog(sanitizedClientIp);
-      log.warn(
-          "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
-          usernameForLog,
-          clientIpForLog,
-          failures,
-          captchaVerifier.provider(),
-          provided,
-          result.reason());
-      throw BizException.of(
-          ResultCode.CAPTCHA_REQUIRED,
-          provided ? "error.auth.captcha_failed" : "error.auth.captcha_required");
-    }
-  }
 
-  /**
-   * 密码校验<b>失败后</b>调用:记一次失败(账号 + IP),并按 {@code backoffStepMillis × 失败数}(封顶 {@code
-   * backoffCapMillis})做渐进退避——拖慢自动化吞吐,真实用户连错才递增、几乎无感。
-   */
-  public void onLoginFailure(String username, String clientIp) {
-    if (!properties.isEnabled()) {
-      return;
+    /**
+     * 密码校验<b>失败后</b>调用:记一次失败(账号 + IP),并按 {@code backoffStepMillis × 失败数}(封顶 {@code
+     * backoffCapMillis})做渐进退避——拖慢自动化吞吐,真实用户连错才递增、几乎无感。
+     */
+    public void onLoginFailure(String username, String clientIp) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        long failures = failureTracker.recordFailure(username, clientIp);
+        applyBackoff(failures);
     }
-    long failures = failureTracker.recordFailure(username, clientIp);
-    applyBackoff(failures);
-  }
 
-  /** 登录成功后调用:清零该账号失败计数(IP 计数保留)。 */
-  public void onLoginSuccess(String username) {
-    if (!properties.isEnabled()) {
-      return;
+    /** 登录成功后调用:清零该账号失败计数(IP 计数保留)。 */
+    public void onLoginSuccess(String username) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        failureTracker.clearAccount(username);
     }
-    failureTracker.clearAccount(username);
-  }
 
-  private void applyBackoff(long failures) {
-    long linearBackoffDelay = properties.getBackoffStepMillis() * failures;
-    long maximumBackoffDelay = properties.getBackoffCapMillis();
-    long delay = Math.min(linearBackoffDelay, maximumBackoffDelay);
-    if (delay <= 0) {
-      return;
+    private void applyBackoff(long failures) {
+        long linearBackoffDelay = properties.getBackoffStepMillis() * failures;
+        long maximumBackoffDelay = properties.getBackoffCapMillis();
+        long delay = Math.min(linearBackoffDelay, maximumBackoffDelay);
+        if (delay <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
     }
-    try {
-      Thread.sleep(delay);
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-    }
-  }
 
-  /**
-   * 截断日志字段,避免用户可控值撑爆日志行。
-   *
-   * <p>CR/LF 防注入由调用点的 {@link
-   * io.github.pinpols.batch.common.logging.LogSanitizer#value(Object)} 完成;本方法只保留原先"超长截断"
-   * 这一条语义,避免改写时把它丢掉。
-   */
-  private static String truncateForLog(String cleaned) {
-    return cleaned.length() > LOG_VALUE_MAX_LENGTH
-        ? cleaned.substring(0, LOG_VALUE_MAX_LENGTH) + "…"
-        : cleaned;
-  }
+    /**
+     * 截断日志字段,避免用户可控值撑爆日志行。
+     *
+     * <p>CR/LF 防注入由调用点的 {@link
+     * io.github.pinpols.batch.common.logging.LogSanitizer#value(Object)} 完成;本方法只保留原先"超长截断"
+     * 这一条语义,避免改写时把它丢掉。
+     */
+    private static String truncateForLog(String cleaned) {
+        return cleaned.length() > LOG_VALUE_MAX_LENGTH ? cleaned.substring(0, LOG_VALUE_MAX_LENGTH) + "…" : cleaned;
+    }
 }

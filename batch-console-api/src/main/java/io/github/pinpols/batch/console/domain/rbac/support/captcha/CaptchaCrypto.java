@@ -16,56 +16,56 @@ import javax.crypto.spec.SecretKeySpec;
  */
 final class CaptchaCrypto {
 
-  private static final char[] HEX = "0123456789abcdef".toCharArray();
-  private static final String HMAC_SHA256 = CryptoAlgorithms.HMAC_SHA256;
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+    private static final String HMAC_SHA256 = CryptoAlgorithms.HMAC_SHA256;
 
-  private CaptchaCrypto() {}
+    private CaptchaCrypto() {}
 
-  /** 字节数组转小写 hex。 */
-  static String hex(byte[] bytes) {
-    char[] out = new char[bytes.length * 2];
-    for (int i = 0; i < bytes.length; i++) {
-      int v = bytes[i] & 0xFF;
-      out[i * 2] = HEX[v >>> 4];
-      out[i * 2 + 1] = HEX[v & 0x0F];
+    /** 字节数组转小写 hex。 */
+    static String hex(byte[] bytes) {
+        char[] out = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int v = bytes[i] & 0xFF;
+            out[i * 2] = HEX[v >>> 4];
+            out[i * 2 + 1] = HEX[v & 0x0F];
+        }
+        return new String(out);
     }
-    return new String(out);
-  }
 
-  /** hex(sha256(utf8(data)))。 */
-  static String sha256Hex(String data) {
-    try {
-      MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] encodedData = data.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = md.digest(encodedData);
-      return hex(digest);
-    } catch (Exception ex) {
-      throw new IllegalStateException("SHA-256 unavailable", ex);
+    /** hex(sha256(utf8(data)))。 */
+    static String sha256Hex(String data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] encodedData = data.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = md.digest(encodedData);
+            return hex(digest);
+        } catch (Exception ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
     }
-  }
 
-  /** HMAC-SHA256，原始字节密钥 → 原始字节(用于多段派生，如 TC3)。 */
-  static byte[] hmacSha256(byte[] key, String message) {
-    try {
-      Mac mac = Mac.getInstance(HMAC_SHA256);
-      SecretKeySpec signingKey = new SecretKeySpec(key, HMAC_SHA256);
-      mac.init(signingKey);
-      byte[] encodedMessage = message.getBytes(StandardCharsets.UTF_8);
-      return mac.doFinal(encodedMessage);
-    } catch (Exception ex) {
-      throw new IllegalStateException("HmacSHA256 unavailable", ex);
+    /** HMAC-SHA256，原始字节密钥 → 原始字节(用于多段派生，如 TC3)。 */
+    static byte[] hmacSha256(byte[] key, String message) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            SecretKeySpec signingKey = new SecretKeySpec(key, HMAC_SHA256);
+            mac.init(signingKey);
+            byte[] encodedMessage = message.getBytes(StandardCharsets.UTF_8);
+            return mac.doFinal(encodedMessage);
+        } catch (Exception ex) {
+            throw new IllegalStateException("HmacSHA256 unavailable", ex);
+        }
     }
-  }
 
-  /** hex(HMAC-SHA256(utf8(key), utf8(data)))。 */
-  static String hmacSha256Hex(String key, String data) {
-    byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
-    byte[] signature = hmacSha256(encodedKey, data);
-    return hex(signature);
-  }
+    /** hex(HMAC-SHA256(utf8(key), utf8(data)))。 */
+    static String hmacSha256Hex(String key, String data) {
+        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
+        byte[] signature = hmacSha256(encodedKey, data);
+        return hex(signature);
+    }
 
-  /** 委派共享换行净化规则;保留验证码日志既有的 null 归空串语义。 */
-  static String sanitizeForLog(String value) {
-    return EmptyChecks.isNull(value) ? "" : LogSanitizer.value(value);
-  }
+    /** 委派共享换行净化规则;保留验证码日志既有的 null 归空串语义。 */
+    static String sanitizeForLog(String value) {
+        return EmptyChecks.isNull(value) ? "" : LogSanitizer.value(value);
+    }
 }

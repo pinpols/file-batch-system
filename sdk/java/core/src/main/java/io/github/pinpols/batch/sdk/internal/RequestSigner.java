@@ -19,66 +19,56 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class RequestSigner {
 
-  private static final char[] HEX = "0123456789abcdef".toCharArray();
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
-  private RequestSigner() {}
+    private RequestSigner() {}
 
-  public static String bodySha256Hex(byte[] body) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
-      byte[] bodyBytes = EmptyChecks.isNull(body) ? new byte[0] : body;
-      byte[] digest = md.digest(bodyBytes);
-      return toHex(digest);
-    } catch (Exception e) {
-      throw new IllegalStateException("SHA-256 unavailable", e);
+    public static String bodySha256Hex(byte[] body) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] bodyBytes = EmptyChecks.isNull(body) ? new byte[0] : body;
+            byte[] digest = md.digest(bodyBytes);
+            return toHex(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
-  }
 
-  public static String canonicalString(
-      String method, String path, String timestamp, String nonce, byte[] body) {
-    return upper(method)
-        + '\n'
-        + nz(path)
-        + '\n'
-        + nz(timestamp)
-        + '\n'
-        + nz(nonce)
-        + '\n'
-        + bodySha256Hex(body);
-  }
-
-  public static String sign(
-      String apiKey, String method, String path, String timestamp, String nonce, byte[] body) {
-    try {
-      Mac mac = Mac.getInstance("HmacSHA256");
-      String normalizedApiKey = nz(apiKey);
-      byte[] apiKeyBytes = normalizedApiKey.getBytes(StandardCharsets.UTF_8);
-      SecretKeySpec signingKey = new SecretKeySpec(apiKeyBytes, "HmacSHA256");
-      mac.init(signingKey);
-      String canonical = canonicalString(method, path, timestamp, nonce, body);
-      byte[] canonicalBytes = canonical.getBytes(StandardCharsets.UTF_8);
-      byte[] signature = mac.doFinal(canonicalBytes);
-      return toHex(signature);
-    } catch (Exception e) {
-      throw new IllegalStateException("HMAC-SHA256 failed", e);
+    public static String canonicalString(String method, String path, String timestamp, String nonce, byte[] body) {
+        return upper(method) + '\n' + nz(path) + '\n' + nz(timestamp) + '\n' + nz(nonce) + '\n' + bodySha256Hex(body);
     }
-  }
 
-  private static String toHex(byte[] bytes) {
-    char[] out = new char[bytes.length * 2];
-    for (int i = 0; i < bytes.length; i++) {
-      int v = bytes[i] & 0xFF;
-      out[i * 2] = HEX[v >>> 4];
-      out[i * 2 + 1] = HEX[v & 0x0F];
+    public static String sign(String apiKey, String method, String path, String timestamp, String nonce, byte[] body) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            String normalizedApiKey = nz(apiKey);
+            byte[] apiKeyBytes = normalizedApiKey.getBytes(StandardCharsets.UTF_8);
+            SecretKeySpec signingKey = new SecretKeySpec(apiKeyBytes, "HmacSHA256");
+            mac.init(signingKey);
+            String canonical = canonicalString(method, path, timestamp, nonce, body);
+            byte[] canonicalBytes = canonical.getBytes(StandardCharsets.UTF_8);
+            byte[] signature = mac.doFinal(canonicalBytes);
+            return toHex(signature);
+        } catch (Exception e) {
+            throw new IllegalStateException("HMAC-SHA256 failed", e);
+        }
     }
-    return new String(out);
-  }
 
-  private static String upper(String s) {
-    return s == null ? "" : s.toUpperCase(Locale.ROOT);
-  }
+    private static String toHex(byte[] bytes) {
+        char[] out = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int v = bytes[i] & 0xFF;
+            out[i * 2] = HEX[v >>> 4];
+            out[i * 2 + 1] = HEX[v & 0x0F];
+        }
+        return new String(out);
+    }
 
-  private static String nz(String s) {
-    return s == null ? "" : s;
-  }
+    private static String upper(String s) {
+        return s == null ? "" : s.toUpperCase(Locale.ROOT);
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
 }

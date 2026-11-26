@@ -29,79 +29,78 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("作业定义查询服务映射")
 class ConsoleJobDefinitionQueryTest {
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+    @Mock
+    private JobDefinitionMapper jobDefinitionMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    private JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private JobExecutionLogMapper jobExecutionLogMapper;
+    @Mock
+    private JobExecutionLogMapper jobExecutionLogMapper;
 
-  @Mock
-  private LocalizedErrorRenderer localizedErrorRenderer;
+    @Mock
+    private LocalizedErrorRenderer localizedErrorRenderer;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  private ConsoleJobQueryService service;
+    private ConsoleJobQueryService service;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleJobQueryMappers mappers = new ConsoleJobQueryMappers(
-        jobDefinitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        jobPartitionMapper,
-        jobExecutionLogMapper);
-    service =
-        new ConsoleJobQueryService(tenantGuard, mappers, localizedErrorRenderer, timezoneProvider);
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleJobQueryMappers mappers = new ConsoleJobQueryMappers(
+                jobDefinitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                jobPartitionMapper,
+                jobExecutionLogMapper);
+        service = new ConsoleJobQueryService(tenantGuard, mappers, localizedErrorRenderer, timezoneProvider);
+    }
 
-  @Test
-  @DisplayName("将精确作业编码和直接前置作业编码映射到同一分页查询")
-  void shouldMapExactJobAndDirectPredecessorFilters() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(jobDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
-    when(jobDefinitionMapper.countByQuery(any())).thenReturn(0L);
-    JobDefinitionQueryRequest request = new JobDefinitionQueryRequest();
-    request.setTenantId("tenant-a");
-    request.setExactJobCode("CURRENT_JOB");
-    request.setDependsOnJobCode("UPSTREAM_JOB");
+    @Test
+    @DisplayName("将精确作业编码和直接前置作业编码映射到同一分页查询")
+    void shouldMapExactJobAndDirectPredecessorFilters() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(jobDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
+        when(jobDefinitionMapper.countByQuery(any())).thenReturn(0L);
+        JobDefinitionQueryRequest request = new JobDefinitionQueryRequest();
+        request.setTenantId("tenant-a");
+        request.setExactJobCode("CURRENT_JOB");
+        request.setDependsOnJobCode("UPSTREAM_JOB");
 
-    service.jobDefinitions(request);
+        service.jobDefinitions(request);
 
-    ArgumentCaptor<JobDefinitionQuery> captor = ArgumentCaptor.forClass(JobDefinitionQuery.class);
-    verify(jobDefinitionMapper).selectByQuery(captor.capture());
-    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
-    assertThat(captor.getValue().exactJobCode()).isEqualTo("CURRENT_JOB");
-    assertThat(captor.getValue().dependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
-    assertThat(captor.getValue().enabled()).isTrue();
-  }
+        ArgumentCaptor<JobDefinitionQuery> captor = ArgumentCaptor.forClass(JobDefinitionQuery.class);
+        verify(jobDefinitionMapper).selectByQuery(captor.capture());
+        assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+        assertThat(captor.getValue().exactJobCode()).isEqualTo("CURRENT_JOB");
+        assertThat(captor.getValue().dependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
+        assertThat(captor.getValue().enabled()).isTrue();
+    }
 
-  @Test
-  @DisplayName("请求包含停用作业时移除启用状态过滤")
-  void shouldIncludeDisabledJobsOnlyWhenExplicitlyRequested() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(jobDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
-    when(jobDefinitionMapper.countByQuery(any())).thenReturn(0L);
-    JobDefinitionQueryRequest request = new JobDefinitionQueryRequest();
-    request.setTenantId("tenant-a");
-    request.setIncludeDisabled(true);
+    @Test
+    @DisplayName("请求包含停用作业时移除启用状态过滤")
+    void shouldIncludeDisabledJobsOnlyWhenExplicitlyRequested() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(jobDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
+        when(jobDefinitionMapper.countByQuery(any())).thenReturn(0L);
+        JobDefinitionQueryRequest request = new JobDefinitionQueryRequest();
+        request.setTenantId("tenant-a");
+        request.setIncludeDisabled(true);
 
-    service.jobDefinitions(request);
+        service.jobDefinitions(request);
 
-    ArgumentCaptor<JobDefinitionQuery> captor = ArgumentCaptor.forClass(JobDefinitionQuery.class);
-    verify(jobDefinitionMapper).selectByQuery(captor.capture());
-    assertThat(captor.getValue().enabled()).isNull();
-  }
+        ArgumentCaptor<JobDefinitionQuery> captor = ArgumentCaptor.forClass(JobDefinitionQuery.class);
+        verify(jobDefinitionMapper).selectByQuery(captor.capture());
+        assertThat(captor.getValue().enabled()).isNull();
+    }
 }

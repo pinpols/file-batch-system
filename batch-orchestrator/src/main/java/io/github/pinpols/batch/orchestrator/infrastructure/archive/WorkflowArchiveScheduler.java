@@ -25,65 +25,62 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    name = "batch.workflow.archive.enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.workflow.archive.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class WorkflowArchiveScheduler {
 
-  /** 单次 tick 最多连刷多少批：防止异常输入下无限循环。 */
-  private static final int MAX_BATCHES_PER_TICK = 5;
+    /** 单次 tick 最多连刷多少批：防止异常输入下无限循环。 */
+    private static final int MAX_BATCHES_PER_TICK = 5;
 
-  private final WorkflowArchiveService workflowArchiveService;
-  private final WorkflowArchiveProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+    private final WorkflowArchiveService workflowArchiveService;
+    private final WorkflowArchiveProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
 
-  @PostConstruct
-  void registerHealthMetric() {
-    schedulerHealthMetrics.register("workflow");
-  }
-
-  @Scheduled(
-      cron = "${batch.workflow.archive.cron:0 15 4 * * *}",
-      zone = "${batch.timezone.default-zone:Asia/Shanghai}")
-  @SchedulerLock(name = "workflow_archive", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
-  public void scheduledArchive() {
-    archive();
-  }
-
-  /** 业务入口：scheduled / 手工调用都走此方法；不在此处加 ShedLock 便于测试。 */
-  public void archive() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void registerHealthMetric() {
+        schedulerHealthMetrics.register("workflow");
     }
-    int totalRuns = 0;
-    int totalNodeRuns = 0;
-    int batches = 0;
-    while (batches < MAX_BATCHES_PER_TICK) {
-      ArchiveBatchResult result = workflowArchiveService.archiveOnce();
-      if (!result.executed()) {
-        break;
-      }
-      totalRuns += result.workflowRunsDeleted();
-      totalNodeRuns += result.workflowNodeRunsDeleted();
-      batches++;
-      if (!result.hasMore(properties.getBatchSize())) {
-        break;
-      }
-      if (gracefulShutdown.isDraining()) {
-        break;
-      }
+
+    @Scheduled(
+            cron = "${batch.workflow.archive.cron:0 15 4 * * *}",
+            zone = "${batch.timezone.default-zone:Asia/Shanghai}")
+    @SchedulerLock(name = "workflow_archive", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
+    public void scheduledArchive() {
+        archive();
     }
-    if (totalRuns > 0 || totalNodeRuns > 0) {
-      log.info(
-          "workflow archive completed: batches={}, runs={}, nodeRuns={}, retentionDays={}",
-          batches,
-          totalRuns,
-          totalNodeRuns,
-          properties.getRetentionDays());
+
+    /** 业务入口：scheduled / 手工调用都走此方法；不在此处加 ShedLock 便于测试。 */
+    public void archive() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        int totalRuns = 0;
+        int totalNodeRuns = 0;
+        int batches = 0;
+        while (batches < MAX_BATCHES_PER_TICK) {
+            ArchiveBatchResult result = workflowArchiveService.archiveOnce();
+            if (!result.executed()) {
+                break;
+            }
+            totalRuns += result.workflowRunsDeleted();
+            totalNodeRuns += result.workflowNodeRunsDeleted();
+            batches++;
+            if (!result.hasMore(properties.getBatchSize())) {
+                break;
+            }
+            if (gracefulShutdown.isDraining()) {
+                break;
+            }
+        }
+        if (totalRuns > 0 || totalNodeRuns > 0) {
+            log.info(
+                    "workflow archive completed: batches={}, runs={}, nodeRuns={}, retentionDays={}",
+                    batches,
+                    totalRuns,
+                    totalNodeRuns,
+                    properties.getRetentionDays());
+        }
+        schedulerHealthMetrics.markSuccess("workflow");
     }
-    schedulerHealthMetrics.markSuccess("workflow");
-  }
 }

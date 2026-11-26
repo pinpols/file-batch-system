@@ -10,44 +10,41 @@ import org.junit.jupiter.api.Test;
 @DisplayName("RequestSignatures: 请求签名 canonical 串与 HMAC-SHA256 摘要契约")
 class RequestSignaturesTest {
 
-  private static final byte[] EMPTY = new byte[0];
+    private static final byte[] EMPTY = new byte[0];
 
-  @Test
-  @DisplayName("空 body 的 sha256 hex 等于公认常量")
-  void shouldProduceKnownBodyHash_whenBodyEmpty() {
-    assertThat(RequestSignatures.bodySha256Hex(EMPTY))
-        .isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-  }
+    @Test
+    @DisplayName("空 body 的 sha256 hex 等于公认常量")
+    void shouldProduceKnownBodyHash_whenBodyEmpty() {
+        assertThat(RequestSignatures.bodySha256Hex(EMPTY))
+                .isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
 
-  @Test
-  @DisplayName("canonical 串按 method/path/ts/nonce/bodyHash 用 \\n 连接")
-  void shouldJoinFieldsWithNewline_whenBuildingCanonical() {
-    String c = RequestSignatures.canonicalString(
-        "post", "/internal/tasks/10/claim", "1700000000000", "abc123", EMPTY);
-    assertThat(c)
-        .isEqualTo("POST\n/internal/tasks/10/claim\n1700000000000\nabc123\n"
-            + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-  }
+    @Test
+    @DisplayName("canonical 串按 method/path/ts/nonce/bodyHash 用 \\n 连接")
+    void shouldJoinFieldsWithNewline_whenBuildingCanonical() {
+        String c =
+                RequestSignatures.canonicalString("post", "/internal/tasks/10/claim", "1700000000000", "abc123", EMPTY);
+        assertThat(c)
+                .isEqualTo("POST\n/internal/tasks/10/claim\n1700000000000\nabc123\n"
+                        + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
 
-  @Test
-  @DisplayName("sign 产出 64 位小写 hex，且确定性")
-  void shouldReturnLowercaseHexAndDeterministic_whenSigning() {
-    String s1 = RequestSignatures.sign(
-        "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
-    String s2 = RequestSignatures.sign(
-        "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
-    assertThat(s1).hasSize(64).isEqualTo(s2).matches("[0-9a-f]{64}");
-  }
+    @Test
+    @DisplayName("sign 产出 64 位小写 hex，且确定性")
+    void shouldReturnLowercaseHexAndDeterministic_whenSigning() {
+        String s1 = RequestSignatures.sign("key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
+        String s2 = RequestSignatures.sign("key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
+        assertThat(s1).hasSize(64).isEqualTo(s2).matches("[0-9a-f]{64}");
+    }
 
-  @Test
-  @DisplayName("任一字段变化签名即变（nonce/key/body）")
-  void shouldAlterSignature_whenAnyFieldChanges() {
-    byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
-    String base = RequestSignatures.sign("k", "POST", "/p", "1", "n", body);
-    assertThat(RequestSignatures.sign("k", "POST", "/p", "1", "n2", body)).isNotEqualTo(base);
-    assertThat(RequestSignatures.sign("k2", "POST", "/p", "1", "n", body)).isNotEqualTo(base);
-    assertThat(RequestSignatures.sign(
-            "k", "POST", "/p", "1", "n", "{ }".getBytes(StandardCharsets.UTF_8)))
-        .isNotEqualTo(base);
-  }
+    @Test
+    @DisplayName("任一字段变化签名即变（nonce/key/body）")
+    void shouldAlterSignature_whenAnyFieldChanges() {
+        byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+        String base = RequestSignatures.sign("k", "POST", "/p", "1", "n", body);
+        assertThat(RequestSignatures.sign("k", "POST", "/p", "1", "n2", body)).isNotEqualTo(base);
+        assertThat(RequestSignatures.sign("k2", "POST", "/p", "1", "n", body)).isNotEqualTo(base);
+        assertThat(RequestSignatures.sign("k", "POST", "/p", "1", "n", "{ }".getBytes(StandardCharsets.UTF_8)))
+                .isNotEqualTo(base);
+    }
 }

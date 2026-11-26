@@ -78,30 +78,30 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * 等待任务成功。
  */
 @E2eSpringBootTest(
-    classes = {
-      E2eOrchestratorApplication.class,
-      E2eBusinessDataSourceConfiguration.class,
-      RuntimeConfigImportDispatchE2eIT.ConsoleConfig.class
-    },
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "batch.sla.enabled=false",
-      "batch.worker.drain.enabled=false",
-      "batch.file-governance.latency.enabled=false",
-      "batch.file-governance.archive.enabled=false",
-      "batch.file-governance.reconcile.enabled=false",
-      "batch.file-governance.arrival.enabled=false",
-      "batch.file-governance.access.enabled=false",
-      "batch.outbox.poll-interval-millis=600000",
-      "batch.retry.poll-interval-millis=600000",
-      "batch.partition-lease.reclaim-interval-millis=600000",
-      // 必须保持较短间隔：如果 launch 在 Worker 注册表可见之前就已执行，WaitingPartitionDispatchScheduler
-      // 是唯一为 CREATED/WAITING 任务写入派发 outbox 的路径。
-      "batch.resource-scheduler.waiting-dispatch-interval-millis=500",
-      "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
-      "batch.scheduler.snapshot-persist-enabled=false",
-      "batch.security.internal-secret=restart-e2e-internal-secret-32chars"
-    })
+        classes = {
+            E2eOrchestratorApplication.class,
+            E2eBusinessDataSourceConfiguration.class,
+            RuntimeConfigImportDispatchE2eIT.ConsoleConfig.class
+        },
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            "batch.sla.enabled=false",
+            "batch.worker.drain.enabled=false",
+            "batch.file-governance.latency.enabled=false",
+            "batch.file-governance.archive.enabled=false",
+            "batch.file-governance.reconcile.enabled=false",
+            "batch.file-governance.arrival.enabled=false",
+            "batch.file-governance.access.enabled=false",
+            "batch.outbox.poll-interval-millis=600000",
+            "batch.retry.poll-interval-millis=600000",
+            "batch.partition-lease.reclaim-interval-millis=600000",
+            // 必须保持较短间隔：如果 launch 在 Worker 注册表可见之前就已执行，WaitingPartitionDispatchScheduler
+            // 是唯一为 CREATED/WAITING 任务写入派发 outbox 的路径。
+            "batch.resource-scheduler.waiting-dispatch-interval-millis=500",
+            "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
+            "batch.scheduler.snapshot-persist-enabled=false",
+            "batch.security.internal-secret=restart-e2e-internal-secret-32chars"
+        })
 // 杀真 subprocess Worker 后 Spring context 里 Lettuce/RedisTemplate 会进入 STOPPED 状态，污染
 // 后续 IT class 共用的同一个 ApplicationContext。AFTER_CLASS 强制 Spring 在本 IT 跑完后销毁
 // 上下文，下个 IT 重建一份干净的，避免 ImportFailurePipeline / ExportPipeline / ExportContent /
@@ -110,98 +110,97 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @DisplayName("Worker 进程重启恢复端到端:派发 worker 被杀后以同消费组重启,重新注册并恢复消费,派发任务最终成功")
 class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-  private static final String JAVA_BIN =
-      Path.of(System.getProperty("java.home"), "bin", "java").toString();
-  private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
-  private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String JAVA_BIN =
+            Path.of(System.getProperty("java.home"), "bin", "java").toString();
+    private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
+    private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
-  private final WorkflowRunLaunchService launchService;
+    private final WorkflowRunLaunchService launchService;
 
-  private final ConsoleConfigSyncApplicationService configSyncService;
+    private final ConsoleConfigSyncApplicationService configSyncService;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  private final OutboxPublisher outboxPublisher;
+    private final OutboxPublisher outboxPublisher;
 
-  private final OutboxEventMapper outboxEventMapper;
+    private final OutboxEventMapper outboxEventMapper;
 
-  private final BatchMqTopicsProperties batchMqTopicsProperties;
-  private final String kafkaBootstrapServers;
-  private final String internalSecret;
-  private final int localServerPort;
+    private final BatchMqTopicsProperties batchMqTopicsProperties;
+    private final String kafkaBootstrapServers;
+    private final String internalSecret;
+    private final int localServerPort;
 
-  @Autowired
-  WorkerProcessRestartRecoveryE2eIT(
-      WorkflowRunLaunchService launchService,
-      ConsoleConfigSyncApplicationService configSyncService,
-      JdbcTemplate jdbcTemplate,
-      OutboxPublisher outboxPublisher,
-      OutboxEventMapper outboxEventMapper,
-      BatchMqTopicsProperties batchMqTopicsProperties,
-      @Value("${spring.kafka.bootstrap-servers}") String kafkaBootstrapServers,
-      @Value("${batch.security.internal-secret}") String internalSecret,
-      @LocalServerPort int localServerPort) {
-    this.launchService = launchService;
-    this.configSyncService = configSyncService;
-    this.jdbcTemplate = jdbcTemplate;
-    this.outboxPublisher = outboxPublisher;
-    this.outboxEventMapper = outboxEventMapper;
-    this.batchMqTopicsProperties = batchMqTopicsProperties;
-    this.kafkaBootstrapServers = kafkaBootstrapServers;
-    this.internalSecret = internalSecret;
-    this.localServerPort = localServerPort;
-  }
+    @Autowired
+    WorkerProcessRestartRecoveryE2eIT(
+            WorkflowRunLaunchService launchService,
+            ConsoleConfigSyncApplicationService configSyncService,
+            JdbcTemplate jdbcTemplate,
+            OutboxPublisher outboxPublisher,
+            OutboxEventMapper outboxEventMapper,
+            BatchMqTopicsProperties batchMqTopicsProperties,
+            @Value("${spring.kafka.bootstrap-servers}") String kafkaBootstrapServers,
+            @Value("${batch.security.internal-secret}") String internalSecret,
+            @LocalServerPort int localServerPort) {
+        this.launchService = launchService;
+        this.configSyncService = configSyncService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.outboxPublisher = outboxPublisher;
+        this.outboxEventMapper = outboxEventMapper;
+        this.batchMqTopicsProperties = batchMqTopicsProperties;
+        this.kafkaBootstrapServers = kafkaBootstrapServers;
+        this.internalSecret = internalSecret;
+        this.localServerPort = localServerPort;
+    }
 
-  @Test
-  @DisplayName("独立派发 Worker 在途请求期间导入新渠道，原请求仍完成于旧地址")
-  void shouldCompleteInFlightDispatchWhenChannelIsImported() throws Exception {
-    String suffix = Long.toUnsignedString(System.nanoTime());
-    String tenantId = "t-flight-" + suffix;
-    String workerCode = "flight-dispatch-" + suffix;
-    String consumerGroup = "batch-worker-dispatch-flight-" + suffix;
-    String channelCode = "flight-" + suffix;
-    String externalRequestId = "flight-request-" + suffix;
-    CountDownLatch received = new CountDownLatch(1);
-    CountDownLatch releaseResponse = new CountDownLatch(1);
-    AtomicInteger oldRequests = new AtomicInteger();
-    AtomicInteger newRequests = new AtomicInteger();
-    AtomicReference<String> requestBody = new AtomicReference<>();
-    ExecutorService receiverExecutor = Executors.newCachedThreadPool();
-    HttpServer receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    receiver.setExecutor(receiverExecutor);
-    receiver.createContext("/old", exchange -> {
-      try {
-        requestBody.set(
-            new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-        oldRequests.incrementAndGet();
-        received.countDown();
-        if (!releaseResponse.await(90, TimeUnit.SECONDS)) {
-          exchange.sendResponseHeaders(503, -1);
-          return;
-        }
-        exchange.sendResponseHeaders(200, -1);
-      } catch (InterruptedException interrupted) {
-        Thread.currentThread().interrupt();
-      } finally {
-        exchange.close();
-      }
-    });
-    receiver.createContext("/new", exchange -> {
-      try {
-        newRequests.incrementAndGet();
-        exchange.sendResponseHeaders(200, -1);
-      } finally {
-        exchange.close();
-      }
-    });
-    receiver.start();
-    Process worker = null;
-    try {
-      String baseUrl = "http://127.0.0.1:" + receiver.getAddress().getPort();
-      String oldEndpoint = baseUrl + "/old";
-      String newEndpoint = baseUrl + "/new";
-      String insertChannel = """
+    @Test
+    @DisplayName("独立派发 Worker 在途请求期间导入新渠道，原请求仍完成于旧地址")
+    void shouldCompleteInFlightDispatchWhenChannelIsImported() throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        String tenantId = "t-flight-" + suffix;
+        String workerCode = "flight-dispatch-" + suffix;
+        String consumerGroup = "batch-worker-dispatch-flight-" + suffix;
+        String channelCode = "flight-" + suffix;
+        String externalRequestId = "flight-request-" + suffix;
+        CountDownLatch received = new CountDownLatch(1);
+        CountDownLatch releaseResponse = new CountDownLatch(1);
+        AtomicInteger oldRequests = new AtomicInteger();
+        AtomicInteger newRequests = new AtomicInteger();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        ExecutorService receiverExecutor = Executors.newCachedThreadPool();
+        HttpServer receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        receiver.setExecutor(receiverExecutor);
+        receiver.createContext("/old", exchange -> {
+            try {
+                requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                oldRequests.incrementAndGet();
+                received.countDown();
+                if (!releaseResponse.await(90, TimeUnit.SECONDS)) {
+                    exchange.sendResponseHeaders(503, -1);
+                    return;
+                }
+                exchange.sendResponseHeaders(200, -1);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                exchange.close();
+            }
+        });
+        receiver.createContext("/new", exchange -> {
+            try {
+                newRequests.incrementAndGet();
+                exchange.sendResponseHeaders(200, -1);
+            } finally {
+                exchange.close();
+            }
+        });
+        receiver.start();
+        Process worker = null;
+        try {
+            String baseUrl = "http://127.0.0.1:" + receiver.getAddress().getPort();
+            String oldEndpoint = baseUrl + "/old";
+            String newEndpoint = baseUrl + "/new";
+            String insertChannel = """
           insert into batch.file_channel_config (
               tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
               config_json, receipt_policy, timeout_seconds, enabled
@@ -209,249 +208,239 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
               jsonb_build_object('target_endpoint', ?, 'channel_type', 'API_PUSH',
                   'channel_code', ?), 'NONE', 60, true)
           """;
-      jdbcTemplate.update(
-          insertChannel, tenantId, channelCode, oldEndpoint, oldEndpoint, channelCode);
-      Path sourceFile = Files.createTempFile("flight-dispatch-", ".txt");
-      try {
-        Files.writeString(sourceFile, "dispatch-" + suffix);
-        Long fileId = seedDispatchFile(tenantId, sourceFile, suffix);
-        LaunchSeed seed = seedDispatchJob(tenantId, "dispatch", TriggerType.API, suffix);
-        Path workerLog = Files.createTempFile("flight-dispatch-worker-", ".log");
-        try {
-          worker = startDispatchWorker(tenantId, workerCode, consumerGroup, workerLog, true);
-          awaitLogContains(workerLog, "Started BatchWorkerDispatchApplication");
-          awaitWorkerOnlineInRegistry(tenantId, workerCode);
-          Map<String, Object> params = Map.of(
-              "fileId",
-              fileId.toString(),
-              "channelCode",
-              channelCode,
-              "externalRequestId",
-              externalRequestId,
-              "ackRequired",
-              false);
-          launchService.launch(new LaunchRequest(
-              tenantId,
-              seed.workflowDefinitionId(),
-              BIZ_DATE,
-              TriggerType.API,
-              seed.requestId(),
-              "flight-trace-" + suffix,
-              params));
-          publishPendingOutbox(tenantId);
-          assertThat(received.await(120, TimeUnit.SECONDS))
-              .as("旧接收端已收到真实 Worker 请求")
-              .isTrue();
-          JsonNode receivedPayload = JsonUtils.fromJson(requestBody.get(), JsonNode.class);
-          assertThat(receivedPayload.path("tenantId").asText()).isEqualTo(tenantId);
-          assertThat(receivedPayload.path("externalRequestId").asText())
-              .isEqualTo(externalRequestId);
+            jdbcTemplate.update(insertChannel, tenantId, channelCode, oldEndpoint, oldEndpoint, channelCode);
+            Path sourceFile = Files.createTempFile("flight-dispatch-", ".txt");
+            try {
+                Files.writeString(sourceFile, "dispatch-" + suffix);
+                Long fileId = seedDispatchFile(tenantId, sourceFile, suffix);
+                LaunchSeed seed = seedDispatchJob(tenantId, "dispatch", TriggerType.API, suffix);
+                Path workerLog = Files.createTempFile("flight-dispatch-worker-", ".log");
+                try {
+                    worker = startDispatchWorker(tenantId, workerCode, consumerGroup, workerLog, true);
+                    awaitLogContains(workerLog, "Started BatchWorkerDispatchApplication");
+                    awaitWorkerOnlineInRegistry(tenantId, workerCode);
+                    Map<String, Object> params = Map.of(
+                            "fileId",
+                            fileId.toString(),
+                            "channelCode",
+                            channelCode,
+                            "externalRequestId",
+                            externalRequestId,
+                            "ackRequired",
+                            false);
+                    launchService.launch(new LaunchRequest(
+                            tenantId,
+                            seed.workflowDefinitionId(),
+                            BIZ_DATE,
+                            TriggerType.API,
+                            seed.requestId(),
+                            "flight-trace-" + suffix,
+                            params));
+                    publishPendingOutbox(tenantId);
+                    assertThat(received.await(120, TimeUnit.SECONDS))
+                            .as("旧接收端已收到真实 Worker 请求")
+                            .isTrue();
+                    JsonNode receivedPayload = JsonUtils.fromJson(requestBody.get(), JsonNode.class);
+                    assertThat(receivedPayload.path("tenantId").asText()).isEqualTo(tenantId);
+                    assertThat(receivedPayload.path("externalRequestId").asText())
+                            .isEqualTo(externalRequestId);
 
-          FileChannelSpec changed = new FileChannelSpec();
-          changed.setChannelCode(channelCode);
-          changed.setChannelName("在途派发渠道");
-          changed.setChannelType("API_PUSH");
-          changed.setTargetEndpoint(newEndpoint);
-          changed.setAuthType("NONE");
-          changed.setConfigJson(JsonUtils.toJson(Map.of(
-              "target_endpoint",
-              newEndpoint,
-              "channel_type",
-              "API_PUSH",
-              "channel_code",
-              channelCode)));
-          changed.setReceiptPolicy("NONE");
-          changed.setTimeoutSeconds(60);
-          changed.setEnabled(true);
-          ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
-          bundle.setFileChannels(List.of(changed));
-          ConfigSyncImportRequest request = new ConfigSyncImportRequest();
-          request.setTenantId(tenantId);
-          request.setSourceEnv("source-" + suffix);
-          request.setTargetEnv("integration-test");
-          request.setTargetTenantIds(List.of(tenantId));
-          request.setMode(InitMode.UPSERT);
-          request.setBundle(bundle);
-          RequestContextHolder.setRequestAttributes(
-              new ServletRequestAttributes(new MockHttpServletRequest()));
-          try {
-            ConfigSyncImportResponse response = configSyncService.importBundle(request);
-            assertThat(response.result().failureTenants()).isZero();
-            assertThat(response.result().results())
-                .singleElement()
-                .satisfies(result -> assertThat(result.fileChannels().updated()).isOne());
-            String endpointSql = """
+                    FileChannelSpec changed = new FileChannelSpec();
+                    changed.setChannelCode(channelCode);
+                    changed.setChannelName("在途派发渠道");
+                    changed.setChannelType("API_PUSH");
+                    changed.setTargetEndpoint(newEndpoint);
+                    changed.setAuthType("NONE");
+                    changed.setConfigJson(JsonUtils.toJson(Map.of(
+                            "target_endpoint", newEndpoint, "channel_type", "API_PUSH", "channel_code", channelCode)));
+                    changed.setReceiptPolicy("NONE");
+                    changed.setTimeoutSeconds(60);
+                    changed.setEnabled(true);
+                    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+                    bundle.setFileChannels(List.of(changed));
+                    ConfigSyncImportRequest request = new ConfigSyncImportRequest();
+                    request.setTenantId(tenantId);
+                    request.setSourceEnv("source-" + suffix);
+                    request.setTargetEnv("integration-test");
+                    request.setTargetTenantIds(List.of(tenantId));
+                    request.setMode(InitMode.UPSERT);
+                    request.setBundle(bundle);
+                    RequestContextHolder.setRequestAttributes(
+                            new ServletRequestAttributes(new MockHttpServletRequest()));
+                    try {
+                        ConfigSyncImportResponse response = configSyncService.importBundle(request);
+                        assertThat(response.result().failureTenants()).isZero();
+                        assertThat(response.result().results())
+                                .singleElement()
+                                .satisfies(result -> assertThat(
+                                                result.fileChannels().updated())
+                                        .isOne());
+                        String endpointSql = """
                 select target_endpoint from batch.file_channel_config
                 where tenant_id = ? and channel_code = ?
                 """;
-            String storedEndpoint =
-                jdbcTemplate.queryForObject(endpointSql, String.class, tenantId, channelCode);
-            assertThat(storedEndpoint).isEqualTo(newEndpoint);
-            String receiptSql = """
+                        String storedEndpoint =
+                                jdbcTemplate.queryForObject(endpointSql, String.class, tenantId, channelCode);
+                        assertThat(storedEndpoint).isEqualTo(newEndpoint);
+                        String receiptSql = """
                 select result_json::text from batch.config_sync_target_receipt
                 where audit_tenant_id = ? and log_id = ? and tenant_id = ?
                 """;
-            String receiptJson = jdbcTemplate.queryForObject(
-                receiptSql, String.class, tenantId, response.syncLogId(), tenantId);
-            TenantInitResult receipt =
-                JsonUtils.fromJsonStrict(receiptJson, TenantInitResult.class);
-            assertThat(receipt.tenantId()).isEqualTo(tenantId);
-            assertThat(receipt.success()).isTrue();
-            assertThat(receipt.fileChannels().updated()).isOne();
-          } finally {
-            RequestContextHolder.resetRequestAttributes();
-          }
+                        String receiptJson = jdbcTemplate.queryForObject(
+                                receiptSql, String.class, tenantId, response.syncLogId(), tenantId);
+                        TenantInitResult receipt = JsonUtils.fromJsonStrict(receiptJson, TenantInitResult.class);
+                        assertThat(receipt.tenantId()).isEqualTo(tenantId);
+                        assertThat(receipt.success()).isTrue();
+                        assertThat(receipt.fileChannels().updated()).isOne();
+                    } finally {
+                        RequestContextHolder.resetRequestAttributes();
+                    }
 
-          releaseResponse.countDown();
-          String taskStatusSql = """
+                    releaseResponse.countDown();
+                    String taskStatusSql = """
               select t.task_status from batch.job_task t
               join batch.job_instance ji on ji.tenant_id = t.tenant_id and ji.id = t.job_instance_id
               where ji.tenant_id = ? and ji.dedup_key = ?
               """;
-          await()
-              .atMost(Duration.ofSeconds(120))
-              .pollInterval(Duration.ofMillis(200))
-              .untilAsserted(() -> {
-                String status = jdbcTemplate.queryForObject(
-                    taskStatusSql, String.class, tenantId, seed.dedupKey());
-                assertThat(status).isEqualTo("SUCCESS");
-              });
-          assertThat(oldRequests).hasValue(1);
-          assertThat(newRequests).hasValue(0);
+                    await().atMost(Duration.ofSeconds(120))
+                            .pollInterval(Duration.ofMillis(200))
+                            .untilAsserted(() -> {
+                                String status = jdbcTemplate.queryForObject(
+                                        taskStatusSql, String.class, tenantId, seed.dedupKey());
+                                assertThat(status).isEqualTo("SUCCESS");
+                            });
+                    assertThat(oldRequests).hasValue(1);
+                    assertThat(newRequests).hasValue(0);
+                } finally {
+                    releaseResponse.countDown();
+                    stopProcess(worker);
+                    worker = null;
+                    Files.deleteIfExists(workerLog);
+                }
+            } finally {
+                Files.deleteIfExists(sourceFile);
+            }
         } finally {
-          releaseResponse.countDown();
-          stopProcess(worker);
-          worker = null;
-          Files.deleteIfExists(workerLog);
+            releaseResponse.countDown();
+            stopProcess(worker);
+            receiver.stop(0);
+            receiverExecutor.shutdownNow();
         }
-      } finally {
-        Files.deleteIfExists(sourceFile);
-      }
-    } finally {
-      releaseResponse.countDown();
-      stopProcess(worker);
-      receiver.stop(0);
-      receiverExecutor.shutdownNow();
     }
-  }
 
-  @Test
-  @DisplayName("派发 worker 进程重启后继续消费:新进程重新注册上线,派发任务成功且目标目录产出文件")
-  void shouldContinueDispatching_whenWorkerProcessRestarted() throws Exception {
-    final String selectTaskStatusSql = """
+    @Test
+    @DisplayName("派发 worker 进程重启后继续消费:新进程重新注册上线,派发任务成功且目标目录产出文件")
+    void shouldContinueDispatching_whenWorkerProcessRestarted() throws Exception {
+        final String selectTaskStatusSql = """
                                 select t.task_status
                         from batch.job_task t
                         join batch.job_instance ji on ji.id = t.job_instance_id
                         where ji.tenant_id = ? and ji.dedup_key = ?
                         """;
 
-    String suffix = Long.toUnsignedString(System.nanoTime());
-    String tenantId = "t-restart-" + suffix;
-    String workerCode = "restart-dispatch-" + suffix;
-    String consumerGroupId = "batch-worker-dispatch-restart-" + suffix;
-    String channelCode = "local-" + suffix;
-    Path targetDir = Files.createTempDirectory("dispatch-restart-target-");
-    Path sourceFile = Files.createTempFile("dispatch-restart-source-", ".txt");
-    byte[] content = ("restart-payload-" + suffix).getBytes(StandardCharsets.UTF_8);
-    Files.write(sourceFile, content);
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        String tenantId = "t-restart-" + suffix;
+        String workerCode = "restart-dispatch-" + suffix;
+        String consumerGroupId = "batch-worker-dispatch-restart-" + suffix;
+        String channelCode = "local-" + suffix;
+        Path targetDir = Files.createTempDirectory("dispatch-restart-target-");
+        Path sourceFile = Files.createTempFile("dispatch-restart-source-", ".txt");
+        byte[] content = ("restart-payload-" + suffix).getBytes(StandardCharsets.UTF_8);
+        Files.write(sourceFile, content);
 
-    seedDispatchChannel(tenantId, channelCode, targetDir);
-    Long fileId = seedDispatchFile(tenantId, sourceFile, suffix);
-    LaunchSeed seed = seedDispatchJob(tenantId, "dispatch", TriggerType.API, suffix);
+        seedDispatchChannel(tenantId, channelCode, targetDir);
+        Long fileId = seedDispatchFile(tenantId, sourceFile, suffix);
+        LaunchSeed seed = seedDispatchJob(tenantId, "dispatch", TriggerType.API, suffix);
 
-    Process worker1 = null;
-    Process worker2 = null;
-    Path worker1Log = Files.createTempFile("dispatch-worker-1-", ".log");
-    Path worker2Log = Files.createTempFile("dispatch-worker-2-", ".log");
-    try {
-      worker1 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker1Log);
-      awaitLogContains(worker1Log, "Started BatchWorkerDispatchApplication");
+        Process worker1 = null;
+        Process worker2 = null;
+        Path worker1Log = Files.createTempFile("dispatch-worker-1-", ".log");
+        Path worker2Log = Files.createTempFile("dispatch-worker-2-", ".log");
+        try {
+            worker1 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker1Log);
+            awaitLogContains(worker1Log, "Started BatchWorkerDispatchApplication");
 
-      stopProcess(worker1);
-      worker1 = null;
+            stopProcess(worker1);
+            worker1 = null;
 
-      worker2 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker2Log);
-      awaitLogContains(worker2Log, "Started BatchWorkerDispatchApplication");
-      awaitWorkerOnlineInRegistry(tenantId, workerCode);
+            worker2 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker2Log);
+            awaitLogContains(worker2Log, "Started BatchWorkerDispatchApplication");
+            awaitWorkerOnlineInRegistry(tenantId, workerCode);
 
-      Map<String, Object> params = new LinkedHashMap<>();
-      params.put("fileId", String.valueOf(fileId));
-      params.put("channelCode", channelCode);
-      params.put("dispatchTarget", targetDir.toString());
-      params.put("externalRequestId", "restart-ext-" + suffix);
-      params.put("receiptCode", "R-RESTART-" + suffix);
-      params.put("ackRequired", false);
-      params.put("forceRetry", false);
+            Map<String, Object> params = new LinkedHashMap<>();
+            params.put("fileId", String.valueOf(fileId));
+            params.put("channelCode", channelCode);
+            params.put("dispatchTarget", targetDir.toString());
+            params.put("externalRequestId", "restart-ext-" + suffix);
+            params.put("receiptCode", "R-RESTART-" + suffix);
+            params.put("ackRequired", false);
+            params.put("forceRetry", false);
 
-      launchService.launch(new LaunchRequest(
-          tenantId,
-          seed.workflowDefinitionId(),
-          BIZ_DATE,
-          TriggerType.API,
-          seed.requestId(),
-          "restart-trace-" + suffix,
-          params));
+            launchService.launch(new LaunchRequest(
+                    tenantId,
+                    seed.workflowDefinitionId(),
+                    BIZ_DATE,
+                    TriggerType.API,
+                    seed.requestId(),
+                    "restart-trace-" + suffix,
+                    params));
 
-      publishPendingOutbox(tenantId);
+            publishPendingOutbox(tenantId);
 
-      // 先创建并发布真实 dispatch topic，再等待 consumer group 稳定。按 topic pattern
-      // 订阅的 Kafka consumer 在 topic 尚不存在时可能尚未创建 group；此时查询 group
-      // 会返回 GroupIdNotFoundException，不能把它当成业务失败。
-      awaitKafkaConsumerGroupStable(consumerGroupId);
+            // 先创建并发布真实 dispatch topic，再等待 consumer group 稳定。按 topic pattern
+            // 订阅的 Kafka consumer 在 topic 尚不存在时可能尚未创建 group；此时查询 group
+            // 会返回 GroupIdNotFoundException，不能把它当成业务失败。
+            awaitKafkaConsumerGroupStable(consumerGroupId);
 
-      // 480s（8 min）：full reactor 跑时 worker subprocess 重启 + Kafka PATTERN topic
-      // metadata 刷新（最长 5 min）+ JVM 启动 + CLAIM 重新建立 在资源竞争下经常踩 5 min 边界。
-      // 8 min 给足够缓冲；e2e 单跑通常 < 60s 完成。
-      await()
-          .atMost(Duration.ofSeconds(480))
-          .pollInterval(Duration.ofMillis(200))
-          .untilAsserted(() -> {
-            String status = jdbcTemplate.queryForObject(
-                selectTaskStatusSql, String.class, tenantId, seed.dedupKey());
-            assertThat(status).isEqualTo("SUCCESS");
-          });
+            // 480s（8 min）：full reactor 跑时 worker subprocess 重启 + Kafka PATTERN topic
+            // metadata 刷新（最长 5 min）+ JVM 启动 + CLAIM 重新建立 在资源竞争下经常踩 5 min 边界。
+            // 8 min 给足够缓冲；e2e 单跑通常 < 60s 完成。
+            await().atMost(Duration.ofSeconds(480))
+                    .pollInterval(Duration.ofMillis(200))
+                    .untilAsserted(() -> {
+                        String status = jdbcTemplate.queryForObject(
+                                selectTaskStatusSql, String.class, tenantId, seed.dedupKey());
+                        assertThat(status).isEqualTo("SUCCESS");
+                    });
 
-      await()
-          .atMost(Duration.ofSeconds(20))
-          .untilAsserted(() -> assertThat(hasAnyFile(targetDir)).isTrue());
-    } finally {
-      stopProcess(worker1);
-      stopProcess(worker2);
+            await().atMost(Duration.ofSeconds(20))
+                    .untilAsserted(() -> assertThat(hasAnyFile(targetDir)).isTrue());
+        } finally {
+            stopProcess(worker1);
+            stopProcess(worker2);
+        }
     }
-  }
 
-  private void awaitKafkaConsumerGroupStable(String consumerGroupId) {
-    Map<String, Object> config =
-        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
-    try (AdminClient adminClient = AdminClient.create(config)) {
-      await()
-          .atMost(Duration.ofSeconds(60))
-          .pollInterval(Duration.ofMillis(500))
-          .until(() -> {
-            try {
-              Map<String, ConsumerGroupDescription> descriptions = adminClient
-                  .describeConsumerGroups(List.of(consumerGroupId))
-                  .all()
-                  .get(10, TimeUnit.SECONDS);
-              ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
-              return desc != null
-                  && desc.groupState() == GroupState.STABLE
-                  && !desc.members().isEmpty();
-            } catch (ExecutionException ex) {
-              if (ex.getCause() instanceof GroupIdNotFoundException) {
-                return false;
-              }
-              throw ex;
-            }
-          });
+    private void awaitKafkaConsumerGroupStable(String consumerGroupId) {
+        Map<String, Object> config = Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+        try (AdminClient adminClient = AdminClient.create(config)) {
+            await().atMost(Duration.ofSeconds(60))
+                    .pollInterval(Duration.ofMillis(500))
+                    .until(() -> {
+                        try {
+                            Map<String, ConsumerGroupDescription> descriptions = adminClient
+                                    .describeConsumerGroups(List.of(consumerGroupId))
+                                    .all()
+                                    .get(10, TimeUnit.SECONDS);
+                            ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
+                            return desc != null
+                                    && desc.groupState() == GroupState.STABLE
+                                    && !desc.members().isEmpty();
+                        } catch (ExecutionException ex) {
+                            if (ex.getCause() instanceof GroupIdNotFoundException) {
+                                return false;
+                            }
+                            throw ex;
+                        }
+                    });
+        }
     }
-  }
 
-  private void seedDispatchChannel(String tenantId, String channelCode, Path targetDir) {
-    final String deleteFileChannelConfigSql = """
+    private void seedDispatchChannel(String tenantId, String channelCode, Path targetDir) {
+        final String deleteFileChannelConfigSql = """
         delete from batch.file_channel_config where tenant_id = ? and channel_code = ?
     """;
-    final String insertFileChannelConfigSql = """
+        final String insertFileChannelConfigSql = """
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
             config_json, receipt_policy, timeout_seconds, enabled
@@ -467,19 +456,19 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         )
         """;
 
-    jdbcTemplate.update(deleteFileChannelConfigSql, tenantId, channelCode);
-    jdbcTemplate.update(
-        insertFileChannelConfigSql,
-        tenantId,
-        channelCode,
-        "Restart local dispatch " + channelCode,
-        targetDir.toString(),
-        targetDir.toString(),
-        channelCode);
-  }
+        jdbcTemplate.update(deleteFileChannelConfigSql, tenantId, channelCode);
+        jdbcTemplate.update(
+                insertFileChannelConfigSql,
+                tenantId,
+                channelCode,
+                "Restart local dispatch " + channelCode,
+                targetDir.toString(),
+                targetDir.toString(),
+                channelCode);
+    }
 
-  private Long seedDispatchFile(String tenantId, Path sourceFile, String suffix) {
-    final String insertFileRecordSql = """
+    private Long seedDispatchFile(String tenantId, Path sourceFile, String suffix) {
+        final String insertFileRecordSql = """
         insert into batch.file_record (
             tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
             file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
@@ -491,31 +480,30 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         ) returning id
         """;
 
-    return jdbcTemplate.queryForObject(
-        insertFileRecordSql,
-        Long.class,
-        tenantId,
-        "dispatch-file-" + suffix,
-        sourceFile.getFileName().toString(),
-        sourceFile.getFileName().toString(),
-        sourceFile.toFile().length(),
-        sourceFile.toString(),
-        BIZ_DATE,
-        "restart-file-trace-" + suffix);
-  }
+        return jdbcTemplate.queryForObject(
+                insertFileRecordSql,
+                Long.class,
+                tenantId,
+                "dispatch-file-" + suffix,
+                sourceFile.getFileName().toString(),
+                sourceFile.getFileName().toString(),
+                sourceFile.toFile().length(),
+                sourceFile.toString(),
+                BIZ_DATE,
+                "restart-file-trace-" + suffix);
+    }
 
-  private LaunchSeed seedDispatchJob(
-      String tenantId, String workerGroup, TriggerType triggerType, String suffix) {
-    final String deleteTriggerRequestSql = """
+    private LaunchSeed seedDispatchJob(String tenantId, String workerGroup, TriggerType triggerType, String suffix) {
+        final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-    final String deleteWorkflowDefinitionSql = """
+        final String deleteWorkflowDefinitionSql = """
             delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?
         """;
-    final String deleteJobDefinitionSql = """
+        final String deleteJobDefinitionSql = """
             delete from batch.job_definition where tenant_id = ? and job_code = ?
         """;
-    final String insertJobDefinitionSql = """
+        final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -525,20 +513,20 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             'NONE', 0, 0, true, 1)
         returning id
         """;
-    final String insertBusinessCalendarSql = """
+        final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone, enabled
         ) values (?, 'E2E_CALENDAR', 'E2E business calendar', 'UTC', true)
         on conflict (tenant_id, calendar_code) do nothing
         """;
-    final String insertWorkflowDefinitionSql = """
+        final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
             calendar_code, single_job_definition_id
         ) values (?, ?, 'restart wf', 'DAG', 1, true, 'E2E_CALENDAR', ?)
         returning id
         """;
-    final String insertWorkflowNodeSql = """
+        final String insertWorkflowNodeSql = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
@@ -547,311 +535,297 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             (?, ?, 'JOB', 'Job', 'JOB', ?, 1, 'NONE', 0, 0, true),
             (?, ?, 'END', 'End', 'END', null, 2, 'NONE', 0, 0, true)
         """;
-    final String insertWorkflowEdgeSql = """
+        final String insertWorkflowEdgeSql = """
         insert into batch.workflow_edge (
             tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
         ) values (?, ?, 'START', 'JOB', 'ALWAYS', true),
                  (?, ?, 'JOB', 'END', 'SUCCESS', true)
         """;
-    final String insertTriggerRequestSql = """
+        final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
             dedup_key, request_status, trace_id
         ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', ?)
         """;
 
-    String jobCode = "RESTART_DISPATCH_" + suffix;
-    String requestId = "restart-req-" + suffix;
-    String dedupKey = "restart-dedup-" + suffix;
+        String jobCode = "RESTART_DISPATCH_" + suffix;
+        String requestId = "restart-req-" + suffix;
+        String dedupKey = "restart-dedup-" + suffix;
 
-    jdbcTemplate.update(deleteTriggerRequestSql, tenantId, requestId);
-    jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, jobCode);
-    jdbcTemplate.update(deleteJobDefinitionSql, tenantId, jobCode);
+        jdbcTemplate.update(deleteTriggerRequestSql, tenantId, requestId);
+        jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, jobCode);
+        jdbcTemplate.update(deleteJobDefinitionSql, tenantId, jobCode);
 
-    Long jobDefinitionId = jdbcTemplate.queryForObject(
-        insertJobDefinitionSql,
-        Long.class,
-        tenantId,
-        jobCode,
-        "restart dispatch " + jobCode,
-        CodeNormalizer.toUpperOrNull(workerGroup));
+        Long jobDefinitionId = jdbcTemplate.queryForObject(
+                insertJobDefinitionSql,
+                Long.class,
+                tenantId,
+                jobCode,
+                "restart dispatch " + jobCode,
+                CodeNormalizer.toUpperOrNull(workerGroup));
 
-    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
-    Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        insertWorkflowNodeSql,
-        tenantId,
-        workflowDefinitionId,
-        tenantId,
-        workflowDefinitionId,
-        jobCode,
-        tenantId,
-        workflowDefinitionId);
-    jdbcTemplate.update(
-        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+        jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+        Long workflowDefinitionId = jdbcTemplate.queryForObject(
+                insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobDefinitionId);
+        jdbcTemplate.update(
+                insertWorkflowNodeSql,
+                tenantId,
+                workflowDefinitionId,
+                tenantId,
+                workflowDefinitionId,
+                jobCode,
+                tenantId,
+                workflowDefinitionId);
+        jdbcTemplate.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
 
-    jdbcTemplate.update(
-        insertTriggerRequestSql,
-        tenantId,
-        requestId,
-        triggerType.code(),
-        workflowDefinitionId,
-        BIZ_DATE,
-        dedupKey,
-        "restart-trace-" + suffix);
+        jdbcTemplate.update(
+                insertTriggerRequestSql,
+                tenantId,
+                requestId,
+                triggerType.code(),
+                workflowDefinitionId,
+                BIZ_DATE,
+                dedupKey,
+                "restart-trace-" + suffix);
 
-    return new LaunchSeed(jobCode, workflowDefinitionId, requestId, dedupKey);
-  }
-
-  private void publishPendingOutbox(String tenantId) {
-    List<OutboxEventEntity> pending = outboxEventMapper.selectPending(new OutboxEventQuery(
-        tenantId,
-        null,
-        null,
-        new PageRequest(1, 500),
-        OutboxPublishStatus.NEW.code(),
-        OutboxPublishStatus.FAILED.code(),
-        null,
-        null,
-        null));
-    ensureTopicsExist(pending);
-    for (OutboxEventEntity event : pending) {
-      outboxPublisher.publish(event);
+        return new LaunchSeed(jobCode, workflowDefinitionId, requestId, dedupKey);
     }
-  }
 
-  private void ensureTopicsExist(List<OutboxEventEntity> pendingEvents) {
-    if (pendingEvents == null || pendingEvents.isEmpty()) {
-      return;
+    private void publishPendingOutbox(String tenantId) {
+        List<OutboxEventEntity> pending = outboxEventMapper.selectPending(new OutboxEventQuery(
+                tenantId,
+                null,
+                null,
+                new PageRequest(1, 500),
+                OutboxPublishStatus.NEW.code(),
+                OutboxPublishStatus.FAILED.code(),
+                null,
+                null,
+                null));
+        ensureTopicsExist(pending);
+        for (OutboxEventEntity event : pending) {
+            outboxPublisher.publish(event);
+        }
     }
-    Set<String> topics = pendingEvents.stream()
-        .map(this::resolveTargetTopic)
-        .filter(topic -> topic != null && !topic.isBlank())
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    if (topics.isEmpty()) {
-      return;
-    }
-    Map<String, Object> config =
-        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
-    try (AdminClient adminClient = AdminClient.create(config)) {
-      List<NewTopic> newTopics =
-          topics.stream().map(topic -> new NewTopic(topic, 1, (short) 1)).toList();
-      adminClient.createTopics(newTopics).all().get();
-    } catch (ExecutionException ex) {
-      if (ex.getCause() instanceof TopicExistsException) {
-        return;
-      }
-      throw new IllegalStateException("failed to create dispatch topics: " + topics, ex);
-    } catch (Exception ex) {
-      throw new IllegalStateException("failed to create dispatch topics: " + topics, ex);
-    }
-  }
 
-  private String resolveTargetTopic(OutboxEventEntity event) {
-    String baseTopic = batchMqTopicsProperties.resolveDispatchTopic(event.getEventType());
-    if (baseTopic == null || baseTopic.isBlank()) {
-      return null;
+    private void ensureTopicsExist(List<OutboxEventEntity> pendingEvents) {
+        if (pendingEvents == null || pendingEvents.isEmpty()) {
+            return;
+        }
+        Set<String> topics = pendingEvents.stream()
+                .map(this::resolveTargetTopic)
+                .filter(topic -> topic != null && !topic.isBlank())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (topics.isEmpty()) {
+            return;
+        }
+        Map<String, Object> config = Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+        try (AdminClient adminClient = AdminClient.create(config)) {
+            List<NewTopic> newTopics = topics.stream()
+                    .map(topic -> new NewTopic(topic, 1, (short) 1))
+                    .toList();
+            adminClient.createTopics(newTopics).all().get();
+        } catch (ExecutionException ex) {
+            if (ex.getCause() instanceof TopicExistsException) {
+                return;
+            }
+            throw new IllegalStateException("failed to create dispatch topics: " + topics, ex);
+        } catch (Exception ex) {
+            throw new IllegalStateException("failed to create dispatch topics: " + topics, ex);
+        }
     }
-    Object payload = JsonUtils.fromJson(event.getPayloadJson(), Object.class);
-    if (payload instanceof Map<?, ?> payloadMap) {
-      Object selectedWorkerId = payloadMap.get("selectedWorkerId");
-      if (selectedWorkerId != null && !String.valueOf(selectedWorkerId).isBlank()) {
-        return BatchTopics.directDispatchTopic(baseTopic, String.valueOf(selectedWorkerId));
-      }
+
+    private String resolveTargetTopic(OutboxEventEntity event) {
+        String baseTopic = batchMqTopicsProperties.resolveDispatchTopic(event.getEventType());
+        if (baseTopic == null || baseTopic.isBlank()) {
+            return null;
+        }
+        Object payload = JsonUtils.fromJson(event.getPayloadJson(), Object.class);
+        if (payload instanceof Map<?, ?> payloadMap) {
+            Object selectedWorkerId = payloadMap.get("selectedWorkerId");
+            if (selectedWorkerId != null && !String.valueOf(selectedWorkerId).isBlank()) {
+                return BatchTopics.directDispatchTopic(baseTopic, String.valueOf(selectedWorkerId));
+            }
+        }
+        return baseTopic;
     }
-    return baseTopic;
-  }
 
-  private Process startDispatchWorker(
-      String tenantId, String workerCode, String consumerGroupId, Path logFile)
-      throws IOException, InterruptedException {
-    return startDispatchWorker(tenantId, workerCode, consumerGroupId, logFile, false);
-  }
-
-  private Process startDispatchWorker(
-      String tenantId,
-      String workerCode,
-      String consumerGroupId,
-      Path logFile,
-      boolean holdResponse)
-      throws IOException, InterruptedException {
-    Path workerExecJar = locateWorkerExecJar();
-    List<String> command = new ArrayList<>(List.of(
-        JAVA_BIN,
-        "-jar",
-        workerExecJar.toString(),
-        "--spring.profiles.active=test,e2e",
-        "--server.port=0",
-        "--spring.datasource.url=" + platformJdbcUrl(),
-        "--spring.datasource.username=batch_user",
-        "--spring.datasource.password=batch_pass_123",
-        "--spring.datasource.driver-class-name=org.postgresql.Driver",
-        "--spring.kafka.bootstrap-servers=" + kafkaBootstrapServers,
-        "--batch.orchestrator.base-url=http://127.0.0.1:" + localServerPort,
-        "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
-        "--batch.worker.registry.fail-fast-on-startup=false",
-        "--batch.security.bypass-mode=true",
-        "--batch.security.internal-secret=" + internalSecret,
-        "--batch.security.kms.default-key-ref=DEFAULT_TEST",
-        "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
-        "--batch.storage.s3.endpoint=" + s3Endpoint(),
-        "--batch.storage.s3.access-key=minioadmin",
-        "--batch.storage.s3.secret-key=minioadmin123",
-        "--batch.storage.s3.bucket=" + s3Bucket(),
-        "--batch.worker.type=DISPATCH",
-        "--batch.worker.dispatch.worker-code=" + workerCode,
-        "--batch.worker.dispatch.worker-type=DISPATCH",
-        "--batch.worker.dispatch.tenant-id=" + tenantId,
-        "--batch.worker.dispatch.heartbeat-interval-millis=1000",
-        "--batch.worker.dispatch.topic=batch.task.dispatch.dispatch",
-        "--batch.worker.dispatch.consumer-group-id=" + consumerGroupId,
-        "--batch.worker.dispatch.circuit-breaker.enabled=false",
-        "--batch.worker.dispatch.health.enabled=false",
-        "--batch.worker.dispatch.receipt-poll.enabled=false",
-        "--batch.worker.lease.renew-interval-millis=1000"));
-    if (holdResponse) {
-      command.add("--batch.worker.dispatch.http-channel.read-timeout-millis=120000");
-      command.add("--batch.worker.dispatch.http-channel.call-timeout-millis=120000");
+    private Process startDispatchWorker(String tenantId, String workerCode, String consumerGroupId, Path logFile)
+            throws IOException, InterruptedException {
+        return startDispatchWorker(tenantId, workerCode, consumerGroupId, logFile, false);
     }
-    ProcessBuilder builder = new ProcessBuilder(command);
-    builder.redirectErrorStream(true);
-    builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
-    return builder.start();
-  }
 
-  private void awaitLogContains(Path logFile, String expectedText) {
-    await()
-        .atMost(Duration.ofSeconds(WORKER_START_TIMEOUT_SECONDS))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String logContent =
-              Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
-          assertThat(logContent).contains(expectedText);
-        });
-  }
+    private Process startDispatchWorker(
+            String tenantId, String workerCode, String consumerGroupId, Path logFile, boolean holdResponse)
+            throws IOException, InterruptedException {
+        Path workerExecJar = locateWorkerExecJar();
+        List<String> command = new ArrayList<>(List.of(
+                JAVA_BIN,
+                "-jar",
+                workerExecJar.toString(),
+                "--spring.profiles.active=test,e2e",
+                "--server.port=0",
+                "--spring.datasource.url=" + platformJdbcUrl(),
+                "--spring.datasource.username=batch_user",
+                "--spring.datasource.password=batch_pass_123",
+                "--spring.datasource.driver-class-name=org.postgresql.Driver",
+                "--spring.kafka.bootstrap-servers=" + kafkaBootstrapServers,
+                "--batch.orchestrator.base-url=http://127.0.0.1:" + localServerPort,
+                "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
+                "--batch.worker.registry.fail-fast-on-startup=false",
+                "--batch.security.bypass-mode=true",
+                "--batch.security.internal-secret=" + internalSecret,
+                "--batch.security.kms.default-key-ref=DEFAULT_TEST",
+                "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
+                "--batch.storage.s3.endpoint=" + s3Endpoint(),
+                "--batch.storage.s3.access-key=minioadmin",
+                "--batch.storage.s3.secret-key=minioadmin123",
+                "--batch.storage.s3.bucket=" + s3Bucket(),
+                "--batch.worker.type=DISPATCH",
+                "--batch.worker.dispatch.worker-code=" + workerCode,
+                "--batch.worker.dispatch.worker-type=DISPATCH",
+                "--batch.worker.dispatch.tenant-id=" + tenantId,
+                "--batch.worker.dispatch.heartbeat-interval-millis=1000",
+                "--batch.worker.dispatch.topic=batch.task.dispatch.dispatch",
+                "--batch.worker.dispatch.consumer-group-id=" + consumerGroupId,
+                "--batch.worker.dispatch.circuit-breaker.enabled=false",
+                "--batch.worker.dispatch.health.enabled=false",
+                "--batch.worker.dispatch.receipt-poll.enabled=false",
+                "--batch.worker.lease.renew-interval-millis=1000"));
+        if (holdResponse) {
+            command.add("--batch.worker.dispatch.http-channel.read-timeout-millis=120000");
+            command.add("--batch.worker.dispatch.http-channel.call-timeout-millis=120000");
+        }
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.redirectErrorStream(true);
+        builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
+        return builder.start();
+    }
 
-  private void awaitWorkerOnlineInRegistry(String tenantId, String workerCode) {
-    final String selectCountSql = """
+    private void awaitLogContains(Path logFile, String expectedText) {
+        await().atMost(Duration.ofSeconds(WORKER_START_TIMEOUT_SECONDS))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String logContent = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
+                    assertThat(logContent).contains(expectedText);
+                });
+    }
+
+    private void awaitWorkerOnlineInRegistry(String tenantId, String workerCode) {
+        final String selectCountSql = """
                       select count(1)::int from batch.worker_registry
                       where tenant_id = ? and worker_code = ? and status = 'ONLINE'\s\
                       and worker_group = 'DISPATCH'
                       """;
 
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          Integer count =
-              jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workerCode);
-          assertThat(count).isEqualTo(1);
-        });
-  }
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    Integer count = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workerCode);
+                    assertThat(count).isEqualTo(1);
+                });
+    }
 
-  private Path locateWorkerExecJar() throws IOException, InterruptedException {
-    Path workerTargetDir = projectRoot().resolve("batch-worker/dispatch/target");
-    Path execJar = findLatestExecJar(workerTargetDir);
-    if (execJar != null) {
-      return execJar;
+    private Path locateWorkerExecJar() throws IOException, InterruptedException {
+        Path workerTargetDir = projectRoot().resolve("batch-worker/dispatch/target");
+        Path execJar = findLatestExecJar(workerTargetDir);
+        if (execJar != null) {
+            return execJar;
+        }
+        buildWorkerDispatchArtifact();
+        execJar = findLatestExecJar(workerTargetDir);
+        if (execJar != null) {
+            return execJar;
+        }
+        throw new IllegalStateException("worker-dispatch exec jar not found under " + workerTargetDir);
     }
-    buildWorkerDispatchArtifact();
-    execJar = findLatestExecJar(workerTargetDir);
-    if (execJar != null) {
-      return execJar;
-    }
-    throw new IllegalStateException("worker-dispatch exec jar not found under " + workerTargetDir);
-  }
 
-  private void buildWorkerDispatchArtifact() throws IOException, InterruptedException {
-    Path rootDir = projectRoot();
-    Path logFile = Files.createTempFile("worker-dispatch-build-", ".log");
-    ProcessBuilder builder = new ProcessBuilder(
-        "mvn",
-        "-q",
-        "-pl",
-        "batch-worker/dispatch",
-        "-am",
-        "-DskipTests",
-        "package",
-        "-Dsurefire.failIfNoSpecifiedTests=false");
-    builder.directory(rootDir.toFile());
-    builder.redirectErrorStream(true);
-    builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
-    Process process = builder.start();
-    try {
-      if (!process.waitFor(WORKER_BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
-        process.destroyForcibly();
-        throw new IllegalStateException("timed out building batch-worker-dispatch; see " + logFile);
-      }
-      if (process.exitValue() != 0) {
-        throw new IllegalStateException("failed to build batch-worker-dispatch; see " + logFile);
-      }
-    } finally {
-      if (process.isAlive()) {
-        process.destroyForcibly();
-      }
+    private void buildWorkerDispatchArtifact() throws IOException, InterruptedException {
+        Path rootDir = projectRoot();
+        Path logFile = Files.createTempFile("worker-dispatch-build-", ".log");
+        ProcessBuilder builder = new ProcessBuilder(
+                "mvn",
+                "-q",
+                "-pl",
+                "batch-worker/dispatch",
+                "-am",
+                "-DskipTests",
+                "package",
+                "-Dsurefire.failIfNoSpecifiedTests=false");
+        builder.directory(rootDir.toFile());
+        builder.redirectErrorStream(true);
+        builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
+        Process process = builder.start();
+        try {
+            if (!process.waitFor(WORKER_BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("timed out building batch-worker-dispatch; see " + logFile);
+            }
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException("failed to build batch-worker-dispatch; see " + logFile);
+            }
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
     }
-  }
 
-  private Path findLatestExecJar(Path targetDir) throws IOException {
-    if (!Files.isDirectory(targetDir)) {
-      return null;
+    private Path findLatestExecJar(Path targetDir) throws IOException {
+        if (!Files.isDirectory(targetDir)) {
+            return null;
+        }
+        try (var stream = Files.list(targetDir)) {
+            return stream.filter(path -> path.getFileName().toString().endsWith("-exec.jar"))
+                    .max(Comparator.comparingLong(path -> path.toFile().lastModified()))
+                    .orElse(null);
+        }
     }
-    try (var stream = Files.list(targetDir)) {
-      return stream
-          .filter(path -> path.getFileName().toString().endsWith("-exec.jar"))
-          .max(Comparator.comparingLong(path -> path.toFile().lastModified()))
-          .orElse(null);
-    }
-  }
 
-  private Path projectRoot() {
-    Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
-    while (current != null) {
-      boolean currentDirectoryIsBackendRepositoryRoot =
-          Files.isRegularFile(current.resolve("pom.xml"))
-              && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
-              && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"));
-      if (currentDirectoryIsBackendRepositoryRoot) {
-        return current;
-      }
-      current = current.getParent();
+    private Path projectRoot() {
+        Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        while (current != null) {
+            boolean currentDirectoryIsBackendRepositoryRoot = Files.isRegularFile(current.resolve("pom.xml"))
+                    && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
+                    && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"));
+            if (currentDirectoryIsBackendRepositoryRoot) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        throw new IllegalStateException("unable to locate project root from " + System.getProperty("user.dir"));
     }
-    throw new IllegalStateException(
-        "unable to locate project root from " + System.getProperty("user.dir"));
-  }
 
-  private void stopProcess(Process process) {
-    if (process == null) {
-      return;
+    private void stopProcess(Process process) {
+        if (process == null) {
+            return;
+        }
+        ProcessHandle handle = process.toHandle();
+        if (!handle.isAlive()) {
+            return;
+        }
+        handle.descendants().forEach(ProcessHandle::destroyForcibly);
+        handle.destroyForcibly();
+        try {
+            handle.onExit().get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException timeoutException) {
+            // 子进程可能在父进程退出竞争窗口中重新出现，再做一次不可恢复终止，避免 Surefire 残留。
+            handle.descendants().forEach(ProcessHandle::destroyForcibly);
+            handle.destroyForcibly();
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException ignored) {
+            // 进程已退出但句柄状态尚未刷新，清理可以继续完成。
+        }
     }
-    ProcessHandle handle = process.toHandle();
-    if (!handle.isAlive()) {
-      return;
-    }
-    handle.descendants().forEach(ProcessHandle::destroyForcibly);
-    handle.destroyForcibly();
-    try {
-      handle.onExit().get(10, TimeUnit.SECONDS);
-    } catch (TimeoutException timeoutException) {
-      // 子进程可能在父进程退出竞争窗口中重新出现，再做一次不可恢复终止，避免 Surefire 残留。
-      handle.descendants().forEach(ProcessHandle::destroyForcibly);
-      handle.destroyForcibly();
-    } catch (InterruptedException interruptedException) {
-      Thread.currentThread().interrupt();
-    } catch (ExecutionException ignored) {
-      // 进程已退出但句柄状态尚未刷新，清理可以继续完成。
-    }
-  }
 
-  private boolean hasAnyFile(Path directory) {
-    try (var stream = Files.list(directory)) {
-      return stream.findAny().isPresent();
-    } catch (IOException ex) {
-      return false;
+    private boolean hasAnyFile(Path directory) {
+        try (var stream = Files.list(directory)) {
+            return stream.findAny().isPresent();
+        } catch (IOException ex) {
+            return false;
+        }
     }
-  }
 
-  private record LaunchSeed(
-      String jobCode, Long workflowDefinitionId, String requestId, String dedupKey) {}
+    private record LaunchSeed(String jobCode, Long workflowDefinitionId, String requestId, String dedupKey) {}
 }

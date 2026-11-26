@@ -10,13 +10,13 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BatchWindowMapper {
 
-  BatchWindowEntity selectFirstByTenantAndCodeAndEnabled(
-      @Param("tenantId") String tenantId,
-      @Param("windowCode") String windowCode,
-      @Param("enabled") Boolean enabled);
+    BatchWindowEntity selectFirstByTenantAndCodeAndEnabled(
+            @Param("tenantId") String tenantId,
+            @Param("windowCode") String windowCode,
+            @Param("enabled") Boolean enabled);
 
-  List<BatchWindowEntity> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    List<BatchWindowEntity> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  BatchWindowEntity selectById(@Param("id") Long id);
+    BatchWindowEntity selectById(@Param("id") Long id);
 }

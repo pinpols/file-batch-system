@@ -30,35 +30,33 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAlertRoutingControllerValidationTest {
 
-  @Mock
-  private ConsoleAlertRoutingApplicationService service;
+    @Mock
+    private ConsoleAlertRoutingApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAlertRoutingController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAlertRoutingController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String body(String routeCode) {
-    return """
+    private String body(String routeCode) {
+        return """
         {
           "tenantId": "ta",
           "routeCode": "%s",
@@ -68,60 +66,58 @@ class ConsoleAlertRoutingControllerValidationTest {
           "receiver": "ops@example.com"
         }
         """.formatted(routeCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("路由编码含空格时返回校验错误, 不创建路由")
-  void rejects_routeCode_with_space() throws Exception {
-    mockMvc
-        .perform(post("/api/console/alert-routings")
-            .contentType(APPLICATION_JSON)
-            .content(body("q q q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("路由编码含空格时返回校验错误, 不创建路由")
+    void rejects_routeCode_with_space() throws Exception {
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("q q q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("路由编码含中文时, 返回校验错误")
-  void rejects_routeCode_chinese() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/alert-routings").contentType(APPLICATION_JSON).content(body("告警")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("路由编码含中文时, 返回校验错误")
+    void rejects_routeCode_chinese() throws Exception {
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("告警")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("路由编码以数字开头时, 返回校验错误")
-  void rejects_routeCode_starts_with_digit() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/alert-routings").contentType(APPLICATION_JSON).content(body("9rt")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("路由编码以数字开头时, 返回校验错误")
+    void rejects_routeCode_starts_with_digit() throws Exception {
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("9rt")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("路由编码为空时, 返回校验错误")
-  void rejects_routeCode_blank() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/alert-routings").contentType(APPLICATION_JSON).content(body("")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("路由编码为空时, 返回校验错误")
+    void rejects_routeCode_blank() throws Exception {
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("路由编码符合命名规范时, 通过校验并创建路由")
-  void accepts_valid_routeCode() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    mockMvc
-        .perform(post("/api/console/alert-routings")
-            .contentType(APPLICATION_JSON)
-            .content(body("route_ok_01")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("路由编码符合命名规范时, 通过校验并创建路由")
+    void accepts_valid_routeCode() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+        mockMvc.perform(post("/api/console/alert-routings")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("route_ok_01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).create(ArgumentMatchers.any());
+    }
 }

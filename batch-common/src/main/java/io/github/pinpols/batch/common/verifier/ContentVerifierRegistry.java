@@ -37,88 +37,87 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ContentVerifierRegistry {
 
-  private static final String METRIC_DURATION = "batch.verifier.duration";
-  private static final String METRIC_FAILURES = "batch.verifier.failures";
+    private static final String METRIC_DURATION = "batch.verifier.duration";
+    private static final String METRIC_FAILURES = "batch.verifier.failures";
 
-  private final List<ContentVerifier> verifiers;
-  private final MeterRegistry meterRegistry;
-  private final ConcurrentMap<String, Timer> timerCache = new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, Counter> failureCounterCache = new ConcurrentHashMap<>();
+    private final List<ContentVerifier> verifiers;
+    private final MeterRegistry meterRegistry;
+    private final ConcurrentMap<String, Timer> timerCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Counter> failureCounterCache = new ConcurrentHashMap<>();
 
-  public ContentVerifierRegistry(
-      ObjectProvider<ContentVerifier> verifierProvider,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.verifiers = verifierProvider.orderedStream().toList();
-    this.meterRegistry = meterRegistryProvider.getIfAvailable();
-    if (log.isInfoEnabled()) {
-      log.info(
-          "ContentVerifierRegistry initialized with {} verifier(s): {}",
-          verifiers.size(),
-          verifiers.stream().map(ContentVerifier::code).toList());
+    public ContentVerifierRegistry(
+            ObjectProvider<ContentVerifier> verifierProvider, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this.verifiers = verifierProvider.orderedStream().toList();
+        this.meterRegistry = meterRegistryProvider.getIfAvailable();
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "ContentVerifierRegistry initialized with {} verifier(s): {}",
+                    verifiers.size(),
+                    verifiers.stream().map(ContentVerifier::code).toList());
+        }
     }
-  }
 
-  /** 列出对当前 jobType+stageCode 适用的 verifier；null stageCode 视为通配。 */
-  public List<ContentVerifier> verifiersFor(JobType jobType, String stageCode) {
-    Objects.requireNonNull(jobType, "jobType");
-    return verifiers.stream()
-        .filter(v -> v.appliesTo() != null && v.appliesTo().contains(jobType))
-        .filter(v -> v.stageCode() == null || v.stageCode().equalsIgnoreCase(stageCode))
-        .toList();
-  }
-
-  /** 执行单个 verifier，包 Micrometer 计时与异常吞咽。永远返回非空 {@link VerifyResult}；调用方据此聚合。 */
-  public VerifyResult run(ContentVerifier verifier, VerifyContext context) {
-    long startNanos = System.nanoTime();
-    String code = verifier.code();
-    VerifyResult result;
-    String outcome;
-    try {
-      result = verifier.verify(context);
-      if (result == null) {
-        result = VerifyResult.fail(code + "_NULL_RESULT", "verifier returned null");
-      }
-      outcome = result.passed() ? "pass" : "fail";
-    } catch (RuntimeException ex) {
-      log.warn(
-          "ContentVerifier {} threw exception: tenantId={}, taskId={}, stage={}",
-          code,
-          context.tenantId(),
-          context.taskId(),
-          context.stageCode(),
-          ex);
-      result = VerifyResult.fail(
-          code + "_EXCEPTION",
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          Map.of("exception", ex.getClass().getSimpleName()));
-      outcome = "error";
+    /** 列出对当前 jobType+stageCode 适用的 verifier；null stageCode 视为通配。 */
+    public List<ContentVerifier> verifiersFor(JobType jobType, String stageCode) {
+        Objects.requireNonNull(jobType, "jobType");
+        return verifiers.stream()
+                .filter(v -> v.appliesTo() != null && v.appliesTo().contains(jobType))
+                .filter(v -> v.stageCode() == null || v.stageCode().equalsIgnoreCase(stageCode))
+                .toList();
     }
-    recordMetrics(code, outcome, result, startNanos);
-    return result;
-  }
 
-  private void recordMetrics(String code, String outcome, VerifyResult result, long startNanos) {
-    if (meterRegistry == null) {
-      return;
+    /** 执行单个 verifier，包 Micrometer 计时与异常吞咽。永远返回非空 {@link VerifyResult}；调用方据此聚合。 */
+    public VerifyResult run(ContentVerifier verifier, VerifyContext context) {
+        long startNanos = System.nanoTime();
+        String code = verifier.code();
+        VerifyResult result;
+        String outcome;
+        try {
+            result = verifier.verify(context);
+            if (result == null) {
+                result = VerifyResult.fail(code + "_NULL_RESULT", "verifier returned null");
+            }
+            outcome = result.passed() ? "pass" : "fail";
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "ContentVerifier {} threw exception: tenantId={}, taskId={}, stage={}",
+                    code,
+                    context.tenantId(),
+                    context.taskId(),
+                    context.stageCode(),
+                    ex);
+            result = VerifyResult.fail(
+                    code + "_EXCEPTION",
+                    ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+                    Map.of("exception", ex.getClass().getSimpleName()));
+            outcome = "error";
+        }
+        recordMetrics(code, outcome, result, startNanos);
+        return result;
     }
-    long elapsedNanos = System.nanoTime() - startNanos;
-    Timer timer = timerCache.computeIfAbsent(
-        code + "::" + outcome,
-        key -> Timer.builder(METRIC_DURATION)
-            .description("ContentVerifier execution time per code/outcome")
-            .tags(Tags.of("code", code, "outcome", outcome))
-            .register(meterRegistry));
-    timer.record(Duration.ofNanos(elapsedNanos));
 
-    if (!result.passed()) {
-      String reason = result.code() == null ? "UNKNOWN" : result.code();
-      Counter counter = failureCounterCache.computeIfAbsent(
-          code + "::" + reason,
-          key -> Counter.builder(METRIC_FAILURES)
-              .description("ContentVerifier failure count per code/reason")
-              .tags(Tags.of("code", code, "reason", reason))
-              .register(meterRegistry));
-      counter.increment();
+    private void recordMetrics(String code, String outcome, VerifyResult result, long startNanos) {
+        if (meterRegistry == null) {
+            return;
+        }
+        long elapsedNanos = System.nanoTime() - startNanos;
+        Timer timer = timerCache.computeIfAbsent(
+                code + "::" + outcome,
+                key -> Timer.builder(METRIC_DURATION)
+                        .description("ContentVerifier execution time per code/outcome")
+                        .tags(Tags.of("code", code, "outcome", outcome))
+                        .register(meterRegistry));
+        timer.record(Duration.ofNanos(elapsedNanos));
+
+        if (!result.passed()) {
+            String reason = result.code() == null ? "UNKNOWN" : result.code();
+            Counter counter = failureCounterCache.computeIfAbsent(
+                    code + "::" + reason,
+                    key -> Counter.builder(METRIC_FAILURES)
+                            .description("ContentVerifier failure count per code/reason")
+                            .tags(Tags.of("code", code, "reason", reason))
+                            .register(meterRegistry));
+            counter.increment();
+        }
     }
-  }
 }

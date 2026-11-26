@@ -46,26 +46,26 @@ import org.mockito.invocation.InvocationOnMock;
 @DisplayName("SDK 与平台协议契约 — 派单载荷、注册心跳、执行回报与认领请求字段对账")
 class SdkPlatformContractTest {
 
-  private static final ObjectMapper M = new ObjectMapper();
+    private static final ObjectMapper M = new ObjectMapper();
 
-  private final BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
-      .baseUrl("http://x")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("k:9092")
-      .kafkaTopicPattern("p.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+            .baseUrl("http://x")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("k:9092")
+            .kafkaTopicPattern("p.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  // ─── Kafka 派单 payload 契约 ────────────────────────────────────────────────
+    // ─── Kafka 派单 payload 契约 ────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("平台派单载荷可被 SDK 反序列化,关键字段对齐且多余新字段被忽略")
-  void shouldDeserializePayload_whenKafkaDispatchReceived() throws Exception {
-    // 模拟平台 producer 写的 JSON(对照 orchestrator BatchTopicResolver + 上游 producer
-    // 写入的 TaskDispatchMessage —— 字段集是协议契约,平台改要同步改 SDK)
-    String wirePayload = """
+    @Test
+    @DisplayName("平台派单载荷可被 SDK 反序列化,关键字段对齐且多余新字段被忽略")
+    void shouldDeserializePayload_whenKafkaDispatchReceived() throws Exception {
+        // 模拟平台 producer 写的 JSON(对照 orchestrator BatchTopicResolver + 上游 producer
+        // 写入的 TaskDispatchMessage —— 字段集是协议契约,平台改要同步改 SDK)
+        String wirePayload = """
         {
           "taskId": 12345,
           "tenantId": "acme",
@@ -78,144 +78,142 @@ class SdkPlatformContractTest {
         }
         """.stripTrailing();
 
-    TaskDispatchMessage msg = M.readValue(wirePayload, TaskDispatchMessage.class);
-    assertThat(msg.taskId()).isEqualTo(12345L);
-    assertThat(msg.tenantId()).isEqualTo("acme");
-    assertThat(msg.jobCode()).isEqualTo("daily-report");
-    assertThat(msg.taskType()).isEqualTo("echo");
-    assertThat(msg.taskInstanceId()).isEqualTo("ti-789");
-    assertThat(msg.parameters()).containsEntry("bizDate", "2026-05-31");
-    assertThat(msg.runtimeAttributes())
-        .containsEntry("traceId", "abc")
-        .containsEntry("partitionInvocationId", "inv-1");
-    msg.validate(); // 必填全有,不应抛
-  }
-
-  // ─── register body 契约 → WorkerHeartbeatDto 字段集 ──────────────────────────
-
-  @Test
-  @DisplayName("注册心跳报文体覆盖必填字段,并发与容量字段类型符合平台约定")
-  void shouldMatchHeartbeatSchema_whenBuildingRegisterBody() {
-    // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
-    Map<String, Object> simulated = new HashMap<>();
-    simulated.put("tenantId", "tx");
-    simulated.put("workerCode", "w-1");
-    simulated.put("workerGroup", "sdk-self-hosted");
-    simulated.put("status", "RUNNING");
-    simulated.put("heartbeatAt", Instant.now().toString());
-    simulated.put("currentLoad", 0);
-    simulated.put("maxConcurrent", 2);
-    simulated.put("capabilityTags", List.of("echo", "sleep"));
-
-    // 必填字段集合(对照 WorkerHeartbeatDto record components)
-    assertThat(simulated.keySet())
-        .containsAll(List.of(
-            "tenantId", "workerCode", "status", "heartbeatAt", "currentLoad", "maxConcurrent"));
-    // capabilityTags 类型必须是 List(WorkerHeartbeatDto.capabilityTags : List<String>)
-    assertThat(simulated.get("capabilityTags")).isInstanceOf(List.class);
-    // currentLoad 必须 Integer(不是 String / null)
-    assertThat(simulated.get("currentLoad")).isInstanceOf(Integer.class);
-    assertThat(simulated.get("maxConcurrent")).isInstanceOf(Integer.class);
-    // 序化往返不丢字段
-    JsonNode tree = M.valueToTree(simulated);
-    for (String f : List.of("tenantId", "workerCode", "status", "currentLoad")) {
-      assertThat(tree.has(f)).as("register body missing %s", f).isTrue();
+        TaskDispatchMessage msg = M.readValue(wirePayload, TaskDispatchMessage.class);
+        assertThat(msg.taskId()).isEqualTo(12345L);
+        assertThat(msg.tenantId()).isEqualTo("acme");
+        assertThat(msg.jobCode()).isEqualTo("daily-report");
+        assertThat(msg.taskType()).isEqualTo("echo");
+        assertThat(msg.taskInstanceId()).isEqualTo("ti-789");
+        assertThat(msg.parameters()).containsEntry("bizDate", "2026-05-31");
+        assertThat(msg.runtimeAttributes())
+                .containsEntry("traceId", "abc")
+                .containsEntry("partitionInvocationId", "inv-1");
+        msg.validate(); // 必填全有,不应抛
     }
-  }
 
-  // ─── report body 契约 → TaskExecutionReportDto 字段集 ───────────────────────
+    // ─── register body 契约 → WorkerHeartbeatDto 字段集 ──────────────────────────
 
-  @Test
-  @DisplayName("执行回报字段集完整,输出字段用复数名且不含已废弃的错误字段")
-  void shouldMatchReportSchema_whenBuildingExecutionReport() throws IOException {
-    List<Map<String, Object>> reports = captureReports(SdkTaskResult.ok("done", Map.of("rows", 5)));
+    @Test
+    @DisplayName("注册心跳报文体覆盖必填字段,并发与容量字段类型符合平台约定")
+    void shouldMatchHeartbeatSchema_whenBuildingRegisterBody() {
+        // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
+        Map<String, Object> simulated = new HashMap<>();
+        simulated.put("tenantId", "tx");
+        simulated.put("workerCode", "w-1");
+        simulated.put("workerGroup", "sdk-self-hosted");
+        simulated.put("status", "RUNNING");
+        simulated.put("heartbeatAt", Instant.now().toString());
+        simulated.put("currentLoad", 0);
+        simulated.put("maxConcurrent", 2);
+        simulated.put("capabilityTags", List.of("echo", "sleep"));
 
-    assertThat(reports).hasSize(1);
-    Map<String, Object> body = reports.get(0);
+        // 必填字段集合(对照 WorkerHeartbeatDto record components)
+        assertThat(simulated.keySet())
+                .containsAll(
+                        List.of("tenantId", "workerCode", "status", "heartbeatAt", "currentLoad", "maxConcurrent"));
+        // capabilityTags 类型必须是 List(WorkerHeartbeatDto.capabilityTags : List<String>)
+        assertThat(simulated.get("capabilityTags")).isInstanceOf(List.class);
+        // currentLoad 必须 Integer(不是 String / null)
+        assertThat(simulated.get("currentLoad")).isInstanceOf(Integer.class);
+        assertThat(simulated.get("maxConcurrent")).isInstanceOf(Integer.class);
+        // 序化往返不丢字段
+        JsonNode tree = M.valueToTree(simulated);
+        for (String f : List.of("tenantId", "workerCode", "status", "currentLoad")) {
+            assertThat(tree.has(f)).as("register body missing %s", f).isTrue();
+        }
+    }
 
-    // TaskExecutionReportDto 关键字段必须都在(taskId/tenantId/workerId/success/message/outputs)
-    assertThat(body)
-        .containsKeys("taskId", "tenantId", "workerId", "success", "message", "outputs");
-    assertThat(body).containsEntry("success", true);
-    assertThat(body.get("outputs")).isInstanceOf(Map.class);
-    // 严禁错名:旧版用过 "output"(单数),平台读不到 → 必须是 "outputs"
-    assertThat(body).doesNotContainKey("output");
-    // 错名 errorClass / errorMessage 已废,平台读 errorCode / resultSummary
-    assertThat(body).doesNotContainKey("errorClass").doesNotContainKey("errorMessage");
-  }
+    // ─── report body 契约 → TaskExecutionReportDto 字段集 ───────────────────────
 
-  @Test
-  @DisplayName("执行异常时回报统一错误码,并把异常细节保留在结果摘要中")
-  void shouldReportErrorCodeAndSummary_whenExecutionFails() throws IOException {
-    List<Map<String, Object>> reports =
-        captureReports(SdkTaskResult.fail(new IllegalStateException("boom")));
-    Map<String, Object> body = reports.get(0);
-    assertThat(body).containsEntry("success", false);
-    // #P2 errorCode 词表统一:未捕获异常 → protocol 常量 EXECUTION_FAILED(跨语言可聚合),
-    // 不再用异常类 SimpleName;原类名 IllegalStateException 保留在 resultSummary.message 可诊断。
-    assertThat(body).containsEntry("errorCode", "EXECUTION_FAILED");
-    // errorMessage 仍是红线禁发字段(平台读 resultSummary,不读 errorMessage)。
-    assertThat(body).doesNotContainKey("errorMessage");
-    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是普通文本(否则平台解析 500)
-    assertThat(body.get("resultSummary").toString())
-        .contains("\"code\":\"EXECUTION_FAILED\"")
-        .contains("boom")
-        .contains("IllegalStateException");
-  }
+    @Test
+    @DisplayName("执行回报字段集完整,输出字段用复数名且不含已废弃的错误字段")
+    void shouldMatchReportSchema_whenBuildingExecutionReport() throws IOException {
+        List<Map<String, Object>> reports = captureReports(SdkTaskResult.ok("done", Map.of("rows", 5)));
 
-  @Test
-  @DisplayName("业务失败未显式给出错误码时回退为统一执行失败码")
-  void shouldDefaultToExecutionFailed_whenBusinessFailWithoutCode() throws IOException {
-    // 业务 fail(message) 无显式码、无异常 → 规范回退 EXECUTION_FAILED(不再是旧的 "FAILED" 非协议值)。
-    Map<String, Object> body =
-        captureReports(SdkTaskResult.fail("business rule violated")).get(0);
-    assertThat(body).containsEntry("success", false).containsEntry("errorCode", "EXECUTION_FAILED");
-    assertThat(body.get("resultSummary").toString()).contains("\"code\":\"EXECUTION_FAILED\"");
-  }
+        assertThat(reports).hasSize(1);
+        Map<String, Object> body = reports.get(0);
 
-  @Test
-  @DisplayName("处理器显式给出的业务错误码原样透传,不被默认码覆盖")
-  void shouldPreserveExplicitErrorCode_whenHandlerProvidesIt() throws IOException {
-    // handler 经 output['errorCode'] 显式给的协议/业务码(如 CANCELLED)必须原样透传,不被 EXECUTION_FAILED 覆盖。
-    Map<String, Object> body =
-        captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);
-    assertThat(body).containsEntry("success", false).containsEntry("errorCode", "CANCELLED");
-    assertThat(body.get("resultSummary").toString()).contains("\"code\":\"CANCELLED\"");
-  }
+        // TaskExecutionReportDto 关键字段必须都在(taskId/tenantId/workerId/success/message/outputs)
+        assertThat(body).containsKeys("taskId", "tenantId", "workerId", "success", "message", "outputs");
+        assertThat(body).containsEntry("success", true);
+        assertThat(body.get("outputs")).isInstanceOf(Map.class);
+        // 严禁错名:旧版用过 "output"(单数),平台读不到 → 必须是 "outputs"
+        assertThat(body).doesNotContainKey("output");
+        // 错名 errorClass / errorMessage 已废,平台读 errorCode / resultSummary
+        assertThat(body).doesNotContainKey("errorClass").doesNotContainKey("errorMessage");
+    }
 
-  // ─── 公用 helpers ────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("执行异常时回报统一错误码,并把异常细节保留在结果摘要中")
+    void shouldReportErrorCodeAndSummary_whenExecutionFails() throws IOException {
+        List<Map<String, Object>> reports = captureReports(SdkTaskResult.fail(new IllegalStateException("boom")));
+        Map<String, Object> body = reports.get(0);
+        assertThat(body).containsEntry("success", false);
+        // #P2 errorCode 词表统一:未捕获异常 → protocol 常量 EXECUTION_FAILED(跨语言可聚合),
+        // 不再用异常类 SimpleName;原类名 IllegalStateException 保留在 resultSummary.message 可诊断。
+        assertThat(body).containsEntry("errorCode", "EXECUTION_FAILED");
+        // errorMessage 仍是红线禁发字段(平台读 resultSummary,不读 errorMessage)。
+        assertThat(body).doesNotContainKey("errorMessage");
+        // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是普通文本(否则平台解析 500)
+        assertThat(body.get("resultSummary").toString())
+                .contains("\"code\":\"EXECUTION_FAILED\"")
+                .contains("boom")
+                .contains("IllegalStateException");
+    }
 
-  /** 跑 dispatcher 一遍,捕获 report 调用的 body 列表(claim 总是返回 ok)。 */
-  private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    PlatformHttpClient.TaskClaimResponse claim = new PlatformHttpClient.TaskClaimResponse("inv-42");
-    when(http.claim(eq(42L), anyString(), any())).thenReturn(claim);
-    List<Map<String, Object>> reports = new ArrayList<>();
-    doAnswer((InvocationOnMock inv) -> {
-          reports.add(inv.getArgument(2));
-          return null;
-        })
-        .when(http)
-        .report(anyLong(), anyString(), any());
-    SdkTaskHandler handler = new SdkTaskHandler() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("业务失败未显式给出错误码时回退为统一执行失败码")
+    void shouldDefaultToExecutionFailed_whenBusinessFailWithoutCode() throws IOException {
+        // 业务 fail(message) 无显式码、无异常 → 规范回退 EXECUTION_FAILED(不再是旧的 "FAILED" 非协议值)。
+        Map<String, Object> body =
+                captureReports(SdkTaskResult.fail("business rule violated")).get(0);
+        assertThat(body).containsEntry("success", false).containsEntry("errorCode", "EXECUTION_FAILED");
+        assertThat(body.get("resultSummary").toString()).contains("\"code\":\"EXECUTION_FAILED\"");
+    }
 
-      @Override
-      public boolean isSafeToReplay(SdkTaskContext ctx) {
-        return true;
-      }
+    @Test
+    @DisplayName("处理器显式给出的业务错误码原样透传,不被默认码覆盖")
+    void shouldPreserveExplicitErrorCode_whenHandlerProvidesIt() throws IOException {
+        // handler 经 output['errorCode'] 显式给的协议/业务码(如 CANCELLED)必须原样透传,不被 EXECUTION_FAILED 覆盖。
+        Map<String, Object> body =
+                captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);
+        assertThat(body).containsEntry("success", false).containsEntry("errorCode", "CANCELLED");
+        assertThat(body.get("resultSummary").toString()).contains("\"code\":\"CANCELLED\"");
+    }
 
-      @Override
-      public SdkTaskResult execute(SdkTaskContext ctx) {
-        return result;
-      }
-    };
-    TaskDispatcher d = new TaskDispatcher(cfg, Map.of("tt", handler), http);
-    d.processInWorkerThread(new TaskDispatchMessage(
-        42L, "tx", "job-1", "tt", "ti-1", Map.of(), Map.of("traceId", "abc")));
-    return reports;
-  }
+    // ─── 公用 helpers ────────────────────────────────────────────────────────
+
+    /** 跑 dispatcher 一遍,捕获 report 调用的 body 列表(claim 总是返回 ok)。 */
+    private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        PlatformHttpClient.TaskClaimResponse claim = new PlatformHttpClient.TaskClaimResponse("inv-42");
+        when(http.claim(eq(42L), anyString(), any())).thenReturn(claim);
+        List<Map<String, Object>> reports = new ArrayList<>();
+        doAnswer((InvocationOnMock inv) -> {
+                    reports.add(inv.getArgument(2));
+                    return null;
+                })
+                .when(http)
+                .report(anyLong(), anyString(), any());
+        SdkTaskHandler handler = new SdkTaskHandler() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
+
+            @Override
+            public boolean isSafeToReplay(SdkTaskContext ctx) {
+                return true;
+            }
+
+            @Override
+            public SdkTaskResult execute(SdkTaskContext ctx) {
+                return result;
+            }
+        };
+        TaskDispatcher d = new TaskDispatcher(cfg, Map.of("tt", handler), http);
+        d.processInWorkerThread(
+                new TaskDispatchMessage(42L, "tx", "job-1", "tt", "ti-1", Map.of(), Map.of("traceId", "abc")));
+        return reports;
+    }
 }

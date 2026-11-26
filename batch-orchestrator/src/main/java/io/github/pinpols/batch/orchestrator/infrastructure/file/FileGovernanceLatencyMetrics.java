@@ -13,54 +13,53 @@ import java.util.Objects;
  * 样本行来自固定的 Mapper 投影，当前在缓存边界使用 Map 保留既有字段形状。
  */
 public record FileGovernanceLatencyMetrics(
-    String tenantId,
-    long arrivalDelayViolations,
-    long maxArrivalDelaySeconds,
-    long processingDelayViolations,
-    long maxProcessingDelaySeconds,
-    List<Map<String, Object>> arrivalDelaySamples,
-    List<Map<String, Object>> processingDelaySamples) {
+        String tenantId,
+        long arrivalDelayViolations,
+        long maxArrivalDelaySeconds,
+        long processingDelayViolations,
+        long maxProcessingDelaySeconds,
+        List<Map<String, Object>> arrivalDelaySamples,
+        List<Map<String, Object>> processingDelaySamples) {
 
-  public static FileGovernanceLatencyMetrics from(Map<String, Object> values) {
-    if (EmptyChecks.isEmpty(values)) {
-      return empty(null);
+    public static FileGovernanceLatencyMetrics from(Map<String, Object> values) {
+        if (EmptyChecks.isEmpty(values)) {
+            return empty(null);
+        }
+        Object tenantIdValue = values.get("tenantId");
+        String tenantId = Objects.toString(tenantIdValue, null);
+        long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
+        long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
+        long processingDelayViolations = number(values.get("processingDelayViolations"));
+        long maxProcessingDelaySeconds = number(values.get("maxProcessingDelaySeconds"));
+        List<Map<String, Object>> arrivalDelaySamples = samples(values.get("arrivalDelaySamples"));
+        List<Map<String, Object>> processingDelaySamples = samples(values.get("processingDelaySamples"));
+        return new FileGovernanceLatencyMetrics(
+                tenantId,
+                arrivalDelayViolations,
+                maxArrivalDelaySeconds,
+                processingDelayViolations,
+                maxProcessingDelaySeconds,
+                arrivalDelaySamples,
+                processingDelaySamples);
     }
-    Object tenantIdValue = values.get("tenantId");
-    String tenantId = Objects.toString(tenantIdValue, null);
-    long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
-    long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
-    long processingDelayViolations = number(values.get("processingDelayViolations"));
-    long maxProcessingDelaySeconds = number(values.get("maxProcessingDelaySeconds"));
-    List<Map<String, Object>> arrivalDelaySamples = samples(values.get("arrivalDelaySamples"));
-    List<Map<String, Object>> processingDelaySamples =
-        samples(values.get("processingDelaySamples"));
-    return new FileGovernanceLatencyMetrics(
-        tenantId,
-        arrivalDelayViolations,
-        maxArrivalDelaySeconds,
-        processingDelayViolations,
-        maxProcessingDelaySeconds,
-        arrivalDelaySamples,
-        processingDelaySamples);
-  }
 
-  public static FileGovernanceLatencyMetrics empty(String tenantId) {
-    return new FileGovernanceLatencyMetrics(tenantId, 0L, 0L, 0L, 0L, List.of(), List.of());
-  }
-
-  private static long number(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    public static FileGovernanceLatencyMetrics empty(String tenantId) {
+        return new FileGovernanceLatencyMetrics(tenantId, 0L, 0L, 0L, 0L, List.of(), List.of());
     }
-    if (EmptyChecks.isNull(value)) {
-      return 0L;
-    }
-    String numericText = String.valueOf(value);
-    return Long.parseLong(numericText);
-  }
 
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> samples(Object value) {
-    return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
-  }
+    private static long number(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (EmptyChecks.isNull(value)) {
+            return 0L;
+        }
+        String numericText = String.valueOf(value);
+        return Long.parseLong(numericText);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> samples(Object value) {
+        return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
+    }
 }

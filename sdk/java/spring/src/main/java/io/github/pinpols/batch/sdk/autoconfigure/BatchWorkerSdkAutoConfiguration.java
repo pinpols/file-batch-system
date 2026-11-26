@@ -18,36 +18,33 @@ import org.springframework.context.annotation.Bean;
 @EnableConfigurationProperties(BatchWorkerSdkProperties.class)
 public class BatchWorkerSdkAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean(BatchPlatformClientConfig.class)
-  BatchPlatformClientConfig batchPlatformClientConfig(BatchWorkerSdkProperties properties) {
-    return properties.toConfig();
-  }
-
-  @Bean
-  @ConditionalOnMissingBean(BatchPlatformClient.class)
-  BatchPlatformClient batchPlatformClient(
-      BatchPlatformClientConfig config,
-      ObjectProvider<SdkTaskHandler> handlerProvider,
-      ObjectProvider<SdkIdempotencyStore> idempotencyStoreProvider) {
-    BatchPlatformClient.Builder builder = BatchPlatformClient.builder(config);
-    SdkIdempotencyStore idempotencyStore = idempotencyStoreProvider.getIfUnique();
-    if (idempotencyStore != null) {
-      builder.idempotencyStore(idempotencyStore);
+    @Bean
+    @ConditionalOnMissingBean(BatchPlatformClientConfig.class)
+    BatchPlatformClientConfig batchPlatformClientConfig(BatchWorkerSdkProperties properties) {
+        return properties.toConfig();
     }
-    List<SdkTaskHandler> handlers = handlerProvider.orderedStream().toList();
-    handlers.forEach(builder::register);
-    return builder.build();
-  }
 
-  @Bean
-  @ConditionalOnProperty(
-      name = "batch.worker-sdk.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnMissingBean(BatchPlatformClientLifecycle.class)
-  BatchPlatformClientLifecycle batchPlatformClientLifecycle(
-      BatchPlatformClient client, BatchWorkerSdkProperties properties) {
-    return new BatchPlatformClientLifecycle(client, properties);
-  }
+    @Bean
+    @ConditionalOnMissingBean(BatchPlatformClient.class)
+    BatchPlatformClient batchPlatformClient(
+            BatchPlatformClientConfig config,
+            ObjectProvider<SdkTaskHandler> handlerProvider,
+            ObjectProvider<SdkIdempotencyStore> idempotencyStoreProvider) {
+        BatchPlatformClient.Builder builder = BatchPlatformClient.builder(config);
+        SdkIdempotencyStore idempotencyStore = idempotencyStoreProvider.getIfUnique();
+        if (idempotencyStore != null) {
+            builder.idempotencyStore(idempotencyStore);
+        }
+        List<SdkTaskHandler> handlers = handlerProvider.orderedStream().toList();
+        handlers.forEach(builder::register);
+        return builder.build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "batch.worker-sdk.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(BatchPlatformClientLifecycle.class)
+    BatchPlatformClientLifecycle batchPlatformClientLifecycle(
+            BatchPlatformClient client, BatchWorkerSdkProperties properties) {
+        return new BatchPlatformClientLifecycle(client, properties);
+    }
 }

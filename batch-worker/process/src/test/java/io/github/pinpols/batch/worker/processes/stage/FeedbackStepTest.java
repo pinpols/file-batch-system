@@ -29,108 +29,108 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("处理反馈阶段:插件缺失与返回空时回退成功,插件异常被吞掉并计数,试运行不触碰插件")
 class FeedbackStepTest {
 
-  private static ProcessMetrics noopMetrics() {
-    return ProcessMetrics.noop();
-  }
+    private static ProcessMetrics noopMetrics() {
+        return ProcessMetrics.noop();
+    }
 
-  private static ProcessMetrics realMetrics(SimpleMeterRegistry registry) {
-    ObjectProvider<MeterRegistry> provider = new ObjectProvider<>() {
-      @Override
-      public MeterRegistry getObject(Object... args) {
-        return registry;
-      }
+    private static ProcessMetrics realMetrics(SimpleMeterRegistry registry) {
+        ObjectProvider<MeterRegistry> provider = new ObjectProvider<>() {
+            @Override
+            public MeterRegistry getObject(Object... args) {
+                return registry;
+            }
 
-      @Override
-      public MeterRegistry getObject() {
-        return registry;
-      }
+            @Override
+            public MeterRegistry getObject() {
+                return registry;
+            }
 
-      @Override
-      public MeterRegistry getIfAvailable() {
-        return registry;
-      }
+            @Override
+            public MeterRegistry getIfAvailable() {
+                return registry;
+            }
 
-      @Override
-      public MeterRegistry getIfUnique() {
-        return registry;
-      }
-    };
-    return new ProcessMetrics(provider);
-  }
+            @Override
+            public MeterRegistry getIfUnique() {
+                return registry;
+            }
+        };
+        return new ProcessMetrics(provider);
+    }
 
-  @Test
-  @DisplayName("阶段标识为处理反馈阶段")
-  void shouldReturnStageFeedback_whenStageAccessed() {
-    assertThat(new FeedbackStep(noopMetrics()).stage()).isEqualTo(ProcessStage.FEEDBACK);
-  }
+    @Test
+    @DisplayName("阶段标识为处理反馈阶段")
+    void shouldReturnStageFeedback_whenStageAccessed() {
+        assertThat(new FeedbackStep(noopMetrics()).stage()).isEqualTo(ProcessStage.FEEDBACK);
+    }
 
-  @Test
-  @DisplayName("happy path: 委托 plugin.feedback()，返回插件结果")
-  void shouldDelegateToPlugin_whenPluginPresent() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    ProcessStageResult expected = ProcessStageResult.success(ProcessStage.FEEDBACK);
-    when(plugin.feedback(any())).thenReturn(expected);
+    @Test
+    @DisplayName("happy path: 委托 plugin.feedback()，返回插件结果")
+    void shouldDelegateToPlugin_whenPluginPresent() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        ProcessStageResult expected = ProcessStageResult.success(ProcessStage.FEEDBACK);
+        when(plugin.feedback(any())).thenReturn(expected);
 
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
 
-    assertThat(new FeedbackStep(noopMetrics()).execute(ctx)).isSameAs(expected);
-    verify(plugin).feedback(ctx);
-  }
+        assertThat(new FeedbackStep(noopMetrics()).execute(ctx)).isSameAs(expected);
+        verify(plugin).feedback(ctx);
+    }
 
-  @Test
-  @DisplayName("plugin.feedback() 返回 null → 回退 success")
-  void shouldReturnSuccess_whenPluginReturnsNull() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.feedback(any())).thenReturn(null);
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
+    @Test
+    @DisplayName("plugin.feedback() 返回 null → 回退 success")
+    void shouldReturnSuccess_whenPluginReturnsNull() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.feedback(any())).thenReturn(null);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
 
-    ProcessStageResult result = new FeedbackStep(noopMetrics()).execute(ctx);
+        ProcessStageResult result = new FeedbackStep(noopMetrics()).execute(ctx);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.stage()).isEqualTo(ProcessStage.FEEDBACK);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(result.stage()).isEqualTo(ProcessStage.FEEDBACK);
+    }
 
-  @Test
-  @DisplayName("无 resolvedPlugin → success no-op")
-  void shouldReturnSuccess_whenNoPlugin() {
-    ProcessJobContext ctx = new ProcessJobContext();
-    assertThat(new FeedbackStep(noopMetrics()).execute(ctx).success()).isTrue();
-  }
+    @Test
+    @DisplayName("无 resolvedPlugin → success no-op")
+    void shouldReturnSuccess_whenNoPlugin() {
+        ProcessJobContext ctx = new ProcessJobContext();
+        assertThat(new FeedbackStep(noopMetrics()).execute(ctx).success()).isTrue();
+    }
 
-  @Test
-  @DisplayName("dry-run 模式：跳过 plugin（不清 staging / 不写审计）")
-  void shouldSkipPlugin_whenDryRun() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setResolvedPlugin(plugin);
-    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
+    @Test
+    @DisplayName("dry-run 模式：跳过 plugin（不清 staging / 不写审计）")
+    void shouldSkipPlugin_whenDryRun() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setResolvedPlugin(plugin);
+        ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
-    assertThat(new FeedbackStep(noopMetrics()).execute(ctx).success()).isTrue();
-    verifyNoInteractions(plugin);
-  }
+        assertThat(new FeedbackStep(noopMetrics()).execute(ctx).success()).isTrue();
+        verifyNoInteractions(plugin);
+    }
 
-  @Test
-  @DisplayName("plugin 抛 RuntimeException → swallow，metric +1，仍返回 success")
-  void shouldSwallowException_andIncrementMetric() {
-    SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    ProcessMetrics metrics = realMetrics(registry);
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.feedback(any())).thenThrow(new IllegalStateException("staging cleanup failed"));
-    ProcessJobContext ctx = new ProcessJobContext();
-    ctx.setTenantId("tenant-A");
-    ctx.setJobCode("JOB_X");
-    ctx.setResolvedPlugin(plugin);
+    @Test
+    @DisplayName("plugin 抛 RuntimeException → swallow，metric +1，仍返回 success")
+    void shouldSwallowException_andIncrementMetric() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ProcessMetrics metrics = realMetrics(registry);
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.feedback(any())).thenThrow(new IllegalStateException("staging cleanup failed"));
+        ProcessJobContext ctx = new ProcessJobContext();
+        ctx.setTenantId("tenant-A");
+        ctx.setJobCode("JOB_X");
+        ctx.setResolvedPlugin(plugin);
 
-    ProcessStageResult result = new FeedbackStep(metrics).execute(ctx);
+        ProcessStageResult result = new FeedbackStep(metrics).execute(ctx);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.stage()).isEqualTo(ProcessStage.FEEDBACK);
-    // metric: process_feedback_swallowed_total = 1
-    // tenantId 不再作为 tag(高基数 → Prometheus 内存耗尽),改单全局 counter
-    assertThat(registry.find("process_feedback_swallowed_total").counter()).isNotNull();
-    assertThat(registry.find("process_feedback_swallowed_total").counter().count())
-        .isEqualTo(1.0);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(result.stage()).isEqualTo(ProcessStage.FEEDBACK);
+        // metric: process_feedback_swallowed_total = 1
+        // tenantId 不再作为 tag(高基数 → Prometheus 内存耗尽),改单全局 counter
+        assertThat(registry.find("process_feedback_swallowed_total").counter()).isNotNull();
+        assertThat(registry.find("process_feedback_swallowed_total").counter().count())
+                .isEqualTo(1.0);
+    }
 }

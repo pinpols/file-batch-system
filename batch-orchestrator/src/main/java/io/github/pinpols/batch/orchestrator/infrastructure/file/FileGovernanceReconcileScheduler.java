@@ -17,18 +17,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FileGovernanceReconcileScheduler {
 
-  private final FileGovernanceScheduler fileGovernanceScheduler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.file-governance.reconcile.poll-interval-millis:60000}")
-  @SchedulerLock(
-      name = "file_governance_reconcile",
-      lockAtMostFor = "PT3M",
-      lockAtLeastFor = "PT30S")
-  public void reconcileObjectStorage() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.file-governance.reconcile.poll-interval-millis:60000}")
+    @SchedulerLock(name = "file_governance_reconcile", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
+    public void reconcileObjectStorage() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        fileGovernanceScheduler.reconcileObjectStorage();
     }
-    fileGovernanceScheduler.reconcileObjectStorage();
-  }
 }

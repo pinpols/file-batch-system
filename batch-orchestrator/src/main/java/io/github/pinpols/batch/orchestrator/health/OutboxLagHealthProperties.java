@@ -13,13 +13,13 @@ import org.springframework.validation.annotation.Validated;
 /** Outbox 积压健康检查阈值。 */
 public class OutboxLagHealthProperties {
 
-  /** NEW + FAILED 状态事件总数达到该阈值,健康端点 DOWN。 */
-  @Min(1)
-  private long backlogThreshold = 1000;
+    /** NEW + FAILED 状态事件总数达到该阈值,健康端点 DOWN。 */
+    @Min(1)
+    private long backlogThreshold = 1000;
 
-  /** PUBLISHING 状态卡住超过该秒数视为 stale,任何一条都触发 DOWN。 */
-  @Min(10)
-  private long stalePublishingSeconds = 300;
+    /** PUBLISHING 状态卡住超过该秒数视为 stale,任何一条都触发 DOWN。 */
+    @Min(10)
+    private long stalePublishingSeconds = 300;
 
-  private boolean enabled = true;
+    private boolean enabled = true;
 }

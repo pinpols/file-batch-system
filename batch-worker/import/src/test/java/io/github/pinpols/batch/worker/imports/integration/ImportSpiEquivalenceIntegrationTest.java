@@ -36,63 +36,62 @@ import org.springframework.test.context.TestConstructor;
  * ImportTaskExecutorTest 已覆盖 delegate 调用的入参翻译)。
  */
 @SpringBootTest(
-    classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  private final ImportStepExecutionAdapter primaryAdapter;
+    private final ImportStepExecutionAdapter primaryAdapter;
 
-  private final BatchTaskExecutorRegistry registry;
+    private final BatchTaskExecutorRegistry registry;
 
-  private final ImportLoadPluginRegistry importLoadPluginRegistry;
+    private final ImportLoadPluginRegistry importLoadPluginRegistry;
 
-  ImportSpiEquivalenceIT(
-      ImportStepExecutionAdapter primaryAdapter,
-      BatchTaskExecutorRegistry registry,
-      ImportLoadPluginRegistry importLoadPluginRegistry) {
-    this.primaryAdapter = primaryAdapter;
-    this.registry = registry;
-    this.importLoadPluginRegistry = importLoadPluginRegistry;
-  }
+    ImportSpiEquivalenceIT(
+            ImportStepExecutionAdapter primaryAdapter,
+            BatchTaskExecutorRegistry registry,
+            ImportLoadPluginRegistry importLoadPluginRegistry) {
+        this.primaryAdapter = primaryAdapter;
+        this.registry = registry;
+        this.importLoadPluginRegistry = importLoadPluginRegistry;
+    }
 
-  @Test
-  @DisplayName("上下文加载后,任务执行器注册表包含导入类型")
-  void shouldRegisterImportTaskType_whenContextLoads() {
-    assertThat(registry.registeredTypes()).contains("IMPORT");
-  }
+    @Test
+    @DisplayName("上下文加载后,任务执行器注册表包含导入类型")
+    void shouldRegisterImportTaskType_whenContextLoads() {
+        assertThat(registry.registeredTypes()).contains("IMPORT");
+    }
 
-  @Test
-  @DisplayName("按导入类型查找时,返回导入任务执行器实例")
-  void shouldReturnImportTaskExecutor_whenLookingUpByType() {
-    BatchTaskExecutor exec = registry.find("IMPORT");
-    assertThat(exec).isNotNull().isInstanceOf(ImportTaskExecutor.class);
-  }
+    @Test
+    @DisplayName("按导入类型查找时,返回导入任务执行器实例")
+    void shouldReturnImportTaskExecutor_whenLookingUpByType() {
+        BatchTaskExecutor exec = registry.find("IMPORT");
+        assertThat(exec).isNotNull().isInstanceOf(ImportTaskExecutor.class);
+    }
 
-  @Test
-  @DisplayName("包装执行器内部委托与主适配器为同一实例,证明两条路径共用实现")
-  void shouldShareDelegateWithPrimaryAdapter_whenSpiWrapperBuilt() throws Exception {
-    ImportTaskExecutor exec = (ImportTaskExecutor) registry.find("IMPORT");
-    Field f = ImportTaskExecutor.class.getDeclaredField("delegate");
-    f.setAccessible(true);
-    Object delegate = f.get(exec);
-    assertThat(delegate)
-        .as("ImportTaskExecutor.delegate 必须是 Spring @Primary 注入的 ImportStepExecutionAdapter,"
-            + "证明 SPI 路径跟老路径真共用一份业务代码(不是各自实现)")
-        .isSameAs(primaryAdapter);
-  }
+    @Test
+    @DisplayName("包装执行器内部委托与主适配器为同一实例,证明两条路径共用实现")
+    void shouldShareDelegateWithPrimaryAdapter_whenSpiWrapperBuilt() throws Exception {
+        ImportTaskExecutor exec = (ImportTaskExecutor) registry.find("IMPORT");
+        Field f = ImportTaskExecutor.class.getDeclaredField("delegate");
+        f.setAccessible(true);
+        Object delegate = f.get(exec);
+        assertThat(delegate)
+                .as("ImportTaskExecutor.delegate 必须是 Spring @Primary 注入的 ImportStepExecutionAdapter,"
+                        + "证明 SPI 路径跟老路径真共用一份业务代码(不是各自实现)")
+                .isSameAs(primaryAdapter);
+    }
 
-  @Test
-  @DisplayName("Worker 注册目录保留通用 JDBC 导入的 UNKNOWN 静态能力")
-  void shouldPublishUnknownReplayCapability_whenImportConfigurationIsVariable() {
-    assertThat(importLoadPluginRegistry.replayCapabilityCatalog())
-        .containsExactly(
-            ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED));
-  }
+    @Test
+    @DisplayName("Worker 注册目录保留通用 JDBC 导入的 UNKNOWN 静态能力")
+    void shouldPublishUnknownReplayCapability_whenImportConfigurationIsVariable() {
+        assertThat(importLoadPluginRegistry.replayCapabilityCatalog())
+                .containsExactly(ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED));
+    }
 }

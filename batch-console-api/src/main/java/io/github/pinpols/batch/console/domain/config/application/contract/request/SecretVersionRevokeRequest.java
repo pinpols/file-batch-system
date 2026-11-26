@@ -8,10 +8,10 @@ import lombok.Data;
 @Data
 public class SecretVersionRevokeRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 512)
-  private String reason;
+    @NotBlank
+    @Size(max = 512)
+    private String reason;
 }

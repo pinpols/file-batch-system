@@ -5,4 +5,4 @@ import jakarta.validation.constraints.Size;
 
 /** 使用原请求键接续冻结批次。 */
 public record BatchDayCatchUpContinueRequest(
-    @NotBlank @Size(max = 128) String tenantId) {}
+        @NotBlank @Size(max = 128) String tenantId) {}

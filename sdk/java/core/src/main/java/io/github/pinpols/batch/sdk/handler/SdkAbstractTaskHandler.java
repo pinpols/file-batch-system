@@ -26,83 +26,83 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
 
-  /** 模板方法 — final 锁死执行序。 */
-  @Override
-  public final SdkTaskResult execute(SdkTaskContext ctx) {
-    boolean started = false;
-    try {
-      validate(ctx);
-      before(ctx);
-      started = true;
-      SdkTaskResult r = doExecute(ctx);
-      after(ctx, r);
-      return r == null ? SdkTaskResult.fail("handler returned null SdkTaskResult") : r;
-    } catch (SdkTaskStoppedException stopped) {
-      // ADR-037 决策三:协作式取消停在已提交安全点 → cancelled 终态,而非 fail。
-      String handlerName = getClass().getSimpleName();
-      String currentTaskType = taskType();
-      Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
-      Map<String, Object> stoppedPositionForLog = stopped.breakPosition();
-      log.info(
-          "SDK handler {} stopped cooperatively (taskType={}, taskId={}) at {}",
-          handlerName,
-          currentTaskType,
-          currentTaskId,
-          stoppedPositionForLog);
-      return SdkTaskResult.cancelled(stopped.breakPosition());
-    } catch (Exception t) {
-      String handlerName = getClass().getSimpleName();
-      String currentTaskType = taskType();
-      Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
-      String exceptionSummary = ExceptionLogSummary.of(t);
-      log.error(
-          "SDK handler {} failed (taskType={}, taskId={}): {}",
-          handlerName,
-          currentTaskType,
-          currentTaskId,
-          exceptionSummary,
-          t);
-      String exceptionMessage = t.getMessage();
-      String failureMessage =
-          EmptyChecks.isNull(exceptionMessage) ? t.getClass().getSimpleName() : t.getMessage();
-      return SdkTaskResult.fail(failureMessage, t);
-    } finally {
-      if (started) {
+    /** 模板方法 — final 锁死执行序。 */
+    @Override
+    public final SdkTaskResult execute(SdkTaskContext ctx) {
+        boolean started = false;
         try {
-          cleanup(ctx);
-        } catch (Exception cleanupEx) {
-          String handlerName = getClass().getSimpleName();
-          String cleanupExceptionSummary = ExceptionLogSummary.of(cleanupEx);
-          log.warn("SDK handler {} cleanup() failed: {}", handlerName, cleanupExceptionSummary);
+            validate(ctx);
+            before(ctx);
+            started = true;
+            SdkTaskResult r = doExecute(ctx);
+            after(ctx, r);
+            return r == null ? SdkTaskResult.fail("handler returned null SdkTaskResult") : r;
+        } catch (SdkTaskStoppedException stopped) {
+            // ADR-037 决策三:协作式取消停在已提交安全点 → cancelled 终态,而非 fail。
+            String handlerName = getClass().getSimpleName();
+            String currentTaskType = taskType();
+            Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+            Map<String, Object> stoppedPositionForLog = stopped.breakPosition();
+            log.info(
+                    "SDK handler {} stopped cooperatively (taskType={}, taskId={}) at {}",
+                    handlerName,
+                    currentTaskType,
+                    currentTaskId,
+                    stoppedPositionForLog);
+            return SdkTaskResult.cancelled(stopped.breakPosition());
+        } catch (Exception t) {
+            String handlerName = getClass().getSimpleName();
+            String currentTaskType = taskType();
+            Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+            String exceptionSummary = ExceptionLogSummary.of(t);
+            log.error(
+                    "SDK handler {} failed (taskType={}, taskId={}): {}",
+                    handlerName,
+                    currentTaskType,
+                    currentTaskId,
+                    exceptionSummary,
+                    t);
+            String exceptionMessage = t.getMessage();
+            String failureMessage =
+                    EmptyChecks.isNull(exceptionMessage) ? t.getClass().getSimpleName() : t.getMessage();
+            return SdkTaskResult.fail(failureMessage, t);
+        } finally {
+            if (started) {
+                try {
+                    cleanup(ctx);
+                } catch (Exception cleanupEx) {
+                    String handlerName = getClass().getSimpleName();
+                    String cleanupExceptionSummary = ExceptionLogSummary.of(cleanupEx);
+                    log.warn("SDK handler {} cleanup() failed: {}", handlerName, cleanupExceptionSummary);
+                }
+            }
         }
-      }
     }
-  }
 
-  /** 业务输入校验,失败抛异常 → 模板转 {@link SdkTaskResult#fail}。默认 no-op。 */
-  protected void validate(SdkTaskContext ctx) {
-    // 无操作
-  }
+    /** 业务输入校验,失败抛异常 → 模板转 {@link SdkTaskResult#fail}。默认 no-op。 */
+    protected void validate(SdkTaskContext ctx) {
+        // 无操作
+    }
 
-  /** 资源 acquire(打开连接 / 占用 lease 等)。默认 no-op;抛异常被模板捕获转 fail。 */
-  protected void before(SdkTaskContext ctx) {
-    // 无操作
-  }
+    /** 资源 acquire(打开连接 / 占用 lease 等)。默认 no-op;抛异常被模板捕获转 fail。 */
+    protected void before(SdkTaskContext ctx) {
+        // 无操作
+    }
 
-  /**
-   * 真业务执行。子类(或 shape 基类)实现。业务异常会被模板转为 {@link SdkTaskResult#fail}，JVM 级 {@link Error} 会继续向上抛出。
-   *
-   * @return 不应返 null;返 null 会被转 fail("returned null")
-   */
-  protected abstract SdkTaskResult doExecute(SdkTaskContext ctx);
+    /**
+     * 真业务执行。子类(或 shape 基类)实现。业务异常会被模板转为 {@link SdkTaskResult#fail}，JVM 级 {@link Error} 会继续向上抛出。
+     *
+     * @return 不应返 null;返 null 会被转 fail("returned null")
+     */
+    protected abstract SdkTaskResult doExecute(SdkTaskContext ctx);
 
-  /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
-  protected void after(SdkTaskContext ctx, SdkTaskResult result) {
-    // 无操作
-  }
+    /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
+    protected void after(SdkTaskContext ctx, SdkTaskResult result) {
+        // 无操作
+    }
 
-  /** finally 资源 release(关连接 / 删临时文件 / 释 lease)。默认 no-op。 */
-  protected void cleanup(SdkTaskContext ctx) {
-    // 无操作
-  }
+    /** finally 资源 release(关连接 / 删临时文件 / 释 lease)。默认 no-op。 */
+    protected void cleanup(SdkTaskContext ctx) {
+        // 无操作
+    }
 }

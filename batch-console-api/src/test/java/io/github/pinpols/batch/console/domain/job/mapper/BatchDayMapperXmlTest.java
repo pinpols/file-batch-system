@@ -22,213 +22,210 @@ import org.junit.jupiter.api.Test;
 @DisplayName("批量日统计语句的状态口径: 正式统计隔离试运行数据并区分在途与失败")
 class BatchDayMapperXmlTest {
 
-  @Test
-  @DisplayName("批次日固定投影的构造列顺序与具名视图组件一致")
-  void shouldMapFixedColumnsToTypedViewsInConstructorOrder() {
-    Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
+    @Test
+    @DisplayName("批次日固定投影的构造列顺序与具名视图组件一致")
+    void shouldMapFixedColumnsToTypedViewsInConstructorOrder() {
+        Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
 
-    assertConstructorColumns(
-        configuration,
-        "batchDayViewResultMap",
-        List.of(
-            "bizDate",
-            "dayStatus",
-            "openAt",
-            "cutoffAt",
-            "settledAt",
-            "slaDeadlineAt",
-            "lateCount",
-            "catchupCount",
-            "totalJobCount",
-            "successJobCount",
-            "failedJobCount",
-            "inFlightJobCount",
-            "frozen"));
-    assertConstructorColumns(
-        configuration,
-        "scheduledOccurrenceViewResultMap",
-        List.of(
-            "workflowDefinitionId",
-            "workflowCode",
-            "catchUpPolicy",
-            "scheduleVersion",
-            "scheduledFireTime",
-            "bizDate",
-            "occurrenceStatus",
-            "requestId",
-            "lastRejectionReason"));
-    assertConstructorColumns(
-        configuration,
-        "batchDayJobSummaryViewResultMap",
-        List.of(
-            "jobCode",
-            "totalJobCount",
-            "successJobCount",
-            "failedJobCount",
-            "inFlightJobCount",
-            "catchupCount"));
-    assertConstructorColumns(
-        configuration,
-        "scheduledOccurrenceFireViewResultMap",
-        List.of(
-            "workflowDefinitionId",
-            "scheduledFireTime",
-            "fireInstanceId",
-            "refireCount",
-            "actualFireTime",
-            "fireKind"));
-  }
-
-  private static void assertConstructorColumns(
-      Configuration configuration, String resultMapId, List<String> expectedColumns) {
-    List<String> actualColumns = configuration
-        .getResultMap(BatchDayMapper.class.getName() + "." + resultMapId)
-        .getConstructorResultMappings()
-        .stream()
-        .map(mapping -> mapping.getColumn())
-        .toList();
-    assertThat(actualColumns).containsExactlyElementsOf(expectedColumns);
-  }
-
-  @Test
-  @DisplayName("正式统计口径排除试运行实例, 在途与失败计数分别覆盖各自的状态集合")
-  void shouldIsolateDryRunAndCoverPausedStates_whenFormalStatistics() {
-    List<String> statements = List.of("selectByQuery", "selectWindow", "selectJobSummaries");
-    Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
-
-    for (String statement : statements) {
-      String sql = batchDaySql(configuration, statement);
-      String successAlias = countAlias(statement, "success");
-      String failedAlias = countAlias(statement, "failed");
-      String inFlightAlias = countAlias(statement, "in_flight");
-      assertThat(sql).contains("ji.dry_run = false");
-      assertThat(statusesForCountAlias(sql, inFlightAlias))
-          .containsExactlyInAnyOrderElementsOf(JobInstanceStatus.activeCodes());
-      assertThat(statusesForCountAlias(sql, failedAlias))
-          .containsExactlyInAnyOrderElementsOf(
-              formalCodes(JobInstanceStatus.unsuccessfulTerminalCodes()));
-      assertThat(statusForCountAlias(sql, successAlias))
-          .isEqualTo(formalCodes(JobInstanceStatus.successCodes()));
+        assertConstructorColumns(
+                configuration,
+                "batchDayViewResultMap",
+                List.of(
+                        "bizDate",
+                        "dayStatus",
+                        "openAt",
+                        "cutoffAt",
+                        "settledAt",
+                        "slaDeadlineAt",
+                        "lateCount",
+                        "catchupCount",
+                        "totalJobCount",
+                        "successJobCount",
+                        "failedJobCount",
+                        "inFlightJobCount",
+                        "frozen"));
+        assertConstructorColumns(
+                configuration,
+                "scheduledOccurrenceViewResultMap",
+                List.of(
+                        "workflowDefinitionId",
+                        "workflowCode",
+                        "catchUpPolicy",
+                        "scheduleVersion",
+                        "scheduledFireTime",
+                        "bizDate",
+                        "occurrenceStatus",
+                        "requestId",
+                        "lastRejectionReason"));
+        assertConstructorColumns(
+                configuration,
+                "batchDayJobSummaryViewResultMap",
+                List.of(
+                        "jobCode",
+                        "totalJobCount",
+                        "successJobCount",
+                        "failedJobCount",
+                        "inFlightJobCount",
+                        "catchupCount"));
+        assertConstructorColumns(
+                configuration,
+                "scheduledOccurrenceFireViewResultMap",
+                List.of(
+                        "workflowDefinitionId",
+                        "scheduledFireTime",
+                        "fireInstanceId",
+                        "refireCount",
+                        "actualFireTime",
+                        "fireKind"));
     }
-  }
 
-  @Test
-  @DisplayName("批日统计与补跑按实例冻结日历筛选")
-  void shouldUseFrozenCalendarForBatchDayQueries() {
-    Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
-    for (String statement :
-        List.of("selectByQuery", "selectWindow", "selectJobSummaries", "selectFailedJobCodes")) {
-      String sql = batchDaySql(configuration, statement);
-      assertThat(sql).as(statement).contains("ji.calendar_code = ?");
-      assertThat(sql).as(statement).doesNotContain("jd.calendar_code");
+    private static void assertConstructorColumns(
+            Configuration configuration, String resultMapId, List<String> expectedColumns) {
+        List<String> actualColumns = configuration
+                .getResultMap(BatchDayMapper.class.getName() + "." + resultMapId)
+                .getConstructorResultMappings()
+                .stream()
+                .map(mapping -> mapping.getColumn())
+                .toList();
+        assertThat(actualColumns).containsExactlyElementsOf(expectedColumns);
     }
-  }
 
-  @Test
-  @DisplayName("补跑候选只包含正式失败和部分失败，不等同全部非成功终态")
-  void shouldUseFormalFailedJobPolicyForCatchUp() {
-    String sql = batchDaySql(loadMapper("mapper/BatchDayMapper.xml"), "selectFailedJobCodes");
-    Matcher clause =
-        Pattern.compile("(?is)ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
-    assertThat(sql).contains("ji.dry_run = false");
-    assertThat(clause.find()).isTrue();
-    assertThat(parseStatusCodes(clause.group(1)))
-        .containsExactlyInAnyOrder("FAILED", "PARTIAL_FAILED");
-    assertThat(clause.find()).isFalse();
-  }
+    @Test
+    @DisplayName("正式统计口径排除试运行实例, 在途与失败计数分别覆盖各自的状态集合")
+    void shouldIsolateDryRunAndCoverPausedStates_whenFormalStatistics() {
+        List<String> statements = List.of("selectByQuery", "selectWindow", "selectJobSummaries");
+        Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
 
-  private static String countAlias(String statement, String category) {
-    if (statement.equals("selectJobSummaries")) {
-      return switch (category) {
-        case "success" -> "successJobCount";
-        case "failed" -> "failedJobCount";
-        case "in_flight" -> "inFlightJobCount";
-        default -> throw new IllegalArgumentException("unsupported category: " + category);
-      };
+        for (String statement : statements) {
+            String sql = batchDaySql(configuration, statement);
+            String successAlias = countAlias(statement, "success");
+            String failedAlias = countAlias(statement, "failed");
+            String inFlightAlias = countAlias(statement, "in_flight");
+            assertThat(sql).contains("ji.dry_run = false");
+            assertThat(statusesForCountAlias(sql, inFlightAlias))
+                    .containsExactlyInAnyOrderElementsOf(JobInstanceStatus.activeCodes());
+            assertThat(statusesForCountAlias(sql, failedAlias))
+                    .containsExactlyInAnyOrderElementsOf(formalCodes(JobInstanceStatus.unsuccessfulTerminalCodes()));
+            assertThat(statusForCountAlias(sql, successAlias)).isEqualTo(formalCodes(JobInstanceStatus.successCodes()));
+        }
     }
-    return category + "_job_count";
-  }
 
-  private static Configuration loadMapper(String resource) {
-    Configuration configuration = new Configuration();
-    try {
-      parseMapper(configuration, "mapper/CommonFragments.xml");
-      parseMapper(configuration, resource);
-      return configuration;
-    } catch (Exception ex) {
-      throw new AssertionError("failed to validate " + resource, ex);
+    @Test
+    @DisplayName("批日统计与补跑按实例冻结日历筛选")
+    void shouldUseFrozenCalendarForBatchDayQueries() {
+        Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
+        for (String statement :
+                List.of("selectByQuery", "selectWindow", "selectJobSummaries", "selectFailedJobCodes")) {
+            String sql = batchDaySql(configuration, statement);
+            assertThat(sql).as(statement).contains("ji.calendar_code = ?");
+            assertThat(sql).as(statement).doesNotContain("jd.calendar_code");
+        }
     }
-  }
 
-  private static void parseMapper(Configuration configuration, String resource) throws Exception {
-    try (InputStream inputStream =
-        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
-      assertThat(inputStream).as(resource).isNotNull();
-      byte[] mapperBytes = inputStream.readAllBytes();
-      new XMLMapperBuilder(
-              new ByteArrayInputStream(mapperBytes),
-              configuration,
-              resource,
-              configuration.getSqlFragments())
-          .parse();
+    @Test
+    @DisplayName("补跑候选只包含正式失败和部分失败，不等同全部非成功终态")
+    void shouldUseFormalFailedJobPolicyForCatchUp() {
+        String sql = batchDaySql(loadMapper("mapper/BatchDayMapper.xml"), "selectFailedJobCodes");
+        Matcher clause = Pattern.compile("(?is)ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)")
+                .matcher(sql);
+        assertThat(sql).contains("ji.dry_run = false");
+        assertThat(clause.find()).isTrue();
+        assertThat(parseStatusCodes(clause.group(1))).containsExactlyInAnyOrder("FAILED", "PARTIAL_FAILED");
+        assertThat(clause.find()).isFalse();
     }
-  }
 
-  private static String batchDaySql(Configuration configuration, String statement) {
-    Map<String, Object> parameters = Map.of(
-        "tenantId",
-        "tenant-a",
-        "calendarCode",
-        "CALENDAR",
-        "bizDate",
-        LocalDate.of(2026, 9, 30),
-        "pageRequest",
-        new PageRequest(1, 20));
-    return configuration
-        .getMappedStatement(BatchDayMapper.class.getName() + "." + statement)
-        .getBoundSql(parameters)
-        .getSql();
-  }
-
-  private static Set<String> formalCodes(Set<String> codes) {
-    return codes.stream()
-        .filter(code -> !JobInstanceStatus.fromCodeOrNull(code).isDryRunTerminal())
-        .collect(Collectors.toSet());
-  }
-
-  private static Set<String> statusesForCountAlias(String sql, String alias) {
-    String expression = "(?is)case\\s+when\\s+ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)"
-        + "\\s+then\\s+1\\s+else\\s+0\\s+end\\s*\\)\\s*,\\s*0\\)"
-        + "\\s+as\\s+\\\"?"
-        + Pattern.quote(alias)
-        + "\\\"?";
-    Matcher matcher = Pattern.compile(expression).matcher(sql);
-    assertThat(matcher.find()).as("status set for %s", alias).isTrue();
-    Set<String> statuses = parseStatusCodes(matcher.group(1));
-    assertThat(matcher.find()).as("single status set for %s", alias).isFalse();
-    return statuses;
-  }
-
-  private static Set<String> statusForCountAlias(String sql, String alias) {
-    String expression = "(?is)case\\s+when\\s+ji\\.instance_status\\s*=\\s*'([^']+)'"
-        + "\\s+then\\s+1\\s+else\\s+0\\s+end\\s*\\)\\s*,\\s*0\\)"
-        + "\\s+as\\s+\\\"?"
-        + Pattern.quote(alias)
-        + "\\\"?";
-    Matcher matcher = Pattern.compile(expression).matcher(sql);
-    assertThat(matcher.find()).as("status for %s", alias).isTrue();
-    Set<String> statuses = Set.of(matcher.group(1));
-    assertThat(matcher.find()).as("single status for %s", alias).isFalse();
-    return statuses;
-  }
-
-  private static Set<String> parseStatusCodes(String expression) {
-    Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(expression);
-    Set<String> statuses = new HashSet<>();
-    while (matcher.find()) {
-      statuses.add(matcher.group(1));
+    private static String countAlias(String statement, String category) {
+        if (statement.equals("selectJobSummaries")) {
+            return switch (category) {
+                case "success" -> "successJobCount";
+                case "failed" -> "failedJobCount";
+                case "in_flight" -> "inFlightJobCount";
+                default -> throw new IllegalArgumentException("unsupported category: " + category);
+            };
+        }
+        return category + "_job_count";
     }
-    assertThat(statuses).isNotEmpty();
-    return statuses;
-  }
+
+    private static Configuration loadMapper(String resource) {
+        Configuration configuration = new Configuration();
+        try {
+            parseMapper(configuration, "mapper/CommonFragments.xml");
+            parseMapper(configuration, resource);
+            return configuration;
+        } catch (Exception ex) {
+            throw new AssertionError("failed to validate " + resource, ex);
+        }
+    }
+
+    private static void parseMapper(Configuration configuration, String resource) throws Exception {
+        try (InputStream inputStream =
+                Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+            assertThat(inputStream).as(resource).isNotNull();
+            byte[] mapperBytes = inputStream.readAllBytes();
+            new XMLMapperBuilder(
+                            new ByteArrayInputStream(mapperBytes),
+                            configuration,
+                            resource,
+                            configuration.getSqlFragments())
+                    .parse();
+        }
+    }
+
+    private static String batchDaySql(Configuration configuration, String statement) {
+        Map<String, Object> parameters = Map.of(
+                "tenantId",
+                "tenant-a",
+                "calendarCode",
+                "CALENDAR",
+                "bizDate",
+                LocalDate.of(2026, 9, 30),
+                "pageRequest",
+                new PageRequest(1, 20));
+        return configuration
+                .getMappedStatement(BatchDayMapper.class.getName() + "." + statement)
+                .getBoundSql(parameters)
+                .getSql();
+    }
+
+    private static Set<String> formalCodes(Set<String> codes) {
+        return codes.stream()
+                .filter(code -> !JobInstanceStatus.fromCodeOrNull(code).isDryRunTerminal())
+                .collect(Collectors.toSet());
+    }
+
+    private static Set<String> statusesForCountAlias(String sql, String alias) {
+        String expression = "(?is)case\\s+when\\s+ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)"
+                + "\\s+then\\s+1\\s+else\\s+0\\s+end\\s*\\)\\s*,\\s*0\\)"
+                + "\\s+as\\s+\\\"?"
+                + Pattern.quote(alias)
+                + "\\\"?";
+        Matcher matcher = Pattern.compile(expression).matcher(sql);
+        assertThat(matcher.find()).as("status set for %s", alias).isTrue();
+        Set<String> statuses = parseStatusCodes(matcher.group(1));
+        assertThat(matcher.find()).as("single status set for %s", alias).isFalse();
+        return statuses;
+    }
+
+    private static Set<String> statusForCountAlias(String sql, String alias) {
+        String expression = "(?is)case\\s+when\\s+ji\\.instance_status\\s*=\\s*'([^']+)'"
+                + "\\s+then\\s+1\\s+else\\s+0\\s+end\\s*\\)\\s*,\\s*0\\)"
+                + "\\s+as\\s+\\\"?"
+                + Pattern.quote(alias)
+                + "\\\"?";
+        Matcher matcher = Pattern.compile(expression).matcher(sql);
+        assertThat(matcher.find()).as("status for %s", alias).isTrue();
+        Set<String> statuses = Set.of(matcher.group(1));
+        assertThat(matcher.find()).as("single status for %s", alias).isFalse();
+        return statuses;
+    }
+
+    private static Set<String> parseStatusCodes(String expression) {
+        Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(expression);
+        Set<String> statuses = new HashSet<>();
+        while (matcher.find()) {
+            statuses.add(matcher.group(1));
+        }
+        assertThat(statuses).isNotEmpty();
+        return statuses;
+    }
 }

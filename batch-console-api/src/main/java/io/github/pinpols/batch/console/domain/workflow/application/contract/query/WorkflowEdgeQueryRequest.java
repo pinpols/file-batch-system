@@ -8,11 +8,11 @@ import lombok.EqualsAndHashCode;
 @Data
 public class WorkflowEdgeQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private String workflowCode;
-  private String fromNodeCode;
-  private String toNodeCode;
-  private String edgeType;
-  private Boolean enabled;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private String workflowCode;
+    private String fromNodeCode;
+    private String toNodeCode;
+    private String edgeType;
+    private Boolean enabled;
 }

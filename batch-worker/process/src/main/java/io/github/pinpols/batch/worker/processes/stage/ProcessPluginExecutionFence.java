@@ -19,99 +19,95 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProcessPluginExecutionFence {
 
-  private final TaskExecutionClient taskExecutionClient;
-  private final boolean enabled;
+    private final TaskExecutionClient taskExecutionClient;
+    private final boolean enabled;
 
-  @Autowired
-  public ProcessPluginExecutionFence(TaskExecutionClient taskExecutionClient) {
-    this(taskExecutionClient, true);
-  }
-
-  private ProcessPluginExecutionFence(TaskExecutionClient taskExecutionClient, boolean enabled) {
-    this.taskExecutionClient = taskExecutionClient;
-    this.enabled = enabled;
-  }
-
-  static ProcessPluginExecutionFence disabledForUnitTests() {
-    return new ProcessPluginExecutionFence(null, false);
-  }
-
-  /**
-   * 返回 true 表示阶段可以继续。远程 Orchestrator 调用发生在
-   * PROCESS 调用围栏开启平台事务之前，因此标记独立提交，
-   * 早于插件产生业务副作用。
-   */
-  public boolean authorize(ProcessJobContext context, ProcessStage stage) {
-    boolean executionFenceNotRequired = !enabled || !isPotentialWriteStage(stage);
-    if (executionFenceNotRequired) {
-      return true;
-    }
-    if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
-      return true;
-    }
-    ProcessComputePlugin plugin = context.getResolvedPlugin();
-    boolean pluginDoesNotRequireFence =
-        EmptyChecks.isNull(plugin) || isReplaySafe(plugin.idempotencyCapability());
-    if (pluginDoesNotRequireFence) {
-      return true;
+    @Autowired
+    public ProcessPluginExecutionFence(TaskExecutionClient taskExecutionClient) {
+        this(taskExecutionClient, true);
     }
 
-    Map<String, Object> attributes = context.getAttributes();
-    if (Boolean.TRUE.equals(
-        attributes.get(ProcessRuntimeKeys.PROCESS_NON_IDEMPOTENT_FENCE_CONFIRMED))) {
-      return true;
+    private ProcessPluginExecutionFence(TaskExecutionClient taskExecutionClient, boolean enabled) {
+        this.taskExecutionClient = taskExecutionClient;
+        this.enabled = enabled;
     }
 
-    Object rawTaskId = attributes.get(PipelineRuntimeKeys.TASK_ID);
-    Long taskId = parseTaskId(rawTaskId);
-    Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-    String invocationId = invocationValue instanceof String value ? value : null;
-    boolean hasPersistedExecutionIdentity = EmptyChecks.isNotNull(taskId)
-        && Texts.hasText(context.getTenantId())
-        && Texts.hasText(context.getWorkerId())
-        && Texts.hasText(invocationId);
-    if (!hasPersistedExecutionIdentity) {
-      return false;
+    static ProcessPluginExecutionFence disabledForUnitTests() {
+        return new ProcessPluginExecutionFence(null, false);
     }
 
-    try {
-      boolean confirmed = taskExecutionClient.markNonIdempotentExecutionStarted(
-          context.getTenantId(), taskId, context.getWorkerId(), invocationId);
-      if (confirmed) {
-        attributes.put(ProcessRuntimeKeys.PROCESS_NON_IDEMPOTENT_FENCE_CONFIRMED, true);
-      }
-      return confirmed;
-    } catch (RuntimeException exception) {
-      log.warn(
-          "PROCESS replay fence could not be confirmed; plugin stage will not run: tenantId={},"
-              + " taskId={}, stage={}, reason={}",
-          context.getTenantId(),
-          taskId,
-          stage,
-          exception.getClass().getSimpleName());
-      return false;
-    }
-  }
+    /**
+     * 返回 true 表示阶段可以继续。远程 Orchestrator 调用发生在
+     * PROCESS 调用围栏开启平台事务之前，因此标记独立提交，
+     * 早于插件产生业务副作用。
+     */
+    public boolean authorize(ProcessJobContext context, ProcessStage stage) {
+        boolean executionFenceNotRequired = !enabled || !isPotentialWriteStage(stage);
+        if (executionFenceNotRequired) {
+            return true;
+        }
+        if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
+            return true;
+        }
+        ProcessComputePlugin plugin = context.getResolvedPlugin();
+        boolean pluginDoesNotRequireFence = EmptyChecks.isNull(plugin) || isReplaySafe(plugin.idempotencyCapability());
+        if (pluginDoesNotRequireFence) {
+            return true;
+        }
 
-  private static Long parseTaskId(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    try {
-      return PlatformRuntimeValues.toLong(value);
-    } catch (NumberFormatException exception) {
-      return null;
-    }
-  }
+        Map<String, Object> attributes = context.getAttributes();
+        if (Boolean.TRUE.equals(attributes.get(ProcessRuntimeKeys.PROCESS_NON_IDEMPOTENT_FENCE_CONFIRMED))) {
+            return true;
+        }
 
-  private static boolean isPotentialWriteStage(ProcessStage stage) {
-    return stage == ProcessStage.COMPUTE
-        || stage == ProcessStage.COMMIT
-        || stage == ProcessStage.FEEDBACK;
-  }
+        Object rawTaskId = attributes.get(PipelineRuntimeKeys.TASK_ID);
+        Long taskId = parseTaskId(rawTaskId);
+        Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+        String invocationId = invocationValue instanceof String value ? value : null;
+        boolean hasPersistedExecutionIdentity = EmptyChecks.isNotNull(taskId)
+                && Texts.hasText(context.getTenantId())
+                && Texts.hasText(context.getWorkerId())
+                && Texts.hasText(invocationId);
+        if (!hasPersistedExecutionIdentity) {
+            return false;
+        }
 
-  private static boolean isReplaySafe(IdempotencyCapability capability) {
-    return capability == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
-        || capability == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
-  }
+        try {
+            boolean confirmed = taskExecutionClient.markNonIdempotentExecutionStarted(
+                    context.getTenantId(), taskId, context.getWorkerId(), invocationId);
+            if (confirmed) {
+                attributes.put(ProcessRuntimeKeys.PROCESS_NON_IDEMPOTENT_FENCE_CONFIRMED, true);
+            }
+            return confirmed;
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "PROCESS replay fence could not be confirmed; plugin stage will not run: tenantId={},"
+                            + " taskId={}, stage={}, reason={}",
+                    context.getTenantId(),
+                    taskId,
+                    stage,
+                    exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private static Long parseTaskId(Object value) {
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        try {
+            return PlatformRuntimeValues.toLong(value);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static boolean isPotentialWriteStage(ProcessStage stage) {
+        return stage == ProcessStage.COMPUTE || stage == ProcessStage.COMMIT || stage == ProcessStage.FEEDBACK;
+    }
+
+    private static boolean isReplaySafe(IdempotencyCapability capability) {
+        return capability == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
+                || capability == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
+    }
 }

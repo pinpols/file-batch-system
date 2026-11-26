@@ -37,58 +37,56 @@ import org.junit.jupiter.params.provider.MethodSource;
 @DisplayName("Console 公开响应与 OpenAPI schema 字段一致")
 class ConsoleResponseOpenApiSchemaTest {
 
-  @ParameterizedTest
-  @MethodSource("responseSchemas")
-  @DisplayName("响应 record 字段与 OpenAPI properties 完全一致, 文档不得漏字段或多字段")
-  void shouldMatchOpenApiProperties(Class<?> responseType, String schemaName) throws IOException {
-    JsonNode properties = schemas().path(schemaName).path("properties");
-    List<String> documentedFields = new ArrayList<>();
-    properties.fieldNames().forEachRemaining(documentedFields::add);
-    Set<String> deprecatedFields = documentedFields.stream()
-        .filter(name -> properties.path(name).path("deprecated").asBoolean(false))
-        .collect(Collectors.toSet());
-    documentedFields.removeAll(deprecatedFields);
-    List<String> serializedFields = Arrays.stream(responseType.getRecordComponents())
-        .map(RecordComponent::getName)
-        .toList();
+    @ParameterizedTest
+    @MethodSource("responseSchemas")
+    @DisplayName("响应 record 字段与 OpenAPI properties 完全一致, 文档不得漏字段或多字段")
+    void shouldMatchOpenApiProperties(Class<?> responseType, String schemaName) throws IOException {
+        JsonNode properties = schemas().path(schemaName).path("properties");
+        List<String> documentedFields = new ArrayList<>();
+        properties.fieldNames().forEachRemaining(documentedFields::add);
+        Set<String> deprecatedFields = documentedFields.stream()
+                .filter(name -> properties.path(name).path("deprecated").asBoolean(false))
+                .collect(Collectors.toSet());
+        documentedFields.removeAll(deprecatedFields);
+        List<String> serializedFields = Arrays.stream(responseType.getRecordComponents())
+                .map(RecordComponent::getName)
+                .toList();
 
-    assertThat(documentedFields)
-        .as("%s 与 %s 字段漂移（deprecated 字段不计入）", schemaName, responseType.getSimpleName())
-        .containsExactlyInAnyOrderElementsOf(serializedFields);
-  }
-
-  private static Stream<Arguments> responseSchemas() {
-    return Stream.of(
-        Arguments.of(ConsoleAlertRoutingResponse.class, "ConsoleAlertRoutingResponse"),
-        Arguments.of(ConsoleFilePipelineResponse.class, "ConsoleFilePipelineResponse"),
-        Arguments.of(ConsoleJobDefinitionResponse.class, "ConsoleJobDefinitionResponse"),
-        Arguments.of(ConsoleJobStepInstanceResponse.class, "ConsoleJobStepInstanceResponse"),
-        Arguments.of(ConsoleTenantResponse.class, "ConsoleTenantResponse"),
-        Arguments.of(ConsoleFileChannelResponse.class, "ConsoleFileChannelResponse"),
-        Arguments.of(ConsoleFileRecordResponse.class, "ConsoleFileRecordResponse"),
-        Arguments.of(ConsoleBatchDayResponse.class, "ConsoleBatchDayResponse"),
-        Arguments.of(ConsoleJobInstanceResponse.class, "ConsoleJobInstanceResponse"),
-        Arguments.of(ConsoleAlertEventResponse.class, "ConsoleAlertEventResponse"),
-        Arguments.of(ConsoleUsageSummaryResponse.class, "ConsoleUsageSummaryResponse"),
-        Arguments.of(ConsoleWorkflowRunResponse.class, "ConsoleWorkflowRunResponse"),
-        Arguments.of(ConsoleApprovalCommandResponse.class, "ConsoleApprovalCommandResponse"),
-        Arguments.of(ConsoleTraceSnapshotResponse.class, "ConsoleTraceSnapshotResponse"),
-        Arguments.of(ConsoleWorkerRegistryResponse.class, "ConsoleWorkerRegistryResponse"));
-  }
-
-  private static JsonNode schemas() throws IOException {
-    return openApi().path("components").path("schemas");
-  }
-
-  private static JsonNode openApi() throws IOException {
-    for (Path current = Path.of("").toAbsolutePath();
-        current != null;
-        current = current.getParent()) {
-      Path schema = current.resolve("docs/api/console-api.openapi.yaml");
-      if (Files.isRegularFile(schema)) {
-        return new YAMLMapper().readTree(Files.readString(schema));
-      }
+        assertThat(documentedFields)
+                .as("%s 与 %s 字段漂移（deprecated 字段不计入）", schemaName, responseType.getSimpleName())
+                .containsExactlyInAnyOrderElementsOf(serializedFields);
     }
-    throw new IllegalStateException("找不到 Console OpenAPI 权威文件");
-  }
+
+    private static Stream<Arguments> responseSchemas() {
+        return Stream.of(
+                Arguments.of(ConsoleAlertRoutingResponse.class, "ConsoleAlertRoutingResponse"),
+                Arguments.of(ConsoleFilePipelineResponse.class, "ConsoleFilePipelineResponse"),
+                Arguments.of(ConsoleJobDefinitionResponse.class, "ConsoleJobDefinitionResponse"),
+                Arguments.of(ConsoleJobStepInstanceResponse.class, "ConsoleJobStepInstanceResponse"),
+                Arguments.of(ConsoleTenantResponse.class, "ConsoleTenantResponse"),
+                Arguments.of(ConsoleFileChannelResponse.class, "ConsoleFileChannelResponse"),
+                Arguments.of(ConsoleFileRecordResponse.class, "ConsoleFileRecordResponse"),
+                Arguments.of(ConsoleBatchDayResponse.class, "ConsoleBatchDayResponse"),
+                Arguments.of(ConsoleJobInstanceResponse.class, "ConsoleJobInstanceResponse"),
+                Arguments.of(ConsoleAlertEventResponse.class, "ConsoleAlertEventResponse"),
+                Arguments.of(ConsoleUsageSummaryResponse.class, "ConsoleUsageSummaryResponse"),
+                Arguments.of(ConsoleWorkflowRunResponse.class, "ConsoleWorkflowRunResponse"),
+                Arguments.of(ConsoleApprovalCommandResponse.class, "ConsoleApprovalCommandResponse"),
+                Arguments.of(ConsoleTraceSnapshotResponse.class, "ConsoleTraceSnapshotResponse"),
+                Arguments.of(ConsoleWorkerRegistryResponse.class, "ConsoleWorkerRegistryResponse"));
+    }
+
+    private static JsonNode schemas() throws IOException {
+        return openApi().path("components").path("schemas");
+    }
+
+    private static JsonNode openApi() throws IOException {
+        for (Path current = Path.of("").toAbsolutePath(); current != null; current = current.getParent()) {
+            Path schema = current.resolve("docs/api/console-api.openapi.yaml");
+            if (Files.isRegularFile(schema)) {
+                return new YAMLMapper().readTree(Files.readString(schema));
+            }
+        }
+        throw new IllegalStateException("找不到 Console OpenAPI 权威文件");
+    }
 }

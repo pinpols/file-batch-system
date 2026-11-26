@@ -5,5 +5,5 @@ import io.github.pinpols.batch.console.application.contract.response.CronPreview
 /** Console Cron 表达式只读预览。 */
 public interface CronPreviewService {
 
-  CronPreviewResponse preview(String expression, Integer count);
+    CronPreviewResponse preview(String expression, Integer count);
 }

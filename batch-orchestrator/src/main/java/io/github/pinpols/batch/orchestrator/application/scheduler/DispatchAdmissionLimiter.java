@@ -7,5 +7,5 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 /** 租户和资源队列维度的派发速率准入。 */
 public interface DispatchAdmissionLimiter {
 
-  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue);
+    ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue);
 }

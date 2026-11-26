@@ -17,38 +17,38 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = "batch.shedlock.provider=jdbc")
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "batch.shedlock.provider=jdbc")
 @DisplayName("ShedLock JDBC 切换: 完整 Orchestrator 上下文装配与互斥语义")
 class ShedLockJdbcConfigurationIntegrationTest extends AbstractIntegrationTest {
 
-  private final LockProvider lockProvider;
+    private final LockProvider lockProvider;
 
-  @Autowired
-  ShedLockJdbcConfigurationIntegrationTest(LockProvider lockProvider) {
-    this.lockProvider = lockProvider;
-  }
+    @Autowired
+    ShedLockJdbcConfigurationIntegrationTest(LockProvider lockProvider) {
+        this.lockProvider = lockProvider;
+    }
 
-  @Test
-  @DisplayName("provider=jdbc 时装配 JDBC 提供者且同名锁保持互斥")
-  void shouldSwitchToJdbcProviderAndKeepMutualExclusion() {
-    assertThat(lockProvider)
-        .isInstanceOfSatisfying(
-            MeteredLockProvider.class,
-            provider -> assertThat(provider.providerType()).isEqualTo("jdbc"));
+    @Test
+    @DisplayName("provider=jdbc 时装配 JDBC 提供者且同名锁保持互斥")
+    void shouldSwitchToJdbcProviderAndKeepMutualExclusion() {
+        assertThat(lockProvider)
+                .isInstanceOfSatisfying(
+                        MeteredLockProvider.class,
+                        provider -> assertThat(provider.providerType()).isEqualTo("jdbc"));
 
-    String lockName = "it-jdbc-provider-switch-" + System.nanoTime();
-    LockConfiguration lockConfiguration = new LockConfiguration(
-        BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(5), Duration.ZERO);
-    Optional<SimpleLock> first = lockProvider.lock(lockConfiguration);
-    Optional<SimpleLock> second = lockProvider.lock(lockConfiguration);
+        String lockName = "it-jdbc-provider-switch-" + System.nanoTime();
+        LockConfiguration lockConfiguration =
+                new LockConfiguration(BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(5), Duration.ZERO);
+        Optional<SimpleLock> first = lockProvider.lock(lockConfiguration);
+        Optional<SimpleLock> second = lockProvider.lock(lockConfiguration);
 
-    assertThat(first).isPresent();
-    assertThat(second).isEmpty();
-    first.ifPresent(SimpleLock::unlock);
-    Optional<SimpleLock> reacquired = lockProvider.lock(lockConfiguration);
-    assertThat(reacquired).isPresent();
-    reacquired.orElseThrow().unlock();
-  }
+        assertThat(first).isPresent();
+        assertThat(second).isEmpty();
+        first.ifPresent(SimpleLock::unlock);
+        Optional<SimpleLock> reacquired = lockProvider.lock(lockConfiguration);
+        assertThat(reacquired).isPresent();
+        reacquired.orElseThrow().unlock();
+    }
 }

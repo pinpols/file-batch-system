@@ -15,14 +15,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.workflow.archive")
 public class WorkflowArchiveProperties {
 
-  private boolean enabled = true;
+    private boolean enabled = true;
 
-  /** 保留天数：终结态（SUCCESS/FAILED/TERMINATED）超过此天数的 workflow_run 被清。 */
-  private int retentionDays = 30;
+    /** 保留天数：终结态（SUCCESS/FAILED/TERMINATED）超过此天数的 workflow_run 被清。 */
+    private int retentionDays = 30;
 
-  /** 单次扫描批量上限：避免一次删几十万行长事务锁表；超出当前阈值剩余条目下次 tick 继续清。 */
-  private int batchSize = 5_000;
+    /** 单次扫描批量上限：避免一次删几十万行长事务锁表；超出当前阈值剩余条目下次 tick 继续清。 */
+    private int batchSize = 5_000;
 
-  /** 调度间隔；默认每天 04:15（不和 file-governance archive / quota reset 撞峰）。 */
-  private String cron = "0 15 4 * * *";
+    /** 调度间隔；默认每天 04:15（不和 file-governance archive / quota reset 撞峰）。 */
+    private String cron = "0 15 4 * * *";
 }

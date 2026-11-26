@@ -47,464 +47,447 @@ import org.springframework.stereotype.Component;
 @Component
 public final class ImportPreprocessObjectSource {
 
-  private static final String ERROR_CODE_OBJECT_LOAD_FAILED =
-      "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
+    private static final String ERROR_CODE_OBJECT_LOAD_FAILED = "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
 
-  private final PlatformFileRecordRepository fileRecords;
-  private final S3StorageProperties s3StorageProperties;
-  private final BatchObjectStore objectStore;
-  private final WorkerImportPayloadProperties payloadProperties;
+    private final PlatformFileRecordRepository fileRecords;
+    private final S3StorageProperties s3StorageProperties;
+    private final BatchObjectStore objectStore;
+    private final WorkerImportPayloadProperties payloadProperties;
 
-  public ImportPreprocessObjectSource(
-      PlatformFileRecordRepository fileRecords,
-      S3StorageProperties s3StorageProperties,
-      BatchObjectStore objectStore,
-      WorkerImportPayloadProperties payloadProperties) {
-    this.fileRecords = fileRecords;
-    this.s3StorageProperties = s3StorageProperties;
-    this.objectStore = objectStore;
-    this.payloadProperties = payloadProperties;
-  }
-
-  void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
-    boolean hasRequiredObjectOwnershipContext = EmptyChecks.isNotNull(context)
-        && EmptyChecks.isNotNull(importPayload)
-        && Texts.hasText(importPayload.storagePath());
-    if (!hasRequiredObjectOwnershipContext) {
-      throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
-          "import object path is required before tenant ownership validation");
+    public ImportPreprocessObjectSource(
+            PlatformFileRecordRepository fileRecords,
+            S3StorageProperties s3StorageProperties,
+            BatchObjectStore objectStore,
+            WorkerImportPayloadProperties payloadProperties) {
+        this.fileRecords = fileRecords;
+        this.s3StorageProperties = s3StorageProperties;
+        this.objectStore = objectStore;
+        this.payloadProperties = payloadProperties;
     }
-    Long fileId =
-        PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    Map<String, Object> fileRecord = EmptyChecks.isNull(fileId)
-        ? Map.of()
-        : fileRecords.loadFileRecord(context.getTenantId(), fileId);
-    Object registeredPath = fileRecord.get("storage_path");
-    if (registeredPath == null
-        || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
-      throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
-          "import object path not owned by tenant (tenant="
-              + context.getTenantId()
-              + ", path="
-              + importPayload.storagePath()
-              + "); refusing to fetch object not registered to this tenant's file_record");
-    }
-  }
 
-  byte[] resolveRawBytes(
-      ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
-    if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
-      String encodedPayload = importPayload.contentBase64();
-      String trimmedPayload = encodedPayload.trim();
-      return Base64.getDecoder().decode(trimmedPayload);
-    }
-    if (importPayload != null && Texts.hasText(importPayload.content())) {
-      Charset charset = resolveCharsetForContentBytes(importPayload, templateConfigObject);
-      return importPayload.content().getBytes(charset);
-    }
-    if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
-      return downloadObjectBytes(importPayload);
-    }
-    String raw = context.getRawPayload();
-    return raw == null ? new byte[0] : raw.getBytes(StandardCharsets.UTF_8);
-  }
-
-  long objectSizeBytes(ImportPayload importPayload) {
-    String bucket = bucketFor(importPayload);
-    try {
-      return objectStore.statSize(bucket, importPayload.storagePath());
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(ImportPreprocessObjectSource.class, "catch:statObject", ex);
-      return -1L;
-    }
-  }
-
-  boolean supportsRangeRead() {
-    return objectStore.supportsRangeRead();
-  }
-
-  ImportStageResult streamObjectToSpoolAndReturn(
-      ImportJobContext context,
-      ImportPayload importPayload,
-      Map<String, Object> templateConfig,
-      Object templateConfigObject) {
-    String bucket = bucketFor(importPayload);
-    String object = importPayload.storagePath();
-    Path spool = null;
-    try {
-      spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-", ".raw");
-      long bytes;
-      try (InputStream in = objectStore.get(bucket, object)) {
-        bytes =
-            Files.copy(EncodingUtils.stripUtf8Bom(in), spool, StandardCopyOption.REPLACE_EXISTING);
-      }
-      Charset charset = resolveCharset(importPayload, templateConfigObject);
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
-      context.setRawPayload("");
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-      log.info(
-          "import preprocess streamed object to spool (no heap buffering): bucket={}, object={},"
-              + " bytes={}, spool={}",
-          bucket,
-          object,
-          bytes,
-          spool);
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put("preprocessed", Boolean.TRUE);
-      String format = resolveFileFormatType(importPayload, templateConfig);
-      fileMetadata.put("preprocessFormat", format == null ? "" : format);
-      fileMetadata.put("sourceObject", object);
-      fileMetadata.put("sourceBytes", bytes);
-      ImportStageSupport.updateFileStatusRecoverAware(
-          fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
-      return ImportStageResult.success(ImportStage.PREPROCESS);
-    } catch (Exception ex) {
-      deleteQuietly(spool);
-      throw objectLoadFailure(bucket, object, ex);
-    }
-  }
-
-  ImportStageResult streamObjectRangeToSpool(
-      ImportJobContext context,
-      ImportPayload importPayload,
-      Map<String, Object> templateConfig,
-      Object templateConfigObject,
-      RangeSlice slice) {
-    String bucket = bucketFor(importPayload);
-    String object = importPayload.storagePath();
-    long rawStart = slice.objectBytes() * (slice.partitionNo() - 1) / slice.partitionCount();
-    long rawEnd = slice.partitionNo() == slice.partitionCount()
-        ? slice.objectBytes()
-        : slice.objectBytes() * slice.partitionNo() / slice.partitionCount();
-    Path spool = null;
-    try {
-      spool = PrivateTempFiles.createTempFile(
-          "batch-preprocess-obj-p" + slice.partitionNo() + "-", ".raw");
-      long keptBytes;
-      try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
-          OutputStream out = Files.newOutputStream(
-              spool,
-              StandardOpenOption.CREATE,
-              StandardOpenOption.TRUNCATE_EXISTING,
-              StandardOpenOption.WRITE)) {
-        BufferedInputStream source = new BufferedInputStream(in, 64 * 1024);
-        long sliceLength = rawEnd - rawStart;
-        if (slice.partitionNo() == 1) {
-          source.mark(3);
-          byte[] prefix = source.readNBytes(3);
-          if (EncodingUtils.stripUtf8Bom(prefix).length < prefix.length) {
-            // 原始分片边界包含 BOM；扣除被剥离的字节后仍让首片承接首行。
-            sliceLength = Math.max(0, sliceLength - prefix.length);
-          } else {
-            source.reset();
-          }
+    void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
+        boolean hasRequiredObjectOwnershipContext = EmptyChecks.isNotNull(context)
+                && EmptyChecks.isNotNull(importPayload)
+                && Texts.hasText(importPayload.storagePath());
+        if (!hasRequiredObjectOwnershipContext) {
+            throw new ImportPreprocessException(
+                    "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
+                    "import object path is required before tenant ownership validation");
         }
-        keptBytes = copyPartitionRange(source, out, sliceLength, slice.partitionNo() > 1);
-      }
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, slice.charset());
-      context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
-      context.setRawPayload("");
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-      log.info(
-          "import preprocess range-sliced object to spool: bucket={}, object={}, partition={}/{},"
-              + " offset={}, sliceBytes={}, keptBytes={}, spool={}",
-          bucket,
-          object,
-          slice.partitionNo(),
-          slice.partitionCount(),
-          rawStart,
-          rawEnd - rawStart,
-          keptBytes,
-          spool);
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put("preprocessed", Boolean.TRUE);
-      String format = resolveFileFormatType(importPayload, templateConfig);
-      fileMetadata.put("preprocessFormat", format == null ? "" : format);
-      fileMetadata.put("sourceObject", object);
-      fileMetadata.put("rangeSlice", slice.partitionNo() + "/" + slice.partitionCount());
-      ImportStageSupport.updateFileStatusRecoverAware(
-          fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
-      return ImportStageResult.success(ImportStage.PREPROCESS);
-    } catch (Exception ex) {
-      deleteQuietly(spool);
-      context.getAttributes().remove(PipelineRuntimeKeys.PARTITION_PRESLICED);
-      int partitionNo = slice.partitionNo();
-      int partitionCount = slice.partitionCount();
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "import preprocess range-slice failed, fallback to full stream: object={}, partition={}/{}, err={}",
-          object,
-          partitionNo,
-          partitionCount,
-          causeSummary);
-      return streamObjectToSpoolAndReturn(
-          context, importPayload, templateConfig, templateConfigObject);
-    }
-  }
-
-  static boolean canStreamObjectDirect(
-      ImportPayload importPayload, Map<String, Object> templateConfig) {
-    Map<String, Object> config = templateConfig == null ? Map.of() : templateConfig;
-    String format = resolveFileFormatType(importPayload, config);
-    if (format != null && isBinaryImportFormat(format)) {
-      return false;
-    }
-    Object pipeline = config.get("preprocess_pipeline");
-    if (EmptyChecks.isNotNull(pipeline)) {
-      String presenceText = String.valueOf(pipeline);
-      if (Texts.hasText(presenceText)) {
-        String rawPipelineConfig = String.valueOf(pipeline);
-        String pipelineConfig = rawPipelineConfig.trim();
-        if (!"[]".equals(pipelineConfig)) {
-          return false;
+        Long fileId = PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        Map<String, Object> fileRecord =
+                EmptyChecks.isNull(fileId) ? Map.of() : fileRecords.loadFileRecord(context.getTenantId(), fileId);
+        Object registeredPath = fileRecord.get("storage_path");
+        if (registeredPath == null || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
+            throw new ImportPreprocessException(
+                    "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
+                    "import object path not owned by tenant (tenant="
+                            + context.getTenantId()
+                            + ", path="
+                            + importPayload.storagePath()
+                            + "); refusing to fetch object not registered to this tenant's file_record");
         }
-      }
     }
-    return isNoneOrBlank(config.get("compress_type")) && isNoneOrBlank(config.get("encrypt_type"));
-  }
 
-  static boolean rangeSliceEligible(
-      ImportPayload importPayload,
-      Map<String, Object> templateConfig,
-      Integer partitionNo,
-      Integer partitionCount,
-      Charset charset) {
-    boolean inputIsNotPartitioned = EmptyChecks.isNull(partitionNo)
-        || EmptyChecks.isNull(partitionCount)
-        || partitionCount <= 1;
-    if (inputIsNotPartitioned) {
-      return false;
-    }
-    if (partitionNo < 1 || partitionNo > partitionCount) {
-      return false;
-    }
-    if (!isNewlineSafeCharset(charset)) {
-      return false;
-    }
-    String formatType = resolveFileFormatType(importPayload, templateConfig);
-    if (formatType == null || formatType.isBlank()) { // empty-check: allow - Sonar S2259
-      return false;
-    }
-    return isRangeSliceableFormat(formatType, templateConfig);
-  }
-
-  static boolean isBinaryImportFormat(String formatType) {
-    if (!Texts.hasText(formatType)) {
-      return false;
-    }
-    String trimmedFormatType = formatType.trim();
-    String normalized = trimmedFormatType.toUpperCase(Locale.ROOT);
-    return FileTemplateFormat.EXCEL.code().equals(normalized)
-        || FileTemplateFormat.BINARY.code().equals(normalized);
-  }
-
-  static String resolveFileFormatType(
-      ImportPayload importPayload, Map<String, Object> templateConfig) {
-    if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
-      return importPayload.fileFormatType();
-    }
-    Object value = templateConfig == null ? null : templateConfig.get("file_format_type");
-    if (value != null && Texts.hasText(String.valueOf(value))) {
-      return String.valueOf(value);
-    }
-    return null;
-  }
-
-  static long copyPartitionRange(
-      InputStream rawIn, OutputStream out, long sliceLen, boolean skipPartialFirstLine)
-      throws IOException {
-    BufferedInputStream in = rawIn instanceof BufferedInputStream buffered
-        ? buffered
-        : new BufferedInputStream(rawIn, 64 * 1024);
-    long consumed = 0;
-    long written = 0;
-    int b;
-    if (skipPartialFirstLine) {
-      while ((b = in.read()) >= 0) {
-        consumed++;
-        if (b == '\n') {
-          break;
+    byte[] resolveRawBytes(ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
+        if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
+            String encodedPayload = importPayload.contentBase64();
+            String trimmedPayload = encodedPayload.trim();
+            return Base64.getDecoder().decode(trimmedPayload);
         }
-      }
-    }
-    while (consumed <= sliceLen) {
-      int c = in.read();
-      if (c < 0) {
-        break;
-      }
-      consumed++;
-      out.write(c);
-      written++;
-      if (c == '\n') {
-        continue;
-      }
-      while ((c = in.read()) >= 0) {
-        consumed++;
-        out.write(c);
-        written++;
-        if (c == '\n') {
-          break;
+        if (importPayload != null && Texts.hasText(importPayload.content())) {
+            Charset charset = resolveCharsetForContentBytes(importPayload, templateConfigObject);
+            return importPayload.content().getBytes(charset);
         }
-      }
-      if (c < 0) {
-        break;
-      }
-    }
-    return written;
-  }
-
-  private byte[] downloadObjectBytes(ImportPayload importPayload) {
-    String bucket = bucketFor(importPayload);
-    String object = importPayload.storagePath();
-    try (InputStream in = objectStore.get(bucket, object)) {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      byte[] buffer = new byte[64 * 1024];
-      long total = 0;
-      int read;
-      while ((read = in.read(buffer)) >= 0) {
-        if (read == 0) {
-          continue;
+        if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+            return downloadObjectBytes(importPayload);
         }
-        total += read;
-        if (total > payloadProperties.getMaxObjectBytes()) {
-          throw new ImportPreprocessException(
-              "IMPORT_PREPROCESS_OBJECT_TOO_LARGE",
-              "import object exceeds max-object-bytes="
-                  + payloadProperties.getMaxObjectBytes()
-                  + " (bucket="
-                  + bucket
-                  + ", object="
-                  + object
-                  + "); raise batch.worker.import.max-object-bytes or split the file");
+        String raw = context.getRawPayload();
+        return raw == null ? new byte[0] : raw.getBytes(StandardCharsets.UTF_8);
+    }
+
+    long objectSizeBytes(ImportPayload importPayload) {
+        String bucket = bucketFor(importPayload);
+        try {
+            return objectStore.statSize(bucket, importPayload.storagePath());
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(ImportPreprocessObjectSource.class, "catch:statObject", ex);
+            return -1L;
         }
-        out.write(buffer, 0, read);
-      }
-      log.info(
-          "import preprocess loaded object from storage: bucket={}, object={}, bytes={}",
-          bucket,
-          object,
-          total);
-      return out.toByteArray();
-    } catch (ImportPreprocessException ex) {
-      throw ex;
-    } catch (Exception ex) {
-      throw objectLoadFailure(bucket, object, ex);
     }
-  }
 
-  private Charset resolveCharsetForContentBytes(
-      ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        String configuredCharsetText = String.valueOf(charset);
-        return EncodingUtils.resolve(configuredCharsetText);
-      }
+    boolean supportsRangeRead() {
+        return objectStore.supportsRangeRead();
     }
-    if (importPayload != null && Texts.hasText(importPayload.charset())) {
-      return EncodingUtils.resolve(importPayload.charset());
-    }
-    return StandardCharsets.UTF_8;
-  }
 
-  private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object targetCharset = templateConfig.get("target_charset");
-      if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
-        String configuredTargetCharsetText = String.valueOf(targetCharset);
-        return EncodingUtils.resolve(configuredTargetCharsetText);
-      }
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        String configuredCharsetText = String.valueOf(charset);
-        return EncodingUtils.resolve(configuredCharsetText);
-      }
+    ImportStageResult streamObjectToSpoolAndReturn(
+            ImportJobContext context,
+            ImportPayload importPayload,
+            Map<String, Object> templateConfig,
+            Object templateConfigObject) {
+        String bucket = bucketFor(importPayload);
+        String object = importPayload.storagePath();
+        Path spool = null;
+        try {
+            spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-", ".raw");
+            long bytes;
+            try (InputStream in = objectStore.get(bucket, object)) {
+                bytes = Files.copy(EncodingUtils.stripUtf8Bom(in), spool, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Charset charset = resolveCharset(importPayload, templateConfigObject);
+            context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+            context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
+            context.setRawPayload("");
+            context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+            context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+            log.info(
+                    "import preprocess streamed object to spool (no heap buffering): bucket={}, object={},"
+                            + " bytes={}, spool={}",
+                    bucket,
+                    object,
+                    bytes,
+                    spool);
+            Map<String, Object> fileMetadata = new LinkedHashMap<>();
+            fileMetadata.put("preprocessed", Boolean.TRUE);
+            String format = resolveFileFormatType(importPayload, templateConfig);
+            fileMetadata.put("preprocessFormat", format == null ? "" : format);
+            fileMetadata.put("sourceObject", object);
+            fileMetadata.put("sourceBytes", bytes);
+            ImportStageSupport.updateFileStatusRecoverAware(
+                    fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
+            return ImportStageResult.success(ImportStage.PREPROCESS);
+        } catch (Exception ex) {
+            deleteQuietly(spool);
+            throw objectLoadFailure(bucket, object, ex);
+        }
     }
-    if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
-      return EncodingUtils.resolve(importPayload.targetCharset());
-    }
-    if (importPayload != null && Texts.hasText(importPayload.charset())) {
-      return EncodingUtils.resolve(importPayload.charset());
-    }
-    return StandardCharsets.UTF_8;
-  }
 
-  private String bucketFor(ImportPayload importPayload) {
-    return Texts.hasText(importPayload.storageBucket())
-        ? importPayload.storageBucket()
-        : s3StorageProperties.getBucket();
-  }
+    ImportStageResult streamObjectRangeToSpool(
+            ImportJobContext context,
+            ImportPayload importPayload,
+            Map<String, Object> templateConfig,
+            Object templateConfigObject,
+            RangeSlice slice) {
+        String bucket = bucketFor(importPayload);
+        String object = importPayload.storagePath();
+        long rawStart = slice.objectBytes() * (slice.partitionNo() - 1) / slice.partitionCount();
+        long rawEnd = slice.partitionNo() == slice.partitionCount()
+                ? slice.objectBytes()
+                : slice.objectBytes() * slice.partitionNo() / slice.partitionCount();
+        Path spool = null;
+        try {
+            spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-p" + slice.partitionNo() + "-", ".raw");
+            long keptBytes;
+            try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
+                    OutputStream out = Files.newOutputStream(
+                            spool,
+                            StandardOpenOption.CREATE,
+                            StandardOpenOption.TRUNCATE_EXISTING,
+                            StandardOpenOption.WRITE)) {
+                BufferedInputStream source = new BufferedInputStream(in, 64 * 1024);
+                long sliceLength = rawEnd - rawStart;
+                if (slice.partitionNo() == 1) {
+                    source.mark(3);
+                    byte[] prefix = source.readNBytes(3);
+                    if (EncodingUtils.stripUtf8Bom(prefix).length < prefix.length) {
+                        // 原始分片边界包含 BOM；扣除被剥离的字节后仍让首片承接首行。
+                        sliceLength = Math.max(0, sliceLength - prefix.length);
+                    } else {
+                        source.reset();
+                    }
+                }
+                keptBytes = copyPartitionRange(source, out, sliceLength, slice.partitionNo() > 1);
+            }
+            context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+            context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, slice.charset());
+            context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
+            context.setRawPayload("");
+            context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+            context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+            log.info(
+                    "import preprocess range-sliced object to spool: bucket={}, object={}, partition={}/{},"
+                            + " offset={}, sliceBytes={}, keptBytes={}, spool={}",
+                    bucket,
+                    object,
+                    slice.partitionNo(),
+                    slice.partitionCount(),
+                    rawStart,
+                    rawEnd - rawStart,
+                    keptBytes,
+                    spool);
+            Map<String, Object> fileMetadata = new LinkedHashMap<>();
+            fileMetadata.put("preprocessed", Boolean.TRUE);
+            String format = resolveFileFormatType(importPayload, templateConfig);
+            fileMetadata.put("preprocessFormat", format == null ? "" : format);
+            fileMetadata.put("sourceObject", object);
+            fileMetadata.put("rangeSlice", slice.partitionNo() + "/" + slice.partitionCount());
+            ImportStageSupport.updateFileStatusRecoverAware(
+                    fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
+            return ImportStageResult.success(ImportStage.PREPROCESS);
+        } catch (Exception ex) {
+            deleteQuietly(spool);
+            context.getAttributes().remove(PipelineRuntimeKeys.PARTITION_PRESLICED);
+            int partitionNo = slice.partitionNo();
+            int partitionCount = slice.partitionCount();
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "import preprocess range-slice failed, fallback to full stream: object={}, partition={}/{}, err={}",
+                    object,
+                    partitionNo,
+                    partitionCount,
+                    causeSummary);
+            return streamObjectToSpoolAndReturn(context, importPayload, templateConfig, templateConfigObject);
+        }
+    }
 
-  private static boolean isRangeSliceableFormat(String format, Map<String, Object> templateConfig) {
-    if (!Texts.hasText(format)) {
-      return false;
+    static boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> templateConfig) {
+        Map<String, Object> config = templateConfig == null ? Map.of() : templateConfig;
+        String format = resolveFileFormatType(importPayload, config);
+        if (format != null && isBinaryImportFormat(format)) {
+            return false;
+        }
+        Object pipeline = config.get("preprocess_pipeline");
+        if (EmptyChecks.isNotNull(pipeline)) {
+            String presenceText = String.valueOf(pipeline);
+            if (Texts.hasText(presenceText)) {
+                String rawPipelineConfig = String.valueOf(pipeline);
+                String pipelineConfig = rawPipelineConfig.trim();
+                if (!"[]".equals(pipelineConfig)) {
+                    return false;
+                }
+            }
+        }
+        return isNoneOrBlank(config.get("compress_type")) && isNoneOrBlank(config.get("encrypt_type"));
     }
-    String trimmedFormat = format.trim();
-    String normalized = trimmedFormat.toUpperCase(Locale.ROOT);
-    if (FileTemplateFormat.FIXED_WIDTH.code().equals(normalized)
-        || "FIXEDWIDTH".equals(normalized)) {
-      return true;
+
+    static boolean rangeSliceEligible(
+            ImportPayload importPayload,
+            Map<String, Object> templateConfig,
+            Integer partitionNo,
+            Integer partitionCount,
+            Charset charset) {
+        boolean inputIsNotPartitioned =
+                EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionCount <= 1;
+        if (inputIsNotPartitioned) {
+            return false;
+        }
+        if (partitionNo < 1 || partitionNo > partitionCount) {
+            return false;
+        }
+        if (!isNewlineSafeCharset(charset)) {
+            return false;
+        }
+        String formatType = resolveFileFormatType(importPayload, templateConfig);
+        if (formatType == null || formatType.isBlank()) { // empty-check: allow - Sonar S2259
+            return false;
+        }
+        return isRangeSliceableFormat(formatType, templateConfig);
     }
-    boolean isDelimitedFileFormat = FileTemplateFormat.DELIMITED.code().equals(normalized)
-        || "CSV".equals(normalized)
-        || "TSV".equals(normalized);
-    if (isDelimitedFileFormat) {
-      Object optIn = templateConfig == null ? null : templateConfig.get("partition_range_slice");
-      if (EmptyChecks.isNull(optIn)) {
+
+    static boolean isBinaryImportFormat(String formatType) {
+        if (!Texts.hasText(formatType)) {
+            return false;
+        }
+        String trimmedFormatType = formatType.trim();
+        String normalized = trimmedFormatType.toUpperCase(Locale.ROOT);
+        return FileTemplateFormat.EXCEL.code().equals(normalized)
+                || FileTemplateFormat.BINARY.code().equals(normalized);
+    }
+
+    static String resolveFileFormatType(ImportPayload importPayload, Map<String, Object> templateConfig) {
+        if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
+            return importPayload.fileFormatType();
+        }
+        Object value = templateConfig == null ? null : templateConfig.get("file_format_type");
+        if (value != null && Texts.hasText(String.valueOf(value))) {
+            return String.valueOf(value);
+        }
+        return null;
+    }
+
+    static long copyPartitionRange(InputStream rawIn, OutputStream out, long sliceLen, boolean skipPartialFirstLine)
+            throws IOException {
+        BufferedInputStream in =
+                rawIn instanceof BufferedInputStream buffered ? buffered : new BufferedInputStream(rawIn, 64 * 1024);
+        long consumed = 0;
+        long written = 0;
+        int b;
+        if (skipPartialFirstLine) {
+            while ((b = in.read()) >= 0) {
+                consumed++;
+                if (b == '\n') {
+                    break;
+                }
+            }
+        }
+        while (consumed <= sliceLen) {
+            int c = in.read();
+            if (c < 0) {
+                break;
+            }
+            consumed++;
+            out.write(c);
+            written++;
+            if (c == '\n') {
+                continue;
+            }
+            while ((c = in.read()) >= 0) {
+                consumed++;
+                out.write(c);
+                written++;
+                if (c == '\n') {
+                    break;
+                }
+            }
+            if (c < 0) {
+                break;
+            }
+        }
+        return written;
+    }
+
+    private byte[] downloadObjectBytes(ImportPayload importPayload) {
+        String bucket = bucketFor(importPayload);
+        String object = importPayload.storagePath();
+        try (InputStream in = objectStore.get(bucket, object)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            long total = 0;
+            int read;
+            while ((read = in.read(buffer)) >= 0) {
+                if (read == 0) {
+                    continue;
+                }
+                total += read;
+                if (total > payloadProperties.getMaxObjectBytes()) {
+                    throw new ImportPreprocessException(
+                            "IMPORT_PREPROCESS_OBJECT_TOO_LARGE",
+                            "import object exceeds max-object-bytes="
+                                    + payloadProperties.getMaxObjectBytes()
+                                    + " (bucket="
+                                    + bucket
+                                    + ", object="
+                                    + object
+                                    + "); raise batch.worker.import.max-object-bytes or split the file");
+                }
+                out.write(buffer, 0, read);
+            }
+            log.info(
+                    "import preprocess loaded object from storage: bucket={}, object={}, bytes={}",
+                    bucket,
+                    object,
+                    total);
+            return out.toByteArray();
+        } catch (ImportPreprocessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw objectLoadFailure(bucket, object, ex);
+        }
+    }
+
+    private Charset resolveCharsetForContentBytes(ImportPayload importPayload, Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object charset = templateConfig.get("charset");
+            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+                String configuredCharsetText = String.valueOf(charset);
+                return EncodingUtils.resolve(configuredCharsetText);
+            }
+        }
+        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+            return EncodingUtils.resolve(importPayload.charset());
+        }
+        return StandardCharsets.UTF_8;
+    }
+
+    private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object targetCharset = templateConfig.get("target_charset");
+            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+                String configuredTargetCharsetText = String.valueOf(targetCharset);
+                return EncodingUtils.resolve(configuredTargetCharsetText);
+            }
+            Object charset = templateConfig.get("charset");
+            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+                String configuredCharsetText = String.valueOf(charset);
+                return EncodingUtils.resolve(configuredCharsetText);
+            }
+        }
+        if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
+            return EncodingUtils.resolve(importPayload.targetCharset());
+        }
+        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+            return EncodingUtils.resolve(importPayload.charset());
+        }
+        return StandardCharsets.UTF_8;
+    }
+
+    private String bucketFor(ImportPayload importPayload) {
+        return Texts.hasText(importPayload.storageBucket())
+                ? importPayload.storageBucket()
+                : s3StorageProperties.getBucket();
+    }
+
+    private static boolean isRangeSliceableFormat(String format, Map<String, Object> templateConfig) {
+        if (!Texts.hasText(format)) {
+            return false;
+        }
+        String trimmedFormat = format.trim();
+        String normalized = trimmedFormat.toUpperCase(Locale.ROOT);
+        if (FileTemplateFormat.FIXED_WIDTH.code().equals(normalized) || "FIXEDWIDTH".equals(normalized)) {
+            return true;
+        }
+        boolean isDelimitedFileFormat = FileTemplateFormat.DELIMITED.code().equals(normalized)
+                || "CSV".equals(normalized)
+                || "TSV".equals(normalized);
+        if (isDelimitedFileFormat) {
+            Object optIn = templateConfig == null ? null : templateConfig.get("partition_range_slice");
+            if (EmptyChecks.isNull(optIn)) {
+                return false;
+            }
+            String rawOptIn = String.valueOf(optIn);
+            String optInText = rawOptIn.trim();
+            return "true".equalsIgnoreCase(optInText);
+        }
         return false;
-      }
-      String rawOptIn = String.valueOf(optIn);
-      String optInText = rawOptIn.trim();
-      return "true".equalsIgnoreCase(optInText);
     }
-    return false;
-  }
 
-  private static boolean isNewlineSafeCharset(Charset charset) {
-    return StandardCharsets.UTF_8.equals(charset)
-        || StandardCharsets.US_ASCII.equals(charset)
-        || StandardCharsets.ISO_8859_1.equals(charset);
-  }
-
-  private static boolean isNoneOrBlank(Object value) {
-    if (value == null) {
-      return true;
+    private static boolean isNewlineSafeCharset(Charset charset) {
+        return StandardCharsets.UTF_8.equals(charset)
+                || StandardCharsets.US_ASCII.equals(charset)
+                || StandardCharsets.ISO_8859_1.equals(charset);
     }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return EmptyChecks.isEmpty(text) || "NONE".equalsIgnoreCase(text);
-  }
 
-  private static ImportPreprocessException objectLoadFailure(
-      String bucket, String object, Exception cause) {
-    return new ImportPreprocessException(
-        ERROR_CODE_OBJECT_LOAD_FAILED,
-        "failed to load import object from storage (bucket="
-            + bucket
-            + ", object="
-            + object
-            + "): "
-            + cause.getMessage(),
-        cause);
-  }
-
-  private static void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
+    private static boolean isNoneOrBlank(Object value) {
+        if (value == null) {
+            return true;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return EmptyChecks.isEmpty(text) || "NONE".equalsIgnoreCase(text);
     }
-    try {
-      Files.deleteIfExists(path);
-    } catch (IOException ex) {
-      SwallowedExceptionLogger.warn(
-          ImportPreprocessObjectSource.class, "catch:tempFileCleanup", ex);
-    }
-  }
 
-  record RangeSlice(Charset charset, long objectBytes, int partitionNo, int partitionCount) {}
+    private static ImportPreprocessException objectLoadFailure(String bucket, String object, Exception cause) {
+        return new ImportPreprocessException(
+                ERROR_CODE_OBJECT_LOAD_FAILED,
+                "failed to load import object from storage (bucket="
+                        + bucket
+                        + ", object="
+                        + object
+                        + "): "
+                        + cause.getMessage(),
+                cause);
+    }
+
+    private static void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ex) {
+            SwallowedExceptionLogger.warn(ImportPreprocessObjectSource.class, "catch:tempFileCleanup", ex);
+        }
+    }
+
+    record RangeSlice(Charset charset, long objectBytes, int partitionNo, int partitionCount) {}
 }

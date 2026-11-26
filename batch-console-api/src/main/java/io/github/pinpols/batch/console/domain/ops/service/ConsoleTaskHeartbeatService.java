@@ -25,45 +25,40 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleTaskHeartbeatService {
 
-  private final JobTaskMapper jobTaskMapper;
-  private final ObjectMapper objectMapper;
-  private final TenantIdResolver tenantGuard;
+    private final JobTaskMapper jobTaskMapper;
+    private final ObjectMapper objectMapper;
+    private final TenantIdResolver tenantGuard;
 
-  /** 读指定租户下某 task 的最新心跳进度;不存在(或不属于该租户)抛 NOT_FOUND。 */
-  public TaskHeartbeatDetailsResponse getHeartbeatDetails(String tenantId, Long taskId) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    JobTaskHeartbeatView heartbeat =
-        jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
-    if (EmptyChecks.isNull(heartbeat)) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
+    /** 读指定租户下某 task 的最新心跳进度;不存在(或不属于该租户)抛 NOT_FOUND。 */
+    public TaskHeartbeatDetailsResponse getHeartbeatDetails(String tenantId, Long taskId) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        JobTaskHeartbeatView heartbeat = jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
+        if (EmptyChecks.isNull(heartbeat)) {
+            throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
+        }
+        Long heartbeatTaskId = heartbeat.getId();
+        String taskStatus = heartbeat.getTaskStatus();
+        String heartbeatDetailsJson = heartbeat.getHeartbeatDetails();
+        Object parsedHeartbeatDetails = parseDetails(heartbeatDetailsJson, taskId);
+        Instant heartbeatAt = heartbeat.getHeartbeatAt();
+        Boolean cancelRequested = heartbeat.getCancelRequested();
+        return new TaskHeartbeatDetailsResponse(
+                heartbeatTaskId, taskStatus, parsedHeartbeatDetails, heartbeatAt, Boolean.TRUE.equals(cancelRequested));
     }
-    Long heartbeatTaskId = heartbeat.getId();
-    String taskStatus = heartbeat.getTaskStatus();
-    String heartbeatDetailsJson = heartbeat.getHeartbeatDetails();
-    Object parsedHeartbeatDetails = parseDetails(heartbeatDetailsJson, taskId);
-    Instant heartbeatAt = heartbeat.getHeartbeatAt();
-    Boolean cancelRequested = heartbeat.getCancelRequested();
-    return new TaskHeartbeatDetailsResponse(
-        heartbeatTaskId,
-        taskStatus,
-        parsedHeartbeatDetails,
-        heartbeatAt,
-        Boolean.TRUE.equals(cancelRequested));
-  }
 
-  /** JSONB 文本解析成 JSON 结构;空 = null;解析异常降级为 null(不让坏数据 500),并 WARN 带 taskId。 */
-  private Object parseDetails(String raw, Long taskId) {
-    if (raw == null || raw.isBlank()) {
-      return null;
+    /** JSONB 文本解析成 JSON 结构;空 = null;解析异常降级为 null(不让坏数据 500),并 WARN 带 taskId。 */
+    private Object parseDetails(String raw, Long taskId) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(raw);
+        } catch (JsonProcessingException e) {
+            log.warn(
+                    "Failed to parse job_task heartbeat_details (taskId={}): {}",
+                    taskId,
+                    SwallowedExceptionLogger.summary(e));
+            return null;
+        }
     }
-    try {
-      return objectMapper.readTree(raw);
-    } catch (JsonProcessingException e) {
-      log.warn(
-          "Failed to parse job_task heartbeat_details (taskId={}): {}",
-          taskId,
-          SwallowedExceptionLogger.summary(e));
-      return null;
-    }
-  }
 }

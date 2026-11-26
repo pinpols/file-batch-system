@@ -12,29 +12,29 @@ import java.security.NoSuchAlgorithmException;
  */
 public final class SecretComparator {
 
-  private SecretComparator() {}
+    private SecretComparator() {}
 
-  /**
-   * 常量时间比较两个 secret 是否相等,且不泄漏长度。
-   *
-   * @param expected 服务端配置的期望值(可空 → 一律不匹配)
-   * @param provided 客户端提供的值(可空 → 一律不匹配)
-   */
-  public static boolean constantTimeEquals(String expected, String provided) {
-    if (expected == null || provided == null) {
-      return false;
+    /**
+     * 常量时间比较两个 secret 是否相等,且不泄漏长度。
+     *
+     * @param expected 服务端配置的期望值(可空 → 一律不匹配)
+     * @param provided 客户端提供的值(可空 → 一律不匹配)
+     */
+    public static boolean constantTimeEquals(String expected, String provided) {
+        if (expected == null || provided == null) {
+            return false;
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+            byte[] expectedHash = digest.digest(expectedBytes);
+            MessageDigest digest2 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] providedBytes = provided.getBytes(StandardCharsets.UTF_8);
+            byte[] providedHash = digest2.digest(providedBytes);
+            return MessageDigest.isEqual(expectedHash, providedHash);
+        } catch (NoSuchAlgorithmException ex) {
+            // SHA-256 是 JDK 必备算法,不可能缺失;真缺失则保守判否。
+            throw new IllegalStateException("SHA-256 not available", ex);
+        }
     }
-    try {
-      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
-      byte[] expectedHash = digest.digest(expectedBytes);
-      MessageDigest digest2 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] providedBytes = provided.getBytes(StandardCharsets.UTF_8);
-      byte[] providedHash = digest2.digest(providedBytes);
-      return MessageDigest.isEqual(expectedHash, providedHash);
-    } catch (NoSuchAlgorithmException ex) {
-      // SHA-256 是 JDK 必备算法,不可能缺失;真缺失则保守判否。
-      throw new IllegalStateException("SHA-256 not available", ex);
-    }
-  }
 }

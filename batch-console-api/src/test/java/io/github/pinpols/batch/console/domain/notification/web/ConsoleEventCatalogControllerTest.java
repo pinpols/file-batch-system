@@ -28,62 +28,62 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleEventCatalogControllerTest {
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
-    messageSource.setBasename("messages");
-    messageSource.setDefaultEncoding("UTF-8");
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasename("messages");
+        messageSource.setDefaultEncoding("UTF-8");
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleEventCatalogController(
-            responseFactory,
-            new ConsoleEventCatalogService(messageSource, new BatchKafkaTopicNamespace(""))))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleEventCatalogController(
+                        responseFactory,
+                        new ConsoleEventCatalogService(messageSource, new BatchKafkaTopicNamespace(""))))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("事件目录只承诺已有业务生产者的五类事件")
-  void shouldReturnEventTypes() throws Exception {
-    mockMvc
-        .perform(get("/api/console/event-catalog/event-types"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[*].code")
-            .value(contains(
-                "JOB_SUCCESS",
-                "JOB_FAILED",
-                "WORKFLOW_SUCCESS",
-                "WORKFLOW_FAILED",
-                "ALERT_ESCALATED")));
-  }
+    @Test
+    @DisplayName("事件目录只承诺已有业务生产者的五类事件")
+    void shouldReturnEventTypes() throws Exception {
+        mockMvc.perform(get("/api/console/event-catalog/event-types"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[*].code")
+                        .value(contains(
+                                "JOB_SUCCESS",
+                                "JOB_FAILED",
+                                "WORKFLOW_SUCCESS",
+                                "WORKFLOW_FAILED",
+                                "ALERT_ESCALATED")));
+    }
 
-  @Test
-  @DisplayName("消息主题清单返回成功, 每项带主题名且总数固定")
-  void shouldReturnTopics() throws Exception {
-    mockMvc
-        .perform(get("/api/console/event-catalog/topics"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].name").exists())
-        .andExpect(jsonPath("$.data[?(@.name == 'batch.task.dispatch.atomic')]").isNotEmpty())
-        .andExpect(jsonPath("$.data[?(@.name == 'batch.job.terminal.v1')]").isNotEmpty())
-        .andExpect(jsonPath("$.data[?(@.name == 'batch.workflow.terminal.v1')]").isNotEmpty())
-        .andExpect(jsonPath("$.data.length()").value(14));
-  }
+    @Test
+    @DisplayName("消息主题清单返回成功, 每项带主题名且总数固定")
+    void shouldReturnTopics() throws Exception {
+        mockMvc.perform(get("/api/console/event-catalog/topics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].name").exists())
+                .andExpect(jsonPath("$.data[?(@.name == 'batch.task.dispatch.atomic')]")
+                        .isNotEmpty())
+                .andExpect(
+                        jsonPath("$.data[?(@.name == 'batch.job.terminal.v1')]").isNotEmpty())
+                .andExpect(jsonPath("$.data[?(@.name == 'batch.workflow.terminal.v1')]")
+                        .isNotEmpty())
+                .andExpect(jsonPath("$.data.length()").value(14));
+    }
 }

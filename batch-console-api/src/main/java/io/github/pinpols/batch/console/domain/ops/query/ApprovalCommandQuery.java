@@ -7,13 +7,13 @@ import lombok.Data;
 @Data
 public class ApprovalCommandQuery {
 
-  private String tenantId;
-  private String approvalNo;
-  private String approvalType;
-  private List<String> excludeApprovalTypes;
-  private String actionType;
-  private String approvalStatus;
-  private String requesterId;
-  private String keyword;
-  private PageRequest pageRequest;
+    private String tenantId;
+    private String approvalNo;
+    private String approvalType;
+    private List<String> excludeApprovalTypes;
+    private String actionType;
+    private String approvalStatus;
+    private String requesterId;
+    private String keyword;
+    private PageRequest pageRequest;
 }

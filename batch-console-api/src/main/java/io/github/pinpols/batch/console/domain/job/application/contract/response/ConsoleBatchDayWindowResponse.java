@@ -5,13 +5,13 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record ConsoleBatchDayWindowResponse(
-    LocalDate bizDate,
-    String dayStatus,
-    Instant cutoffAt,
-    Instant slaDeadlineAt,
-    Instant currentSystemTime,
-    Long timeUntilCutoffSeconds,
-    Instant lateArrivalWindowClosesAt,
-    List<ConsoleBatchDaySummaryResponse> jobs,
-    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences,
-    Boolean frozen) {}
+        LocalDate bizDate,
+        String dayStatus,
+        Instant cutoffAt,
+        Instant slaDeadlineAt,
+        Instant currentSystemTime,
+        Long timeUntilCutoffSeconds,
+        Instant lateArrivalWindowClosesAt,
+        List<ConsoleBatchDaySummaryResponse> jobs,
+        List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences,
+        Boolean frozen) {}

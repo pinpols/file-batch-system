@@ -10,10 +10,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /** KMS 集成的连接与密钥引用配置。 */
 public class BatchKmsProperties {
 
-  private String defaultKeyRef = "DEFAULT_TEST";
-  private Map<String, String> keys = new LinkedHashMap<>();
+    private String defaultKeyRef = "DEFAULT_TEST";
+    private Map<String, String> keys = new LinkedHashMap<>();
 
-  public void setKeys(Map<String, String> keys) {
-    this.keys = keys == null ? new LinkedHashMap<>() : new LinkedHashMap<>(keys);
-  }
+    public void setKeys(Map<String, String> keys) {
+        this.keys = keys == null ? new LinkedHashMap<>() : new LinkedHashMap<>(keys);
+    }
 }

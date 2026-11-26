@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleSystemParameterValueResponse(String key, String value) {
 
-  public static ConsoleSystemParameterValueResponse of(String key, String value) {
-    return new ConsoleSystemParameterValueResponse(key, value);
-  }
+    public static ConsoleSystemParameterValueResponse of(String key, String value) {
+        return new ConsoleSystemParameterValueResponse(key, value);
+    }
 }

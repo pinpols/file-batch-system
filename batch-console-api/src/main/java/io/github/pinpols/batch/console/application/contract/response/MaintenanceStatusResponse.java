@@ -16,12 +16,12 @@ import java.util.List;
  * @param updatedAt 最近一次共享状态更新时间(ISO-8601 字符串)
  */
 public record MaintenanceStatusResponse(
-    boolean enabled,
-    boolean readOnly,
-    String message,
-    String etaAt,
-    String startsAt,
-    boolean active,
-    List<String> affectedServices,
-    long version,
-    String updatedAt) {}
+        boolean enabled,
+        boolean readOnly,
+        String message,
+        String etaAt,
+        String startsAt,
+        boolean active,
+        List<String> affectedServices,
+        long version,
+        String updatedAt) {}

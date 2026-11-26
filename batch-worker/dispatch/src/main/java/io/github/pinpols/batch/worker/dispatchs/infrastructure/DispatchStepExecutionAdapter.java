@@ -31,133 +31,117 @@ import org.springframework.stereotype.Component;
 @Primary
 @Component
 public class DispatchStepExecutionAdapter
-    extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
+        extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
 
-  private final DispatchStageExecutor dispatchStageExecutor;
-  private final DispatchReplayCapabilityResolver replayCapabilityResolver;
-  private final ObjectMapper objectMapper;
+    private final DispatchStageExecutor dispatchStageExecutor;
+    private final DispatchReplayCapabilityResolver replayCapabilityResolver;
+    private final ObjectMapper objectMapper;
 
-  public DispatchStepExecutionAdapter(
-      DispatchStageExecutor dispatchStageExecutor,
-      DispatchReplayCapabilityResolver replayCapabilityResolver,
-      ObjectMapper objectMapper,
-      PlatformPipelineRunRepository pipelineRuns,
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
-      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(
-        pipelineRuns,
-        fileRecords,
-        dispatchStageExecutor,
-        verifierHookProvider,
-        compensationHookProvider);
-    this.dispatchStageExecutor = dispatchStageExecutor;
-    this.replayCapabilityResolver = replayCapabilityResolver;
-    this.objectMapper = objectMapper;
-  }
-
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    return replayCapabilityResolver.resolve(request);
-  }
-
-  @Override
-  protected String pipelineType() {
-    return DispatchWorkerType.DISPATCH;
-  }
-
-  @Override
-  protected String initialStage() {
-    return DispatchStage.PREPARE.name();
-  }
-
-  @Override
-  protected DispatchJobContext buildContext(
-      StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
-    DispatchJobContext context = new DispatchJobContext();
-    populateCommonFields(context, request, contextMap);
-    Object bizDateContextValue = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
-    String bizDate = String.valueOf(bizDateContextValue);
-    context.setBizDate(bizDate);
-    Object taskIdValue = contextMap.getOrDefault(
-        PipelineRuntimeKeys.TASK_ID, contextMap.getOrDefault("dispatchId", ""));
-    String dispatchId = String.valueOf(taskIdValue);
-    context.setDispatchId(dispatchId);
-    Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-    boolean rawDispatchPayloadNeedsDecoding = EmptyChecks.isNull(dispatchPayload)
-        && EmptyChecks.isNotNull(context.getRawPayload())
-        && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
-    if (rawDispatchPayloadNeedsDecoding) {
-      dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
-      context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, dispatchPayload);
+    public DispatchStepExecutionAdapter(
+            DispatchStageExecutor dispatchStageExecutor,
+            DispatchReplayCapabilityResolver replayCapabilityResolver,
+            ObjectMapper objectMapper,
+            PlatformPipelineRunRepository pipelineRuns,
+            PlatformFileRecordRepository fileRecords,
+            ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+            ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+        super(pipelineRuns, fileRecords, dispatchStageExecutor, verifierHookProvider, compensationHookProvider);
+        this.dispatchStageExecutor = dispatchStageExecutor;
+        this.replayCapabilityResolver = replayCapabilityResolver;
+        this.objectMapper = objectMapper;
     }
-    return context;
-  }
 
-  @Override
-  protected List<DispatchStageResult> executeStages(DispatchJobContext context) {
-    return dispatchStageExecutor.execute(context);
-  }
-
-  @Override
-  protected DispatchStageResult resolvePipelineFailure(
-      DispatchJobContext context, List<DispatchStageResult> results) {
-    boolean retryRecovered =
-        Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
-    return DispatchStageOutcome.failure(results, retryRecovered);
-  }
-
-  @Override
-  protected boolean isSuccess(DispatchStageResult result) {
-    return result != null && result.success();
-  }
-
-  @Override
-  protected String resultStage(DispatchStageResult result) {
-    return result.stage().name();
-  }
-
-  @Override
-  protected String resultCode(DispatchStageResult result) {
-    return result.code();
-  }
-
-  @Override
-  protected String resultMessage(DispatchStageResult result) {
-    return result.message();
-  }
-
-  @Override
-  protected StepExecutionResponse buildSuccessResponse(
-      DispatchJobContext context,
-      List<DispatchStageResult> results,
-      Map<String, Object> attributes) {
-    // ADR-009 Stage 1.2: 把 DISPATCH 的关键产出暴露给下游 workflow 节点 DSL 引用
-    Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(
-        outputs,
-        DispatchRuntimeKeys.RECEIPT_CODE,
-        attributes.get(DispatchRuntimeKeys.RECEIPT_CODE));
-    putIfPresent(
-        outputs,
-        DispatchRuntimeKeys.RECEIPT_STATUS,
-        attributes.get(DispatchRuntimeKeys.RECEIPT_STATUS));
-    putIfPresent(
-        outputs,
-        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
-        attributes.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-    if (attributes.get(DispatchRuntimeKeys.DISPATCH_MANIFEST_REF)
-        instanceof DispatchManifestRef manifestRef) {
-      manifestRef.putPipelineOutputs(outputs);
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+        return replayCapabilityResolver.resolve(request);
     }
-    if (attributes.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD)
-        instanceof DispatchPayload dispatchPayload) {
-      putIfPresent(outputs, DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+
+    @Override
+    protected String pipelineType() {
+        return DispatchWorkerType.DISPATCH;
     }
-    if (!outputs.isEmpty()) {
-      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+
+    @Override
+    protected String initialStage() {
+        return DispatchStage.PREPARE.name();
     }
-    return new StepExecutionResponse(true, "SUCCESS", "dispatch stage completed");
-  }
+
+    @Override
+    protected DispatchJobContext buildContext(StepExecutionRequest request, Map<String, Object> contextMap, Long fileId)
+            throws Exception {
+        DispatchJobContext context = new DispatchJobContext();
+        populateCommonFields(context, request, contextMap);
+        Object bizDateContextValue = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+        String bizDate = String.valueOf(bizDateContextValue);
+        context.setBizDate(bizDate);
+        Object taskIdValue =
+                contextMap.getOrDefault(PipelineRuntimeKeys.TASK_ID, contextMap.getOrDefault("dispatchId", ""));
+        String dispatchId = String.valueOf(taskIdValue);
+        context.setDispatchId(dispatchId);
+        Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        boolean rawDispatchPayloadNeedsDecoding = EmptyChecks.isNull(dispatchPayload)
+                && EmptyChecks.isNotNull(context.getRawPayload())
+                && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
+        if (rawDispatchPayloadNeedsDecoding) {
+            dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
+            context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, dispatchPayload);
+        }
+        return context;
+    }
+
+    @Override
+    protected List<DispatchStageResult> executeStages(DispatchJobContext context) {
+        return dispatchStageExecutor.execute(context);
+    }
+
+    @Override
+    protected DispatchStageResult resolvePipelineFailure(
+            DispatchJobContext context, List<DispatchStageResult> results) {
+        boolean retryRecovered = Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
+        return DispatchStageOutcome.failure(results, retryRecovered);
+    }
+
+    @Override
+    protected boolean isSuccess(DispatchStageResult result) {
+        return result != null && result.success();
+    }
+
+    @Override
+    protected String resultStage(DispatchStageResult result) {
+        return result.stage().name();
+    }
+
+    @Override
+    protected String resultCode(DispatchStageResult result) {
+        return result.code();
+    }
+
+    @Override
+    protected String resultMessage(DispatchStageResult result) {
+        return result.message();
+    }
+
+    @Override
+    protected StepExecutionResponse buildSuccessResponse(
+            DispatchJobContext context, List<DispatchStageResult> results, Map<String, Object> attributes) {
+        // ADR-009 Stage 1.2: 把 DISPATCH 的关键产出暴露给下游 workflow 节点 DSL 引用
+        Map<String, Object> outputs = new LinkedHashMap<>();
+        putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
+        putIfPresent(outputs, DispatchRuntimeKeys.RECEIPT_CODE, attributes.get(DispatchRuntimeKeys.RECEIPT_CODE));
+        putIfPresent(outputs, DispatchRuntimeKeys.RECEIPT_STATUS, attributes.get(DispatchRuntimeKeys.RECEIPT_STATUS));
+        putIfPresent(
+                outputs,
+                DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
+                attributes.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+        if (attributes.get(DispatchRuntimeKeys.DISPATCH_MANIFEST_REF) instanceof DispatchManifestRef manifestRef) {
+            manifestRef.putPipelineOutputs(outputs);
+        }
+        if (attributes.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD) instanceof DispatchPayload dispatchPayload) {
+            putIfPresent(outputs, DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+        }
+        if (!outputs.isEmpty()) {
+            attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+        }
+        return new StepExecutionResponse(true, "SUCCESS", "dispatch stage completed");
+    }
 }

@@ -22,22 +22,22 @@ import java.util.Map;
  */
 public interface PipelineCompensator {
 
-  /**
-   * 该 compensator 适用的 pipeline 类型({@code "IMPORT"/"EXPORT"/"DISPATCH"})，与 {@code
-   * AbstractPipelineStepExecutionAdapter#pipelineType()} 对齐(大小写不敏感)。
-   */
-  String pipelineType();
+    /**
+     * 该 compensator 适用的 pipeline 类型({@code "IMPORT"/"EXPORT"/"DISPATCH"})，与 {@code
+     * AbstractPipelineStepExecutionAdapter#pipelineType()} 对齐(大小写不敏感)。
+     */
+    String pipelineType();
 
-  /**
-   * 对本 run 执行反向动作。
-   *
-   * @param tenantId 租户 ID
-   * @param pipelineInstanceId 当前 pipeline 实例 ID(审计用)
-   * @param fileId 当前 file_record id(export / dispatch 反向删对象时按它 scope);可为 null
-   * @param attributes pipeline runtime attributes(含 templateConfig / batchNo / traceId / fileRecord
-   *     等 run 标识来源)
-   * @return 反向动作结果(已删行数 / 是否 SKIP / 原因);<b>永不抛异常</b>，内部失败转 {@link CompensationResult#failed}
-   */
-  CompensationResult compensate(
-      String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes);
+    /**
+     * 对本 run 执行反向动作。
+     *
+     * @param tenantId 租户 ID
+     * @param pipelineInstanceId 当前 pipeline 实例 ID(审计用)
+     * @param fileId 当前 file_record id(export / dispatch 反向删对象时按它 scope);可为 null
+     * @param attributes pipeline runtime attributes(含 templateConfig / batchNo / traceId / fileRecord
+     *     等 run 标识来源)
+     * @return 反向动作结果(已删行数 / 是否 SKIP / 原因);<b>永不抛异常</b>，内部失败转 {@link CompensationResult#failed}
+     */
+    CompensationResult compensate(
+            String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes);
 }

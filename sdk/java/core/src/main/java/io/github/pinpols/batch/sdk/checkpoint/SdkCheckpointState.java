@@ -18,25 +18,24 @@ import java.util.Map;
  * @param completed 整个 task 是否已完成;{@code true} 时续跑模板直接幂等跳过
  */
 public record SdkCheckpointState(
-    Map<String, Object> breakPosition, long succeedCount, long failCount, boolean completed) {
+        Map<String, Object> breakPosition, long succeedCount, long failCount, boolean completed) {
 
-  public SdkCheckpointState {
-    breakPosition = breakPosition == null ? Map.of() : Map.copyOf(breakPosition);
-  }
+    public SdkCheckpointState {
+        breakPosition = breakPosition == null ? Map.of() : Map.copyOf(breakPosition);
+    }
 
-  /** 首次运行的初始状态:无断点、计数归零、未完成。 */
-  public static SdkCheckpointState initial() {
-    return new SdkCheckpointState(Map.of(), 0L, 0L, false);
-  }
+    /** 首次运行的初始状态:无断点、计数归零、未完成。 */
+    public static SdkCheckpointState initial() {
+        return new SdkCheckpointState(Map.of(), 0L, 0L, false);
+    }
 
-  /** 派生一个推进后的状态(保留 completed=false),用于每批 {@code commit}。 */
-  public SdkCheckpointState advance(
-      Map<String, Object> nextBreakPosition, long succeed, long fail) {
-    return new SdkCheckpointState(nextBreakPosition, succeed, fail, false);
-  }
+    /** 派生一个推进后的状态(保留 completed=false),用于每批 {@code commit}。 */
+    public SdkCheckpointState advance(Map<String, Object> nextBreakPosition, long succeed, long fail) {
+        return new SdkCheckpointState(nextBreakPosition, succeed, fail, false);
+    }
 
-  /** 派生终态(completed=true),用于 task 跑完后的幂等标记。 */
-  public SdkCheckpointState markCompleted() {
-    return new SdkCheckpointState(breakPosition, succeedCount, failCount, true);
-  }
+    /** 派生终态(completed=true),用于 task 跑完后的幂等标记。 */
+    public SdkCheckpointState markCompleted() {
+        return new SdkCheckpointState(breakPosition, succeedCount, failCount, true);
+    }
 }

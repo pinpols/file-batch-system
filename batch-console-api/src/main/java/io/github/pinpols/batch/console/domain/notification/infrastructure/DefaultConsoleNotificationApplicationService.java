@@ -68,426 +68,404 @@ import org.springframework.web.util.HtmlUtils;
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleNotificationApplicationService
-    implements ConsoleNotificationApplicationService {
-  /**
-   * notification_channel.channel_code VARCHAR(64)
-   * （V49__create_notification_approval_config_sync.sql）。
-   */
-  private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+public class DefaultConsoleNotificationApplicationService implements ConsoleNotificationApplicationService {
+    /**
+     * notification_channel.channel_code VARCHAR(64)
+     * （V49__create_notification_approval_config_sync.sql）。
+     */
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
 
-  /**
-   * notification_channel.channel_name VARCHAR(128)
-   * （V49__create_notification_approval_config_sync.sql）。
-   */
-  private static final int CHANNEL_NAME_MAX_LENGTH = 128;
+    /**
+     * notification_channel.channel_name VARCHAR(128)
+     * （V49__create_notification_approval_config_sync.sql）。
+     */
+    private static final int CHANNEL_NAME_MAX_LENGTH = 128;
 
-  /**
-   * subscription_rule.event_types VARCHAR(512)（V49__create_notification_approval_config_sync.sql）
-   * 。
-   */
-  private static final int EVENT_TYPES_MAX_LENGTH = 512;
+    /**
+     * subscription_rule.event_types VARCHAR(512)（V49__create_notification_approval_config_sync.sql）
+     * 。
+     */
+    private static final int EVENT_TYPES_MAX_LENGTH = 512;
 
-  /**
-   * subscription_rule.rule_name VARCHAR(128)（V49__create_notification_approval_config_sync.sql）。
-   */
-  private static final int RULE_NAME_MAX_LENGTH = 128;
+    /**
+     * subscription_rule.rule_name VARCHAR(128)（V49__create_notification_approval_config_sync.sql）。
+     */
+    private static final int RULE_NAME_MAX_LENGTH = 128;
 
-  /**
-   * subscription_rule.severity_filter VARCHAR(128)
-   * （V49__create_notification_approval_config_sync.sql）。
-   */
-  private static final int SEVERITY_FILTER_MAX_LENGTH = 128;
+    /**
+     * subscription_rule.severity_filter VARCHAR(128)
+     * （V49__create_notification_approval_config_sync.sql）。
+     */
+    private static final int SEVERITY_FILTER_MAX_LENGTH = 128;
 
-  /**
-   * subscription_rule.job_code_filter VARCHAR(512)
-   * （V49__create_notification_approval_config_sync.sql）。
-   */
-  private static final int JOB_CODE_FILTER_MAX_LENGTH = 512;
+    /**
+     * subscription_rule.job_code_filter VARCHAR(512)
+     * （V49__create_notification_approval_config_sync.sql）。
+     */
+    private static final int JOB_CODE_FILTER_MAX_LENGTH = 512;
 
-  /** 投递日志单次查询条数上限。 */
-  private static final int MAX_DELIVERY_LOG_LIMIT = 500;
+    /** 投递日志单次查询条数上限。 */
+    private static final int MAX_DELIVERY_LOG_LIMIT = 500;
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  /**
-   * 测试投递错误摘要长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）；
-   * 回显给调用方时用同一上限。
-   */
-  private static final int TEST_ERROR_SUMMARY_MAX_LENGTH = 1024;
+    // ── duplicate literal constants ─────────────────────────────────────────
+    /**
+     * 测试投递错误摘要长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）；
+     * 回显给调用方时用同一上限。
+     */
+    private static final int TEST_ERROR_SUMMARY_MAX_LENGTH = 1024;
 
-  private static final String ERR_CHANNEL_NOT_FOUND = "notification channel not found: ";
-  private static final String KEY_MESSAGE = "message";
-  private static final String KEY_CONFIG_JSON = "configJson";
-  private static final String KEY_UPDATED_BY = "updatedBy";
-  private static final String KEY_RULE_NAME = "ruleName";
-  private static final String KEY_EVENT_TYPES = "eventTypes";
-  private static final String KEY_SEVERITY_FILTER = "severityFilter";
-  private static final String KEY_JOB_CODE_FILTER = "jobCodeFilter";
-  private static final String KEY_ENABLED = "enabled";
-  private static final String KEY_CHANNEL_NAME = "channelName";
-  private static final String KEY_TENANT_ID = "tenantId";
+    private static final String ERR_CHANNEL_NOT_FOUND = "notification channel not found: ";
+    private static final String KEY_MESSAGE = "message";
+    private static final String KEY_CONFIG_JSON = "configJson";
+    private static final String KEY_UPDATED_BY = "updatedBy";
+    private static final String KEY_RULE_NAME = "ruleName";
+    private static final String KEY_EVENT_TYPES = "eventTypes";
+    private static final String KEY_SEVERITY_FILTER = "severityFilter";
+    private static final String KEY_JOB_CODE_FILTER = "jobCodeFilter";
+    private static final String KEY_ENABLED = "enabled";
+    private static final String KEY_CHANNEL_NAME = "channelName";
+    private static final String KEY_TENANT_ID = "tenantId";
 
-  private static final Set<String> CHANNEL_TYPES = Set.of(
-      NotificationChannelType.EMAIL.code(),
-      NotificationChannelType.DINGTALK.code(),
-      NotificationChannelType.WECOM.code(),
-      NotificationChannelType.WEBHOOK.code(),
-      NotificationChannelType.SMS.code());
+    private static final Set<String> CHANNEL_TYPES = Set.of(
+            NotificationChannelType.EMAIL.code(),
+            NotificationChannelType.DINGTALK.code(),
+            NotificationChannelType.WECOM.code(),
+            NotificationChannelType.WEBHOOK.code(),
+            NotificationChannelType.SMS.code());
 
-  private static final String TEST_EVENT_TYPE = "TEST";
+    private static final String TEST_EVENT_TYPE = "TEST";
 
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleRequestMetadataResolver metadataResolver;
-  private final NotificationChannelMapper channelMapper;
-  private final SubscriptionRuleMapper ruleMapper;
-  private final NotificationDeliveryLogMapper deliveryLogMapper;
-  private final NotificationSenderRegistry senderRegistry;
-  private final WebhookDispatcher webhookDispatcher;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleRequestMetadataResolver metadataResolver;
+    private final NotificationChannelMapper channelMapper;
+    private final SubscriptionRuleMapper ruleMapper;
+    private final NotificationDeliveryLogMapper deliveryLogMapper;
+    private final NotificationSenderRegistry senderRegistry;
+    private final WebhookDispatcher webhookDispatcher;
 
-  /**
-   * deliverTest 是租户可反复触发的出站投递,也是 SSRF DNS-rebinding 的放大点(重复触发可赢 rebinding 竞态)。 按 (租户 + 渠道)
-   * 限频,挡住高频重放。
-   */
-  private final SlidingWindowRateLimiter testChannelRateLimiter;
+    /**
+     * deliverTest 是租户可反复触发的出站投递,也是 SSRF DNS-rebinding 的放大点(重复触发可赢 rebinding 竞态)。 按 (租户 + 渠道)
+     * 限频,挡住高频重放。
+     */
+    private final SlidingWindowRateLimiter testChannelRateLimiter;
 
-  /**
-   * WEBHOOK 渠道 url 存前 fail-closed 校验:拦字面量内网/元数据 IP。OkHttp 的 SsrfGuardedDns pin 对**字面量 IP** 短路不生效,
-   * 故字面量 IP 的 SSRF 必须在入库这道关拦住(与 webhook 订阅一致)。
-   */
-  private final CallbackUrlValidator callbackUrlValidator;
+    /**
+     * WEBHOOK 渠道 url 存前 fail-closed 校验:拦字面量内网/元数据 IP。OkHttp 的 SsrfGuardedDns pin 对**字面量 IP** 短路不生效,
+     * 故字面量 IP 的 SSRF 必须在入库这道关拦住(与 webhook 订阅一致)。
+     */
+    private final CallbackUrlValidator callbackUrlValidator;
 
-  /** deliverTest 每 (租户 + 渠道) 滑窗(1 分钟)内最多触发次数。 */
-  private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
+    /** deliverTest 每 (租户 + 渠道) 滑窗(1 分钟)内最多触发次数。 */
+    private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
 
-  @Override
-  public List<ConsoleNotificationChannelResponse> listChannels(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    List<NotificationChannelRow> channels = channelMapper.selectByTenant(resolved);
-    return channels.stream().map(ConsoleNotificationChannelResponse::from).toList();
-  }
-
-  @Override
-  public ConsoleNotificationChannelResponse getChannel(String tenantId, String channelCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    NotificationChannelRow channel = channelMapper.selectByCode(resolved, channelCode);
-    NotificationChannelRow existingChannel =
-        Guard.requireFound(channel, ERR_CHANNEL_NOT_FOUND + channelCode);
-    return ConsoleNotificationChannelResponse.from(existingChannel);
-  }
-
-  @Override
-  @Transactional
-  public void createChannel(String tenantId, NotificationChannelUpsertRequest request) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode =
-        ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH);
-    Guard.requireText(channelCode, "channelCode is required");
-    Guard.requireText(request.getChannelName(), "channelName is required");
-    String channelType = request.getChannelType();
-    requireKnownChannelType(channelType);
-    validateWebhookChannelUrl(channelType, request.getConfigJson());
-    if (channelMapper.selectByCode(resolved, channelCode) != null) {
-      throw BizException.of(
-          ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
+    @Override
+    public List<ConsoleNotificationChannelResponse> listChannels(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        List<NotificationChannelRow> channels = channelMapper.selectByTenant(resolved);
+        return channels.stream().map(ConsoleNotificationChannelResponse::from).toList();
     }
-    String operator = metadataResolver.current().operatorId();
-    String sanitizedChannelName =
-        ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
-    String configJson = request.getConfigJson();
-    Boolean enabled = enabledOrDefault(request.getEnabled());
-    int inserted = channelMapper.insert(NotificationChannelInsertParam.builder()
-        .tenantId(resolved)
-        .channelCode(channelCode)
-        .channelName(sanitizedChannelName)
-        .channelType(channelType)
-        .configJson(configJson)
-        .enabled(enabled)
-        .createdBy(operator)
-        .updatedBy(operator)
-        .build());
-    if (inserted == 0) {
-      throw BizException.of(
-          ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
-    }
-  }
 
-  @Override
-  @Transactional
-  public void updateChannel(
-      String tenantId, String channelCode, NotificationChannelUpdateRequest request) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-    NotificationChannelRow existing =
+    @Override
+    public ConsoleNotificationChannelResponse getChannel(String tenantId, String channelCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        NotificationChannelRow channel = channelMapper.selectByCode(resolved, channelCode);
+        NotificationChannelRow existingChannel = Guard.requireFound(channel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        return ConsoleNotificationChannelResponse.from(existingChannel);
+    }
+
+    @Override
+    @Transactional
+    public void createChannel(String tenantId, NotificationChannelUpsertRequest request) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        String channelCode = ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH);
+        Guard.requireText(channelCode, "channelCode is required");
+        Guard.requireText(request.getChannelName(), "channelName is required");
+        String channelType = request.getChannelType();
+        requireKnownChannelType(channelType);
+        validateWebhookChannelUrl(channelType, request.getConfigJson());
+        if (channelMapper.selectByCode(resolved, channelCode) != null) {
+            throw BizException.of(ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
+        }
+        String operator = metadataResolver.current().operatorId();
+        String sanitizedChannelName = ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
+        String configJson = request.getConfigJson();
+        Boolean enabled = enabledOrDefault(request.getEnabled());
+        int inserted = channelMapper.insert(NotificationChannelInsertParam.builder()
+                .tenantId(resolved)
+                .channelCode(channelCode)
+                .channelName(sanitizedChannelName)
+                .channelType(channelType)
+                .configJson(configJson)
+                .enabled(enabled)
+                .createdBy(operator)
+                .updatedBy(operator)
+                .build());
+        if (inserted == 0) {
+            throw BizException.of(ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void updateChannel(String tenantId, String channelCode, NotificationChannelUpdateRequest request) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
+        NotificationChannelRow existing = Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        requireKnownChannelType(request.getChannelType());
+        String configJson = EmptyChecks.isNotNull(request.getConfigJson())
+                ? preserveMaskedChannelConfig(request.getConfigJson(), existing.configJson())
+                : null;
+        validateWebhookChannelUrl(request.getChannelType(), configJson);
+        String operator = metadataResolver.current().operatorId();
+        String sanitizedChannelName = ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
+        String channelType = request.getChannelType();
+        Boolean enabled = enabledOrDefault(request.getEnabled());
+        channelMapper.update(NotificationChannelUpdateParam.builder()
+                .tenantId(resolved)
+                .channelCode(channelCode)
+                .channelName(sanitizedChannelName)
+                .channelType(channelType)
+                .configJson(configJson)
+                .enabled(enabled)
+                .updatedBy(operator)
+                .build());
+    }
+
+    private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
+        boolean storedConfigIsMissing = EmptyChecks.isNull(storedValue);
+        if (storedConfigIsMissing) {
+            return submittedJson;
+        }
+        boolean submittedConfigDoesNotContainMask = !submittedJson.contains(SecretMasking.MASKED_VALUE);
+        if (submittedConfigDoesNotContainMask) {
+            return submittedJson;
+        }
+        String storedConfigJson = storedValue instanceof String storedText ? storedText : JsonUtils.toJson(storedValue);
+        return SecretMasking.preserveMaskedJson(submittedJson, storedConfigJson, Set.of("url"));
+    }
+
+    /**
+     * WEBHOOK 渠道:对 config_json 里的 url 做存前 SSRF 校验(与 webhook 订阅同一把 {@link CallbackUrlValidator})。
+     * 拦字面量内网/元数据 IP —— 这是字面量 IP SSRF 的主修(OkHttp Dns pin 对字面量 IP 短路不生效)。url 缺失则跳过(由投递期"missing
+     * url"处理)。
+     */
+    private void validateWebhookChannelUrl(String channelType, String configJson) {
+        if (!NotificationChannelType.WEBHOOK.code().equalsIgnoreCase(channelType)) {
+            return;
+        }
+        String url = WebhookDeliverySupport.configText(
+                configJson, "url", DefaultConsoleNotificationApplicationService.class);
+        if (url != null && !url.isBlank()) {
+            callbackUrlValidator.validate(url);
+        }
+    }
+
+    private static void requireKnownChannelType(String channelType) {
+        if (!CHANNEL_TYPES.contains(channelType)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "channelType must be one of " + CHANNEL_TYPES);
+        }
+    }
+
+    private static Boolean enabledOrDefault(Boolean enabled) {
+        return enabled == null ? Boolean.TRUE : enabled;
+    }
+
+    @Override
+    @Transactional
+    public void deleteChannel(String tenantId, String channelCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        channelMapper.deleteByCode(resolved, channelCode);
+    }
+
+    @Override
+    public List<ConsoleSubscriptionRuleResponse> listRules(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        List<SubscriptionRuleRow> rules = ruleMapper.selectByTenant(resolved);
+        return rules.stream().map(ConsoleSubscriptionRuleResponse::from).toList();
+    }
+
+    @Override
+    public ConsoleSubscriptionRuleResponse getRule(String tenantId, Long ruleId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        SubscriptionRuleRow rule = ruleMapper.selectById(resolved, ruleId);
+        SubscriptionRuleRow existingRule = Guard.requireFound(rule, "subscription rule not found: " + ruleId);
+        return ConsoleSubscriptionRuleResponse.from(existingRule);
+    }
+
+    @Override
+    @Transactional
+    public void createRule(String tenantId, SubscriptionRuleUpsertRequest request) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
+        Guard.requireText(eventTypes, "eventTypes is required");
+        NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
+        String channelCode = request.getChannelCode();
+        NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
         Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
-    requireKnownChannelType(request.getChannelType());
-    String configJson = EmptyChecks.isNotNull(request.getConfigJson())
-        ? preserveMaskedChannelConfig(request.getConfigJson(), existing.configJson())
-        : null;
-    validateWebhookChannelUrl(request.getChannelType(), configJson);
-    String operator = metadataResolver.current().operatorId();
-    String sanitizedChannelName =
-        ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
-    String channelType = request.getChannelType();
-    Boolean enabled = enabledOrDefault(request.getEnabled());
-    channelMapper.update(NotificationChannelUpdateParam.builder()
-        .tenantId(resolved)
-        .channelCode(channelCode)
-        .channelName(sanitizedChannelName)
-        .channelType(channelType)
-        .configJson(configJson)
-        .enabled(enabled)
-        .updatedBy(operator)
-        .build());
-  }
-
-  private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
-    boolean storedConfigIsMissing = EmptyChecks.isNull(storedValue);
-    if (storedConfigIsMissing) {
-      return submittedJson;
+        String operator = metadataResolver.current().operatorId();
+        String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
+        Guard.requireText(ruleName, "ruleName is required");
+        String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
+        String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
+        Boolean enabled = enabledOrDefault(request.getEnabled());
+        SubscriptionRuleInsertParam ruleParameters = SubscriptionRuleInsertParam.builder()
+                .tenantId(resolved)
+                .ruleName(ruleName)
+                .channelCode(channelCode)
+                .eventTypes(eventTypes)
+                .severityFilter(severityFilter)
+                .jobCodeFilter(jobCodeFilter)
+                .enabled(enabled)
+                .createdBy(operator)
+                .updatedBy(operator)
+                .build();
+        ruleMapper.insert(ruleParameters);
     }
-    boolean submittedConfigDoesNotContainMask = !submittedJson.contains(SecretMasking.MASKED_VALUE);
-    if (submittedConfigDoesNotContainMask) {
-      return submittedJson;
-    }
-    String storedConfigJson =
-        storedValue instanceof String storedText ? storedText : JsonUtils.toJson(storedValue);
-    return SecretMasking.preserveMaskedJson(submittedJson, storedConfigJson, Set.of("url"));
-  }
 
-  /**
-   * WEBHOOK 渠道:对 config_json 里的 url 做存前 SSRF 校验(与 webhook 订阅同一把 {@link CallbackUrlValidator})。
-   * 拦字面量内网/元数据 IP —— 这是字面量 IP SSRF 的主修(OkHttp Dns pin 对字面量 IP 短路不生效)。url 缺失则跳过(由投递期"missing
-   * url"处理)。
-   */
-  private void validateWebhookChannelUrl(String channelType, String configJson) {
-    if (!NotificationChannelType.WEBHOOK.code().equalsIgnoreCase(channelType)) {
-      return;
-    }
-    String url = WebhookDeliverySupport.configText(
-        configJson, "url", DefaultConsoleNotificationApplicationService.class);
-    if (url != null && !url.isBlank()) {
-      callbackUrlValidator.validate(url);
-    }
-  }
-
-  private static void requireKnownChannelType(String channelType) {
-    if (!CHANNEL_TYPES.contains(channelType)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "channelType must be one of " + CHANNEL_TYPES);
-    }
-  }
-
-  private static Boolean enabledOrDefault(Boolean enabled) {
-    return enabled == null ? Boolean.TRUE : enabled;
-  }
-
-  @Override
-  @Transactional
-  public void deleteChannel(String tenantId, String channelCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    channelMapper.deleteByCode(resolved, channelCode);
-  }
-
-  @Override
-  public List<ConsoleSubscriptionRuleResponse> listRules(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    List<SubscriptionRuleRow> rules = ruleMapper.selectByTenant(resolved);
-    return rules.stream().map(ConsoleSubscriptionRuleResponse::from).toList();
-  }
-
-  @Override
-  public ConsoleSubscriptionRuleResponse getRule(String tenantId, Long ruleId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    SubscriptionRuleRow rule = ruleMapper.selectById(resolved, ruleId);
-    SubscriptionRuleRow existingRule =
-        Guard.requireFound(rule, "subscription rule not found: " + ruleId);
-    return ConsoleSubscriptionRuleResponse.from(existingRule);
-  }
-
-  @Override
-  @Transactional
-  public void createRule(String tenantId, SubscriptionRuleUpsertRequest request) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String eventTypes =
-        ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
-    Guard.requireText(eventTypes, "eventTypes is required");
-    NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
-    String channelCode = request.getChannelCode();
-    NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-    Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
-    String operator = metadataResolver.current().operatorId();
-    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
-    Guard.requireText(ruleName, "ruleName is required");
-    String severityFilter =
-        ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
-    String jobCodeFilter =
-        ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
-    Boolean enabled = enabledOrDefault(request.getEnabled());
-    SubscriptionRuleInsertParam ruleParameters = SubscriptionRuleInsertParam.builder()
-        .tenantId(resolved)
-        .ruleName(ruleName)
-        .channelCode(channelCode)
-        .eventTypes(eventTypes)
-        .severityFilter(severityFilter)
-        .jobCodeFilter(jobCodeFilter)
-        .enabled(enabled)
-        .createdBy(operator)
-        .updatedBy(operator)
-        .build();
-    ruleMapper.insert(ruleParameters);
-  }
-
-  @Override
-  @Transactional
-  public void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String eventTypes =
-        ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
-    Guard.requireText(eventTypes, "eventTypes is required");
-    NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
-    SubscriptionRuleRow selectedRule = ruleMapper.selectById(resolved, ruleId);
-    Guard.requireFound(selectedRule, "subscription rule not found: " + ruleId);
-    // P1-4: update 也必须校验 channel 存在(与 createRule 一致)。否则可写入失效 channelCode,
-    // 而 SubscriptionRuleMapper.selectEnabledByEventType 要 join notification_channel,
-    // 失效 channel 会让规则永不命中(保存成功但永远不生效的无效规则)。
-    String channelCode = request.getChannelCode();
-    NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-    Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
-    String operator = metadataResolver.current().operatorId();
-    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
-    Guard.requireText(ruleName, "ruleName is required");
-    String severityFilter =
-        ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
-    String jobCodeFilter =
-        ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
-    Boolean enabled = enabledOrDefault(request.getEnabled());
-    SubscriptionRuleUpdateParam ruleParameters = SubscriptionRuleUpdateParam.builder()
-        .tenantId(resolved)
-        .id(ruleId)
-        .ruleName(ruleName)
-        .channelCode(channelCode)
-        .eventTypes(eventTypes)
-        .severityFilter(severityFilter)
-        .jobCodeFilter(jobCodeFilter)
-        .enabled(enabled)
-        .updatedBy(operator)
-        .build();
-    ruleMapper.update(ruleParameters);
-  }
-
-  @Override
-  @Transactional
-  public void deleteRule(String tenantId, Long ruleId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    ruleMapper.deleteById(resolved, ruleId);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public List<ConsoleNotificationDeliveryLogResponse> deliveryLogs(String tenantId, int limit) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    deliveryLogMapper.bindTenant(resolvedTenantId);
-    int boundedLimit = Math.min(limit, MAX_DELIVERY_LOG_LIMIT);
-    List<NotificationDeliveryLogRow> deliveryLogRows =
-        deliveryLogMapper.selectByTenant(resolvedTenantId, boundedLimit);
-    return deliveryLogRows.stream()
-        .map(ConsoleNotificationDeliveryLogResponse::from)
-        .toList();
-  }
-
-  /**
-   * 渠道配置页「测试」按钮:按渠道类型真正发一条测试消息,如实反映投递结果并落真实投递日志。
-   *
-   * <p>WEBHOOK 渠道复用 {@link WebhookDispatcher#attemptDelivery}(自带 SSRF 防护 + 超时 + HMAC 签名);其余渠道
-   * (EMAIL / DINGTALK / WECOM / SMS)经 {@link NotificationSenderRegistry} 解析对应 {@link
-   * NotificationSender} 投递。 成功/失败均落一条 {@code notification_delivery_log};失败时把净化后的 sender
-   * 错误摘要返回前端,便于运维排查配置。
-   */
-  @Override
-  public ConsoleNotificationTestResultResponse testChannel(String tenantId, String channelCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    // SSRF 收窄:deliverTest 可反复触发,是 rebinding 竞态的放大点;超频拦在建连之前。
-    if (!testChannelRateLimiter.tryAcquire(
-        "notif:test:" + resolved + ":" + channelCode, TEST_CHANNEL_LIMIT_PER_MINUTE)) {
-      throw BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited");
-    }
-    NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-    NotificationChannelRow channel =
+    @Override
+    @Transactional
+    public void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
+        Guard.requireText(eventTypes, "eventTypes is required");
+        NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
+        SubscriptionRuleRow selectedRule = ruleMapper.selectById(resolved, ruleId);
+        Guard.requireFound(selectedRule, "subscription rule not found: " + ruleId);
+        // P1-4: update 也必须校验 channel 存在(与 createRule 一致)。否则可写入失效 channelCode,
+        // 而 SubscriptionRuleMapper.selectEnabledByEventType 要 join notification_channel,
+        // 失效 channel 会让规则永不命中(保存成功但永远不生效的无效规则)。
+        String channelCode = request.getChannelCode();
+        NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
         Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
-    String channelType = channel.channelType();
-    String configJson = channel.configJson();
-
-    String testMessage = "[BATCH] 测试通知 " + BatchDateTimeSupport.utcNow();
-    Map<String, Object> payloadFields = Map.of(KEY_MESSAGE, testMessage, "test", Boolean.TRUE);
-    String payloadJson = JsonUtils.toJson(payloadFields);
-    Instant occurredAt = BatchDateTimeSupport.utcNow();
-    Map<String, Object> eventFields = Map.of(KEY_MESSAGE, testMessage);
-    WebhookEventPayload payload = new WebhookEventPayload(
-        resolved, TEST_EVENT_TYPE, "notification-test", null, occurredAt, eventFields);
-
-    WebhookDeliveryResult result =
-        deliverTest(resolved, channelCode, channelType, configJson, payload, payloadJson);
-    String safeErrorSummary = safeTestError(result.errorSummary());
-    String displayErrorSummary =
-        ConsoleTextSanitizer.safeDisplay(safeErrorSummary, TEST_ERROR_SUMMARY_MAX_LENGTH);
-
-    // 真实投递结果落审计日志(成功 SUCCESS / 失败 FAILED + 错误摘要)。
-    String deliveryStatus = result.success() ? "SUCCESS" : "FAILED";
-    NotificationDeliveryLogInsertParam deliveryLogFields =
-        NotificationDeliveryLogInsertParam.builder()
-            .tenantId(resolved)
-            .ruleId(0L)
-            .channelCode(channelCode)
-            .eventType(TEST_EVENT_TYPE)
-            .alertEventId(null)
-            .payloadJson(payloadJson)
-            .deliveryStatus(deliveryStatus)
-            .errorMessage(safeErrorSummary)
-            .attempt(1)
-            .build();
-    deliveryLogMapper.insert(deliveryLogFields);
-
-    String message = result.success()
-        ? "test notification delivered"
-        : "test notification failed: " + displayErrorSummary;
-    return new ConsoleNotificationTestResultResponse(
-        channelCode,
-        channelType,
-        result.success(),
-        result.success() ? "OK" : "FAILED",
-        message,
-        result.httpStatus(),
-        displayErrorSummary);
-  }
-
-  private static String safeTestError(String errorSummary) {
-    if (EmptyChecks.isNull(errorSummary)) {
-      return null;
+        String operator = metadataResolver.current().operatorId();
+        String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
+        Guard.requireText(ruleName, "ruleName is required");
+        String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
+        String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
+        Boolean enabled = enabledOrDefault(request.getEnabled());
+        SubscriptionRuleUpdateParam ruleParameters = SubscriptionRuleUpdateParam.builder()
+                .tenantId(resolved)
+                .id(ruleId)
+                .ruleName(ruleName)
+                .channelCode(channelCode)
+                .eventTypes(eventTypes)
+                .severityFilter(severityFilter)
+                .jobCodeFilter(jobCodeFilter)
+                .enabled(enabled)
+                .updatedBy(operator)
+                .build();
+        ruleMapper.update(ruleParameters);
     }
-    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(errorSummary));
-    return SwallowedExceptionLogger.safeMessage(normalized, TEST_ERROR_SUMMARY_MAX_LENGTH);
-  }
 
-  private WebhookDeliveryResult deliverTest(
-      String tenantId,
-      String channelCode,
-      String channelType,
-      String configJson,
-      WebhookEventPayload payload,
-      String payloadJson) {
-    WebhookDeliverySupport.DeliveryContext deliveryContext =
-        new WebhookDeliverySupport.DeliveryContext(
-            tenantId,
-            channelCode,
-            channelType,
-            configJson,
-            payload,
-            payloadJson,
-            senderRegistry,
-            webhookDispatcher,
-            DefaultConsoleNotificationApplicationService.class);
-    return WebhookDeliverySupport.deliver(deliveryContext);
-  }
+    @Override
+    @Transactional
+    public void deleteRule(String tenantId, Long ruleId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        ruleMapper.deleteById(resolved, ruleId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsoleNotificationDeliveryLogResponse> deliveryLogs(String tenantId, int limit) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        deliveryLogMapper.bindTenant(resolvedTenantId);
+        int boundedLimit = Math.min(limit, MAX_DELIVERY_LOG_LIMIT);
+        List<NotificationDeliveryLogRow> deliveryLogRows =
+                deliveryLogMapper.selectByTenant(resolvedTenantId, boundedLimit);
+        return deliveryLogRows.stream()
+                .map(ConsoleNotificationDeliveryLogResponse::from)
+                .toList();
+    }
+
+    /**
+     * 渠道配置页「测试」按钮:按渠道类型真正发一条测试消息,如实反映投递结果并落真实投递日志。
+     *
+     * <p>WEBHOOK 渠道复用 {@link WebhookDispatcher#attemptDelivery}(自带 SSRF 防护 + 超时 + HMAC 签名);其余渠道
+     * (EMAIL / DINGTALK / WECOM / SMS)经 {@link NotificationSenderRegistry} 解析对应 {@link
+     * NotificationSender} 投递。 成功/失败均落一条 {@code notification_delivery_log};失败时把净化后的 sender
+     * 错误摘要返回前端,便于运维排查配置。
+     */
+    @Override
+    public ConsoleNotificationTestResultResponse testChannel(String tenantId, String channelCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        // SSRF 收窄:deliverTest 可反复触发,是 rebinding 竞态的放大点;超频拦在建连之前。
+        if (!testChannelRateLimiter.tryAcquire(
+                "notif:test:" + resolved + ":" + channelCode, TEST_CHANNEL_LIMIT_PER_MINUTE)) {
+            throw BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited");
+        }
+        NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
+        NotificationChannelRow channel = Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        String channelType = channel.channelType();
+        String configJson = channel.configJson();
+
+        String testMessage = "[BATCH] 测试通知 " + BatchDateTimeSupport.utcNow();
+        Map<String, Object> payloadFields = Map.of(KEY_MESSAGE, testMessage, "test", Boolean.TRUE);
+        String payloadJson = JsonUtils.toJson(payloadFields);
+        Instant occurredAt = BatchDateTimeSupport.utcNow();
+        Map<String, Object> eventFields = Map.of(KEY_MESSAGE, testMessage);
+        WebhookEventPayload payload =
+                new WebhookEventPayload(resolved, TEST_EVENT_TYPE, "notification-test", null, occurredAt, eventFields);
+
+        WebhookDeliveryResult result =
+                deliverTest(resolved, channelCode, channelType, configJson, payload, payloadJson);
+        String safeErrorSummary = safeTestError(result.errorSummary());
+        String displayErrorSummary = ConsoleTextSanitizer.safeDisplay(safeErrorSummary, TEST_ERROR_SUMMARY_MAX_LENGTH);
+
+        // 真实投递结果落审计日志(成功 SUCCESS / 失败 FAILED + 错误摘要)。
+        String deliveryStatus = result.success() ? "SUCCESS" : "FAILED";
+        NotificationDeliveryLogInsertParam deliveryLogFields = NotificationDeliveryLogInsertParam.builder()
+                .tenantId(resolved)
+                .ruleId(0L)
+                .channelCode(channelCode)
+                .eventType(TEST_EVENT_TYPE)
+                .alertEventId(null)
+                .payloadJson(payloadJson)
+                .deliveryStatus(deliveryStatus)
+                .errorMessage(safeErrorSummary)
+                .attempt(1)
+                .build();
+        deliveryLogMapper.insert(deliveryLogFields);
+
+        String message =
+                result.success() ? "test notification delivered" : "test notification failed: " + displayErrorSummary;
+        return new ConsoleNotificationTestResultResponse(
+                channelCode,
+                channelType,
+                result.success(),
+                result.success() ? "OK" : "FAILED",
+                message,
+                result.httpStatus(),
+                displayErrorSummary);
+    }
+
+    private static String safeTestError(String errorSummary) {
+        if (EmptyChecks.isNull(errorSummary)) {
+            return null;
+        }
+        String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(errorSummary));
+        return SwallowedExceptionLogger.safeMessage(normalized, TEST_ERROR_SUMMARY_MAX_LENGTH);
+    }
+
+    private WebhookDeliveryResult deliverTest(
+            String tenantId,
+            String channelCode,
+            String channelType,
+            String configJson,
+            WebhookEventPayload payload,
+            String payloadJson) {
+        WebhookDeliverySupport.DeliveryContext deliveryContext = new WebhookDeliverySupport.DeliveryContext(
+                tenantId,
+                channelCode,
+                channelType,
+                configJson,
+                payload,
+                payloadJson,
+                senderRegistry,
+                webhookDispatcher,
+                DefaultConsoleNotificationApplicationService.class);
+        return WebhookDeliverySupport.deliver(deliveryContext);
+    }
 }

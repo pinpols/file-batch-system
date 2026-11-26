@@ -8,40 +8,36 @@ import io.github.pinpols.batch.common.model.PageRequest;
  * <p>docs/agent-baseline.md §Query Record 工厂方法规约：字段数 ≥ 5 且调用者仅传少数字段时，必须提供 静态工厂，禁止在调用处写出 {@code null} 参数。
  */
 public record JobTaskQuery(
-    String tenantId,
-    Long jobInstanceId,
-    Long jobPartitionId,
-    String taskStatus,
-    PageRequest pageRequest) {
+        String tenantId, Long jobInstanceId, Long jobPartitionId, String taskStatus, PageRequest pageRequest) {
 
-  /** 按租户全量查（列表页默认分页）。 */
-  public static JobTaskQuery ofTenant(String tenantId, PageRequest pageRequest) {
-    return new JobTaskQuery(tenantId, null, null, null, pageRequest);
-  }
+    /** 按租户全量查（列表页默认分页）。 */
+    public static JobTaskQuery ofTenant(String tenantId, PageRequest pageRequest) {
+        return new JobTaskQuery(tenantId, null, null, null, pageRequest);
+    }
 
-  /** 按 job_instance_id 查该实例下所有 task；pageRequest 可传 null 表示不分页。 */
-  public static JobTaskQuery ofJobInstance(String tenantId, Long jobInstanceId) {
-    return new JobTaskQuery(tenantId, jobInstanceId, null, null, null);
-  }
+    /** 按 job_instance_id 查该实例下所有 task；pageRequest 可传 null 表示不分页。 */
+    public static JobTaskQuery ofJobInstance(String tenantId, Long jobInstanceId) {
+        return new JobTaskQuery(tenantId, jobInstanceId, null, null, null);
+    }
 
-  /** 按 job_instance_id + status 过滤。 */
-  public static JobTaskQuery ofJobInstance(String tenantId, Long jobInstanceId, String taskStatus) {
-    return new JobTaskQuery(tenantId, jobInstanceId, null, taskStatus, null);
-  }
+    /** 按 job_instance_id + status 过滤。 */
+    public static JobTaskQuery ofJobInstance(String tenantId, Long jobInstanceId, String taskStatus) {
+        return new JobTaskQuery(tenantId, jobInstanceId, null, taskStatus, null);
+    }
 
-  /** 按 partition 查该分区下所有 task。 */
-  public static JobTaskQuery ofPartition(String tenantId, Long jobPartitionId) {
-    return new JobTaskQuery(tenantId, null, jobPartitionId, null, null);
-  }
+    /** 按 partition 查该分区下所有 task。 */
+    public static JobTaskQuery ofPartition(String tenantId, Long jobPartitionId) {
+        return new JobTaskQuery(tenantId, null, jobPartitionId, null, null);
+    }
 
-  /** 按实例与 partition 精确定位 task。 */
-  public static JobTaskQuery ofPartition(String tenantId, Long jobInstanceId, Long jobPartitionId) {
-    return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, null, null);
-  }
+    /** 按实例与 partition 精确定位 task。 */
+    public static JobTaskQuery ofPartition(String tenantId, Long jobInstanceId, Long jobPartitionId) {
+        return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, null, null);
+    }
 
-  /** 按实例、partition 与状态精确定位 task。 */
-  public static JobTaskQuery ofPartition(
-      String tenantId, Long jobInstanceId, Long jobPartitionId, String taskStatus) {
-    return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, taskStatus, null);
-  }
+    /** 按实例、partition 与状态精确定位 task。 */
+    public static JobTaskQuery ofPartition(
+            String tenantId, Long jobInstanceId, Long jobPartitionId, String taskStatus) {
+        return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, taskStatus, null);
+    }
 }

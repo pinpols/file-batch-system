@@ -22,13 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PipelineProgressInternalController {
 
-  private final PipelineProgressReadService progress;
+    private final PipelineProgressReadService progress;
 
-  /** 按 pipeline 实例查询，并聚合同一 stage 的并发分片。 */
-  @GetMapping("/by-pipeline")
-  public List<PipelineProgressItem> queryByPipeline(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
-    return progress.snapshot(tenantId, pipelineInstanceId);
-  }
+    /** 按 pipeline 实例查询，并聚合同一 stage 的并发分片。 */
+    @GetMapping("/by-pipeline")
+    public List<PipelineProgressItem> queryByPipeline(
+            @RequestParam("tenantId") String tenantId, @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
+        return progress.snapshot(tenantId, pipelineInstanceId);
+    }
 }

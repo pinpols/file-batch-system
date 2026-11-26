@@ -4,9 +4,9 @@ package io.github.pinpols.batch.console.shared.query;
 @FunctionalInterface
 public interface TenantIdResolver {
 
-  String resolveTenant(String requestTenantId);
+    String resolveTenant(String requestTenantId);
 
-  default void assertTenantAllowed(String requestedTenantId) {
-    resolveTenant(requestedTenantId);
-  }
+    default void assertTenantAllowed(String requestedTenantId) {
+        resolveTenant(requestedTenantId);
+    }
 }

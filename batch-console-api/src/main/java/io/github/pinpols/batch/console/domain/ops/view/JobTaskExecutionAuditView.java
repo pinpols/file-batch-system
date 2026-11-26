@@ -12,15 +12,15 @@ import lombok.Data;
 @Data
 public class JobTaskExecutionAuditView {
 
-  private Long id;
-  private Long jobInstanceId;
-  private String jobCode;
-  private String taskStatus;
-  private String assignedWorkerCode;
-  private String effectiveParameters;
-  private String resultSummary;
-  private String errorCode;
-  private String errorMessage;
-  private Instant startedAt;
-  private Instant finishedAt;
+    private Long id;
+    private Long jobInstanceId;
+    private String jobCode;
+    private String taskStatus;
+    private String assignedWorkerCode;
+    private String effectiveParameters;
+    private String resultSummary;
+    private String errorCode;
+    private String errorMessage;
+    private Instant startedAt;
+    private Instant finishedAt;
 }

@@ -73,605 +73,584 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    prefix = "batch.worker.executors.stored-proc",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "batch.worker.executors.stored-proc", name = "enabled", havingValue = "true")
 public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
-  /** 结果集 fetch size 上限；行数上限更小时取行数上限。 */
-  private static final int MAX_FETCH_SIZE = 1000;
+    /** 结果集 fetch size 上限；行数上限更小时取行数上限。 */
+    private static final int MAX_FETCH_SIZE = 1000;
 
-  static final String PARAM_PROC = "procedureName";
-  static final String PARAM_IN = "inParams";
-  static final String PARAM_OUT = "outParams";
-  static final String PARAM_TIMEOUT = "statementTimeoutSeconds";
-  static final String PARAM_DS_BEAN = "dataSourceBean";
-  static final String PARAM_AUTO_COMMIT = "autoCommit";
+    static final String PARAM_PROC = "procedureName";
+    static final String PARAM_IN = "inParams";
+    static final String PARAM_OUT = "outParams";
+    static final String PARAM_TIMEOUT = "statementTimeoutSeconds";
+    static final String PARAM_DS_BEAN = "dataSourceBean";
+    static final String PARAM_AUTO_COMMIT = "autoCommit";
 
-  // 过程名字符规则:schema.proc 或 proc;允许字母数字下划线 + 一个可选 dot
-  private static final Pattern PROC_NAME = Pattern.compile("^[A-Za-z_]\\w*(\\.[A-Za-z_]\\w*)?$");
+    // 过程名字符规则:schema.proc 或 proc;允许字母数字下划线 + 一个可选 dot
+    private static final Pattern PROC_NAME = Pattern.compile("^[A-Za-z_]\\w*(\\.[A-Za-z_]\\w*)?$");
 
-  private final StoredProcExecutorProperties props;
-  private final DataSourceResolver dataSourceResolver;
+    private final StoredProcExecutorProperties props;
+    private final DataSourceResolver dataSourceResolver;
 
-  @Autowired
-  public StoredProcTaskExecutor(
-      StoredProcExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
-    this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
-  }
-
-  public StoredProcTaskExecutor(
-      StoredProcExecutorProperties props, DataSourceResolver dataSourceResolver) {
-    this.props = props;
-    this.dataSourceResolver = dataSourceResolver;
-  }
-
-  @Override
-  public String taskType() {
-    return props.getTaskType();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    return new TaskCapability(
-        Set.of(ResourceKind.DB),
-        false, // 存过通常有副作用
-        true,
-        props.getDefaultStatementTimeout());
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    try {
-      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
-          ctx.parameters(), "atomic.storedproc.parameters");
-      Invocation inv = parseInvocation(ctx);
-      if (ctx.isDryRun()) {
-        // ADR-026 §dry-run:不开 CallableStatement,不触 DB,只回传将要 CALL 的过程 + 输入参数个数 + dataSource bean。
-        // 不暴露 inParams value(可能含业务敏感数据)。
-        String requestedDsBean = stringParam(ctx.parameters(), PARAM_DS_BEAN, null);
-        String dsBean = resolveDataSourceBean(requestedDsBean);
-        Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
-        planned.put("plannedAction", "storedProc");
-        planned.put(PARAM_PROC, inv.procName);
-        planned.put("inParamCount", inv.inParams.size());
-        planned.put("outParamTypes", inv.outTypes);
-        planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
-        planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
-        planned.put(PARAM_TIMEOUT, inv.timeoutSec);
-        log.info(
-            "stored proc executor dry-run skipped real CALL: tenantId={}, jobCode={}, proc={}",
-            ctx.tenantId(),
-            ctx.jobCode(),
-            inv.procName);
-        return TaskResult.ok("dry-run: CALL " + inv.procName + " (not invoked)", planned);
-      }
-      return runCall(inv);
-    } catch (StoredProcValidationException ex) {
-      // schema/SECURITY DEFINER/角色等安全闸 vs 入参非法
-      String msg = ex.getMessage();
-      boolean security = msg != null
-          && (msg.contains("not allowed")
-              || msg.contains("OS-capable")
-              || msg.contains("SECURITY DEFINER")
-              || msg.contains("EXECUTE privilege")
-              || msg.contains("schema not allowed"));
-      return AtomicErrorCode.fail(
-          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID, msg);
-    } catch (BizException ex) {
-      log.warn(
-          "stored proc executor rejected by SensitiveDataValidator: tenantId={}, jobCode={},"
-              + " key={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
-              ? "?"
-              : ex.getMessageArgs()[1]);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
-    } catch (RuntimeException ex) {
-      log.error(
-          "stored proc executor unexpected error: tenantId={}, jobCode={}, cause={}",
-          LogSanitizer.value(ctx.tenantId()),
-          LogSanitizer.value(ctx.jobCode()),
-          SwallowedExceptionLogger.summary(ex));
-      String exceptionMessage = ex.getMessage();
-      String failureMessage =
-          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : exceptionMessage;
-      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
-    }
-  }
-
-  // ─── parsing + validation ────────────────────────────────────────────────────
-
-  private Invocation parseInvocation(TaskContext ctx) {
-    Map<String, Object> params = ctx.parameters();
-
-    Object pnObj = params.get(PARAM_PROC);
-    if (!(pnObj instanceof String procedureName) || EmptyChecks.isBlank(procedureName)) {
-      throw new StoredProcValidationException("parameters.procedureName required");
-    }
-    String procName = procedureName.trim();
-    if (!PROC_NAME.matcher(procName).matches()) {
-      throw new StoredProcValidationException(
-          "procedureName must match ^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$, got: "
-              + procName);
-    }
-    requireAllowed(procName);
-
-    List<Object> inParams = parseInParams(params.get(PARAM_IN));
-    List<String> outTypes = parseOutTypes(params.get(PARAM_OUT));
-
-    // timeout(只能缩短)
-    int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
-    Object t = params.get(PARAM_TIMEOUT);
-    if (EmptyChecks.isNotNull(t)) {
-      Long requested = AtomicParameterNumbers.positiveLong(t);
-      if (EmptyChecks.isNull(requested)) {
-        throw new StoredProcValidationException("statementTimeoutSeconds must be positive integer");
-      }
-      if (requested < timeoutSec) {
-        timeoutSec = requested.intValue();
-      }
+    @Autowired
+    public StoredProcTaskExecutor(
+            StoredProcExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
+        this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
     }
 
-    // dataSource — 覆盖 bean 名必须在白名单内
-    String requestedDsBean = stringParam(params, PARAM_DS_BEAN, null);
-    String dsBeanName = resolveDataSourceBean(requestedDsBean);
-    DataSource ds = dataSourceResolver.resolve(dsBeanName);
-
-    boolean autoCommit = props.isDefaultAutoCommit();
-    Object ac = params.get(PARAM_AUTO_COMMIT);
-    if (ac instanceof Boolean booleanValue) {
-      autoCommit = booleanValue;
+    public StoredProcTaskExecutor(StoredProcExecutorProperties props, DataSourceResolver dataSourceResolver) {
+        this.props = props;
+        this.dataSourceResolver = dataSourceResolver;
     }
 
-    return new Invocation(procName, inParams, outTypes, ds, timeoutSec, autoCommit);
-  }
-
-  /**
-   * 放行校验:仅按 allowedSchemas(schema 级)放行。空 = 允许全部(仅 dev;授权由最小权限 DB 角色保证)。 非 schema-qualified 过程名按 pin
-   * 用的 defaultSchema 判定。
-   */
-  private void requireAllowed(String procName) {
-    if (props.getAllowedSchemas().isEmpty()) {
-      return; // 空 = 允许全部(仅 dev;授权由最小权限角色保证)
+    @Override
+    public String taskType() {
+        return props.getTaskType();
     }
-    String schema = schemaOf(procName);
-    if (schema == null) {
-      schema = props.getDefaultSchema();
+
+    @Override
+    public TaskCapability capability() {
+        return new TaskCapability(
+                Set.of(ResourceKind.DB),
+                false, // 存过通常有副作用
+                true,
+                props.getDefaultStatementTimeout());
     }
-    if (!props.getAllowedSchemas().contains(schema)) {
-      throw new StoredProcValidationException("procedureName schema not allowed: "
-          + procName
-          + ", allowedSchemas="
-          + props.getAllowedSchemas());
-    }
-  }
 
-  /** 取 schema-qualified 过程名的 schema 部分(点号前);非 schema-qualified(无点)返回 null。 */
-  private static String schemaOf(String procName) {
-    int dot = procName.indexOf('.');
-    return dot > 0 ? procName.substring(0, dot) : null;
-  }
-
-  /**
-   * 解析最终使用的 dataSource bean 名。{@code requested} 为 null = 用配置默认(返回 {@link
-   * StoredProcExecutorProperties#getDataSourceBeanName()})。若 {@code requested} 与配置默认不同, 则必须在 {@code
-   * allowedDataSourceBeans} 白名单内,否则抛 {@link StoredProcValidationException}。 提取为静态可测 helper。
-   */
-  static String resolveDataSourceBean(String requested, String configured, Set<String> allowed) {
-    if (requested == null) {
-      return configured;
-    }
-    if (requested.equals(configured)) {
-      return requested;
-    }
-    if (allowed != null && allowed.contains(requested)) {
-      return requested;
-    }
-    throw new StoredProcValidationException(
-        "dataSourceBean not allowed: " + requested + ", allowedDataSourceBeans=" + allowed);
-  }
-
-  private String resolveDataSourceBean(String requested) {
-    return resolveDataSourceBean(
-        requested, props.getDataSourceBeanName(), props.getAllowedDataSourceBeans());
-  }
-
-  private static List<Object> parseInParams(Object raw) {
-    if (raw == null) {
-      return List.of();
-    }
-    if (raw instanceof List<?> list) {
-      return List.copyOf(list);
-    }
-    throw new StoredProcValidationException("parameters.inParams must be a list");
-  }
-
-  private List<String> parseOutTypes(Object raw) {
-    if (raw == null) {
-      return List.of();
-    }
-    if (!(raw instanceof List<?> list)) {
-      throw new StoredProcValidationException(
-          "parameters.outParams must be a list of SQL type names");
-    }
-    List<String> out = new ArrayList<>();
-    for (Object o : list) {
-      if (o == null) {
-        throw new StoredProcValidationException("outParams contains null");
-      }
-      String rawType = String.valueOf(o);
-      String trimmedType = rawType.trim();
-      String type = trimmedType.toUpperCase(Locale.ROOT);
-      if (!props.getAllowedOutSqlTypes().contains(type)) {
-        throw new StoredProcValidationException(
-            "OUT type " + type + " not in allowedOutSqlTypes=" + props.getAllowedOutSqlTypes());
-      }
-      out.add(type);
-    }
-    return out;
-  }
-
-  private static String stringParam(Map<String, Object> p, String key, String fallback) {
-    Object v = p.get(key);
-    return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
-  }
-
-  static int toSqlType(String typeName) {
-    return switch (typeName) {
-      case "BIGINT" -> Types.BIGINT;
-      case "INTEGER" -> Types.INTEGER;
-      case "SMALLINT" -> Types.SMALLINT;
-      case "TINYINT" -> Types.TINYINT;
-      case "DECIMAL" -> Types.DECIMAL;
-      case "NUMERIC" -> Types.NUMERIC;
-      case "DOUBLE" -> Types.DOUBLE;
-      case "FLOAT" -> Types.FLOAT;
-      case "REAL" -> Types.REAL;
-      case "VARCHAR" -> Types.VARCHAR;
-      case "CHAR" -> Types.CHAR;
-      case "NVARCHAR" -> Types.NVARCHAR;
-      case "NCHAR" -> Types.NCHAR;
-      case "BOOLEAN" -> Types.BOOLEAN;
-      case "BIT" -> Types.BIT;
-      case "DATE" -> Types.DATE;
-      case "TIME" -> Types.TIME;
-      case "TIMESTAMP" -> Types.TIMESTAMP;
-      case "TIMESTAMP_WITH_TIMEZONE" -> Types.TIMESTAMP_WITH_TIMEZONE;
-      case "REF_CURSOR" -> Types.REF_CURSOR;
-      case "OTHER" -> Types.OTHER;
-      default -> throw new StoredProcValidationException("unsupported SQL type: " + typeName);
-    };
-  }
-
-  // ─── execution ──────────────────────────────────────────────────────────────
-
-  private TaskResult runCall(Invocation inv) {
-    long start = System.currentTimeMillis();
-    int totalParams = inv.inParams.size() + inv.outTypes.size();
-    AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
-        .withAutoCommit(inv.autoCommit)
-        // 角色闸用 executor 本地实现(StoredProcValidationException 保留 i18n 语义)
-        .withForbidOsCapableRole(false);
-
-    try {
-      return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
-        // 授权与实际执行必须使用同一 schema；自动提交下 SET LOCAL 不跨语句生效。
-        String targetProcName = EmptyChecks.isNull(schemaOf(inv.procName))
-            ? props.getDefaultSchema() + "." + inv.procName
-            : inv.procName;
-        String call = buildCallSql(conn, targetProcName, totalParams);
-        // 事务模式下固定过程内部的 search_path；调用目标始终使用限定名。
-        pinSearchPath(conn, targetProcName);
-        // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
-        if (props.isForbidOsCapableRole()) {
-          requireNonOsCapableRole(conn);
-        }
-        if (!props.isAllowSecurityDefiner()) {
-          requireNotSecurityDefiner(conn, targetProcName);
-        }
-        if (props.isVerifyExecutePrivilege()) {
-          requireExecutePrivilege(conn, targetProcName);
-        }
-        return execCallableStatement(conn, call, inv, start);
-      });
-    } catch (SQLException ex) {
-      boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
-      boolean isTimeout = hasTimeoutSqlState
-          || (ex.getMessage() != null
-              && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
-      return AtomicErrorCode.fail(
-          isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
-          "stored proc call failed: " + ex.getMessage(),
-          ex);
-    }
-  }
-
-  private TaskResult execCallableStatement(Connection conn, String call, Invocation inv, long start)
-      throws SQLException {
-    try (CallableStatement cs = conn.prepareCall(call)) {
-      cs.setQueryTimeout(inv.timeoutSec);
-      for (int i = 0; i < inv.inParams.size(); i++) {
-        cs.setObject(i + 1, inv.inParams.get(i));
-      }
-      for (int i = 0; i < inv.outTypes.size(); i++) {
-        int position = inv.inParams.size() + i + 1;
-        String outputType = inv.outTypes.get(i);
-        int sqlType = toSqlType(outputType);
-        cs.registerOutParameter(position, sqlType);
-      }
-      cs.execute();
-
-      Map<String, Object> outValues = new LinkedHashMap<>();
-      List<List<Map<String, Object>>> resultSets = new ArrayList<>();
-      boolean outputTruncated = false;
-      for (int i = 0; i < inv.outTypes.size(); i++) {
-        int pos = inv.inParams.size() + i + 1;
-        String key = "p" + (i + 1);
-        String type = inv.outTypes.get(i);
-        if ("REF_CURSOR".equals(type)) {
-          Object cursor = cs.getObject(pos);
-          if (cursor instanceof ResultSet resultSet) {
-            RefCursorResult rc = readRefCursor(resultSet);
-            resultSets.add(rc.rows());
-            if (rc.truncated()) {
-              outValues.put(key, "<REF_CURSOR truncated>");
-              outputTruncated = true;
-            } else {
-              outValues.put(key, "<REF_CURSOR>");
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        try {
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(ctx.parameters(), "atomic.storedproc.parameters");
+            Invocation inv = parseInvocation(ctx);
+            if (ctx.isDryRun()) {
+                // ADR-026 §dry-run:不开 CallableStatement,不触 DB,只回传将要 CALL 的过程 + 输入参数个数 + dataSource bean。
+                // 不暴露 inParams value(可能含业务敏感数据)。
+                String requestedDsBean = stringParam(ctx.parameters(), PARAM_DS_BEAN, null);
+                String dsBean = resolveDataSourceBean(requestedDsBean);
+                Map<String, Object> planned = new LinkedHashMap<>();
+                planned.put(PipelineRuntimeKeys.DRY_RUN, true);
+                planned.put("plannedAction", "storedProc");
+                planned.put(PARAM_PROC, inv.procName);
+                planned.put("inParamCount", inv.inParams.size());
+                planned.put("outParamTypes", inv.outTypes);
+                planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
+                planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
+                planned.put(PARAM_TIMEOUT, inv.timeoutSec);
+                log.info(
+                        "stored proc executor dry-run skipped real CALL: tenantId={}, jobCode={}, proc={}",
+                        ctx.tenantId(),
+                        ctx.jobCode(),
+                        inv.procName);
+                return TaskResult.ok("dry-run: CALL " + inv.procName + " (not invoked)", planned);
             }
-          } else {
-            outValues.put(key, "<REF_CURSOR>");
-          }
-        } else {
-          Object outputValue = cs.getObject(pos);
-          Object truncatedOutputValue = truncateIfNeeded(outputValue);
-          outValues.put(key, truncatedOutputValue);
+            return runCall(inv);
+        } catch (StoredProcValidationException ex) {
+            // schema/SECURITY DEFINER/角色等安全闸 vs 入参非法
+            String msg = ex.getMessage();
+            boolean security = msg != null
+                    && (msg.contains("not allowed")
+                            || msg.contains("OS-capable")
+                            || msg.contains("SECURITY DEFINER")
+                            || msg.contains("EXECUTE privilege")
+                            || msg.contains("schema not allowed"));
+            return AtomicErrorCode.fail(
+                    security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID, msg);
+        } catch (BizException ex) {
+            log.warn(
+                    "stored proc executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}," + " key={}",
+                    ctx.tenantId(),
+                    ctx.jobCode(),
+                    ex.getMessageArgs() == null || ex.getMessageArgs().length < 2 ? "?" : ex.getMessageArgs()[1]);
+            return AtomicErrorCode.fail(
+                    AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            log.error(
+                    "stored proc executor unexpected error: tenantId={}, jobCode={}, cause={}",
+                    LogSanitizer.value(ctx.tenantId()),
+                    LogSanitizer.value(ctx.jobCode()),
+                    SwallowedExceptionLogger.summary(ex));
+            String exceptionMessage = ex.getMessage();
+            String failureMessage =
+                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : exceptionMessage;
+            return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
-      }
+    }
 
-      Map<String, Object> output = new HashMap<>();
-      output.put("outValues", outValues);
-      output.put("resultSets", resultSets);
-      output.put("truncated", outputTruncated);
-      output.put("durationMillis", System.currentTimeMillis() - start);
-      return TaskResult.ok(
-          "called "
-              + inv.procName
-              + " (in="
-              + inv.inParams.size()
-              + ", out="
-              + inv.outTypes.size()
-              + ")",
-          output);
-    }
-  }
+    // ─── parsing + validation ────────────────────────────────────────────────────
 
-  /**
-   * 构造调用语句。真 PROCEDURE 用原生 {@code CALL proc(...)};FUNCTION 用 JDBC {@code {call ...}} 转义(PG 驱动转
-   * SELECT)。原因:PG 默认 {@code escapeSyntaxCallMode=select} 把 {@code {call}} 当函数解析,调真过程会报 "is a
-   * procedure, use CALL"。经 {@code pg_proc.prokind} 判定;非 PG / 查不到 / 异常时回退 {@code {call}}(保留旧函数语义)。
-   */
-  private static String buildCallSql(Connection conn, String procName, int totalParams) {
-    String placeholders = "?,".repeat(totalParams);
-    if (!placeholders.isEmpty()) {
-      placeholders = placeholders.substring(0, placeholders.length() - 1);
-    }
-    if (isProcedure(conn, procName)) {
-      return "CALL " + procName + "(" + placeholders + ")";
-    }
-    return "{call " + procName + "(" + placeholders + ")}";
-  }
+    private Invocation parseInvocation(TaskContext ctx) {
+        Map<String, Object> params = ctx.parameters();
 
-  /** 查 {@code pg_proc.prokind} 判定目标是否为 PROCEDURE('p')。非 PG / mock / 查不到时返回 false(按函数处理)。 */
-  private static boolean isProcedure(Connection conn, String procName) {
-    String schema = null;
-    String name = procName;
-    int dot = procName.indexOf('.');
-    if (dot > 0) {
-      schema = procName.substring(0, dot);
-      name = procName.substring(dot + 1);
-    }
-    try {
-      if (schema == null) {
-        String sql = "select p.prokind from pg_catalog.pg_proc p"
-            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            + " where p.proname = ? limit 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-          ps.setString(1, name);
-          try (ResultSet rs = ps.executeQuery()) {
-            return rs.next() && "p".equals(rs.getString(1));
-          }
+        Object pnObj = params.get(PARAM_PROC);
+        if (!(pnObj instanceof String procedureName) || EmptyChecks.isBlank(procedureName)) {
+            throw new StoredProcValidationException("parameters.procedureName required");
         }
-      }
-      String sql = "select p.prokind from pg_catalog.pg_proc p"
-          + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-          + " where p.proname = ? and n.nspname = ? limit 1";
-      try (PreparedStatement ps = conn.prepareStatement(sql)) {
-        ps.setString(1, name);
-        ps.setString(2, schema);
-        try (ResultSet rs = ps.executeQuery()) {
-          return rs.next() && "p".equals(rs.getString(1));
+        String procName = procedureName.trim();
+        if (!PROC_NAME.matcher(procName).matches()) {
+            throw new StoredProcValidationException(
+                    "procedureName must match ^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$, got: " + procName);
         }
-      }
-    } catch (SQLException | RuntimeException ex) {
-      return false;
-    }
-  }
+        requireAllowed(procName);
 
-  /**
-   * 读 REFCURSOR,最多读 {@link StoredProcExecutorProperties#getMaxRefCursorRows()} 行。达到上限即停止, 不再继续
-   * {@code next()},标记 truncated;并设置 fetch size 避免驱动一次性把整个游标拉进堆(P-2)。
-   */
-  private RefCursorResult readRefCursor(ResultSet rs) throws SQLException {
-    int cap = props.getMaxRefCursorRows();
-    List<Map<String, Object>> rows = new ArrayList<>();
-    boolean truncated = false;
-    try (ResultSet r = rs) {
-      try {
-        // 提示驱动分批取,避免无界堆读。容量从上限和一个合理批量中取较小值。
-        r.setFetchSize(Math.min(cap > 0 ? cap : MAX_FETCH_SIZE, MAX_FETCH_SIZE));
-      } catch (SQLException ignore) {
-        // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限回退)。
-      }
-      ResultSetMetaData md = r.getMetaData();
-      int cols = md.getColumnCount();
-      while (r.next()) {
-        if (rows.size() >= cap) {
-          truncated = true;
-          break;
-        }
-        Map<String, Object> row = new LinkedHashMap<>();
-        for (int i = 1; i <= cols; i++) {
-          row.put(md.getColumnLabel(i), r.getObject(i));
-        }
-        rows.add(row);
-      }
-    }
-    if (truncated) {
-      log.warn("REF_CURSOR truncated at maxRefCursorRows={}", cap);
-    }
-    return new RefCursorResult(rows, truncated);
-  }
+        List<Object> inParams = parseInParams(params.get(PARAM_IN));
+        List<String> outTypes = parseOutTypes(params.get(PARAM_OUT));
 
-  /**
-   * 在当前事务内 pin search_path:{@code SET LOCAL search_path = pg_catalog, <schema>}。schema = 过程名
-   * schema(若 qualified)否则 {@link StoredProcExecutorProperties#getDefaultSchema()}。 防止调用方借 session
-   * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL)；自动提交模式下调用目标使用限定名，但过程内部的
-   * search_path 仍由数据库会话配置决定。非 PG / 不支持时静默忽略。
-   */
-  @SuppressWarnings("java:S2077")
-  private void pinSearchPath(Connection conn, String procName) {
-    String schema = schemaOf(procName);
-    if (schema == null) {
-      schema = props.getDefaultSchema();
-    }
-    // 限定过程名的 schema 已由 PROC_NAME 校验；未限定时使用运维配置的 defaultSchema。
-    String sql = "SET LOCAL search_path = pg_catalog, " + schema;
-    try (Statement st = conn.createStatement()) {
-      st.execute(sql);
-    } catch (SQLException | RuntimeException ex) {
-      log.debug("pin search_path skipped: {}", SwallowedExceptionLogger.summary(ex));
-    }
-  }
-
-  /**
-   * DB 原生授权:current_user 必须对目标过程有 EXECUTE 权限,否则抛 {@link StoredProcValidationException}。 仅在 {@code
-   * verifyExecutePrivilege=true} 时调用。
-   */
-  private void requireExecutePrivilege(Connection conn, String procName) {
-    // 按 OID 判权:has_function_privilege 的 text 形态需带参数签名(如 'sch.f()'),无签名会报
-    // "function does not exist";改用 pg_proc 解析 OID 再判,免签名、对重载也稳。
-    int dot = procName.indexOf('.');
-    String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
-    String name = dot > 0 ? procName.substring(dot + 1) : procName;
-    String sql = "select has_function_privilege(current_user, p.oid, 'EXECUTE')"
-        + " from pg_catalog.pg_proc p"
-        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-        + " where p.proname = ? and n.nspname = ? limit 1";
-    try (PreparedStatement ps = conn.prepareStatement(sql)) {
-      ps.setString(1, name);
-      ps.setString(2, schema);
-      try (ResultSet rs = ps.executeQuery()) {
-        if (!rs.next()) {
-          throw new StoredProcValidationException(
-              "procedure not found for EXECUTE check: " + procName);
+        // timeout(只能缩短)
+        int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
+        Object t = params.get(PARAM_TIMEOUT);
+        if (EmptyChecks.isNotNull(t)) {
+            Long requested = AtomicParameterNumbers.positiveLong(t);
+            if (EmptyChecks.isNull(requested)) {
+                throw new StoredProcValidationException("statementTimeoutSeconds must be positive integer");
+            }
+            if (requested < timeoutSec) {
+                timeoutSec = requested.intValue();
+            }
         }
-        if (!rs.getBoolean(1)) {
-          throw new StoredProcValidationException(
-              "current_user lacks EXECUTE privilege on " + procName);
-        }
-      }
-    } catch (SQLException ex) {
-      throw new StoredProcValidationException(
-          "EXECUTE privilege check failed for " + procName + ": " + ex.getMessage());
-    }
-  }
 
-  /**
-   * 代码层堵死 OS:拒绝以 OS 能力角色执行。存过 body 不可审查,唯一可靠的代码层防线是不给执行角色 OS 权限—— superuser 或 {@code
-   * pg_execute_server_program} / {@code pg_read_server_files} / {@code pg_write_server_files}
-   * 成员(这些是 COPY PROGRAM / 不可信 PL / 服务端文件访问的前置),命中即拒。
-   */
-  private void requireNonOsCapableRole(Connection conn) {
-    String sql = "select rolsuper"
-        + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
-        + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
-        + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
-        + " from pg_roles where rolname = current_user";
-    try (PreparedStatement ps = conn.prepareStatement(sql);
-        ResultSet rs = ps.executeQuery()) {
-      if (rs.next() && rs.getBoolean(1)) {
+        // dataSource — 覆盖 bean 名必须在白名单内
+        String requestedDsBean = stringParam(params, PARAM_DS_BEAN, null);
+        String dsBeanName = resolveDataSourceBean(requestedDsBean);
+        DataSource ds = dataSourceResolver.resolve(dsBeanName);
+
+        boolean autoCommit = props.isDefaultAutoCommit();
+        Object ac = params.get(PARAM_AUTO_COMMIT);
+        if (ac instanceof Boolean booleanValue) {
+            autoCommit = booleanValue;
+        }
+
+        return new Invocation(procName, inParams, outTypes, ds, timeoutSec, autoCommit);
+    }
+
+    /**
+     * 放行校验:仅按 allowedSchemas(schema 级)放行。空 = 允许全部(仅 dev;授权由最小权限 DB 角色保证)。 非 schema-qualified 过程名按 pin
+     * 用的 defaultSchema 判定。
+     */
+    private void requireAllowed(String procName) {
+        if (props.getAllowedSchemas().isEmpty()) {
+            return; // 空 = 允许全部(仅 dev;授权由最小权限角色保证)
+        }
+        String schema = schemaOf(procName);
+        if (schema == null) {
+            schema = props.getDefaultSchema();
+        }
+        if (!props.getAllowedSchemas().contains(schema)) {
+            throw new StoredProcValidationException(
+                    "procedureName schema not allowed: " + procName + ", allowedSchemas=" + props.getAllowedSchemas());
+        }
+    }
+
+    /** 取 schema-qualified 过程名的 schema 部分(点号前);非 schema-qualified(无点)返回 null。 */
+    private static String schemaOf(String procName) {
+        int dot = procName.indexOf('.');
+        return dot > 0 ? procName.substring(0, dot) : null;
+    }
+
+    /**
+     * 解析最终使用的 dataSource bean 名。{@code requested} 为 null = 用配置默认(返回 {@link
+     * StoredProcExecutorProperties#getDataSourceBeanName()})。若 {@code requested} 与配置默认不同, 则必须在 {@code
+     * allowedDataSourceBeans} 白名单内,否则抛 {@link StoredProcValidationException}。 提取为静态可测 helper。
+     */
+    static String resolveDataSourceBean(String requested, String configured, Set<String> allowed) {
+        if (requested == null) {
+            return configured;
+        }
+        if (requested.equals(configured)) {
+            return requested;
+        }
+        if (allowed != null && allowed.contains(requested)) {
+            return requested;
+        }
         throw new StoredProcValidationException(
-            "refusing stored-proc on OS-capable DB role (superuser / pg_execute_server_program /"
-                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
-                + " role, or disable forbidOsCapableRole only in trusted test envs");
-      }
-    } catch (SQLException ex) {
-      throw new StoredProcValidationException("OS-capable role check failed: " + ex.getMessage());
+                "dataSourceBean not allowed: " + requested + ", allowedDataSourceBeans=" + allowed);
     }
-  }
 
-  /**
-   * 代码层堵死 OS(补充):拒绝 SECURITY DEFINER 过程({@code pg_proc.prosecdef=true})。它以 owner 身份运行, 若 owner 是
-   * superuser/OS 能力角色,可绕过 {@link #requireNonOsCapableRole} 提权碰 OS。
-   */
-  private void requireNotSecurityDefiner(Connection conn, String procName) {
-    int dot = procName.indexOf('.');
-    String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
-    String name = dot > 0 ? procName.substring(dot + 1) : procName;
-    String sql = "select p.prosecdef from pg_catalog.pg_proc p"
-        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-        + " where p.proname = ? and n.nspname = ? limit 1";
-    try (PreparedStatement ps = conn.prepareStatement(sql)) {
-      ps.setString(1, name);
-      ps.setString(2, schema);
-      try (ResultSet rs = ps.executeQuery()) {
-        if (rs.next() && rs.getBoolean(1)) {
-          throw new StoredProcValidationException(
-              "refusing SECURITY DEFINER procedure (privilege escalation risk): " + procName);
+    private String resolveDataSourceBean(String requested) {
+        return resolveDataSourceBean(requested, props.getDataSourceBeanName(), props.getAllowedDataSourceBeans());
+    }
+
+    private static List<Object> parseInParams(Object raw) {
+        if (raw == null) {
+            return List.of();
         }
-      }
-    } catch (SQLException ex) {
-      throw new StoredProcValidationException(
-          "SECURITY DEFINER check failed for " + procName + ": " + ex.getMessage());
+        if (raw instanceof List<?> list) {
+            return List.copyOf(list);
+        }
+        throw new StoredProcValidationException("parameters.inParams must be a list");
     }
-  }
 
-  private Object truncateIfNeeded(Object value) {
-    if (value instanceof String s && s.length() > props.getMaxOutBytesPerParam()) {
-      log.warn("OUT value truncated at {} bytes", props.getMaxOutBytesPerParam());
-      return s.substring(0, props.getMaxOutBytesPerParam()) + "...<truncated>";
+    private List<String> parseOutTypes(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw new StoredProcValidationException("parameters.outParams must be a list of SQL type names");
+        }
+        List<String> out = new ArrayList<>();
+        for (Object o : list) {
+            if (o == null) {
+                throw new StoredProcValidationException("outParams contains null");
+            }
+            String rawType = String.valueOf(o);
+            String trimmedType = rawType.trim();
+            String type = trimmedType.toUpperCase(Locale.ROOT);
+            if (!props.getAllowedOutSqlTypes().contains(type)) {
+                throw new StoredProcValidationException(
+                        "OUT type " + type + " not in allowedOutSqlTypes=" + props.getAllowedOutSqlTypes());
+            }
+            out.add(type);
+        }
+        return out;
     }
-    return value;
-  }
 
-  // ─── helper records / exceptions ────────────────────────────────────────────
-
-  private record Invocation(
-      String procName,
-      List<Object> inParams,
-      List<String> outTypes,
-      DataSource dataSource,
-      int timeoutSec,
-      boolean autoCommit) {}
-
-  /** readRefCursor 结果:已读行 + 是否因 maxRefCursorRows 截断。 */
-  private record RefCursorResult(List<Map<String, Object>> rows, boolean truncated) {}
-
-  static final class StoredProcValidationException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    StoredProcValidationException(String message) {
-      super(message);
+    private static String stringParam(Map<String, Object> p, String key, String fallback) {
+        Object v = p.get(key);
+        return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
     }
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(StoredProcExecutorProperties.class)
-  static class PropertiesConfig {}
+    static int toSqlType(String typeName) {
+        return switch (typeName) {
+            case "BIGINT" -> Types.BIGINT;
+            case "INTEGER" -> Types.INTEGER;
+            case "SMALLINT" -> Types.SMALLINT;
+            case "TINYINT" -> Types.TINYINT;
+            case "DECIMAL" -> Types.DECIMAL;
+            case "NUMERIC" -> Types.NUMERIC;
+            case "DOUBLE" -> Types.DOUBLE;
+            case "FLOAT" -> Types.FLOAT;
+            case "REAL" -> Types.REAL;
+            case "VARCHAR" -> Types.VARCHAR;
+            case "CHAR" -> Types.CHAR;
+            case "NVARCHAR" -> Types.NVARCHAR;
+            case "NCHAR" -> Types.NCHAR;
+            case "BOOLEAN" -> Types.BOOLEAN;
+            case "BIT" -> Types.BIT;
+            case "DATE" -> Types.DATE;
+            case "TIME" -> Types.TIME;
+            case "TIMESTAMP" -> Types.TIMESTAMP;
+            case "TIMESTAMP_WITH_TIMEZONE" -> Types.TIMESTAMP_WITH_TIMEZONE;
+            case "REF_CURSOR" -> Types.REF_CURSOR;
+            case "OTHER" -> Types.OTHER;
+            default -> throw new StoredProcValidationException("unsupported SQL type: " + typeName);
+        };
+    }
+
+    // ─── execution ──────────────────────────────────────────────────────────────
+
+    private TaskResult runCall(Invocation inv) {
+        long start = System.currentTimeMillis();
+        int totalParams = inv.inParams.size() + inv.outTypes.size();
+        AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
+                .withAutoCommit(inv.autoCommit)
+                // 角色闸用 executor 本地实现(StoredProcValidationException 保留 i18n 语义)
+                .withForbidOsCapableRole(false);
+
+        try {
+            return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
+                // 授权与实际执行必须使用同一 schema；自动提交下 SET LOCAL 不跨语句生效。
+                String targetProcName = EmptyChecks.isNull(schemaOf(inv.procName))
+                        ? props.getDefaultSchema() + "." + inv.procName
+                        : inv.procName;
+                String call = buildCallSql(conn, targetProcName, totalParams);
+                // 事务模式下固定过程内部的 search_path；调用目标始终使用限定名。
+                pinSearchPath(conn, targetProcName);
+                // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
+                if (props.isForbidOsCapableRole()) {
+                    requireNonOsCapableRole(conn);
+                }
+                if (!props.isAllowSecurityDefiner()) {
+                    requireNotSecurityDefiner(conn, targetProcName);
+                }
+                if (props.isVerifyExecutePrivilege()) {
+                    requireExecutePrivilege(conn, targetProcName);
+                }
+                return execCallableStatement(conn, call, inv, start);
+            });
+        } catch (SQLException ex) {
+            boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
+            boolean isTimeout = hasTimeoutSqlState
+                    || (ex.getMessage() != null
+                            && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+            return AtomicErrorCode.fail(
+                    isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
+                    "stored proc call failed: " + ex.getMessage(),
+                    ex);
+        }
+    }
+
+    private TaskResult execCallableStatement(Connection conn, String call, Invocation inv, long start)
+            throws SQLException {
+        try (CallableStatement cs = conn.prepareCall(call)) {
+            cs.setQueryTimeout(inv.timeoutSec);
+            for (int i = 0; i < inv.inParams.size(); i++) {
+                cs.setObject(i + 1, inv.inParams.get(i));
+            }
+            for (int i = 0; i < inv.outTypes.size(); i++) {
+                int position = inv.inParams.size() + i + 1;
+                String outputType = inv.outTypes.get(i);
+                int sqlType = toSqlType(outputType);
+                cs.registerOutParameter(position, sqlType);
+            }
+            cs.execute();
+
+            Map<String, Object> outValues = new LinkedHashMap<>();
+            List<List<Map<String, Object>>> resultSets = new ArrayList<>();
+            boolean outputTruncated = false;
+            for (int i = 0; i < inv.outTypes.size(); i++) {
+                int pos = inv.inParams.size() + i + 1;
+                String key = "p" + (i + 1);
+                String type = inv.outTypes.get(i);
+                if ("REF_CURSOR".equals(type)) {
+                    Object cursor = cs.getObject(pos);
+                    if (cursor instanceof ResultSet resultSet) {
+                        RefCursorResult rc = readRefCursor(resultSet);
+                        resultSets.add(rc.rows());
+                        if (rc.truncated()) {
+                            outValues.put(key, "<REF_CURSOR truncated>");
+                            outputTruncated = true;
+                        } else {
+                            outValues.put(key, "<REF_CURSOR>");
+                        }
+                    } else {
+                        outValues.put(key, "<REF_CURSOR>");
+                    }
+                } else {
+                    Object outputValue = cs.getObject(pos);
+                    Object truncatedOutputValue = truncateIfNeeded(outputValue);
+                    outValues.put(key, truncatedOutputValue);
+                }
+            }
+
+            Map<String, Object> output = new HashMap<>();
+            output.put("outValues", outValues);
+            output.put("resultSets", resultSets);
+            output.put("truncated", outputTruncated);
+            output.put("durationMillis", System.currentTimeMillis() - start);
+            return TaskResult.ok(
+                    "called " + inv.procName + " (in=" + inv.inParams.size() + ", out=" + inv.outTypes.size() + ")",
+                    output);
+        }
+    }
+
+    /**
+     * 构造调用语句。真 PROCEDURE 用原生 {@code CALL proc(...)};FUNCTION 用 JDBC {@code {call ...}} 转义(PG 驱动转
+     * SELECT)。原因:PG 默认 {@code escapeSyntaxCallMode=select} 把 {@code {call}} 当函数解析,调真过程会报 "is a
+     * procedure, use CALL"。经 {@code pg_proc.prokind} 判定;非 PG / 查不到 / 异常时回退 {@code {call}}(保留旧函数语义)。
+     */
+    private static String buildCallSql(Connection conn, String procName, int totalParams) {
+        String placeholders = "?,".repeat(totalParams);
+        if (!placeholders.isEmpty()) {
+            placeholders = placeholders.substring(0, placeholders.length() - 1);
+        }
+        if (isProcedure(conn, procName)) {
+            return "CALL " + procName + "(" + placeholders + ")";
+        }
+        return "{call " + procName + "(" + placeholders + ")}";
+    }
+
+    /** 查 {@code pg_proc.prokind} 判定目标是否为 PROCEDURE('p')。非 PG / mock / 查不到时返回 false(按函数处理)。 */
+    private static boolean isProcedure(Connection conn, String procName) {
+        String schema = null;
+        String name = procName;
+        int dot = procName.indexOf('.');
+        if (dot > 0) {
+            schema = procName.substring(0, dot);
+            name = procName.substring(dot + 1);
+        }
+        try {
+            if (schema == null) {
+                String sql = "select p.prokind from pg_catalog.pg_proc p"
+                        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+                        + " where p.proname = ? limit 1";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, name);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        return rs.next() && "p".equals(rs.getString(1));
+                    }
+                }
+            }
+            String sql = "select p.prokind from pg_catalog.pg_proc p"
+                    + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+                    + " where p.proname = ? and n.nspname = ? limit 1";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, name);
+                ps.setString(2, schema);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && "p".equals(rs.getString(1));
+                }
+            }
+        } catch (SQLException | RuntimeException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * 读 REFCURSOR,最多读 {@link StoredProcExecutorProperties#getMaxRefCursorRows()} 行。达到上限即停止, 不再继续
+     * {@code next()},标记 truncated;并设置 fetch size 避免驱动一次性把整个游标拉进堆(P-2)。
+     */
+    private RefCursorResult readRefCursor(ResultSet rs) throws SQLException {
+        int cap = props.getMaxRefCursorRows();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        boolean truncated = false;
+        try (ResultSet r = rs) {
+            try {
+                // 提示驱动分批取,避免无界堆读。容量从上限和一个合理批量中取较小值。
+                r.setFetchSize(Math.min(cap > 0 ? cap : MAX_FETCH_SIZE, MAX_FETCH_SIZE));
+            } catch (SQLException ignore) {
+                // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限回退)。
+            }
+            ResultSetMetaData md = r.getMetaData();
+            int cols = md.getColumnCount();
+            while (r.next()) {
+                if (rows.size() >= cap) {
+                    truncated = true;
+                    break;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int i = 1; i <= cols; i++) {
+                    row.put(md.getColumnLabel(i), r.getObject(i));
+                }
+                rows.add(row);
+            }
+        }
+        if (truncated) {
+            log.warn("REF_CURSOR truncated at maxRefCursorRows={}", cap);
+        }
+        return new RefCursorResult(rows, truncated);
+    }
+
+    /**
+     * 在当前事务内 pin search_path:{@code SET LOCAL search_path = pg_catalog, <schema>}。schema = 过程名
+     * schema(若 qualified)否则 {@link StoredProcExecutorProperties#getDefaultSchema()}。 防止调用方借 session
+     * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL)；自动提交模式下调用目标使用限定名，但过程内部的
+     * search_path 仍由数据库会话配置决定。非 PG / 不支持时静默忽略。
+     */
+    @SuppressWarnings("java:S2077")
+    private void pinSearchPath(Connection conn, String procName) {
+        String schema = schemaOf(procName);
+        if (schema == null) {
+            schema = props.getDefaultSchema();
+        }
+        // 限定过程名的 schema 已由 PROC_NAME 校验；未限定时使用运维配置的 defaultSchema。
+        String sql = "SET LOCAL search_path = pg_catalog, " + schema;
+        try (Statement st = conn.createStatement()) {
+            st.execute(sql);
+        } catch (SQLException | RuntimeException ex) {
+            log.debug("pin search_path skipped: {}", SwallowedExceptionLogger.summary(ex));
+        }
+    }
+
+    /**
+     * DB 原生授权:current_user 必须对目标过程有 EXECUTE 权限,否则抛 {@link StoredProcValidationException}。 仅在 {@code
+     * verifyExecutePrivilege=true} 时调用。
+     */
+    private void requireExecutePrivilege(Connection conn, String procName) {
+        // 按 OID 判权:has_function_privilege 的 text 形态需带参数签名(如 'sch.f()'),无签名会报
+        // "function does not exist";改用 pg_proc 解析 OID 再判,免签名、对重载也稳。
+        int dot = procName.indexOf('.');
+        String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
+        String name = dot > 0 ? procName.substring(dot + 1) : procName;
+        String sql = "select has_function_privilege(current_user, p.oid, 'EXECUTE')"
+                + " from pg_catalog.pg_proc p"
+                + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+                + " where p.proname = ? and n.nspname = ? limit 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, schema);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new StoredProcValidationException("procedure not found for EXECUTE check: " + procName);
+                }
+                if (!rs.getBoolean(1)) {
+                    throw new StoredProcValidationException("current_user lacks EXECUTE privilege on " + procName);
+                }
+            }
+        } catch (SQLException ex) {
+            throw new StoredProcValidationException(
+                    "EXECUTE privilege check failed for " + procName + ": " + ex.getMessage());
+        }
+    }
+
+    /**
+     * 代码层堵死 OS:拒绝以 OS 能力角色执行。存过 body 不可审查,唯一可靠的代码层防线是不给执行角色 OS 权限—— superuser 或 {@code
+     * pg_execute_server_program} / {@code pg_read_server_files} / {@code pg_write_server_files}
+     * 成员(这些是 COPY PROGRAM / 不可信 PL / 服务端文件访问的前置),命中即拒。
+     */
+    private void requireNonOsCapableRole(Connection conn) {
+        String sql = "select rolsuper"
+                + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+                + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+                + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+                + " from pg_roles where rolname = current_user";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
+            if (rs.next() && rs.getBoolean(1)) {
+                throw new StoredProcValidationException(
+                        "refusing stored-proc on OS-capable DB role (superuser / pg_execute_server_program /"
+                                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
+                                + " role, or disable forbidOsCapableRole only in trusted test envs");
+            }
+        } catch (SQLException ex) {
+            throw new StoredProcValidationException("OS-capable role check failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * 代码层堵死 OS(补充):拒绝 SECURITY DEFINER 过程({@code pg_proc.prosecdef=true})。它以 owner 身份运行, 若 owner 是
+     * superuser/OS 能力角色,可绕过 {@link #requireNonOsCapableRole} 提权碰 OS。
+     */
+    private void requireNotSecurityDefiner(Connection conn, String procName) {
+        int dot = procName.indexOf('.');
+        String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
+        String name = dot > 0 ? procName.substring(dot + 1) : procName;
+        String sql = "select p.prosecdef from pg_catalog.pg_proc p"
+                + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+                + " where p.proname = ? and n.nspname = ? limit 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, schema);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getBoolean(1)) {
+                    throw new StoredProcValidationException(
+                            "refusing SECURITY DEFINER procedure (privilege escalation risk): " + procName);
+                }
+            }
+        } catch (SQLException ex) {
+            throw new StoredProcValidationException(
+                    "SECURITY DEFINER check failed for " + procName + ": " + ex.getMessage());
+        }
+    }
+
+    private Object truncateIfNeeded(Object value) {
+        if (value instanceof String s && s.length() > props.getMaxOutBytesPerParam()) {
+            log.warn("OUT value truncated at {} bytes", props.getMaxOutBytesPerParam());
+            return s.substring(0, props.getMaxOutBytesPerParam()) + "...<truncated>";
+        }
+        return value;
+    }
+
+    // ─── helper records / exceptions ────────────────────────────────────────────
+
+    private record Invocation(
+            String procName,
+            List<Object> inParams,
+            List<String> outTypes,
+            DataSource dataSource,
+            int timeoutSec,
+            boolean autoCommit) {}
+
+    /** readRefCursor 结果:已读行 + 是否因 maxRefCursorRows 截断。 */
+    private record RefCursorResult(List<Map<String, Object>> rows, boolean truncated) {}
+
+    static final class StoredProcValidationException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        StoredProcValidationException(String message) {
+            super(message);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(StoredProcExecutorProperties.class)
+    static class PropertiesConfig {}
 }

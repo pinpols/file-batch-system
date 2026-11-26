@@ -47,92 +47,90 @@ import org.springframework.web.multipart.MultipartFile;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleFileController {
 
-  private final ConsoleFileApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleFileApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 归档文件。 */
-  @PostMapping("/archive")
-  public CommonResponse<ConsoleFileOperationResponse> archive(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ArchiveFileRequest request) {
-    return responseFactory.success(applicationService.archive(request, idempotencyKey));
-  }
+    /** 归档文件。 */
+    @PostMapping("/archive")
+    public CommonResponse<ConsoleFileOperationResponse> archive(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody ArchiveFileRequest request) {
+        return responseFactory.success(applicationService.archive(request, idempotencyKey));
+    }
 
-  /** 删除文件记录（物理删除）。 */
-  @DeleteMapping("/{fileId}")
-  public CommonResponse<ConsoleFileOperationResponse> delete(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long fileId,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(required = false) String reason) {
-    DeleteFileRequest request = new DeleteFileRequest();
-    request.setFileId(fileId);
-    request.setTenantId(tenantId);
-    request.setReason(reason);
-    return responseFactory.success(applicationService.delete(request, idempotencyKey));
-  }
+    /** 删除文件记录（物理删除）。 */
+    @DeleteMapping("/{fileId}")
+    public CommonResponse<ConsoleFileOperationResponse> delete(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long fileId,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(required = false) String reason) {
+        DeleteFileRequest request = new DeleteFileRequest();
+        request.setFileId(fileId);
+        request.setTenantId(tenantId);
+        request.setReason(reason);
+        return responseFactory.success(applicationService.delete(request, idempotencyKey));
+    }
 
-  /** 重新派发文件任务。 */
-  @PostMapping("/redispatch")
-  public CommonResponse<ConsoleFileOperationResponse> redispatch(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody RedispatchFileRequest request) {
-    return responseFactory.success(applicationService.redispatch(request, idempotencyKey));
-  }
+    /** 重新派发文件任务。 */
+    @PostMapping("/redispatch")
+    public CommonResponse<ConsoleFileOperationResponse> redispatch(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody RedispatchFileRequest request) {
+        return responseFactory.success(applicationService.redispatch(request, idempotencyKey));
+    }
 
-  /** 获取预签名下载地址。 */
-  @PostMapping("/presign-download")
-  public CommonResponse<ConsolePresignDownloadResponse> presignDownload(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody PresignDownloadFileRequest request) {
-    return responseFactory.success(applicationService.presignDownload(request, idempotencyKey));
-  }
+    /** 获取预签名下载地址。 */
+    @PostMapping("/presign-download")
+    public CommonResponse<ConsolePresignDownloadResponse> presignDownload(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody PresignDownloadFileRequest request) {
+        return responseFactory.success(applicationService.presignDownload(request, idempotencyKey));
+    }
 
-  /** 对到达组执行批量动作。 */
-  @PostMapping("/arrival-groups/action")
-  public CommonResponse<ConsoleFileOperationResponse> operateArrivalGroup(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody FileArrivalGroupActionRequest request) {
-    return responseFactory.success(applicationService.operateArrivalGroup(request, idempotencyKey));
-  }
+    /** 对到达组执行批量动作。 */
+    @PostMapping("/arrival-groups/action")
+    public CommonResponse<ConsoleFileOperationResponse> operateArrivalGroup(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody FileArrivalGroupActionRequest request) {
+        return responseFactory.success(applicationService.operateArrivalGroup(request, idempotencyKey));
+    }
 
-  /** 获取预签名上传地址（租户主动上传文件）。 */
-  @PostMapping("/presign-upload")
-  public CommonResponse<ConsoleFilePresignUploadResponse> presignUpload(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("channelCode") String channelCode,
-      @RequestParam("fileName") String fileName,
-      @Valid @RequestBody(required = false) ConsoleFileUploadBindingRequest binding) {
-    return responseFactory.success(
-        applicationService.presignUpload(tenantId, channelCode, fileName, binding, idempotencyKey));
-  }
+    /** 获取预签名上传地址（租户主动上传文件）。 */
+    @PostMapping("/presign-upload")
+    public CommonResponse<ConsoleFilePresignUploadResponse> presignUpload(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("channelCode") String channelCode,
+            @RequestParam("fileName") String fileName,
+            @Valid @RequestBody(required = false) ConsoleFileUploadBindingRequest binding) {
+        return responseFactory.success(
+                applicationService.presignUpload(tenantId, channelCode, fileName, binding, idempotencyKey));
+    }
 
-  /** 返回当前租户已经配置并启用的人工上传目标。 */
-  @GetMapping("/manual-upload-targets")
-  public CommonResponse<List<ConsoleFileUploadTargetResponse>> listManualUploadTargets(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.listManualUploadTargets(tenantId));
-  }
+    /** 返回当前租户已经配置并启用的人工上传目标。 */
+    @GetMapping("/manual-upload-targets")
+    public CommonResponse<List<ConsoleFileUploadTargetResponse>> listManualUploadTargets(
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.listManualUploadTargets(tenantId));
+    }
 
-  /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */
-  @PutMapping("/{fileId}/content")
-  public CommonResponse<ConsoleFileOperationResponse> uploadContent(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long fileId,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("file") MultipartFile file) {
-    return responseFactory.success(
-        applicationService.uploadContent(tenantId, fileId, file, idempotencyKey));
-  }
+    /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */
+    @PutMapping("/{fileId}/content")
+    public CommonResponse<ConsoleFileOperationResponse> uploadContent(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long fileId,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("file") MultipartFile file) {
+        return responseFactory.success(applicationService.uploadContent(tenantId, fileId, file, idempotencyKey));
+    }
 
-  /** 租户确认文件已到达。 */
-  @PostMapping("/{fileId}/confirm-arrival")
-  public CommonResponse<ConsoleFileOperationResponse> confirmArrival(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable Long fileId,
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        applicationService.confirmArrival(tenantId, fileId, idempotencyKey));
-  }
+    /** 租户确认文件已到达。 */
+    @PostMapping("/{fileId}/confirm-arrival")
+    public CommonResponse<ConsoleFileOperationResponse> confirmArrival(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable Long fileId,
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.confirmArrival(tenantId, fileId, idempotencyKey));
+    }
 }

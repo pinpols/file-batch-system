@@ -25,53 +25,53 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2259")
 public class SseTicketService {
 
-  private static final Duration TICKET_TTL = Duration.ofMinutes(5);
-  private static final String FIELD_SEPARATOR = "|";
-  private static final String FIELD_SEPARATOR_REGEX = "\\|";
-  private static final String ROLE_SEPARATOR = ",";
+    private static final Duration TICKET_TTL = Duration.ofMinutes(5);
+    private static final String FIELD_SEPARATOR = "|";
+    private static final String FIELD_SEPARATOR_REGEX = "\\|";
+    private static final String ROLE_SEPARATOR = ",";
 
-  private final SseTicketStore ticketStore;
+    private final SseTicketStore ticketStore;
 
-  /** 签发一次性 ticket，绑定签发时的角色集。 */
-  public String issue(String username, String tenantId, Collection<String> authorities) {
-    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
-      throw new IllegalArgumentException("unsupported console role set");
-    }
-    UUID ticketUuid = UUID.randomUUID();
-    String ticketUuidText = ticketUuid.toString();
-    String ticket = ticketUuidText.replace("-", "");
-    String roles = String.join(
-        ROLE_SEPARATOR, authorities.stream().filter(Texts::hasText).distinct().toList());
-    String value =
-        username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
-    ticketStore.save(ticket, value, TICKET_TTL);
-    return ticket;
-  }
-
-  /** 验证并消费 ticket（一次性）。 */
-  public TicketPayload validate(String ticket) {
-    if (!Texts.hasText(ticket)) {
-      return null;
-    }
-    String value = ticketStore.consume(ticket.trim());
-    if (!Texts.hasText(value)) {
-      return null;
-    }
-    String[] parts = value.split(FIELD_SEPARATOR_REGEX, -1);
-    String username = parts.length > 0 ? parts[0] : "";
-    String tenantId = parts.length > 1 ? parts[1] : "";
-    Set<String> roles = new LinkedHashSet<>();
-    if (parts.length > 2 && Texts.hasText(parts[2])) {
-      for (String r : parts[2].split(ROLE_SEPARATOR)) {
-        if (Texts.hasText(r)) {
-          roles.add(r.trim());
+    /** 签发一次性 ticket，绑定签发时的角色集。 */
+    public String issue(String username, String tenantId, Collection<String> authorities) {
+        if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+            throw new IllegalArgumentException("unsupported console role set");
         }
-      }
+        UUID ticketUuid = UUID.randomUUID();
+        String ticketUuidText = ticketUuid.toString();
+        String ticket = ticketUuidText.replace("-", "");
+        String roles = String.join(
+                ROLE_SEPARATOR,
+                authorities.stream().filter(Texts::hasText).distinct().toList());
+        String value = username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
+        ticketStore.save(ticket, value, TICKET_TTL);
+        return ticket;
     }
-    Set<String> immutableAuthorities = Collections.unmodifiableSet(roles);
-    return new TicketPayload(username, tenantId, immutableAuthorities);
-  }
 
-  /** R4-P1-1：ticket 解码结果——含签发时角色集。 */
-  public record TicketPayload(String username, String tenantId, Set<String> authorities) {}
+    /** 验证并消费 ticket（一次性）。 */
+    public TicketPayload validate(String ticket) {
+        if (!Texts.hasText(ticket)) {
+            return null;
+        }
+        String value = ticketStore.consume(ticket.trim());
+        if (!Texts.hasText(value)) {
+            return null;
+        }
+        String[] parts = value.split(FIELD_SEPARATOR_REGEX, -1);
+        String username = parts.length > 0 ? parts[0] : "";
+        String tenantId = parts.length > 1 ? parts[1] : "";
+        Set<String> roles = new LinkedHashSet<>();
+        if (parts.length > 2 && Texts.hasText(parts[2])) {
+            for (String r : parts[2].split(ROLE_SEPARATOR)) {
+                if (Texts.hasText(r)) {
+                    roles.add(r.trim());
+                }
+            }
+        }
+        Set<String> immutableAuthorities = Collections.unmodifiableSet(roles);
+        return new TicketPayload(username, tenantId, immutableAuthorities);
+    }
+
+    /** R4-P1-1：ticket 解码结果——含签发时角色集。 */
+    public record TicketPayload(String username, String tenantId, Set<String> authorities) {}
 }

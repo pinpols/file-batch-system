@@ -50,167 +50,155 @@ import org.springframework.stereotype.Component;
 @Component
 public class TokenBucketRateLimiter {
 
-  private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
+    private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
 
-  /**
-   * fail-open 计数：Redis 不可达时在无限流保护下放行的请求数。tag {@code reason} 区分 {@code redis_exception}（Lettuce
-   * 命令级故障）与 {@code bucket4j_timeout}（配了 requestTimeout 后超时）。tag 基数固定为 2，不带 tenant/action 高基数维度，
-   * 供「过去 N 分钟多少请求在无限流保护下放行」告警。
-   */
-  static final String METRIC_FAILOPEN = "batch.ratelimit.failopen.total";
+    /**
+     * fail-open 计数：Redis 不可达时在无限流保护下放行的请求数。tag {@code reason} 区分 {@code redis_exception}（Lettuce
+     * 命令级故障）与 {@code bucket4j_timeout}（配了 requestTimeout 后超时）。tag 基数固定为 2，不带 tenant/action 高基数维度，
+     * 供「过去 N 分钟多少请求在无限流保护下放行」告警。
+     */
+    static final String METRIC_FAILOPEN = "batch.ratelimit.failopen.total";
 
-  static final String METRIC_FAILCLOSED = "batch.ratelimit.failclosed.total";
+    static final String METRIC_FAILCLOSED = "batch.ratelimit.failclosed.total";
 
-  static final String FAILOPEN_REASON_REDIS = "redis_exception";
-  static final String FAILOPEN_REASON_TIMEOUT = "bucket4j_timeout";
+    static final String FAILOPEN_REASON_REDIS = "redis_exception";
+    static final String FAILOPEN_REASON_TIMEOUT = "bucket4j_timeout";
 
-  /**
-   * fail-open reason：Redis 短路熔断 OPEN，直接放行未发 Redis 命令（省掉 requestTimeout 阻塞）。与上面两类 reason 一套 counter，
-   * 但语义不同——上面是"发了命令但故障"，这个是"熔断判定不健康后连命令都没发"。tag 基数固定，供告警区分持续慢故障 vs 偶发抖动。
-   */
-  static final String FAILOPEN_REASON_CIRCUIT_OPEN = "circuit_open";
+    /**
+     * fail-open reason：Redis 短路熔断 OPEN，直接放行未发 Redis 命令（省掉 requestTimeout 阻塞）。与上面两类 reason 一套 counter，
+     * 但语义不同——上面是"发了命令但故障"，这个是"熔断判定不健康后连命令都没发"。tag 基数固定，供告警区分持续慢故障 vs 偶发抖动。
+     */
+    static final String FAILOPEN_REASON_CIRCUIT_OPEN = "circuit_open";
 
-  private final LettuceBasedProxyManager<String> proxyManager;
-  private final MeterRegistry meterRegistry;
-  private final RedisRateLimitCircuitBreaker circuitBreaker;
-  private final RateLimitProperties properties;
-  private final BatchRedisNamespace redisNamespace;
+    private final LettuceBasedProxyManager<String> proxyManager;
+    private final MeterRegistry meterRegistry;
+    private final RedisRateLimitCircuitBreaker circuitBreaker;
+    private final RateLimitProperties properties;
+    private final BatchRedisNamespace redisNamespace;
 
-  // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
-  // RateLimitProperties）。
-  private final Map<BucketSpec, Supplier<BucketConfiguration>> configSuppliers =
-      new ConcurrentHashMap<>();
+    // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
+    // RateLimitProperties）。
+    private final Map<BucketSpec, Supplier<BucketConfiguration>> configSuppliers = new ConcurrentHashMap<>();
 
-  private record BucketSpec(long capacity, Duration refillPeriod) {}
+    private record BucketSpec(long capacity, Duration refillPeriod) {}
 
-  private enum BackendFailureMode {
-    FAIL_OPEN,
-    FAIL_CLOSED
-  }
-
-  @Autowired
-  public TokenBucketRateLimiter(
-      LettuceBasedProxyManager<String> proxyManager,
-      MeterRegistry meterRegistry,
-      RedisRateLimitCircuitBreaker circuitBreaker,
-      RateLimitProperties properties,
-      BatchRedisNamespace redisNamespace) {
-    this.proxyManager = proxyManager;
-    this.meterRegistry = meterRegistry;
-    this.circuitBreaker = circuitBreaker;
-    this.properties = properties;
-    this.redisNamespace = redisNamespace;
-  }
-
-  TokenBucketRateLimiter(
-      LettuceBasedProxyManager<String> proxyManager,
-      MeterRegistry meterRegistry,
-      RedisRateLimitCircuitBreaker circuitBreaker,
-      RateLimitProperties properties) {
-    this(proxyManager, meterRegistry, circuitBreaker, properties, new BatchRedisNamespace(""));
-  }
-
-  public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
-    return tryConsume(
-        tenantId,
-        action,
-        new BucketSpec(maxPerMinute, REFILL_PERIOD),
-        BackendFailureMode.FAIL_OPEN,
-        false);
-  }
-
-  /**
-   * 内部派发准入的每秒令牌桶。Redis 故障时返回 false，让分区保留 WAITING；不会把后端故障变成无界放行。
-   */
-  public boolean tryConsumePerSecond(String tenantId, String action, long maxPerSecond) {
-    Duration refillPeriod = Duration.ofSeconds(1);
-    BucketSpec bucketSpec = new BucketSpec(maxPerSecond, refillPeriod);
-    return tryConsume(tenantId, action, bucketSpec, BackendFailureMode.FAIL_CLOSED, true);
-  }
-
-  private boolean tryConsume(
-      String tenantId,
-      String action,
-      BucketSpec spec,
-      BackendFailureMode failureMode,
-      boolean dynamicConfiguration) {
-    boolean rateLimitRequestIsInvalid =
-        spec.capacity() <= 0 || !Texts.hasText(tenantId) || !Texts.hasText(action);
-    if (rateLimitRequestIsInvalid) {
-      return true;
+    private enum BackendFailureMode {
+        FAIL_OPEN,
+        FAIL_CLOSED
     }
-    String key = resolveBucketKey(tenantId, action, spec, dynamicConfiguration);
-    try {
-      // 经短路熔断执行：CLOSED/HALF_OPEN 时正常发 Redis 命令；OPEN 时不发命令、抛 CallNotPermittedException 短路 fail-open。
-      return circuitBreaker.call(() -> bucketFor(key, spec).tryConsume(1));
-    } catch (CallNotPermittedException ex) {
-      return backendFailure(tenantId, action, FAILOPEN_REASON_CIRCUIT_OPEN, failureMode, ex);
-    } catch (RedisException | TimeoutException ex) {
-      // API 限流保持历史 fail-open；内部派发由 failureMode 选择 fail-closed。
-      // 坑：Redis 命令级故障抛 io.lettuce.core.RedisException；但 proxy manager 配了 requestTimeout 后，
-      //     超时抛的是 io.github.bucket4j.TimeoutException（不是 RedisException）——必须一并兜住，
-      //     否则超时会逃逸 catch，绕开两类入口各自声明的降级方向。
-      String reason =
-          (ex instanceof TimeoutException) ? FAILOPEN_REASON_TIMEOUT : FAILOPEN_REASON_REDIS;
-      return backendFailure(tenantId, action, reason, failureMode, ex);
+
+    @Autowired
+    public TokenBucketRateLimiter(
+            LettuceBasedProxyManager<String> proxyManager,
+            MeterRegistry meterRegistry,
+            RedisRateLimitCircuitBreaker circuitBreaker,
+            RateLimitProperties properties,
+            BatchRedisNamespace redisNamespace) {
+        this.proxyManager = proxyManager;
+        this.meterRegistry = meterRegistry;
+        this.circuitBreaker = circuitBreaker;
+        this.properties = properties;
+        this.redisNamespace = redisNamespace;
     }
-  }
 
-  private boolean backendFailure(
-      String tenantId,
-      String action,
-      String reason,
-      BackendFailureMode failureMode,
-      RuntimeException ex) {
-    boolean failOpen = failureMode == BackendFailureMode.FAIL_OPEN;
-    String metric = failOpen ? METRIC_FAILOPEN : METRIC_FAILCLOSED;
-    Counter.builder(metric)
-        .tags(Tags.of("reason", reason))
-        .register(meterRegistry)
-        .increment();
-    log.warn(
-        "Redis rate-limit unavailable; {}: tenantId={}, action={}, cause={}",
-        failOpen ? "fail-open" : "fail-closed",
-        LogSanitizer.value(tenantId),
-        LogSanitizer.value(action),
-        SwallowedExceptionLogger.summary(ex));
-    log.debug("Redis rate-limit backend failure", ex);
-    return failOpen;
-  }
-
-  private String resolveBucketKey(
-      String tenantId, String action, BucketSpec spec, boolean dynamicConfiguration) {
-    if (!dynamicConfiguration) {
-      String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, action);
-      return redisNamespace.key(bucketKey);
+    TokenBucketRateLimiter(
+            LettuceBasedProxyManager<String> proxyManager,
+            MeterRegistry meterRegistry,
+            RedisRateLimitCircuitBreaker circuitBreaker,
+            RateLimitProperties properties) {
+        this(proxyManager, meterRegistry, circuitBreaker, properties, new BatchRedisNamespace(""));
     }
-    // 租户/队列 maxQps 来自热更新配置表，不能依赖部署级 bucketConfigurationVersion。
-    // 阈值与周期进入 key 后，配置变更立即启用新桶；旧 key 由 Bucket4j 过期策略自然回收。
-    String versionedAction = "%s_cap_%d_period_ms_%d"
-        .formatted(action, spec.capacity(), spec.refillPeriod().toMillis());
-    String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, versionedAction);
-    return redisNamespace.key(bucketKey);
-  }
 
-  private BucketProxy bucketFor(String key, BucketSpec spec) {
-    return proxyManager
-        .builder()
-        .withImplicitConfigurationReplacement(
-            properties.getBucketConfigurationVersion(), TokensInheritanceStrategy.PROPORTIONALLY)
-        .build(key, configSupplierFor(spec));
-  }
+    public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
+        return tryConsume(
+                tenantId, action, new BucketSpec(maxPerMinute, REFILL_PERIOD), BackendFailureMode.FAIL_OPEN, false);
+    }
 
-  private Supplier<BucketConfiguration> configSupplierFor(BucketSpec spec) {
-    return configSuppliers.computeIfAbsent(spec, this::buildConfigSupplier);
-  }
+    /**
+     * 内部派发准入的每秒令牌桶。Redis 故障时返回 false，让分区保留 WAITING；不会把后端故障变成无界放行。
+     */
+    public boolean tryConsumePerSecond(String tenantId, String action, long maxPerSecond) {
+        Duration refillPeriod = Duration.ofSeconds(1);
+        BucketSpec bucketSpec = new BucketSpec(maxPerSecond, refillPeriod);
+        return tryConsume(tenantId, action, bucketSpec, BackendFailureMode.FAIL_CLOSED, true);
+    }
 
-  private Supplier<BucketConfiguration> buildConfigSupplier(BucketSpec spec) {
-    BucketConfiguration configuration = BucketConfiguration.builder()
-        .addLimit(Bandwidth.builder()
-            .capacity(spec.capacity())
-            .refillGreedy(spec.capacity(), spec.refillPeriod())
-            .build())
-        .build();
-    return () -> configuration;
-  }
+    private boolean tryConsume(
+            String tenantId,
+            String action,
+            BucketSpec spec,
+            BackendFailureMode failureMode,
+            boolean dynamicConfiguration) {
+        boolean rateLimitRequestIsInvalid = spec.capacity() <= 0 || !Texts.hasText(tenantId) || !Texts.hasText(action);
+        if (rateLimitRequestIsInvalid) {
+            return true;
+        }
+        String key = resolveBucketKey(tenantId, action, spec, dynamicConfiguration);
+        try {
+            // 经短路熔断执行：CLOSED/HALF_OPEN 时正常发 Redis 命令；OPEN 时不发命令、抛 CallNotPermittedException 短路 fail-open。
+            return circuitBreaker.call(() -> bucketFor(key, spec).tryConsume(1));
+        } catch (CallNotPermittedException ex) {
+            return backendFailure(tenantId, action, FAILOPEN_REASON_CIRCUIT_OPEN, failureMode, ex);
+        } catch (RedisException | TimeoutException ex) {
+            // API 限流保持历史 fail-open；内部派发由 failureMode 选择 fail-closed。
+            // 坑：Redis 命令级故障抛 io.lettuce.core.RedisException；但 proxy manager 配了 requestTimeout 后，
+            //     超时抛的是 io.github.bucket4j.TimeoutException（不是 RedisException）——必须一并兜住，
+            //     否则超时会逃逸 catch，绕开两类入口各自声明的降级方向。
+            String reason = (ex instanceof TimeoutException) ? FAILOPEN_REASON_TIMEOUT : FAILOPEN_REASON_REDIS;
+            return backendFailure(tenantId, action, reason, failureMode, ex);
+        }
+    }
+
+    private boolean backendFailure(
+            String tenantId, String action, String reason, BackendFailureMode failureMode, RuntimeException ex) {
+        boolean failOpen = failureMode == BackendFailureMode.FAIL_OPEN;
+        String metric = failOpen ? METRIC_FAILOPEN : METRIC_FAILCLOSED;
+        Counter.builder(metric)
+                .tags(Tags.of("reason", reason))
+                .register(meterRegistry)
+                .increment();
+        log.warn(
+                "Redis rate-limit unavailable; {}: tenantId={}, action={}, cause={}",
+                failOpen ? "fail-open" : "fail-closed",
+                LogSanitizer.value(tenantId),
+                LogSanitizer.value(action),
+                SwallowedExceptionLogger.summary(ex));
+        log.debug("Redis rate-limit backend failure", ex);
+        return failOpen;
+    }
+
+    private String resolveBucketKey(String tenantId, String action, BucketSpec spec, boolean dynamicConfiguration) {
+        if (!dynamicConfiguration) {
+            String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, action);
+            return redisNamespace.key(bucketKey);
+        }
+        // 租户/队列 maxQps 来自热更新配置表，不能依赖部署级 bucketConfigurationVersion。
+        // 阈值与周期进入 key 后，配置变更立即启用新桶；旧 key 由 Bucket4j 过期策略自然回收。
+        String versionedAction = "%s_cap_%d_period_ms_%d"
+                .formatted(action, spec.capacity(), spec.refillPeriod().toMillis());
+        String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, versionedAction);
+        return redisNamespace.key(bucketKey);
+    }
+
+    private BucketProxy bucketFor(String key, BucketSpec spec) {
+        return proxyManager
+                .builder()
+                .withImplicitConfigurationReplacement(
+                        properties.getBucketConfigurationVersion(), TokensInheritanceStrategy.PROPORTIONALLY)
+                .build(key, configSupplierFor(spec));
+    }
+
+    private Supplier<BucketConfiguration> configSupplierFor(BucketSpec spec) {
+        return configSuppliers.computeIfAbsent(spec, this::buildConfigSupplier);
+    }
+
+    private Supplier<BucketConfiguration> buildConfigSupplier(BucketSpec spec) {
+        BucketConfiguration configuration = BucketConfiguration.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(spec.capacity())
+                        .refillGreedy(spec.capacity(), spec.refillPeriod())
+                        .build())
+                .build();
+        return () -> configuration;
+    }
 }

@@ -23,16 +23,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleUsageSummaryController {
 
-  private final ConsoleUsageSummaryService service;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleUsageSummaryService service;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/usage-summary")
-  public CommonResponse<List<ConsoleUsageSummaryResponse>> query(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("from") LocalDate from,
-      @RequestParam("to") LocalDate to,
-      @RequestParam(value = "metricCode", required = false) String metricCode,
-      @RequestParam(value = "pageCode", required = false) String pageCode) {
-    return responseFactory.success(service.query(tenantId, from, to, metricCode, pageCode));
-  }
+    @GetMapping("/usage-summary")
+    public CommonResponse<List<ConsoleUsageSummaryResponse>> query(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("from") LocalDate from,
+            @RequestParam("to") LocalDate to,
+            @RequestParam(value = "metricCode", required = false) String metricCode,
+            @RequestParam(value = "pageCode", required = false) String pageCode) {
+        return responseFactory.success(service.query(tenantId, from, to, metricCode, pageCode));
+    }
 }

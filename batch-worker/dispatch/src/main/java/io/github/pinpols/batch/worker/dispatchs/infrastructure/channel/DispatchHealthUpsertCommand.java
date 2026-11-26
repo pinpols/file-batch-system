@@ -18,11 +18,11 @@ import lombok.Builder;
  */
 @Builder
 record DispatchHealthUpsertCommand(
-    String tenantId,
-    String channelCode,
-    String channelType,
-    Instant now,
-    Instant nextProbeAt,
-    int failureThreshold,
-    String probeMessage,
-    String probeEvidence) {}
+        String tenantId,
+        String channelCode,
+        String channelType,
+        Instant now,
+        Instant nextProbeAt,
+        int failureThreshold,
+        String probeMessage,
+        String probeEvidence) {}

@@ -23,106 +23,99 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Dispatch 投递指标采集:按渠道类型与投递结果分桶计数,并暴露熔断开路的实时数量")
 class DispatchDeliveryMetricsTest {
 
-  private SimpleMeterRegistry registry;
-  private DispatchChannelCircuitBreaker circuitBreaker;
-  private DispatchDeliveryMetrics metrics;
+    private SimpleMeterRegistry registry;
+    private DispatchChannelCircuitBreaker circuitBreaker;
+    private DispatchDeliveryMetrics metrics;
 
-  @BeforeEach
-  void setUp() {
-    registry = new SimpleMeterRegistry();
-    circuitBreaker = mock(DispatchChannelCircuitBreaker.class);
-    metrics = new DispatchDeliveryMetrics(registry, circuitBreaker);
-    metrics.registerOpenCircuitGauge();
-  }
+    @BeforeEach
+    void setUp() {
+        registry = new SimpleMeterRegistry();
+        circuitBreaker = mock(DispatchChannelCircuitBreaker.class);
+        metrics = new DispatchDeliveryMetrics(registry, circuitBreaker);
+        metrics.registerOpenCircuitGauge();
+    }
 
-  @Test
-  @DisplayName("投递成功时,成功结果分桶的计数累加一")
-  void shouldRecordSuccessCounter_whenSuccessTrue() {
-    metrics.recordDelivery("SFTP", true, false);
+    @Test
+    @DisplayName("投递成功时,成功结果分桶的计数累加一")
+    void shouldRecordSuccessCounter_whenSuccessTrue() {
+        metrics.recordDelivery("SFTP", true, false);
 
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "SFTP")
-            .tag("result", "success")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "SFTP")
+                        .tag("result", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("failure（非熔断）→ result=failure counter +1")
-  void shouldRecordFailureCounter_whenSuccessFalseAndNotRejected() {
-    metrics.recordDelivery("OSS", false, false);
+    @Test
+    @DisplayName("failure（非熔断）→ result=failure counter +1")
+    void shouldRecordFailureCounter_whenSuccessFalseAndNotRejected() {
+        metrics.recordDelivery("OSS", false, false);
 
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "OSS")
-            .tag("result", "failure")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "OSS")
+                        .tag("result", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName(
-      "circuitRejected=TRUE 优先于 success → result=circuit_open（即使 success=true 也算 circuit_open）")
-  void shouldRecordCircuitOpen_whenCircuitRejected() {
-    metrics.recordDelivery("API", true, true);
-    metrics.recordDelivery("API", false, true);
+    @Test
+    @DisplayName("circuitRejected=TRUE 优先于 success → result=circuit_open（即使 success=true 也算 circuit_open）")
+    void shouldRecordCircuitOpen_whenCircuitRejected() {
+        metrics.recordDelivery("API", true, true);
+        metrics.recordDelivery("API", false, true);
 
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "API")
-            .tag("result", "circuit_open")
-            .counter()
-            .count())
-        .isEqualTo(2.0);
-    // success/failure 桶不应被触达
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "API")
-            .tag("result", "success")
-            .counter())
-        .isNull();
-  }
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "API")
+                        .tag("result", "circuit_open")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        // success/failure 桶不应被触达
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "API")
+                        .tag("result", "success")
+                        .counter())
+                .isNull();
+    }
 
-  @Test
-  @DisplayName("channel_type=null → tag 值为 unknown")
-  void shouldUseUnknownTag_whenChannelTypeNull() {
-    metrics.recordDelivery(null, true, false);
+    @Test
+    @DisplayName("channel_type=null → tag 值为 unknown")
+    void shouldUseUnknownTag_whenChannelTypeNull() {
+        metrics.recordDelivery(null, true, false);
 
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "unknown")
-            .tag("result", "success")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-  }
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "unknown")
+                        .tag("result", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("多次同 tag → 同一 counter 累加，不重复注册 meter")
-  void shouldAccumulateCounter_whenSameTagsRepeated() {
-    metrics.recordDelivery("NAS", true, false);
-    metrics.recordDelivery("NAS", true, false);
-    metrics.recordDelivery("NAS", true, false);
+    @Test
+    @DisplayName("多次同 tag → 同一 counter 累加，不重复注册 meter")
+    void shouldAccumulateCounter_whenSameTagsRepeated() {
+        metrics.recordDelivery("NAS", true, false);
+        metrics.recordDelivery("NAS", true, false);
+        metrics.recordDelivery("NAS", true, false);
 
-    assertThat(registry
-            .find("batch.dispatch.deliveries")
-            .tag("channel_type", "NAS")
-            .tag("result", "success")
-            .counter()
-            .count())
-        .isEqualTo(3.0);
-  }
+        assertThat(registry.find("batch.dispatch.deliveries")
+                        .tag("channel_type", "NAS")
+                        .tag("result", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(3.0);
+    }
 
-  @Test
-  @DisplayName("batch.dispatch.circuits.open gauge → 反映 circuit breaker.currentOpenCircuits()")
-  void shouldExposeOpenCircuitsGauge_fromCircuitBreaker() {
-    when(circuitBreaker.currentOpenCircuits()).thenReturn(3);
+    @Test
+    @DisplayName("batch.dispatch.circuits.open gauge → 反映 circuit breaker.currentOpenCircuits()")
+    void shouldExposeOpenCircuitsGauge_fromCircuitBreaker() {
+        when(circuitBreaker.currentOpenCircuits()).thenReturn(3);
 
-    Double value = registry.find("batch.dispatch.circuits.open").gauge().value();
+        Double value = registry.find("batch.dispatch.circuits.open").gauge().value();
 
-    assertThat(value).isEqualTo(3.0);
-  }
+        assertThat(value).isEqualTo(3.0);
+    }
 }

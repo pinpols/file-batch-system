@@ -31,82 +31,79 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("文件配置查询: Mapper 结果投影为稳定响应类型")
 class ConsoleFileConfigurationProjectionTest {
 
-  private FileChannelConfigMapper channelMapper;
-  private FileTemplateConfigMapper templateMapper;
-  private FilePipelineStepRunMapper stepRunMapper;
-  private ConsoleFileQueryService service;
+    private FileChannelConfigMapper channelMapper;
+    private FileTemplateConfigMapper templateMapper;
+    private FilePipelineStepRunMapper stepRunMapper;
+    private ConsoleFileQueryService service;
 
-  @BeforeEach
-  void setUp() {
-    channelMapper = mock(FileChannelConfigMapper.class);
-    templateMapper = mock(FileTemplateConfigMapper.class);
-    stepRunMapper = mock(FilePipelineStepRunMapper.class);
-    ConsoleFileQueryMappers mappers = new ConsoleFileQueryMappers(
-        null, null, null, null, stepRunMapper, null, channelMapper, templateMapper);
-    TenantIdResolver tenantResolver = ignored -> "tenant-a";
-    service = new ConsoleFileQueryService(
-        tenantResolver,
-        mappers,
-        mock(BatchSecurityProperties.class),
-        mock(LocalizedErrorRenderer.class),
-        mock(ConsoleOrchestratorPort.class),
-        mock(BatchDateTimeSupport.class));
-  }
+    @BeforeEach
+    void setUp() {
+        channelMapper = mock(FileChannelConfigMapper.class);
+        templateMapper = mock(FileTemplateConfigMapper.class);
+        stepRunMapper = mock(FilePipelineStepRunMapper.class);
+        ConsoleFileQueryMappers mappers =
+                new ConsoleFileQueryMappers(null, null, null, null, stepRunMapper, null, channelMapper, templateMapper);
+        TenantIdResolver tenantResolver = ignored -> "tenant-a";
+        service = new ConsoleFileQueryService(
+                tenantResolver,
+                mappers,
+                mock(BatchSecurityProperties.class),
+                mock(LocalizedErrorRenderer.class),
+                mock(ConsoleOrchestratorPort.class),
+                mock(BatchDateTimeSupport.class));
+    }
 
-  @Test
-  @DisplayName("渠道和模板查询使用具名投影映射并保留响应标识")
-  void shouldProjectChannelAndTemplateRows() {
-    when(channelMapper.selectByQuery(ArgumentMatchers.argThat(
-            parameters -> parameters != null && parameters.tenantId() != null)))
-        .thenReturn(List.of(FileChannelConfigQueryView.builder()
-            .id(11L)
-            .tenantId("tenant-a")
-            .channelCode("SFTP")
-            .build()));
-    when(channelMapper.countByQuery(anyString(), any(), any(), any())).thenReturn(1L);
-    when(templateMapper.selectByQuery(any()))
-        .thenReturn(List.of(FileTemplateConfigQueryView.builder()
-            .id(12L)
-            .tenantId("tenant-a")
-            .templateCode("IMPORT_CSV")
-            .build()));
-    when(templateMapper.countByQuery(any())).thenReturn(1L);
+    @Test
+    @DisplayName("渠道和模板查询使用具名投影映射并保留响应标识")
+    void shouldProjectChannelAndTemplateRows() {
+        when(channelMapper.selectByQuery(
+                        ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null)))
+                .thenReturn(List.of(FileChannelConfigQueryView.builder()
+                        .id(11L)
+                        .tenantId("tenant-a")
+                        .channelCode("SFTP")
+                        .build()));
+        when(channelMapper.countByQuery(anyString(), any(), any(), any())).thenReturn(1L);
+        when(templateMapper.selectByQuery(any()))
+                .thenReturn(List.of(FileTemplateConfigQueryView.builder()
+                        .id(12L)
+                        .tenantId("tenant-a")
+                        .templateCode("IMPORT_CSV")
+                        .build()));
+        when(templateMapper.countByQuery(any())).thenReturn(1L);
 
-    var channels = service.fileChannels(new FileChannelQueryRequest());
-    var templates = service.fileTemplates(new FileTemplateQueryRequest());
+        var channels = service.fileChannels(new FileChannelQueryRequest());
+        var templates = service.fileTemplates(new FileTemplateQueryRequest());
 
-    assertThat(channels.items()).singleElement().extracting("channelCode").isEqualTo("SFTP");
-    assertThat(templates.items())
-        .singleElement()
-        .extracting("templateCode")
-        .isEqualTo("IMPORT_CSV");
-  }
+        assertThat(channels.items()).singleElement().extracting("channelCode").isEqualTo("SFTP");
+        assertThat(templates.items()).singleElement().extracting("templateCode").isEqualTo("IMPORT_CSV");
+    }
 
-  @Test
-  @DisplayName("文件流水线步骤摘要在响应中递归遮罩凭据字段")
-  void shouldMaskCredentialsInPipelineStepSummaries() {
-    when(stepRunMapper.selectByQuery(any(FilePipelineStepRunQuery.class)))
-        .thenReturn(List.of(FilePipelineStepRunQueryView.builder()
-            .id(1L)
-            .pipelineInstanceId(12L)
-            .stepCode("LOAD")
-            .stageCode("LOAD")
-            .inputSummary("{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}")
-            .outputSummary("{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")
-            .build()));
-    when(stepRunMapper.countByQuery(any(FilePipelineStepRunQuery.class))).thenReturn(1L);
+    @Test
+    @DisplayName("文件流水线步骤摘要在响应中递归遮罩凭据字段")
+    void shouldMaskCredentialsInPipelineStepSummaries() {
+        when(stepRunMapper.selectByQuery(any(FilePipelineStepRunQuery.class)))
+                .thenReturn(List.of(FilePipelineStepRunQueryView.builder()
+                        .id(1L)
+                        .pipelineInstanceId(12L)
+                        .stepCode("LOAD")
+                        .stageCode("LOAD")
+                        .inputSummary("{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}")
+                        .outputSummary("{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")
+                        .build()));
+        when(stepRunMapper.countByQuery(any(FilePipelineStepRunQuery.class))).thenReturn(1L);
 
-    FilePipelineStepQueryRequest request = new FilePipelineStepQueryRequest();
-    request.setTenantId("tenant-a");
-    var response = service.filePipelineSteps(request).items().getFirst();
+        FilePipelineStepQueryRequest request = new FilePipelineStepQueryRequest();
+        request.setTenantId("tenant-a");
+        var response = service.filePipelineSteps(request).items().getFirst();
 
-    assertThat(response.inputSummary())
-        .contains("&quot;source&quot;:&quot;upload.csv&quot;")
-        .contains("&quot;clientSecret&quot;:&quot;****&quot;")
-        .doesNotContain("raw");
-    assertThat(response.outputSummary())
-        .contains("&quot;rows&quot;:5")
-        .contains("&quot;password&quot;:&quot;****&quot;")
-        .doesNotContain("raw");
-  }
+        assertThat(response.inputSummary())
+                .contains("&quot;source&quot;:&quot;upload.csv&quot;")
+                .contains("&quot;clientSecret&quot;:&quot;****&quot;")
+                .doesNotContain("raw");
+        assertThat(response.outputSummary())
+                .contains("&quot;rows&quot;:5")
+                .contains("&quot;password&quot;:&quot;****&quot;")
+                .doesNotContain("raw");
+    }
 }

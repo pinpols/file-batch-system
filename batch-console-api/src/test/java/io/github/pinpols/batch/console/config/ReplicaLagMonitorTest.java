@@ -31,112 +31,116 @@ import org.springframework.context.support.StaticApplicationContext;
 @DisplayName("只读副本延迟监控: 指标注册,采样成功与异常回退")
 class ReplicaLagMonitorTest {
 
-  private DataSource primary;
-  private Connection conn;
-  private PreparedStatement ps;
-  private ResultSet rs;
-  private SimpleMeterRegistry meterRegistry;
-  private ReplicaLagMonitor monitor;
+    private DataSource primary;
+    private Connection conn;
+    private PreparedStatement ps;
+    private ResultSet rs;
+    private SimpleMeterRegistry meterRegistry;
+    private ReplicaLagMonitor monitor;
 
-  @BeforeEach
-  void setUp() throws SQLException {
-    primary = mock(DataSource.class);
-    conn = mock(Connection.class);
-    ps = mock(PreparedStatement.class);
-    rs = mock(ResultSet.class);
-    lenient().when(primary.getConnection()).thenReturn(conn);
-    lenient().when(conn.prepareStatement(anyString())).thenReturn(ps);
-    lenient().when(ps.executeQuery()).thenReturn(rs);
+    @BeforeEach
+    void setUp() throws SQLException {
+        primary = mock(DataSource.class);
+        conn = mock(Connection.class);
+        ps = mock(PreparedStatement.class);
+        rs = mock(ResultSet.class);
+        lenient().when(primary.getConnection()).thenReturn(conn);
+        lenient().when(conn.prepareStatement(anyString())).thenReturn(ps);
+        lenient().when(ps.executeQuery()).thenReturn(rs);
 
-    meterRegistry = new SimpleMeterRegistry();
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
-    lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        meterRegistry = new SimpleMeterRegistry();
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
 
-    monitor = new ReplicaLagMonitor(primary, provider, new ReplicaLagMonitorProperties());
-  }
+        monitor = new ReplicaLagMonitor(primary, provider, new ReplicaLagMonitorProperties());
+    }
 
-  @Test
-  @DisplayName("启动后注册副本延迟指标,初始观测值为负数表示尚未采样")
-  void shouldRegisterGaugeWithExpectedName() {
-    assertThat(meterRegistry.find("batch.console.replica.replay_lag_seconds").gauge())
-        .isNotNull();
-    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0); // 初始值
-  }
+    @Test
+    @DisplayName("启动后注册副本延迟指标,初始观测值为负数表示尚未采样")
+    void shouldRegisterGaugeWithExpectedName() {
+        assertThat(meterRegistry
+                        .find("batch.console.replica.replay_lag_seconds")
+                        .gauge())
+                .isNotNull();
+        assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0); // 初始值
+    }
 
-  @Test
-  @DisplayName("采样成功时,当前延迟与指标值同步刷新为查询结果")
-  void shouldUpdateGaugeOnSuccessfulSample() throws SQLException {
-    when(rs.next()).thenReturn(true);
-    when(rs.getDouble(1)).thenReturn(1.42);
+    @Test
+    @DisplayName("采样成功时,当前延迟与指标值同步刷新为查询结果")
+    void shouldUpdateGaugeOnSuccessfulSample() throws SQLException {
+        when(rs.next()).thenReturn(true);
+        when(rs.getDouble(1)).thenReturn(1.42);
 
-    monitor.sampleReplayLag();
+        monitor.sampleReplayLag();
 
-    assertThat(monitor.currentLagSeconds()).isEqualTo(1.42);
-    assertThat(meterRegistry
-            .find("batch.console.replica.replay_lag_seconds")
-            .gauge()
-            .value())
-        .isEqualTo(1.42);
-  }
+        assertThat(monitor.currentLagSeconds()).isEqualTo(1.42);
+        assertThat(meterRegistry
+                        .find("batch.console.replica.replay_lag_seconds")
+                        .gauge()
+                        .value())
+                .isEqualTo(1.42);
+    }
 
-  @Test
-  @DisplayName("复制视图无数据行但聚合查询仍返回一行时,延迟按零处理")
-  void shouldHandleEmptyReplicationView() throws SQLException {
-    // pg_stat_replication 没行（无 streaming replica）→ COALESCE 返回 0；ResultSet 仍有 1 行（聚合查询）
-    when(rs.next()).thenReturn(true);
-    when(rs.getDouble(1)).thenReturn(0.0);
+    @Test
+    @DisplayName("复制视图无数据行但聚合查询仍返回一行时,延迟按零处理")
+    void shouldHandleEmptyReplicationView() throws SQLException {
+        // pg_stat_replication 没行（无 streaming replica）→ COALESCE 返回 0；ResultSet 仍有 1 行（聚合查询）
+        when(rs.next()).thenReturn(true);
+        when(rs.getDouble(1)).thenReturn(0.0);
 
-    monitor.sampleReplayLag();
+        monitor.sampleReplayLag();
 
-    assertThat(monitor.currentLagSeconds()).isEqualTo(0.0);
-  }
+        assertThat(monitor.currentLagSeconds()).isEqualTo(0.0);
+    }
 
-  @Test
-  @DisplayName("建连抛出数据库异常时,延迟回退为负数占位值")
-  void shouldFallBackToMinusOneOnSqlException() throws SQLException {
-    when(primary.getConnection()).thenThrow(new SQLException("connection refused", "08001"));
+    @Test
+    @DisplayName("建连抛出数据库异常时,延迟回退为负数占位值")
+    void shouldFallBackToMinusOneOnSqlException() throws SQLException {
+        when(primary.getConnection()).thenThrow(new SQLException("connection refused", "08001"));
 
-    // 先模拟一次成功
-    monitor.sampleReplayLag();
-    // gauge 应仍为 -1（initial），因为 SQLException 导致重置为 -1
-    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
-  }
+        // 先模拟一次成功
+        monitor.sampleReplayLag();
+        // gauge 应仍为 -1（initial），因为 SQLException 导致重置为 -1
+        assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
+    }
 
-  @Test
-  @DisplayName("结果集读取抛出运行时异常时,延迟回退为负数占位值")
-  void shouldFallBackToMinusOneOnRuntimeException() throws SQLException {
-    when(rs.next()).thenThrow(new RuntimeException("driver bug"));
+    @Test
+    @DisplayName("结果集读取抛出运行时异常时,延迟回退为负数占位值")
+    void shouldFallBackToMinusOneOnRuntimeException() throws SQLException {
+        when(rs.next()).thenThrow(new RuntimeException("driver bug"));
 
-    monitor.sampleReplayLag();
+        monitor.sampleReplayLag();
 
-    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
-  }
+        assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
+    }
 
-  @Test
-  @DisplayName("首次采样失败后,下一次采样恢复正常并刷新延迟")
-  void shouldRecoverFromTransientFailureOnNextSample() throws SQLException {
-    // 第一次失败
-    when(primary.getConnection()).thenThrow(new SQLException("blip", "08001")).thenReturn(conn);
-    monitor.sampleReplayLag();
-    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
+    @Test
+    @DisplayName("首次采样失败后,下一次采样恢复正常并刷新延迟")
+    void shouldRecoverFromTransientFailureOnNextSample() throws SQLException {
+        // 第一次失败
+        when(primary.getConnection())
+                .thenThrow(new SQLException("blip", "08001"))
+                .thenReturn(conn);
+        monitor.sampleReplayLag();
+        assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
 
-    // 第二次成功
-    when(rs.next()).thenReturn(true);
-    when(rs.getDouble(1)).thenReturn(0.3);
-    monitor.sampleReplayLag();
+        // 第二次成功
+        when(rs.next()).thenReturn(true);
+        when(rs.getDouble(1)).thenReturn(0.3);
+        monitor.sampleReplayLag();
 
-    assertThat(monitor.currentLagSeconds()).isEqualTo(0.3);
-  }
+        assertThat(monitor.currentLagSeconds()).isEqualTo(0.3);
+    }
 
-  @Test
-  @DisplayName("容器关闭事件到达后,采样直接跳过且不再获取连接")
-  void shouldSkipSamplingAfterContextClosed() throws SQLException {
-    monitor.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+    @Test
+    @DisplayName("容器关闭事件到达后,采样直接跳过且不再获取连接")
+    void shouldSkipSamplingAfterContextClosed() throws SQLException {
+        monitor.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
-    monitor.sampleReplayLag();
+        monitor.sampleReplayLag();
 
-    verify(primary, never()).getConnection();
-    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
-  }
+        verify(primary, never()).getConnection();
+        assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
+    }
 }

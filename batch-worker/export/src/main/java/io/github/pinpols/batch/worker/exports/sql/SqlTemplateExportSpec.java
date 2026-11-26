@@ -16,115 +16,108 @@ import java.util.regex.Pattern;
  * <p>主查询 SQL 来自 {@code default_query_sql}，附加配置来自 {@code query_param_schema.sqlTemplateExport}（或
  * {@code sql_template_export}）。
  */
-public record SqlTemplateExportSpec(
-    String detailSql, String cursorColumn, String cursorTiebreakerColumn) {
+public record SqlTemplateExportSpec(String detailSql, String cursorColumn, String cursorTiebreakerColumn) {
 
-  /**
-   * 从模板配置中解析 SqlTemplateExportSpec。
-   *
-   * @param templateConfig 模板配置 Map
-   * @param objectMapper JSON 解析工具
-   * @return 解析结果
-   * @throws IllegalArgumentException 配置缺失或 SQL 为空时抛出
-   */
-  public static SqlTemplateExportSpec parse(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    if (templateConfig == null || templateConfig.isEmpty()) {
-      throw new WorkerConfigException("template config missing");
-    }
-    Object rawDetailSql = firstNonNull(
-        templateConfig.get("default_query_sql"),
-        templateConfig.get("defaultQuerySql"),
-        templateConfig.get("detail_query_sql"),
-        templateConfig.get("detailQuerySql"));
-    String detailSql = textValue(rawDetailSql);
-    if (detailSql == null) {
-      throw new WorkerConfigException("default_query_sql is required for sql_template_export");
-    }
+    /**
+     * 从模板配置中解析 SqlTemplateExportSpec。
+     *
+     * @param templateConfig 模板配置 Map
+     * @param objectMapper JSON 解析工具
+     * @return 解析结果
+     * @throws IllegalArgumentException 配置缺失或 SQL 为空时抛出
+     */
+    public static SqlTemplateExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        if (templateConfig == null || templateConfig.isEmpty()) {
+            throw new WorkerConfigException("template config missing");
+        }
+        Object rawDetailSql = firstNonNull(
+                templateConfig.get("default_query_sql"),
+                templateConfig.get("defaultQuerySql"),
+                templateConfig.get("detail_query_sql"),
+                templateConfig.get("detailQuerySql"));
+        String detailSql = textValue(rawDetailSql);
+        if (detailSql == null) {
+            throw new WorkerConfigException("default_query_sql is required for sql_template_export");
+        }
 
-    Map<String, Object> schemaMap = ExportConfigValueSupport.toMap(
-        templateConfig.get("query_param_schema"), objectMapper, SqlTemplateExportSpec.class);
-    Object rawSpec = firstNonNull(
-        schemaMap.get("sqlTemplateExport"),
-        schemaMap.get("sql_template_export"),
-        templateConfig.get("sql_template_export"),
-        templateConfig.get("sqlTemplateExport"));
-    Map<String, Object> spec =
-        ExportConfigValueSupport.toMap(rawSpec, objectMapper, SqlTemplateExportSpec.class);
+        Map<String, Object> schemaMap = ExportConfigValueSupport.toMap(
+                templateConfig.get("query_param_schema"), objectMapper, SqlTemplateExportSpec.class);
+        Object rawSpec = firstNonNull(
+                schemaMap.get("sqlTemplateExport"),
+                schemaMap.get("sql_template_export"),
+                templateConfig.get("sql_template_export"),
+                templateConfig.get("sqlTemplateExport"));
+        Map<String, Object> spec = ExportConfigValueSupport.toMap(rawSpec, objectMapper, SqlTemplateExportSpec.class);
 
-    Object rawCursorColumn = firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column"));
-    String cursorColumn = textValue(rawCursorColumn);
-    if (!Texts.hasText(cursorColumn)) {
-      cursorColumn = "id";
-    }
-    cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
+        Object rawCursorColumn = firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column"));
+        String cursorColumn = textValue(rawCursorColumn);
+        if (!Texts.hasText(cursorColumn)) {
+            cursorColumn = "id";
+        }
+        cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
 
-    String tiebreakerColumn = textValue(
-        firstNonNull(spec.get("cursorTiebreakerColumn"), spec.get("cursor_tiebreaker_column")));
-    if (EmptyChecks.isNotNull(tiebreakerColumn)) {
-      tiebreakerColumn =
-          JdbcMappedSqlValidator.requireIdentifier(tiebreakerColumn, "cursorTiebreakerColumn");
-      if (tiebreakerColumn.equalsIgnoreCase(cursorColumn)) {
-        throw new IllegalArgumentException(
-            "sqlTemplateExport.cursorTiebreakerColumn must differ from cursorColumn");
-      }
-    }
+        String tiebreakerColumn =
+                textValue(firstNonNull(spec.get("cursorTiebreakerColumn"), spec.get("cursor_tiebreaker_column")));
+        if (EmptyChecks.isNotNull(tiebreakerColumn)) {
+            tiebreakerColumn = JdbcMappedSqlValidator.requireIdentifier(tiebreakerColumn, "cursorTiebreakerColumn");
+            if (tiebreakerColumn.equalsIgnoreCase(cursorColumn)) {
+                throw new IllegalArgumentException(
+                        "sqlTemplateExport.cursorTiebreakerColumn must differ from cursorColumn");
+            }
+        }
 
-    // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
-    // 如果用户 SELECT 里没出这列，运行期才会失败 PostgreSQL `bad SQL grammar`，debug 成本极高。
-    // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
-    String trimmedSql = detailSql;
-    if (!mentionsIdentifier(trimmedSql, cursorColumn)) {
-      throw new IllegalArgumentException(
-          "sql_template_export default_query_sql must reference cursor column `"
-              + cursorColumn
-              + "` (used by ORDER BY / keyset pagination). Either add `"
-              + cursorColumn
-              + "` to the SELECT list, or set sqlTemplateExport.cursorColumn to a column actually"
-              + " selected by the query.");
-    }
-    if (EmptyChecks.isNotNull(tiebreakerColumn)
-        && !mentionsIdentifier(trimmedSql, tiebreakerColumn)) {
-      throw new IllegalArgumentException(
-          "sql_template_export default_query_sql must reference cursorTiebreakerColumn `"
-              + tiebreakerColumn
-              + "` (used by ORDER BY / keyset pagination). Add it to the SELECT list, or remove"
-              + " sqlTemplateExport.cursorTiebreakerColumn.");
+        // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
+        // 如果用户 SELECT 里没出这列，运行期才会失败 PostgreSQL `bad SQL grammar`，debug 成本极高。
+        // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
+        String trimmedSql = detailSql;
+        if (!mentionsIdentifier(trimmedSql, cursorColumn)) {
+            throw new IllegalArgumentException("sql_template_export default_query_sql must reference cursor column `"
+                    + cursorColumn
+                    + "` (used by ORDER BY / keyset pagination). Either add `"
+                    + cursorColumn
+                    + "` to the SELECT list, or set sqlTemplateExport.cursorColumn to a column actually"
+                    + " selected by the query.");
+        }
+        if (EmptyChecks.isNotNull(tiebreakerColumn) && !mentionsIdentifier(trimmedSql, tiebreakerColumn)) {
+            throw new IllegalArgumentException(
+                    "sql_template_export default_query_sql must reference cursorTiebreakerColumn `"
+                            + tiebreakerColumn
+                            + "` (used by ORDER BY / keyset pagination). Add it to the SELECT list, or remove"
+                            + " sqlTemplateExport.cursorTiebreakerColumn.");
+        }
+
+        return new SqlTemplateExportSpec(trimmedSql, cursorColumn, tiebreakerColumn);
     }
 
-    return new SqlTemplateExportSpec(trimmedSql, cursorColumn, tiebreakerColumn);
-  }
-
-  /** 是否配置了唯一排序后缀；配置后分页使用 (cursorColumn, cursorTiebreakerColumn) 复合游标。 */
-  public boolean tiebreakerColumnIsConfigured() {
-    return EmptyChecks.isNotEmpty(cursorTiebreakerColumn);
-  }
-
-  /** 词界扫描：识别 `\b<name>\b` 是否出现在 SQL 中（不区分大小写）。 */
-  private static boolean mentionsIdentifier(String sql, String name) {
-    if (sql == null || name == null) {
-      return false;
+    /** 是否配置了唯一排序后缀；配置后分页使用 (cursorColumn, cursorTiebreakerColumn) 复合游标。 */
+    public boolean tiebreakerColumnIsConfigured() {
+        return EmptyChecks.isNotEmpty(cursorTiebreakerColumn);
     }
-    Pattern identifierPattern =
-        Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE);
-    Matcher identifierMatcher = identifierPattern.matcher(sql);
-    return identifierMatcher.find();
-  }
 
-  private static Object firstNonNull(Object... values) {
-    for (Object value : values) {
-      if (value != null) {
-        return value;
-      }
+    /** 词界扫描：识别 `\b<name>\b` 是否出现在 SQL 中（不区分大小写）。 */
+    private static boolean mentionsIdentifier(String sql, String name) {
+        if (sql == null || name == null) {
+            return false;
+        }
+        Pattern identifierPattern = Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE);
+        Matcher identifierMatcher = identifierPattern.matcher(sql);
+        return identifierMatcher.find();
     }
-    return null;
-  }
 
-  private static String textValue(Object value) {
-    if (value == null) {
-      return null;
+    private static Object firstNonNull(Object... values) {
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) ? text.trim() : null;
-  }
+
+    private static String textValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return Texts.hasText(text) ? text.trim() : null;
+    }
 }

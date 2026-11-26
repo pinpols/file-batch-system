@@ -16,98 +16,95 @@ import org.springframework.stereotype.Component;
 @Component
 public class JobResourceAssignmentGuard {
 
-  private static final String ERROR_KEY = "error.job.resource_assignment_platform_owned";
+    private static final String ERROR_KEY = "error.job.resource_assignment_platform_owned";
 
-  public void assertCreateAllowed(String queueCode, String workerGroup) {
-    if (isPlatformAdmin()) {
-      return;
+    public void assertCreateAllowed(String queueCode, String workerGroup) {
+        if (isPlatformAdmin()) {
+            return;
+        }
+        requireTenantAdmin();
+        if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
+            throw forbidden();
+        }
     }
-    requireTenantAdmin();
-    if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
-      throw forbidden();
+
+    public void assertUpdateAllowed(
+            String requestedQueueCode,
+            String requestedWorkerGroup,
+            String currentQueueCode,
+            String currentWorkerGroup) {
+        if (isPlatformAdmin()) {
+            return;
+        }
+        requireTenantAdmin();
+        if (changes(requestedQueueCode, currentQueueCode, CodeNormalizer::toConfigFormOrNull)
+                || changes(requestedWorkerGroup, currentWorkerGroup, CodeNormalizer::toUpperOrNull)) {
+            throw forbidden();
+        }
     }
-  }
 
-  public void assertUpdateAllowed(
-      String requestedQueueCode,
-      String requestedWorkerGroup,
-      String currentQueueCode,
-      String currentWorkerGroup) {
-    if (isPlatformAdmin()) {
-      return;
+    public void assertWorkerGroupUpdateAllowed(String requestedWorkerGroup, String currentWorkerGroup) {
+        assertUpdateAllowed(null, requestedWorkerGroup, null, currentWorkerGroup);
     }
-    requireTenantAdmin();
-    if (changes(requestedQueueCode, currentQueueCode, CodeNormalizer::toConfigFormOrNull)
-        || changes(requestedWorkerGroup, currentWorkerGroup, CodeNormalizer::toUpperOrNull)) {
-      throw forbidden();
+
+    public void assertCopyOverridesAllowed(String queueCode, String workerGroup) {
+        if (isPlatformAdmin()) {
+            return;
+        }
+        requireTenantAdmin();
+        if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
+            throw forbidden();
+        }
     }
-  }
 
-  public void assertWorkerGroupUpdateAllowed(
-      String requestedWorkerGroup, String currentWorkerGroup) {
-    assertUpdateAllowed(null, requestedWorkerGroup, null, currentWorkerGroup);
-  }
-
-  public void assertCopyOverridesAllowed(String queueCode, String workerGroup) {
-    if (isPlatformAdmin()) {
-      return;
+    public boolean shouldResolveRoutingForCopy() {
+        if (isPlatformAdmin()) {
+            return false;
+        }
+        requireTenantAdmin();
+        return true;
     }
-    requireTenantAdmin();
-    if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
-      throw forbidden();
+
+    public boolean shouldPreserveExistingRouting() {
+        if (isPlatformAdmin()) {
+            return false;
+        }
+        requireTenantAdmin();
+        return true;
     }
-  }
 
-  public boolean shouldResolveRoutingForCopy() {
-    if (isPlatformAdmin()) {
-      return false;
+    private static boolean changes(String requested, String current, Function<String, String> normalize) {
+        if (EmptyChecks.isNull(requested)) {
+            return false;
+        }
+        String normalizedRequested = normalize.apply(requested);
+        String normalizedCurrent = normalize.apply(current);
+        return !Objects.equals(normalizedRequested, normalizedCurrent);
     }
-    requireTenantAdmin();
-    return true;
-  }
 
-  public boolean shouldPreserveExistingRouting() {
-    if (isPlatformAdmin()) {
-      return false;
+    private static boolean isPlatformAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null // empty-check: allow - Sonar S2259
+                && authentication.isAuthenticated()
+                && hasAuthority(authentication, ConsoleRoles.ADMIN);
     }
-    requireTenantAdmin();
-    return true;
-  }
 
-  private static boolean changes(
-      String requested, String current, Function<String, String> normalize) {
-    if (EmptyChecks.isNull(requested)) {
-      return false;
+    private static void requireTenantAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean operatorIsNotTenantAdministrator = authentication == null // empty-check: allow - Sonar S2259
+                || !authentication.isAuthenticated()
+                || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN);
+        if (operatorIsNotTenantAdministrator) {
+            throw forbidden();
+        }
     }
-    String normalizedRequested = normalize.apply(requested);
-    String normalizedCurrent = normalize.apply(current);
-    return !Objects.equals(normalizedRequested, normalizedCurrent);
-  }
 
-  private static boolean isPlatformAdmin() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null // empty-check: allow - Sonar S2259
-        && authentication.isAuthenticated()
-        && hasAuthority(authentication, ConsoleRoles.ADMIN);
-  }
-
-  private static void requireTenantAdmin() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    boolean operatorIsNotTenantAdministrator =
-        authentication == null // empty-check: allow - Sonar S2259
-            || !authentication.isAuthenticated()
-            || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN);
-    if (operatorIsNotTenantAdministrator) {
-      throw forbidden();
+    private static boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
     }
-  }
 
-  private static boolean hasAuthority(Authentication authentication, String authority) {
-    return authentication.getAuthorities().stream()
-        .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-  }
-
-  private static BizException forbidden() {
-    return BizException.of(ResultCode.FORBIDDEN, ERROR_KEY);
-  }
+    private static BizException forbidden() {
+        return BizException.of(ResultCode.FORBIDDEN, ERROR_KEY);
+    }
 }

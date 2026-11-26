@@ -31,125 +31,122 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * </ul>
  */
 @SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.console.security.rate-limit.enabled=false")
+        classes = BatchConsoleApiApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.console.security.rate-limit.enabled=false")
 @DisplayName("控制台遥测写路径: 入参校验口径与成功受理响应")
 class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  private WebTestClient webTestClient;
+    private WebTestClient webTestClient;
 
-  @BeforeEach
-  void setUp() {
-    webTestClient = WebTestClient.bindToServer()
-        .baseUrl("http://127.0.0.1:" + port)
-        .responseTimeout(Duration.ofSeconds(30))
-        .build();
-  }
-
-  @Test
-  @DisplayName("合规上报: 返回成功响应")
-  void shouldAcceptTelemetry_whenPayloadValid() {
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("app", "console");
-    body.put("events", List.of(Map.of("type", "info", "name", "page_view", "page", "/home")));
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody()
-        .jsonPath("$.code")
-        .isEqualTo("SUCCESS");
-  }
-
-  @Test
-  @DisplayName("事件列表为空: 返回请求不合法")
-  void shouldRejectEventsList_whenEmpty() {
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("app", "console", "events", List.of()))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
-
-  @Test
-  @DisplayName("缺少应用标识: 返回请求不合法")
-  void shouldRejectPayload_whenAppMissing() {
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("events", List.of(Map.of("type", "info", "name", "x"))))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
-
-  @Test
-  @DisplayName("事件条数超过上限: 返回请求不合法")
-  void shouldRejectEvents_whenCountAboveLimit() {
-    // events @Size(max=50)
-    List<Map<String, Object>> events = new ArrayList<>();
-    for (int i = 0; i < 51; i++) {
-      events.add(Map.of("type", "info", "name", "evt-" + i));
+    @BeforeEach
+    void setUp() {
+        webTestClient = WebTestClient.bindToServer()
+                .baseUrl("http://127.0.0.1:" + port)
+                .responseTimeout(Duration.ofSeconds(30))
+                .build();
     }
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("app", "console", "events", events))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
 
-  @Test
-  @DisplayName("单条事件的附加字段超过字节上限: 返回请求不合法")
-  void shouldRejectEvent_whenPropsExceedByteLimit() {
-    // props 单 event 最大 8KB,构造 10KB 字符串触发 validateProps 拦截
-    String big = "x".repeat(10_000);
-    Map<String, Object> bigProps = Map.of("payload", big);
-    Map<String, Object> body = Map.of(
-        "app",
-        "console",
-        "events",
-        List.of(Map.of("type", "info", "name", "fat-event", "props", bigProps)));
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body)
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("合规上报: 返回成功响应")
+    void shouldAcceptTelemetry_whenPayloadValid() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("app", "console");
+        body.put("events", List.of(Map.of("type", "info", "name", "page_view", "page", "/home")));
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("SUCCESS");
+    }
 
-  @Test
-  @DisplayName("附加字段为空对象: 仍返回成功")
-  void shouldAcceptEvent_whenPropsFieldEmpty() {
-    Map<String, Object> event = new LinkedHashMap<>();
-    event.put("type", "info");
-    event.put("name", "x");
-    event.put("props", Collections.emptyMap());
-    webTestClient
-        .post()
-        .uri("/api/console/telemetry/events")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("app", "console", "events", List.of(event)))
-        .exchange()
-        .expectStatus()
-        .isOk();
-    // 结构验证:status 200 已说明通过 props 校验链
-    assertThat(true).isTrue();
-  }
+    @Test
+    @DisplayName("事件列表为空: 返回请求不合法")
+    void shouldRejectEventsList_whenEmpty() {
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("app", "console", "events", List.of()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    @DisplayName("缺少应用标识: 返回请求不合法")
+    void shouldRejectPayload_whenAppMissing() {
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("events", List.of(Map.of("type", "info", "name", "x"))))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    @DisplayName("事件条数超过上限: 返回请求不合法")
+    void shouldRejectEvents_whenCountAboveLimit() {
+        // events @Size(max=50)
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            events.add(Map.of("type", "info", "name", "evt-" + i));
+        }
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("app", "console", "events", events))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    @DisplayName("单条事件的附加字段超过字节上限: 返回请求不合法")
+    void shouldRejectEvent_whenPropsExceedByteLimit() {
+        // props 单 event 最大 8KB,构造 10KB 字符串触发 validateProps 拦截
+        String big = "x".repeat(10_000);
+        Map<String, Object> bigProps = Map.of("payload", big);
+        Map<String, Object> body = Map.of(
+                "app", "console", "events", List.of(Map.of("type", "info", "name", "fat-event", "props", bigProps)));
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    @DisplayName("附加字段为空对象: 仍返回成功")
+    void shouldAcceptEvent_whenPropsFieldEmpty() {
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("type", "info");
+        event.put("name", "x");
+        event.put("props", Collections.emptyMap());
+        webTestClient
+                .post()
+                .uri("/api/console/telemetry/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("app", "console", "events", List.of(event)))
+                .exchange()
+                .expectStatus()
+                .isOk();
+        // 结构验证:status 200 已说明通过 props 校验链
+        assertThat(true).isTrue();
+    }
 }

@@ -19,38 +19,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CalendarDependencyWaitController {
 
-  private final CalendarDependencyWaitGovernanceService governanceService;
+    private final CalendarDependencyWaitGovernanceService governanceService;
 
-  @GetMapping
-  public List<CalendarDependencyWaitResponse> list(
-      @RequestParam String tenantId,
-      @RequestParam(required = false) String calendarCode,
-      @RequestParam(required = false) String waitStatus,
-      @RequestParam(defaultValue = "100") int limit) {
-    List<CalendarDependencyWaitEntity> waits =
-        governanceService.list(tenantId, calendarCode, waitStatus, limit);
-    return waits.stream().map(CalendarDependencyWaitResponse::from).toList();
-  }
+    @GetMapping
+    public List<CalendarDependencyWaitResponse> list(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) String calendarCode,
+            @RequestParam(required = false) String waitStatus,
+            @RequestParam(defaultValue = "100") int limit) {
+        List<CalendarDependencyWaitEntity> waits = governanceService.list(tenantId, calendarCode, waitStatus, limit);
+        return waits.stream().map(CalendarDependencyWaitResponse::from).toList();
+    }
 
-  @PostMapping("/manual-action")
-  public CalendarDependencyWaitResponse requestManualAction(
-      @RequestBody ManualActionRequest request) {
-    CalendarDependencyWaitEntity wait = governanceService.requestManualAction(
-        new CalendarDependencyWaitGovernanceService.ManualActionCommand(
-            request.tenantId(),
-            request.calendarCode(),
-            request.bizDate(),
-            request.action(),
-            request.operatorId(),
-            request.reason()));
-    return CalendarDependencyWaitResponse.from(wait);
-  }
+    @PostMapping("/manual-action")
+    public CalendarDependencyWaitResponse requestManualAction(@RequestBody ManualActionRequest request) {
+        CalendarDependencyWaitEntity wait =
+                governanceService.requestManualAction(new CalendarDependencyWaitGovernanceService.ManualActionCommand(
+                        request.tenantId(),
+                        request.calendarCode(),
+                        request.bizDate(),
+                        request.action(),
+                        request.operatorId(),
+                        request.reason()));
+        return CalendarDependencyWaitResponse.from(wait);
+    }
 
-  public record ManualActionRequest(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String action,
-      String operatorId,
-      String reason) {}
+    public record ManualActionRequest(
+            String tenantId, String calendarCode, LocalDate bizDate, String action, String operatorId, String reason) {}
 }

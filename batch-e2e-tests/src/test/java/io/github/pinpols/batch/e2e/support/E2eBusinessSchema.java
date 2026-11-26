@@ -15,9 +15,6 @@ import org.springframework.test.context.jdbc.SqlConfig;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 @Sql(
-    scripts = E2eTestSql.BIZ_SCHEMA,
-    config =
-        @SqlConfig(
-            dataSource = "e2eBusinessDataSource",
-            transactionManager = "e2eBusinessTransactionManager"))
+        scripts = E2eTestSql.BIZ_SCHEMA,
+        config = @SqlConfig(dataSource = "e2eBusinessDataSource", transactionManager = "e2eBusinessTransactionManager"))
 public @interface E2eBusinessSchema {}

@@ -21,45 +21,44 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 @Slf4j
 public class RlsPolicyHealthIndicator implements HealthIndicator {
 
-  /** 运行期只接受 strict policy；transition 仅用于应急回滚期间的显式降级。 */
-  public static final List<String> ACCEPTED_POLICY_NAMES =
-      RlsClosedWorldChecker.ACCEPTED_POLICY_NAMES;
+    /** 运行期只接受 strict policy；transition 仅用于应急回滚期间的显式降级。 */
+    public static final List<String> ACCEPTED_POLICY_NAMES = RlsClosedWorldChecker.ACCEPTED_POLICY_NAMES;
 
-  private final RlsClosedWorldChecker checker;
+    private final RlsClosedWorldChecker checker;
 
-  /** 兼容旧构造器:无豁免清单。 */
-  public RlsPolicyHealthIndicator(DataSource businessDataSource) {
-    this(businessDataSource, List.of());
-  }
-
-  public RlsPolicyHealthIndicator(DataSource businessDataSource, List<String> exemptBizTables) {
-    this.checker = new RlsClosedWorldChecker(businessDataSource, exemptBizTables);
-  }
-
-  @Override
-  public Health health() {
-    RlsClosedWorldChecker.Result result;
-    try {
-      result = checker.check();
-    } catch (SQLException e) {
-      String causeSummary = SwallowedExceptionLogger.summary(e);
-      log.warn("RLS health check failed: {}", causeSummary);
-      return Health.down().withException(e).build();
+    /** 兼容旧构造器:无豁免清单。 */
+    public RlsPolicyHealthIndicator(DataSource businessDataSource) {
+        this(businessDataSource, List.of());
     }
 
-    Health.Builder builder = result.isClean() ? Health.up() : Health.down();
-    if (!result.missingEnable().isEmpty()) {
-      builder.withDetail("missingEnableRls", result.missingEnable());
+    public RlsPolicyHealthIndicator(DataSource businessDataSource, List<String> exemptBizTables) {
+        this.checker = new RlsClosedWorldChecker(businessDataSource, exemptBizTables);
     }
-    if (!result.missingForce().isEmpty()) {
-      builder.withDetail("missingForceRls", result.missingForce());
+
+    @Override
+    public Health health() {
+        RlsClosedWorldChecker.Result result;
+        try {
+            result = checker.check();
+        } catch (SQLException e) {
+            String causeSummary = SwallowedExceptionLogger.summary(e);
+            log.warn("RLS health check failed: {}", causeSummary);
+            return Health.down().withException(e).build();
+        }
+
+        Health.Builder builder = result.isClean() ? Health.up() : Health.down();
+        if (!result.missingEnable().isEmpty()) {
+            builder.withDetail("missingEnableRls", result.missingEnable());
+        }
+        if (!result.missingForce().isEmpty()) {
+            builder.withDetail("missingForceRls", result.missingForce());
+        }
+        if (!result.missingPolicy().isEmpty()) {
+            builder.withDetail("missingPolicy", result.missingPolicy());
+        }
+        if (!result.isClean()) {
+            builder.withDetail("missingRlsTables", result.allMissingTables());
+        }
+        return builder.build();
     }
-    if (!result.missingPolicy().isEmpty()) {
-      builder.withDetail("missingPolicy", result.missingPolicy());
-    }
-    if (!result.isClean()) {
-      builder.withDetail("missingRlsTables", result.allMissingTables());
-    }
-    return builder.build();
-  }
 }

@@ -19,58 +19,58 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
  */
 public final class TestConstants {
 
-  private TestConstants() {}
+    private TestConstants() {}
 
-  /** {@link JobInstanceStatus} 速记。 */
-  public static final class JobInstance {
-    public static final String SUCCESS = JobInstanceStatus.SUCCESS.code();
-    public static final String FAILED = JobInstanceStatus.FAILED.code();
-    public static final String RUNNING = JobInstanceStatus.RUNNING.code();
-    public static final String CREATED = JobInstanceStatus.CREATED.code();
+    /** {@link JobInstanceStatus} 速记。 */
+    public static final class JobInstance {
+        public static final String SUCCESS = JobInstanceStatus.SUCCESS.code();
+        public static final String FAILED = JobInstanceStatus.FAILED.code();
+        public static final String RUNNING = JobInstanceStatus.RUNNING.code();
+        public static final String CREATED = JobInstanceStatus.CREATED.code();
 
-    private JobInstance() {}
-  }
+        private JobInstance() {}
+    }
 
-  /** {@link WorkflowRunStatus} 速记。 */
-  public static final class Workflow {
-    public static final String SUCCESS = WorkflowRunStatus.SUCCESS.code();
-    public static final String FAILED = WorkflowRunStatus.FAILED.code();
-    public static final String RUNNING = WorkflowRunStatus.RUNNING.code();
-    public static final String CREATED = WorkflowRunStatus.CREATED.code();
-    public static final String TERMINATED = WorkflowRunStatus.TERMINATED.code();
+    /** {@link WorkflowRunStatus} 速记。 */
+    public static final class Workflow {
+        public static final String SUCCESS = WorkflowRunStatus.SUCCESS.code();
+        public static final String FAILED = WorkflowRunStatus.FAILED.code();
+        public static final String RUNNING = WorkflowRunStatus.RUNNING.code();
+        public static final String CREATED = WorkflowRunStatus.CREATED.code();
+        public static final String TERMINATED = WorkflowRunStatus.TERMINATED.code();
 
-    private Workflow() {}
-  }
+        private Workflow() {}
+    }
 
-  /** {@link WorkflowEdgeType} 速记(注意跟 Workflow.SUCCESS 同字面量但语义不同)。 */
-  public static final class Edge {
-    public static final String SUCCESS = WorkflowEdgeType.SUCCESS.code();
-    public static final String FAILURE = WorkflowEdgeType.FAILURE.code();
-    public static final String CONDITION = WorkflowEdgeType.CONDITION.code();
-    public static final String ALWAYS = WorkflowEdgeType.ALWAYS.code();
+    /** {@link WorkflowEdgeType} 速记(注意跟 Workflow.SUCCESS 同字面量但语义不同)。 */
+    public static final class Edge {
+        public static final String SUCCESS = WorkflowEdgeType.SUCCESS.code();
+        public static final String FAILURE = WorkflowEdgeType.FAILURE.code();
+        public static final String CONDITION = WorkflowEdgeType.CONDITION.code();
+        public static final String ALWAYS = WorkflowEdgeType.ALWAYS.code();
 
-    private Edge() {}
-  }
+        private Edge() {}
+    }
 
-  /** {@link OutboxPublishStatus} 速记。 */
-  public static final class Outbox {
-    public static final String NEW = OutboxPublishStatus.NEW.code();
-    public static final String PUBLISHING = OutboxPublishStatus.PUBLISHING.code();
-    public static final String PUBLISHED = OutboxPublishStatus.PUBLISHED.code();
-    public static final String FAILED = OutboxPublishStatus.FAILED.code();
-    public static final String GIVE_UP = OutboxPublishStatus.GIVE_UP.code();
+    /** {@link OutboxPublishStatus} 速记。 */
+    public static final class Outbox {
+        public static final String NEW = OutboxPublishStatus.NEW.code();
+        public static final String PUBLISHING = OutboxPublishStatus.PUBLISHING.code();
+        public static final String PUBLISHED = OutboxPublishStatus.PUBLISHED.code();
+        public static final String FAILED = OutboxPublishStatus.FAILED.code();
+        public static final String GIVE_UP = OutboxPublishStatus.GIVE_UP.code();
 
-    private Outbox() {}
-  }
+        private Outbox() {}
+    }
 
-  /** {@link DeadLetterReplayStatus} 速记(DLQ replay 场景特别多 "NEW")。 */
-  public static final class DeadLetter {
-    public static final String NEW = DeadLetterReplayStatus.NEW.code();
-    public static final String REPLAYING = DeadLetterReplayStatus.REPLAYING.code();
-    public static final String SUCCESS = DeadLetterReplayStatus.SUCCESS.code();
-    public static final String FAILED = DeadLetterReplayStatus.FAILED.code();
-    public static final String GIVE_UP = DeadLetterReplayStatus.GIVE_UP.code();
+    /** {@link DeadLetterReplayStatus} 速记(DLQ replay 场景特别多 "NEW")。 */
+    public static final class DeadLetter {
+        public static final String NEW = DeadLetterReplayStatus.NEW.code();
+        public static final String REPLAYING = DeadLetterReplayStatus.REPLAYING.code();
+        public static final String SUCCESS = DeadLetterReplayStatus.SUCCESS.code();
+        public static final String FAILED = DeadLetterReplayStatus.FAILED.code();
+        public static final String GIVE_UP = DeadLetterReplayStatus.GIVE_UP.code();
 
-    private DeadLetter() {}
-  }
+        private DeadLetter() {}
+    }
 }

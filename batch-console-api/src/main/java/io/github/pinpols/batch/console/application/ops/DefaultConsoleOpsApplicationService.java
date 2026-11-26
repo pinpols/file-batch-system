@@ -28,99 +28,90 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DefaultConsoleOpsApplicationService implements ConsoleOpsSummaryPort {
 
-  private final TenantIdResolver tenantGuard;
-  private final ApprovalCommandMapper approvalCommandMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final OutboxRetryLogMapper outboxRetryLogMapper;
-  private final OutboxDeliveryLogMapper outboxDeliveryLogMapper;
-  private final AlertEventMapper alertEventMapper;
-  private final ConsoleQueryCacheService cacheService;
+    private final TenantIdResolver tenantGuard;
+    private final ApprovalCommandMapper approvalCommandMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final OutboxRetryLogMapper outboxRetryLogMapper;
+    private final OutboxDeliveryLogMapper outboxDeliveryLogMapper;
+    private final AlertEventMapper alertEventMapper;
+    private final ConsoleQueryCacheService cacheService;
 
-  /** 按租户聚合运维摘要指标。 */
-  @Override
-  public ConsoleOpsSummaryResponse summary(String tenantId) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    return cacheService.getOrLoad(
-        "dashboard:" + ConsoleQueryCacheService.keySegment(resolvedTenantId) + ":summary",
-        ConsoleQueryCacheService.DASHBOARD_TTL,
-        ConsoleOpsSummaryResponse.class,
-        () -> loadSummary(resolvedTenantId));
-  }
+    /** 按租户聚合运维摘要指标。 */
+    @Override
+    public ConsoleOpsSummaryResponse summary(String tenantId) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        return cacheService.getOrLoad(
+                "dashboard:" + ConsoleQueryCacheService.keySegment(resolvedTenantId) + ":summary",
+                ConsoleQueryCacheService.DASHBOARD_TTL,
+                ConsoleOpsSummaryResponse.class,
+                () -> loadSummary(resolvedTenantId));
+    }
 
-  private ConsoleOpsSummaryResponse loadSummary(String resolvedTenantId) {
-    long pendingApprovals = approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING");
+    private ConsoleOpsSummaryResponse loadSummary(String resolvedTenantId) {
+        long pendingApprovals = approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING");
 
-    long openAlerts = alertEventMapper.countByStatus(resolvedTenantId, "OPEN");
-    long criticalAlerts =
-        alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN");
-    AlertMetrics alerts = new AlertMetrics(openAlerts, criticalAlerts);
+        long openAlerts = alertEventMapper.countByStatus(resolvedTenantId, "OPEN");
+        long criticalAlerts = alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN");
+        AlertMetrics alerts = new AlertMetrics(openAlerts, criticalAlerts);
 
-    long runningJobs = jobInstanceMapper.countByStatuses(
-        resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code()));
-    long failedJobs = jobInstanceMapper.countByStatuses(
-        resolvedTenantId,
-        List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code()));
-    long slaBreaches = jobInstanceMapper.countSlaBreaches(
-        resolvedTenantId,
-        List.of(
-            JobInstanceStatus.CREATED.code(),
-            JobInstanceStatus.WAITING.code(),
-            JobInstanceStatus.READY.code(),
-            JobInstanceStatus.RUNNING.code(),
-            JobInstanceStatus.PARTIAL_FAILED.code()));
-    JobMetrics jobs = new JobMetrics(runningJobs, failedJobs, slaBreaches);
+        long runningJobs =
+                jobInstanceMapper.countByStatuses(resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code()));
+        long failedJobs = jobInstanceMapper.countByStatuses(
+                resolvedTenantId, List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code()));
+        long slaBreaches = jobInstanceMapper.countSlaBreaches(
+                resolvedTenantId,
+                List.of(
+                        JobInstanceStatus.CREATED.code(),
+                        JobInstanceStatus.WAITING.code(),
+                        JobInstanceStatus.READY.code(),
+                        JobInstanceStatus.RUNNING.code(),
+                        JobInstanceStatus.PARTIAL_FAILED.code()));
+        JobMetrics jobs = new JobMetrics(runningJobs, failedJobs, slaBreaches);
 
-    long onlineWorkers =
-        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.ONLINE.code());
-    long drainingWorkers =
-        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.DRAINING.code());
-    long offlineWorkers =
-        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.OFFLINE.code());
-    long decommissionedWorkers = workerRegistryMapper.countByStatus(
-        resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code());
-    WorkerMetrics workers =
-        new WorkerMetrics(onlineWorkers, drainingWorkers, offlineWorkers + decommissionedWorkers);
+        long onlineWorkers = workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.ONLINE.code());
+        long drainingWorkers =
+                workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.DRAINING.code());
+        long offlineWorkers = workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.OFFLINE.code());
+        long decommissionedWorkers =
+                workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code());
+        WorkerMetrics workers =
+                new WorkerMetrics(onlineWorkers, drainingWorkers, offlineWorkers + decommissionedWorkers);
 
-    long outboxRetryBacklog = outboxRetryLogMapper.countByStatuses(
-        resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED"));
-    long outboxDeliveryFailures = outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED");
-    OutboxMetrics outbox = new OutboxMetrics(outboxRetryBacklog, outboxDeliveryFailures);
+        long outboxRetryBacklog =
+                outboxRetryLogMapper.countByStatuses(resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED"));
+        long outboxDeliveryFailures = outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED");
+        OutboxMetrics outbox = new OutboxMetrics(outboxRetryBacklog, outboxDeliveryFailures);
 
-    OpsSummaryMetrics metrics =
-        new OpsSummaryMetrics(pendingApprovals, alerts, jobs, workers, outbox);
-    return toResponse(resolvedTenantId, metrics);
-  }
+        OpsSummaryMetrics metrics = new OpsSummaryMetrics(pendingApprovals, alerts, jobs, workers, outbox);
+        return toResponse(resolvedTenantId, metrics);
+    }
 
-  private ConsoleOpsSummaryResponse toResponse(String tenantId, OpsSummaryMetrics metrics) {
-    return ConsoleOpsSummaryResponse.builder()
-        .tenantId(tenantId)
-        .pendingApprovals(metrics.pendingApprovals())
-        .openAlerts(metrics.alerts().openAlerts())
-        .criticalAlerts(metrics.alerts().criticalAlerts())
-        .runningJobs(metrics.jobs().runningJobs())
-        .failedJobs(metrics.jobs().failedJobs())
-        .slaBreaches(metrics.jobs().slaBreaches())
-        .onlineWorkers(metrics.workers().onlineWorkers())
-        .drainingWorkers(metrics.workers().drainingWorkers())
-        .offlineWorkers(metrics.workers().offlineWorkers())
-        .outboxRetryBacklog(metrics.outbox().outboxRetryBacklog())
-        .outboxDeliveryFailures(metrics.outbox().outboxDeliveryFailures())
-        .build();
-  }
+    private ConsoleOpsSummaryResponse toResponse(String tenantId, OpsSummaryMetrics metrics) {
+        return ConsoleOpsSummaryResponse.builder()
+                .tenantId(tenantId)
+                .pendingApprovals(metrics.pendingApprovals())
+                .openAlerts(metrics.alerts().openAlerts())
+                .criticalAlerts(metrics.alerts().criticalAlerts())
+                .runningJobs(metrics.jobs().runningJobs())
+                .failedJobs(metrics.jobs().failedJobs())
+                .slaBreaches(metrics.jobs().slaBreaches())
+                .onlineWorkers(metrics.workers().onlineWorkers())
+                .drainingWorkers(metrics.workers().drainingWorkers())
+                .offlineWorkers(metrics.workers().offlineWorkers())
+                .outboxRetryBacklog(metrics.outbox().outboxRetryBacklog())
+                .outboxDeliveryFailures(metrics.outbox().outboxDeliveryFailures())
+                .build();
+    }
 
-  private record OpsSummaryMetrics(
-      long pendingApprovals,
-      AlertMetrics alerts,
-      JobMetrics jobs,
-      WorkerMetrics workers,
-      OutboxMetrics outbox) {}
+    private record OpsSummaryMetrics(
+            long pendingApprovals, AlertMetrics alerts, JobMetrics jobs, WorkerMetrics workers, OutboxMetrics outbox) {}
 
-  private record AlertMetrics(long openAlerts, long criticalAlerts) {}
+    private record AlertMetrics(long openAlerts, long criticalAlerts) {}
 
-  private record JobMetrics(long runningJobs, long failedJobs, long slaBreaches) {}
+    private record JobMetrics(long runningJobs, long failedJobs, long slaBreaches) {}
 
-  private record WorkerMetrics(long onlineWorkers, long drainingWorkers, long offlineWorkers) {}
+    private record WorkerMetrics(long onlineWorkers, long drainingWorkers, long offlineWorkers) {}
 
-  private record OutboxMetrics(long outboxRetryBacklog, long outboxDeliveryFailures) {}
+    private record OutboxMetrics(long outboxRetryBacklog, long outboxDeliveryFailures) {}
 }

@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleJobQueryMappers {
 
-  public final JobDefinitionMapper jobDefinitionMapper;
-  public final JobInstanceMapper jobInstanceMapper;
-  public final JobStepInstanceMapper jobStepInstanceMapper;
-  public final JobPartitionMapper jobPartitionMapper;
-  public final JobExecutionLogMapper jobExecutionLogMapper;
+    public final JobDefinitionMapper jobDefinitionMapper;
+    public final JobInstanceMapper jobInstanceMapper;
+    public final JobStepInstanceMapper jobStepInstanceMapper;
+    public final JobPartitionMapper jobPartitionMapper;
+    public final JobExecutionLogMapper jobExecutionLogMapper;
 }

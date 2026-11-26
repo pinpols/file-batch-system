@@ -14,43 +14,42 @@ import org.junit.jupiter.api.Test;
 @DisplayName("校验问题掩码单测:未开启掩码时对空问题集合的兜底处理")
 class ValidationIssueMaskerTest {
 
-  @Test
-  @DisplayName("未开启掩码且问题集合为空时,输出的记录级与数据集级问题都为空")
-  void shouldTreatNullIssueCollectionsAsEmptyWhenMaskingIsDisabled() {
-    ValidationIssueMasker masker = new ValidationIssueMasker(new BatchSecurityProperties());
-    ValidationSession session = new ValidationSession(
-        null, Map.of(), 0L, null, null, List.of(), null, null, null, Set.of());
+    @Test
+    @DisplayName("未开启掩码且问题集合为空时,输出的记录级与数据集级问题都为空")
+    void shouldTreatNullIssueCollectionsAsEmptyWhenMaskingIsDisabled() {
+        ValidationIssueMasker masker = new ValidationIssueMasker(new BatchSecurityProperties());
+        ValidationSession session =
+                new ValidationSession(null, Map.of(), 0L, null, null, List.of(), null, null, null, Set.of());
 
-    ValidationOutcome outcome = masker.maskOutcome(session);
+        ValidationOutcome outcome = masker.maskOutcome(session);
 
-    assertThat(outcome.recordIssues()).isEmpty();
-    assertThat(outcome.datasetIssues()).isEmpty();
-  }
+        assertThat(outcome.recordIssues()).isEmpty();
+        assertThat(outcome.datasetIssues()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("校验问题脱敏后结构化原始行仍保留对象结构")
-  void shouldPreserveStructuredRawRecordWhenMasking() {
-    ImportJobContext context = new ImportJobContext();
-    context
-        .getAttributes()
-        .put(
-            PipelineRuntimeKeys.TEMPLATE_CONFIG,
-            Map.of("log_masking_enabled", true, "masking_rule_set", "STRICT"));
-    ValidationIssue issue = new ValidationIssue(1L, "INVALID", "invalid", Map.of("name", "Alice"));
-    ValidationSession session = ValidationSession.builder()
-        .context(context)
-        .recordIssues(Map.of(1L, issue))
-        .datasetIssues(List.of())
-        .appliedChecks(Set.of())
-        .build();
+    @Test
+    @DisplayName("校验问题脱敏后结构化原始行仍保留对象结构")
+    void shouldPreserveStructuredRawRecordWhenMasking() {
+        ImportJobContext context = new ImportJobContext();
+        context.getAttributes()
+                .put(
+                        PipelineRuntimeKeys.TEMPLATE_CONFIG,
+                        Map.of("log_masking_enabled", true, "masking_rule_set", "STRICT"));
+        ValidationIssue issue = new ValidationIssue(1L, "INVALID", "invalid", Map.of("name", "Alice"));
+        ValidationSession session = ValidationSession.builder()
+                .context(context)
+                .recordIssues(Map.of(1L, issue))
+                .datasetIssues(List.of())
+                .appliedChecks(Set.of())
+                .build();
 
-    Object raw = new ValidationIssueMasker(new BatchSecurityProperties())
-        .maskOutcome(session)
-        .recordIssues()
-        .get(1L)
-        .rawRecord();
+        Object raw = new ValidationIssueMasker(new BatchSecurityProperties())
+                .maskOutcome(session)
+                .recordIssues()
+                .get(1L)
+                .rawRecord();
 
-    assertThat(raw).isInstanceOf(Map.class);
-    assertThat(String.valueOf(raw)).doesNotContain("Alice");
-  }
+        assertThat(raw).isInstanceOf(Map.class);
+        assertThat(String.valueOf(raw)).doesNotContain("Alice");
+    }
 }

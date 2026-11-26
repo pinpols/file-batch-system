@@ -48,61 +48,60 @@ import org.springframework.test.context.jdbc.Sql;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.export.worker-type=EXPORT")
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.export.worker-type=EXPORT")
 @E2eBusinessSchema
 @Sql(
-    scripts = {
-      E2eTestSql.EXPORT_TEMPLATE_SEED,
-    })
+        scripts = {
+            E2eTestSql.EXPORT_TEMPLATE_SEED,
+        })
 @EnabledIf("s3BackendActive")
 @DisplayName("导出链路对象存储故障端到端容错:对象存储不可达时按固定重试预算反复重排队,预算耗尽后分片进入死信终态")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-  private static final String ACCOUNTING_PERIOD =
-      BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
-  private static final String BATCH_NO = "E2E-EXPORT-MINIO-FAIL-1";
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String ACCOUNTING_PERIOD = BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
+    private static final String BATCH_NO = "E2E-EXPORT-MINIO-FAIL-1";
 
-  @DynamicPropertySource
-  static void useUnreachableMinio(DynamicPropertyRegistry registry) {
-    registry.add("batch.storage.s3.endpoint", () -> "http://127.0.0.1:19987");
-    registry.add("batch.storage.backend-guard.cutover-id", () -> "storage-it-unreachable");
-  }
+    @DynamicPropertySource
+    static void useUnreachableMinio(DynamicPropertyRegistry registry) {
+        registry.add("batch.storage.s3.endpoint", () -> "http://127.0.0.1:19987");
+        registry.add("batch.storage.backend-guard.cutover-id", () -> "storage-it-unreachable");
+    }
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  @Qualifier("exportBusinessDataSource")
-  private DataSource businessDataSource;
+    @Autowired
+    @Qualifier("exportBusinessDataSource")
+    private DataSource businessDataSource;
 
-  @Test
-  @DisplayName("对象存储不可达时导出任务反复重排队,重试预算耗尽后该分片写入死信记录,链路以死信终态收敛")
-  void shouldDeadLetterPartition_whenStorageUnreachableAndRetryBudgetExhausted() {
-    final String insertSettlementBatchSql = """
+    @Test
+    @DisplayName("对象存储不可达时导出任务反复重排队,重试预算耗尽后该分片写入死信记录,链路以死信终态收敛")
+    void shouldDeadLetterPartition_whenStorageUnreachableAndRetryBudgetExhausted() {
+        final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, ?, ?, 'READY', 1, 0, 'CNY')
             returning id
             """;
-    final String insertSettlementDetailSql = """
+        final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, ?, ?, 10.00, 1.00, 9.00, 'CNY', 'READY')
         """;
 
-    final String selectCountSql = """
+        final String selectCountSql = """
                       select count(*) from batch.dead_letter_task dlt
                       join batch.job_partition jp on jp.id = dlt.source_id
                       join batch.job_instance ji on ji.id = jp.job_instance_id
@@ -110,53 +109,44 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
                         and ji.tenant_id = ? and ji.dedup_key = ?
                       """;
 
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId = businessJdbc.queryForObject(
-        insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
-    assertThat(batchId).isNotNull();
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        Long batchId = businessJdbc.queryForObject(
+                insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
+        assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        insertSettlementDetailSql,
-        TENANT,
-        batchId,
-        "E2E-MF-001",
-        "C-MF-1",
-        BIZ_DATE,
-        ACCOUNTING_PERIOD);
+        businessJdbc.update(
+                insertSettlementDetailSql, TENANT, batchId, "E2E-MF-001", "C-MF-1", BIZ_DATE, ACCOUNTING_PERIOD);
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        new E2eScenarioFixture.LaunchPreparationSpec(
-                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
-            .retryPolicy("FIXED")
-            .retryMaxCount(2)
-            .bizDate(BIZ_DATE));
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                new E2eScenarioFixture.LaunchPreparationSpec(jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
+                        .retryPolicy("FIXED")
+                        .retryMaxCount(2)
+                        .bizDate(BIZ_DATE));
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchNo", BATCH_NO);
-    params.put("templateCode", "EXP-CUSTOMER-JSON");
-    params.put("bizDate", BIZ_DATE.toString());
-    params.put("bizType", "SETTLEMENT");
-    params.put("fileCode", "e2e-export-objectStore-fail");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", BATCH_NO);
+        params.put("templateCode", "EXP-CUSTOMER-JSON");
+        params.put("bizDate", BIZ_DATE.toString());
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-export-objectStore-fail");
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-export-objectStore-fail",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-export-objectStore-fail",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(240))
-        .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(() -> {
-          e2eOutboxPublishSupport.publishAllPending(TENANT);
-          Long dlq =
-              jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
-          assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
-        });
-  }
+        await().atMost(Duration.ofSeconds(240))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    e2eOutboxPublishSupport.publishAllPending(TENANT);
+                    Long dlq = jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
+                    assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
+                });
+    }
 }

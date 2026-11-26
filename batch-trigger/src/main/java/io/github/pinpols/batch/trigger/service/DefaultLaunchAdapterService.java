@@ -40,169 +40,156 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
-  private final CalendarBizDateResolver calendarBizDateResolver;
-  private final BatchTimezoneProvider timezoneProvider;
-  private final CronExpressionAdapter cronAdapter;
+    private final CalendarBizDateResolver calendarBizDateResolver;
+    private final BatchTimezoneProvider timezoneProvider;
+    private final CronExpressionAdapter cronAdapter;
 
-  @Override
-  public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
-    TriggerLaunchInput request = command.request();
-    // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
-    LaunchRequest.LaunchRequestBuilder launchRequestBuilder = LaunchRequest.builder();
-    launchRequestBuilder.tenantId(request.tenantId());
-    launchRequestBuilder.bizDate(request.bizDate());
-    TriggerType triggerType = resolveTriggerType(command);
-    launchRequestBuilder.triggerType(triggerType);
-    launchRequestBuilder.requestId(command.requestId());
-    launchRequestBuilder.traceId(command.traceId());
-    launchRequestBuilder.params(request.params());
-    launchRequestBuilder.dataIntervalStart(request.dataIntervalStart());
-    launchRequestBuilder.dataIntervalEnd(request.dataIntervalEnd());
-    launchRequestBuilder.dryRun(Boolean.TRUE.equals(request.dryRun()));
-    launchRequestBuilder.workflowDefinitionId(request.workflowDefinitionId());
-    launchRequestBuilder.externalEventCode(request.externalEventCode());
-    launchRequestBuilder.externalEventSource(request.externalEventSource());
-    launchRequestBuilder.externalEventId(request.externalEventId());
-    return launchRequestBuilder.build();
-  }
-
-  @Override
-  public LaunchRequest fromScheduledTrigger(
-      ScheduledTriggerCommand command, CalendarBizDateDefinition calendar) {
-    TriggerDescriptor descriptor = command.descriptor();
-    // timezone 未配置时 fallback 到平台默认（batch.timezone.default-zone），而非 JVM default。
-    // 错误配置不应阻断所有调度触发，但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
-    // bizDate=null 表示日历判断为节假日且 rollRule=SKIP，调用方据此跳过本次调度
-    LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
-    return buildScheduledRequest(command, bizDate, zoneId);
-  }
-
-  @Override
-  public LaunchRequest fromObservedScheduledTrigger(
-      ScheduledTriggerCommand command, LocalDate bizDate) {
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(command.descriptor().getTimezone());
-    return buildScheduledRequest(command, bizDate, zoneId);
-  }
-
-  private LaunchRequest buildScheduledRequest(
-      ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
-    TriggerDescriptor descriptor = command.descriptor();
-    // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
-    TriggerType triggerType =
-        EmptyChecks.isNull(command.triggerType()) ? TriggerType.SCHEDULED : command.triggerType();
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("scheduleType", descriptor.getScheduleType());
-    params.put("scheduleExpression", descriptor.getScheduleExpression());
-    params.put("triggerMode", descriptor.getTriggerMode());
-    params.put("calendarCode", descriptor.getCalendarCode());
-    params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
-    params.put("scheduledAt", command.fireTime().toString());
-    if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
-      params.put("workflowDefinitionId", descriptor.getWorkflowDefinitionId());
+    @Override
+    public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
+        TriggerLaunchInput request = command.request();
+        // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
+        LaunchRequest.LaunchRequestBuilder launchRequestBuilder = LaunchRequest.builder();
+        launchRequestBuilder.tenantId(request.tenantId());
+        launchRequestBuilder.bizDate(request.bizDate());
+        TriggerType triggerType = resolveTriggerType(command);
+        launchRequestBuilder.triggerType(triggerType);
+        launchRequestBuilder.requestId(command.requestId());
+        launchRequestBuilder.traceId(command.traceId());
+        launchRequestBuilder.params(request.params());
+        launchRequestBuilder.dataIntervalStart(request.dataIntervalStart());
+        launchRequestBuilder.dataIntervalEnd(request.dataIntervalEnd());
+        launchRequestBuilder.dryRun(Boolean.TRUE.equals(request.dryRun()));
+        launchRequestBuilder.workflowDefinitionId(request.workflowDefinitionId());
+        launchRequestBuilder.externalEventCode(request.externalEventCode());
+        launchRequestBuilder.externalEventSource(request.externalEventSource());
+        launchRequestBuilder.externalEventId(request.externalEventId());
+        return launchRequestBuilder.build();
     }
-    if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
-      params.put("workflowCode", descriptor.getWorkflowCode());
-    }
-    if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
-      params.put("workflowVersion", descriptor.getWorkflowVersion());
-    }
-    // catchUp / catchUpApprovalRequired 写入 params 供 Orchestrator 决策 catch-up 审批流程
-    params.put("catchUp", TriggerType.CATCH_UP == triggerType);
-    boolean catchUpApprovalRequired =
-        CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy());
-    params.put("catchUpApprovalRequired", catchUpApprovalRequired);
-    // V94: 计算 [thisFireAt, nextFireAt) 半开区间, 业务可拼 SQL WHERE update_time >= :start AND update_time <
-    // :end
-    Instant nextFireAt = resolveNextFireAt(
-        descriptor.getScheduleType(),
-        descriptor.getScheduleExpression(),
-        zoneId,
-        command.fireTime());
-    return LaunchRequest.builder()
-        .tenantId(descriptor.getTenantId())
-        .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
-        .bizDate(bizDate)
-        .triggerType(triggerType)
-        .requestId(command.requestId())
-        .traceId(command.traceId())
-        .params(params)
-        .dataIntervalStart(command.fireTime())
-        .dataIntervalEnd(nextFireAt)
-        .build();
-  }
 
-  /**
-   * V94: 算下一次 fire 时刻, 用作 data_interval_end. 失败 (cron 非法 / scheduleType 未识别) 时返 null, 上游 instance 落
-   * NULL data_interval, 由 worker 走 bizDate 回退; 不阻断 launch.
-   */
-  private Instant resolveNextFireAt(
-      String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
-    if (EmptyChecks.isNull(scheduleType) || EmptyChecks.isBlank(scheduleExpression)) {
-      return null;
+    @Override
+    public LaunchRequest fromScheduledTrigger(ScheduledTriggerCommand command, CalendarBizDateDefinition calendar) {
+        TriggerDescriptor descriptor = command.descriptor();
+        // timezone 未配置时 fallback 到平台默认（batch.timezone.default-zone），而非 JVM default。
+        // 错误配置不应阻断所有调度触发，但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
+        ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
+        // bizDate=null 表示日历判断为节假日且 rollRule=SKIP，调用方据此跳过本次调度
+        LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
+        return buildScheduledRequest(command, bizDate, zoneId);
     }
-    String trimmedScheduleType = scheduleType.trim();
-    String type = trimmedScheduleType.toUpperCase(Locale.ROOT);
-    try {
-      NextFireCalculator calculator = nextFireCalculators().get(type);
-      return EmptyChecks.isNull(calculator)
-          ? null
-          : calculator.next(scheduleExpression, zoneId, fireAt);
-    } catch (RuntimeException ex) {
-      log.warn(
-          "data_interval next-fire computation failed: scheduleType={}, expr={}, error={}",
-          scheduleType,
-          scheduleExpression,
-          SwallowedExceptionLogger.summary(ex));
-      return null;
+
+    @Override
+    public LaunchRequest fromObservedScheduledTrigger(ScheduledTriggerCommand command, LocalDate bizDate) {
+        ZoneId zoneId = timezoneProvider.resolveOrDefault(command.descriptor().getTimezone());
+        return buildScheduledRequest(command, bizDate, zoneId);
     }
-  }
 
-  private Map<String, NextFireCalculator> nextFireCalculators() {
-    return Map.of(
-        ScheduleType.CRON.code(),
-        cronAdapter::next,
-        ScheduleType.FIXED_RATE.code(),
-        (expr, zone, fireAt) -> {
-          // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
-          Duration interval = parseFixedRateInterval(expr);
-          return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
-        });
-  }
-
-  @FunctionalInterface
-  private interface NextFireCalculator {
-    Instant next(String scheduleExpression, ZoneId zoneId, Instant fireAt);
-  }
-
-  private static Duration parseFixedRateInterval(String expr) {
-    String trimmed = expr.trim();
-    if (EmptyChecks.isEmpty(trimmed)) {
-      return null;
+    private LaunchRequest buildScheduledRequest(ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
+        TriggerDescriptor descriptor = command.descriptor();
+        // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
+        TriggerType triggerType =
+                EmptyChecks.isNull(command.triggerType()) ? TriggerType.SCHEDULED : command.triggerType();
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("scheduleType", descriptor.getScheduleType());
+        params.put("scheduleExpression", descriptor.getScheduleExpression());
+        params.put("triggerMode", descriptor.getTriggerMode());
+        params.put("calendarCode", descriptor.getCalendarCode());
+        params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
+        params.put("scheduledAt", command.fireTime().toString());
+        if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+            params.put("workflowDefinitionId", descriptor.getWorkflowDefinitionId());
+        }
+        if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
+            params.put("workflowCode", descriptor.getWorkflowCode());
+        }
+        if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
+            params.put("workflowVersion", descriptor.getWorkflowVersion());
+        }
+        // catchUp / catchUpApprovalRequired 写入 params 供 Orchestrator 决策 catch-up 审批流程
+        params.put("catchUp", TriggerType.CATCH_UP == triggerType);
+        boolean catchUpApprovalRequired =
+                CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy());
+        params.put("catchUpApprovalRequired", catchUpApprovalRequired);
+        // V94: 计算 [thisFireAt, nextFireAt) 半开区间, 业务可拼 SQL WHERE update_time >= :start AND update_time <
+        // :end
+        Instant nextFireAt = resolveNextFireAt(
+                descriptor.getScheduleType(), descriptor.getScheduleExpression(), zoneId, command.fireTime());
+        return LaunchRequest.builder()
+                .tenantId(descriptor.getTenantId())
+                .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
+                .bizDate(bizDate)
+                .triggerType(triggerType)
+                .requestId(command.requestId())
+                .traceId(command.traceId())
+                .params(params)
+                .dataIntervalStart(command.fireTime())
+                .dataIntervalEnd(nextFireAt)
+                .build();
     }
-    // 纯数字 → 秒
-    boolean containsOnlyDigits = trimmed.chars().allMatch(Character::isDigit);
-    if (containsOnlyDigits) {
-      long seconds = Long.parseLong(trimmed);
-      return seconds <= 0 ? null : Duration.ofSeconds(seconds);
-    }
-    // ISO-8601 (PT5M / PT1H / PT30S 等)
-    try {
-      String normalizedDuration = trimmed.toUpperCase(Locale.ROOT);
-      return Duration.parse(normalizedDuration);
-    } catch (RuntimeException ignored) {
-      SwallowedExceptionLogger.warn(
-          DefaultLaunchAdapterService.class, "catch:RuntimeException", ignored);
 
-      return null;
+    /**
+     * V94: 算下一次 fire 时刻, 用作 data_interval_end. 失败 (cron 非法 / scheduleType 未识别) 时返 null, 上游 instance 落
+     * NULL data_interval, 由 worker 走 bizDate 回退; 不阻断 launch.
+     */
+    private Instant resolveNextFireAt(String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
+        if (EmptyChecks.isNull(scheduleType) || EmptyChecks.isBlank(scheduleExpression)) {
+            return null;
+        }
+        String trimmedScheduleType = scheduleType.trim();
+        String type = trimmedScheduleType.toUpperCase(Locale.ROOT);
+        try {
+            NextFireCalculator calculator = nextFireCalculators().get(type);
+            return EmptyChecks.isNull(calculator) ? null : calculator.next(scheduleExpression, zoneId, fireAt);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "data_interval next-fire computation failed: scheduleType={}, expr={}, error={}",
+                    scheduleType,
+                    scheduleExpression,
+                    SwallowedExceptionLogger.summary(ex));
+            return null;
+        }
     }
-  }
 
-  @Override
-  public TriggerType resolveTriggerType(TriggerLaunchCommand command) {
-    // API 触发不要求调用方传 triggerType，null 时默认 API 以简化客户端接入
-    return EmptyChecks.isNull(command.request().triggerType())
-        ? TriggerType.API
-        : command.request().triggerType();
-  }
+    private Map<String, NextFireCalculator> nextFireCalculators() {
+        return Map.of(
+                ScheduleType.CRON.code(), cronAdapter::next, ScheduleType.FIXED_RATE.code(), (expr, zone, fireAt) -> {
+                    // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
+                    Duration interval = parseFixedRateInterval(expr);
+                    return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
+                });
+    }
+
+    @FunctionalInterface
+    private interface NextFireCalculator {
+        Instant next(String scheduleExpression, ZoneId zoneId, Instant fireAt);
+    }
+
+    private static Duration parseFixedRateInterval(String expr) {
+        String trimmed = expr.trim();
+        if (EmptyChecks.isEmpty(trimmed)) {
+            return null;
+        }
+        // 纯数字 → 秒
+        boolean containsOnlyDigits = trimmed.chars().allMatch(Character::isDigit);
+        if (containsOnlyDigits) {
+            long seconds = Long.parseLong(trimmed);
+            return seconds <= 0 ? null : Duration.ofSeconds(seconds);
+        }
+        // ISO-8601 (PT5M / PT1H / PT30S 等)
+        try {
+            String normalizedDuration = trimmed.toUpperCase(Locale.ROOT);
+            return Duration.parse(normalizedDuration);
+        } catch (RuntimeException ignored) {
+            SwallowedExceptionLogger.warn(DefaultLaunchAdapterService.class, "catch:RuntimeException", ignored);
+
+            return null;
+        }
+    }
+
+    @Override
+    public TriggerType resolveTriggerType(TriggerLaunchCommand command) {
+        // API 触发不要求调用方传 triggerType，null 时默认 API 以简化客户端接入
+        return EmptyChecks.isNull(command.request().triggerType())
+                ? TriggerType.API
+                : command.request().triggerType();
+    }
 }

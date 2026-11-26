@@ -16,14 +16,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleOidcAuthenticationFailureHandler implements AuthenticationFailureHandler {
 
-  private final ConsoleOidcProperties properties;
-  private final ConsoleOidcLoginAudit loginAudit;
+    private final ConsoleOidcProperties properties;
+    private final ConsoleOidcLoginAudit loginAudit;
 
-  @Override
-  public void onAuthenticationFailure(
-      HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
-      throws IOException, ServletException {
-    loginAudit.failed(properties.getTenantId(), "OIDC_AUTHENTICATION_FAILED");
-    response.sendRedirect("/login?authError=oidc");
-  }
+    @Override
+    public void onAuthenticationFailure(
+            HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
+            throws IOException, ServletException {
+        loginAudit.failed(properties.getTenantId(), "OIDC_AUTHENTICATION_FAILED");
+        response.sendRedirect("/login?authError=oidc");
+    }
 }

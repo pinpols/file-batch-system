@@ -54,169 +54,163 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CrossDayDependencyReconciler {
 
-  static final String STATUS_WAITING_DEPENDENCY = "WAITING_DEPENDENCY";
-  static final String STATUS_FAILED = "FAILED";
-  static final String ALERT_TYPE_TIMEOUT = "BATCH_WORKFLOW_CROSS_DAY_DEP_TIMEOUT";
+    static final String STATUS_WAITING_DEPENDENCY = "WAITING_DEPENDENCY";
+    static final String STATUS_FAILED = "FAILED";
+    static final String ALERT_TYPE_TIMEOUT = "BATCH_WORKFLOW_CROSS_DAY_DEP_TIMEOUT";
 
-  private final OrchestratorWorkflowMappers workflowMappers;
-  private final CrossDayDependencyResolver crossDayDependencyResolver;
-  private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
-  private final AlertEventService alertEventService;
-  private final CrossDayDependencyReconcileProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final SecretPayloadProtector secretPayloadProtector;
+    private final OrchestratorWorkflowMappers workflowMappers;
+    private final CrossDayDependencyResolver crossDayDependencyResolver;
+    private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
+    private final AlertEventService alertEventService;
+    private final CrossDayDependencyReconcileProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final SecretPayloadProtector secretPayloadProtector;
 
-  @Scheduled(fixedDelayString = "${batch.workflow.cross-day-dep.poll-interval-millis:60000}")
-  @SchedulerLock(name = "cross_day_dep_reconcile", lockAtMostFor = "PT5M", lockAtLeastFor = "PT0S")
-  public void scheduledReconcile() {
-    if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.workflow.cross-day-dep.poll-interval-millis:60000}")
+    @SchedulerLock(name = "cross_day_dep_reconcile", lockAtMostFor = "PT5M", lockAtLeastFor = "PT0S")
+    public void scheduledReconcile() {
+        if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
+            return;
+        }
+        Instant now = dateTimeSupport.nowInstant();
+        List<WorkflowNodeRunEntity> waiting = workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
+                STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
+        if (waiting == null || waiting.isEmpty()) {
+            return;
+        }
+        for (WorkflowNodeRunEntity entry : waiting) {
+            try {
+                reconcileOne(entry, now);
+            } catch (Exception failure) {
+                log.warn(
+                        "cross_day_dep reconcile error: nodeRunId={}, nodeCode={}, msg={}",
+                        entry.getId(),
+                        entry.getNodeCode(),
+                        SwallowedExceptionLogger.summary(failure));
+            }
+        }
     }
-    Instant now = dateTimeSupport.nowInstant();
-    List<WorkflowNodeRunEntity> waiting =
-        workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
-            STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
-    if (waiting == null || waiting.isEmpty()) {
-      return;
-    }
-    for (WorkflowNodeRunEntity entry : waiting) {
-      try {
-        reconcileOne(entry, now);
-      } catch (Exception failure) {
-        log.warn(
-            "cross_day_dep reconcile error: nodeRunId={}, nodeCode={}, msg={}",
-            entry.getId(),
-            entry.getNodeCode(),
-            SwallowedExceptionLogger.summary(failure));
-      }
-    }
-  }
 
-  void reconcileOne(WorkflowNodeRunEntity nodeRun, Instant now) {
-    // workflow_node_run 实体本身没 tenantId 字段；用 RLS-bypass 的 selectByIdAnyTenant 先解出 tenant，
-    // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
-    Long workflowRunId = nodeRun.getWorkflowRunId();
-    WorkflowRunEntity workflowRun =
-        workflowMappers.workflowRunMapper.selectByIdAnyTenant(workflowRunId);
-    if (EmptyChecks.isNull(workflowRun)) {
-      return;
+    void reconcileOne(WorkflowNodeRunEntity nodeRun, Instant now) {
+        // workflow_node_run 实体本身没 tenantId 字段；用 RLS-bypass 的 selectByIdAnyTenant 先解出 tenant，
+        // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
+        Long workflowRunId = nodeRun.getWorkflowRunId();
+        WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByIdAnyTenant(workflowRunId);
+        if (EmptyChecks.isNull(workflowRun)) {
+            return;
+        }
+        String tenantId = workflowRun.getTenantId();
+        if (tenantId == null || tenantId.isBlank()) {
+            return;
+        }
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileOneBound(nodeRun, workflowRun, now));
     }
-    String tenantId = workflowRun.getTenantId();
-    if (tenantId == null || tenantId.isBlank()) {
-      return;
-    }
-    RlsTenantContextHolder.runWithTenant(
-        tenantId, () -> reconcileOneBound(nodeRun, workflowRun, now));
-  }
 
-  /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
-  private void reconcileOneBound(
-      WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
-    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-    WorkflowNodeEntity workflowNode = EmptyChecks.isNull(snapshot)
-        ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-            workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
-        : snapshot.node(nodeRun.getNodeCode());
-    boolean nodeHasNoCrossDayDependencies = EmptyChecks.isNull(workflowNode)
-        || EmptyChecks.isNull(workflowNode.getCrossDayDependencies())
-        || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
-    if (nodeHasNoCrossDayDependencies) {
-      // 无可用依赖声明时失败关闭，避免无依据地派发。
-      markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);
-      return;
+    /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
+    private void reconcileOneBound(WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
+        WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
+        WorkflowNodeEntity workflowNode = EmptyChecks.isNull(snapshot)
+                ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+                        workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
+                : snapshot.node(nodeRun.getNodeCode());
+        boolean nodeHasNoCrossDayDependencies = EmptyChecks.isNull(workflowNode)
+                || EmptyChecks.isNull(workflowNode.getCrossDayDependencies())
+                || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
+        if (nodeHasNoCrossDayDependencies) {
+            // 无可用依赖声明时失败关闭，避免无依据地派发。
+            markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);
+            return;
+        }
+        ResolutionResult result = crossDayDependencyResolver.resolve(
+                workflowRun.getTenantId(),
+                workflowRun.getBizDate(),
+                workflowNode.getCrossDayDependencies(),
+                Boolean.TRUE.equals(workflowRun.getDryRun()));
+        if (result.isResolved()) {
+            log.info(
+                    "cross_day_dep resolved: tenantId={}, workflowRunId={}, nodeCode={}",
+                    workflowRun.getTenantId(),
+                    workflowRun.getId(),
+                    nodeRun.getNodeCode());
+            WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
+            WorkflowDagService.DagNodeResolution resolution =
+                    new WorkflowDagService.DagNodeResolution(nodeRun.getNodeCode(), nodeRun.getNodeType());
+            String sourcePayload = EmptyChecks.isNull(nodeRun.getSourcePayloadProtected())
+                    ? null
+                    : secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
+            String traceId = workflowRun.getTraceId();
+            dispatchService.dispatchNode(null, workflowRun, resolution, sourcePayload, traceId);
+            return;
+        }
+        if (result.isFailed()) {
+            if (markFailed(nodeRun, result.getFailureCode(), now)) {
+                emitTimeoutAlert(workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
+            }
+            return;
+        }
+        // WAITING — 看是否超时
+        long timeoutSeconds = resolveTimeoutSeconds(workflowNode);
+        if (timeoutSeconds <= 0L) {
+            return;
+        }
+        if (nodeRun.getStartedAt() == null) {
+            // 极少见：旧数据 / migration 残留没设 startedAt，跳过本轮等下次 dispatch 写入再判
+            return;
+        }
+        Instant deadline = nodeRun.getStartedAt().plus(Duration.ofSeconds(timeoutSeconds));
+        if (now.isAfter(deadline)) {
+            if (markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now)) {
+                emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
+            }
+        }
     }
-    ResolutionResult result = crossDayDependencyResolver.resolve(
-        workflowRun.getTenantId(),
-        workflowRun.getBizDate(),
-        workflowNode.getCrossDayDependencies(),
-        Boolean.TRUE.equals(workflowRun.getDryRun()));
-    if (result.isResolved()) {
-      log.info(
-          "cross_day_dep resolved: tenantId={}, workflowRunId={}, nodeCode={}",
-          workflowRun.getTenantId(),
-          workflowRun.getId(),
-          nodeRun.getNodeCode());
-      WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
-      WorkflowDagService.DagNodeResolution resolution =
-          new WorkflowDagService.DagNodeResolution(nodeRun.getNodeCode(), nodeRun.getNodeType());
-      String sourcePayload = EmptyChecks.isNull(nodeRun.getSourcePayloadProtected())
-          ? null
-          : secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
-      String traceId = workflowRun.getTraceId();
-      dispatchService.dispatchNode(null, workflowRun, resolution, sourcePayload, traceId);
-      return;
-    }
-    if (result.isFailed()) {
-      if (markFailed(nodeRun, result.getFailureCode(), now)) {
-        emitTimeoutAlert(workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
-      }
-      return;
-    }
-    // WAITING — 看是否超时
-    long timeoutSeconds = resolveTimeoutSeconds(workflowNode);
-    if (timeoutSeconds <= 0L) {
-      return;
-    }
-    if (nodeRun.getStartedAt() == null) {
-      // 极少见：旧数据 / migration 残留没设 startedAt，跳过本轮等下次 dispatch 写入再判
-      return;
-    }
-    Instant deadline = nodeRun.getStartedAt().plus(Duration.ofSeconds(timeoutSeconds));
-    if (now.isAfter(deadline)) {
-      if (markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now)) {
-        emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
-      }
-    }
-  }
 
-  private long resolveTimeoutSeconds(WorkflowNodeEntity workflowNode) {
-    Integer declared = workflowNode.getCrossDayDependencyTimeoutSeconds();
-    if (declared == null || declared <= 0) {
-      return properties.getDefaultTimeoutSeconds();
+    private long resolveTimeoutSeconds(WorkflowNodeEntity workflowNode) {
+        Integer declared = workflowNode.getCrossDayDependencyTimeoutSeconds();
+        if (declared == null || declared <= 0) {
+            return properties.getDefaultTimeoutSeconds();
+        }
+        return declared;
     }
-    return declared;
-  }
 
-  private boolean markFailed(WorkflowNodeRunEntity nodeRun, String failureCode, Instant now) {
-    return workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
-            .id(nodeRun.getId())
-            .nodeStatus(STATUS_FAILED)
-            .expectedStatus(STATUS_WAITING_DEPENDENCY)
-            .errorCode(EmptyChecks.isNull(failureCode) ? "CROSS_DAY_DEP_FAILED" : failureCode)
-            .errorMessage("cross-day dependency reconcile fail")
-            .durationMs(0L)
-            .finishedAt(now)
-            .build())
-        == 1;
-  }
+    private boolean markFailed(WorkflowNodeRunEntity nodeRun, String failureCode, Instant now) {
+        return workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+                        .id(nodeRun.getId())
+                        .nodeStatus(STATUS_FAILED)
+                        .expectedStatus(STATUS_WAITING_DEPENDENCY)
+                        .errorCode(EmptyChecks.isNull(failureCode) ? "CROSS_DAY_DEP_FAILED" : failureCode)
+                        .errorMessage("cross-day dependency reconcile fail")
+                        .durationMs(0L)
+                        .finishedAt(now)
+                        .build())
+                == 1;
+    }
 
-  private void emitTimeoutAlert(
-      WorkflowRunEntity workflowRun, WorkflowNodeRunEntity nodeRun, String reason) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("tenantId", workflowRun.getTenantId());
-    detail.put("workflowRunId", workflowRun.getId());
-    detail.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
-    detail.put("nodeCode", nodeRun.getNodeCode());
-    detail.put(
-        "bizDate",
-        EmptyChecks.isNull(workflowRun.getBizDate())
-            ? null
-            : workflowRun.getBizDate().toString());
-    detail.put("waitingReason", nodeRun.getErrorMessage());
-    detail.put("reason", reason);
-    String resourceKey =
-        workflowRun.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
-    AlertEmitCommand request = AlertEmitCommand.builder()
-        .tenantId(workflowRun.getTenantId())
-        .serviceName("batch-orchestrator")
-        .alertType(ALERT_TYPE_TIMEOUT)
-        .severity("ERROR")
-        .title("workflow cross-day dependency " + reason.toLowerCase(Locale.ROOT))
-        .detailJson(JsonUtils.toJson(detail))
-        .resourceKey(resourceKey)
-        .traceId(workflowRun.getTraceId())
-        .build();
-    alertEventService.emit(request);
-  }
+    private void emitTimeoutAlert(WorkflowRunEntity workflowRun, WorkflowNodeRunEntity nodeRun, String reason) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("tenantId", workflowRun.getTenantId());
+        detail.put("workflowRunId", workflowRun.getId());
+        detail.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
+        detail.put("nodeCode", nodeRun.getNodeCode());
+        detail.put(
+                "bizDate",
+                EmptyChecks.isNull(workflowRun.getBizDate())
+                        ? null
+                        : workflowRun.getBizDate().toString());
+        detail.put("waitingReason", nodeRun.getErrorMessage());
+        detail.put("reason", reason);
+        String resourceKey = workflowRun.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
+        AlertEmitCommand request = AlertEmitCommand.builder()
+                .tenantId(workflowRun.getTenantId())
+                .serviceName("batch-orchestrator")
+                .alertType(ALERT_TYPE_TIMEOUT)
+                .severity("ERROR")
+                .title("workflow cross-day dependency " + reason.toLowerCase(Locale.ROOT))
+                .detailJson(JsonUtils.toJson(detail))
+                .resourceKey(resourceKey)
+                .traceId(workflowRun.getTraceId())
+                .build();
+        alertEventService.emit(request);
+    }
 }

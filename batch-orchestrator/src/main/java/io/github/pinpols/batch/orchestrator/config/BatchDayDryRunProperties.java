@@ -8,12 +8,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.replay.dry-run")
 public class BatchDayDryRunProperties {
 
-  /** 默认关闭；开启前必须完成目标环境副作用隔离验收。 */
-  private boolean enabled;
+    /** 默认关闭；开启前必须完成目标环境副作用隔离验收。 */
+    private boolean enabled;
 
-  /** 单会话最多物化的演练 entry 数。 */
-  private int maxActiveEntries = 200;
+    /** 单会话最多物化的演练 entry 数。 */
+    private int maxActiveEntries = 200;
 
-  /** dry-run 结果默认保留天数。 */
-  private int retentionDays = 7;
+    /** dry-run 结果默认保留天数。 */
+    private int retentionDays = 7;
 }

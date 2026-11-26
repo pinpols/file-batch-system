@@ -28,51 +28,50 @@ import org.junit.jupiter.api.Test;
 @DisplayName("KafkaTaskConsumer 认证失败 — 消费循环快速失败并上报致命认证状态")
 class KafkaConsumerAuthFailureTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("kafka:9092")
-      .kafkaTopicPattern("batch.task.dispatch.tx.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
+    private TaskDispatcher dispatcher;
 
-  @AfterEach
-  void tearDown() {
-    if (dispatcher != null) dispatcher.stop();
-  }
-
-  @SuppressWarnings("unchecked")
-  private Consumer<String, byte[]> mockConsumer() {
-    return mock(Consumer.class);
-  }
-
-  @Test
-  @DisplayName("认证异常时消费循环立即失败退出,标记致命认证失败且不计入崩溃")
-  void shouldFailFast_whenAuthenticationException() {
-    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-    Consumer<String, byte[]> consumer = mockConsumer();
-    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
-    when(consumer.assignment()).thenReturn(Set.of());
-    when(consumer.poll(any())).thenThrow(new SaslAuthenticationException("bad creds"));
-
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      // 执行并断言:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
-      assertThatThrownBy(kafka::run)
-          .isInstanceOf(BatchSdkClientException.class)
-          .hasMessageContaining("SASL auth failed")
-          .hasCauseInstanceOf(SaslAuthenticationException.class)
-          .extracting(t -> ((BatchSdkClientException) t).stage())
-          .isEqualTo(BatchSdkClientException.Stage.KAFKA_AUTH);
-
-      assertThat(kafka.isFatalAuthFailure()).isTrue();
-      assertThat(kafka.isRunning()).isFalse();
-      // crashed 不该被置 —— auth 失败是确定性的 fatal,不归入"非预期 Throwable"
-      assertThat(kafka.hasCrashed()).isFalse();
+    @AfterEach
+    void tearDown() {
+        if (dispatcher != null) dispatcher.stop();
     }
-  }
+
+    @SuppressWarnings("unchecked")
+    private Consumer<String, byte[]> mockConsumer() {
+        return mock(Consumer.class);
+    }
+
+    @Test
+    @DisplayName("认证异常时消费循环立即失败退出,标记致命认证失败且不计入崩溃")
+    void shouldFailFast_whenAuthenticationException() {
+        dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+        Consumer<String, byte[]> consumer = mockConsumer();
+        doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+        when(consumer.assignment()).thenReturn(Set.of());
+        when(consumer.poll(any())).thenThrow(new SaslAuthenticationException("bad creds"));
+
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            // 执行并断言:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
+            assertThatThrownBy(kafka::run)
+                    .isInstanceOf(BatchSdkClientException.class)
+                    .hasMessageContaining("SASL auth failed")
+                    .hasCauseInstanceOf(SaslAuthenticationException.class)
+                    .extracting(t -> ((BatchSdkClientException) t).stage())
+                    .isEqualTo(BatchSdkClientException.Stage.KAFKA_AUTH);
+
+            assertThat(kafka.isFatalAuthFailure()).isTrue();
+            assertThat(kafka.isRunning()).isFalse();
+            // crashed 不该被置 —— auth 失败是确定性的 fatal,不归入"非预期 Throwable"
+            assertThat(kafka.hasCrashed()).isFalse();
+        }
+    }
 }

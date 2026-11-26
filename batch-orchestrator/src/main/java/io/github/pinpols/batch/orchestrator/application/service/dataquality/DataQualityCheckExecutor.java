@@ -47,191 +47,185 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DataQualityCheckExecutor {
 
-  /** 阈值 JSON 解析失败时写日志的预览长度；不对应数据库列。 */
-  private static final int THRESHOLD_JSON_LOG_PREVIEW_LENGTH = 200;
+    /** 阈值 JSON 解析失败时写日志的预览长度；不对应数据库列。 */
+    private static final int THRESHOLD_JSON_LOG_PREVIEW_LENGTH = 200;
 
-  private static final String STATUS_PASS = "PASS";
-  private static final String STATUS_FAIL = "FAIL";
-  private static final String STATUS_ERROR = "ERROR";
+    private static final String STATUS_PASS = "PASS";
+    private static final String STATUS_FAIL = "FAIL";
+    private static final String STATUS_ERROR = "ERROR";
 
-  private static final String SEVERITY_BLOCKER = "BLOCKER";
-  private static final String SEVERITY_WARN = "WARN";
+    private static final String SEVERITY_BLOCKER = "BLOCKER";
+    private static final String SEVERITY_WARN = "WARN";
 
-  private final DataQualityRuleMapper ruleMapper;
-  private final DataQualityCheckMapper checkMapper;
-  private final DataQualitySqlRuleProbe sqlRuleProbe;
-  private final DataQualityProperties properties;
+    private final DataQualityRuleMapper ruleMapper;
+    private final DataQualityCheckMapper checkMapper;
+    private final DataQualitySqlRuleProbe sqlRuleProbe;
+    private final DataQualityProperties properties;
 
-  /**
-   * 执行 DQ gate。规则集为空时返回 {@link GateStatus#NO_RULES}（与现有行为一致 — 无规则不阻塞）。
-   *
-   * @param instance job_instance 终态
-   * @param businessKey 由 ResultVersionWriter 算出的 business_key（如 {@code job:DAILY_PNL:2026-05-07}）
-   */
-  public DataQualityGateOutcome execute(JobInstanceEntity instance, String businessKey) {
-    if (properties.getMode() == DataQualityProperties.Mode.OFF) {
-      return DataQualityGateOutcome.noRules();
-    }
-    boolean dataQualityInputIsIncomplete = EmptyChecks.isNull(instance)
-        || instance.getId() == null
-        || !Texts.hasText(instance.getTenantId())
-        || !Texts.hasText(businessKey);
-    if (dataQualityInputIsIncomplete) {
-      return DataQualityGateOutcome.noRules();
-    }
-    List<DataQualityRuleEntity> rules =
-        ruleMapper.selectEnabledByBusinessKey(instance.getTenantId(), businessKey);
-    if (EmptyChecks.isEmpty(rules)) {
-      return DataQualityGateOutcome.noRules();
-    }
-
-    List<RuleFinding> findings = new ArrayList<>(rules.size());
-    boolean anyBlocker = false;
-    boolean anyWarn = false;
-    Instant now = BatchDateTimeSupport.utcNow();
-
-    for (DataQualityRuleEntity rule : rules) {
-      RuleFinding finding = executeOne(instance, rule, now);
-      findings.add(finding);
-      if (STATUS_FAIL.equals(finding.status()) || STATUS_ERROR.equals(finding.status())) {
-        if (SEVERITY_BLOCKER.equalsIgnoreCase(rule.getSeverity())) {
-          anyBlocker = true;
-        } else {
-          anyWarn = true;
+    /**
+     * 执行 DQ gate。规则集为空时返回 {@link GateStatus#NO_RULES}（与现有行为一致 — 无规则不阻塞）。
+     *
+     * @param instance job_instance 终态
+     * @param businessKey 由 ResultVersionWriter 算出的 business_key（如 {@code job:DAILY_PNL:2026-05-07}）
+     */
+    public DataQualityGateOutcome execute(JobInstanceEntity instance, String businessKey) {
+        if (properties.getMode() == DataQualityProperties.Mode.OFF) {
+            return DataQualityGateOutcome.noRules();
         }
-      }
+        boolean dataQualityInputIsIncomplete = EmptyChecks.isNull(instance)
+                || instance.getId() == null
+                || !Texts.hasText(instance.getTenantId())
+                || !Texts.hasText(businessKey);
+        if (dataQualityInputIsIncomplete) {
+            return DataQualityGateOutcome.noRules();
+        }
+        List<DataQualityRuleEntity> rules = ruleMapper.selectEnabledByBusinessKey(instance.getTenantId(), businessKey);
+        if (EmptyChecks.isEmpty(rules)) {
+            return DataQualityGateOutcome.noRules();
+        }
+
+        List<RuleFinding> findings = new ArrayList<>(rules.size());
+        boolean anyBlocker = false;
+        boolean anyWarn = false;
+        Instant now = BatchDateTimeSupport.utcNow();
+
+        for (DataQualityRuleEntity rule : rules) {
+            RuleFinding finding = executeOne(instance, rule, now);
+            findings.add(finding);
+            if (STATUS_FAIL.equals(finding.status()) || STATUS_ERROR.equals(finding.status())) {
+                if (SEVERITY_BLOCKER.equalsIgnoreCase(rule.getSeverity())) {
+                    anyBlocker = true;
+                } else {
+                    anyWarn = true;
+                }
+            }
+        }
+
+        GateStatus status = gateStatus(anyBlocker, anyWarn);
+        if (properties.getMode() == DataQualityProperties.Mode.SHADOW && status == GateStatus.BLOCKED) {
+            log.warn(
+                    "DQ blocker findings observed in SHADOW mode; result promotion remains unchanged:"
+                            + " tenantId={}, jobInstanceId={}, businessKey={}",
+                    instance.getTenantId(),
+                    instance.getId(),
+                    businessKey);
+            status = GateStatus.WARN;
+        }
+        return DataQualityGateOutcome.builder()
+                .status(status)
+                .findings(findings)
+                .build();
     }
 
-    GateStatus status = gateStatus(anyBlocker, anyWarn);
-    if (properties.getMode() == DataQualityProperties.Mode.SHADOW && status == GateStatus.BLOCKED) {
-      log.warn(
-          "DQ blocker findings observed in SHADOW mode; result promotion remains unchanged:"
-              + " tenantId={}, jobInstanceId={}, businessKey={}",
-          instance.getTenantId(),
-          instance.getId(),
-          businessKey);
-      status = GateStatus.WARN;
+    private RuleFinding executeOne(JobInstanceEntity instance, DataQualityRuleEntity rule, Instant now) {
+        String type = rule.getRuleType() == null ? "" : rule.getRuleType().toUpperCase(Locale.ROOT);
+        String severity =
+                rule.getSeverity() == null ? SEVERITY_WARN : rule.getSeverity().toUpperCase(Locale.ROOT);
+        try {
+            String status =
+                    switch (type) {
+                        case "TABLE_LEVEL", "CROSS_TABLE", "CROSS_DAY" -> executeScalarSqlRule(instance, rule);
+                        case "ROW_LEVEL" ->
+                            // v1.0 暂占位：业务方走 SPI sink 直接写 data_quality_check；
+                            // 这里返回 PASS 让 gate 不强阻（避免误伤）— 真实失败由 sink 已落 FAIL 行驱动。
+                            "SKIPPED";
+                        default -> STATUS_ERROR;
+                    };
+            writeCheckWithoutDetails(instance, rule, severity, status, now);
+            return RuleFinding.builder()
+                    .ruleCode(rule.getRuleCode())
+                    .ruleType(type)
+                    .severity(severity)
+                    .status(status)
+                    .message(null)
+                    .build();
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(DataQualityCheckExecutor.class, "catch:dq_rule_execute_failure", ex);
+            writeCheckWithoutDetails(instance, rule, severity, STATUS_ERROR, now);
+            return RuleFinding.builder()
+                    .ruleCode(rule.getRuleCode())
+                    .ruleType(type)
+                    .severity(severity)
+                    .status(STATUS_ERROR)
+                    .message(ex.getMessage())
+                    .build();
+        }
     }
-    return DataQualityGateOutcome.builder().status(status).findings(findings).build();
-  }
 
-  private RuleFinding executeOne(
-      JobInstanceEntity instance, DataQualityRuleEntity rule, Instant now) {
-    String type = rule.getRuleType() == null ? "" : rule.getRuleType().toUpperCase(Locale.ROOT);
-    String severity =
-        rule.getSeverity() == null ? SEVERITY_WARN : rule.getSeverity().toUpperCase(Locale.ROOT);
-    try {
-      String status =
-          switch (type) {
-            case "TABLE_LEVEL", "CROSS_TABLE", "CROSS_DAY" -> executeScalarSqlRule(instance, rule);
-            case "ROW_LEVEL" ->
-              // v1.0 暂占位：业务方走 SPI sink 直接写 data_quality_check；
-              // 这里返回 PASS 让 gate 不强阻（避免误伤）— 真实失败由 sink 已落 FAIL 行驱动。
-              "SKIPPED";
-            default -> STATUS_ERROR;
-          };
-      writeCheckWithoutDetails(instance, rule, severity, status, now);
-      return RuleFinding.builder()
-          .ruleCode(rule.getRuleCode())
-          .ruleType(type)
-          .severity(severity)
-          .status(status)
-          .message(null)
-          .build();
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(
-          DataQualityCheckExecutor.class, "catch:dq_rule_execute_failure", ex);
-      writeCheckWithoutDetails(instance, rule, severity, STATUS_ERROR, now);
-      return RuleFinding.builder()
-          .ruleCode(rule.getRuleCode())
-          .ruleType(type)
-          .severity(severity)
-          .status(STATUS_ERROR)
-          .message(ex.getMessage())
-          .build();
+    /**
+     * TABLE_LEVEL 规则执行：JSqlParser 解析校验（必须 SELECT/WITH + 禁 * + schema 白名单）， 通过
+     * NamedParameterJdbcTemplate 的 {@code :tenantId} / {@code :bizDate} / {@code :jobInstanceId} 命名参数
+     * bind（驱动负责安全转义，杜绝字符串拼接注入面）；单行单值结果 vs thresholdJson 判定 PASS/FAIL。
+     *
+     * <p>R2-P0-1 安全说明：之前用 {@code String.replace(":bizDate", "'"+date+"'")} 把值拼回 SQL， 只对单引号做转义；bizDate
+     * 含 {@code --} 等即可注入。NamedParameterJdbcTemplate 改用 JDBC bind 参数后， 即使 rule.expression 由 admin
+     * 写库，注入面也被驱动层兜住。
+     */
+    private String executeScalarSqlRule(JobInstanceEntity instance, DataQualityRuleEntity rule) {
+        long actual = sqlRuleProbe.evaluateScalar(instance, rule);
+        return matchThreshold(actual, rule.getThresholdJson(), rule.getRuleCode()) ? STATUS_PASS : STATUS_FAIL;
     }
-  }
 
-  /**
-   * TABLE_LEVEL 规则执行：JSqlParser 解析校验（必须 SELECT/WITH + 禁 * + schema 白名单）， 通过
-   * NamedParameterJdbcTemplate 的 {@code :tenantId} / {@code :bizDate} / {@code :jobInstanceId} 命名参数
-   * bind（驱动负责安全转义，杜绝字符串拼接注入面）；单行单值结果 vs thresholdJson 判定 PASS/FAIL。
-   *
-   * <p>R2-P0-1 安全说明：之前用 {@code String.replace(":bizDate", "'"+date+"'")} 把值拼回 SQL， 只对单引号做转义；bizDate
-   * 含 {@code --} 等即可注入。NamedParameterJdbcTemplate 改用 JDBC bind 参数后， 即使 rule.expression 由 admin
-   * 写库，注入面也被驱动层兜住。
-   */
-  private String executeScalarSqlRule(JobInstanceEntity instance, DataQualityRuleEntity rule) {
-    long actual = sqlRuleProbe.evaluateScalar(instance, rule);
-    return matchThreshold(actual, rule.getThresholdJson(), rule.getRuleCode())
-        ? STATUS_PASS
-        : STATUS_FAIL;
-  }
+    @SuppressWarnings("unchecked")
+    private boolean matchThreshold(long actual, String thresholdJson, String ruleCode) {
+        if (!Texts.hasText(thresholdJson)) {
+            return actual > 0;
+        }
+        Map<String, Object> threshold;
+        try {
+            threshold = JsonUtils.fromJson(thresholdJson, Map.class);
+        } catch (Exception ex) {
+            // thresholdJson 配置坏了不能静默翻转判定语义:留痕后仍走原 fallback(actual > 0)。
+            String thresholdJsonForLog = thresholdJson.length() <= THRESHOLD_JSON_LOG_PREVIEW_LENGTH
+                    ? thresholdJson
+                    : thresholdJson.substring(0, THRESHOLD_JSON_LOG_PREVIEW_LENGTH) + "...";
+            log.warn(
+                    "DQ thresholdJson parse failed, falling back to 'actual > 0': ruleCode={},"
+                            + " thresholdJson={}, cause={}",
+                    ruleCode,
+                    thresholdJsonForLog,
+                    SwallowedExceptionLogger.summary(ex));
+            return actual > 0;
+        }
+        if (threshold == null) {
+            return actual > 0;
+        }
+        Object min = threshold.get("min");
+        Object max = threshold.get("max");
+        Object expected = threshold.get("expected");
+        if (expected instanceof Number n) {
+            return actual == n.longValue();
+        }
+        return !(min instanceof Number minN && actual < minN.longValue())
+                && !(max instanceof Number maxN && actual > maxN.longValue());
+    }
 
-  @SuppressWarnings("unchecked")
-  private boolean matchThreshold(long actual, String thresholdJson, String ruleCode) {
-    if (!Texts.hasText(thresholdJson)) {
-      return actual > 0;
+    private static GateStatus gateStatus(boolean anyBlocker, boolean anyWarn) {
+        if (anyBlocker) {
+            return GateStatus.BLOCKED;
+        }
+        if (anyWarn) {
+            return GateStatus.WARN;
+        }
+        return GateStatus.PASS;
     }
-    Map<String, Object> threshold;
-    try {
-      threshold = JsonUtils.fromJson(thresholdJson, Map.class);
-    } catch (Exception ex) {
-      // thresholdJson 配置坏了不能静默翻转判定语义:留痕后仍走原 fallback(actual > 0)。
-      String thresholdJsonForLog = thresholdJson.length() <= THRESHOLD_JSON_LOG_PREVIEW_LENGTH
-          ? thresholdJson
-          : thresholdJson.substring(0, THRESHOLD_JSON_LOG_PREVIEW_LENGTH) + "...";
-      log.warn(
-          "DQ thresholdJson parse failed, falling back to 'actual > 0': ruleCode={},"
-              + " thresholdJson={}, cause={}",
-          ruleCode,
-          thresholdJsonForLog,
-          SwallowedExceptionLogger.summary(ex));
-      return actual > 0;
-    }
-    if (threshold == null) {
-      return actual > 0;
-    }
-    Object min = threshold.get("min");
-    Object max = threshold.get("max");
-    Object expected = threshold.get("expected");
-    if (expected instanceof Number n) {
-      return actual == n.longValue();
-    }
-    return !(min instanceof Number minN && actual < minN.longValue())
-        && !(max instanceof Number maxN && actual > maxN.longValue());
-  }
 
-  private static GateStatus gateStatus(boolean anyBlocker, boolean anyWarn) {
-    if (anyBlocker) {
-      return GateStatus.BLOCKED;
+    private void writeCheckWithoutDetails(
+            JobInstanceEntity instance, DataQualityRuleEntity rule, String severity, String status, Instant now) {
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        String metricsJson = JsonUtils.toJson(metrics);
+        DataQualityCheckEntity check = DataQualityCheckEntity.builder()
+                .tenantId(instance.getTenantId())
+                .jobInstanceId(instance.getId())
+                .ruleId(rule.getId())
+                .ruleCode(rule.getRuleCode())
+                .ruleType(rule.getRuleType())
+                .severity(severity)
+                .status(status)
+                .metricsJson(metricsJson)
+                .failureSample(null)
+                .checkedAt(now)
+                .build();
+        checkMapper.insert(check);
     }
-    if (anyWarn) {
-      return GateStatus.WARN;
-    }
-    return GateStatus.PASS;
-  }
-
-  private void writeCheckWithoutDetails(
-      JobInstanceEntity instance,
-      DataQualityRuleEntity rule,
-      String severity,
-      String status,
-      Instant now) {
-    Map<String, Object> metrics = new LinkedHashMap<>();
-    String metricsJson = JsonUtils.toJson(metrics);
-    DataQualityCheckEntity check = DataQualityCheckEntity.builder()
-        .tenantId(instance.getTenantId())
-        .jobInstanceId(instance.getId())
-        .ruleId(rule.getId())
-        .ruleCode(rule.getRuleCode())
-        .ruleType(rule.getRuleType())
-        .severity(severity)
-        .status(status)
-        .metricsJson(metricsJson)
-        .failureSample(null)
-        .checkedAt(now)
-        .build();
-    checkMapper.insert(check);
-  }
 }

@@ -20,23 +20,23 @@ import lombok.Data;
 @Data
 public class ConsoleLoginRequest {
 
-  // 明文字段（路径 1）
-  private String username;
-  private String password;
+    // 明文字段（路径 1）
+    private String username;
+    private String password;
 
-  // 加密字段（路径 2）
-  private String encryptedKey;
-  private String iv;
-  private String ciphertext;
+    // 加密字段（路径 2）
+    private String encryptedKey;
+    private String iv;
+    private String ciphertext;
 
-  /**
-   * 验证码凭据(risk-based,非必填)。失败计数达阈值后登录需带此字段。<b>非机密</b>,始终走 body 顶层明文(不进加密块);加密路径下应用服务
-   * 会从外层请求把它带到解密后的请求上。形态由已配置的第三方 provider 决定。
-   */
-  private String captchaToken;
+    /**
+     * 验证码凭据(risk-based,非必填)。失败计数达阈值后登录需带此字段。<b>非机密</b>,始终走 body 顶层明文(不进加密块);加密路径下应用服务
+     * 会从外层请求把它带到解密后的请求上。形态由已配置的第三方 provider 决定。
+     */
+    private String captchaToken;
 
-  /** 当前 body 是否为加密形态。 */
-  public boolean isEncrypted() {
-    return encryptedKey != null && !encryptedKey.isBlank();
-  }
+    /** 当前 body 是否为加密形态。 */
+    public boolean isEncrypted() {
+        return encryptedKey != null && !encryptedKey.isBlank();
+    }
 }

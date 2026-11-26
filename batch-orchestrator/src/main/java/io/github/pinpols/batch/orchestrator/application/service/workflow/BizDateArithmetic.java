@@ -30,180 +30,179 @@ import org.springframework.stereotype.Service;
 @Service
 public class BizDateArithmetic {
 
-  /** LAST_N_WEEKS 标签允许的最大周数（一个季度）。 */
-  private static final int MAX_LAST_WEEKS = 13;
+    /** LAST_N_WEEKS 标签允许的最大周数（一个季度）。 */
+    private static final int MAX_LAST_WEEKS = 13;
 
-  private static final int RANGE_MAX_DAYS = 90;
+    private static final int RANGE_MAX_DAYS = 90;
 
-  /**
-   * 解析 offset：
-   *
-   * <ul>
-   *   <li>int → 自然日加减；
-   *   <li>枚举字符串 → MONTH_START / MONTH_END / QUARTER_START / QUARTER_END / YEAR_START / YEAR_END。
-   * </ul>
-   *
-   * 任一参数非法或 null 返回 null。
-   */
-  public LocalDate resolveOffset(LocalDate bizDate, Integer offsetDays) {
-    if (bizDate == null || offsetDays == null) {
-      return null;
+    /**
+     * 解析 offset：
+     *
+     * <ul>
+     *   <li>int → 自然日加减；
+     *   <li>枚举字符串 → MONTH_START / MONTH_END / QUARTER_START / QUARTER_END / YEAR_START / YEAR_END。
+     * </ul>
+     *
+     * 任一参数非法或 null 返回 null。
+     */
+    public LocalDate resolveOffset(LocalDate bizDate, Integer offsetDays) {
+        if (bizDate == null || offsetDays == null) {
+            return null;
+        }
+        return bizDate.plusDays(offsetDays);
     }
-    return bizDate.plusDays(offsetDays);
-  }
 
-  /** 解析命名 offset tag。 */
-  public LocalDate resolveNamedOffset(LocalDate bizDate, String namedOffset) {
-    if (bizDate == null || !Texts.hasText(namedOffset)) {
-      return null;
+    /** 解析命名 offset tag。 */
+    public LocalDate resolveNamedOffset(LocalDate bizDate, String namedOffset) {
+        if (bizDate == null || !Texts.hasText(namedOffset)) {
+            return null;
+        }
+        String trimmedOffset = namedOffset.trim();
+        String tag = trimmedOffset.toUpperCase(Locale.ROOT);
+        return switch (tag) {
+            case "MONTH_START" -> bizDate.withDayOfMonth(1);
+            case "MONTH_END" -> {
+                YearMonth month = YearMonth.from(bizDate);
+                yield bizDate.with(month.atEndOfMonth());
+            }
+            case "QUARTER_START" -> {
+                int month = ((bizDate.getMonthValue() - 1) / 3) * 3 + 1;
+                yield LocalDate.of(bizDate.getYear(), month, 1);
+            }
+            case "QUARTER_END" -> {
+                int startMonth = ((bizDate.getMonthValue() - 1) / 3) * 3 + 1;
+                YearMonth quarterEnd = YearMonth.of(bizDate.getYear(), startMonth + 2);
+                yield quarterEnd.atEndOfMonth();
+            }
+            case "YEAR_START" -> LocalDate.of(bizDate.getYear(), Month.JANUARY, 1);
+            case "YEAR_END" -> LocalDate.of(bizDate.getYear(), Month.DECEMBER, 31);
+            case "PREV_BIZ_DAY" -> previousBusinessDay(bizDate);
+            default -> null;
+        };
     }
-    String trimmedOffset = namedOffset.trim();
-    String tag = trimmedOffset.toUpperCase(Locale.ROOT);
-    return switch (tag) {
-      case "MONTH_START" -> bizDate.withDayOfMonth(1);
-      case "MONTH_END" -> {
-        YearMonth month = YearMonth.from(bizDate);
-        yield bizDate.with(month.atEndOfMonth());
-      }
-      case "QUARTER_START" -> {
-        int month = ((bizDate.getMonthValue() - 1) / 3) * 3 + 1;
-        yield LocalDate.of(bizDate.getYear(), month, 1);
-      }
-      case "QUARTER_END" -> {
-        int startMonth = ((bizDate.getMonthValue() - 1) / 3) * 3 + 1;
-        YearMonth quarterEnd = YearMonth.of(bizDate.getYear(), startMonth + 2);
-        yield quarterEnd.atEndOfMonth();
-      }
-      case "YEAR_START" -> LocalDate.of(bizDate.getYear(), Month.JANUARY, 1);
-      case "YEAR_END" -> LocalDate.of(bizDate.getYear(), Month.DECEMBER, 31);
-      case "PREV_BIZ_DAY" -> previousBusinessDay(bizDate);
-      default -> null;
-    };
-  }
 
-  /**
-   * 解析 range tag 为 LocalDate 列表（升序）。
-   *
-   * <ul>
-   *   <li>{@code PREV_N_BIZ_DAYS}（N ≤ {@value #RANGE_MAX_DAYS}）→ 从 bizDate 往回数 N 个工作日（不含 bizDate）；
-   *   <li>{@code MTD_TO_YESTERDAY} → 当月 1 号到 bizDate-1 的所有自然日；
-   *   <li>{@code LAST_N_WEEKS}（N ≤ 13）→ N 周自然日。
-   * </ul>
-   *
-   * 不识别的 tag 返回空列表。
-   */
-  public List<LocalDate> resolveRange(LocalDate bizDate, String rangeTag) {
-    if (bizDate == null || !Texts.hasText(rangeTag)) {
-      return Collections.emptyList();
-    }
-    String trimmedRangeTag = rangeTag.trim();
-    String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
+    /**
+     * 解析 range tag 为 LocalDate 列表（升序）。
+     *
+     * <ul>
+     *   <li>{@code PREV_N_BIZ_DAYS}（N ≤ {@value #RANGE_MAX_DAYS}）→ 从 bizDate 往回数 N 个工作日（不含 bizDate）；
+     *   <li>{@code MTD_TO_YESTERDAY} → 当月 1 号到 bizDate-1 的所有自然日；
+     *   <li>{@code LAST_N_WEEKS}（N ≤ 13）→ N 周自然日。
+     * </ul>
+     *
+     * 不识别的 tag 返回空列表。
+     */
+    public List<LocalDate> resolveRange(LocalDate bizDate, String rangeTag) {
+        if (bizDate == null || !Texts.hasText(rangeTag)) {
+            return Collections.emptyList();
+        }
+        String trimmedRangeTag = rangeTag.trim();
+        String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
 
-    if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
-      String dayCountText = tag.substring("PREV_".length());
-      int n = parseLeadingInt(dayCountText);
-      if (n <= 0 || n > RANGE_MAX_DAYS) {
+        if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
+            String dayCountText = tag.substring("PREV_".length());
+            int n = parseLeadingInt(dayCountText);
+            if (n <= 0 || n > RANGE_MAX_DAYS) {
+                return Collections.emptyList();
+            }
+            return previousBusinessDays(bizDate, n);
+        }
+        if ("MTD_TO_YESTERDAY".equals(tag)) {
+            LocalDate start = bizDate.withDayOfMonth(1);
+            LocalDate end = bizDate.minusDays(1);
+            return inclusiveRange(start, end);
+        }
+        if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
+            String weekCountText = tag.substring("LAST_".length());
+            int weeks = parseLeadingInt(weekCountText);
+            if (weeks <= 0 || weeks > MAX_LAST_WEEKS) {
+                return Collections.emptyList();
+            }
+            LocalDate end = bizDate.minusDays(1);
+            LocalDate start = end.minusWeeks(weeks).plusDays(1);
+            return inclusiveRange(start, end);
+        }
         return Collections.emptyList();
-      }
-      return previousBusinessDays(bizDate, n);
     }
-    if ("MTD_TO_YESTERDAY".equals(tag)) {
-      LocalDate start = bizDate.withDayOfMonth(1);
-      LocalDate end = bizDate.minusDays(1);
-      return inclusiveRange(start, end);
-    }
-    if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
-      String weekCountText = tag.substring("LAST_".length());
-      int weeks = parseLeadingInt(weekCountText);
-      if (weeks <= 0 || weeks > MAX_LAST_WEEKS) {
-        return Collections.emptyList();
-      }
-      LocalDate end = bizDate.minusDays(1);
-      LocalDate start = end.minusWeeks(weeks).plusDays(1);
-      return inclusiveRange(start, end);
-    }
-    return Collections.emptyList();
-  }
 
-  /** 前一个工作日(周一~周五;暂不感知节假日)。 */
-  public LocalDate previousBusinessDay(LocalDate bizDate) {
-    if (bizDate == null) {
-      return null;
+    /** 前一个工作日(周一~周五;暂不感知节假日)。 */
+    public LocalDate previousBusinessDay(LocalDate bizDate) {
+        if (bizDate == null) {
+            return null;
+        }
+        LocalDate prev = bizDate.minusDays(1);
+        while (isWeekend(prev)) {
+            prev = prev.minusDays(1);
+        }
+        return prev;
     }
-    LocalDate prev = bizDate.minusDays(1);
-    while (isWeekend(prev)) {
-      prev = prev.minusDays(1);
-    }
-    return prev;
-  }
 
-  /** 后一个工作日(周一~周五;暂不感知节假日)。 */
-  public LocalDate nextBusinessDay(LocalDate bizDate) {
-    if (bizDate == null) {
-      return null;
+    /** 后一个工作日(周一~周五;暂不感知节假日)。 */
+    public LocalDate nextBusinessDay(LocalDate bizDate) {
+        if (bizDate == null) {
+            return null;
+        }
+        LocalDate next = bizDate.plusDays(1);
+        while (isWeekend(next)) {
+            next = next.plusDays(1);
+        }
+        return next;
     }
-    LocalDate next = bizDate.plusDays(1);
-    while (isWeekend(next)) {
-      next = next.plusDays(1);
-    }
-    return next;
-  }
 
-  private List<LocalDate> previousBusinessDays(LocalDate bizDate, int count) {
-    List<LocalDate> dates = new ArrayList<>();
-    LocalDate cursor = bizDate.minusDays(1);
-    while (dates.size() < count) {
-      if (!isWeekend(cursor)) {
-        dates.add(cursor);
-      }
-      cursor = cursor.minusDays(1);
-      // 回退防御：避免极端配置无限循环（理论上 count ≤ RANGE_MAX_DAYS，循环会停）
-      if (cursor.isBefore(bizDate.minusYears(1))) {
-        break;
-      }
+    private List<LocalDate> previousBusinessDays(LocalDate bizDate, int count) {
+        List<LocalDate> dates = new ArrayList<>();
+        LocalDate cursor = bizDate.minusDays(1);
+        while (dates.size() < count) {
+            if (!isWeekend(cursor)) {
+                dates.add(cursor);
+            }
+            cursor = cursor.minusDays(1);
+            // 回退防御：避免极端配置无限循环（理论上 count ≤ RANGE_MAX_DAYS，循环会停）
+            if (cursor.isBefore(bizDate.minusYears(1))) {
+                break;
+            }
+        }
+        Collections.reverse(dates);
+        return dates;
     }
-    Collections.reverse(dates);
-    return dates;
-  }
 
-  /** 是否周末(周六/周日);当前节假日语义即周末近似。 */
-  public boolean isWeekend(LocalDate date) {
-    DayOfWeek dow = date.getDayOfWeek();
-    return DayOfWeek.SATURDAY.equals(dow) || DayOfWeek.SUNDAY.equals(dow);
-  }
+    /** 是否周末(周六/周日);当前节假日语义即周末近似。 */
+    public boolean isWeekend(LocalDate date) {
+        DayOfWeek dow = date.getDayOfWeek();
+        return DayOfWeek.SATURDAY.equals(dow) || DayOfWeek.SUNDAY.equals(dow);
+    }
 
-  private List<LocalDate> inclusiveRange(LocalDate start, LocalDate end) {
-    boolean businessDateRangeIsInvalid =
-        EmptyChecks.isNull(start) || EmptyChecks.isNull(end) || start.isAfter(end);
-    if (businessDateRangeIsInvalid) {
-      return Collections.emptyList();
+    private List<LocalDate> inclusiveRange(LocalDate start, LocalDate end) {
+        boolean businessDateRangeIsInvalid = EmptyChecks.isNull(start) || EmptyChecks.isNull(end) || start.isAfter(end);
+        if (businessDateRangeIsInvalid) {
+            return Collections.emptyList();
+        }
+        List<LocalDate> dates = new ArrayList<>();
+        for (LocalDate cursor = start; !cursor.isAfter(end); cursor = cursor.plusDays(1)) {
+            dates.add(cursor);
+            if (dates.size() > RANGE_MAX_DAYS) {
+                break;
+            }
+        }
+        return dates;
     }
-    List<LocalDate> dates = new ArrayList<>();
-    for (LocalDate cursor = start; !cursor.isAfter(end); cursor = cursor.plusDays(1)) {
-      dates.add(cursor);
-      if (dates.size() > RANGE_MAX_DAYS) {
-        break;
-      }
-    }
-    return dates;
-  }
 
-  private int parseLeadingInt(String text) {
-    StringBuilder digits = new StringBuilder();
-    for (char c : text.toCharArray()) {
-      if (Character.isDigit(c)) {
-        digits.append(c);
-      } else {
-        break;
-      }
+    private int parseLeadingInt(String text) {
+        StringBuilder digits = new StringBuilder();
+        for (char c : text.toCharArray()) {
+            if (Character.isDigit(c)) {
+                digits.append(c);
+            } else {
+                break;
+            }
+        }
+        if (digits.isEmpty()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(digits.toString());
+        } catch (NumberFormatException nfe) {
+            return -1;
+        }
     }
-    if (digits.isEmpty()) {
-      return -1;
-    }
-    try {
-      return Integer.parseInt(digits.toString());
-    } catch (NumberFormatException nfe) {
-      return -1;
-    }
-  }
 }

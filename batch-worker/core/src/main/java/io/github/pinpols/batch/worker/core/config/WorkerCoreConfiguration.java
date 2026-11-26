@@ -10,14 +10,14 @@ import org.springframework.context.annotation.Import;
 @Configuration(proxyBeanMethods = false)
 @Import({WorkerReportOutboxConfiguration.class, WorkerCoreAsyncConfiguration.class})
 @EnableConfigurationProperties({
-  OrchestratorClientProperties.class,
-  OrchestratorTaskClientProperties.class,
-  WorkerExecutionTimeoutProperties.class,
-  WorkerReportOutboxProperties.class,
-  WorkerLeaseProperties.class,
-  WorkerWatchdogSchedulerProperties.class,
-  WorkerCheckpointProperties.class,
-  WorkerBatchClaimProperties.class,
-  WorkerIdentityProperties.class
+    OrchestratorClientProperties.class,
+    OrchestratorTaskClientProperties.class,
+    WorkerExecutionTimeoutProperties.class,
+    WorkerReportOutboxProperties.class,
+    WorkerLeaseProperties.class,
+    WorkerWatchdogSchedulerProperties.class,
+    WorkerCheckpointProperties.class,
+    WorkerBatchClaimProperties.class,
+    WorkerIdentityProperties.class
 })
 public class WorkerCoreConfiguration {}

@@ -13,9 +13,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.compensation.stale-running-reconciler")
 public class StaleCompensationReconcilerProperties {
 
-  /** RUNNING 命令被视为遗留的超时秒数；{@code <= 0} 表示禁用对账。默认 3600。 */
-  private long timeoutSeconds = 3_600L;
+    /** RUNNING 命令被视为遗留的超时秒数；{@code <= 0} 表示禁用对账。默认 3600。 */
+    private long timeoutSeconds = 3_600L;
 
-  /** 单批标记失败的最大记录数；{@code <= 0} 表示禁用对账。默认 100。 */
-  private int batchSize = 100;
+    /** 单批标记失败的最大记录数；{@code <= 0} 表示禁用对账。默认 100。 */
+    private int batchSize = 100;
 }

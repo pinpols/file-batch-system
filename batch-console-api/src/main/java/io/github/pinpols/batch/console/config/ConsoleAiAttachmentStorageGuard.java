@@ -11,18 +11,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleAiAttachmentStorageGuard {
 
-  private final ConsoleAiProperties aiProperties;
-  private final S3StorageProperties storageProperties;
+    private final ConsoleAiProperties aiProperties;
+    private final S3StorageProperties storageProperties;
 
-  @PostConstruct
-  void validate() {
-    String attachmentBucket = aiProperties.getAttachment().getStorageBucket();
-    if (EmptyChecks.isBlank(attachmentBucket)) {
-      throw new IllegalStateException("AI attachment storage bucket must not be blank");
+    @PostConstruct
+    void validate() {
+        String attachmentBucket = aiProperties.getAttachment().getStorageBucket();
+        if (EmptyChecks.isBlank(attachmentBucket)) {
+            throw new IllegalStateException("AI attachment storage bucket must not be blank");
+        }
+        if (attachmentBucket.trim().equals(storageProperties.getBucket())) {
+            throw new IllegalStateException("AI attachment storage bucket must differ from batch file bucket");
+        }
     }
-    if (attachmentBucket.trim().equals(storageProperties.getBucket())) {
-      throw new IllegalStateException(
-          "AI attachment storage bucket must differ from batch file bucket");
-    }
-  }
 }

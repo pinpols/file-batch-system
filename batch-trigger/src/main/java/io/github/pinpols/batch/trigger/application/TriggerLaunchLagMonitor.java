@@ -30,82 +30,83 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class TriggerLaunchLagMonitor {
 
-  static final long UNKNOWN_LAG = TriggerLaunchLagQueryPort.UNKNOWN_LAG;
+    static final long UNKNOWN_LAG = TriggerLaunchLagQueryPort.UNKNOWN_LAG;
 
-  private final TriggerLaunchLagQueryPort lagQuery;
-  private final TriggerOutboxRelayProperties properties;
-  private final ThreadPoolTaskScheduler scheduler;
-  private final AtomicReference<LagSnapshot> snapshot =
-      new AtomicReference<>(new LagSnapshot(UNKNOWN_LAG, 0L));
-  private final AtomicLong sequence = new AtomicLong();
-  private final AtomicBoolean started = new AtomicBoolean();
-  private final AtomicBoolean stopping = new AtomicBoolean();
-  private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
+    private final TriggerLaunchLagQueryPort lagQuery;
+    private final TriggerOutboxRelayProperties properties;
+    private final ThreadPoolTaskScheduler scheduler;
+    private final AtomicReference<LagSnapshot> snapshot = new AtomicReference<>(new LagSnapshot(UNKNOWN_LAG, 0L));
+    private final AtomicLong sequence = new AtomicLong();
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
 
-  public TriggerLaunchLagMonitor(
-      TriggerLaunchLagQueryPort lagQuery,
-      TriggerOutboxRelayProperties properties,
-      MeterRegistry meterRegistry,
-      @Qualifier("triggerLaunchLagMonitorScheduler") ThreadPoolTaskScheduler scheduler) {
-    this.lagQuery = lagQuery;
-    this.properties = properties;
-    this.scheduler = scheduler;
-    meterRegistry.gauge(
-        "batch.trigger.launch.consumer.lag", snapshot, value -> value.get().lag());
-  }
-
-  @EventListener(ApplicationReadyEvent.class)
-  public void start() {
-    if (!properties.isAdaptiveReleaseEnabled()) {
-      return;
+    public TriggerLaunchLagMonitor(
+            TriggerLaunchLagQueryPort lagQuery,
+            TriggerOutboxRelayProperties properties,
+            MeterRegistry meterRegistry,
+            @Qualifier("triggerLaunchLagMonitorScheduler") ThreadPoolTaskScheduler scheduler) {
+        this.lagQuery = lagQuery;
+        this.properties = properties;
+        this.scheduler = scheduler;
+        meterRegistry.gauge(
+                "batch.trigger.launch.consumer.lag",
+                snapshot,
+                value -> value.get().lag());
     }
-    boolean firstStart = started.compareAndSet(false, true);
-    if (!firstStart) {
-      return;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void start() {
+        if (!properties.isAdaptiveReleaseEnabled()) {
+            return;
+        }
+        boolean firstStart = started.compareAndSet(false, true);
+        if (!firstStart) {
+            return;
+        }
+        Duration samplingInterval = Duration.ofMillis(properties.getLagSampleIntervalMillis());
+        scheduledTask.set(scheduler.scheduleWithFixedDelay(this::sampleSafely, samplingInterval));
     }
-    Duration samplingInterval = Duration.ofMillis(properties.getLagSampleIntervalMillis());
-    scheduledTask.set(scheduler.scheduleWithFixedDelay(this::sampleSafely, samplingInterval));
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  public void stop() {
-    stopping.set(true);
-    ScheduledFuture<?> task = scheduledTask.getAndSet(null);
-    if (task != null) {
-      task.cancel(true);
+    @EventListener(ContextClosedEvent.class)
+    public void stop() {
+        stopping.set(true);
+        ScheduledFuture<?> task = scheduledTask.getAndSet(null);
+        if (task != null) {
+            task.cancel(true);
+        }
     }
-  }
 
-  LagSnapshot current() {
-    return snapshot.get();
-  }
-
-  void sampleSafely() {
-    if (stopping.get()) {
-      return;
+    LagSnapshot current() {
+        return snapshot.get();
     }
-    try {
-      long sampledLag = lagQuery.sampleLag();
-      publishSnapshot(sampledLag);
-    } catch (InterruptedException exception) {
-      Thread.currentThread().interrupt();
-      if (!stopping.get()) {
-        publishSnapshot(UNKNOWN_LAG);
-      }
-    } catch (ExecutionException | TimeoutException | RuntimeException exception) {
-      if (!stopping.get()) {
-        publishSnapshot(UNKNOWN_LAG);
-        SwallowedExceptionLogger.warn(
-            TriggerLaunchLagMonitor.class, "trigger-launch-consumer-lag-sample-failed", exception);
-      }
+
+    void sampleSafely() {
+        if (stopping.get()) {
+            return;
+        }
+        try {
+            long sampledLag = lagQuery.sampleLag();
+            publishSnapshot(sampledLag);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            if (!stopping.get()) {
+                publishSnapshot(UNKNOWN_LAG);
+            }
+        } catch (ExecutionException | TimeoutException | RuntimeException exception) {
+            if (!stopping.get()) {
+                publishSnapshot(UNKNOWN_LAG);
+                SwallowedExceptionLogger.warn(
+                        TriggerLaunchLagMonitor.class, "trigger-launch-consumer-lag-sample-failed", exception);
+            }
+        }
     }
-  }
 
-  private void publishSnapshot(long lag) {
-    long snapshotSequence = sequence.incrementAndGet();
-    LagSnapshot nextSnapshot = new LagSnapshot(lag, snapshotSequence);
-    snapshot.set(nextSnapshot);
-  }
+    private void publishSnapshot(long lag) {
+        long snapshotSequence = sequence.incrementAndGet();
+        LagSnapshot nextSnapshot = new LagSnapshot(lag, snapshotSequence);
+        snapshot.set(nextSnapshot);
+    }
 
-  record LagSnapshot(long lag, long sequence) {}
+    record LagSnapshot(long lag, long sequence) {}
 }

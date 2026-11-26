@@ -15,39 +15,39 @@ import org.junit.jupiter.api.Test;
 
 @DisplayName("告警重发的租户故障隔离与启停")
 class AlertmanagerReemitSchedulerTest {
-  @Test
-  @DisplayName("单租户失败仍处理后续租户")
-  void shouldContinueAfterTenantFailure() {
-    AlertmanagerEmitProperties properties = new AlertmanagerEmitProperties();
-    properties.setEnabled(true);
-    AlertmanagerEmitPublisher publisher = mock(AlertmanagerEmitPublisher.class);
-    when(publisher.isEnabled()).thenReturn(true);
-    AlertmanagerReemitService service = mock(AlertmanagerReemitService.class);
-    doThrow(new IllegalStateException("injected tenant failure"))
-        .when(service)
-        .reemitTenant("tenant-a");
-    TenantDirectoryMapper directory = mock(TenantDirectoryMapper.class);
-    when(directory.selectAllTenantIds()).thenReturn(List.of("tenant-a", "tenant-b"));
-    AlertmanagerReemitScheduler scheduler = new AlertmanagerReemitScheduler(
-        properties, publisher, service, directory, mock(OrchestratorGracefulShutdown.class));
+    @Test
+    @DisplayName("单租户失败仍处理后续租户")
+    void shouldContinueAfterTenantFailure() {
+        AlertmanagerEmitProperties properties = new AlertmanagerEmitProperties();
+        properties.setEnabled(true);
+        AlertmanagerEmitPublisher publisher = mock(AlertmanagerEmitPublisher.class);
+        when(publisher.isEnabled()).thenReturn(true);
+        AlertmanagerReemitService service = mock(AlertmanagerReemitService.class);
+        doThrow(new IllegalStateException("injected tenant failure"))
+                .when(service)
+                .reemitTenant("tenant-a");
+        TenantDirectoryMapper directory = mock(TenantDirectoryMapper.class);
+        when(directory.selectAllTenantIds()).thenReturn(List.of("tenant-a", "tenant-b"));
+        AlertmanagerReemitScheduler scheduler = new AlertmanagerReemitScheduler(
+                properties, publisher, service, directory, mock(OrchestratorGracefulShutdown.class));
 
-    scheduler.reemit();
+        scheduler.reemit();
 
-    verify(service).reemitTenant("tenant-b");
-  }
+        verify(service).reemitTenant("tenant-b");
+    }
 
-  @Test
-  @DisplayName("关闭开关时不读取目录或发送")
-  void shouldSkipWhenDisabled() {
-    AlertmanagerEmitProperties properties = new AlertmanagerEmitProperties();
-    AlertmanagerEmitPublisher publisher = mock(AlertmanagerEmitPublisher.class);
-    AlertmanagerReemitService service = mock(AlertmanagerReemitService.class);
-    TenantDirectoryMapper directory = mock(TenantDirectoryMapper.class);
-    AlertmanagerReemitScheduler scheduler = new AlertmanagerReemitScheduler(
-        properties, publisher, service, directory, mock(OrchestratorGracefulShutdown.class));
+    @Test
+    @DisplayName("关闭开关时不读取目录或发送")
+    void shouldSkipWhenDisabled() {
+        AlertmanagerEmitProperties properties = new AlertmanagerEmitProperties();
+        AlertmanagerEmitPublisher publisher = mock(AlertmanagerEmitPublisher.class);
+        AlertmanagerReemitService service = mock(AlertmanagerReemitService.class);
+        TenantDirectoryMapper directory = mock(TenantDirectoryMapper.class);
+        AlertmanagerReemitScheduler scheduler = new AlertmanagerReemitScheduler(
+                properties, publisher, service, directory, mock(OrchestratorGracefulShutdown.class));
 
-    scheduler.reemit();
+        scheduler.reemit();
 
-    verifyNoInteractions(directory, service, publisher);
-  }
+        verifyNoInteractions(directory, service, publisher);
+    }
 }

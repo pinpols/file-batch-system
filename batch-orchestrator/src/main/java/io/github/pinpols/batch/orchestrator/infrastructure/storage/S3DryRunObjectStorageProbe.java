@@ -18,77 +18,74 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 @Component
 public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProbe {
 
-  private static final String SCOPE_EXECUTION = "execution";
-  private static final Pattern S3_BUCKET_PATTERN =
-      Pattern.compile("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$");
+    private static final String SCOPE_EXECUTION = "execution";
+    private static final Pattern S3_BUCKET_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$");
 
-  private final ObjectProvider<S3Client> s3ClientProvider;
-  private final ObjectProvider<S3StorageProperties> s3PropertiesProvider;
+    private final ObjectProvider<S3Client> s3ClientProvider;
+    private final ObjectProvider<S3StorageProperties> s3PropertiesProvider;
 
-  public S3DryRunObjectStorageProbe(
-      ObjectProvider<S3Client> s3ClientProvider,
-      ObjectProvider<S3StorageProperties> s3PropertiesProvider) {
-    this.s3ClientProvider = s3ClientProvider;
-    this.s3PropertiesProvider = s3PropertiesProvider;
-  }
+    public S3DryRunObjectStorageProbe(
+            ObjectProvider<S3Client> s3ClientProvider, ObjectProvider<S3StorageProperties> s3PropertiesProvider) {
+        this.s3ClientProvider = s3ClientProvider;
+        this.s3PropertiesProvider = s3PropertiesProvider;
+    }
 
-  @Override
-  // S2259 无法识别 EmptyChecks 对 ObjectProvider 可空结果的保护。
-  @SuppressWarnings("java:S2259")
-  public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
-    String bucket = stringValue(params, "s3Bucket");
-    if (!Texts.hasText(bucket)) {
-      S3StorageProperties properties = s3PropertiesProvider.getIfAvailable();
-      bucket = EmptyChecks.isNull(properties) ? null : properties.getBucket();
+    @Override
+    // S2259 无法识别 EmptyChecks 对 ObjectProvider 可空结果的保护。
+    @SuppressWarnings("java:S2259")
+    public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
+        String bucket = stringValue(params, "s3Bucket");
+        if (!Texts.hasText(bucket)) {
+            S3StorageProperties properties = s3PropertiesProvider.getIfAvailable();
+            bucket = EmptyChecks.isNull(properties) ? null : properties.getBucket();
+        }
+        if (!Texts.hasText(bucket)) {
+            return 0;
+        }
+        if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
+            findings.add(DryRunFinding.error(
+                    "EXEC_S3_BUCKET_INVALID",
+                    SCOPE_EXECUTION,
+                    "s3 bucket name does not match DNS-style rule: " + bucket,
+                    bucket));
+            return 1;
+        }
+        S3Client client = s3ClientProvider.getIfAvailable();
+        if (EmptyChecks.isNull(client)) {
+            findings.add(DryRunFinding.warn(
+                    "EXEC_S3_CLIENT_UNAVAILABLE",
+                    SCOPE_EXECUTION,
+                    "S3Client bean unavailable; bucket name passed regex only",
+                    bucket));
+            return 1;
+        }
+        probeBucket(client, bucket, findings);
+        return 1;
     }
-    if (!Texts.hasText(bucket)) {
-      return 0;
-    }
-    if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
-      findings.add(DryRunFinding.error(
-          "EXEC_S3_BUCKET_INVALID",
-          SCOPE_EXECUTION,
-          "s3 bucket name does not match DNS-style rule: " + bucket,
-          bucket));
-      return 1;
-    }
-    S3Client client = s3ClientProvider.getIfAvailable();
-    if (EmptyChecks.isNull(client)) {
-      findings.add(DryRunFinding.warn(
-          "EXEC_S3_CLIENT_UNAVAILABLE",
-          SCOPE_EXECUTION,
-          "S3Client bean unavailable; bucket name passed regex only",
-          bucket));
-      return 1;
-    }
-    probeBucket(client, bucket, findings);
-    return 1;
-  }
 
-  private void probeBucket(S3Client client, String bucket, List<DryRunFinding> findings) {
-    try {
-      boolean exists;
-      try {
-        client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-        exists = true;
-      } catch (NoSuchBucketException notFound) {
-        exists = false;
-      }
-      if (exists) {
-        findings.add(DryRunFinding.pass(
-            "EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
-      } else {
-        findings.add(DryRunFinding.error(
-            "EXEC_S3_BUCKET_MISSING", SCOPE_EXECUTION, "s3 bucket not found: " + bucket, bucket));
-      }
-    } catch (Exception ex) {
-      findings.add(DryRunFinding.warn(
-          "EXEC_S3_PROBE_FAILED", SCOPE_EXECUTION, "s3 probe failed: " + ex.getMessage(), bucket));
+    private void probeBucket(S3Client client, String bucket, List<DryRunFinding> findings) {
+        try {
+            boolean exists;
+            try {
+                client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+                exists = true;
+            } catch (NoSuchBucketException notFound) {
+                exists = false;
+            }
+            if (exists) {
+                findings.add(DryRunFinding.pass("EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
+            } else {
+                findings.add(DryRunFinding.error(
+                        "EXEC_S3_BUCKET_MISSING", SCOPE_EXECUTION, "s3 bucket not found: " + bucket, bucket));
+            }
+        } catch (Exception ex) {
+            findings.add(DryRunFinding.warn(
+                    "EXEC_S3_PROBE_FAILED", SCOPE_EXECUTION, "s3 probe failed: " + ex.getMessage(), bucket));
+        }
     }
-  }
 
-  private static String stringValue(Map<String, Object> params, String key) {
-    Object raw = EmptyChecks.isNull(params) ? null : params.get(key);
-    return raw instanceof String string ? string : null;
-  }
+    private static String stringValue(Map<String, Object> params, String key) {
+        Object raw = EmptyChecks.isNull(params) ? null : params.get(key);
+        return raw instanceof String string ? string : null;
+    }
 }

@@ -23,38 +23,38 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("默认分区节流器: 分区配额关闭时直接放行并跳过活跃分区计数")
 class DefaultPartitionThrottleTest {
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private QuotaRuntimeStateService quotaRuntimeStateService;
+    @Mock
+    private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  private DefaultPartitionThrottle throttle;
+    private DefaultPartitionThrottle throttle;
 
-  @BeforeEach
-  void setUp() {
-    throttle = new DefaultPartitionThrottle(
-        jobPartitionMapper, configCacheService, quotaRuntimeStateService, governance);
-  }
+    @BeforeEach
+    void setUp() {
+        throttle = new DefaultPartitionThrottle(
+                jobPartitionMapper, configCacheService, quotaRuntimeStateService, governance);
+    }
 
-  @Test
-  @DisplayName("租户和队列分区配额均关闭时直接放行, 且不查询活跃分区")
-  void shouldPassThroughWithoutActivePartitionCount_whenPartitionQuotasDisabled() {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId("ta");
-    TenantQuotaPolicyEntity disabledLimits = new TenantQuotaPolicyEntity(
-        null, "ta", "unbounded", 0, 0, 0, 1, null, 0, 0, "NONE", 0, true, null);
-    when(configCacheService.findEnabledQuotaPolicy("ta")).thenReturn(disabledLimits);
+    @Test
+    @DisplayName("租户和队列分区配额均关闭时直接放行, 且不查询活跃分区")
+    void shouldPassThroughWithoutActivePartitionCount_whenPartitionQuotasDisabled() {
+        ResourceSchedulingRequest request = new ResourceSchedulingRequest();
+        request.setTenantId("ta");
+        TenantQuotaPolicyEntity disabledLimits =
+                new TenantQuotaPolicyEntity(null, "ta", "unbounded", 0, 0, 0, 1, null, 0, 0, "NONE", 0, true, null);
+        when(configCacheService.findEnabledQuotaPolicy("ta")).thenReturn(disabledLimits);
 
-    ResourceCheck result = throttle.check(request, null);
+        ResourceCheck result = throttle.check(request, null);
 
-    assertThat(result.allowed()).isTrue();
-    verifyNoInteractions(jobPartitionMapper, quotaRuntimeStateService, governance);
-  }
+        assertThat(result.allowed()).isTrue();
+        verifyNoInteractions(jobPartitionMapper, quotaRuntimeStateService, governance);
+    }
 }

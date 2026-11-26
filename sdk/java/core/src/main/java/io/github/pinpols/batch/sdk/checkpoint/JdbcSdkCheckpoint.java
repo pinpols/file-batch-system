@@ -51,7 +51,7 @@ import javax.sql.DataSource;
  */
 public final class JdbcSdkCheckpoint implements SdkCheckpoint {
 
-  private static final String UPSERT_SQL = """
+    private static final String UPSERT_SQL = """
       INSERT INTO sdk_task_checkpoint
           (task_id, break_position, succeed_count, fail_count, completed, updated_at)
       VALUES (?, ?, ?, ?, ?, now())
@@ -63,88 +63,87 @@ public final class JdbcSdkCheckpoint implements SdkCheckpoint {
           updated_at     = now()
       """;
 
-  private static final String LOAD_SQL =
-      "SELECT break_position, succeed_count, fail_count, completed"
-          + " FROM sdk_task_checkpoint WHERE task_id = ?";
+    private static final String LOAD_SQL = "SELECT break_position, succeed_count, fail_count, completed"
+            + " FROM sdk_task_checkpoint WHERE task_id = ?";
 
-  private final DataSource dataSource;
-  private final ObjectMapper objectMapper;
+    private final DataSource dataSource;
+    private final ObjectMapper objectMapper;
 
-  public JdbcSdkCheckpoint(DataSource dataSource, ObjectMapper objectMapper) {
-    this.dataSource = dataSource;
-    this.objectMapper = objectMapper;
-  }
+    public JdbcSdkCheckpoint(DataSource dataSource, ObjectMapper objectMapper) {
+        this.dataSource = dataSource;
+        this.objectMapper = objectMapper;
+    }
 
-  @Override
-  public Optional<SdkCheckpointState> load(String taskId) {
-    try (Connection c = dataSource.getConnection();
-        PreparedStatement ps = c.prepareStatement(LOAD_SQL)) {
-      ps.setString(1, taskId);
-      try (ResultSet rs = ps.executeQuery()) {
-        if (!rs.next()) {
-          return Optional.empty();
+    @Override
+    public Optional<SdkCheckpointState> load(String taskId) {
+        try (Connection c = dataSource.getConnection();
+                PreparedStatement ps = c.prepareStatement(LOAD_SQL)) {
+            ps.setString(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                String breakPositionJson = rs.getString(1);
+                Map<String, Object> breakPosition = readBreakPosition(breakPositionJson);
+                long succeedCount = rs.getLong(2);
+                long failCount = rs.getLong(3);
+                boolean completed = rs.getBoolean(4);
+                SdkCheckpointState checkpointState =
+                        new SdkCheckpointState(breakPosition, succeedCount, failCount, completed);
+                return Optional.of(checkpointState);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("checkpoint load failed for taskId=" + taskId, e);
         }
-        String breakPositionJson = rs.getString(1);
-        Map<String, Object> breakPosition = readBreakPosition(breakPositionJson);
-        long succeedCount = rs.getLong(2);
-        long failCount = rs.getLong(3);
-        boolean completed = rs.getBoolean(4);
-        SdkCheckpointState checkpointState =
-            new SdkCheckpointState(breakPosition, succeedCount, failCount, completed);
-        return Optional.of(checkpointState);
-      }
-    } catch (Exception e) {
-      throw new IllegalStateException("checkpoint load failed for taskId=" + taskId, e);
     }
-  }
 
-  /**
-   * 便利重载:自管 connection + 提交。<b>仅当业务写也在同一调用内时才同事务</b>,否则违反 ADR-037 强约束。续跑模板默认走这条; 真要业务 + 断点同事务请改用
-   * {@link #save(Connection, String, SdkCheckpointState)}。
-   */
-  @Override
-  public void save(String taskId, SdkCheckpointState state) {
-    try (Connection c = dataSource.getConnection()) {
-      boolean prevAutoCommit = c.getAutoCommit();
-      c.setAutoCommit(false);
-      try {
-        save(c, taskId, state);
-        c.commit();
-      } catch (RuntimeException ex) {
-        c.rollback();
-        throw ex;
-      } finally {
-        c.setAutoCommit(prevAutoCommit);
-      }
-    } catch (Exception e) {
-      throw new IllegalStateException("checkpoint save failed for taskId=" + taskId, e);
+    /**
+     * 便利重载:自管 connection + 提交。<b>仅当业务写也在同一调用内时才同事务</b>,否则违反 ADR-037 强约束。续跑模板默认走这条; 真要业务 + 断点同事务请改用
+     * {@link #save(Connection, String, SdkCheckpointState)}。
+     */
+    @Override
+    public void save(String taskId, SdkCheckpointState state) {
+        try (Connection c = dataSource.getConnection()) {
+            boolean prevAutoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                save(c, taskId, state);
+                c.commit();
+            } catch (RuntimeException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(prevAutoCommit);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("checkpoint save failed for taskId=" + taskId, e);
+        }
     }
-  }
 
-  /**
-   * <b>推荐用法</b>:在业务正在用的 {@link Connection} 上 {@code UPDATE 断点行},<b>不在此 commit</b> —— 由调用方对同一
-   * connection {@code commit()},把业务写与断点写合成一个原子事务。这才是 ADR-037 决策二「同事务强约束」的落地点。
-   */
-  public void save(Connection connection, String taskId, SdkCheckpointState state) {
-    try (PreparedStatement ps = connection.prepareStatement(UPSERT_SQL)) {
-      ps.setString(1, taskId);
-      Map<String, Object> breakPosition = state.breakPosition();
-      String breakPositionJson = objectMapper.writeValueAsString(breakPosition);
-      ps.setString(2, breakPositionJson);
-      ps.setLong(3, state.succeedCount());
-      ps.setLong(4, state.failCount());
-      ps.setBoolean(5, state.completed());
-      ps.executeUpdate();
-    } catch (Exception e) {
-      throw new IllegalStateException("checkpoint upsert failed for taskId=" + taskId, e);
+    /**
+     * <b>推荐用法</b>:在业务正在用的 {@link Connection} 上 {@code UPDATE 断点行},<b>不在此 commit</b> —— 由调用方对同一
+     * connection {@code commit()},把业务写与断点写合成一个原子事务。这才是 ADR-037 决策二「同事务强约束」的落地点。
+     */
+    public void save(Connection connection, String taskId, SdkCheckpointState state) {
+        try (PreparedStatement ps = connection.prepareStatement(UPSERT_SQL)) {
+            ps.setString(1, taskId);
+            Map<String, Object> breakPosition = state.breakPosition();
+            String breakPositionJson = objectMapper.writeValueAsString(breakPosition);
+            ps.setString(2, breakPositionJson);
+            ps.setLong(3, state.succeedCount());
+            ps.setLong(4, state.failCount());
+            ps.setBoolean(5, state.completed());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new IllegalStateException("checkpoint upsert failed for taskId=" + taskId, e);
+        }
     }
-  }
 
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> readBreakPosition(String json) throws JsonProcessingException {
-    if (json == null || json.isBlank()) {
-      return Map.of();
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readBreakPosition(String json) throws JsonProcessingException {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        return objectMapper.readValue(json, Map.class);
     }
-    return objectMapper.readValue(json, Map.class);
-  }
 }

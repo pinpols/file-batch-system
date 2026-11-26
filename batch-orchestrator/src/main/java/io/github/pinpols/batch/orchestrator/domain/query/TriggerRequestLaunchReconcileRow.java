@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class TriggerRequestLaunchReconcileRow {
 
-  private String tenantId;
-  private String requestId;
-  private Long jobInstanceId;
+    private String tenantId;
+    private String requestId;
+    private Long jobInstanceId;
 }

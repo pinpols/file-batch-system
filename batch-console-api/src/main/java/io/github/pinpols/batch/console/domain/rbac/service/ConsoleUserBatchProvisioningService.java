@@ -52,365 +52,353 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class ConsoleUserBatchProvisioningService {
 
-  /** console_user_account.display_name VARCHAR(256)（V34__create_console_user_account.sql）。 */
-  private static final int DISPLAY_NAME_MAX_LENGTH = 256;
+    /** console_user_account.display_name VARCHAR(256)（V34__create_console_user_account.sql）。 */
+    private static final int DISPLAY_NAME_MAX_LENGTH = 256;
 
-  /** 初始密码的随机字节数；24 字节经 Base64URL 编码为 32 个字符。 */
-  private static final int RANDOM_PASSWORD_BYTES = 24;
+    /** 初始密码的随机字节数；24 字节经 Base64URL 编码为 32 个字符。 */
+    private static final int RANDOM_PASSWORD_BYTES = 24;
 
-  static final int MAX_ROWS = 500;
-  private static final long MAX_BYTES = 2L * 1024 * 1024;
-  private static final Duration PREVIEW_TTL = Duration.ofMinutes(15);
-  private static final String PREFIX = "console:user-batch:preview:";
-  static final List<String> HEADERS = List.of("tenantId", "username", "displayName", "role");
-  private static final Pattern USERNAME = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$");
-  private static final SecureRandom RANDOM = new SecureRandom();
+    static final int MAX_ROWS = 500;
+    private static final long MAX_BYTES = 2L * 1024 * 1024;
+    private static final Duration PREVIEW_TTL = Duration.ofMinutes(15);
+    private static final String PREFIX = "console:user-batch:preview:";
+    static final List<String> HEADERS = List.of("tenantId", "username", "displayName", "role");
+    private static final Pattern USERNAME = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$");
+    private static final SecureRandom RANDOM = new SecureRandom();
 
-  private final ConsoleUserAccountService accountService;
-  private final ConsoleUserAccountMapper accountMapper;
-  private final ConsoleUserBatchOperationMapper operationMapper;
-  private final TenantMapper tenantMapper;
-  private final ConsoleUserBatchProvisioningStore store;
-  private final ObjectMapper objectMapper;
+    private final ConsoleUserAccountService accountService;
+    private final ConsoleUserAccountMapper accountMapper;
+    private final ConsoleUserBatchOperationMapper operationMapper;
+    private final TenantMapper tenantMapper;
+    private final ConsoleUserBatchProvisioningStore store;
+    private final ObjectMapper objectMapper;
 
-  public record AccountRow(
-      int rowNo, String tenantId, String username, String displayName, String role) {}
+    public record AccountRow(int rowNo, String tenantId, String username, String displayName, String role) {}
 
-  public record RowIssue(int rowNo, String username, String errorCode, String message) {}
+    public record RowIssue(int rowNo, String username, String errorCode, String message) {}
 
-  public record Preview(
-      String previewToken,
-      int version,
-      String sourceDigest,
-      int totalRows,
-      int validRows,
-      List<AccountRow> rows,
-      List<RowIssue> issues) {}
+    public record Preview(
+            String previewToken,
+            int version,
+            String sourceDigest,
+            int totalRows,
+            int validRows,
+            List<AccountRow> rows,
+            List<RowIssue> issues) {}
 
-  public record Credential(
-      long accountId, String tenantId, String username, String initialPassword) {
-    @Override
-    public String toString() {
-      return "Credential[accountId=" + accountId + ", tenantId=" + tenantId + ", username="
-          + username + ", secret=<redacted>]";
-    }
-  }
-
-  public record ApplyResult(UUID operationId, int accountCount, List<Credential> credentials) {}
-
-  public record Operation(
-      UUID operationId, UUID requestId, int accountCount, String tenantIds, String createdAt) {}
-
-  private record Session(String actor, String sourceDigest, int version, List<AccountRow> rows) {}
-
-  private record StoredSession(Session session, String json) {}
-
-  private static final String APPLYING_PREFIX = "APPLYING:";
-
-  public byte[] template() {
-    try (XSSFWorkbook workbook = new XSSFWorkbook();
-        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      Sheet sheet = workbook.createSheet("Accounts");
-      Row header = sheet.createRow(0);
-      for (int i = 0; i < HEADERS.size(); i++) {
-        header.createCell(i).setCellValue(HEADERS.get(i));
-      }
-      workbook.write(out);
-      return out.toByteArray();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Failed to create account template", ex);
-    }
-  }
-
-  public Preview preview(MultipartFile file) throws IOException {
-    UploadFileGuard.requireExcel(file);
-    String filename = file.getOriginalFilename();
-    boolean provisioningWorkbookIsInvalid = file.getSize() > MAX_BYTES
-        || filename == null // empty-check: allow - Sonar 需要直接识别解引用前的空值保护。
-        || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
-    if (provisioningWorkbookIsInvalid) {
-      throw invalid("XLSX file exceeds 2 MiB or has an unsupported extension");
-    }
-    byte[] bytes = file.getBytes();
-    List<AccountRow> rows = ConsoleUserBatchWorkbookParser.parse(bytes);
-    if (EmptyChecks.isEmpty(rows)) throw invalid("Workbook contains no accounts");
-    UUID tokenId = UUID.randomUUID();
-    String token = tokenId.toString();
-    String digest = digest(bytes);
-    ConsolePrincipal principal = actor();
-    String previewActorUsername = principal.username();
-    Session session = new Session(previewActorUsername, digest, 1, rows);
-    save(token, session);
-    return validate(token, session);
-  }
-
-  public Preview patch(String token, int version, AccountRow replacement) {
-    StoredSession stored = load(token);
-    Session session = stored.session();
-    if (version != session.version())
-      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
-    List<AccountRow> rows = new ArrayList<>(session.rows());
-    int index = -1;
-    for (int i = 0; i < rows.size(); i++) {
-      if (rows.get(i).rowNo() == replacement.rowNo()) {
-        index = i;
-        break;
-      }
-    }
-    if (index < 0) throw invalid("Unknown preview row");
-    rows.set(index, replacement);
-    Session updated = new Session(session.actor(), session.sourceDigest(), version + 1, rows);
-    if (!store.replacePreview(PREFIX + token, stored.json(), serialize(updated), PREVIEW_TTL)) {
-      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
-    }
-    return validate(token, updated);
-  }
-
-  @Transactional
-  public ApplyResult apply(String token, int version, UUID requestId) {
-    StoredSession stored = load(token);
-    Session session = stored.session();
-    if (session.version() != version)
-      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
-    if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
-    Operation existingApplication = findByRequestId(requestId, null);
-    if (EmptyChecks.isNotNull(existingApplication)) {
-      throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
-    }
-    Preview checked = validate(token, session);
-    if (EmptyChecks.isNotEmpty(checked.issues())) {
-      throw BizException.of(
-          ResultCode.CONFLICT, "Preview has validation errors; refresh and correct it");
-    }
-    String applying = APPLYING_PREFIX + UUID.randomUUID();
-    if (!store.replacePreview(PREFIX + token, stored.json(), applying, PREVIEW_TTL)) {
-      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
-    }
-    boolean managedTransaction = TransactionSynchronizationManager.isSynchronizationActive();
-    if (managedTransaction) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+    public record Credential(long accountId, String tenantId, String username, String initialPassword) {
         @Override
-        public void afterCompletion(int status) {
-          if (status == STATUS_UNKNOWN) {
-            // 提交结果不确定时不能恢复可编辑状态，保留冻结态并通过操作记录核实。
-            log.error("batch preview transaction outcome unknown: requestId={}", requestId);
-            return;
-          }
-          finishApply(token, applying, stored.json(), status == STATUS_COMMITTED, requestId);
+        public String toString() {
+            return "Credential[accountId=" + accountId + ", tenantId=" + tenantId + ", username=" + username
+                    + ", secret=<redacted>]";
         }
-      });
     }
-    boolean succeeded = false;
-    try {
-      ApplyResult result = createAccounts(session, checked, requestId);
-      succeeded = true;
-      return result;
-    } finally {
-      // 单测直接调用时无事务代理；生产路径必须等真实提交/回滚后再消费或恢复预览。
-      if (!managedTransaction) {
-        finishApply(token, applying, stored.json(), succeeded, requestId);
-      }
+
+    public record ApplyResult(UUID operationId, int accountCount, List<Credential> credentials) {}
+
+    public record Operation(UUID operationId, UUID requestId, int accountCount, String tenantIds, String createdAt) {}
+
+    private record Session(String actor, String sourceDigest, int version, List<AccountRow> rows) {}
+
+    private record StoredSession(Session session, String json) {}
+
+    private static final String APPLYING_PREFIX = "APPLYING:";
+
+    public byte[] template() {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Accounts");
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < HEADERS.size(); i++) {
+                header.createCell(i).setCellValue(HEADERS.get(i));
+            }
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to create account template", ex);
+        }
     }
-  }
 
-  private void finishApply(
-      String token, String applying, String original, boolean committed, UUID requestId) {
-    try {
-      if (committed) {
-        store.deletePreview(PREFIX + token, applying);
-      } else {
-        store.replacePreview(PREFIX + token, applying, original, PREVIEW_TTL);
-      }
-    } catch (DataAccessException ex) {
-      // 提交记录在数据库中；Redis 清理失败时保留冻结态直至 TTL，不误报业务回滚。
-      // 预览令牌及存储异常可能包含账户信息，仅记录操作关联标识和异常类型。
-      log.error(
-          "batch preview finalization failed: requestId={} committed={} cause={}",
-          requestId,
-          committed,
-          ex.getClass().getSimpleName());
+    public Preview preview(MultipartFile file) throws IOException {
+        UploadFileGuard.requireExcel(file);
+        String filename = file.getOriginalFilename();
+        boolean provisioningWorkbookIsInvalid = file.getSize() > MAX_BYTES
+                || filename == null // empty-check: allow - Sonar 需要直接识别解引用前的空值保护。
+                || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
+        if (provisioningWorkbookIsInvalid) {
+            throw invalid("XLSX file exceeds 2 MiB or has an unsupported extension");
+        }
+        byte[] bytes = file.getBytes();
+        List<AccountRow> rows = ConsoleUserBatchWorkbookParser.parse(bytes);
+        if (EmptyChecks.isEmpty(rows)) throw invalid("Workbook contains no accounts");
+        UUID tokenId = UUID.randomUUID();
+        String token = tokenId.toString();
+        String digest = digest(bytes);
+        ConsolePrincipal principal = actor();
+        String previewActorUsername = principal.username();
+        Session session = new Session(previewActorUsername, digest, 1, rows);
+        save(token, session);
+        return validate(token, session);
     }
-  }
 
-  private ApplyResult createAccounts(Session session, Preview checked, UUID requestId) {
-    List<Credential> credentials = new ArrayList<>();
-    Set<String> tenantIds = new HashSet<>();
-    for (AccountRow row : checked.rows()) {
-      String password = randomPassword();
-      ConsoleUserAccountResponse created = accountService.createProvisioned(
-          row.tenantId(), row.username(), password, row.displayName(), row.role());
-      credentials.add(
-          new Credential(created.id(), created.tenantId(), created.username(), password));
-      tenantIds.add(created.tenantId());
+    public Preview patch(String token, int version, AccountRow replacement) {
+        StoredSession stored = load(token);
+        Session session = stored.session();
+        if (version != session.version()) throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+        List<AccountRow> rows = new ArrayList<>(session.rows());
+        int index = -1;
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).rowNo() == replacement.rowNo()) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) throw invalid("Unknown preview row");
+        rows.set(index, replacement);
+        Session updated = new Session(session.actor(), session.sourceDigest(), version + 1, rows);
+        if (!store.replacePreview(PREFIX + token, stored.json(), serialize(updated), PREVIEW_TTL)) {
+            throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+        }
+        return validate(token, updated);
     }
-    UUID operationId = UUID.randomUUID();
-    List<String> sortedTenantIds = tenantIds.stream().sorted().toList();
-    String tenantIdsCsv = String.join(",", sortedTenantIds);
-    ConsoleUserBatchOperationInsertOperationParam consoleUserBatchOperationInsertOperationParam =
-        ConsoleUserBatchOperationInsertOperationParam.builder()
-            .operationId(operationId)
-            .requestId(requestId)
-            .actor(session.actor())
-            .sourceDigest(session.sourceDigest())
-            .accountCount(credentials.size())
-            .tenantIds(tenantIdsCsv)
-            .build();
-    operationMapper.insertOperation(consoleUserBatchOperationInsertOperationParam);
-    return new ApplyResult(operationId, credentials.size(), credentials);
-  }
 
-  public Operation operation(UUID operationId, String targetTenantId) {
-    ConsolePrincipal principal = actor();
-    ConsoleUserBatchOperationView found = operationMapper.selectByOperationId(
-        operationId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
-    if (EmptyChecks.isNull(found))
-      throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
-    return toOperation(found);
-  }
-
-  public Operation findByRequestId(UUID requestId, String targetTenantId) {
-    ConsolePrincipal principal = actor();
-    ConsoleUserBatchOperationView found = operationMapper.selectByRequestId(
-        requestId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
-    return EmptyChecks.isNull(found) ? null : toOperation(found);
-  }
-
-  public Operation findByRequestId(UUID requestId) {
-    return findByRequestId(requestId, null);
-  }
-
-  private static Operation toOperation(ConsoleUserBatchOperationView row) {
-    return new Operation(
-        row.getOperationId(),
-        row.getRequestId(),
-        row.getAccountCount(),
-        row.getTenantIds(),
-        row.getCreatedAt().toString());
-  }
-
-  private Preview validate(String token, Session session) {
-    ConsolePrincipal principal = actor();
-    Set<String> usernames = new HashSet<>();
-    List<RowIssue> issues = new ArrayList<>();
-    List<AccountRow> normalized = new ArrayList<>();
-    for (AccountRow raw : session.rows()) {
-      AccountRow row = normalize(raw, principal);
-      normalized.add(row);
-      String code = validateRow(row, principal, usernames);
-      if (EmptyChecks.isNotNull(code))
-        issues.add(new RowIssue(row.rowNo(), row.username(), code, code));
+    @Transactional
+    public ApplyResult apply(String token, int version, UUID requestId) {
+        StoredSession stored = load(token);
+        Session session = stored.session();
+        if (session.version() != version) throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+        if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
+        Operation existingApplication = findByRequestId(requestId, null);
+        if (EmptyChecks.isNotNull(existingApplication)) {
+            throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
+        }
+        Preview checked = validate(token, session);
+        if (EmptyChecks.isNotEmpty(checked.issues())) {
+            throw BizException.of(ResultCode.CONFLICT, "Preview has validation errors; refresh and correct it");
+        }
+        String applying = APPLYING_PREFIX + UUID.randomUUID();
+        if (!store.replacePreview(PREFIX + token, stored.json(), applying, PREVIEW_TTL)) {
+            throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+        }
+        boolean managedTransaction = TransactionSynchronizationManager.isSynchronizationActive();
+        if (managedTransaction) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status == STATUS_UNKNOWN) {
+                        // 提交结果不确定时不能恢复可编辑状态，保留冻结态并通过操作记录核实。
+                        log.error("batch preview transaction outcome unknown: requestId={}", requestId);
+                        return;
+                    }
+                    finishApply(token, applying, stored.json(), status == STATUS_COMMITTED, requestId);
+                }
+            });
+        }
+        boolean succeeded = false;
+        try {
+            ApplyResult result = createAccounts(session, checked, requestId);
+            succeeded = true;
+            return result;
+        } finally {
+            // 单测直接调用时无事务代理；生产路径必须等真实提交/回滚后再消费或恢复预览。
+            if (!managedTransaction) {
+                finishApply(token, applying, stored.json(), succeeded, requestId);
+            }
+        }
     }
-    return new Preview(
-        token,
-        session.version(),
-        session.sourceDigest(),
-        normalized.size(),
-        normalized.size() - issues.size(),
-        normalized,
-        issues);
-  }
 
-  private AccountRow normalize(AccountRow raw, ConsolePrincipal principal) {
-    String tenantId = trim(raw.tenantId());
-    if (!principal.authorities().contains(ConsoleRoles.ADMIN)) tenantId = principal.tenantId();
-    int rowNo = raw.rowNo();
-    String username = trim(raw.username());
-    String displayName = trim(raw.displayName());
-    String role = trim(raw.role());
-    String normalizedRole = role.toUpperCase(Locale.ROOT);
-    return new AccountRow(rowNo, tenantId, username, displayName, normalizedRole);
-  }
-
-  private String validateRow(AccountRow row, ConsolePrincipal principal, Set<String> usernames) {
-    if (!USERNAME.matcher(row.username()).matches()
-        || row.displayName().length() > DISPLAY_NAME_MAX_LENGTH) return "INVALID_ACCOUNT";
-    String normalizedUsernameForDuplicateCheck = row.username().toLowerCase(Locale.ROOT);
-    boolean usernameIsUniqueInFile = usernames.add(normalizedUsernameForDuplicateCheck);
-    if (!usernameIsUniqueInFile) return "DUPLICATE_IN_FILE";
-    boolean roleIsNotAllowedForPrincipal = !ConsoleRoles.ALL.contains(row.role())
-        || (!principal.authorities().contains(ConsoleRoles.ADMIN)
-            && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER).contains(row.role()));
-    if (roleIsNotAllowedForPrincipal) return "INVALID_ROLE";
-    if (Set.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR).contains(row.role())) {
-      if (!"system".equals(row.tenantId())) return "INVALID_TENANT";
-    } else {
-      TenantRow tenant = tenantMapper.selectByTenantId(row.tenantId());
-      boolean tenantIsMissingOrInactive =
-          EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status());
-      if (tenantIsMissingOrInactive) return "TENANT_NOT_ACTIVE";
+    private void finishApply(String token, String applying, String original, boolean committed, UUID requestId) {
+        try {
+            if (committed) {
+                store.deletePreview(PREFIX + token, applying);
+            } else {
+                store.replacePreview(PREFIX + token, applying, original, PREVIEW_TTL);
+            }
+        } catch (DataAccessException ex) {
+            // 提交记录在数据库中；Redis 清理失败时保留冻结态直至 TTL，不误报业务回滚。
+            // 预览令牌及存储异常可能包含账户信息，仅记录操作关联标识和异常类型。
+            log.error(
+                    "batch preview finalization failed: requestId={} committed={} cause={}",
+                    requestId,
+                    committed,
+                    ex.getClass().getSimpleName());
+        }
     }
-    ConsoleUserAccountRow existingAccount = accountMapper.selectByUsername(row.username());
-    return EmptyChecks.isNull(existingAccount) ? null : "USERNAME_EXISTS";
-  }
 
-  private static String trim(String value) {
-    return EmptyChecks.isNull(value) ? "" : value.trim();
-  }
-
-  private static String effectiveTenantFilter(
-      String requestedTenantId, ConsolePrincipal principal) {
-    if (!principal.authorities().contains(ConsoleRoles.ADMIN)) return principal.tenantId();
-    String trimmed = trim(requestedTenantId);
-    return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
-  }
-
-  private void save(String token, Session session) {
-    store.savePreview(PREFIX + token, serialize(session), PREVIEW_TTL);
-  }
-
-  private String serialize(Session session) {
-    try {
-      return objectMapper.writeValueAsString(session);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalStateException("Failed to serialize batch preview", ex);
+    private ApplyResult createAccounts(Session session, Preview checked, UUID requestId) {
+        List<Credential> credentials = new ArrayList<>();
+        Set<String> tenantIds = new HashSet<>();
+        for (AccountRow row : checked.rows()) {
+            String password = randomPassword();
+            ConsoleUserAccountResponse created = accountService.createProvisioned(
+                    row.tenantId(), row.username(), password, row.displayName(), row.role());
+            credentials.add(new Credential(created.id(), created.tenantId(), created.username(), password));
+            tenantIds.add(created.tenantId());
+        }
+        UUID operationId = UUID.randomUUID();
+        List<String> sortedTenantIds = tenantIds.stream().sorted().toList();
+        String tenantIdsCsv = String.join(",", sortedTenantIds);
+        ConsoleUserBatchOperationInsertOperationParam consoleUserBatchOperationInsertOperationParam =
+                ConsoleUserBatchOperationInsertOperationParam.builder()
+                        .operationId(operationId)
+                        .requestId(requestId)
+                        .actor(session.actor())
+                        .sourceDigest(session.sourceDigest())
+                        .accountCount(credentials.size())
+                        .tenantIds(tenantIdsCsv)
+                        .build();
+        operationMapper.insertOperation(consoleUserBatchOperationInsertOperationParam);
+        return new ApplyResult(operationId, credentials.size(), credentials);
     }
-  }
 
-  private StoredSession load(String token) {
-    String json = store.loadPreview(PREFIX + token);
-    if (EmptyChecks.isNull(json)) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
-    if (json.startsWith(APPLYING_PREFIX)) {
-      throw BizException.of(ResultCode.CONFLICT, "Preview is being applied");
+    public Operation operation(UUID operationId, String targetTenantId) {
+        ConsolePrincipal principal = actor();
+        ConsoleUserBatchOperationView found = operationMapper.selectByOperationId(
+                operationId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
+        if (EmptyChecks.isNull(found)) throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
+        return toOperation(found);
     }
-    try {
-      Session session = objectMapper.readValue(json, Session.class);
-      if (!actor().username().equals(session.actor())) {
-        throw BizException.of(ResultCode.FORBIDDEN, "Preview belongs to another operator");
-      }
-      return new StoredSession(session, json);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalStateException("Failed to read batch preview", ex);
+
+    public Operation findByRequestId(UUID requestId, String targetTenantId) {
+        ConsolePrincipal principal = actor();
+        ConsoleUserBatchOperationView found = operationMapper.selectByRequestId(
+                requestId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
+        return EmptyChecks.isNull(found) ? null : toOperation(found);
     }
-  }
 
-  private ConsolePrincipal actor() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null // empty-check: allow - Sonar 需要直接识别认证对象的空值保护。
-        || !(auth.getPrincipal() instanceof ConsolePrincipal principal)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "Authentication required");
+    public Operation findByRequestId(UUID requestId) {
+        return findByRequestId(requestId, null);
     }
-    return principal;
-  }
 
-  private static String digest(byte[] bytes) {
-    try {
-      HexFormat hexFormat = HexFormat.of();
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hashedBytes = digest.digest(bytes);
-      return hexFormat.formatHex(hashedBytes);
-    } catch (NoSuchAlgorithmException ex) {
-      throw new IllegalStateException(ex);
+    private static Operation toOperation(ConsoleUserBatchOperationView row) {
+        return new Operation(
+                row.getOperationId(),
+                row.getRequestId(),
+                row.getAccountCount(),
+                row.getTenantIds(),
+                row.getCreatedAt().toString());
     }
-  }
 
-  private static String randomPassword() {
-    byte[] bytes = new byte[RANDOM_PASSWORD_BYTES];
-    RANDOM.nextBytes(bytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-  }
+    private Preview validate(String token, Session session) {
+        ConsolePrincipal principal = actor();
+        Set<String> usernames = new HashSet<>();
+        List<RowIssue> issues = new ArrayList<>();
+        List<AccountRow> normalized = new ArrayList<>();
+        for (AccountRow raw : session.rows()) {
+            AccountRow row = normalize(raw, principal);
+            normalized.add(row);
+            String code = validateRow(row, principal, usernames);
+            if (EmptyChecks.isNotNull(code)) issues.add(new RowIssue(row.rowNo(), row.username(), code, code));
+        }
+        return new Preview(
+                token,
+                session.version(),
+                session.sourceDigest(),
+                normalized.size(),
+                normalized.size() - issues.size(),
+                normalized,
+                issues);
+    }
 
-  static BizException invalid(String detail) {
-    return BizException.of(
-        ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), detail);
-  }
+    private AccountRow normalize(AccountRow raw, ConsolePrincipal principal) {
+        String tenantId = trim(raw.tenantId());
+        if (!principal.authorities().contains(ConsoleRoles.ADMIN)) tenantId = principal.tenantId();
+        int rowNo = raw.rowNo();
+        String username = trim(raw.username());
+        String displayName = trim(raw.displayName());
+        String role = trim(raw.role());
+        String normalizedRole = role.toUpperCase(Locale.ROOT);
+        return new AccountRow(rowNo, tenantId, username, displayName, normalizedRole);
+    }
+
+    private String validateRow(AccountRow row, ConsolePrincipal principal, Set<String> usernames) {
+        if (!USERNAME.matcher(row.username()).matches() || row.displayName().length() > DISPLAY_NAME_MAX_LENGTH)
+            return "INVALID_ACCOUNT";
+        String normalizedUsernameForDuplicateCheck = row.username().toLowerCase(Locale.ROOT);
+        boolean usernameIsUniqueInFile = usernames.add(normalizedUsernameForDuplicateCheck);
+        if (!usernameIsUniqueInFile) return "DUPLICATE_IN_FILE";
+        boolean roleIsNotAllowedForPrincipal = !ConsoleRoles.ALL.contains(row.role())
+                || (!principal.authorities().contains(ConsoleRoles.ADMIN)
+                        && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER)
+                                .contains(row.role()));
+        if (roleIsNotAllowedForPrincipal) return "INVALID_ROLE";
+        if (Set.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR).contains(row.role())) {
+            if (!"system".equals(row.tenantId())) return "INVALID_TENANT";
+        } else {
+            TenantRow tenant = tenantMapper.selectByTenantId(row.tenantId());
+            boolean tenantIsMissingOrInactive = EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status());
+            if (tenantIsMissingOrInactive) return "TENANT_NOT_ACTIVE";
+        }
+        ConsoleUserAccountRow existingAccount = accountMapper.selectByUsername(row.username());
+        return EmptyChecks.isNull(existingAccount) ? null : "USERNAME_EXISTS";
+    }
+
+    private static String trim(String value) {
+        return EmptyChecks.isNull(value) ? "" : value.trim();
+    }
+
+    private static String effectiveTenantFilter(String requestedTenantId, ConsolePrincipal principal) {
+        if (!principal.authorities().contains(ConsoleRoles.ADMIN)) return principal.tenantId();
+        String trimmed = trim(requestedTenantId);
+        return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
+    }
+
+    private void save(String token, Session session) {
+        store.savePreview(PREFIX + token, serialize(session), PREVIEW_TTL);
+    }
+
+    private String serialize(Session session) {
+        try {
+            return objectMapper.writeValueAsString(session);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize batch preview", ex);
+        }
+    }
+
+    private StoredSession load(String token) {
+        String json = store.loadPreview(PREFIX + token);
+        if (EmptyChecks.isNull(json)) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
+        if (json.startsWith(APPLYING_PREFIX)) {
+            throw BizException.of(ResultCode.CONFLICT, "Preview is being applied");
+        }
+        try {
+            Session session = objectMapper.readValue(json, Session.class);
+            if (!actor().username().equals(session.actor())) {
+                throw BizException.of(ResultCode.FORBIDDEN, "Preview belongs to another operator");
+            }
+            return new StoredSession(session, json);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to read batch preview", ex);
+        }
+    }
+
+    private ConsolePrincipal actor() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null // empty-check: allow - Sonar 需要直接识别认证对象的空值保护。
+                || !(auth.getPrincipal() instanceof ConsolePrincipal principal)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "Authentication required");
+        }
+        return principal;
+    }
+
+    private static String digest(byte[] bytes) {
+        try {
+            HexFormat hexFormat = HexFormat.of();
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashedBytes = digest.digest(bytes);
+            return hexFormat.formatHex(hashedBytes);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private static String randomPassword() {
+        byte[] bytes = new byte[RANDOM_PASSWORD_BYTES];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    static BizException invalid(String detail) {
+        return BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), detail);
+    }
 }

@@ -33,166 +33,143 @@ import org.springframework.stereotype.Component;
 @Primary
 @Component
 public class ExportStepExecutionAdapter
-    extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
+        extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
 
-  /** 按 pipeline 分段加锁的锁数量。 */
-  private static final int PIPELINE_LOCK_STRIPES = 64;
+    /** 按 pipeline 分段加锁的锁数量。 */
+    private static final int PIPELINE_LOCK_STRIPES = 64;
 
-  private final ExportStageExecutor exportStageExecutor;
-  private final ObjectMapper objectMapper;
+    private final ExportStageExecutor exportStageExecutor;
+    private final ObjectMapper objectMapper;
 
-  // 同一 pipeline 实例的重复投递可能在同一 worker 进程并发执行；checkpoint 文件是实例级资源，
-  // 必须把 GENERATE 到 COMPLETE 整条链路串行化，避免一个执行清理文件时另一个执行仍在读写。
-  private static final ReentrantLock[] PIPELINE_LOCKS = createPipelineLocks();
+    // 同一 pipeline 实例的重复投递可能在同一 worker 进程并发执行；checkpoint 文件是实例级资源，
+    // 必须把 GENERATE 到 COMPLETE 整条链路串行化，避免一个执行清理文件时另一个执行仍在读写。
+    private static final ReentrantLock[] PIPELINE_LOCKS = createPipelineLocks();
 
-  private static ReentrantLock[] createPipelineLocks() {
-    ReentrantLock[] locks = new ReentrantLock[PIPELINE_LOCK_STRIPES];
-    for (int i = 0; i < locks.length; i++) {
-      locks[i] = new ReentrantLock();
+    private static ReentrantLock[] createPipelineLocks() {
+        ReentrantLock[] locks = new ReentrantLock[PIPELINE_LOCK_STRIPES];
+        for (int i = 0; i < locks.length; i++) {
+            locks[i] = new ReentrantLock();
+        }
+        return locks;
     }
-    return locks;
-  }
 
-  public ExportStepExecutionAdapter(
-      ExportStageExecutor exportStageExecutor,
-      ObjectMapper objectMapper,
-      PlatformPipelineRunRepository pipelineRuns,
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
-      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(
-        pipelineRuns,
-        fileRecords,
-        exportStageExecutor,
-        verifierHookProvider,
-        compensationHookProvider);
-    this.exportStageExecutor = exportStageExecutor;
-    this.objectMapper = objectMapper;
-  }
-
-  @Override
-  protected String pipelineType() {
-    return ExportWorkerType.EXPORT;
-  }
-
-  @Override
-  protected String initialStage() {
-    return ExportStage.PREPARE.name();
-  }
-
-  @Override
-  protected ExportJobContext buildContext(
-      StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
-    ExportJobContext context = new ExportJobContext();
-    populateCommonFields(context, request, contextMap);
-    Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
-    String bizDate = String.valueOf(rawBizDate);
-    context.setBizDate(bizDate);
-    context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-    Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    boolean rawExportPayloadNeedsDecoding = EmptyChecks.isNull(exportPayload)
-        && EmptyChecks.isNotNull(context.getRawPayload())
-        && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
-    if (rawExportPayloadNeedsDecoding) {
-      exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-      context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
+    public ExportStepExecutionAdapter(
+            ExportStageExecutor exportStageExecutor,
+            ObjectMapper objectMapper,
+            PlatformPipelineRunRepository pipelineRuns,
+            PlatformFileRecordRepository fileRecords,
+            ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+            ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+        super(pipelineRuns, fileRecords, exportStageExecutor, verifierHookProvider, compensationHookProvider);
+        this.exportStageExecutor = exportStageExecutor;
+        this.objectMapper = objectMapper;
     }
-    return context;
-  }
 
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
-      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    @Override
+    protected String pipelineType() {
+        return ExportWorkerType.EXPORT;
     }
-    Map<String, Object> requestContext = request.context();
-    Map<String, Object> attributes = EmptyChecks.isNull(requestContext)
-        ? new LinkedHashMap<>()
-        : new LinkedHashMap<>(requestContext);
-    resolveSystemPipelineSteps(attributes);
-    Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    ExportJobContext context;
-    try {
-      context = buildContext(request, attributes, fileId);
-    } catch (Exception exception) {
-      throw new IllegalArgumentException("invalid EXPORT replay request", exception);
+
+    @Override
+    protected String initialStage() {
+        return ExportStage.PREPARE.name();
     }
-    return exportStageExecutor.resolveReplayCapability(context);
-  }
 
-  @Override
-  protected List<ExportStageResult> executeStages(ExportJobContext context) {
-    Long pipelineInstanceId = PlatformRuntimeValues.toLong(
-        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
-      return exportStageExecutor.execute(context);
+    @Override
+    protected ExportJobContext buildContext(StepExecutionRequest request, Map<String, Object> contextMap, Long fileId)
+            throws Exception {
+        ExportJobContext context = new ExportJobContext();
+        populateCommonFields(context, request, contextMap);
+        Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+        String bizDate = String.valueOf(rawBizDate);
+        context.setBizDate(bizDate);
+        context.setFileId(fileId == null ? "" : String.valueOf(fileId));
+        Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+        boolean rawExportPayloadNeedsDecoding = EmptyChecks.isNull(exportPayload)
+                && EmptyChecks.isNotNull(context.getRawPayload())
+                && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
+        if (rawExportPayloadNeedsDecoding) {
+            exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
+            context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
+        }
+        return context;
     }
-    ReentrantLock lock =
-        PIPELINE_LOCKS[Math.floorMod(pipelineInstanceId.hashCode(), PIPELINE_LOCKS.length)];
-    lock.lock();
-    try {
-      return exportStageExecutor.execute(context);
-    } finally {
-      lock.unlock();
+
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+        if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+            return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+        }
+        Map<String, Object> requestContext = request.context();
+        Map<String, Object> attributes =
+                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+        resolveSystemPipelineSteps(attributes);
+        Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+        ExportJobContext context;
+        try {
+            context = buildContext(request, attributes, fileId);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("invalid EXPORT replay request", exception);
+        }
+        return exportStageExecutor.resolveReplayCapability(context);
     }
-  }
 
-  @Override
-  protected boolean isSuccess(ExportStageResult result) {
-    return result != null && result.success();
-  }
-
-  @Override
-  protected String resultStage(ExportStageResult result) {
-    return result.stage().name();
-  }
-
-  @Override
-  protected String resultCode(ExportStageResult result) {
-    return result.code();
-  }
-
-  @Override
-  protected String resultMessage(ExportStageResult result) {
-    return result.message();
-  }
-
-  @Override
-  protected StepExecutionResponse buildSuccessResponse(
-      ExportJobContext context, List<ExportStageResult> results, Map<String, Object> attributes) {
-    String objectName =
-        String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.OBJECT_NAME, ""));
-    // ADR-009 Stage 1.2: 把 EXPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
-    Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(
-        outputs, PipelineRuntimeKeys.OBJECT_NAME, attributes.get(PipelineRuntimeKeys.OBJECT_NAME));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.RECORD_COUNT,
-        attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.FILE_SIZE_BYTES,
-        attributes.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.CHECKSUM_VALUE,
-        attributes.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.CHECKSUM_TYPE,
-        attributes.get(PipelineRuntimeKeys.CHECKSUM_TYPE));
-    // ADR-041 Phase1.3:归一化 count 信封。export 读=写,input/output 同取 recordCount(导出行数)。
-    putIfPresent(
-        outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
-    putIfPresent(
-        outputs, NodeOutputKeys.OUTPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
-    putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
-    if (!outputs.isEmpty()) {
-      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    @Override
+    protected List<ExportStageResult> executeStages(ExportJobContext context) {
+        Long pipelineInstanceId =
+                PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+            return exportStageExecutor.execute(context);
+        }
+        ReentrantLock lock = PIPELINE_LOCKS[Math.floorMod(pipelineInstanceId.hashCode(), PIPELINE_LOCKS.length)];
+        lock.lock();
+        try {
+            return exportStageExecutor.execute(context);
+        } finally {
+            lock.unlock();
+        }
     }
-    return new StepExecutionResponse(
-        true, "SUCCESS", EmptyChecks.isBlank(objectName) ? "export stage completed" : objectName);
-  }
+
+    @Override
+    protected boolean isSuccess(ExportStageResult result) {
+        return result != null && result.success();
+    }
+
+    @Override
+    protected String resultStage(ExportStageResult result) {
+        return result.stage().name();
+    }
+
+    @Override
+    protected String resultCode(ExportStageResult result) {
+        return result.code();
+    }
+
+    @Override
+    protected String resultMessage(ExportStageResult result) {
+        return result.message();
+    }
+
+    @Override
+    protected StepExecutionResponse buildSuccessResponse(
+            ExportJobContext context, List<ExportStageResult> results, Map<String, Object> attributes) {
+        String objectName = String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.OBJECT_NAME, ""));
+        // ADR-009 Stage 1.2: 把 EXPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
+        Map<String, Object> outputs = new LinkedHashMap<>();
+        putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
+        putIfPresent(outputs, PipelineRuntimeKeys.OBJECT_NAME, attributes.get(PipelineRuntimeKeys.OBJECT_NAME));
+        putIfPresent(outputs, PipelineRuntimeKeys.RECORD_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+        putIfPresent(outputs, PipelineRuntimeKeys.FILE_SIZE_BYTES, attributes.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+        putIfPresent(outputs, PipelineRuntimeKeys.CHECKSUM_VALUE, attributes.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
+        putIfPresent(outputs, PipelineRuntimeKeys.CHECKSUM_TYPE, attributes.get(PipelineRuntimeKeys.CHECKSUM_TYPE));
+        // ADR-041 Phase1.3:归一化 count 信封。export 读=写,input/output 同取 recordCount(导出行数)。
+        putIfPresent(outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+        putIfPresent(outputs, NodeOutputKeys.OUTPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+        putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
+        if (!outputs.isEmpty()) {
+            attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+        }
+        return new StepExecutionResponse(
+                true, "SUCCESS", EmptyChecks.isBlank(objectName) ? "export stage completed" : objectName);
+    }
 }

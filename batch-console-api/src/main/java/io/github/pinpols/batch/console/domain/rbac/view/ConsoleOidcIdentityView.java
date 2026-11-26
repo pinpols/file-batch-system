@@ -7,12 +7,12 @@ import lombok.Data;
 @Data
 public class ConsoleOidcIdentityView {
 
-  private Long id;
-  private String tenantId;
-  private Long accountId;
-  private String username;
-  private String issuer;
-  private String subject;
-  private String linkedBy;
-  private Instant linkedAt;
+    private Long id;
+    private String tenantId;
+    private Long accountId;
+    private String username;
+    private String issuer;
+    private String subject;
+    private String linkedBy;
+    private Instant linkedAt;
 }

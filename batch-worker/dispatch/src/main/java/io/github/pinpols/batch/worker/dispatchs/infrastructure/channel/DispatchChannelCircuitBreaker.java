@@ -46,98 +46,96 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchChannelCircuitBreaker {
 
-  /** HALF_OPEN 允许的受限试探调用数(行为增强,原实现无半开态)。 */
-  private static final int HALF_OPEN_PROBES = 3;
+    /** HALF_OPEN 允许的受限试探调用数(行为增强,原实现无半开态)。 */
+    private static final int HALF_OPEN_PROBES = 3;
 
-  /** onError 需要一个 Throwable 计入失败;渠道投递失败以布尔返回值表达,这里用一个无栈标记异常。 */
-  private static final Throwable DISPATCH_FAILURE = new DispatchFailureSignal();
+    /** onError 需要一个 Throwable 计入失败;渠道投递失败以布尔返回值表达,这里用一个无栈标记异常。 */
+    private static final Throwable DISPATCH_FAILURE = new DispatchFailureSignal();
 
-  private final DispatchCircuitBreakerProperties properties;
-  private final CircuitBreakerRegistry registry;
+    private final DispatchCircuitBreakerProperties properties;
+    private final CircuitBreakerRegistry registry;
 
-  /**
-   * 生产/Spring 装配路径:注入真实 {@link MeterRegistry},自持 registry 绑到 micrometer,per-key breaker 状态吐 {@code
-   * resilience4j.circuitbreaker.*} 指标。
-   */
-  @Autowired
-  public DispatchChannelCircuitBreaker(
-      DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
-    this.properties = properties;
-    this.registry = CircuitBreakerRegistry.of(buildConfig(properties));
-    TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(registry).bindTo(meterRegistry);
-  }
-
-  /**
-   * 纯单元测试便利构造器:不接 micrometer(内部用一次性 {@link SimpleMeterRegistry}),熔断行为与二参构造器完全等价。测试如需断言指标
-   * 绑定,请显式用二参构造器传入自己的 {@link MeterRegistry}。
-   */
-  public DispatchChannelCircuitBreaker(DispatchCircuitBreakerProperties properties) {
-    this(properties, new SimpleMeterRegistry());
-  }
-
-  private static CircuitBreakerConfig buildConfig(DispatchCircuitBreakerProperties properties) {
-    int window = Math.max(1, properties.getFailureThreshold());
-    CircuitBreakerConfig.Builder config = CircuitBreakerConfig.custom()
-        .slidingWindowType(SlidingWindowType.COUNT_BASED)
-        .slidingWindowSize(window)
-        .minimumNumberOfCalls(window)
-        // 100% 阈值 + 窗口=阈值:窗口内全失败才熔断,等价原"连续 N 次失败"语义;
-        // 期间出现一次成功即拉低失败率,不熔断(与原实现 recordSuccess 清零计数一致)。
-        .failureRateThreshold(100.0f);
-    long cooldownMillis = properties.getCooldownMillis();
-    return config
-        .waitDurationInOpenState(Duration.ofMillis(cooldownMillis))
-        .permittedNumberOfCallsInHalfOpenState(HALF_OPEN_PROBES)
-        .build();
-  }
-
-  /**
-   * 是否放行该渠道的一次投递。CLOSED → 放行;OPEN(冷却期内)→ 拒绝;冷却期满转 HALF_OPEN → 放行受限试探。
-   *
-   * <p>与 R4J 权限模型对齐:每次 {@code allow()} 取一个 permission,配对后续恰好一次 {@link #recordSuccess}/{@link
-   * #recordFailure}(gateway 调用契约保证)。
-   */
-  public boolean allow(String key) {
-    if (!properties.isEnabled()) {
-      return true;
+    /**
+     * 生产/Spring 装配路径:注入真实 {@link MeterRegistry},自持 registry 绑到 micrometer,per-key breaker 状态吐 {@code
+     * resilience4j.circuitbreaker.*} 指标。
+     */
+    @Autowired
+    public DispatchChannelCircuitBreaker(DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
+        this.properties = properties;
+        this.registry = CircuitBreakerRegistry.of(buildConfig(properties));
+        TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(registry).bindTo(meterRegistry);
     }
-    return registry.circuitBreaker(key).tryAcquirePermission();
-  }
 
-  public void recordSuccess(String key) {
-    if (!properties.isEnabled()) {
-      return;
+    /**
+     * 纯单元测试便利构造器:不接 micrometer(内部用一次性 {@link SimpleMeterRegistry}),熔断行为与二参构造器完全等价。测试如需断言指标
+     * 绑定,请显式用二参构造器传入自己的 {@link MeterRegistry}。
+     */
+    public DispatchChannelCircuitBreaker(DispatchCircuitBreakerProperties properties) {
+        this(properties, new SimpleMeterRegistry());
     }
-    CircuitBreaker circuitBreaker = registry.circuitBreaker(key);
-    circuitBreaker.onSuccess(0L, TimeUnit.NANOSECONDS);
-    // 有界化(对齐原 ConcurrentHashMap 在恢复时 remove 的语义):CLOSED 且窗口内无残留失败的健康 breaker
-    // 可安全驱逐,避免高基数 tenant|channelType|channelCode 无界增长;下次调用会重建等价的新 CLOSED 实例。
-    // HALF_OPEN 探测中不驱逐,以免打断受限试探。
-    boolean closedBreakerHasNoFailures = circuitBreaker.getState() == CircuitBreaker.State.CLOSED
-        && circuitBreaker.getMetrics().getNumberOfFailedCalls() == 0;
-    if (closedBreakerHasNoFailures) {
-      registry.remove(key);
-    }
-  }
 
-  public void recordFailure(String key) {
-    if (!properties.isEnabled()) {
-      return;
+    private static CircuitBreakerConfig buildConfig(DispatchCircuitBreakerProperties properties) {
+        int window = Math.max(1, properties.getFailureThreshold());
+        CircuitBreakerConfig.Builder config = CircuitBreakerConfig.custom()
+                .slidingWindowType(SlidingWindowType.COUNT_BASED)
+                .slidingWindowSize(window)
+                .minimumNumberOfCalls(window)
+                // 100% 阈值 + 窗口=阈值:窗口内全失败才熔断,等价原"连续 N 次失败"语义;
+                // 期间出现一次成功即拉低失败率,不熔断(与原实现 recordSuccess 清零计数一致)。
+                .failureRateThreshold(100.0f);
+        long cooldownMillis = properties.getCooldownMillis();
+        return config.waitDurationInOpenState(Duration.ofMillis(cooldownMillis))
+                .permittedNumberOfCallsInHalfOpenState(HALF_OPEN_PROBES)
+                .build();
     }
-    registry.circuitBreaker(key).onError(0L, TimeUnit.NANOSECONDS, DISPATCH_FAILURE);
-  }
 
-  /** 返回当前处于熔断(OPEN)状态的渠道数量。HALF_OPEN 不计入(已在试探恢复中)。 */
-  public int currentOpenCircuits() {
-    return (int) registry.getAllCircuitBreakers().stream()
-        .filter(cb -> cb.getState() == CircuitBreaker.State.OPEN)
-        .count();
-  }
-
-  /** 轻量标记异常:无消息、不填栈,仅用于把渠道投递失败喂给 R4J 的 onError。 */
-  private static final class DispatchFailureSignal extends RuntimeException {
-    private DispatchFailureSignal() {
-      super("dispatch delivery failed", null, false, false);
+    /**
+     * 是否放行该渠道的一次投递。CLOSED → 放行;OPEN(冷却期内)→ 拒绝;冷却期满转 HALF_OPEN → 放行受限试探。
+     *
+     * <p>与 R4J 权限模型对齐:每次 {@code allow()} 取一个 permission,配对后续恰好一次 {@link #recordSuccess}/{@link
+     * #recordFailure}(gateway 调用契约保证)。
+     */
+    public boolean allow(String key) {
+        if (!properties.isEnabled()) {
+            return true;
+        }
+        return registry.circuitBreaker(key).tryAcquirePermission();
     }
-  }
+
+    public void recordSuccess(String key) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        CircuitBreaker circuitBreaker = registry.circuitBreaker(key);
+        circuitBreaker.onSuccess(0L, TimeUnit.NANOSECONDS);
+        // 有界化(对齐原 ConcurrentHashMap 在恢复时 remove 的语义):CLOSED 且窗口内无残留失败的健康 breaker
+        // 可安全驱逐,避免高基数 tenant|channelType|channelCode 无界增长;下次调用会重建等价的新 CLOSED 实例。
+        // HALF_OPEN 探测中不驱逐,以免打断受限试探。
+        boolean closedBreakerHasNoFailures = circuitBreaker.getState() == CircuitBreaker.State.CLOSED
+                && circuitBreaker.getMetrics().getNumberOfFailedCalls() == 0;
+        if (closedBreakerHasNoFailures) {
+            registry.remove(key);
+        }
+    }
+
+    public void recordFailure(String key) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        registry.circuitBreaker(key).onError(0L, TimeUnit.NANOSECONDS, DISPATCH_FAILURE);
+    }
+
+    /** 返回当前处于熔断(OPEN)状态的渠道数量。HALF_OPEN 不计入(已在试探恢复中)。 */
+    public int currentOpenCircuits() {
+        return (int) registry.getAllCircuitBreakers().stream()
+                .filter(cb -> cb.getState() == CircuitBreaker.State.OPEN)
+                .count();
+    }
+
+    /** 轻量标记异常:无消息、不填栈,仅用于把渠道投递失败喂给 R4J 的 onError。 */
+    private static final class DispatchFailureSignal extends RuntimeException {
+        private DispatchFailureSignal() {
+            super("dispatch delivery failed", null, false, false);
+        }
+    }
 }

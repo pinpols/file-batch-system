@@ -11,25 +11,25 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisConsoleSessionStore implements ConsoleSessionStore {
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  @Override
-  public Long increment(String key) {
-    return redisTemplate.opsForValue().increment(key);
-  }
+    @Override
+    public Long increment(String key) {
+        return redisTemplate.opsForValue().increment(key);
+    }
 
-  @Override
-  public void expire(String key, Duration ttl) {
-    redisTemplate.expire(key, ttl);
-  }
+    @Override
+    public void expire(String key, Duration ttl) {
+        redisTemplate.expire(key, ttl);
+    }
 
-  @Override
-  public String get(String key) {
-    return redisTemplate.opsForValue().get(key);
-  }
+    @Override
+    public String get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
 
-  @Override
-  public void delete(String key) {
-    redisTemplate.delete(key);
-  }
+    @Override
+    public void delete(String key) {
+        redisTemplate.delete(key);
+    }
 }

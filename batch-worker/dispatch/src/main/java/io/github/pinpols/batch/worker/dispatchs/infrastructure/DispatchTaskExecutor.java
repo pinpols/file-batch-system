@@ -26,61 +26,61 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchTaskExecutor implements BatchTaskExecutor {
 
-  /**
-   * 兼容构造器使用的能力超时秒数，
-   * 与 dispatch worker 的 capability-timeout-seconds 默认值 900 一致。
-   */
-  private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 900L;
+    /**
+     * 兼容构造器使用的能力超时秒数，
+     * 与 dispatch worker 的 capability-timeout-seconds 默认值 900 一致。
+     */
+    private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 900L;
 
-  private final DispatchStepExecutionAdapter delegate;
-  private final WorkerExecutionTimeoutProperties timeoutProperties;
+    private final DispatchStepExecutionAdapter delegate;
+    private final WorkerExecutionTimeoutProperties timeoutProperties;
 
-  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
-  public DispatchTaskExecutor(DispatchStepExecutionAdapter delegate) {
-    this(delegate, compatibilityDefaults());
-  }
-
-  @Autowired
-  public DispatchTaskExecutor(
-      DispatchStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
-    this.delegate = delegate;
-    this.timeoutProperties = timeoutProperties;
-  }
-
-  private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
-    WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
-    properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
-    return properties;
-  }
-
-  @Override
-  public String taskType() {
-    return JobType.DISPATCH.code();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    Set<ResourceKind> resourceKinds = Set.of(ResourceKind.NET, ResourceKind.DISK);
-    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
-    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
-    return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
-  }
-
-  @Override
-  public ReplayCapabilityDeclaration replayCapabilityDeclaration() {
-    return DispatchReplayCapability.declaration();
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    StepExecutionRequest req = new StepExecutionRequest(
-        ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
-    StepExecutionResponse resp = delegate.execute(req);
-    if (resp.success()) {
-      String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
-      return TaskResult.ok(successMessage);
+    /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+    public DispatchTaskExecutor(DispatchStepExecutionAdapter delegate) {
+        this(delegate, compatibilityDefaults());
     }
-    String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
-    return TaskResult.fail(failureMessage);
-  }
+
+    @Autowired
+    public DispatchTaskExecutor(
+            DispatchStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+        this.delegate = delegate;
+        this.timeoutProperties = timeoutProperties;
+    }
+
+    private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
+        WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
+        properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
+        return properties;
+    }
+
+    @Override
+    public String taskType() {
+        return JobType.DISPATCH.code();
+    }
+
+    @Override
+    public TaskCapability capability() {
+        Set<ResourceKind> resourceKinds = Set.of(ResourceKind.NET, ResourceKind.DISK);
+        long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+        Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
+        return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
+    }
+
+    @Override
+    public ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+        return DispatchReplayCapability.declaration();
+    }
+
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        StepExecutionRequest req = new StepExecutionRequest(
+                ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
+        StepExecutionResponse resp = delegate.execute(req);
+        if (resp.success()) {
+            String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
+            return TaskResult.ok(successMessage);
+        }
+        String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
+        return TaskResult.fail(failureMessage);
+    }
 }

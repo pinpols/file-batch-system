@@ -9,9 +9,4 @@ import lombok.Builder;
  */
 @Builder
 public record ResourceTagUpsertInput(
-    String tenantId,
-    String resourceType,
-    String resourceCode,
-    String tagKey,
-    String tagValue,
-    String operator) {}
+        String tenantId, String resourceType, String resourceCode, String tagKey, String tagValue, String operator) {}

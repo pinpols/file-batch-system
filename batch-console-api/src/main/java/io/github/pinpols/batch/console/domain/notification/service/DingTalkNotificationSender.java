@@ -37,147 +37,141 @@ import org.springframework.stereotype.Component;
 @SuppressWarnings("java:S2583")
 public class DingTalkNotificationSender implements NotificationSender {
 
-  /** payloadJson 拼入文案前的最大字符数，防止文案过长被钉钉截断或拒绝。 */
-  private static final int MAX_PAYLOAD_CHARS = 1000;
+    /** payloadJson 拼入文案前的最大字符数，防止文案过长被钉钉截断或拒绝。 */
+    private static final int MAX_PAYLOAD_CHARS = 1000;
 
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-  private static final String JSON_MEDIA_TYPE = "application/json; charset=utf-8";
+    private static final String JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 
-  private final ObjectMapper objectMapper;
-  private final OutboundHttpTransport httpTransport;
+    private final ObjectMapper objectMapper;
+    private final OutboundHttpTransport httpTransport;
 
-  public DingTalkNotificationSender(
-      ObjectMapper objectMapper, @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
-    this.objectMapper = objectMapper;
-    this.httpTransport = httpTransport;
-  }
-
-  @Override
-  public String channelType() {
-    return "DINGTALK";
-  }
-
-  @Override
-  public WebhookDeliveryResult send(NotificationMessage message) {
-    String url;
-    String secret;
-    try {
-      JsonNode config = objectMapper.readTree(message.configJson());
-      url = textOrNull(config, "url");
-      secret = textOrNull(config, "secret");
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "dingtalk config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, "invalid dingtalk config");
+    public DingTalkNotificationSender(
+            ObjectMapper objectMapper, @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
+        this.objectMapper = objectMapper;
+        this.httpTransport = httpTransport;
     }
 
-    if (url == null || url.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "missing dingtalk url");
+    @Override
+    public String channelType() {
+        return "DINGTALK";
     }
 
-    String requestUrl;
-    try {
-      requestUrl = (secret == null || secret.isBlank()) ? url : signedUrl(url, secret);
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn("dingtalk sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, "dingtalk sign failed");
+    @Override
+    public WebhookDeliveryResult send(NotificationMessage message) {
+        String url;
+        String secret;
+        try {
+            JsonNode config = objectMapper.readTree(message.configJson());
+            url = textOrNull(config, "url");
+            secret = textOrNull(config, "secret");
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("dingtalk config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, "invalid dingtalk config");
+        }
+
+        if (url == null || url.isBlank()) {
+            return WebhookDeliveryResult.failure(null, "missing dingtalk url");
+        }
+
+        String requestUrl;
+        try {
+            requestUrl = (secret == null || secret.isBlank()) ? url : signedUrl(url, secret);
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("dingtalk sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, "dingtalk sign failed");
+        }
+
+        String body;
+        try {
+            body = buildBody(message);
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("dingtalk body build failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, "dingtalk body build failed");
+        }
+
+        try {
+            OutboundHttpContent httpContent = new OutboundHttpContent(body, JSON_MEDIA_TYPE);
+            OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
+                    requestUrl, Map.of(), httpContent, CONNECT_TIMEOUT, REQUEST_TIMEOUT, OutboundAddressPolicy.GUARDED);
+            OutboundHttpResponse response = httpTransport.execute(httpRequest);
+            if (!response.isSuccessful()) {
+                String channelCodeForLog = LogSanitizer.value(message.channelCode());
+                int statusForLog = response.statusCode();
+                log.warn("dingtalk http failed channel={} status={}", channelCodeForLog, statusForLog);
+                return WebhookDeliveryResult.failure(
+                        response.statusCode(), "dingtalk http status=" + response.statusCode());
+            }
+            JsonNode node = objectMapper.readTree(response.body());
+            int errcode = node.path("errcode").asInt(-1);
+            if (errcode == 0) {
+                return WebhookDeliveryResult.ok();
+            }
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            log.warn("dingtalk rejected channel={} errcode={}", channelCodeForLog, errcode);
+            return WebhookDeliveryResult.failure(200, "dingtalk errcode=" + errcode);
+        } catch (Exception ex) {
+            String channelCodeForLog = LogSanitizer.value(message.channelCode());
+            String reasonForLog = ex.getClass().getSimpleName();
+            log.warn("dingtalk delivery failed channel={} reason={}", channelCodeForLog, reasonForLog);
+            return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
+        }
     }
 
-    String body;
-    try {
-      body = buildBody(message);
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn("dingtalk body build failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, "dingtalk body build failed");
+    /**
+     * 按钉钉加签规则追加 timestamp/sign。签名串 = {@code timestamp + "\n" + secret}，HmacSHA256+Base64+urlencode。
+     */
+    private String signedUrl(String url, String secret) throws GeneralSecurityException {
+        long timestamp = epochMillis();
+        String stringToSign = timestamp + "\n" + secret;
+        Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
+        mac.init(signingKey);
+        byte[] signingText = stringToSign.getBytes(StandardCharsets.UTF_8);
+        byte[] digest = mac.doFinal(signingText);
+        String base64Signature = Base64.getEncoder().encodeToString(digest);
+        String sign = URLEncoder.encode(base64Signature, StandardCharsets.UTF_8);
+        String separator = url.contains("?") ? "&" : "?";
+        return url + separator + "timestamp=" + timestamp + "&sign=" + sign;
     }
 
-    try {
-      OutboundHttpContent httpContent = new OutboundHttpContent(body, JSON_MEDIA_TYPE);
-      OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
-          requestUrl,
-          Map.of(),
-          httpContent,
-          CONNECT_TIMEOUT,
-          REQUEST_TIMEOUT,
-          OutboundAddressPolicy.GUARDED);
-      OutboundHttpResponse response = httpTransport.execute(httpRequest);
-      if (!response.isSuccessful()) {
-        String channelCodeForLog = LogSanitizer.value(message.channelCode());
-        int statusForLog = response.statusCode();
-        log.warn("dingtalk http failed channel={} status={}", channelCodeForLog, statusForLog);
-        return WebhookDeliveryResult.failure(
-            response.statusCode(), "dingtalk http status=" + response.statusCode());
-      }
-      JsonNode node = objectMapper.readTree(response.body());
-      int errcode = node.path("errcode").asInt(-1);
-      if (errcode == 0) {
-        return WebhookDeliveryResult.ok();
-      }
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      log.warn("dingtalk rejected channel={} errcode={}", channelCodeForLog, errcode);
-      return WebhookDeliveryResult.failure(200, "dingtalk errcode=" + errcode);
-    } catch (Exception ex) {
-      String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      String reasonForLog = ex.getClass().getSimpleName();
-      log.warn("dingtalk delivery failed channel={} reason={}", channelCodeForLog, reasonForLog);
-      return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
+    /** 构造钉钉 text 消息 body：{@code {"msgtype":"text","text":{"content":<摘要>}}}。 */
+    private String buildBody(NotificationMessage message) throws JsonProcessingException {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("msgtype", "text");
+        ObjectNode text = root.putObject("text");
+        text.put("content", summarize(message));
+        return objectMapper.writeValueAsString(root);
     }
-  }
 
-  /**
-   * 按钉钉加签规则追加 timestamp/sign。签名串 = {@code timestamp + "\n" + secret}，HmacSHA256+Base64+urlencode。
-   */
-  private String signedUrl(String url, String secret) throws GeneralSecurityException {
-    long timestamp = epochMillis();
-    String stringToSign = timestamp + "\n" + secret;
-    Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-    byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-    SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
-    mac.init(signingKey);
-    byte[] signingText = stringToSign.getBytes(StandardCharsets.UTF_8);
-    byte[] digest = mac.doFinal(signingText);
-    String base64Signature = Base64.getEncoder().encodeToString(digest);
-    String sign = URLEncoder.encode(base64Signature, StandardCharsets.UTF_8);
-    String separator = url.contains("?") ? "&" : "?";
-    return url + separator + "timestamp=" + timestamp + "&sign=" + sign;
-  }
-
-  /** 构造钉钉 text 消息 body：{@code {"msgtype":"text","text":{"content":<摘要>}}}。 */
-  private String buildBody(NotificationMessage message) throws JsonProcessingException {
-    ObjectNode root = objectMapper.createObjectNode();
-    root.put("msgtype", "text");
-    ObjectNode text = root.putObject("text");
-    text.put("content", summarize(message));
-    return objectMapper.writeValueAsString(root);
-  }
-
-  /** 由 eventType + 截断后的 payloadJson 拼成简洁中文摘要。 */
-  private String summarize(NotificationMessage message) {
-    String eventType = (message.payload() != null && message.payload().eventType() != null)
-        ? message.payload().eventType()
-        : "UNKNOWN";
-    String detail = message.payloadJson() == null ? "" : message.payloadJson();
-    if (detail.length() > MAX_PAYLOAD_CHARS) {
-      detail = detail.substring(0, MAX_PAYLOAD_CHARS) + "...(truncated)";
+    /** 由 eventType + 截断后的 payloadJson 拼成简洁中文摘要。 */
+    private String summarize(NotificationMessage message) {
+        String eventType = (message.payload() != null && message.payload().eventType() != null)
+                ? message.payload().eventType()
+                : "UNKNOWN";
+        String detail = message.payloadJson() == null ? "" : message.payloadJson();
+        if (detail.length() > MAX_PAYLOAD_CHARS) {
+            detail = detail.substring(0, MAX_PAYLOAD_CHARS) + "...(truncated)";
+        }
+        return "【批处理通知】事件类型: " + eventType + "\n详情: " + detail;
     }
-    return "【批处理通知】事件类型: " + eventType + "\n详情: " + detail;
-  }
 
-  private static String textOrNull(JsonNode config, String field) {
-    JsonNode node = config.get(field);
-    return (node == null || node.isNull()) ? null : node.asText();
-  }
+    private static String textOrNull(JsonNode config, String field) {
+        JsonNode node = config.get(field);
+        return (node == null || node.isNull()) ? null : node.asText();
+    }
 
-  /** 当前毫秒时间戳，抽出便于单测固定签名。 */
-  protected long epochMillis() {
-    return System.currentTimeMillis();
-  }
+    /** 当前毫秒时间戳，抽出便于单测固定签名。 */
+    protected long epochMillis() {
+        return System.currentTimeMillis();
+    }
 }

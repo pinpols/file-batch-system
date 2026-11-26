@@ -8,5 +8,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.trigger.launch.metrics")
 public class TriggerLaunchContinuityMetricsProperties {
 
-  private long staleAfterSeconds = 300L;
+    private long staleAfterSeconds = 300L;
 }

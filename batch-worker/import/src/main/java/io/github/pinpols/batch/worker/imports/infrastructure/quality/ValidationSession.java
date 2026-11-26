@@ -9,13 +9,13 @@ import lombok.Builder;
 
 @Builder
 public record ValidationSession(
-    ImportJobContext context,
-    Map<String, Object> ruleSet,
-    long totalCount,
-    String normalizedPayload,
-    ImportPayload importPayload,
-    List<String> schemaFields,
-    Map<String, Set<String>> seenValues,
-    List<ValidationIssue> datasetIssues,
-    Map<Long, ValidationIssue> recordIssues,
-    Set<String> appliedChecks) {}
+        ImportJobContext context,
+        Map<String, Object> ruleSet,
+        long totalCount,
+        String normalizedPayload,
+        ImportPayload importPayload,
+        List<String> schemaFields,
+        Map<String, Set<String>> seenValues,
+        List<ValidationIssue> datasetIssues,
+        Map<Long, ValidationIssue> recordIssues,
+        Set<String> appliedChecks) {}

@@ -19,39 +19,38 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PipelineProgressQueryService {
 
-  /** 一次批量查询进度时允许的 pipeline id 数上限。 */
-  private static final int MAX_IDS_PER_QUERY = 100;
+    /** 一次批量查询进度时允许的 pipeline id 数上限。 */
+    private static final int MAX_IDS_PER_QUERY = 100;
 
-  private final TenantIdResolver tenantGuard;
-  private final FilePipelineStepRunMapper mapper;
-  private final ConsoleFileQueryService files;
+    private final TenantIdResolver tenantGuard;
+    private final FilePipelineStepRunMapper mapper;
+    private final ConsoleFileQueryService files;
 
-  public static List<Long> normalize(List<Long> ids) {
-    if (EmptyChecks.isEmpty(ids)
-        || ids.size() > MAX_IDS_PER_QUERY
-        || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "pipelineInstanceIds");
-    return ids.stream().distinct().sorted().toList();
-  }
+    public static List<Long> normalize(List<Long> ids) {
+        if (EmptyChecks.isEmpty(ids)
+                || ids.size() > MAX_IDS_PER_QUERY
+                || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "pipelineInstanceIds");
+        return ids.stream().distinct().sorted().toList();
+    }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public PipelineProgressResponse query(String requestedTenant, List<Long> ids) {
-    String resolvedTenant = tenantGuard.resolveTenant(requestedTenant);
-    String requiredTenant = TenantScope.requireTenant(resolvedTenant);
-    List<Long> normalizedIds = normalize(ids);
-    return queryAuthorized(requiredTenant, normalizedIds);
-  }
-  /** 后台服务器采样显式设置RLS，不向客户端泄漏其他租户对象是否存在。 */
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public PipelineProgressResponse queryAuthorized(String tenant, List<Long> ids) {
-    TenantScope.requireTenant(tenant);
-    List<Long> scope = normalize(ids);
-    mapper.setTenantContext(tenant);
-    List<PipelineProgressResponse.Pipeline> pipelines =
-        scope.stream().map(id -> files.pipelineSnapshotAuthorized(tenant, id)).toList();
-    return new PipelineProgressResponse(tenant, BatchDateTimeSupport.utcNow(), pipelines);
-  }
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PipelineProgressResponse query(String requestedTenant, List<Long> ids) {
+        String resolvedTenant = tenantGuard.resolveTenant(requestedTenant);
+        String requiredTenant = TenantScope.requireTenant(resolvedTenant);
+        List<Long> normalizedIds = normalize(ids);
+        return queryAuthorized(requiredTenant, normalizedIds);
+    }
+    /** 后台服务器采样显式设置RLS，不向客户端泄漏其他租户对象是否存在。 */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PipelineProgressResponse queryAuthorized(String tenant, List<Long> ids) {
+        TenantScope.requireTenant(tenant);
+        List<Long> scope = normalize(ids);
+        mapper.setTenantContext(tenant);
+        List<PipelineProgressResponse.Pipeline> pipelines = scope.stream()
+                .map(id -> files.pipelineSnapshotAuthorized(tenant, id))
+                .toList();
+        return new PipelineProgressResponse(tenant, BatchDateTimeSupport.utcNow(), pipelines);
+    }
 }

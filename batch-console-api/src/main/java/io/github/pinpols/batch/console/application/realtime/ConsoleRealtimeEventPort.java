@@ -7,9 +7,9 @@ package io.github.pinpols.batch.console.application.realtime;
  */
 public interface ConsoleRealtimeEventPort {
 
-  void publishChanged(String tenantId, String stream, String eventType);
+    void publishChanged(String tenantId, String stream, String eventType);
 
-  void publishChanged(String tenantId, String stream, String eventType, Object data);
+    void publishChanged(String tenantId, String stream, String eventType, Object data);
 
-  void publishSummaryRefresh(String tenantId);
+    void publishSummaryRefresh(String tenantId);
 }

@@ -47,191 +47,177 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAiControllerTest {
 
-  @Mock
-  private ConsoleAiApplicationService applicationService;
+    @Mock
+    private ConsoleAiApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAiController(
-            applicationService,
-            responseFactory,
-            mock(ConsoleAiAuthorizationService.class),
-            requestMetadataResolver,
-            new ConsoleAiProperties(),
-            mock(ConsoleAiImageApplicationService.class),
-            new ConsoleAiStreamRegistry(
-                mock(ConsoleAiAuthorizationService.class), requestMetadataResolver)))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAiController(
+                        applicationService,
+                        responseFactory,
+                        mock(ConsoleAiAuthorizationService.class),
+                        requestMetadataResolver,
+                        new ConsoleAiProperties(),
+                        mock(ConsoleAiImageApplicationService.class),
+                        new ConsoleAiStreamRegistry(
+                                mock(ConsoleAiAuthorizationService.class), requestMetadataResolver)))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("缺少幂等键请求头时返回 400 且不进入业务处理")
-  void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(
-            post("/api/console/ai/chat/stream").contentType(APPLICATION_JSON).content("""
+    @Test
+    @DisplayName("缺少幂等键请求头时返回 400 且不进入业务处理")
+    void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(post("/api/console/ai/chat/stream")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","prompt":"列出今日失败的作业"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(applicationService);
-  }
+        verifyNoInteractions(applicationService);
+    }
 
-  @Test
-  @DisplayName("提示词为空白时返回 400 校验错误")
-  void shouldReturn400WhenPromptIsBlank() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(post("/api/console/ai/chat/stream")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("提示词为空白时返回 400 校验错误")
+    void shouldReturn400WhenPromptIsBlank() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(post("/api/console/ai/chat/stream")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","prompt":""}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-    verifyNoInteractions(applicationService);
-  }
+        verifyNoInteractions(applicationService);
+    }
 
-  @Test
-  @DisplayName("旧版对话端点不再暴露并返回 404")
-  void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc
-        .perform(post("/api/console/ai/chat")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-old")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("旧版对话端点不再暴露并返回 404")
+    void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc.perform(post("/api/console/ai/chat")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-old")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"t1","prompt":"查询失败作业"}
                 """))
-        .andExpect(status().isNotFound());
-    verifyNoInteractions(applicationService);
-  }
-
-  @Test
-  @DisplayName("流式应答按增量与结束事件推送完整答案")
-  void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
-    ConsoleAiApplicationService.PreparedStream prepared =
-        mock(ConsoleAiApplicationService.PreparedStream.class);
-    when(prepared.requestId()).thenReturn("req-stream");
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata(
-            "req-stream", "trace-stream", "t1", "operator-a", null, null));
-    when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
-    AiChatResponse chatResponse = new AiChatResponse();
-    chatResponse.setRequestId("req-stream");
-    chatResponse.setAnswer("hello world");
-    when(prepared.execute(any())).thenAnswer(invocation -> {
-      ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
-      observer.onDelta("hello ");
-      observer.onDelta("world");
-      return chatResponse;
-    });
-
-    MvcResult pending = mockMvc
-        .perform(post("/api/console/ai/chat/stream")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-stream")
-            .contentType(APPLICATION_JSON)
-            .content("""
-                {"tenantId":"t1","prompt":"explain job failure"}
-                """))
-        .andExpect(request().asyncStarted())
-        .andReturn();
-
-    String stream = mockMvc
-        .perform(MockMvcRequestBuilders.asyncDispatch(pending))
-        .andExpect(status().isOk())
-        .andReturn()
-        .getResponse()
-        .getContentAsString();
-    assertThat(stream.contains("event:started")).isTrue();
-    assertThat(stream.contains("event:delta")).isTrue();
-    assertThat(stream.contains("event:completed")).isTrue();
-    assertThat(stream.contains("hello world")).isTrue();
-  }
-
-  @Test
-  @DisplayName("非会话归属人取消他人流式请求时返回 404")
-  void shouldRejectCrossOperatorCancellation() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    ConsoleAiApplicationService.PreparedStream prepared =
-        mock(ConsoleAiApplicationService.PreparedStream.class);
-    when(prepared.requestId()).thenReturn("req-stream");
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
-    when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
-    CountDownLatch entered = new CountDownLatch(1);
-    CountDownLatch release = new CountDownLatch(1);
-    when(prepared.execute(any())).thenAnswer(invocation -> {
-      entered.countDown();
-      release.await(2, TimeUnit.SECONDS);
-      return new AiChatResponse();
-    });
-    MvcResult pending = mockMvc
-        .perform(post("/api/console/ai/chat/stream")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-stream")
-            .contentType(APPLICATION_JSON)
-            .content("""
-                {"tenantId":"t1","prompt":"explain job failure"}
-                """))
-        .andExpect(request().asyncStarted())
-        .andReturn();
-    assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-cancel", "trace-cancel", "t1", "other", null, null));
-    try {
-      mockMvc
-          .perform(post("/api/console/ai/chat/stream/req-stream/cancel")
-              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cancel"))
-          .andExpect(status().isNotFound());
-    } finally {
-      release.countDown();
-      mockMvc.perform(MockMvcRequestBuilders.asyncDispatch(pending));
+                .andExpect(status().isNotFound());
+        verifyNoInteractions(applicationService);
     }
-  }
 
-  @Test
-  @DisplayName("会话分页按当前租户与操作人范围返回")
-  void shouldReturnOwnerScopedConversationPage() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator-a", null, null));
-    when(applicationService.conversationPage("tenant-a", "operator-a", "cursor-1", 2))
-        .thenReturn(PageResponse.cursor(List.of(), 2, null));
+    @Test
+    @DisplayName("流式应答按增量与结束事件推送完整答案")
+    void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
+        ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+        when(prepared.requestId()).thenReturn("req-stream");
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "operator-a", null, null));
+        when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
+        AiChatResponse chatResponse = new AiChatResponse();
+        chatResponse.setRequestId("req-stream");
+        chatResponse.setAnswer("hello world");
+        when(prepared.execute(any())).thenAnswer(invocation -> {
+            ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
+            observer.onDelta("hello ");
+            observer.onDelta("world");
+            return chatResponse;
+        });
 
-    mockMvc
-        .perform(get("/api/console/ai/conversations/page")
-            .param("cursor", "cursor-1")
-            .param("limit", "2"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.pageSize").value(2))
-        .andExpect(jsonPath("$.data.hasMore").value(false));
+        MvcResult pending = mockMvc.perform(post("/api/console/ai/chat/stream")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-stream")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                {"tenantId":"t1","prompt":"explain job failure"}
+                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(applicationService).conversationPage("tenant-a", "operator-a", "cursor-1", 2);
-  }
+        String stream = mockMvc.perform(MockMvcRequestBuilders.asyncDispatch(pending))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(stream.contains("event:started")).isTrue();
+        assertThat(stream.contains("event:delta")).isTrue();
+        assertThat(stream.contains("event:completed")).isTrue();
+        assertThat(stream.contains("hello world")).isTrue();
+    }
+
+    @Test
+    @DisplayName("非会话归属人取消他人流式请求时返回 404")
+    void shouldRejectCrossOperatorCancellation() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+        when(prepared.requestId()).thenReturn("req-stream");
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
+        when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(prepared.execute(any())).thenAnswer(invocation -> {
+            entered.countDown();
+            release.await(2, TimeUnit.SECONDS);
+            return new AiChatResponse();
+        });
+        MvcResult pending = mockMvc.perform(post("/api/console/ai/chat/stream")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-stream")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                {"tenantId":"t1","prompt":"explain job failure"}
+                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-cancel", "trace-cancel", "t1", "other", null, null));
+        try {
+            mockMvc.perform(post("/api/console/ai/chat/stream/req-stream/cancel")
+                            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cancel"))
+                    .andExpect(status().isNotFound());
+        } finally {
+            release.countDown();
+            mockMvc.perform(MockMvcRequestBuilders.asyncDispatch(pending));
+        }
+    }
+
+    @Test
+    @DisplayName("会话分页按当前租户与操作人范围返回")
+    void shouldReturnOwnerScopedConversationPage() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator-a", null, null));
+        when(applicationService.conversationPage("tenant-a", "operator-a", "cursor-1", 2))
+                .thenReturn(PageResponse.cursor(List.of(), 2, null));
+
+        mockMvc.perform(get("/api/console/ai/conversations/page")
+                        .param("cursor", "cursor-1")
+                        .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageSize").value(2))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
+
+        verify(applicationService).conversationPage("tenant-a", "operator-a", "cursor-1", 2);
+    }
 }

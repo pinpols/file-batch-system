@@ -22,85 +22,85 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("租户动作限流器: 动作配额解析, 拒绝计数与短路口径")
 class TenantActionRateLimiterTest {
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  @Mock
-  private TokenBucketRateLimiter limiter;
+    @Mock
+    private TokenBucketRateLimiter limiter;
 
-  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-  private TenantActionRateLimiter newLimiter(RateLimitProperties props) {
-    when(governance.rateLimit()).thenReturn(props);
-    return new TenantActionRateLimiter(governance, limiter, meterRegistry);
-  }
+    private TenantActionRateLimiter newLimiter(RateLimitProperties props) {
+        when(governance.rateLimit()).thenReturn(props);
+        return new TenantActionRateLimiter(governance, limiter, meterRegistry);
+    }
 
-  @Test
-  @DisplayName("TASK_CLAIM 用 claim 阈值,TASK_REPORT 用 report 阈值")
-  void shouldResolveOwnQuota_whenTaskActionGiven() {
-    RateLimitProperties props = new RateLimitProperties();
-    props.setMaxClaimRequestsPerTenantPerMinute(111L);
-    props.setMaxReportRequestsPerTenantPerMinute(222L);
-    TenantActionRateLimiter rl = newLimiter(props);
-    when(limiter.tryConsume(eq("t1"), eq("TASK_CLAIM"), anyLong())).thenReturn(true);
-    when(limiter.tryConsume(eq("t1"), eq("TASK_REPORT"), anyLong())).thenReturn(true);
+    @Test
+    @DisplayName("TASK_CLAIM 用 claim 阈值,TASK_REPORT 用 report 阈值")
+    void shouldResolveOwnQuota_whenTaskActionGiven() {
+        RateLimitProperties props = new RateLimitProperties();
+        props.setMaxClaimRequestsPerTenantPerMinute(111L);
+        props.setMaxReportRequestsPerTenantPerMinute(222L);
+        TenantActionRateLimiter rl = newLimiter(props);
+        when(limiter.tryConsume(eq("t1"), eq("TASK_CLAIM"), anyLong())).thenReturn(true);
+        when(limiter.tryConsume(eq("t1"), eq("TASK_REPORT"), anyLong())).thenReturn(true);
 
-    rl.tryConsume("t1", RateLimitAction.TASK_CLAIM);
-    rl.tryConsume("t1", RateLimitAction.TASK_REPORT);
+        rl.tryConsume("t1", RateLimitAction.TASK_CLAIM);
+        rl.tryConsume("t1", RateLimitAction.TASK_REPORT);
 
-    ArgumentCaptor<Long> claimMax = ArgumentCaptor.forClass(Long.class);
-    ArgumentCaptor<Long> reportMax = ArgumentCaptor.forClass(Long.class);
-    verify(limiter).tryConsume(eq("t1"), eq("TASK_CLAIM"), claimMax.capture());
-    verify(limiter).tryConsume(eq("t1"), eq("TASK_REPORT"), reportMax.capture());
-    assertThat(claimMax.getValue()).isEqualTo(111L);
-    assertThat(reportMax.getValue()).isEqualTo(222L);
-  }
+        ArgumentCaptor<Long> claimMax = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Long> reportMax = ArgumentCaptor.forClass(Long.class);
+        verify(limiter).tryConsume(eq("t1"), eq("TASK_CLAIM"), claimMax.capture());
+        verify(limiter).tryConsume(eq("t1"), eq("TASK_REPORT"), reportMax.capture());
+        assertThat(claimMax.getValue()).isEqualTo(111L);
+        assertThat(reportMax.getValue()).isEqualTo(222L);
+    }
 
-  @Test
-  @DisplayName("命中限流拒绝时按 action 自增 batch.ratelimit.rejected.total,放行时不计数")
-  void shouldIncrementCounterByAction_whenRejected() {
-    RateLimitProperties props = new RateLimitProperties();
-    props.setMaxClaimRequestsPerTenantPerMinute(1L);
-    props.setMaxReportRequestsPerTenantPerMinute(1L);
-    TenantActionRateLimiter rl = newLimiter(props);
-    when(limiter.tryConsume(eq("t1"), eq("TASK_CLAIM"), anyLong())).thenReturn(false);
-    when(limiter.tryConsume(eq("t1"), eq("TASK_REPORT"), anyLong())).thenReturn(true);
+    @Test
+    @DisplayName("命中限流拒绝时按 action 自增 batch.ratelimit.rejected.total,放行时不计数")
+    void shouldIncrementCounterByAction_whenRejected() {
+        RateLimitProperties props = new RateLimitProperties();
+        props.setMaxClaimRequestsPerTenantPerMinute(1L);
+        props.setMaxReportRequestsPerTenantPerMinute(1L);
+        TenantActionRateLimiter rl = newLimiter(props);
+        when(limiter.tryConsume(eq("t1"), eq("TASK_CLAIM"), anyLong())).thenReturn(false);
+        when(limiter.tryConsume(eq("t1"), eq("TASK_REPORT"), anyLong())).thenReturn(true);
 
-    assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isFalse();
-    assertThat(rl.tryConsume("t1", RateLimitAction.TASK_REPORT)).isTrue();
+        assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isFalse();
+        assertThat(rl.tryConsume("t1", RateLimitAction.TASK_REPORT)).isTrue();
 
-    assertThat(meterRegistry
-            .get(TenantActionRateLimiter.METRIC_REJECTED)
-            .tag("action", "TASK_CLAIM")
-            .counter()
-            .count())
-        .isEqualTo(1.0);
-    // 放行的 action 不建计数器
-    assertThat(meterRegistry
-            .find(TenantActionRateLimiter.METRIC_REJECTED)
-            .tag("action", "TASK_REPORT")
-            .counter())
-        .isNull();
-  }
+        assertThat(meterRegistry
+                        .get(TenantActionRateLimiter.METRIC_REJECTED)
+                        .tag("action", "TASK_CLAIM")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        // 放行的 action 不建计数器
+        assertThat(meterRegistry
+                        .find(TenantActionRateLimiter.METRIC_REJECTED)
+                        .tag("action", "TASK_REPORT")
+                        .counter())
+                .isNull();
+    }
 
-  @Test
-  @DisplayName("总开关关闭时直接放行,不触达底层限流器")
-  void shouldAllow_whenLimiterDisabled() {
-    RateLimitProperties props = new RateLimitProperties();
-    props.setEnabled(false);
-    TenantActionRateLimiter rl = newLimiter(props);
+    @Test
+    @DisplayName("总开关关闭时直接放行,不触达底层限流器")
+    void shouldAllow_whenLimiterDisabled() {
+        RateLimitProperties props = new RateLimitProperties();
+        props.setEnabled(false);
+        TenantActionRateLimiter rl = newLimiter(props);
 
-    assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isTrue();
-    verifyNoInteractions(limiter);
-  }
+        assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isTrue();
+        verifyNoInteractions(limiter);
+    }
 
-  @Test
-  @DisplayName("tenantId 为空时放行(无法归属租户的内部调用)")
-  void shouldAllow_whenTenantBlank() {
-    TenantActionRateLimiter rl = newLimiter(new RateLimitProperties());
+    @Test
+    @DisplayName("tenantId 为空时放行(无法归属租户的内部调用)")
+    void shouldAllow_whenTenantBlank() {
+        TenantActionRateLimiter rl = newLimiter(new RateLimitProperties());
 
-    assertThat(rl.tryConsume(null, RateLimitAction.TASK_CLAIM)).isTrue();
-    assertThat(rl.tryConsume("  ", RateLimitAction.TASK_REPORT)).isTrue();
-    verifyNoInteractions(limiter);
-  }
+        assertThat(rl.tryConsume(null, RateLimitAction.TASK_CLAIM)).isTrue();
+        assertThat(rl.tryConsume("  ", RateLimitAction.TASK_REPORT)).isTrue();
+        verifyNoInteractions(limiter);
+    }
 }

@@ -36,78 +36,78 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("等待分区候选预评估: 排序不消费容量和派发令牌,正式准入只扣一次")
 class ResourceSchedulerPreviewTest {
 
-  @Mock
-  private ResourceQueueManager resourceQueueManager;
+    @Mock
+    private ResourceQueueManager resourceQueueManager;
 
-  @Mock
-  private ConcurrencyLimiter concurrencyLimiter;
+    @Mock
+    private ConcurrencyLimiter concurrencyLimiter;
 
-  @Mock
-  private PartitionThrottle partitionThrottle;
+    @Mock
+    private PartitionThrottle partitionThrottle;
 
-  @Mock
-  private DispatchAdmissionLimiter dispatchAdmissionLimiter;
+    @Mock
+    private DispatchAdmissionLimiter dispatchAdmissionLimiter;
 
-  @Mock
-  private DownstreamAdmissionGuard downstreamAdmissionGuard;
+    @Mock
+    private DownstreamAdmissionGuard downstreamAdmissionGuard;
 
-  @Mock
-  private WorkerSelector workerSelector;
+    @Mock
+    private WorkerSelector workerSelector;
 
-  @Mock
-  private PriorityScheduler priorityScheduler;
+    @Mock
+    private PriorityScheduler priorityScheduler;
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Mock
-  private BatchDateTimeSupport dateTimeSupport;
+    @Mock
+    private BatchDateTimeSupport dateTimeSupport;
 
-  @Spy
-  private ResourceSchedulerProperties resourceSchedulerProperties;
+    @Spy
+    private ResourceSchedulerProperties resourceSchedulerProperties;
 
-  @InjectMocks
-  private DefaultResourceScheduler scheduler;
+    @InjectMocks
+    private DefaultResourceScheduler scheduler;
 
-  @Test
-  @DisplayName("反复评估等待候选保留路由与公平分数,只在实际派发时扣一次额度")
-  void shouldConsumeAdmissionOnce_whenPreviewedRepeatedlyBeforeDispatch() {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId("tenant-preview");
-    request.setWorkerGroup("IMPORT");
-    request.setWaitingSince(Instant.parse("2026-10-22T00:00:00Z"));
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
-    when(priorityScheduler.resolvePriorityBand(5)).thenReturn("MEDIUM");
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
-    when(downstreamAdmissionGuard.check(request)).thenReturn(ResourceCheck.allow());
-    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-10-22T00:01:00Z"));
+    @Test
+    @DisplayName("反复评估等待候选保留路由与公平分数,只在实际派发时扣一次额度")
+    void shouldConsumeAdmissionOnce_whenPreviewedRepeatedlyBeforeDispatch() {
+        ResourceSchedulingRequest request = new ResourceSchedulingRequest();
+        request.setTenantId("tenant-preview");
+        request.setWorkerGroup("IMPORT");
+        request.setWaitingSince(Instant.parse("2026-10-22T00:00:00Z"));
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
+        when(priorityScheduler.resolvePriorityBand(5)).thenReturn("MEDIUM");
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
+        when(downstreamAdmissionGuard.check(request)).thenReturn(ResourceCheck.allow());
+        when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-10-22T00:01:00Z"));
 
-    for (int attempt = 0; attempt < 3; attempt++) {
-      var candidate = scheduler.preview(request);
-      assertThat(candidate.isDispatchable()).isTrue();
-      assertThat(candidate.getRoute()).isSameAs(route);
-      assertThat(candidate.getFairnessScore()).isNotNull();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var candidate = scheduler.preview(request);
+            assertThat(candidate.isDispatchable()).isTrue();
+            assertThat(candidate.getRoute()).isSameAs(route);
+            assertThat(candidate.getFairnessScore()).isNotNull();
+        }
+        verifyNoInteractions(concurrencyLimiter, partitionThrottle, dispatchAdmissionLimiter);
+
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        assertThat(scheduler.schedule(request).isDispatchable()).isTrue();
+
+        verify(concurrencyLimiter, times(1)).check(any(), any());
+        verify(partitionThrottle, times(1)).check(any(), any());
+        verify(dispatchAdmissionLimiter, times(1)).check(any(), any());
     }
-    verifyNoInteractions(concurrencyLimiter, partitionThrottle, dispatchAdmissionLimiter);
-
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    assertThat(scheduler.schedule(request).isDispatchable()).isTrue();
-
-    verify(concurrencyLimiter, times(1)).check(any(), any());
-    verify(partitionThrottle, times(1)).check(any(), any());
-    verify(dispatchAdmissionLimiter, times(1)).check(any(), any());
-  }
 }

@@ -5,10 +5,10 @@ import lombok.Builder;
 
 @Builder
 public record BatchDayManualOperation(
-    String dayStatus,
-    Boolean frozen,
-    String operationReason,
-    String operatedBy,
-    Instant operatedAt,
-    Instant settledAt,
-    Instant updatedAt) {}
+        String dayStatus,
+        Boolean frozen,
+        String operationReason,
+        String operatedBy,
+        Instant operatedAt,
+        Instant settledAt,
+        Instant updatedAt) {}

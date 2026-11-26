@@ -20,125 +20,120 @@ import java.util.regex.Pattern;
  */
 public final class TrailerControlRecord {
 
-  /** ParseStep 剥离 trailer 后,把声明笔数 / 控制总额 stash 进 context attributes 的键。 */
-  public static final String ATTR_DECLARED_RECORD_COUNT = "declaredRecordCount";
+    /** ParseStep 剥离 trailer 后,把声明笔数 / 控制总额 stash 进 context attributes 的键。 */
+    public static final String ATTR_DECLARED_RECORD_COUNT = "declaredRecordCount";
 
-  public static final String ATTR_DECLARED_CONTROL_TOTAL = "declaredControlTotal";
+    public static final String ATTR_DECLARED_CONTROL_TOTAL = "declaredControlTotal";
 
-  private final Long declaredRecordCount;
-  private final BigDecimal declaredControlTotal;
+    private final Long declaredRecordCount;
+    private final BigDecimal declaredControlTotal;
 
-  private TrailerControlRecord(Long declaredRecordCount, BigDecimal declaredControlTotal) {
-    this.declaredRecordCount = declaredRecordCount;
-    this.declaredControlTotal = declaredControlTotal;
-  }
-
-  public Long declaredRecordCount() {
-    return declaredRecordCount;
-  }
-
-  public BigDecimal declaredControlTotal() {
-    return declaredControlTotal;
-  }
-
-  public boolean isPresent() {
-    return declaredRecordCount != null || declaredControlTotal != null;
-  }
-
-  /** trailer_template 是否声明了 trailer 行(present=true);ParseStep 用它决定是否剥离末行。 */
-  public static boolean isPresentEnabled(Map<String, Object> trailerTemplate) {
-    return trailerTemplate != null
-        && !trailerTemplate.isEmpty()
-        && boolOr(trailerTemplate.get("present"), false);
-  }
-
-  /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
-  public static TrailerControlRecord parse(
-      String trailerLine, Map<String, Object> trailerTemplate) {
-    if (EmptyChecks.isNull(trailerLine) || EmptyChecks.isEmpty(trailerTemplate)) {
-      return new TrailerControlRecord(null, null);
+    private TrailerControlRecord(Long declaredRecordCount, BigDecimal declaredControlTotal) {
+        this.declaredRecordCount = declaredRecordCount;
+        this.declaredControlTotal = declaredControlTotal;
     }
-    boolean present = boolOr(trailerTemplate.get("present"), false);
-    if (!present) {
-      return new TrailerControlRecord(null, null);
-    }
-    String delimiter = strOr(trailerTemplate.get("delimiter"), ",");
-    String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
-    Object rawRecordCountIndex = trailerTemplate.get("recordCountIndex");
-    int recordCountIndex = intOr(rawRecordCountIndex, -1);
-    Long count = fieldLong(fields, recordCountIndex);
-    Object rawControlTotalIndex = trailerTemplate.get("controlTotalIndex");
-    int controlTotalIndex = intOr(rawControlTotalIndex, -1);
-    BigDecimal total = fieldDecimal(fields, controlTotalIndex);
-    return new TrailerControlRecord(count, total);
-  }
 
-  private static Long fieldLong(String[] fields, int index) {
-    String raw = fieldAt(fields, index);
-    if (raw == null || !Texts.hasText(raw)) {
-      return null;
+    public Long declaredRecordCount() {
+        return declaredRecordCount;
     }
-    try {
-      String trimmedValue = raw.trim();
-      return Long.parseLong(trimmedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          TrailerControlRecord.class, "catch:NumberFormatException", ignored);
-      return null;
-    }
-  }
 
-  private static BigDecimal fieldDecimal(String[] fields, int index) {
-    String raw = fieldAt(fields, index);
-    if (raw == null || !Texts.hasText(raw)) {
-      return null;
+    public BigDecimal declaredControlTotal() {
+        return declaredControlTotal;
     }
-    try {
-      String trimmedValue = raw.trim();
-      return new BigDecimal(trimmedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          TrailerControlRecord.class, "catch:NumberFormatException", ignored);
-      return null;
-    }
-  }
 
-  private static String fieldAt(String[] fields, int index) {
-    return index < 0 || index >= fields.length ? null : fields[index];
-  }
+    public boolean isPresent() {
+        return declaredRecordCount != null || declaredControlTotal != null;
+    }
 
-  private static String strOr(Object value, String fallback) {
-    if (EmptyChecks.isNull(value)) {
-      return fallback;
+    /** trailer_template 是否声明了 trailer 行(present=true);ParseStep 用它决定是否剥离末行。 */
+    public static boolean isPresentEnabled(Map<String, Object> trailerTemplate) {
+        return trailerTemplate != null && !trailerTemplate.isEmpty() && boolOr(trailerTemplate.get("present"), false);
     }
-    String presenceText = String.valueOf(value);
-    if (!Texts.hasText(presenceText)) {
-      return fallback;
-    }
-    String resultText = String.valueOf(value);
-    return resultText;
-  }
 
-  private static int intOr(Object value, int fallback) {
-    if (value instanceof Number number) {
-      return number.intValue();
+    /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
+    public static TrailerControlRecord parse(String trailerLine, Map<String, Object> trailerTemplate) {
+        if (EmptyChecks.isNull(trailerLine) || EmptyChecks.isEmpty(trailerTemplate)) {
+            return new TrailerControlRecord(null, null);
+        }
+        boolean present = boolOr(trailerTemplate.get("present"), false);
+        if (!present) {
+            return new TrailerControlRecord(null, null);
+        }
+        String delimiter = strOr(trailerTemplate.get("delimiter"), ",");
+        String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
+        Object rawRecordCountIndex = trailerTemplate.get("recordCountIndex");
+        int recordCountIndex = intOr(rawRecordCountIndex, -1);
+        Long count = fieldLong(fields, recordCountIndex);
+        Object rawControlTotalIndex = trailerTemplate.get("controlTotalIndex");
+        int controlTotalIndex = intOr(rawControlTotalIndex, -1);
+        BigDecimal total = fieldDecimal(fields, controlTotalIndex);
+        return new TrailerControlRecord(count, total);
     }
-    try {
-      if (EmptyChecks.isNull(value)) {
-        return fallback;
-      }
-      String rawText = String.valueOf(value);
-      String text = rawText.trim();
-      return Integer.parseInt(text);
-    } catch (NumberFormatException ignored) {
-      return fallback;
-    }
-  }
 
-  private static boolean boolOr(Object value, boolean fallback) {
-    if (value instanceof Boolean bool) {
-      return bool;
+    private static Long fieldLong(String[] fields, int index) {
+        String raw = fieldAt(fields, index);
+        if (raw == null || !Texts.hasText(raw)) {
+            return null;
+        }
+        try {
+            String trimmedValue = raw.trim();
+            return Long.parseLong(trimmedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(TrailerControlRecord.class, "catch:NumberFormatException", ignored);
+            return null;
+        }
     }
-    return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
-  }
+
+    private static BigDecimal fieldDecimal(String[] fields, int index) {
+        String raw = fieldAt(fields, index);
+        if (raw == null || !Texts.hasText(raw)) {
+            return null;
+        }
+        try {
+            String trimmedValue = raw.trim();
+            return new BigDecimal(trimmedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(TrailerControlRecord.class, "catch:NumberFormatException", ignored);
+            return null;
+        }
+    }
+
+    private static String fieldAt(String[] fields, int index) {
+        return index < 0 || index >= fields.length ? null : fields[index];
+    }
+
+    private static String strOr(Object value, String fallback) {
+        if (EmptyChecks.isNull(value)) {
+            return fallback;
+        }
+        String presenceText = String.valueOf(value);
+        if (!Texts.hasText(presenceText)) {
+            return fallback;
+        }
+        String resultText = String.valueOf(value);
+        return resultText;
+    }
+
+    private static int intOr(Object value, int fallback) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            if (EmptyChecks.isNull(value)) {
+                return fallback;
+            }
+            String rawText = String.valueOf(value);
+            String text = rawText.trim();
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static boolean boolOr(Object value, boolean fallback) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
+    }
 }

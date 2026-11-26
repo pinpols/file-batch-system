@@ -32,62 +32,61 @@ import org.springframework.test.context.TestPropertySource;
 @DisplayName("下游熔断降级组件的窄上下文冒烟:自动装配可装配,降级调用可用且指标绑定生效")
 class DownstreamFallbackContextSmokeTest {
 
-  @Autowired
-  private DownstreamFallback downstreamFallback;
+    @Autowired
+    private DownstreamFallback downstreamFallback;
 
-  @Autowired
-  private CircuitBreakerRegistry circuitBreakerRegistry;
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
 
-  @Autowired
-  private MeterRegistry meterRegistry;
+    @Autowired
+    private MeterRegistry meterRegistry;
 
-  @Test
-  @DisplayName("窄上下文装配成功:共享熔断注册表可注入,主调用返回成功值")
-  void shouldLoadContextWithAutoconfigAndRunFallback() {
-    assertThat(circuitBreakerRegistry)
-        .as("R4J autoconfig must provide CircuitBreakerRegistry")
-        .isNotNull();
-    assertThat(downstreamFallback).isNotNull();
+    @Test
+    @DisplayName("窄上下文装配成功:共享熔断注册表可注入,主调用返回成功值")
+    void shouldLoadContextWithAutoconfigAndRunFallback() {
+        assertThat(circuitBreakerRegistry)
+                .as("R4J autoconfig must provide CircuitBreakerRegistry")
+                .isNotNull();
+        assertThat(downstreamFallback).isNotNull();
 
-    String result = downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
-    assertThat(result).isEqualTo("ok");
-  }
-
-  /**
-   * B3:光验 registry!=null + happy path 不够——若绑定链断裂(如 prod 误排除 metrics autoconfig),会「零 CB 指标而测试仍绿」。断言
-   * {@code resilience4j.circuitbreaker.state} 真被埋进 registry,守护绑定链本身。
-   */
-  @Test
-  @DisplayName("首次调用创建熔断器后,状态指标真实注册进指标注册表,守护绑定链")
-  void shouldBindCircuitBreakerStateMeter_whenBreakerCreated() {
-    // 触发一次调用确保 "smoke" 熔断器被创建并被 metrics binder 注册。
-    downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
-
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
-        .as("metrics autoconfig must bind circuitbreaker.state gauge for created breakers")
-        .isNotEmpty();
-  }
-
-  @SpringBootConfiguration
-  @EnableConfigurationProperties(DownstreamCircuitBreakerProperties.class)
-  @ImportAutoConfiguration({
-    CircuitBreakerAutoConfiguration.class,
-    CircuitBreakerMetricsAutoConfiguration.class,
-  })
-  static class SmokeApp {
-
-    @Bean
-    MeterRegistry meterRegistry() {
-      return new SimpleMeterRegistry();
+        String result = downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
+        assertThat(result).isEqualTo("ok");
     }
 
-    @Bean
-    DownstreamFallback downstreamFallback(
-        ObjectProvider<MeterRegistry> meterRegistryProvider,
-        ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
-        DownstreamCircuitBreakerProperties properties) {
-      return new DownstreamFallback(
-          meterRegistryProvider, circuitBreakerRegistryProvider, properties);
+    /**
+     * B3:光验 registry!=null + happy path 不够——若绑定链断裂(如 prod 误排除 metrics autoconfig),会「零 CB 指标而测试仍绿」。断言
+     * {@code resilience4j.circuitbreaker.state} 真被埋进 registry,守护绑定链本身。
+     */
+    @Test
+    @DisplayName("首次调用创建熔断器后,状态指标真实注册进指标注册表,守护绑定链")
+    void shouldBindCircuitBreakerStateMeter_whenBreakerCreated() {
+        // 触发一次调用确保 "smoke" 熔断器被创建并被 metrics binder 注册。
+        downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
+
+        assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
+                .as("metrics autoconfig must bind circuitbreaker.state gauge for created breakers")
+                .isNotEmpty();
     }
-  }
+
+    @SpringBootConfiguration
+    @EnableConfigurationProperties(DownstreamCircuitBreakerProperties.class)
+    @ImportAutoConfiguration({
+        CircuitBreakerAutoConfiguration.class,
+        CircuitBreakerMetricsAutoConfiguration.class,
+    })
+    static class SmokeApp {
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+
+        @Bean
+        DownstreamFallback downstreamFallback(
+                ObjectProvider<MeterRegistry> meterRegistryProvider,
+                ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
+                DownstreamCircuitBreakerProperties properties) {
+            return new DownstreamFallback(meterRegistryProvider, circuitBreakerRegistryProvider, properties);
+        }
+    }
 }

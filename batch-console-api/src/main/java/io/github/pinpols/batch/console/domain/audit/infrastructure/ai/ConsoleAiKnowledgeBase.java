@@ -37,162 +37,159 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleAiKnowledgeBase {
 
-  private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
-  private final ConsoleAiProperties properties;
-  private final ResourcePatternResolver resourceResolver =
-      new PathMatchingResourcePatternResolver();
+    private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
+    private final ConsoleAiProperties properties;
+    private final ResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
 
-  private final Object indexLock = new Object();
-  private final AtomicReference<List<Chunk>> index = new AtomicReference<>();
+    private final Object indexLock = new Object();
+    private final AtomicReference<List<Chunk>> index = new AtomicReference<>();
 
-  /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
-  public List<Snippet> retrieve(String query) {
-    ConsoleAiProperties.Rag rag = properties.getRag();
-    boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || EmptyChecks.isBlank(query);
-    if (knowledgeRetrievalIsUnavailable) {
-      return List.of();
-    }
-    List<Chunk> chunks = ensureIndex();
-    if (chunks.isEmpty()) {
-      return List.of();
-    }
-    EmbeddingModel model = embeddingModelProvider.getIfAvailable();
-    if (model == null) {
-      return List.of();
-    }
-    float[] queryVector;
-    try {
-      queryVector = model.embed(query);
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:embed-query-failed", ex);
-      return List.of();
-    }
-    return chunks.stream()
-        .map(chunk -> {
-          String source = chunk.source();
-          String text = chunk.text();
-          float[] chunkVector = chunk.vector();
-          double similarity = cosine(queryVector, chunkVector);
-          return new Snippet(source, text, similarity);
-        })
-        .filter(snippet -> snippet.score() >= rag.getMinScore())
-        .sorted(Comparator.comparingDouble(Snippet::score).reversed())
-        .limit(Math.max(rag.getTopK(), 1))
-        .toList();
-  }
-
-  private List<Chunk> ensureIndex() {
-    List<Chunk> local = index.get();
-    if (local != null) {
-      return local;
-    }
-    synchronized (indexLock) {
-      local = index.get();
-      if (local == null) {
-        local = buildIndex();
-        index.set(local);
-      }
-      return local;
-    }
-  }
-
-  private List<Chunk> buildIndex() {
-    EmbeddingModel model = embeddingModelProvider.getIfAvailable();
-    if (model == null) {
-      log.info(
-          "console AI RAG: embedding model unavailable, knowledge base disabled (primer-only)");
-      return List.of();
-    }
-    List<Document> documents = loadAndSplit();
-    if (documents.isEmpty()) {
-      log.warn(
-          "console AI RAG: no knowledge documents found under {}",
-          properties.getRag().getLocations());
-      return List.of();
-    }
-    List<String> texts = documents.stream().map(Document::getText).toList();
-    List<float[]> vectors;
-    try {
-      vectors = model.embed(texts);
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:embed-corpus-failed", ex);
-      return List.of();
-    }
-    List<Chunk> chunks = new ArrayList<>(documents.size());
-    for (int i = 0; i < documents.size() && i < vectors.size(); i++) {
-      Object source = documents.get(i).getMetadata().get("source");
-      String chunkSource = EmptyChecks.isNull(source) ? "knowledge" : source.toString();
-      chunks.add(new Chunk(chunkSource, texts.get(i), vectors.get(i)));
-    }
-    log.info(
-        "console AI RAG: knowledge base built, {} chunk(s) from {} location(s)",
-        chunks.size(),
-        properties.getRag().getLocations().size());
-    return List.copyOf(chunks);
-  }
-
-  private List<Document> loadAndSplit() {
-    TokenTextSplitter splitter = TokenTextSplitter.builder().build();
-    List<Document> documents = new ArrayList<>();
-    for (String location : properties.getRag().getLocations()) {
-      for (Resource resource : resolve(location)) {
-        String text = read(resource);
-        if (text == null || text.isBlank()) {
-          continue;
+    /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
+    public List<Snippet> retrieve(String query) {
+        ConsoleAiProperties.Rag rag = properties.getRag();
+        boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || EmptyChecks.isBlank(query);
+        if (knowledgeRetrievalIsUnavailable) {
+            return List.of();
         }
-        String source = resource.getFilename() == null ? location : resource.getFilename();
-        Map<String, Object> metadata = Map.of("source", source);
-        Document sourceDocument = new Document(text, metadata);
-        List<Document> sourceDocuments = List.of(sourceDocument);
-        List<Document> splitDocuments = splitter.apply(sourceDocuments);
-        documents.addAll(splitDocuments);
-      }
+        List<Chunk> chunks = ensureIndex();
+        if (chunks.isEmpty()) {
+            return List.of();
+        }
+        EmbeddingModel model = embeddingModelProvider.getIfAvailable();
+        if (model == null) {
+            return List.of();
+        }
+        float[] queryVector;
+        try {
+            queryVector = model.embed(query);
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:embed-query-failed", ex);
+            return List.of();
+        }
+        return chunks.stream()
+                .map(chunk -> {
+                    String source = chunk.source();
+                    String text = chunk.text();
+                    float[] chunkVector = chunk.vector();
+                    double similarity = cosine(queryVector, chunkVector);
+                    return new Snippet(source, text, similarity);
+                })
+                .filter(snippet -> snippet.score() >= rag.getMinScore())
+                .sorted(Comparator.comparingDouble(Snippet::score).reversed())
+                .limit(Math.max(rag.getTopK(), 1))
+                .toList();
     }
-    return documents;
-  }
 
-  private List<Resource> resolve(String location) {
-    try {
-      return List.of(resourceResolver.getResources(location));
-    } catch (IOException ex) {
-      SwallowedExceptionLogger.info(
-          ConsoleAiKnowledgeBase.class, "catch:resolve-location-failed", ex);
-      return List.of();
+    private List<Chunk> ensureIndex() {
+        List<Chunk> local = index.get();
+        if (local != null) {
+            return local;
+        }
+        synchronized (indexLock) {
+            local = index.get();
+            if (local == null) {
+                local = buildIndex();
+                index.set(local);
+            }
+            return local;
+        }
     }
-  }
 
-  private String read(Resource resource) {
-    try {
-      InputStream input = resource.getInputStream();
-      byte[] resourceBytes = input.readAllBytes();
-      return new String(resourceBytes, StandardCharsets.UTF_8);
-    } catch (IOException ex) {
-      SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:read-resource-failed", ex);
-      return null;
+    private List<Chunk> buildIndex() {
+        EmbeddingModel model = embeddingModelProvider.getIfAvailable();
+        if (model == null) {
+            log.info("console AI RAG: embedding model unavailable, knowledge base disabled (primer-only)");
+            return List.of();
+        }
+        List<Document> documents = loadAndSplit();
+        if (documents.isEmpty()) {
+            log.warn(
+                    "console AI RAG: no knowledge documents found under {}",
+                    properties.getRag().getLocations());
+            return List.of();
+        }
+        List<String> texts = documents.stream().map(Document::getText).toList();
+        List<float[]> vectors;
+        try {
+            vectors = model.embed(texts);
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:embed-corpus-failed", ex);
+            return List.of();
+        }
+        List<Chunk> chunks = new ArrayList<>(documents.size());
+        for (int i = 0; i < documents.size() && i < vectors.size(); i++) {
+            Object source = documents.get(i).getMetadata().get("source");
+            String chunkSource = EmptyChecks.isNull(source) ? "knowledge" : source.toString();
+            chunks.add(new Chunk(chunkSource, texts.get(i), vectors.get(i)));
+        }
+        log.info(
+                "console AI RAG: knowledge base built, {} chunk(s) from {} location(s)",
+                chunks.size(),
+                properties.getRag().getLocations().size());
+        return List.copyOf(chunks);
     }
-  }
 
-  private static double cosine(float[] a, float[] b) {
-    if (a == null || b == null || a.length == 0 || a.length != b.length) {
-      return 0.0;
+    private List<Document> loadAndSplit() {
+        TokenTextSplitter splitter = TokenTextSplitter.builder().build();
+        List<Document> documents = new ArrayList<>();
+        for (String location : properties.getRag().getLocations()) {
+            for (Resource resource : resolve(location)) {
+                String text = read(resource);
+                if (text == null || text.isBlank()) {
+                    continue;
+                }
+                String source = resource.getFilename() == null ? location : resource.getFilename();
+                Map<String, Object> metadata = Map.of("source", source);
+                Document sourceDocument = new Document(text, metadata);
+                List<Document> sourceDocuments = List.of(sourceDocument);
+                List<Document> splitDocuments = splitter.apply(sourceDocuments);
+                documents.addAll(splitDocuments);
+            }
+        }
+        return documents;
     }
-    double dot = 0;
-    double normA = 0;
-    double normB = 0;
-    for (int i = 0; i < a.length; i++) {
-      dot += (double) a[i] * b[i];
-      normA += (double) a[i] * a[i];
-      normB += (double) b[i] * b[i];
-    }
-    if (normA == 0 || normB == 0) {
-      return 0.0;
-    }
-    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-  }
 
-  /** 检索命中的片段:来源文件名 + 文本 + 相似度分。 */
-  public record Snippet(String source, String text, double score) {}
+    private List<Resource> resolve(String location) {
+        try {
+            return List.of(resourceResolver.getResources(location));
+        } catch (IOException ex) {
+            SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:resolve-location-failed", ex);
+            return List.of();
+        }
+    }
 
-  @SuppressWarnings("java:S6218")
-  private record Chunk(String source, String text, float[] vector) {}
+    private String read(Resource resource) {
+        try {
+            InputStream input = resource.getInputStream();
+            byte[] resourceBytes = input.readAllBytes();
+            return new String(resourceBytes, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:read-resource-failed", ex);
+            return null;
+        }
+    }
+
+    private static double cosine(float[] a, float[] b) {
+        if (a == null || b == null || a.length == 0 || a.length != b.length) {
+            return 0.0;
+        }
+        double dot = 0;
+        double normA = 0;
+        double normB = 0;
+        for (int i = 0; i < a.length; i++) {
+            dot += (double) a[i] * b[i];
+            normA += (double) a[i] * a[i];
+            normB += (double) b[i] * b[i];
+        }
+        if (normA == 0 || normB == 0) {
+            return 0.0;
+        }
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    /** 检索命中的片段:来源文件名 + 文本 + 相似度分。 */
+    public record Snippet(String source, String text, double score) {}
+
+    @SuppressWarnings("java:S6218")
+    private record Chunk(String source, String text, float[] vector) {}
 }

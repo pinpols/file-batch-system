@@ -19,232 +19,227 @@ import lombok.Builder;
  */
 @Builder(toBuilder = true)
 public record WorkerRegistryEntity(
-    Long id,
-    String tenantId,
-    String workerCode,
-    String workerGroup,
-    JsonbString capabilityTags,
-    String resourceTag,
-    String status,
-    Instant heartbeatAt,
-    Integer currentLoad,
-    Integer maxConcurrent,
-    Instant drainStartedAt,
-    Instant drainDeadlineAt,
-    // SDK Phase 5 / SDK-P5-3 运行指纹（均可空，非 SDK 的文件 pipeline worker 不上报）。
-    String hostName,
-    String hostIp,
-    String processId,
-    // Worker 实际监听 HTTP 端口（V221）；NULL=老 worker / 老 SDK / 非 web 上下文未上报。
-    Integer port,
-    String buildId,
-    String sdkVersion,
-    String workerPoolCode,
-    JsonbString taskCapabilities) {
+        Long id,
+        String tenantId,
+        String workerCode,
+        String workerGroup,
+        JsonbString capabilityTags,
+        String resourceTag,
+        String status,
+        Instant heartbeatAt,
+        Integer currentLoad,
+        Integer maxConcurrent,
+        Instant drainStartedAt,
+        Instant drainDeadlineAt,
+        // SDK Phase 5 / SDK-P5-3 运行指纹（均可空，非 SDK 的文件 pipeline worker 不上报）。
+        String hostName,
+        String hostIp,
+        String processId,
+        // Worker 实际监听 HTTP 端口（V221）；NULL=老 worker / 老 SDK / 非 web 上下文未上报。
+        Integer port,
+        String buildId,
+        String sdkVersion,
+        String workerPoolCode,
+        JsonbString taskCapabilities) {
 
-  /** Worker 未声明容量时的平台默认并发；DDL 的同值 DEFAULT 仅作为数据库最后防线。 */
-  public static final int DEFAULT_MAX_CONCURRENT = 10;
+    /** Worker 未声明容量时的平台默认并发；DDL 的同值 DEFAULT 仅作为数据库最后防线。 */
+    public static final int DEFAULT_MAX_CONCURRENT = 10;
 
-  /** 兼容未携带运行时任务能力的注册快照。 */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public WorkerRegistryEntity(
-      Long id,
-      String tenantId,
-      String workerCode,
-      String workerGroup,
-      JsonbString capabilityTags,
-      String resourceTag,
-      String status,
-      Instant heartbeatAt,
-      Integer currentLoad,
-      Integer maxConcurrent,
-      Instant drainStartedAt,
-      Instant drainDeadlineAt,
-      String hostName,
-      String hostIp,
-      String processId,
-      Integer port,
-      String buildId,
-      String sdkVersion,
-      String workerPoolCode) {
-    this(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        null);
-  }
+    /** 兼容未携带运行时任务能力的注册快照。 */
+    @SuppressWarnings("PMD.ExcessiveParameterList")
+    public WorkerRegistryEntity(
+            Long id,
+            String tenantId,
+            String workerCode,
+            String workerGroup,
+            JsonbString capabilityTags,
+            String resourceTag,
+            String status,
+            Instant heartbeatAt,
+            Integer currentLoad,
+            Integer maxConcurrent,
+            Instant drainStartedAt,
+            Instant drainDeadlineAt,
+            String hostName,
+            String hostIp,
+            String processId,
+            Integer port,
+            String buildId,
+            String sdkVersion,
+            String workerPoolCode) {
+        this(
+                id,
+                tenantId,
+                workerCode,
+                workerGroup,
+                capabilityTags,
+                resourceTag,
+                status,
+                heartbeatAt,
+                currentLoad,
+                maxConcurrent,
+                drainStartedAt,
+                drainDeadlineAt,
+                hostName,
+                hostIp,
+                processId,
+                port,
+                buildId,
+                sdkVersion,
+                workerPoolCode,
+                null);
+    }
 
-  /**
-   * 兼容构造器：不带运行指纹（hostName/hostIp/processId/buildId/sdkVersion），全置 null。 缓存重建 / 选择器 /
-   * 测试等不关心指纹的路径沿用此入口，避免大面积改 canonical 调用点。
-   */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public WorkerRegistryEntity(
-      Long id,
-      String tenantId,
-      String workerCode,
-      String workerGroup,
-      JsonbString capabilityTags,
-      String resourceTag,
-      String status,
-      Instant heartbeatAt,
-      Integer currentLoad,
-      Integer maxConcurrent,
-      Instant drainStartedAt,
-      Instant drainDeadlineAt) {
-    this(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        workerCode,
-        null);
-  }
+    /**
+     * 兼容构造器：不带运行指纹（hostName/hostIp/processId/buildId/sdkVersion），全置 null。 缓存重建 / 选择器 /
+     * 测试等不关心指纹的路径沿用此入口，避免大面积改 canonical 调用点。
+     */
+    @SuppressWarnings("PMD.ExcessiveParameterList")
+    public WorkerRegistryEntity(
+            Long id,
+            String tenantId,
+            String workerCode,
+            String workerGroup,
+            JsonbString capabilityTags,
+            String resourceTag,
+            String status,
+            Instant heartbeatAt,
+            Integer currentLoad,
+            Integer maxConcurrent,
+            Instant drainStartedAt,
+            Instant drainDeadlineAt) {
+        this(
+                id,
+                tenantId,
+                workerCode,
+                workerGroup,
+                capabilityTags,
+                resourceTag,
+                status,
+                heartbeatAt,
+                currentLoad,
+                maxConcurrent,
+                drainStartedAt,
+                drainDeadlineAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                workerCode,
+                null);
+    }
 
-  /** 兼容 workerPoolCode 引入前的完整构造调用。 */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public WorkerRegistryEntity(
-      Long id,
-      String tenantId,
-      String workerCode,
-      String workerGroup,
-      JsonbString capabilityTags,
-      String resourceTag,
-      String status,
-      Instant heartbeatAt,
-      Integer currentLoad,
-      Integer maxConcurrent,
-      Instant drainStartedAt,
-      Instant drainDeadlineAt,
-      String hostName,
-      String hostIp,
-      String processId,
-      String buildId,
-      String sdkVersion) {
-    this(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        null,
-        buildId,
-        sdkVersion,
-        workerCode,
-        null);
-  }
+    /** 兼容 workerPoolCode 引入前的完整构造调用。 */
+    @SuppressWarnings("PMD.ExcessiveParameterList")
+    public WorkerRegistryEntity(
+            Long id,
+            String tenantId,
+            String workerCode,
+            String workerGroup,
+            JsonbString capabilityTags,
+            String resourceTag,
+            String status,
+            Instant heartbeatAt,
+            Integer currentLoad,
+            Integer maxConcurrent,
+            Instant drainStartedAt,
+            Instant drainDeadlineAt,
+            String hostName,
+            String hostIp,
+            String processId,
+            String buildId,
+            String sdkVersion) {
+        this(
+                id,
+                tenantId,
+                workerCode,
+                workerGroup,
+                capabilityTags,
+                resourceTag,
+                status,
+                heartbeatAt,
+                currentLoad,
+                maxConcurrent,
+                drainStartedAt,
+                drainDeadlineAt,
+                hostName,
+                hostIp,
+                processId,
+                null,
+                buildId,
+                sdkVersion,
+                workerCode,
+                null);
+    }
 
-  /** 任务路由使用稳定池代码；历史行没有该列时回退实例 workerCode。 */
-  public String routingCode() {
-    return EmptyChecks.isBlank(workerPoolCode) ? workerCode : workerPoolCode;
-  }
+    /** 任务路由使用稳定池代码；历史行没有该列时回退实例 workerCode。 */
+    public String routingCode() {
+        return EmptyChecks.isBlank(workerPoolCode) ? workerCode : workerPoolCode;
+    }
 
-  /** 注册请求可在不改变实例主键的情况下刷新稳定路由池代码。 */
-  public WorkerRegistryEntity withWorkerPoolCode(String newWorkerPoolCode) {
-    return toBuilder().workerPoolCode(newWorkerPoolCode).build();
-  }
+    /** 注册请求可在不改变实例主键的情况下刷新稳定路由池代码。 */
+    public WorkerRegistryEntity withWorkerPoolCode(String newWorkerPoolCode) {
+        return toBuilder().workerPoolCode(newWorkerPoolCode).build();
+    }
 
-  /** 注册/重注册更新：状态、心跳时间、负载、能力标签和 worker 自报并发上限。 */
-  public WorkerRegistryEntity withHeartbeat(
-      String status,
-      Instant heartbeatAt,
-      Integer currentLoad,
-      JsonbString capabilityTags,
-      Integer maxConcurrent) {
-    return toBuilder()
-        .status(status)
-        .heartbeatAt(heartbeatAt)
-        .currentLoad(currentLoad)
-        .capabilityTags(capabilityTags)
-        .maxConcurrent(maxConcurrent)
-        .build();
-  }
+    /** 注册/重注册更新：状态、心跳时间、负载、能力标签和 worker 自报并发上限。 */
+    public WorkerRegistryEntity withHeartbeat(
+            String status,
+            Instant heartbeatAt,
+            Integer currentLoad,
+            JsonbString capabilityTags,
+            Integer maxConcurrent) {
+        return toBuilder()
+                .status(status)
+                .heartbeatAt(heartbeatAt)
+                .currentLoad(currentLoad)
+                .capabilityTags(capabilityTags)
+                .maxConcurrent(maxConcurrent)
+                .build();
+    }
 
-  /** 仅更新状态（如 OFFLINE）。 */
-  public WorkerRegistryEntity withStatus(String status, Instant heartbeatAt) {
-    return toBuilder().status(status).heartbeatAt(heartbeatAt).build();
-  }
+    /** 仅更新状态（如 OFFLINE）。 */
+    public WorkerRegistryEntity withStatus(String status, Instant heartbeatAt) {
+        return toBuilder().status(status).heartbeatAt(heartbeatAt).build();
+    }
 
-  /** 开始排空：设置 DRAINING 状态和排空窗口。 */
-  public WorkerRegistryEntity withDrain(
-      String status, Instant drainStartedAt, Instant drainDeadlineAt, Instant heartbeatAt) {
-    return toBuilder()
-        .status(status)
-        .heartbeatAt(heartbeatAt)
-        .drainStartedAt(drainStartedAt)
-        .drainDeadlineAt(drainDeadlineAt)
-        .build();
-  }
+    /** 开始排空：设置 DRAINING 状态和排空窗口。 */
+    public WorkerRegistryEntity withDrain(
+            String status, Instant drainStartedAt, Instant drainDeadlineAt, Instant heartbeatAt) {
+        return toBuilder()
+                .status(status)
+                .heartbeatAt(heartbeatAt)
+                .drainStartedAt(drainStartedAt)
+                .drainDeadlineAt(drainDeadlineAt)
+                .build();
+    }
 
-  /** 标记已下线：清除排空时间戳。 */
-  public WorkerRegistryEntity withDecommissioned(Instant heartbeatAt) {
-    return toBuilder()
-        .status("DECOMMISSIONED")
-        .heartbeatAt(heartbeatAt)
-        .drainStartedAt(null)
-        .drainDeadlineAt(null)
-        .build();
-  }
+    /** 标记已下线：清除排空时间戳。 */
+    public WorkerRegistryEntity withDecommissioned(Instant heartbeatAt) {
+        return toBuilder()
+                .status("DECOMMISSIONED")
+                .heartbeatAt(heartbeatAt)
+                .drainStartedAt(null)
+                .drainDeadlineAt(null)
+                .build();
+    }
 
-  /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 换监听端口 / 升 SDK 版本）。 */
-  public WorkerRegistryEntity withFingerprint(
-      String hostName,
-      String hostIp,
-      String processId,
-      Integer port,
-      String buildId,
-      String sdkVersion) {
-    return toBuilder()
-        .hostName(hostName)
-        .hostIp(hostIp)
-        .processId(processId)
-        .port(port)
-        .buildId(buildId)
-        .sdkVersion(sdkVersion)
-        .build();
-  }
+    /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 换监听端口 / 升 SDK 版本）。 */
+    public WorkerRegistryEntity withFingerprint(
+            String hostName, String hostIp, String processId, Integer port, String buildId, String sdkVersion) {
+        return toBuilder()
+                .hostName(hostName)
+                .hostIp(hostIp)
+                .processId(processId)
+                .port(port)
+                .buildId(buildId)
+                .sdkVersion(sdkVersion)
+                .build();
+    }
 
-  public WorkerRegistryEntity withTaskCapabilities(JsonbString newTaskCapabilities) {
-    return toBuilder().taskCapabilities(newTaskCapabilities).build();
-  }
+    public WorkerRegistryEntity withTaskCapabilities(JsonbString newTaskCapabilities) {
+        return toBuilder().taskCapabilities(newTaskCapabilities).build();
+    }
 }

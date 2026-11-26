@@ -22,16 +22,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleJobDependencyWaitController {
 
-  private final ConsoleOrchestratorPort orchestrator;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestrator;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<List<ConsoleJobDependencyWaitResponse>> list(
-      @RequestParam String tenantId,
-      @RequestParam(required = false) String waitStatus,
-      @RequestParam(required = false) String jobCode,
-      @RequestParam(defaultValue = "100") int limit) {
-    return responseFactory.success(
-        orchestrator.listJobDependencyWaits(tenantId, waitStatus, jobCode, limit));
-  }
+    @GetMapping
+    public CommonResponse<List<ConsoleJobDependencyWaitResponse>> list(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) String waitStatus,
+            @RequestParam(required = false) String jobCode,
+            @RequestParam(defaultValue = "100") int limit) {
+        return responseFactory.success(orchestrator.listJobDependencyWaits(tenantId, waitStatus, jobCode, limit));
+    }
 }

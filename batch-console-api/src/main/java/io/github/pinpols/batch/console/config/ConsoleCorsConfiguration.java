@@ -24,41 +24,41 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @RequiredArgsConstructor
 public class ConsoleCorsConfiguration {
 
-  /** 浏览器缓存 CORS 预检结果的秒数（1 小时）。 */
-  private static final long PREFLIGHT_MAX_AGE_SECONDS = 3600L;
+    /** 浏览器缓存 CORS 预检结果的秒数（1 小时）。 */
+    private static final long PREFLIGHT_MAX_AGE_SECONDS = 3600L;
 
-  private final ConsoleSecurityProperties properties;
+    private final ConsoleSecurityProperties properties;
 
-  @Bean
-  public CorsConfigurationSource consoleCorsConfigurationSource() {
-    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    List<String> origins = properties.getCorsAllowedOrigins();
-    if (origins == null || origins.isEmpty()) {
-      // 同域部署:不发 CORS 头,浏览器同源策略生效。返回空 source,DispatcherServlet 不应用 CORS。
-      return source;
+    @Bean
+    public CorsConfigurationSource consoleCorsConfigurationSource() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        List<String> origins = properties.getCorsAllowedOrigins();
+        if (origins == null || origins.isEmpty()) {
+            // 同域部署:不发 CORS 头,浏览器同源策略生效。返回空 source,DispatcherServlet 不应用 CORS。
+            return source;
+        }
+        CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(origins);
+        cfg.setAllowedMethods(List.of(
+                HttpMethod.GET.name(),
+                HttpMethod.POST.name(),
+                HttpMethod.PUT.name(),
+                HttpMethod.PATCH.name(),
+                HttpMethod.DELETE.name(),
+                HttpMethod.OPTIONS.name()));
+        cfg.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                CommonConstants.DEFAULT_TENANT_ID_HEADER,
+                "X-Idempotency-Key",
+                "X-Request-Id",
+                "X-XSRF-TOKEN"));
+        cfg.setExposedHeaders(
+                List.of(CommonConstants.DEFAULT_REQUEST_ID_HEADER, CommonConstants.DEFAULT_TRACE_ID_HEADER));
+        cfg.setAllowCredentials(true); // HttpOnly cookie 必需
+        cfg.setMaxAge(PREFLIGHT_MAX_AGE_SECONDS);
+        source.registerCorsConfiguration("/api/console/**", cfg);
+        return source;
     }
-    CorsConfiguration cfg = new CorsConfiguration();
-    cfg.setAllowedOrigins(origins);
-    cfg.setAllowedMethods(List.of(
-        HttpMethod.GET.name(),
-        HttpMethod.POST.name(),
-        HttpMethod.PUT.name(),
-        HttpMethod.PATCH.name(),
-        HttpMethod.DELETE.name(),
-        HttpMethod.OPTIONS.name()));
-    cfg.setAllowedHeaders(List.of(
-        HttpHeaders.AUTHORIZATION,
-        HttpHeaders.CONTENT_TYPE,
-        HttpHeaders.ACCEPT,
-        CommonConstants.DEFAULT_TENANT_ID_HEADER,
-        "X-Idempotency-Key",
-        "X-Request-Id",
-        "X-XSRF-TOKEN"));
-    cfg.setExposedHeaders(List.of(
-        CommonConstants.DEFAULT_REQUEST_ID_HEADER, CommonConstants.DEFAULT_TRACE_ID_HEADER));
-    cfg.setAllowCredentials(true); // HttpOnly cookie 必需
-    cfg.setMaxAge(PREFLIGHT_MAX_AGE_SECONDS);
-    source.registerCorsConfiguration("/api/console/**", cfg);
-    return source;
-  }
 }

@@ -16,130 +16,124 @@ import org.apache.ibatis.annotations.Param;
 
 public interface OutboxEventMapper {
 
-  int insert(OutboxEventEntity entity);
+    int insert(OutboxEventEntity entity);
 
-  List<OutboxEventEntity> selectPending(OutboxEventQuery query);
+    List<OutboxEventEntity> selectPending(OutboxEventQuery query);
 
-  int markPublishing(OutboxEventMarkPublishingParam parameters);
+    int markPublishing(OutboxEventMarkPublishingParam parameters);
 
-  int markPublished(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
+    int markPublished(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("status") String status,
+            @Param("publishingStatus") String publishingStatus);
 
-  int markFailed(OutboxEventMarkFailedParam parameters);
+    int markFailed(OutboxEventMarkFailedParam parameters);
 
-  int markGiveUp(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
+    int markGiveUp(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("status") String status,
+            @Param("publishingStatus") String publishingStatus);
 
-  /**
-   * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
-   * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
-   */
-  List<OutboxPublishClaim> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
+    /**
+     * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
+     * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
+     */
+    List<OutboxPublishClaim> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
 
-  /**
-   * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
-   * 守卫，并要求 {@code publish_attempt} 与领取凭据一致，拒绝旧发布者覆盖新一轮结果。
-   */
-  int markPublishedBatch(OutboxEventMarkPublishedBatchParam parameters);
+    /**
+     * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
+     * 守卫，并要求 {@code publish_attempt} 与领取凭据一致，拒绝旧发布者覆盖新一轮结果。
+     */
+    int markPublishedBatch(OutboxEventMarkPublishedBatchParam parameters);
 
-  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
-  int markFailedBatch(OutboxEventMarkFailedBatchParam parameters);
+    /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
+    int markFailedBatch(OutboxEventMarkFailedBatchParam parameters);
 
-  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp 并校验领取凭据。 */
-  int markGiveUpBatch(OutboxEventMarkGiveUpBatchParam parameters);
+    /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp 并校验领取凭据。 */
+    int markGiveUpBatch(OutboxEventMarkGiveUpBatchParam parameters);
 
-  /**
-   * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久长期停滞。
-   *
-   * @return 被重置的记录数
-   */
-  int resetStalePublishing(
-      @Param("publishingStatus") String publishingStatus,
-      @Param("failedStatus") String failedStatus,
-      @Param("timeoutSeconds") long timeoutSeconds);
+    /**
+     * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久长期停滞。
+     *
+     * @return 被重置的记录数
+     */
+    int resetStalePublishing(
+            @Param("publishingStatus") String publishingStatus,
+            @Param("failedStatus") String failedStatus,
+            @Param("timeoutSeconds") long timeoutSeconds);
 
-  /** 积压量指标：统计指定状态的 outbox 事件总数（跨租户）。供 Micrometer gauge 使用。 */
-  long countByStatuses(@Param("statuses") List<String> statuses);
+    /** 积压量指标：统计指定状态的 outbox 事件总数（跨租户）。供 Micrometer gauge 使用。 */
+    long countByStatuses(@Param("statuses") List<String> statuses);
 
-  /** 异常指标：统计卡在 PUBLISHING 且超期的事件数。正常情况下 resetStalePublishing 会清 0。 */
-  long countStalePublishing(
-      @Param("publishingStatus") String publishingStatus,
-      @Param("timeoutSeconds") long timeoutSeconds);
+    /** 异常指标：统计卡在 PUBLISHING 且超期的事件数。正常情况下 resetStalePublishing 会清 0。 */
+    long countStalePublishing(
+            @Param("publishingStatus") String publishingStatus, @Param("timeoutSeconds") long timeoutSeconds);
 
-  /** 分区 outbox 幂等观测：统计窗口内重复 (tenant_id,event_key) 组数。 */
-  long countDuplicateEventKeysSince(@Param("since") Instant since);
+    /** 分区 outbox 幂等观测：统计窗口内重复 (tenant_id,event_key) 组数。 */
+    long countDuplicateEventKeysSince(@Param("since") Instant since);
 
-  /**
-   * Console 运维清理：按租户删除 PUBLISHED 状态、updated_at 早于 cutoff 的事件。 仅供 OutboxOpsApplicationService 在
-   * orchestrator 内事务调用，console 通过 HTTP 转发触发。
-   */
-  int deletePublishedBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+    /**
+     * Console 运维清理：按租户删除 PUBLISHED 状态、updated_at 早于 cutoff 的事件。 仅供 OutboxOpsApplicationService 在
+     * orchestrator 内事务调用，console 通过 HTTP 转发触发。
+     */
+    int deletePublishedBefore(@Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
 
-  /** Console 运维清理：按租户删除 GIVE_UP 状态、updated_at 早于 cutoff 的事件。语义同上。 */
-  int deleteGiveUpBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+    /** Console 运维清理：按租户删除 GIVE_UP 状态、updated_at 早于 cutoff 的事件。语义同上。 */
+    int deleteGiveUpBefore(@Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
 
-  /** 全局归档诊断：是否存在过期候选的子记录 tenant_id 与 Outbox 父事件不一致。 */
-  boolean existsTenantMismatchedArchiveCandidate(
-      @Param("status") String status, @Param("cutoff") Instant cutoff);
+    /** 全局归档诊断：是否存在过期候选的子记录 tenant_id 与 Outbox 父事件不一致。 */
+    boolean existsTenantMismatchedArchiveCandidate(@Param("status") String status, @Param("cutoff") Instant cutoff);
 
-  /**
-   * Console 运维重投递：将指定 id 中、当前状态属于 fromStatuses（如 FAILED/GIVE_UP）的事件 reset 回 NEW， 让 OutboxForwarder
-   * 重新拾起。受 ConsoleOutboxOps 应用层调用，console 通过 HTTP 转发触发。
-   */
-  default int resetToNew(String tenantId, List<Long> ids, List<String> fromStatuses) {
-    return resetStatus(tenantId, ids, fromStatuses, OutboxPublishStatus.NEW.code());
-  }
+    /**
+     * Console 运维重投递：将指定 id 中、当前状态属于 fromStatuses（如 FAILED/GIVE_UP）的事件 reset 回 NEW， 让 OutboxForwarder
+     * 重新拾起。受 ConsoleOutboxOps 应用层调用，console 通过 HTTP 转发触发。
+     */
+    default int resetToNew(String tenantId, List<Long> ids, List<String> fromStatuses) {
+        return resetStatus(tenantId, ids, fromStatuses, OutboxPublishStatus.NEW.code());
+    }
 
-  int resetStatus(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("fromStatuses") List<String> fromStatuses,
-      @Param("targetStatus") String targetStatus);
+    int resetStatus(
+            @Param("tenantId") String tenantId,
+            @Param("ids") List<Long> ids,
+            @Param("fromStatuses") List<String> fromStatuses,
+            @Param("targetStatus") String targetStatus);
 
-  /** P1-3 dry-run: 统计满足 cleanup 条件的 PUBLISHED 行数(不删)。 */
-  int countPublishedBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+    /** P1-3 dry-run: 统计满足 cleanup 条件的 PUBLISHED 行数(不删)。 */
+    int countPublishedBefore(@Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
 
-  /** P1-3 dry-run: 统计满足 cleanup 条件的 GIVE_UP 行数(不删)。 */
-  int countGiveUpBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+    /** P1-3 dry-run: 统计满足 cleanup 条件的 GIVE_UP 行数(不删)。 */
+    int countGiveUpBefore(@Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
 
-  /** P1-3 dry-run: 统计 republish 候选(指定 ids ∩ status ∈ fromStatuses)的行数(不改)。 */
-  int countResettable(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("fromStatuses") List<String> fromStatuses);
+    /** P1-3 dry-run: 统计 republish 候选(指定 ids ∩ status ∈ fromStatuses)的行数(不改)。 */
+    int countResettable(
+            @Param("tenantId") String tenantId,
+            @Param("ids") List<Long> ids,
+            @Param("fromStatuses") List<String> fromStatuses);
 
-  /**
-   * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。 status 通常是 PUBLISHED 或
-   * GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
-   */
-  List<Long> selectArchivableIds(
-      @Param("status") String status, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    /**
+     * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。 status 通常是 PUBLISHED 或
+     * GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
+     */
+    List<Long> selectArchivableIds(
+            @Param("status") String status, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  /** 将待瘦身 outbox_event 复制到 archive schema；重复 id 跳过，保证归档任务可重入。 */
-  int archiveOutboxEventsByIds(@Param("ids") List<Long> ids);
+    /** 将待瘦身 outbox_event 复制到 archive schema；重复 id 跳过，保证归档任务可重入。 */
+    int archiveOutboxEventsByIds(@Param("ids") List<Long> ids);
 
-  /** 将 outbox 相关投递日志复制到 archive schema。 */
-  int archiveEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+    /** 将 outbox 相关投递日志复制到 archive schema。 */
+    int archiveEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
 
-  /** 将 outbox 重试记录复制到 archive schema。 */
-  int archiveEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+    /** 将 outbox 重试记录复制到 archive schema。 */
+    int archiveEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
 
-  /** 按 outbox_event_id 列表删 event_delivery_log（FK 子表）。 */
-  int deleteEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+    /** 按 outbox_event_id 列表删 event_delivery_log（FK 子表）。 */
+    int deleteEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
 
-  /** 按 outbox_event_id 列表删 event_outbox_retry（FK 子表）。 */
-  int deleteEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+    /** 按 outbox_event_id 列表删 event_outbox_retry（FK 子表）。 */
+    int deleteEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
 
-  /** 按 id 列表删 outbox_event。 */
-  int deleteByIds(@Param("ids") List<Long> ids);
+    /** 按 id 列表删 outbox_event。 */
+    int deleteByIds(@Param("ids") List<Long> ids);
 }

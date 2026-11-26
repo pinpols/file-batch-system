@@ -6,13 +6,13 @@ package io.github.pinpols.batch.orchestrator.domain.enums;
  * <p>{@link #PENDING_APPROVAL} 与 {@link #RUNNING} 是活跃态：同一租户、日历和业务日只允许一个活跃会话。
  */
 public enum BatchDayReplaySessionStatus {
-  PENDING_APPROVAL,
-  RUNNING,
-  SUCCEEDED,
-  PARTIAL_FAILED,
-  CANCELLED;
+    PENDING_APPROVAL,
+    RUNNING,
+    SUCCEEDED,
+    PARTIAL_FAILED,
+    CANCELLED;
 
-  public String code() {
-    return name();
-  }
+    public String code() {
+        return name();
+    }
 }

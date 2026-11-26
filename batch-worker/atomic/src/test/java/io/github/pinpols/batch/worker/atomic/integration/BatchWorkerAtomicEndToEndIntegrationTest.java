@@ -29,80 +29,80 @@ import org.springframework.test.context.DynamicPropertySource;
  * → 直接 execute → 真实 OS / DB" 这一段,补 atomic 主链 IT 缺口。
  */
 @SpringBootTest(
-    classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "batch.worker.executors.shell.enabled=true",
-      "batch.worker.executors.sql.enabled=true",
-      // http 默认 enabled=true,显式打开避免被 profile 关掉
-      "batch.worker.executors.http.enabled=true",
-      "batch.worker.executors.shell.command-whitelist=/bin/echo",
-      "batch.worker.executors.shell.workdir-base=${java.io.tmpdir}/batch-atomic-it"
-    })
+        classes = BatchWorkerAtomicApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            "batch.worker.executors.shell.enabled=true",
+            "batch.worker.executors.sql.enabled=true",
+            // http 默认 enabled=true,显式打开避免被 profile 关掉
+            "batch.worker.executors.http.enabled=true",
+            "batch.worker.executors.shell.command-whitelist=/bin/echo",
+            "batch.worker.executors.shell.workdir-base=${java.io.tmpdir}/batch-atomic-it"
+        })
 @DisplayName("原子 Worker 端到端: 三类执行器真实执行链路")
 class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+    @Autowired
+    BatchTaskExecutorRegistry registry;
 
-  @Test
-  @DisplayName("SPI registry 含 shell / sql / http 三类已开启的 executor")
-  void shouldRegisterEnabledExecutors_whenRegistryDumped() {
-    Map<String, String> dump = registry.dumpRegistry();
-    assertThat(dump).containsKeys("shell", "sql", "http");
-    assertThat(dump.get("shell")).contains("ShellTaskExecutor");
-    assertThat(dump.get("sql")).contains("SqlTaskExecutor");
-    assertThat(dump.get("http")).contains("HttpTaskExecutor");
-  }
+    @Test
+    @DisplayName("SPI registry 含 shell / sql / http 三类已开启的 executor")
+    void shouldRegisterEnabledExecutors_whenRegistryDumped() {
+        Map<String, String> dump = registry.dumpRegistry();
+        assertThat(dump).containsKeys("shell", "sql", "http");
+        assertThat(dump.get("shell")).contains("ShellTaskExecutor");
+        assertThat(dump.get("sql")).contains("SqlTaskExecutor");
+        assertThat(dump.get("http")).contains("HttpTaskExecutor");
+    }
 
-  @Test
-  @DisplayName("shell:/bin/echo 跑真命令,output 含 exitCode=0")
-  void shellEcho_realProcess() throws Exception {
-    Path workdir = PrivateTempFiles.resolveUnderTempRoot("batch-atomic-it");
-    Files.createDirectories(workdir);
+    @Test
+    @DisplayName("shell:/bin/echo 跑真命令,output 含 exitCode=0")
+    void shellEcho_realProcess() throws Exception {
+        Path workdir = PrivateTempFiles.resolveUnderTempRoot("batch-atomic-it");
+        Files.createDirectories(workdir);
 
-    BatchTaskExecutor shell = registry.find("shell");
-    assertThat(shell).as("shell executor 已注册").isNotNull();
+        BatchTaskExecutor shell = registry.find("shell");
+        assertThat(shell).as("shell executor 已注册").isNotNull();
 
-    TaskContext ctx = new TaskContext(
-        "tenant-a",
-        "atomic-e2e-shell",
-        "ti-shell-1",
-        "worker-it",
-        Map.of("command", "/bin/echo", "args", List.of("hello", "atomic"), "timeoutSeconds", 5L),
-        Map.of());
-    TaskResult result = shell.execute(ctx);
+        TaskContext ctx = new TaskContext(
+                "tenant-a",
+                "atomic-e2e-shell",
+                "ti-shell-1",
+                "worker-it",
+                Map.of("command", "/bin/echo", "args", List.of("hello", "atomic"), "timeoutSeconds", 5L),
+                Map.of());
+        TaskResult result = shell.execute(ctx);
 
-    assertThat(result.success()).as("echo 应成功").isTrue();
-    assertThat(result.output()).containsEntry("exitCode", 0);
-    Object stdout = result.output().get("stdout");
-    assertThat(String.valueOf(stdout)).contains("hello").contains("atomic");
-  }
+        assertThat(result.success()).as("echo 应成功").isTrue();
+        assertThat(result.output()).containsEntry("exitCode", 0);
+        Object stdout = result.output().get("stdout");
+        assertThat(String.valueOf(stdout)).contains("hello").contains("atomic");
+    }
 
-  @Test
-  @DisplayName("shell:命令不在白名单时被拒,落 fail 而非异常逸出")
-  void shellNonWhitelistedCommand_rejected() {
-    BatchTaskExecutor shell = registry.find("shell");
-    assertThat(shell).isNotNull();
+    @Test
+    @DisplayName("shell:命令不在白名单时被拒,落 fail 而非异常逸出")
+    void shellNonWhitelistedCommand_rejected() {
+        BatchTaskExecutor shell = registry.find("shell");
+        assertThat(shell).isNotNull();
 
-    TaskContext ctx = new TaskContext(
-        "tenant-a",
-        "atomic-e2e-shell-deny",
-        "ti-shell-2",
-        "worker-it",
-        Map.of("command", "/bin/cat", "args", List.of("/etc/hostname")),
-        Map.of());
-    TaskResult result = shell.execute(ctx);
+        TaskContext ctx = new TaskContext(
+                "tenant-a",
+                "atomic-e2e-shell-deny",
+                "ti-shell-2",
+                "worker-it",
+                Map.of("command", "/bin/cat", "args", List.of("/etc/hostname")),
+                Map.of());
+        TaskResult result = shell.execute(ctx);
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.message()).containsIgnoringCase("whitelist");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).containsIgnoringCase("whitelist");
+    }
 
-  // SQL E2E:已被 SqlTaskExecutorIntegrationTest 覆盖(用专配的低权限角色);本测不重复,
-  // 避免对 superuser 角色卡的硬化校验冲突。
+    // SQL E2E:已被 SqlTaskExecutorIntegrationTest 覆盖(用专配的低权限角色);本测不重复,
+    // 避免对 superuser 角色卡的硬化校验冲突。
 }

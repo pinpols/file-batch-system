@@ -13,18 +13,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ResourceAdmissionStartupGuard implements ApplicationRunner {
 
-  private final Environment environment;
-  private final ResourceSchedulerProperties properties;
+    private final Environment environment;
+    private final ResourceSchedulerProperties properties;
 
-  @Override
-  public void run(ApplicationArguments args) {
-    if (!BatchProfileSupport.isProductionProfile(environment)) {
-      return;
+    @Override
+    public void run(ApplicationArguments args) {
+        if (!BatchProfileSupport.isProductionProfile(environment)) {
+            return;
+        }
+        if (properties.getGlobalMaxRunningJobs() <= 0) {
+            throw new IllegalStateException("production requires batch.resource-scheduler.global-max-running-jobs > 0; "
+                    + "an unbounded control plane can move an overload directly into PostgreSQL/Kafka");
+        }
     }
-    if (properties.getGlobalMaxRunningJobs() <= 0) {
-      throw new IllegalStateException(
-          "production requires batch.resource-scheduler.global-max-running-jobs > 0; "
-              + "an unbounded control plane can move an overload directly into PostgreSQL/Kafka");
-    }
-  }
 }

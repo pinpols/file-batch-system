@@ -20,24 +20,24 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleSchedulerController {
 
-  private final ConsoleTriggerProxyService triggerProxyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTriggerProxyService triggerProxyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/status")
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<ConsoleSchedulerCommandResponse> status() {
-    return responseFactory.success(triggerProxyService.schedulerStatus());
-  }
+    @GetMapping("/status")
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<ConsoleSchedulerCommandResponse> status() {
+        return responseFactory.success(triggerProxyService.schedulerStatus());
+    }
 
-  @PostMapping("/pause-all")
-  @AuditAction(action = "scheduler.pauseAll", aggregateType = "scheduler")
-  public CommonResponse<ConsoleSchedulerCommandResponse> pauseAll() {
-    return responseFactory.success(triggerProxyService.schedulerPauseAll());
-  }
+    @PostMapping("/pause-all")
+    @AuditAction(action = "scheduler.pauseAll", aggregateType = "scheduler")
+    public CommonResponse<ConsoleSchedulerCommandResponse> pauseAll() {
+        return responseFactory.success(triggerProxyService.schedulerPauseAll());
+    }
 
-  @PostMapping("/resume-all")
-  @AuditAction(action = "scheduler.resumeAll", aggregateType = "scheduler")
-  public CommonResponse<ConsoleSchedulerCommandResponse> resumeAll() {
-    return responseFactory.success(triggerProxyService.schedulerResumeAll());
-  }
+    @PostMapping("/resume-all")
+    @AuditAction(action = "scheduler.resumeAll", aggregateType = "scheduler")
+    public CommonResponse<ConsoleSchedulerCommandResponse> resumeAll() {
+        return responseFactory.success(triggerProxyService.schedulerResumeAll());
+    }
 }

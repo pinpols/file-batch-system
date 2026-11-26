@@ -133,1399 +133,1316 @@ import org.springframework.context.MessageSource;
  */
 public final class ConfigPackageSheetSpecs {
 
-  private static final String EMPTY = "";
-  private static final String SCENARIO_IMPORT = "IMPORT";
-  private static final String SCENARIO_EXPORT = "EXPORT";
-  private static final String SCENARIO_WORKFLOW = "WORKFLOW";
-  private static final String DEFAULT_MONITORING_SEVERITY = AlertSeverity.WARN.code();
-  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {
-    DEFAULT_MONITORING_SEVERITY, AlertSeverity.ERROR.code(), AlertSeverity.CRITICAL.code()
-  };
+    private static final String EMPTY = "";
+    private static final String SCENARIO_IMPORT = "IMPORT";
+    private static final String SCENARIO_EXPORT = "EXPORT";
+    private static final String SCENARIO_WORKFLOW = "WORKFLOW";
+    private static final String DEFAULT_MONITORING_SEVERITY = AlertSeverity.WARN.code();
+    private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {
+        DEFAULT_MONITORING_SEVERITY, AlertSeverity.ERROR.code(), AlertSeverity.CRITICAL.code()
+    };
 
-  /**
-   * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
-   *
-   * <p>下拉项展示顺序 = enum 声明顺序（业务认知顺序），不直接用 Set#toArray 的 unordered 输出。 CI 单测 {@code
-   * ConfigPackageEnumDropdownConsistencyTest} 锁定这 4 个数组的内容 == validator 集合， 防止文档侧漂移（job_type 漏
-   * PROCESS / schedule_type 多 EVENT/ONE_TIME / pipeline_type 漏 PROCESS / stage_code 含 TRANSFER
-   * 等历史漂移问题已修复，CI 守护后续不再退步）。
-   */
-  static final String[] JOB_TYPE_DROPDOWN = DictEnum.codeList(JobType.class).toArray(String[]::new);
+    /**
+     * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
+     *
+     * <p>下拉项展示顺序 = enum 声明顺序（业务认知顺序），不直接用 Set#toArray 的 unordered 输出。 CI 单测 {@code
+     * ConfigPackageEnumDropdownConsistencyTest} 锁定这 4 个数组的内容 == validator 集合， 防止文档侧漂移（job_type 漏
+     * PROCESS / schedule_type 多 EVENT/ONE_TIME / pipeline_type 漏 PROCESS / stage_code 含 TRANSFER
+     * 等历史漂移问题已修复，CI 守护后续不再退步）。
+     */
+    static final String[] JOB_TYPE_DROPDOWN = DictEnum.codeList(JobType.class).toArray(String[]::new);
 
-  static final String[] SCHEDULE_TYPE_DROPDOWN =
-      DictEnum.codeList(ScheduleType.class).toArray(String[]::new);
+    static final String[] SCHEDULE_TYPE_DROPDOWN =
+            DictEnum.codeList(ScheduleType.class).toArray(String[]::new);
 
-  static final String[] PIPELINE_TYPE_DROPDOWN =
-      DictEnum.codeList(PipelineType.class).toArray(String[]::new);
+    static final String[] PIPELINE_TYPE_DROPDOWN =
+            DictEnum.codeList(PipelineType.class).toArray(String[]::new);
 
-  /**
-   * stage_code 在 worker 侧拆 3 enum（ImportStage / ExportStage / DispatchStage / ProcessStage 等模块自管），
-   * 这里只取 validator 的 union 集合，并按业务流转顺序固定列出，避免 Set 转 array 出现非预期顺序。
-   */
-  static final String[] STAGE_CODE_DROPDOWN = {
-    "RECEIVE",
-    "PREPROCESS",
-    "PARSE",
-    "VALIDATE",
-    "LOAD",
-    "FEEDBACK",
-    "PREPARE",
-    "COMPUTE",
-    "GENERATE",
-    "STORE",
-    "REGISTER",
-    "COMPLETE",
-    "COMMIT",
-    "DISPATCH",
-    "ACK",
-    "RETRY",
-    "COMPENSATE"
-  };
+    /**
+     * stage_code 在 worker 侧拆 3 enum（ImportStage / ExportStage / DispatchStage / ProcessStage 等模块自管），
+     * 这里只取 validator 的 union 集合，并按业务流转顺序固定列出，避免 Set 转 array 出现非预期顺序。
+     */
+    static final String[] STAGE_CODE_DROPDOWN = {
+        "RECEIVE",
+        "PREPROCESS",
+        "PARSE",
+        "VALIDATE",
+        "LOAD",
+        "FEEDBACK",
+        "PREPARE",
+        "COMPUTE",
+        "GENERATE",
+        "STORE",
+        "REGISTER",
+        "COMPLETE",
+        "COMMIT",
+        "DISPATCH",
+        "ACK",
+        "RETRY",
+        "COMPENSATE"
+    };
 
-  private static final String[] RETRY_POLICY_DROPDOWN =
-      DictEnum.codeList(RetryPolicyType.class).toArray(String[]::new);
-  private static final String[] CHANNEL_TYPE_DROPDOWN =
-      DictEnum.codeList(FileChannelType.class).toArray(String[]::new);
-  private static final String[] AUTH_TYPE_DROPDOWN =
-      DictEnum.codeList(FileChannelAuthType.class).toArray(String[]::new);
-  private static final String[] RECEIPT_POLICY_DROPDOWN =
-      DictEnum.codeList(FileReceiptPolicy.class).toArray(String[]::new);
-  private static final String[] QUEUE_TYPE_DROPDOWN =
-      DictEnum.codeList(ResourceQueueType.class).toArray(String[]::new);
-  private static final String[] PRIORITY_POLICY_DROPDOWN =
-      DictEnum.codeList(QueuePriorityPolicy.class).toArray(String[]::new);
-  private static final String[] HOLIDAY_ROLL_RULE_DROPDOWN =
-      DictEnum.codeList(HolidayRollRule.class).toArray(String[]::new);
-  private static final String[] CATCH_UP_POLICY_DROPDOWN =
-      DictEnum.codeList(CatchUpPolicyType.class).toArray(String[]::new);
-  private static final String[] WINDOW_END_STRATEGY_DROPDOWN =
-      DictEnum.codeList(BatchWindowEndStrategy.class).toArray(String[]::new);
-  private static final String[] OUT_OF_WINDOW_ACTION_DROPDOWN =
-      DictEnum.codeList(OutOfWindowAction.class).toArray(String[]::new);
-  private static final String[] EXECUTION_MODE_DROPDOWN =
-      DictEnum.codeList(ExecutionMode.class).toArray(String[]::new);
-  private static final String[] SHARD_STRATEGY_DROPDOWN =
-      DictEnum.codeList(ShardStrategy.class).toArray(String[]::new);
-  private static final String[] WORKFLOW_TYPE_DROPDOWN =
-      DictEnum.codeList(WorkflowType.class).toArray(String[]::new);
-  private static final String[] WORKFLOW_NODE_TYPE_DROPDOWN =
-      DictEnum.codeList(WorkflowNodeType.class).stream()
-          .filter(code -> !WorkflowNodeType.TASK.code().equals(code))
-          .toArray(String[]::new);
-  private static final String[] WORKFLOW_EDGE_TYPE_DROPDOWN =
-      DictEnum.codeList(WorkflowEdgeType.class).toArray(String[]::new);
-  private static final String[] FILE_CHECKSUM_TYPE_DROPDOWN =
-      DictEnum.codeList(FileChecksumType.class).toArray(String[]::new);
-  private static final String[] FILE_COMPRESS_TYPE_DROPDOWN =
-      DictEnum.codeList(FileCompressType.class).toArray(String[]::new);
-  private static final String[] FILE_ENCRYPT_TYPE_DROPDOWN =
-      DictEnum.codeList(FileEncryptType.class).toArray(String[]::new);
+    private static final String[] RETRY_POLICY_DROPDOWN =
+            DictEnum.codeList(RetryPolicyType.class).toArray(String[]::new);
+    private static final String[] CHANNEL_TYPE_DROPDOWN =
+            DictEnum.codeList(FileChannelType.class).toArray(String[]::new);
+    private static final String[] AUTH_TYPE_DROPDOWN =
+            DictEnum.codeList(FileChannelAuthType.class).toArray(String[]::new);
+    private static final String[] RECEIPT_POLICY_DROPDOWN =
+            DictEnum.codeList(FileReceiptPolicy.class).toArray(String[]::new);
+    private static final String[] QUEUE_TYPE_DROPDOWN =
+            DictEnum.codeList(ResourceQueueType.class).toArray(String[]::new);
+    private static final String[] PRIORITY_POLICY_DROPDOWN =
+            DictEnum.codeList(QueuePriorityPolicy.class).toArray(String[]::new);
+    private static final String[] HOLIDAY_ROLL_RULE_DROPDOWN =
+            DictEnum.codeList(HolidayRollRule.class).toArray(String[]::new);
+    private static final String[] CATCH_UP_POLICY_DROPDOWN =
+            DictEnum.codeList(CatchUpPolicyType.class).toArray(String[]::new);
+    private static final String[] WINDOW_END_STRATEGY_DROPDOWN =
+            DictEnum.codeList(BatchWindowEndStrategy.class).toArray(String[]::new);
+    private static final String[] OUT_OF_WINDOW_ACTION_DROPDOWN =
+            DictEnum.codeList(OutOfWindowAction.class).toArray(String[]::new);
+    private static final String[] EXECUTION_MODE_DROPDOWN =
+            DictEnum.codeList(ExecutionMode.class).toArray(String[]::new);
+    private static final String[] SHARD_STRATEGY_DROPDOWN =
+            DictEnum.codeList(ShardStrategy.class).toArray(String[]::new);
+    private static final String[] WORKFLOW_TYPE_DROPDOWN =
+            DictEnum.codeList(WorkflowType.class).toArray(String[]::new);
+    private static final String[] WORKFLOW_NODE_TYPE_DROPDOWN = DictEnum.codeList(WorkflowNodeType.class).stream()
+            .filter(code -> !WorkflowNodeType.TASK.code().equals(code))
+            .toArray(String[]::new);
+    private static final String[] WORKFLOW_EDGE_TYPE_DROPDOWN =
+            DictEnum.codeList(WorkflowEdgeType.class).toArray(String[]::new);
+    private static final String[] FILE_CHECKSUM_TYPE_DROPDOWN =
+            DictEnum.codeList(FileChecksumType.class).toArray(String[]::new);
+    private static final String[] FILE_COMPRESS_TYPE_DROPDOWN =
+            DictEnum.codeList(FileCompressType.class).toArray(String[]::new);
+    private static final String[] FILE_ENCRYPT_TYPE_DROPDOWN =
+            DictEnum.codeList(FileEncryptType.class).toArray(String[]::new);
 
-  private static final String GUIDE_IMPORT = "IMPORT";
-  private static final String GUIDE_TIMEOUT_DESC = "超时秒数。";
-  private static final String GUIDE_DESC_DESC = "描述。";
-  private static final String GUIDE_STR = "字符串";
-  private static final String GUIDE_ENUM = "枚举";
-  private static final String GUIDE_INT = "整数";
-  private static final String GUIDE_BOOL = "布尔值";
-  private static final String GUIDE_JSON = "JSON";
-  private static final String GUIDE_SQL = "SQL";
-  private static final String GUIDE_TRUE = "TRUE";
-  private static final String GUIDE_FALSE = "FALSE";
-  private static final String GUIDE_NONE = "NONE";
-  private static final String GUIDE_ENABLED_DESC = "是否启用。";
-  private static final String GUIDE_TENANT_DESC = "所属租户。";
-  private static final String GUIDE_TENANT_EXAMPLE = "tenant-a";
-  private static final String GUIDE_JOB_EXAMPLE = "JOB_IMPORT_CUSTOMER";
-  private static final String GUIDE_EMPTY_JSON = "{}";
-  private static final String GUIDE_VERSION_ONE = "1";
+    private static final String GUIDE_IMPORT = "IMPORT";
+    private static final String GUIDE_TIMEOUT_DESC = "超时秒数。";
+    private static final String GUIDE_DESC_DESC = "描述。";
+    private static final String GUIDE_STR = "字符串";
+    private static final String GUIDE_ENUM = "枚举";
+    private static final String GUIDE_INT = "整数";
+    private static final String GUIDE_BOOL = "布尔值";
+    private static final String GUIDE_JSON = "JSON";
+    private static final String GUIDE_SQL = "SQL";
+    private static final String GUIDE_TRUE = "TRUE";
+    private static final String GUIDE_FALSE = "FALSE";
+    private static final String GUIDE_NONE = "NONE";
+    private static final String GUIDE_ENABLED_DESC = "是否启用。";
+    private static final String GUIDE_TENANT_DESC = "所属租户。";
+    private static final String GUIDE_TENANT_EXAMPLE = "tenant-a";
+    private static final String GUIDE_JOB_EXAMPLE = "JOB_IMPORT_CUSTOMER";
+    private static final String GUIDE_EMPTY_JSON = "{}";
+    private static final String GUIDE_VERSION_ONE = "1";
 
-  // ── 真实非空示例片段（提取自 batch-e2e-tests import/export-template-config-seed.sql，
-  //    与 worker 实际解析逻辑一致；精简但结构完整、可直接改）。
-  //    import 与 export 两套 field_mappings / query_param_schema 结构不同，分别给。
-  //    片段文案与 3 张只读说明 sheet 已外置到 classpath 资源 /config-package-guidance.json，
-  //    由 ConfigPackageGuidanceContent 加载；此处常量名保留不变（测试与 FILL_EXAMPLE_OVERRIDE 仍引用）。
+    // ── 真实非空示例片段（提取自 batch-e2e-tests import/export-template-config-seed.sql，
+    //    与 worker 实际解析逻辑一致；精简但结构完整、可直接改）。
+    //    import 与 export 两套 field_mappings / query_param_schema 结构不同，分别给。
+    //    片段文案与 3 张只读说明 sheet 已外置到 classpath 资源 /config-package-guidance.json，
+    //    由 ConfigPackageGuidanceContent 加载；此处常量名保留不变（测试与 FILL_EXAMPLE_OVERRIDE 仍引用）。
 
-  private static final ConfigPackageGuidanceContent GUIDANCE = ConfigPackageGuidanceContent.load();
+    private static final ConfigPackageGuidanceContent GUIDANCE = ConfigPackageGuidanceContent.load();
 
-  /**
-   * import 的 field_mappings：source/targetColumn/type/required/maxLength/format（非极简 source/target）。
-   */
-  private static final String EXAMPLE_IMPORT_FIELD_MAPPINGS =
-      GUIDANCE.fragment("importFieldMappings");
+    /**
+     * import 的 field_mappings：source/targetColumn/type/required/maxLength/format（非极简 source/target）。
+     */
+    private static final String EXAMPLE_IMPORT_FIELD_MAPPINGS = GUIDANCE.fragment("importFieldMappings");
 
-  /** export 的 field_mappings：sourceColumn/header/format（numberFormat 走 format 如 #,##0.00）。 */
-  private static final String EXAMPLE_EXPORT_FIELD_MAPPINGS =
-      GUIDANCE.fragment("exportFieldMappings");
+    /** export 的 field_mappings：sourceColumn/header/format（numberFormat 走 format 如 #,##0.00）。 */
+    private static final String EXAMPLE_EXPORT_FIELD_MAPPINGS = GUIDANCE.fragment("exportFieldMappings");
 
-  /**
-   * import 的
-   * query_param_schema.jdbcMappedImport 的字段包括 schema、table、columnMappings、conflictColumns 和 systemBindings。
-   */
-  private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA =
-      GUIDANCE.fragment("importQueryParamSchema");
+    /**
+     * import 的
+     * query_param_schema.jdbcMappedImport 的字段包括 schema、table、columnMappings、conflictColumns 和 systemBindings。
+     */
+    private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA = GUIDANCE.fragment("importQueryParamSchema");
 
-  /**
-   * export 的 query_param_schema：JSON Schema 参数声明，或 sqlTemplateExport.cursorColumn /
-   * jdbcMappedExport。
-   */
-  private static final String EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA =
-      GUIDANCE.fragment("exportQueryParamSchema");
+    /**
+     * export 的 query_param_schema：JSON Schema 参数声明，或 sqlTemplateExport.cursorColumn /
+     * jdbcMappedExport。
+     */
+    private static final String EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA = GUIDANCE.fragment("exportQueryParamSchema");
 
-  /** export 的 default_query_sql：命名参数 :tenantId/:batchNo，单条安全 SELECT。 */
-  private static final String EXAMPLE_EXPORT_QUERY_SQL = GUIDANCE.fragment("exportQuerySql");
+    /** export 的 default_query_sql：命名参数 :tenantId/:batchNo，单条安全 SELECT。 */
+    private static final String EXAMPLE_EXPORT_QUERY_SQL = GUIDANCE.fragment("exportQuerySql");
 
-  /** validation_rule_set（import）：maxErrorRate/stopOnFirstError/duplicateKeyCheck。 */
-  private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET =
-      GUIDANCE.fragment("importValidationRuleSet");
+    /** validation_rule_set（import）：maxErrorRate/stopOnFirstError/duplicateKeyCheck。 */
+    private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET = GUIDANCE.fragment("importValidationRuleSet");
 
-  /** 渠道示例配置；真实凭据不得写入或从配置包导出。 */
-  private static final String EXAMPLE_CHANNEL_CONFIG_JSON = GUIDANCE.fragment("channelConfigJson");
+    /** 渠道示例配置；真实凭据不得写入或从配置包导出。 */
+    private static final String EXAMPLE_CHANNEL_CONFIG_JSON = GUIDANCE.fragment("channelConfigJson");
 
-  /** job default_params：IMPORT/EXPORT 用 templateCode 引用 file_template_config。 */
-  private static final String EXAMPLE_JOB_DEFAULT_PARAMS = GUIDANCE.fragment("jobDefaultParams");
+    /** job default_params：IMPORT/EXPORT 用 templateCode 引用 file_template_config。 */
+    private static final String EXAMPLE_JOB_DEFAULT_PARAMS = GUIDANCE.fragment("jobDefaultParams");
 
-  /** PROCESS 步骤 step_params：targetSchema/targetTable/sql/columnMappings。 */
-  private static final String EXAMPLE_PROCESS_STEP_PARAMS = GUIDANCE.fragment("processStepParams");
+    /** PROCESS 步骤 step_params：targetSchema/targetTable/sql/columnMappings。 */
+    private static final String EXAMPLE_PROCESS_STEP_PARAMS = GUIDANCE.fragment("processStepParams");
 
-  /** DISPATCH 步骤 step_params：channelCode 指向 file_channel_config.channel_code。 */
-  private static final String EXAMPLE_DISPATCH_STEP_PARAMS =
-      GUIDANCE.fragment("dispatchStepParams");
+    /** DISPATCH 步骤 step_params：channelCode 指向 file_channel_config.channel_code。 */
+    private static final String EXAMPLE_DISPATCH_STEP_PARAMS = GUIDANCE.fragment("dispatchStepParams");
 
-  /**
-   * 「填写示例」per-(sheet,column) 覆盖：仅最难字段给完整片段。值取自 e2e fixture（与 worker 解析逻辑一致）。
-   * file_template_config 的 field_mappings / query_param_schema 同时给 import 和 export 两套结构。
-   */
-  static final Map<String, Map<String, String>> FILL_EXAMPLE_OVERRIDE = Map.ofEntries(
-      Map.entry(
-          FILE_TEMPLATE_SHEET,
-          Map.ofEntries(
-              Map.entry("field_mappings", """
+    /**
+     * 「填写示例」per-(sheet,column) 覆盖：仅最难字段给完整片段。值取自 e2e fixture（与 worker 解析逻辑一致）。
+     * file_template_config 的 field_mappings / query_param_schema 同时给 import 和 export 两套结构。
+     */
+    static final Map<String, Map<String, String>> FILL_EXAMPLE_OVERRIDE = Map.ofEntries(
+            Map.entry(
+                    FILE_TEMPLATE_SHEET,
+                    Map.ofEntries(
+                            Map.entry("field_mappings", """
                   IMPORT: %s
                   EXPORT: %s
                   """.formatted(
-                  EXAMPLE_IMPORT_FIELD_MAPPINGS, EXAMPLE_EXPORT_FIELD_MAPPINGS).stripTrailing()),
-              Map.entry(
-                  "query_param_schema",
-                  """
+                                    EXAMPLE_IMPORT_FIELD_MAPPINGS, EXAMPLE_EXPORT_FIELD_MAPPINGS).stripTrailing()),
+                            Map.entry(
+                                    "query_param_schema",
+                                    """
                   IMPORT: %s
                   EXPORT: %s
-                  """.formatted(
-                      EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA, EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA).stripTrailing()),
-              Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
-              Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
-      Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
-      Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)));
+                  """.formatted(EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA, EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA)
+                                            .stripTrailing()),
+                            Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
+                            Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
+            Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
+            Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)));
 
-  private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
-  private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
-  private static final String[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {
-    ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
-    ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED,
-    ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED,
-    ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED,
-    ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED,
-    ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED,
-    ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL,
-    COL_ENABLED
-  };
+    private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
+    private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
+    private static final String[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {
+        ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+        ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED,
+        ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED,
+        ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED,
+        ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED,
+        ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED,
+        ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL,
+        COL_ENABLED
+    };
 
-  private final MessageSource messageSource;
+    private final MessageSource messageSource;
 
-  public ConfigPackageSheetSpecs(MessageSource messageSource) {
-    this.messageSource = messageSource;
-  }
-
-  public record SheetDef(
-      String name,
-      List<String> columns,
-      Map<String, ColumnGuide> guides,
-      BiConsumer<Sheet, Locale> validationApplier) {}
-
-  public List<SheetDef> build() {
-    Map<String, ColumnGuide> resourceQueueGuides = buildResourceQueueGuides();
-    Map<String, ColumnGuide> businessCalendarGuides = buildBusinessCalendarGuides();
-    Map<String, ColumnGuide> batchWindowGuides = buildBatchWindowGuides();
-    Map<String, ColumnGuide> jobGuides = buildJobGuides();
-    Map<String, ColumnGuide> jobMonitoringPolicyGuides = buildJobMonitoringPolicyGuides();
-    Map<String, ColumnGuide> channelGuides = buildChannelGuides();
-    Map<String, ColumnGuide> fileTemplateGuides = buildFileTemplateGuides();
-    Map<String, ColumnGuide> workflowDefinitionGuides = buildWfDefGuides();
-    Map<String, ColumnGuide> workflowNodeGuides = buildWfNodeGuides();
-    Map<String, ColumnGuide> workflowEdgeGuides = buildWfEdgeGuides();
-    Map<String, ColumnGuide> workflowMonitoringPolicyGuides = buildWorkflowMonitoringPolicyGuides();
-
-    List<SheetDef> sheetDefinitions = List.of(
-        new SheetDef(
-            RESOURCE_QUEUE_SHEET,
-            RESOURCE_QUEUE_COLUMNS,
-            resourceQueueGuides,
-            this::applyResourceQueueValidations),
-        new SheetDef(
-            BUSINESS_CALENDAR_SHEET,
-            BUSINESS_CALENDAR_COLUMNS,
-            businessCalendarGuides,
-            this::applyBusinessCalendarValidations),
-        new SheetDef(
-            BATCH_WINDOW_SHEET,
-            BATCH_WINDOW_COLUMNS,
-            batchWindowGuides,
-            this::applyBatchWindowValidations),
-        new SheetDef(JOB_SHEET, JOB_COLUMNS, jobGuides, this::applyJobValidations),
-        new SheetDef(
-            JOB_MONITORING_POLICY_SHEET,
-            JOB_MONITORING_POLICY_COLUMNS,
-            jobMonitoringPolicyGuides,
-            this::applyJobMonitoringPolicyValidations),
-        new SheetDef(CHANNEL_SHEET, CHANNEL_COLUMNS, channelGuides, this::applyChannelValidations),
-        new SheetDef(
-            FILE_TEMPLATE_SHEET,
-            FILE_TEMPLATE_COLUMNS,
-            fileTemplateGuides,
-            this::applyFileTemplateValidations),
-        new SheetDef(
-            WF_DEF_SHEET, WF_DEF_COLUMNS, workflowDefinitionGuides, this::applyWfDefValidations),
-        new SheetDef(
-            WF_NODE_SHEET, WF_NODE_COLUMNS, workflowNodeGuides, this::applyWfNodeValidations),
-        new SheetDef(
-            WF_EDGE_SHEET, WF_EDGE_COLUMNS, workflowEdgeGuides, this::applyWfEdgeValidations),
-        new SheetDef(
-            WORKFLOW_MONITORING_POLICY_SHEET,
-            WORKFLOW_MONITORING_POLICY_COLUMNS,
-            workflowMonitoringPolicyGuides,
-            this::applyJobMonitoringPolicyValidations));
-    return sheetDefinitions;
-  }
-
-  /**
-   * 将完整业务结构投影为场景化工作簿。租户模板不包含平台管理的资源分配和运行监控阈值。
-   */
-  public List<SheetDef> project(List<String> rawScenarios) {
-    Set<String> scenarios = ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios);
-    if (scenarios.contains("ALL")) {
-      return build();
+    public ConfigPackageSheetSpecs(MessageSource messageSource) {
+        this.messageSource = messageSource;
     }
 
-    Set<String> includedSheets = new LinkedHashSet<>();
-    includedSheets.add(JOB_SHEET);
-    for (String scenario : scenarios) {
-      includeScenarioSheets(scenario, includedSheets);
+    public record SheetDef(
+            String name,
+            List<String> columns,
+            Map<String, ColumnGuide> guides,
+            BiConsumer<Sheet, Locale> validationApplier) {}
+
+    public List<SheetDef> build() {
+        Map<String, ColumnGuide> resourceQueueGuides = buildResourceQueueGuides();
+        Map<String, ColumnGuide> businessCalendarGuides = buildBusinessCalendarGuides();
+        Map<String, ColumnGuide> batchWindowGuides = buildBatchWindowGuides();
+        Map<String, ColumnGuide> jobGuides = buildJobGuides();
+        Map<String, ColumnGuide> jobMonitoringPolicyGuides = buildJobMonitoringPolicyGuides();
+        Map<String, ColumnGuide> channelGuides = buildChannelGuides();
+        Map<String, ColumnGuide> fileTemplateGuides = buildFileTemplateGuides();
+        Map<String, ColumnGuide> workflowDefinitionGuides = buildWfDefGuides();
+        Map<String, ColumnGuide> workflowNodeGuides = buildWfNodeGuides();
+        Map<String, ColumnGuide> workflowEdgeGuides = buildWfEdgeGuides();
+        Map<String, ColumnGuide> workflowMonitoringPolicyGuides = buildWorkflowMonitoringPolicyGuides();
+
+        List<SheetDef> sheetDefinitions = List.of(
+                new SheetDef(
+                        RESOURCE_QUEUE_SHEET,
+                        RESOURCE_QUEUE_COLUMNS,
+                        resourceQueueGuides,
+                        this::applyResourceQueueValidations),
+                new SheetDef(
+                        BUSINESS_CALENDAR_SHEET,
+                        BUSINESS_CALENDAR_COLUMNS,
+                        businessCalendarGuides,
+                        this::applyBusinessCalendarValidations),
+                new SheetDef(
+                        BATCH_WINDOW_SHEET, BATCH_WINDOW_COLUMNS, batchWindowGuides, this::applyBatchWindowValidations),
+                new SheetDef(JOB_SHEET, JOB_COLUMNS, jobGuides, this::applyJobValidations),
+                new SheetDef(
+                        JOB_MONITORING_POLICY_SHEET,
+                        JOB_MONITORING_POLICY_COLUMNS,
+                        jobMonitoringPolicyGuides,
+                        this::applyJobMonitoringPolicyValidations),
+                new SheetDef(CHANNEL_SHEET, CHANNEL_COLUMNS, channelGuides, this::applyChannelValidations),
+                new SheetDef(
+                        FILE_TEMPLATE_SHEET,
+                        FILE_TEMPLATE_COLUMNS,
+                        fileTemplateGuides,
+                        this::applyFileTemplateValidations),
+                new SheetDef(WF_DEF_SHEET, WF_DEF_COLUMNS, workflowDefinitionGuides, this::applyWfDefValidations),
+                new SheetDef(WF_NODE_SHEET, WF_NODE_COLUMNS, workflowNodeGuides, this::applyWfNodeValidations),
+                new SheetDef(WF_EDGE_SHEET, WF_EDGE_COLUMNS, workflowEdgeGuides, this::applyWfEdgeValidations),
+                new SheetDef(
+                        WORKFLOW_MONITORING_POLICY_SHEET,
+                        WORKFLOW_MONITORING_POLICY_COLUMNS,
+                        workflowMonitoringPolicyGuides,
+                        this::applyJobMonitoringPolicyValidations));
+        return sheetDefinitions;
     }
 
-    List<SheetDef> projected = new ArrayList<>();
-    for (SheetDef def : build()) {
-      if (includedSheets.contains(def.name())) {
-        projected.add(projectSheet(def, scenarios));
-      }
-    }
-    return List.copyOf(projected);
-  }
+    /**
+     * 将完整业务结构投影为场景化工作簿。租户模板不包含平台管理的资源分配和运行监控阈值。
+     */
+    public List<SheetDef> project(List<String> rawScenarios) {
+        Set<String> scenarios = ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios);
+        if (scenarios.contains("ALL")) {
+            return build();
+        }
 
-  private static void includeScenarioSheets(String scenario, Set<String> includedSheets) {
-    switch (scenario) {
-      case SCENARIO_IMPORT,
-          SCENARIO_EXPORT,
-          "IMPORT_DELIMITED",
-          "IMPORT_FIXED_WIDTH",
-          "IMPORT_EXCEL",
-          "IMPORT_XML",
-          "IMPORT_JSON",
-          "EXPORT_DELIMITED",
-          "EXPORT_FIXED_WIDTH",
-          "EXPORT_EXCEL",
-          "EXPORT_JSON" -> {
-        includedSheets.add(FILE_TEMPLATE_SHEET);
-      }
-      case "PROCESS" -> {}
-      case "DISPATCH" -> {
-        includedSheets.add(CHANNEL_SHEET);
-      }
-      case SCENARIO_WORKFLOW -> {
-        includedSheets.add(FILE_TEMPLATE_SHEET);
-        includedSheets.add(CHANNEL_SHEET);
-        includedSheets.add(WF_DEF_SHEET);
-        includedSheets.add(WF_NODE_SHEET);
-        includedSheets.add(WF_EDGE_SHEET);
-        includedSheets.add(WORKFLOW_MONITORING_POLICY_SHEET);
-      }
-      case "SCHEDULE" -> {
-        includedSheets.add(BUSINESS_CALENDAR_SHEET);
-        includedSheets.add(BATCH_WINDOW_SHEET);
-        includedSheets.add(JOB_MONITORING_POLICY_SHEET);
-      }
-      case "ATOMIC" -> {
-        // Atomic 作业没有需要配置的专属 sheet，保留默认的作业定义 sheet 即可。
-      }
-      default -> throw new IllegalArgumentException("unsupported package scenario: " + scenario);
-    }
-  }
+        Set<String> includedSheets = new LinkedHashSet<>();
+        includedSheets.add(JOB_SHEET);
+        for (String scenario : scenarios) {
+            includeScenarioSheets(scenario, includedSheets);
+        }
 
-  private SheetDef projectSheet(SheetDef definition, Set<String> scenarios) {
-    List<String> columns = projectedColumns(definition.name(), definition.columns(), scenarios);
-    Map<String, ColumnGuide> guides = new LinkedHashMap<>();
-    for (String column : columns) {
-      ColumnGuide guide = definition.guides().get(column);
-      if (EmptyChecks.isNotNull(guide)) {
-        guides.put(column, guide);
-      }
+        List<SheetDef> projected = new ArrayList<>();
+        for (SheetDef def : build()) {
+            if (includedSheets.contains(def.name())) {
+                projected.add(projectSheet(def, scenarios));
+            }
+        }
+        return List.copyOf(projected);
     }
 
-    BiConsumer<Sheet, Locale> validationApplier = definition.validationApplier();
-    Optional<Set<String>> focusedFormats = focusedFileFormats(scenarios);
-    String focusedDirection = focusedFileDirection(scenarios);
-    if (FILE_TEMPLATE_SHEET.equals(definition.name()) && focusedFormats.isPresent()) {
-      Set<String> formats = focusedFormats.orElseThrow();
-      Set<String> focusedTypes =
-          EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
-      validationApplier =
-          (sheet, locale) -> applyFileTemplateValidations(sheet, locale, formats, focusedTypes);
-      replaceGuideChoices(
-          guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, formats);
-      if (EmptyChecks.isNotNull(focusedDirection)) {
-        replaceGuideChoices(
-            guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
-      }
+    private static void includeScenarioSheets(String scenario, Set<String> includedSheets) {
+        switch (scenario) {
+            case SCENARIO_IMPORT,
+                    SCENARIO_EXPORT,
+                    "IMPORT_DELIMITED",
+                    "IMPORT_FIXED_WIDTH",
+                    "IMPORT_EXCEL",
+                    "IMPORT_XML",
+                    "IMPORT_JSON",
+                    "EXPORT_DELIMITED",
+                    "EXPORT_FIXED_WIDTH",
+                    "EXPORT_EXCEL",
+                    "EXPORT_JSON" -> {
+                includedSheets.add(FILE_TEMPLATE_SHEET);
+            }
+            case "PROCESS" -> {}
+            case "DISPATCH" -> {
+                includedSheets.add(CHANNEL_SHEET);
+            }
+            case SCENARIO_WORKFLOW -> {
+                includedSheets.add(FILE_TEMPLATE_SHEET);
+                includedSheets.add(CHANNEL_SHEET);
+                includedSheets.add(WF_DEF_SHEET);
+                includedSheets.add(WF_NODE_SHEET);
+                includedSheets.add(WF_EDGE_SHEET);
+                includedSheets.add(WORKFLOW_MONITORING_POLICY_SHEET);
+            }
+            case "SCHEDULE" -> {
+                includedSheets.add(BUSINESS_CALENDAR_SHEET);
+                includedSheets.add(BATCH_WINDOW_SHEET);
+                includedSheets.add(JOB_MONITORING_POLICY_SHEET);
+            }
+            case "ATOMIC" -> {
+                // Atomic 作业没有需要配置的专属 sheet，保留默认的作业定义 sheet 即可。
+            }
+            default -> throw new IllegalArgumentException("unsupported package scenario: " + scenario);
+        }
     }
-    return new SheetDef(definition.name(), columns, Map.copyOf(guides), validationApplier);
-  }
 
-  /** 模板投影与工作簿解析共用的必需结构列。 */
-  public static Set<String> requiredImportHeaders(String sheetName, List<String> columns) {
-    Set<String> required =
-        switch (sheetName) {
-          case JOB_SHEET ->
-            Set.of(
-                COL_JOB_CODE,
-                COL_JOB_NAME,
-                COL_JOB_TYPE,
-                ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
-          case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
-          case WORKFLOW_MONITORING_POLICY_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION);
-          case CHANNEL_SHEET ->
-            Set.of(
-                COL_CHANNEL_CODE,
-                COL_CHANNEL_NAME,
-                ConfigPackageExcelSchema.COL_CHANNEL_TYPE,
-                ConfigPackageExcelSchema.COL_AUTH_TYPE,
-                COL_RECEIPT_POLICY);
-          case FILE_TEMPLATE_SHEET ->
-            Set.of(
+    private SheetDef projectSheet(SheetDef definition, Set<String> scenarios) {
+        List<String> columns = projectedColumns(definition.name(), definition.columns(), scenarios);
+        Map<String, ColumnGuide> guides = new LinkedHashMap<>();
+        for (String column : columns) {
+            ColumnGuide guide = definition.guides().get(column);
+            if (EmptyChecks.isNotNull(guide)) {
+                guides.put(column, guide);
+            }
+        }
+
+        BiConsumer<Sheet, Locale> validationApplier = definition.validationApplier();
+        Optional<Set<String>> focusedFormats = focusedFileFormats(scenarios);
+        String focusedDirection = focusedFileDirection(scenarios);
+        if (FILE_TEMPLATE_SHEET.equals(definition.name()) && focusedFormats.isPresent()) {
+            Set<String> formats = focusedFormats.orElseThrow();
+            Set<String> focusedTypes =
+                    EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
+            validationApplier = (sheet, locale) -> applyFileTemplateValidations(sheet, locale, formats, focusedTypes);
+            replaceGuideChoices(guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, formats);
+            if (EmptyChecks.isNotNull(focusedDirection)) {
+                replaceGuideChoices(guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
+            }
+        }
+        return new SheetDef(definition.name(), columns, Map.copyOf(guides), validationApplier);
+    }
+
+    /** 模板投影与工作簿解析共用的必需结构列。 */
+    public static Set<String> requiredImportHeaders(String sheetName, List<String> columns) {
+        Set<String> required =
+                switch (sheetName) {
+                    case JOB_SHEET ->
+                        Set.of(COL_JOB_CODE, COL_JOB_NAME, COL_JOB_TYPE, ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
+                    case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
+                    case WORKFLOW_MONITORING_POLICY_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION);
+                    case CHANNEL_SHEET ->
+                        Set.of(
+                                COL_CHANNEL_CODE,
+                                COL_CHANNEL_NAME,
+                                ConfigPackageExcelSchema.COL_CHANNEL_TYPE,
+                                ConfigPackageExcelSchema.COL_AUTH_TYPE,
+                                COL_RECEIPT_POLICY);
+                    case FILE_TEMPLATE_SHEET ->
+                        Set.of(
+                                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
+                                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
+                                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+                                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE);
+                    case WF_DEF_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION);
+                    case WF_NODE_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_NODE_CODE, COL_NODE_TYPE);
+                    case WF_EDGE_SHEET ->
+                        Set.of(
+                                COL_WORKFLOW_CODE,
+                                COL_WORKFLOW_VERSION,
+                                COL_FROM_NODE_CODE,
+                                COL_TO_NODE_CODE,
+                                COL_EDGE_TYPE);
+                    default -> {
+                        Set<String> all = new LinkedHashSet<>(columns);
+                        all.remove(COL_TENANT_ID);
+                        yield Set.copyOf(all);
+                    }
+                };
+        return required;
+    }
+
+    private static List<String> projectedColumns(String sheetName, List<String> allColumns, Set<String> scenarios) {
+        Set<String> selected =
+                switch (sheetName) {
+                    case JOB_SHEET ->
+                        Set.of(
+                                COL_JOB_CODE,
+                                COL_JOB_NAME,
+                                COL_JOB_TYPE,
+                                COL_BIZ_TYPE,
+                                COL_SCHEDULE_TYPE,
+                                COL_SCHEDULE_EXPR,
+                                COL_DEPENDS_ON_JOB_CODE,
+                                ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+                                ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+                                COL_CALENDAR_CODE,
+                                COL_WINDOW_CODE,
+                                COL_DEFAULT_PARAMS,
+                                COL_ENABLED,
+                                COL_DESCRIPTION);
+                    case FILE_TEMPLATE_SHEET -> fileTemplateColumns(scenarios);
+                    case CHANNEL_SHEET ->
+                        Set.of(
+                                COL_CHANNEL_CODE,
+                                COL_CHANNEL_NAME,
+                                COL_CHANNEL_TYPE,
+                                ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT,
+                                COL_AUTH_TYPE,
+                                COL_CONFIG_JSON,
+                                COL_RECEIPT_POLICY,
+                                COL_TIMEOUT_SECONDS,
+                                COL_ENABLED);
+                    case JOB_MONITORING_POLICY_SHEET ->
+                        Set.of(
+                                COL_JOB_CODE,
+                                COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                                COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                                COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+                                COL_COMPLETION_DEADLINE_SEVERITY);
+                    case WORKFLOW_MONITORING_POLICY_SHEET ->
+                        Set.of(
+                                COL_WORKFLOW_CODE,
+                                COL_WORKFLOW_VERSION,
+                                COL_SOFT_RUNTIME_SECONDS,
+                                COL_SOFT_RUNTIME_SEVERITY,
+                                COL_START_GRACE_SECONDS,
+                                COL_START_GRACE_SEVERITY,
+                                COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                                COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                                COL_COMPLETION_DEADLINE_SEVERITY);
+                    case WF_NODE_SHEET ->
+                        Set.of(
+                                COL_WORKFLOW_CODE,
+                                COL_WORKFLOW_VERSION,
+                                COL_NODE_CODE,
+                                COL_NODE_NAME,
+                                COL_NODE_TYPE,
+                                COL_RELATED_JOB_CODE,
+                                COL_WINDOW_CODE,
+                                COL_NODE_ORDER,
+                                COL_NODE_PARAMS,
+                                COL_ENABLED);
+                    default -> Set.copyOf(allColumns);
+                };
+        return allColumns.stream()
+                .filter(column -> selected.contains(column) && !COL_TENANT_ID.equals(column))
+                .toList();
+    }
+
+    private static Set<String> fileTemplateColumns(Set<String> scenarios) {
+        List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
+        boolean onlyNonWorkflowProfilesAreSelected = EmptyChecks.isNotEmpty(profiles)
+                && !scenarios.contains(SCENARIO_IMPORT)
+                && !scenarios.contains(SCENARIO_EXPORT)
+                && !scenarios.contains(SCENARIO_WORKFLOW);
+        if (onlyNonWorkflowProfilesAreSelected) {
+            return focusedFileTemplateColumns(profiles);
+        }
+        Set<String> selected = new LinkedHashSet<>(Set.of(
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
-                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE);
-          case WF_DEF_SHEET ->
-            Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION);
-          case WF_NODE_SHEET ->
-            Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_NODE_CODE, COL_NODE_TYPE);
-          case WF_EDGE_SHEET ->
-            Set.of(
-                COL_WORKFLOW_CODE,
-                COL_WORKFLOW_VERSION,
-                COL_FROM_NODE_CODE,
-                COL_TO_NODE_CODE,
-                COL_EDGE_TYPE);
-          default -> {
-            Set<String> all = new LinkedHashSet<>(columns);
-            all.remove(COL_TENANT_ID);
-            yield Set.copyOf(all);
-          }
-        };
-    return required;
-  }
-
-  private static List<String> projectedColumns(
-      String sheetName, List<String> allColumns, Set<String> scenarios) {
-    Set<String> selected =
-        switch (sheetName) {
-          case JOB_SHEET ->
-            Set.of(
-                COL_JOB_CODE,
-                COL_JOB_NAME,
-                COL_JOB_TYPE,
                 COL_BIZ_TYPE,
-                COL_SCHEDULE_TYPE,
-                COL_SCHEDULE_EXPR,
-                COL_DEPENDS_ON_JOB_CODE,
-                ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
-                ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
-                COL_CALENDAR_CODE,
-                COL_WINDOW_CODE,
-                COL_DEFAULT_PARAMS,
+                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+                ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+                ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+                ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+                ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
+                ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
+                ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
+                ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
+                ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+                ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
+                ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
+                COL_VERSION,
                 COL_ENABLED,
-                COL_DESCRIPTION);
-          case FILE_TEMPLATE_SHEET -> fileTemplateColumns(scenarios);
-          case CHANNEL_SHEET ->
-            Set.of(
-                COL_CHANNEL_CODE,
-                COL_CHANNEL_NAME,
+                COL_DESCRIPTION));
+        if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
+        }
+        if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
+            selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
+        }
+        return Set.copyOf(selected);
+    }
+
+    private static List<ConfigPackageFileScenario> fileProfiles(Set<String> scenarios) {
+        return scenarios.stream()
+                .map(ConfigPackageFileScenario::fromCode)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private static Optional<Set<String>> focusedFileFormats(Set<String> scenarios) {
+        boolean scenarioDoesNotRestrictFileFormat = scenarios.contains(SCENARIO_IMPORT)
+                || scenarios.contains(SCENARIO_EXPORT)
+                || scenarios.contains(SCENARIO_WORKFLOW);
+        if (scenarioDoesNotRestrictFileFormat) {
+            return Optional.empty();
+        }
+        Set<String> formats = new LinkedHashSet<>();
+        for (ConfigPackageFileScenario profile : ConfigPackageFileScenario.values()) {
+            if (scenarios.contains(profile.code())) {
+                formats.add(profile.format().code());
+            }
+        }
+        return EmptyChecks.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
+    }
+
+    private static String focusedFileDirection(Set<String> scenarios) {
+        boolean scenarioDoesNotRestrictFileDirection = scenarios.contains(SCENARIO_IMPORT)
+                || scenarios.contains(SCENARIO_EXPORT)
+                || scenarios.contains(SCENARIO_WORKFLOW);
+        if (scenarioDoesNotRestrictFileDirection) {
+            return null;
+        }
+        Set<String> directions = fileProfiles(scenarios).stream()
+                .map(ConfigPackageFileScenario::direction)
+                .collect(Collectors.toSet());
+        return directions.size() == 1 ? directions.iterator().next() : null;
+    }
+
+    private static void replaceGuideChoices(Map<String, ColumnGuide> guides, String columnName, Set<String> choices) {
+        ColumnGuide guide = guides.get(columnName);
+        if (EmptyChecks.isNotNull(guide)) {
+            guides.put(
+                    columnName,
+                    new ColumnGuide(
+                            guide.required(),
+                            guide.readOnly(),
+                            guide.description(),
+                            guide.formatHint(),
+                            String.join(", ", choices),
+                            List.copyOf(choices)));
+        }
+    }
+
+    private static Set<String> focusedFileTemplateColumns(List<ConfigPackageFileScenario> profiles) {
+        Set<String> selected = new LinkedHashSet<>(Set.of(
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+                COL_BIZ_TYPE,
+                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+                ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
+                COL_VERSION,
+                COL_ENABLED,
+                COL_DESCRIPTION));
+        for (ConfigPackageFileScenario profile : profiles) {
+            if (SCENARIO_IMPORT.equals(profile.direction())) {
+                selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
+            } else {
+                selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
+                selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
+                selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
+                selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
+            }
+            switch (profile.format()) {
+                case DELIMITED ->
+                    selected.addAll(Set.of(
+                            ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+                            ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
+                            ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+                            ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+                            ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
+                            ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
+                            ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
+                            ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+                            ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
+                            ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE));
+                case FIXED_WIDTH ->
+                    selected.addAll(Set.of(
+                            ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+                            ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
+                            ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+                            ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+                            ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
+                            ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+                            ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS));
+                case EXCEL -> selected.add(ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS);
+                case XML, JSON ->
+                    selected.addAll(Set.of(
+                            ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+                            ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET));
+                case BINARY -> throw new IllegalArgumentException("BINARY is not a tenant template format");
+            }
+        }
+        return Set.copyOf(selected);
+    }
+
+    private Map<String, ColumnGuide> buildResourceQueueGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry("queue_code", requiredColumn("资源队列编码。", GUIDE_STR, "import-queue")),
+                Map.entry("queue_name", requiredColumn("资源队列名称。", GUIDE_STR, "导入主队列")),
+                Map.entry(
+                        "queue_type",
+                        requiredColumn(
+                                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, SCENARIO_EXPORT, "DISPATCH", "MIXED")),
+                Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
+                Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
+                Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
+                Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
+                Map.entry("resource_tag", optionalColumn("资源标签。", GUIDE_STR, "standard")),
+                Map.entry(
+                        "priority_policy",
+                        optionalColumn("优先级策略。", GUIDE_ENUM, "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
+                Map.entry("fair_share_weight", requiredColumn("公平调度权重。", GUIDE_INT, "1")),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "导入任务默认资源队列")));
+    }
+
+    private Map<String, ColumnGuide> buildBusinessCalendarGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_CODE,
+                        requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME,
+                        requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_TIMEZONE,
+                        requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
+                        optionalColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
+                        optionalColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS,
+                        requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
+                Map.entry(
+                        ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS,
+                        optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认业务日历")));
+    }
+
+    private Map<String, ColumnGuide> buildBatchWindowGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry("window_code", requiredColumn("批次窗口编码。", GUIDE_STR, "always-open")),
+                Map.entry("window_name", requiredColumn("批次窗口名称。", GUIDE_STR, "全天窗口")),
+                Map.entry("timezone", requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
+                Map.entry("start_time", requiredColumn("开始时间 HH:mm 或 HH:mm:ss。", "时间", "00:00")),
+                Map.entry("end_time", requiredColumn("结束时间 HH:mm 或 HH:mm:ss。", "时间", "23:59")),
+                Map.entry(
+                        "end_strategy",
+                        optionalColumn("窗口结束策略。", GUIDE_ENUM, "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
+                Map.entry("out_of_window_action", optionalColumn("窗口外动作。", GUIDE_ENUM, "WAIT", "WAIT", "FAIL")),
+                Map.entry(
+                        "allow_cross_day", optionalColumn("是否允许跨日。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认批次窗口")));
+    }
+
+    private void applyJobValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                COL_JOB_TYPE,
+                JOB_TYPE_DROPDOWN,
+                "excel.job.def.job_type.prompt_title",
+                "excel.job.def.job_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                COL_SCHEDULE_TYPE,
+                SCHEDULE_TYPE_DROPDOWN,
+                "excel.job.def.schedule_type.prompt_title",
+                "excel.job.def.schedule_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                COL_RETRY_POLICY,
+                RETRY_POLICY_DROPDOWN,
+                "excel.job.def.retry_policy.prompt_title",
+                "excel.job.def.retry_policy.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                COL_SHARD_STRATEGY,
+                SHARD_STRATEGY_DROPDOWN,
+                "excel.job.def.shard_strategy.prompt_title",
+                "excel.job.def.shard_strategy.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                COL_EXECUTION_MODE,
+                EXECUTION_MODE_DROPDOWN,
+                "excel.job.def.execution_mode.prompt_title",
+                "excel.job.def.execution_mode.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyJobMonitoringPolicyValidations(Sheet sheet, Locale locale) {
+        for (String columnName :
+                List.of(COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
+            addColumnDropdownValidation(
+                    sheet,
+                    columnName,
+                    JOB_MONITORING_SEVERITY_CHOICES,
+                    "excel.common.severity.prompt_title",
+                    "excel.common.severity.prompt_box",
+                    locale);
+        }
+    }
+
+    private void applyChannelValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
                 COL_CHANNEL_TYPE,
-                ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT,
+                CHANNEL_TYPE_DROPDOWN,
+                "excel.channel.channel_type.prompt_title",
+                "excel.channel.channel_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
                 COL_AUTH_TYPE,
-                COL_CONFIG_JSON,
+                AUTH_TYPE_DROPDOWN,
+                "excel.channel.auth_type.prompt_title",
+                "excel.channel.auth_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
                 COL_RECEIPT_POLICY,
-                COL_TIMEOUT_SECONDS,
-                COL_ENABLED);
-          case JOB_MONITORING_POLICY_SHEET ->
-            Set.of(
-                COL_JOB_CODE,
-                COL_COMPLETION_DEADLINE_LOCAL_TIME,
-                COL_COMPLETION_DEADLINE_DAY_OFFSET,
-                COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
-                COL_COMPLETION_DEADLINE_SEVERITY);
-          case WORKFLOW_MONITORING_POLICY_SHEET ->
-            Set.of(
-                COL_WORKFLOW_CODE,
-                COL_WORKFLOW_VERSION,
-                COL_SOFT_RUNTIME_SECONDS,
-                COL_SOFT_RUNTIME_SEVERITY,
-                COL_START_GRACE_SECONDS,
-                COL_START_GRACE_SEVERITY,
-                COL_COMPLETION_DEADLINE_LOCAL_TIME,
-                COL_COMPLETION_DEADLINE_DAY_OFFSET,
-                COL_COMPLETION_DEADLINE_SEVERITY);
-          case WF_NODE_SHEET ->
-            Set.of(
-                COL_WORKFLOW_CODE,
-                COL_WORKFLOW_VERSION,
-                COL_NODE_CODE,
-                COL_NODE_NAME,
+                RECEIPT_POLICY_DROPDOWN,
+                "excel.channel.receipt_policy.prompt_title",
+                "excel.channel.receipt_policy.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyResourceQueueValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                "queue_type",
+                QUEUE_TYPE_DROPDOWN,
+                "excel.queue.queue_type.prompt_title",
+                "excel.queue.queue_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                "priority_policy",
+                PRIORITY_POLICY_DROPDOWN,
+                "excel.queue.priority_policy.prompt_title",
+                "excel.queue.priority_policy.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyBusinessCalendarValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
+                HOLIDAY_ROLL_RULE_DROPDOWN,
+                "excel.calendar.holiday_roll_rule.prompt_title",
+                "excel.calendar.holiday_roll_rule.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
+                CATCH_UP_POLICY_DROPDOWN,
+                "excel.calendar.catch_up_policy.prompt_title",
+                "excel.calendar.catch_up_policy.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyBatchWindowValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.BatchWindow.COL_END_STRATEGY,
+                WINDOW_END_STRATEGY_DROPDOWN,
+                "excel.window.end_strategy.prompt_title",
+                "excel.window.end_strategy.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.BatchWindow.COL_OUT_OF_WINDOW_ACTION,
+                OUT_OF_WINDOW_ACTION_DROPDOWN,
+                "excel.window.out_of_window_action.prompt_title",
+                "excel.window.out_of_window_action.prompt_box",
+                locale);
+        boolDropdown(sheet, ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY, locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyFileTemplateValidations(Sheet sheet, Locale locale) {
+        applyFileTemplateValidations(sheet, locale, FILE_FORMAT_TYPES, FILE_TEMPLATE_TYPES);
+    }
+
+    private void applyFileTemplateValidations(
+            Sheet sheet, Locale locale, Set<String> allowedFileFormats, Set<String> allowedTemplateTypes) {
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+                orderedChoices(FileTemplateType.class, allowedTemplateTypes),
+                "excel.template.template_type.prompt_title",
+                "excel.template.template_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+                orderedChoices(FileTemplateFormat.class, allowedFileFormats),
+                "excel.template.file_format_type.prompt_title",
+                "excel.template.file_format_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE,
+                FILE_CHECKSUM_TYPE_DROPDOWN,
+                "excel.template.checksum_type.prompt_title",
+                "excel.template.checksum_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE,
+                FILE_COMPRESS_TYPE_DROPDOWN,
+                "excel.template.compress_type.prompt_title",
+                "excel.template.compress_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE,
+                FILE_ENCRYPT_TYPE_DROPDOWN,
+                "excel.template.encrypt_type.prompt_title",
+                "excel.template.encrypt_type.prompt_box",
+                locale);
+        for (String column : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
+            int columnIndex = columnIndex(sheet, column);
+            if (columnIndex >= 0) {
+                addBooleanDropdownValidation(sheet, columnIndex, locale);
+            }
+        }
+    }
+
+    private void addColumnDropdownValidation(
+            Sheet sheet, String column, String[] choices, String titleKey, String promptKey, Locale locale) {
+        int columnIndex = columnIndex(sheet, column);
+        if (columnIndex >= 0) {
+            DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
+                    .values(choices)
+                    .promptTitle(titleKey)
+                    .promptText(promptKey)
+                    .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
+                    .messageSource(messageSource)
+                    .locale(locale)
+                    .build();
+            addDropdownValidation(sheet, columnIndex, validationSpec);
+        }
+    }
+
+    private static int columnIndex(Sheet sheet, String columnName) {
+        Row header = sheet.getRow(0);
+        if (EmptyChecks.isNull(header)) {
+            return -1;
+        }
+        for (int index = 0; index < header.getLastCellNum(); index++) {
+            if (columnName.equals(header.getCell(index).getStringCellValue())) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static <E extends Enum<E> & DictEnum> String[] orderedChoices(
+            Class<E> enumType, Set<String> allowedValues) {
+        return DictEnum.codeList(enumType).stream()
+                .filter(allowedValues::contains)
+                .toArray(String[]::new);
+    }
+
+    private void applyWfDefValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                COL_WORKFLOW_TYPE,
+                WORKFLOW_TYPE_DROPDOWN,
+                "excel.workflow.def.workflow_type.prompt_title",
+                "excel.workflow.def.workflow_type.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
+    }
+
+    private void applyWfNodeValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
                 COL_NODE_TYPE,
-                COL_RELATED_JOB_CODE,
-                COL_WINDOW_CODE,
-                COL_NODE_ORDER,
-                COL_NODE_PARAMS,
-                COL_ENABLED);
-          default -> Set.copyOf(allColumns);
-        };
-    return allColumns.stream()
-        .filter(column -> selected.contains(column) && !COL_TENANT_ID.equals(column))
-        .toList();
-  }
-
-  private static Set<String> fileTemplateColumns(Set<String> scenarios) {
-    List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
-    boolean onlyNonWorkflowProfilesAreSelected = EmptyChecks.isNotEmpty(profiles)
-        && !scenarios.contains(SCENARIO_IMPORT)
-        && !scenarios.contains(SCENARIO_EXPORT)
-        && !scenarios.contains(SCENARIO_WORKFLOW);
-    if (onlyNonWorkflowProfilesAreSelected) {
-      return focusedFileTemplateColumns(profiles);
+                WORKFLOW_NODE_TYPE_DROPDOWN,
+                "excel.workflow.node.node_type.prompt_title",
+                "excel.workflow.node.node_type.prompt_box",
+                locale);
+        addColumnDropdownValidation(
+                sheet,
+                COL_RETRY_POLICY,
+                RETRY_POLICY_DROPDOWN,
+                "excel.workflow.node.retry_policy.prompt_title",
+                "excel.workflow.node.retry_policy.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
     }
-    Set<String> selected = new LinkedHashSet<>(Set.of(
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
-        COL_BIZ_TYPE,
-        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
-        ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
-        ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
-        ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
-        ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
-        ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
-        ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
-        ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
-        ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
-        ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
-        ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
-        COL_VERSION,
-        COL_ENABLED,
-        COL_DESCRIPTION));
-    if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
+
+    private void applyWfEdgeValidations(Sheet sheet, Locale locale) {
+        addColumnDropdownValidation(
+                sheet,
+                COL_EDGE_TYPE,
+                WORKFLOW_EDGE_TYPE_DROPDOWN,
+                "excel.workflow.edge.edge_type.prompt_title",
+                "excel.workflow.edge.edge_type.prompt_box",
+                locale);
+        boolDropdown(sheet, COL_ENABLED, locale);
     }
-    if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
-      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
+
+    private void boolDropdown(Sheet sheet, String columnName, Locale locale) {
+        int columnIndex = columnIndex(sheet, columnName);
+        if (columnIndex >= 0) {
+            addBooleanDropdownValidation(sheet, columnIndex, locale);
+        }
     }
-    return Set.copyOf(selected);
-  }
 
-  private static List<ConfigPackageFileScenario> fileProfiles(Set<String> scenarios) {
-    return scenarios.stream()
-        .map(ConfigPackageFileScenario::fromCode)
-        .flatMap(Optional::stream)
-        .toList();
-  }
-
-  private static Optional<Set<String>> focusedFileFormats(Set<String> scenarios) {
-    boolean scenarioDoesNotRestrictFileFormat = scenarios.contains(SCENARIO_IMPORT)
-        || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains(SCENARIO_WORKFLOW);
-    if (scenarioDoesNotRestrictFileFormat) {
-      return Optional.empty();
+    private void addBooleanDropdownValidation(Sheet sheet, int columnIndex, Locale locale) {
+        DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
+                .values(new String[] {GUIDE_TRUE, GUIDE_FALSE})
+                .promptTitle("excel.common.enabled.prompt_title")
+                .promptText("excel.common.enabled.prompt_box")
+                .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
+                .messageSource(messageSource)
+                .locale(locale)
+                .build();
+        addDropdownValidation(sheet, columnIndex, validationSpec);
     }
-    Set<String> formats = new LinkedHashSet<>();
-    for (ConfigPackageFileScenario profile : ConfigPackageFileScenario.values()) {
-      if (scenarios.contains(profile.code())) {
-        formats.add(profile.format().code());
-      }
+
+    private Map<String, ColumnGuide> buildJobGuides() {
+        Map<String, ColumnGuide> guides = Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_JOB_CODE, requiredColumn("作业唯一编码。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+                Map.entry(COL_JOB_NAME, requiredColumn("作业名称。", GUIDE_STR, "客户导入作业")),
+                Map.entry(
+                        COL_JOB_TYPE,
+                        requiredColumn(
+                                "作业类型。",
+                                GUIDE_ENUM,
+                                GUIDE_IMPORT,
+                                // 与 JobType enum / JOB_TYPES 对齐：
+                                // 直接从 JobType 生成，包含五类 Worker、GENERAL/WORKFLOW 与文件束类型。
+                                JOB_TYPE_DROPDOWN)),
+                Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
+                Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),
+                Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
+                Map.entry(
+                        COL_SCHEDULE_TYPE,
+                        requiredColumn(
+                                "调度类型。",
+                                GUIDE_ENUM,
+                                "MANUAL",
+                                // 与 ScheduleType enum / SCHEDULE_TYPES 对齐：
+                                // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
+                                SCHEDULE_TYPE_DROPDOWN)),
+                Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
+                Map.entry(
+                        COL_DEPENDS_ON_JOB_CODE,
+                        optionalColumn("上游作业编码；填写后 scheduled fire 前会等待同 bizDate 上游就绪。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+                Map.entry(
+                        ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+                        optionalColumn("多个上游作业编码用英文逗号分隔；所有上游在同 bizDate 均就绪后才触发。", GUIDE_STR, "IMPORT_A,IMPORT_B")),
+                Map.entry(
+                        ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+                        optionalColumn(
+                                "依赖日期对齐枚举，与上游编码按位置对应；留空按 SAME_DAY；PREVIOUS_BIZ_DAY 按下游作业业务日历解析，未配置业务日历时按周一至周五计算。",
+                                GUIDE_STR,
+                                "SAME_DAY,PREVIOUS_BIZ_DAY")),
+                Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
+                Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
+                Map.entry(
+                        COL_RETRY_POLICY,
+                        optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
+                Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "3")),
+                Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
+                Map.entry(
+                        COL_SHARD_STRATEGY,
+                        optionalColumn("分片策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
+                Map.entry(
+                        COL_EXECUTION_MODE,
+                        optionalColumn(
+                                "执行模式。INCREMENTAL 需要同时填写 watermark_field。",
+                                GUIDE_ENUM,
+                                "FULL",
+                                "FULL",
+                                "INCREMENTAL",
+                                "CDC")),
+                Map.entry(
+                        COL_WATERMARK_FIELD,
+                        optionalColumn("增量水位字段名；execution_mode=INCREMENTAL 时填写。", GUIDE_STR, "updated_at")),
+                Map.entry(
+                        COL_EXECUTION_HANDLER,
+                        optionalColumn("执行处理器 Bean 名称（新建时设置，更新时忽略）。", GUIDE_STR, "importJobHandler")),
+                Map.entry(
+                        COL_PARAM_SCHEMA, optionalColumn("参数 JSON Schema（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+                Map.entry(
+                        COL_DEFAULT_PARAMS,
+                        optionalColumn(
+                                "默认参数 JSON（新建时设置，更新时忽略）。IMPORT/EXPORT 用 templateCode 引用 file_template_config。",
+                                GUIDE_JSON,
+                                EXAMPLE_JOB_DEFAULT_PARAMS)),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入作业")));
+        return guides;
     }
-    return EmptyChecks.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
-  }
 
-  private static String focusedFileDirection(Set<String> scenarios) {
-    boolean scenarioDoesNotRestrictFileDirection = scenarios.contains(SCENARIO_IMPORT)
-        || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains(SCENARIO_WORKFLOW);
-    if (scenarioDoesNotRestrictFileDirection) {
-      return null;
+    private Map<String, ColumnGuide> buildJobMonitoringPolicyGuides() {
+        Map<String, ColumnGuide> guides = Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_JOB_CODE, requiredColumn("策略对应的作业编码，需在本包或当前租户中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+                Map.entry(
+                        COL_SOFT_RUNTIME_SECONDS,
+                        optionalColumn("作业开始执行后运行超过此秒数时告警；所有调度类型均适用。新建作业不统一启用默认值；配置包中 0 或留空表示关闭。", GUIDE_INT, "")),
+                Map.entry(
+                        COL_SOFT_RUNTIME_SEVERITY,
+                        optionalColumn(
+                                "运行超时告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES)),
+                Map.entry(
+                        COL_START_GRACE_SECONDS,
+                        optionalColumn(
+                                "Cron 或依赖作业进入执行资格后允许延迟启动的时长（秒）；超过后仍未启动则告警。新建作业默认 300 秒；配置包中 0 或留空表示关闭。",
+                                GUIDE_INT,
+                                "300")),
+                Map.entry(
+                        COL_START_GRACE_SEVERITY,
+                        optionalColumn(
+                                "启动过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES)),
+                Map.entry(
+                        COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                        optionalColumn(
+                                "仅无依赖的 CRON 作业使用：完成截止钟点（HH:mm），按作业时区和计划触发日解释；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00")),
+                Map.entry(
+                        COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                        optionalColumn("仅无依赖的 CRON 作业使用：截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1")),
+                Map.entry(
+                        COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+                        optionalColumn(
+                                "仅依赖作业使用：从下游满足执行资格时起算的最晚完成时长（秒）；0 或留空关闭。若同时为 CRON，以计划触发时刻和上游 EFFECTIVE 时刻较晚者作为起算点。",
+                                GUIDE_INT,
+                                "")),
+                Map.entry(
+                        COL_COMPLETION_DEADLINE_SEVERITY,
+                        optionalColumn(
+                                "完成过晚告警级别。",
+                                GUIDE_ENUM,
+                                DEFAULT_MONITORING_SEVERITY,
+                                JOB_MONITORING_SEVERITY_CHOICES)));
+        return guides;
     }
-    Set<String> directions = fileProfiles(scenarios).stream()
-        .map(ConfigPackageFileScenario::direction)
-        .collect(Collectors.toSet());
-    return directions.size() == 1 ? directions.iterator().next() : null;
-  }
 
-  private static void replaceGuideChoices(
-      Map<String, ColumnGuide> guides, String columnName, Set<String> choices) {
-    ColumnGuide guide = guides.get(columnName);
-    if (EmptyChecks.isNotNull(guide)) {
-      guides.put(
-          columnName,
-          new ColumnGuide(
-              guide.required(),
-              guide.readOnly(),
-              guide.description(),
-              guide.formatHint(),
-              String.join(", ", choices),
-              List.copyOf(choices)));
+    private Map<String, ColumnGuide> buildWorkflowMonitoringPolicyGuides() {
+        ColumnGuide tenantGuide = optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE);
+        ColumnGuide workflowCodeGuide = requiredColumn("策略对应的工作流编码，需在本包或当前租户中存在。", GUIDE_STR, "daily_settlement");
+        ColumnGuide workflowVersionGuide = requiredColumn("策略对应的工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE);
+        ColumnGuide softRuntimeSecondsGuide = optionalColumn("工作流开始后运行超过此秒数时告警；0 或留空表示关闭。", GUIDE_INT, "0");
+        ColumnGuide softRuntimeSeverityGuide =
+                optionalColumn("运行超时告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+        ColumnGuide startGraceSecondsGuide = optionalColumn("工作流进入执行资格后允许延迟启动的时长（秒）；0 或留空表示关闭。", GUIDE_INT, "0");
+        ColumnGuide startGraceSeverityGuide =
+                optionalColumn("启动过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+        ColumnGuide completionDeadlineTimeGuide =
+                optionalColumn("工作流完成截止钟点（HH:mm）；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00");
+        ColumnGuide completionDeadlineDayOffsetGuide =
+                optionalColumn("截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1");
+        ColumnGuide completionDeadlineSeverityGuide =
+                optionalColumn("完成过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+
+        Map<String, ColumnGuide> guides = Map.ofEntries(
+                Map.entry(COL_TENANT_ID, tenantGuide),
+                Map.entry(COL_WORKFLOW_CODE, workflowCodeGuide),
+                Map.entry(COL_WORKFLOW_VERSION, workflowVersionGuide),
+                Map.entry(COL_SOFT_RUNTIME_SECONDS, softRuntimeSecondsGuide),
+                Map.entry(COL_SOFT_RUNTIME_SEVERITY, softRuntimeSeverityGuide),
+                Map.entry(COL_START_GRACE_SECONDS, startGraceSecondsGuide),
+                Map.entry(COL_START_GRACE_SEVERITY, startGraceSeverityGuide),
+                Map.entry(COL_COMPLETION_DEADLINE_LOCAL_TIME, completionDeadlineTimeGuide),
+                Map.entry(COL_COMPLETION_DEADLINE_DAY_OFFSET, completionDeadlineDayOffsetGuide),
+                Map.entry(COL_COMPLETION_DEADLINE_SEVERITY, completionDeadlineSeverityGuide));
+        return guides;
     }
-  }
 
-  private static Set<String> focusedFileTemplateColumns(List<ConfigPackageFileScenario> profiles) {
-    Set<String> selected = new LinkedHashSet<>(Set.of(
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
-        COL_BIZ_TYPE,
-        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
-        ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
-        COL_VERSION,
-        COL_ENABLED,
-        COL_DESCRIPTION));
-    for (ConfigPackageFileScenario profile : profiles) {
-      if (SCENARIO_IMPORT.equals(profile.direction())) {
-        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
-      } else {
-        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
-        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
-        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
-        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
-      }
-      switch (profile.format()) {
-        case DELIMITED ->
-          selected.addAll(Set.of(
-              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
-              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
-              ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
-              ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
-              ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
-              ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
-              ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
-              ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
-              ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
-              ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE));
-        case FIXED_WIDTH ->
-          selected.addAll(Set.of(
-              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
-              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
-              ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
-              ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
-              ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
-              ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
-              ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS));
-        case EXCEL -> selected.add(ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS);
-        case XML, JSON ->
-          selected.addAll(Set.of(
-              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
-              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET));
-        case BINARY -> throw new IllegalArgumentException("BINARY is not a tenant template format");
-      }
+    private Map<String, ColumnGuide> buildChannelGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_CHANNEL_CODE, requiredColumn("通道唯一编码。", GUIDE_STR, "sftp_inbound")),
+                Map.entry(COL_CHANNEL_NAME, requiredColumn("通道名称。", GUIDE_STR, "SFTP 入站通道")),
+                Map.entry(
+                        COL_CHANNEL_TYPE,
+                        requiredColumn(
+                                "通道类型。",
+                                GUIDE_ENUM,
+                                "SFTP",
+                                "SFTP",
+                                "API",
+                                "EMAIL",
+                                "NAS",
+                                "OSS",
+                                "LOCAL",
+                                "API_PUSH")),
+                Map.entry("target_endpoint", optionalColumn("目标地址。", GUIDE_STR, "sftp.example.com")),
+                Map.entry(
+                        COL_AUTH_TYPE,
+                        requiredColumn(
+                                "认证类型。",
+                                GUIDE_ENUM,
+                                "PASSWORD",
+                                GUIDE_NONE,
+                                "PASSWORD",
+                                "KEY_PAIR",
+                                "TOKEN",
+                                "OAUTH2",
+                                "CUSTOM")),
+                Map.entry(
+                        COL_CONFIG_JSON,
+                        optionalColumn(
+                                "可选的通道运行参数 JSON；导出配置包会留空以保护凭据，同租户 MERGE 留空时保留现有配置。新通道默认为 {}，请在通道管理中完成连接参数与凭据配置。",
+                                GUIDE_JSON,
+                                EXAMPLE_CHANNEL_CONFIG_JSON)),
+                Map.entry(
+                        COL_RECEIPT_POLICY,
+                        requiredColumn("回执策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
+                Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "30")),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
     }
-    return Set.copyOf(selected);
-  }
 
-  private Map<String, ColumnGuide> buildResourceQueueGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry("queue_code", requiredColumn("资源队列编码。", GUIDE_STR, "import-queue")),
-        Map.entry("queue_name", requiredColumn("资源队列名称。", GUIDE_STR, "导入主队列")),
-        Map.entry(
-            "queue_type",
-            requiredColumn(
-                "队列类型。",
-                GUIDE_ENUM,
-                GUIDE_IMPORT,
-                GUIDE_IMPORT,
-                SCENARIO_EXPORT,
-                "DISPATCH",
-                "MIXED")),
-        Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
-        Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
-        Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
-        Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
-        Map.entry("resource_tag", optionalColumn("资源标签。", GUIDE_STR, "standard")),
-        Map.entry(
-            "priority_policy",
-            optionalColumn("优先级策略。", GUIDE_ENUM, "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
-        Map.entry("fair_share_weight", requiredColumn("公平调度权重。", GUIDE_INT, "1")),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "导入任务默认资源队列")));
-  }
-
-  private Map<String, ColumnGuide> buildBusinessCalendarGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_CODE,
-            requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME,
-            requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_TIMEZONE,
-            requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
-            optionalColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
-            optionalColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS,
-            requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
-        Map.entry(
-            ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS,
-            optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认业务日历")));
-  }
-
-  private Map<String, ColumnGuide> buildBatchWindowGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry("window_code", requiredColumn("批次窗口编码。", GUIDE_STR, "always-open")),
-        Map.entry("window_name", requiredColumn("批次窗口名称。", GUIDE_STR, "全天窗口")),
-        Map.entry("timezone", requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
-        Map.entry("start_time", requiredColumn("开始时间 HH:mm 或 HH:mm:ss。", "时间", "00:00")),
-        Map.entry("end_time", requiredColumn("结束时间 HH:mm 或 HH:mm:ss。", "时间", "23:59")),
-        Map.entry(
-            "end_strategy",
-            optionalColumn(
-                "窗口结束策略。", GUIDE_ENUM, "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
-        Map.entry(
-            "out_of_window_action", optionalColumn("窗口外动作。", GUIDE_ENUM, "WAIT", "WAIT", "FAIL")),
-        Map.entry(
-            "allow_cross_day",
-            optionalColumn("是否允许跨日。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认批次窗口")));
-  }
-
-  private void applyJobValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_JOB_TYPE,
-        JOB_TYPE_DROPDOWN,
-        "excel.job.def.job_type.prompt_title",
-        "excel.job.def.job_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_SCHEDULE_TYPE,
-        SCHEDULE_TYPE_DROPDOWN,
-        "excel.job.def.schedule_type.prompt_title",
-        "excel.job.def.schedule_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_RETRY_POLICY,
-        RETRY_POLICY_DROPDOWN,
-        "excel.job.def.retry_policy.prompt_title",
-        "excel.job.def.retry_policy.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_SHARD_STRATEGY,
-        SHARD_STRATEGY_DROPDOWN,
-        "excel.job.def.shard_strategy.prompt_title",
-        "excel.job.def.shard_strategy.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_EXECUTION_MODE,
-        EXECUTION_MODE_DROPDOWN,
-        "excel.job.def.execution_mode.prompt_title",
-        "excel.job.def.execution_mode.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyJobMonitoringPolicyValidations(Sheet sheet, Locale locale) {
-    for (String columnName : List.of(
-        COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
-      addColumnDropdownValidation(
-          sheet,
-          columnName,
-          JOB_MONITORING_SEVERITY_CHOICES,
-          "excel.common.severity.prompt_title",
-          "excel.common.severity.prompt_box",
-          locale);
+    private Map<String, ColumnGuide> buildFileTemplateGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry("template_code", requiredColumn("文件模板唯一编码。", GUIDE_STR, "TPL_IMPORT_CUSTOMER")),
+                Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
+                Map.entry(
+                        "template_type",
+                        requiredColumn("模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, SCENARIO_EXPORT, "SHARED")),
+                Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
+                Map.entry(
+                        "file_format_type",
+                        requiredColumn(
+                                "文件格式。",
+                                GUIDE_ENUM,
+                                "DELIMITED",
+                                "DELIMITED",
+                                "FIXED_WIDTH",
+                                "EXCEL",
+                                "XML",
+                                "JSON",
+                                "BINARY")),
+                Map.entry("charset", optionalColumn("源文件字符集。", GUIDE_STR, "UTF-8")),
+                Map.entry("target_charset", optionalColumn("导出目标字符集。", GUIDE_STR, "UTF-8")),
+                Map.entry("with_bom", optionalColumn("是否带 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry("line_separator", optionalColumn("换行符。", GUIDE_STR, "\\n")),
+                Map.entry("delimiter", optionalColumn("分隔符。", GUIDE_STR, ",")),
+                Map.entry("quote_char", optionalColumn("引用符。", GUIDE_STR, "\"")),
+                Map.entry("escape_char", optionalColumn("转义符。", GUIDE_STR, "\\")),
+                Map.entry("record_length", optionalColumn("定长文件记录长度。", GUIDE_INT, "0")),
+                Map.entry("header_rows", optionalColumn("导入跳过头部行数；留空默认 0，CSV 首行为表头时填 1。", GUIDE_INT, "0")),
+                Map.entry("footer_rows", optionalColumn("导入跳过尾部行数。", GUIDE_INT, "0")),
+                Map.entry("header_template", optionalColumn("导出头部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+                Map.entry("trailer_template", optionalColumn("导出尾部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+                Map.entry(
+                        "checksum_type", optionalColumn("校验类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA256")),
+                Map.entry("compress_type", optionalColumn("压缩类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "ZIP", "GZIP")),
+                Map.entry("encrypt_type", optionalColumn("加密类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "PGP", "AES")),
+                Map.entry("naming_rule", optionalColumn("文件命名规则。", GUIDE_STR, "customer_${batchDate}.csv")),
+                Map.entry(
+                        "field_mappings",
+                        optionalColumn(
+                                "字段映射 JSON。IMPORT 用 source(name)/targetColumn/type/required/maxLength/format；EXPORT"
+                                        + " 用 sourceColumn/header/type/format(numberFormat 如 #,##0.00)。两套结构不同，见填写示例列。",
+                                GUIDE_JSON,
+                                EXAMPLE_IMPORT_FIELD_MAPPINGS)),
+                Map.entry(
+                        "validation_rule_set",
+                        optionalColumn(
+                                "校验规则 JSON（IMPORT）。maxErrorRate/stopOnFirstError/duplicateKeyCheck。",
+                                GUIDE_JSON,
+                                EXAMPLE_IMPORT_VALIDATION_RULE_SET)),
+                Map.entry("default_query_code", optionalColumn("默认查询编码。", GUIDE_STR, "QRY_CUSTOMER_EXPORT")),
+                Map.entry(
+                        "default_query_sql",
+                        optionalColumn(
+                                "默认导出 SQL（EXPORT only，单条安全 SELECT，命名参数 :tenantId 等）。",
+                                GUIDE_SQL,
+                                EXAMPLE_EXPORT_QUERY_SQL)),
+                Map.entry(
+                        "query_param_schema",
+                        optionalColumn(
+                                "查询参数 JSON。IMPORT 用 jdbcMappedImport(schema/table/columnMappings/"
+                                        + "conflictColumns/systemBindings)；EXPORT 用 JSON Schema 参数声明或 "
+                                        + "sqlTemplateExport.cursorColumn / jdbcMappedExport。两套结构不同，见填写示例列。",
+                                GUIDE_JSON,
+                                EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA)),
+                Map.entry(
+                        "streaming_enabled",
+                        optionalColumn("是否流式处理。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry("page_size", optionalColumn("分页大小。", GUIDE_INT, "1000")),
+                Map.entry("fetch_size", optionalColumn("JDBC fetch size。", GUIDE_INT, "1000")),
+                Map.entry("chunk_size", optionalColumn("分块大小。", GUIDE_INT, "500")),
+                Map.entry(
+                        "preview_masking_enabled",
+                        optionalColumn("预览是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        "error_line_masking_enabled",
+                        optionalColumn("错误行是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        "log_masking_enabled",
+                        optionalColumn("日志是否脱敏；留空默认 FALSE。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        "content_encryption_enabled",
+                        optionalColumn("内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry("encryption_key_ref", optionalColumn("密钥引用。", GUIDE_STR, "kms://file-template/customer")),
+                Map.entry(
+                        "download_requires_approval",
+                        optionalColumn("下载是否需要审批。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry("masking_rule_set", optionalColumn("脱敏规则集编码。", GUIDE_STR, "MASK_CUSTOMER")),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(COL_VERSION, optionalColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户导入文件模板")));
     }
-  }
 
-  private void applyChannelValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_CHANNEL_TYPE,
-        CHANNEL_TYPE_DROPDOWN,
-        "excel.channel.channel_type.prompt_title",
-        "excel.channel.channel_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_AUTH_TYPE,
-        AUTH_TYPE_DROPDOWN,
-        "excel.channel.auth_type.prompt_title",
-        "excel.channel.auth_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_RECEIPT_POLICY,
-        RECEIPT_POLICY_DROPDOWN,
-        "excel.channel.receipt_policy.prompt_title",
-        "excel.channel.receipt_policy.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyResourceQueueValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        "queue_type",
-        QUEUE_TYPE_DROPDOWN,
-        "excel.queue.queue_type.prompt_title",
-        "excel.queue.queue_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        "priority_policy",
-        PRIORITY_POLICY_DROPDOWN,
-        "excel.queue.priority_policy.prompt_title",
-        "excel.queue.priority_policy.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyBusinessCalendarValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
-        HOLIDAY_ROLL_RULE_DROPDOWN,
-        "excel.calendar.holiday_roll_rule.prompt_title",
-        "excel.calendar.holiday_roll_rule.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
-        CATCH_UP_POLICY_DROPDOWN,
-        "excel.calendar.catch_up_policy.prompt_title",
-        "excel.calendar.catch_up_policy.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyBatchWindowValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.BatchWindow.COL_END_STRATEGY,
-        WINDOW_END_STRATEGY_DROPDOWN,
-        "excel.window.end_strategy.prompt_title",
-        "excel.window.end_strategy.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.BatchWindow.COL_OUT_OF_WINDOW_ACTION,
-        OUT_OF_WINDOW_ACTION_DROPDOWN,
-        "excel.window.out_of_window_action.prompt_title",
-        "excel.window.out_of_window_action.prompt_box",
-        locale);
-    boolDropdown(sheet, ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY, locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyFileTemplateValidations(Sheet sheet, Locale locale) {
-    applyFileTemplateValidations(sheet, locale, FILE_FORMAT_TYPES, FILE_TEMPLATE_TYPES);
-  }
-
-  private void applyFileTemplateValidations(
-      Sheet sheet,
-      Locale locale,
-      Set<String> allowedFileFormats,
-      Set<String> allowedTemplateTypes) {
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
-        orderedChoices(FileTemplateType.class, allowedTemplateTypes),
-        "excel.template.template_type.prompt_title",
-        "excel.template.template_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
-        orderedChoices(FileTemplateFormat.class, allowedFileFormats),
-        "excel.template.file_format_type.prompt_title",
-        "excel.template.file_format_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE,
-        FILE_CHECKSUM_TYPE_DROPDOWN,
-        "excel.template.checksum_type.prompt_title",
-        "excel.template.checksum_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE,
-        FILE_COMPRESS_TYPE_DROPDOWN,
-        "excel.template.compress_type.prompt_title",
-        "excel.template.compress_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE,
-        FILE_ENCRYPT_TYPE_DROPDOWN,
-        "excel.template.encrypt_type.prompt_title",
-        "excel.template.encrypt_type.prompt_box",
-        locale);
-    for (String column : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
-      int columnIndex = columnIndex(sheet, column);
-      if (columnIndex >= 0) {
-        addBooleanDropdownValidation(sheet, columnIndex, locale);
-      }
+    private Map<String, ColumnGuide> buildWfDefGuides() {
+        Map<String, ColumnGuide> guides = Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_WORKFLOW_CODE, requiredColumn("工作流唯一编码，三个工作流 sheet 共用此键。", GUIDE_STR, "WF_SETTLEMENT")),
+                Map.entry(COL_WORKFLOW_NAME, requiredColumn("工作流名称。", GUIDE_STR, "清算工作流")),
+                Map.entry(COL_WORKFLOW_TYPE, requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
+                Map.entry(COL_VERSION, requiredColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+                Map.entry(
+                        COL_SINGLE_JOB_CODE,
+                        optionalColumn("受管单作业工作流关联的作业编码；必须在本包或目标租户中存在。组合工作流留空。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        COL_SCHEDULE_ENABLED,
+                        optionalColumn("是否启用此工作流的定时触发。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+                Map.entry(
+                        COL_SCHEDULE_TYPE,
+                        optionalColumn("工作流调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL")),
+                Map.entry(COL_SCHEDULE_EXPR, optionalColumn("CRON/FIXED_RATE 表达式。", GUIDE_STR, EMPTY)),
+                Map.entry(COL_TIMEZONE, optionalColumn("调度时区。", GUIDE_STR, "UTC")),
+                Map.entry(
+                        COL_TRIGGER_MODE,
+                        optionalColumn(
+                                "工作流触发模式。", GUIDE_ENUM, "MANUAL", "SCHEDULED", "API", "MANUAL", "EVENT", "MIXED")),
+                Map.entry(COL_CALENDAR_CODE, optionalColumn("关联业务日历编码。", GUIDE_STR, EMPTY)),
+                Map.entry(COL_DEPENDS_ON_JOB_CODE, optionalColumn("依赖作业编码。", GUIDE_STR, EMPTY)),
+                Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "清算批量工作流")));
+        return guides;
     }
-  }
 
-  private void addColumnDropdownValidation(
-      Sheet sheet,
-      String column,
-      String[] choices,
-      String titleKey,
-      String promptKey,
-      Locale locale) {
-    int columnIndex = columnIndex(sheet, column);
-    if (columnIndex >= 0) {
-      DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
-          .values(choices)
-          .promptTitle(titleKey)
-          .promptText(promptKey)
-          .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
-          .messageSource(messageSource)
-          .locale(locale)
-          .build();
-      addDropdownValidation(sheet, columnIndex, validationSpec);
+    private Map<String, ColumnGuide> buildWfNodeGuides() {
+        Map<String, ColumnGuide> guides = Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
+                Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+                Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
+                Map.entry(COL_NODE_NAME, requiredColumn("节点名称。", GUIDE_STR, "导入节点")),
+                Map.entry(COL_NODE_TYPE, requiredColumn("节点类型。", GUIDE_ENUM, "JOB", WORKFLOW_NODE_TYPE_DROPDOWN)),
+                Map.entry(
+                        COL_RELATED_JOB_CODE,
+                        optionalColumn("关联的作业编码，需在本包 job_definition sheet 或库中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+                Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
+                Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
+                Map.entry(COL_NODE_ORDER, optionalColumn("节点顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+                Map.entry(
+                        COL_RETRY_POLICY,
+                        optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
+                Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "0")),
+                Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
+                Map.entry(COL_NODE_PARAMS, optionalColumn("节点参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+        return guides;
     }
-  }
 
-  private static int columnIndex(Sheet sheet, String columnName) {
-    Row header = sheet.getRow(0);
-    if (EmptyChecks.isNull(header)) {
-      return -1;
+    private Map<String, ColumnGuide> buildWfEdgeGuides() {
+        return Map.ofEntries(
+                Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+                Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
+                Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+                Map.entry(COL_FROM_NODE_CODE, requiredColumn("源节点编码。", GUIDE_STR, "NODE_IMPORT")),
+                Map.entry(COL_TO_NODE_CODE, requiredColumn("目标节点编码。", GUIDE_STR, "NODE_EXPORT")),
+                Map.entry(
+                        COL_EDGE_TYPE,
+                        requiredColumn("边类型。", GUIDE_ENUM, "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
+                Map.entry(COL_CONDITION_EXPR, optionalColumn("CONDITION 类型的条件表达式。", GUIDE_STR, EMPTY)),
+                Map.entry(
+                        COL_ENABLED,
+                        optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
     }
-    for (int index = 0; index < header.getLastCellNum(); index++) {
-      if (columnName.equals(header.getCell(index).getStringCellValue())) {
-        return index;
-      }
-    }
-    return -1;
-  }
-
-  private static <E extends Enum<E> & DictEnum> String[] orderedChoices(
-      Class<E> enumType, Set<String> allowedValues) {
-    return DictEnum.codeList(enumType).stream()
-        .filter(allowedValues::contains)
-        .toArray(String[]::new);
-  }
-
-  private void applyWfDefValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_WORKFLOW_TYPE,
-        WORKFLOW_TYPE_DROPDOWN,
-        "excel.workflow.def.workflow_type.prompt_title",
-        "excel.workflow.def.workflow_type.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyWfNodeValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_NODE_TYPE,
-        WORKFLOW_NODE_TYPE_DROPDOWN,
-        "excel.workflow.node.node_type.prompt_title",
-        "excel.workflow.node.node_type.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_RETRY_POLICY,
-        RETRY_POLICY_DROPDOWN,
-        "excel.workflow.node.retry_policy.prompt_title",
-        "excel.workflow.node.retry_policy.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void applyWfEdgeValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_EDGE_TYPE,
-        WORKFLOW_EDGE_TYPE_DROPDOWN,
-        "excel.workflow.edge.edge_type.prompt_title",
-        "excel.workflow.edge.edge_type.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  private void boolDropdown(Sheet sheet, String columnName, Locale locale) {
-    int columnIndex = columnIndex(sheet, columnName);
-    if (columnIndex >= 0) {
-      addBooleanDropdownValidation(sheet, columnIndex, locale);
-    }
-  }
-
-  private void addBooleanDropdownValidation(Sheet sheet, int columnIndex, Locale locale) {
-    DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
-        .values(new String[] {GUIDE_TRUE, GUIDE_FALSE})
-        .promptTitle("excel.common.enabled.prompt_title")
-        .promptText("excel.common.enabled.prompt_box")
-        .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
-        .messageSource(messageSource)
-        .locale(locale)
-        .build();
-    addDropdownValidation(sheet, columnIndex, validationSpec);
-  }
-
-  private Map<String, ColumnGuide> buildJobGuides() {
-    Map<String, ColumnGuide> guides = Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_JOB_CODE, requiredColumn("作业唯一编码。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(COL_JOB_NAME, requiredColumn("作业名称。", GUIDE_STR, "客户导入作业")),
-        Map.entry(
-            COL_JOB_TYPE,
-            requiredColumn(
-                "作业类型。",
-                GUIDE_ENUM,
-                GUIDE_IMPORT,
-                // 与 JobType enum / JOB_TYPES 对齐：
-                // 直接从 JobType 生成，包含五类 Worker、GENERAL/WORKFLOW 与文件束类型。
-                JOB_TYPE_DROPDOWN)),
-        Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
-        Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),
-        Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
-        Map.entry(
-            COL_SCHEDULE_TYPE,
-            requiredColumn(
-                "调度类型。",
-                GUIDE_ENUM,
-                "MANUAL",
-                // 与 ScheduleType enum / SCHEDULE_TYPES 对齐：
-                // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
-                SCHEDULE_TYPE_DROPDOWN)),
-        Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
-        Map.entry(
-            COL_DEPENDS_ON_JOB_CODE,
-            optionalColumn(
-                "上游作业编码；填写后 scheduled fire 前会等待同 bizDate 上游就绪。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(
-            ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
-            optionalColumn(
-                "多个上游作业编码用英文逗号分隔；所有上游在同 bizDate 均就绪后才触发。", GUIDE_STR, "IMPORT_A,IMPORT_B")),
-        Map.entry(
-            ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
-            optionalColumn(
-                "依赖日期对齐枚举，与上游编码按位置对应；留空按 SAME_DAY；PREVIOUS_BIZ_DAY 按下游作业业务日历解析，未配置业务日历时按周一至周五计算。",
-                GUIDE_STR,
-                "SAME_DAY,PREVIOUS_BIZ_DAY")),
-        Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
-        Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
-        Map.entry(
-            COL_RETRY_POLICY,
-            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
-        Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "3")),
-        Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
-        Map.entry(
-            COL_SHARD_STRATEGY,
-            optionalColumn(
-                "分片策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
-        Map.entry(
-            COL_EXECUTION_MODE,
-            optionalColumn(
-                "执行模式。INCREMENTAL 需要同时填写 watermark_field。",
-                GUIDE_ENUM,
-                "FULL",
-                "FULL",
-                "INCREMENTAL",
-                "CDC")),
-        Map.entry(
-            COL_WATERMARK_FIELD,
-            optionalColumn("增量水位字段名；execution_mode=INCREMENTAL 时填写。", GUIDE_STR, "updated_at")),
-        Map.entry(
-            COL_EXECUTION_HANDLER,
-            optionalColumn("执行处理器 Bean 名称（新建时设置，更新时忽略）。", GUIDE_STR, "importJobHandler")),
-        Map.entry(
-            COL_PARAM_SCHEMA,
-            optionalColumn("参数 JSON Schema（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(
-            COL_DEFAULT_PARAMS,
-            optionalColumn(
-                "默认参数 JSON（新建时设置，更新时忽略）。IMPORT/EXPORT 用 templateCode 引用 file_template_config。",
-                GUIDE_JSON,
-                EXAMPLE_JOB_DEFAULT_PARAMS)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入作业")));
-    return guides;
-  }
-
-  private Map<String, ColumnGuide> buildJobMonitoringPolicyGuides() {
-    Map<String, ColumnGuide> guides = Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(
-            COL_JOB_CODE, requiredColumn("策略对应的作业编码，需在本包或当前租户中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(
-            COL_SOFT_RUNTIME_SECONDS,
-            optionalColumn(
-                "作业开始执行后运行超过此秒数时告警；所有调度类型均适用。新建作业不统一启用默认值；配置包中 0 或留空表示关闭。", GUIDE_INT, "")),
-        Map.entry(
-            COL_SOFT_RUNTIME_SEVERITY,
-            optionalColumn(
-                "运行超时告警级别。",
-                GUIDE_ENUM,
-                DEFAULT_MONITORING_SEVERITY,
-                JOB_MONITORING_SEVERITY_CHOICES)),
-        Map.entry(
-            COL_START_GRACE_SECONDS,
-            optionalColumn(
-                "Cron 或依赖作业进入执行资格后允许延迟启动的时长（秒）；超过后仍未启动则告警。新建作业默认 300 秒；配置包中 0 或留空表示关闭。",
-                GUIDE_INT,
-                "300")),
-        Map.entry(
-            COL_START_GRACE_SEVERITY,
-            optionalColumn(
-                "启动过晚告警级别。",
-                GUIDE_ENUM,
-                DEFAULT_MONITORING_SEVERITY,
-                JOB_MONITORING_SEVERITY_CHOICES)),
-        Map.entry(
-            COL_COMPLETION_DEADLINE_LOCAL_TIME,
-            optionalColumn(
-                "仅无依赖的 CRON 作业使用：完成截止钟点（HH:mm），按作业时区和计划触发日解释；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00")),
-        Map.entry(
-            COL_COMPLETION_DEADLINE_DAY_OFFSET,
-            optionalColumn("仅无依赖的 CRON 作业使用：截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1")),
-        Map.entry(
-            COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
-            optionalColumn(
-                "仅依赖作业使用：从下游满足执行资格时起算的最晚完成时长（秒）；0 或留空关闭。若同时为 CRON，以计划触发时刻和上游 EFFECTIVE 时刻较晚者作为起算点。",
-                GUIDE_INT,
-                "")),
-        Map.entry(
-            COL_COMPLETION_DEADLINE_SEVERITY,
-            optionalColumn(
-                "完成过晚告警级别。",
-                GUIDE_ENUM,
-                DEFAULT_MONITORING_SEVERITY,
-                JOB_MONITORING_SEVERITY_CHOICES)));
-    return guides;
-  }
-
-  private Map<String, ColumnGuide> buildWorkflowMonitoringPolicyGuides() {
-    ColumnGuide tenantGuide = optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE);
-    ColumnGuide workflowCodeGuide =
-        requiredColumn("策略对应的工作流编码，需在本包或当前租户中存在。", GUIDE_STR, "daily_settlement");
-    ColumnGuide workflowVersionGuide = requiredColumn("策略对应的工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE);
-    ColumnGuide softRuntimeSecondsGuide =
-        optionalColumn("工作流开始后运行超过此秒数时告警；0 或留空表示关闭。", GUIDE_INT, "0");
-    ColumnGuide softRuntimeSeverityGuide = optionalColumn(
-        "运行超时告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
-    ColumnGuide startGraceSecondsGuide =
-        optionalColumn("工作流进入执行资格后允许延迟启动的时长（秒）；0 或留空表示关闭。", GUIDE_INT, "0");
-    ColumnGuide startGraceSeverityGuide = optionalColumn(
-        "启动过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
-    ColumnGuide completionDeadlineTimeGuide =
-        optionalColumn("工作流完成截止钟点（HH:mm）；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00");
-    ColumnGuide completionDeadlineDayOffsetGuide =
-        optionalColumn("截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1");
-    ColumnGuide completionDeadlineSeverityGuide = optionalColumn(
-        "完成过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
-
-    Map<String, ColumnGuide> guides = Map.ofEntries(
-        Map.entry(COL_TENANT_ID, tenantGuide),
-        Map.entry(COL_WORKFLOW_CODE, workflowCodeGuide),
-        Map.entry(COL_WORKFLOW_VERSION, workflowVersionGuide),
-        Map.entry(COL_SOFT_RUNTIME_SECONDS, softRuntimeSecondsGuide),
-        Map.entry(COL_SOFT_RUNTIME_SEVERITY, softRuntimeSeverityGuide),
-        Map.entry(COL_START_GRACE_SECONDS, startGraceSecondsGuide),
-        Map.entry(COL_START_GRACE_SEVERITY, startGraceSeverityGuide),
-        Map.entry(COL_COMPLETION_DEADLINE_LOCAL_TIME, completionDeadlineTimeGuide),
-        Map.entry(COL_COMPLETION_DEADLINE_DAY_OFFSET, completionDeadlineDayOffsetGuide),
-        Map.entry(COL_COMPLETION_DEADLINE_SEVERITY, completionDeadlineSeverityGuide));
-    return guides;
-  }
-
-  private Map<String, ColumnGuide> buildChannelGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_CHANNEL_CODE, requiredColumn("通道唯一编码。", GUIDE_STR, "sftp_inbound")),
-        Map.entry(COL_CHANNEL_NAME, requiredColumn("通道名称。", GUIDE_STR, "SFTP 入站通道")),
-        Map.entry(
-            COL_CHANNEL_TYPE,
-            requiredColumn(
-                "通道类型。",
-                GUIDE_ENUM,
-                "SFTP",
-                "SFTP",
-                "API",
-                "EMAIL",
-                "NAS",
-                "OSS",
-                "LOCAL",
-                "API_PUSH")),
-        Map.entry("target_endpoint", optionalColumn("目标地址。", GUIDE_STR, "sftp.example.com")),
-        Map.entry(
-            COL_AUTH_TYPE,
-            requiredColumn(
-                "认证类型。",
-                GUIDE_ENUM,
-                "PASSWORD",
-                GUIDE_NONE,
-                "PASSWORD",
-                "KEY_PAIR",
-                "TOKEN",
-                "OAUTH2",
-                "CUSTOM")),
-        Map.entry(
-            COL_CONFIG_JSON,
-            optionalColumn(
-                "可选的通道运行参数 JSON；导出配置包会留空以保护凭据，同租户 MERGE 留空时保留现有配置。新通道默认为 {}，请在通道管理中完成连接参数与凭据配置。",
-                GUIDE_JSON,
-                EXAMPLE_CHANNEL_CONFIG_JSON)),
-        Map.entry(
-            COL_RECEIPT_POLICY,
-            requiredColumn(
-                "回执策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
-        Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "30")),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
-  }
-
-  private Map<String, ColumnGuide> buildFileTemplateGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry("template_code", requiredColumn("文件模板唯一编码。", GUIDE_STR, "TPL_IMPORT_CUSTOMER")),
-        Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
-        Map.entry(
-            "template_type",
-            requiredColumn(
-                "模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, SCENARIO_EXPORT, "SHARED")),
-        Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
-        Map.entry(
-            "file_format_type",
-            requiredColumn(
-                "文件格式。",
-                GUIDE_ENUM,
-                "DELIMITED",
-                "DELIMITED",
-                "FIXED_WIDTH",
-                "EXCEL",
-                "XML",
-                "JSON",
-                "BINARY")),
-        Map.entry("charset", optionalColumn("源文件字符集。", GUIDE_STR, "UTF-8")),
-        Map.entry("target_charset", optionalColumn("导出目标字符集。", GUIDE_STR, "UTF-8")),
-        Map.entry(
-            "with_bom",
-            optionalColumn("是否带 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry("line_separator", optionalColumn("换行符。", GUIDE_STR, "\\n")),
-        Map.entry("delimiter", optionalColumn("分隔符。", GUIDE_STR, ",")),
-        Map.entry("quote_char", optionalColumn("引用符。", GUIDE_STR, "\"")),
-        Map.entry("escape_char", optionalColumn("转义符。", GUIDE_STR, "\\")),
-        Map.entry("record_length", optionalColumn("定长文件记录长度。", GUIDE_INT, "0")),
-        Map.entry("header_rows", optionalColumn("导入跳过头部行数；留空默认 0，CSV 首行为表头时填 1。", GUIDE_INT, "0")),
-        Map.entry("footer_rows", optionalColumn("导入跳过尾部行数。", GUIDE_INT, "0")),
-        Map.entry("header_template", optionalColumn("导出头部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry("trailer_template", optionalColumn("导出尾部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(
-            "checksum_type",
-            optionalColumn("校验类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA256")),
-        Map.entry(
-            "compress_type",
-            optionalColumn("压缩类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "ZIP", "GZIP")),
-        Map.entry(
-            "encrypt_type",
-            optionalColumn("加密类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "PGP", "AES")),
-        Map.entry("naming_rule", optionalColumn("文件命名规则。", GUIDE_STR, "customer_${batchDate}.csv")),
-        Map.entry(
-            "field_mappings",
-            optionalColumn(
-                "字段映射 JSON。IMPORT 用 source(name)/targetColumn/type/required/maxLength/format；EXPORT"
-                    + " 用 sourceColumn/header/type/format(numberFormat 如 #,##0.00)。两套结构不同，见填写示例列。",
-                GUIDE_JSON,
-                EXAMPLE_IMPORT_FIELD_MAPPINGS)),
-        Map.entry(
-            "validation_rule_set",
-            optionalColumn(
-                "校验规则 JSON（IMPORT）。maxErrorRate/stopOnFirstError/duplicateKeyCheck。",
-                GUIDE_JSON,
-                EXAMPLE_IMPORT_VALIDATION_RULE_SET)),
-        Map.entry(
-            "default_query_code", optionalColumn("默认查询编码。", GUIDE_STR, "QRY_CUSTOMER_EXPORT")),
-        Map.entry(
-            "default_query_sql",
-            optionalColumn(
-                "默认导出 SQL（EXPORT only，单条安全 SELECT，命名参数 :tenantId 等）。",
-                GUIDE_SQL,
-                EXAMPLE_EXPORT_QUERY_SQL)),
-        Map.entry(
-            "query_param_schema",
-            optionalColumn(
-                "查询参数 JSON。IMPORT 用 jdbcMappedImport(schema/table/columnMappings/"
-                    + "conflictColumns/systemBindings)；EXPORT 用 JSON Schema 参数声明或 "
-                    + "sqlTemplateExport.cursorColumn / jdbcMappedExport。两套结构不同，见填写示例列。",
-                GUIDE_JSON,
-                EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA)),
-        Map.entry(
-            "streaming_enabled",
-            optionalColumn("是否流式处理。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry("page_size", optionalColumn("分页大小。", GUIDE_INT, "1000")),
-        Map.entry("fetch_size", optionalColumn("JDBC fetch size。", GUIDE_INT, "1000")),
-        Map.entry("chunk_size", optionalColumn("分块大小。", GUIDE_INT, "500")),
-        Map.entry(
-            "preview_masking_enabled",
-            optionalColumn("预览是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            "error_line_masking_enabled",
-            optionalColumn("错误行是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            "log_masking_enabled",
-            optionalColumn("日志是否脱敏；留空默认 FALSE。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            "content_encryption_enabled",
-            optionalColumn("内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            "encryption_key_ref",
-            optionalColumn("密钥引用。", GUIDE_STR, "kms://file-template/customer")),
-        Map.entry(
-            "download_requires_approval",
-            optionalColumn("下载是否需要审批。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry("masking_rule_set", optionalColumn("脱敏规则集编码。", GUIDE_STR, "MASK_CUSTOMER")),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_VERSION, optionalColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户导入文件模板")));
-  }
-
-  private Map<String, ColumnGuide> buildWfDefGuides() {
-    Map<String, ColumnGuide> guides = Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(
-            COL_WORKFLOW_CODE,
-            requiredColumn("工作流唯一编码，三个工作流 sheet 共用此键。", GUIDE_STR, "WF_SETTLEMENT")),
-        Map.entry(COL_WORKFLOW_NAME, requiredColumn("工作流名称。", GUIDE_STR, "清算工作流")),
-        Map.entry(
-            COL_WORKFLOW_TYPE,
-            requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
-        Map.entry(COL_VERSION, requiredColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(
-            COL_SINGLE_JOB_CODE,
-            optionalColumn("受管单作业工作流关联的作业编码；必须在本包或目标租户中存在。组合工作流留空。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            COL_SCHEDULE_ENABLED,
-            optionalColumn("是否启用此工作流的定时触发。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(
-            COL_SCHEDULE_TYPE,
-            optionalColumn("工作流调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL")),
-        Map.entry(COL_SCHEDULE_EXPR, optionalColumn("CRON/FIXED_RATE 表达式。", GUIDE_STR, EMPTY)),
-        Map.entry(COL_TIMEZONE, optionalColumn("调度时区。", GUIDE_STR, "UTC")),
-        Map.entry(
-            COL_TRIGGER_MODE,
-            optionalColumn(
-                "工作流触发模式。", GUIDE_ENUM, "MANUAL", "SCHEDULED", "API", "MANUAL", "EVENT", "MIXED")),
-        Map.entry(COL_CALENDAR_CODE, optionalColumn("关联业务日历编码。", GUIDE_STR, EMPTY)),
-        Map.entry(COL_DEPENDS_ON_JOB_CODE, optionalColumn("依赖作业编码。", GUIDE_STR, EMPTY)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "清算批量工作流")));
-    return guides;
-  }
-
-  private Map<String, ColumnGuide> buildWfNodeGuides() {
-    Map<String, ColumnGuide> guides = Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
-        Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
-        Map.entry(COL_NODE_NAME, requiredColumn("节点名称。", GUIDE_STR, "导入节点")),
-        Map.entry(
-            COL_NODE_TYPE, requiredColumn("节点类型。", GUIDE_ENUM, "JOB", WORKFLOW_NODE_TYPE_DROPDOWN)),
-        Map.entry(
-            COL_RELATED_JOB_CODE,
-            optionalColumn(
-                "关联的作业编码，需在本包 job_definition sheet 或库中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
-        Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
-        Map.entry(COL_NODE_ORDER, optionalColumn("节点顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(
-            COL_RETRY_POLICY,
-            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
-        Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "0")),
-        Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
-        Map.entry(COL_NODE_PARAMS, optionalColumn("节点参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
-    return guides;
-  }
-
-  private Map<String, ColumnGuide> buildWfEdgeGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
-        Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_FROM_NODE_CODE, requiredColumn("源节点编码。", GUIDE_STR, "NODE_IMPORT")),
-        Map.entry(COL_TO_NODE_CODE, requiredColumn("目标节点编码。", GUIDE_STR, "NODE_EXPORT")),
-        Map.entry(
-            COL_EDGE_TYPE,
-            requiredColumn(
-                "边类型。", GUIDE_ENUM, "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
-        Map.entry(COL_CONDITION_EXPR, optionalColumn("CONDITION 类型的条件表达式。", GUIDE_STR, EMPTY)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
-  }
 }

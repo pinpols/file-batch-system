@@ -24,65 +24,60 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkflowArchiveService {
 
-  private final WorkflowRunMapper workflowRunMapper;
-  private final WorkflowArchiveProperties properties;
+    private final WorkflowRunMapper workflowRunMapper;
+    private final WorkflowArchiveProperties properties;
 
-  /**
-   * 执行一次归档，返回候选与热根/节点删除数。复制完成且冷热整行一致后才删除；复制或核对失败时回滚本批事务。
-   */
-  @Transactional
-  public ArchiveBatchResult archiveOnce() {
-    if (!properties.isEnabled()) {
-      return ArchiveBatchResult.disabled();
-    }
-    int retention = Math.max(1, properties.getRetentionDays());
-    int batchSize = Math.max(1, properties.getBatchSize());
-    Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofDays(retention));
-    List<Long> ids = workflowRunMapper.selectArchivableIds(cutoff, batchSize);
-    if (ids.isEmpty()) {
-      return ArchiveBatchResult.empty(cutoff);
-    }
-    // A3 fix(2026-05-29):insert-before-delete 模式,跟 SuccessInstanceArchiveService /
-    // OutboxArchiveService 一致。原本只有 delete 步骤,workflow_run/node_run 永久丢失,
-    // archive 表永远为空,与"archive"语义名实不符。
-    int nodeRunsArchived = workflowRunMapper.archiveWorkflowNodeRunsByWorkflowRunIds(ids);
-    int runsArchived = workflowRunMapper.archiveWorkflowRunsByIds(ids);
-    if (workflowRunMapper.countArchiveCopyMismatches(ids) > 0) {
-      throw new IllegalStateException(
-          "Workflow archive copy verification failed; hot data retained");
-    }
-    int nodeRunsDeleted = workflowRunMapper.deleteNodeRunsByWorkflowRunIds(ids);
-    int runsDeleted = workflowRunMapper.deleteByIds(ids);
-    log.info(
-        "workflow archive tick: cutoff={}, retention={}d,"
-            + " archived(runs={}, nodeRuns={}), deleted(runs={}, nodeRuns={})",
-        cutoff,
-        retention,
-        runsArchived,
-        nodeRunsArchived,
-        runsDeleted,
-        nodeRunsDeleted);
-    return new ArchiveBatchResult(true, cutoff, ids.size(), runsDeleted, nodeRunsDeleted);
-  }
-
-  public record ArchiveBatchResult(
-      boolean executed,
-      Instant cutoff,
-      int candidates,
-      int workflowRunsDeleted,
-      int workflowNodeRunsDeleted) {
-
-    public static ArchiveBatchResult disabled() {
-      return new ArchiveBatchResult(false, null, 0, 0, 0);
+    /**
+     * 执行一次归档，返回候选与热根/节点删除数。复制完成且冷热整行一致后才删除；复制或核对失败时回滚本批事务。
+     */
+    @Transactional
+    public ArchiveBatchResult archiveOnce() {
+        if (!properties.isEnabled()) {
+            return ArchiveBatchResult.disabled();
+        }
+        int retention = Math.max(1, properties.getRetentionDays());
+        int batchSize = Math.max(1, properties.getBatchSize());
+        Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofDays(retention));
+        List<Long> ids = workflowRunMapper.selectArchivableIds(cutoff, batchSize);
+        if (ids.isEmpty()) {
+            return ArchiveBatchResult.empty(cutoff);
+        }
+        // A3 fix(2026-05-29):insert-before-delete 模式,跟 SuccessInstanceArchiveService /
+        // OutboxArchiveService 一致。原本只有 delete 步骤,workflow_run/node_run 永久丢失,
+        // archive 表永远为空,与"archive"语义名实不符。
+        int nodeRunsArchived = workflowRunMapper.archiveWorkflowNodeRunsByWorkflowRunIds(ids);
+        int runsArchived = workflowRunMapper.archiveWorkflowRunsByIds(ids);
+        if (workflowRunMapper.countArchiveCopyMismatches(ids) > 0) {
+            throw new IllegalStateException("Workflow archive copy verification failed; hot data retained");
+        }
+        int nodeRunsDeleted = workflowRunMapper.deleteNodeRunsByWorkflowRunIds(ids);
+        int runsDeleted = workflowRunMapper.deleteByIds(ids);
+        log.info(
+                "workflow archive tick: cutoff={}, retention={}d,"
+                        + " archived(runs={}, nodeRuns={}), deleted(runs={}, nodeRuns={})",
+                cutoff,
+                retention,
+                runsArchived,
+                nodeRunsArchived,
+                runsDeleted,
+                nodeRunsDeleted);
+        return new ArchiveBatchResult(true, cutoff, ids.size(), runsDeleted, nodeRunsDeleted);
     }
 
-    public static ArchiveBatchResult empty(Instant cutoff) {
-      return new ArchiveBatchResult(true, cutoff, 0, 0, 0);
-    }
+    public record ArchiveBatchResult(
+            boolean executed, Instant cutoff, int candidates, int workflowRunsDeleted, int workflowNodeRunsDeleted) {
 
-    public boolean hasMore(int batchSize) {
-      // 候选数 == batchSize 暗示可能还有未清的（命中 limit）
-      return executed && candidates >= batchSize;
+        public static ArchiveBatchResult disabled() {
+            return new ArchiveBatchResult(false, null, 0, 0, 0);
+        }
+
+        public static ArchiveBatchResult empty(Instant cutoff) {
+            return new ArchiveBatchResult(true, cutoff, 0, 0, 0);
+        }
+
+        public boolean hasMore(int batchSize) {
+            // 候选数 == batchSize 暗示可能还有未清的（命中 limit）
+            return executed && candidates >= batchSize;
+        }
     }
-  }
 }

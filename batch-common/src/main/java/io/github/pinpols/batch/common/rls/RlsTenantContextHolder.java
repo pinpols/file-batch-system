@@ -28,49 +28,49 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class RlsTenantContextHolder {
 
-  private static final ThreadLocal<String> HOLDER = new ThreadLocal<>();
+    private static final ThreadLocal<String> HOLDER = new ThreadLocal<>();
 
-  private RlsTenantContextHolder() {}
+    private RlsTenantContextHolder() {}
 
-  /** 取当前 ThreadLocal 内的 tenant_id;未设返 null。 */
-  public static String get() {
-    return HOLDER.get();
-  }
-
-  /** 强制设值(慎用)— 推荐 {@link #runWithTenant} 自动清理。 */
-  public static void set(String tenantId) {
-    if (Texts.hasText(tenantId)) {
-      HOLDER.set(tenantId);
-    } else {
-      HOLDER.remove();
+    /** 取当前 ThreadLocal 内的 tenant_id;未设返 null。 */
+    public static String get() {
+        return HOLDER.get();
     }
-  }
 
-  /** 清空(线程返还池前显式清,防泄漏)。 */
-  public static void clear() {
-    HOLDER.remove();
-  }
+    /** 强制设值(慎用)— 推荐 {@link #runWithTenant} 自动清理。 */
+    public static void set(String tenantId) {
+        if (Texts.hasText(tenantId)) {
+            HOLDER.set(tenantId);
+        } else {
+            HOLDER.remove();
+        }
+    }
 
-  /** 推荐用法:绑定 tenant_id 跑一段代码,完成后自动清。 */
-  public static <T> T runWithTenant(String tenantId, Supplier<T> action) {
-    String prev = HOLDER.get();
-    set(tenantId);
-    try {
-      return action.get();
-    } finally {
-      if (prev == null) {
+    /** 清空(线程返还池前显式清,防泄漏)。 */
+    public static void clear() {
         HOLDER.remove();
-      } else {
-        HOLDER.set(prev);
-      }
     }
-  }
 
-  /** void 重载。 */
-  public static void runWithTenant(String tenantId, Runnable action) {
-    runWithTenant(tenantId, () -> {
-      action.run();
-      return null;
-    });
-  }
+    /** 推荐用法:绑定 tenant_id 跑一段代码,完成后自动清。 */
+    public static <T> T runWithTenant(String tenantId, Supplier<T> action) {
+        String prev = HOLDER.get();
+        set(tenantId);
+        try {
+            return action.get();
+        } finally {
+            if (prev == null) {
+                HOLDER.remove();
+            } else {
+                HOLDER.set(prev);
+            }
+        }
+    }
+
+    /** void 重载。 */
+    public static void runWithTenant(String tenantId, Runnable action) {
+        runWithTenant(tenantId, () -> {
+            action.run();
+            return null;
+        });
+    }
 }

@@ -25,13 +25,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsoleOpsRealtimeController {
 
-  private final ConsoleOpsSummaryRealtimePort summaryRealtimeStream;
+    private final ConsoleOpsSummaryRealtimePort summaryRealtimeStream;
 
-  @GetMapping(value = "/summary/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter summaryEvents(
-      @RequestParam @NotBlank String tenantId,
-      @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis,
-      @RequestParam(value = "initialSnapshot", defaultValue = "true") boolean initialSnapshot) {
-    return summaryRealtimeStream.subscribe(tenantId, heartbeatMillis, initialSnapshot);
-  }
+    @GetMapping(value = "/summary/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter summaryEvents(
+            @RequestParam @NotBlank String tenantId,
+            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis,
+            @RequestParam(value = "initialSnapshot", defaultValue = "true") boolean initialSnapshot) {
+        return summaryRealtimeStream.subscribe(tenantId, heartbeatMillis, initialSnapshot);
+    }
 }

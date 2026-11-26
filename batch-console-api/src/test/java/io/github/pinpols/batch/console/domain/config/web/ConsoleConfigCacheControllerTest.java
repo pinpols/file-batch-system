@@ -26,82 +26,74 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleConfigCacheControllerTest {
 
-  @Mock
-  private ConsoleConfigCacheInvalidationService service;
+    @Mock
+    private ConsoleConfigCacheInvalidationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleConfigCacheController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleConfigCacheController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("清理单个作业定义缓存时, 按租户与作业编码委托并返回清理键")
-  void shouldCallService_whenEvictingJobDefinition() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-job-definition")
-            .param("tenantId", "ta")
-            .param("jobCode", "JOB_A"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.evicted").value("job-definition:ta:JOB_A"));
-    verify(service).evictManual("ta", "job-definition", "JOB_A");
-  }
+    @Test
+    @DisplayName("清理单个作业定义缓存时, 按租户与作业编码委托并返回清理键")
+    void shouldCallService_whenEvictingJobDefinition() throws Exception {
+        mockMvc.perform(post("/api/console/ops/cache/evict-job-definition")
+                        .param("tenantId", "ta")
+                        .param("jobCode", "JOB_A"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.evicted").value("job-definition:ta:JOB_A"));
+        verify(service).evictManual("ta", "job-definition", "JOB_A");
+    }
 
-  @Test
-  @DisplayName("清理租户下全部作业定义缓存时, 只按租户委托")
-  void shouldCallService_whenEvictingAllJobDefinitions() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-all-job-definitions").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(service).evictManual("ta", "job-definition", "*");
-  }
+    @Test
+    @DisplayName("清理租户下全部作业定义缓存时, 只按租户委托")
+    void shouldCallService_whenEvictingAllJobDefinitions() throws Exception {
+        mockMvc.perform(post("/api/console/ops/cache/evict-all-job-definitions").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(service).evictManual("ta", "job-definition", "*");
+    }
 
-  @Test
-  @DisplayName("清理工作流定义缓存时, 租户与工作流编码传给服务")
-  void shouldPassCode_whenEvictingWorkflowDefinition() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-workflow-definition")
-            .param("tenantId", "ta")
-            .param("workflowCode", "WF_A"))
-        .andExpect(status().isOk());
-    verify(service).evictManual("ta", "workflow-definition", "WF_A");
-  }
+    @Test
+    @DisplayName("清理工作流定义缓存时, 租户与工作流编码传给服务")
+    void shouldPassCode_whenEvictingWorkflowDefinition() throws Exception {
+        mockMvc.perform(post("/api/console/ops/cache/evict-workflow-definition")
+                        .param("tenantId", "ta")
+                        .param("workflowCode", "WF_A"))
+                .andExpect(status().isOk());
+        verify(service).evictManual("ta", "workflow-definition", "WF_A");
+    }
 
-  @Test
-  @DisplayName("清理业务日历与批次窗口缓存时, 两者各自编码分别传给服务")
-  void shouldDelegate_whenEvictingCalendarAndBatchWindow() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-business-calendar")
-            .param("tenantId", "ta")
-            .param("calendarCode", "C_A"))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-batch-window")
-            .param("tenantId", "ta")
-            .param("windowCode", "W_A"))
-        .andExpect(status().isOk());
-    verify(service).evictManual("ta", "business-calendar", "C_A");
-    verify(service).evictManual("ta", "batch-window", "W_A");
-  }
+    @Test
+    @DisplayName("清理业务日历与批次窗口缓存时, 两者各自编码分别传给服务")
+    void shouldDelegate_whenEvictingCalendarAndBatchWindow() throws Exception {
+        mockMvc.perform(post("/api/console/ops/cache/evict-business-calendar")
+                        .param("tenantId", "ta")
+                        .param("calendarCode", "C_A"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/console/ops/cache/evict-batch-window")
+                        .param("tenantId", "ta")
+                        .param("windowCode", "W_A"))
+                .andExpect(status().isOk());
+        verify(service).evictManual("ta", "business-calendar", "C_A");
+        verify(service).evictManual("ta", "batch-window", "W_A");
+    }
 
-  @Test
-  @DisplayName("清理配额策略缓存时, 只按租户委托")
-  void shouldDelegate_whenEvictingQuotaPolicies() throws Exception {
-    mockMvc
-        .perform(post("/api/console/ops/cache/evict-quota-policies").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(service).evictManual("ta", "tenant-quota-policy", "enabled-first");
-  }
+    @Test
+    @DisplayName("清理配额策略缓存时, 只按租户委托")
+    void shouldDelegate_whenEvictingQuotaPolicies() throws Exception {
+        mockMvc.perform(post("/api/console/ops/cache/evict-quota-policies").param("tenantId", "ta"))
+                .andExpect(status().isOk());
+        verify(service).evictManual("ta", "tenant-quota-policy", "enabled-first");
+    }
 }

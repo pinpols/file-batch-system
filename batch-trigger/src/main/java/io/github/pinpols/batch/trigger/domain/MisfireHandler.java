@@ -6,5 +6,5 @@ package io.github.pinpols.batch.trigger.domain;
  */
 public interface MisfireHandler {
 
-  void handle(String triggerName);
+    void handle(String triggerName);
 }

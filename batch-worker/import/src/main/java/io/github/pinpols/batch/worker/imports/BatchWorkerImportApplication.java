@@ -12,27 +12,25 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication(
-    scanBasePackages = "io.github.pinpols.batch",
-    exclude = MybatisAutoConfiguration.class)
+@SpringBootApplication(scanBasePackages = "io.github.pinpols.batch", exclude = MybatisAutoConfiguration.class)
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableKafka
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
 @MapperScan(
-    basePackages = {
-      "io.github.pinpols.batch.worker.core.mapper",
-      "io.github.pinpols.batch.worker.imports.mapper",
-      "io.github.pinpols.batch.common.mapper"
-    },
-    sqlSessionFactoryRef = "importPlatformSqlSessionFactory")
+        basePackages = {
+            "io.github.pinpols.batch.worker.core.mapper",
+            "io.github.pinpols.batch.worker.imports.mapper",
+            "io.github.pinpols.batch.common.mapper"
+        },
+        sqlSessionFactoryRef = "importPlatformSqlSessionFactory")
 public class BatchWorkerImportApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(BatchWorkerImportApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(BatchWorkerImportApplication.class, args);
+    }
 }

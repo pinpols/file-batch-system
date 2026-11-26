@@ -32,90 +32,87 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleFilePipelineObservabilityControllerTest {
 
-  @Mock
-  private ConsoleQueryApplicationService queryApplicationService;
+    @Mock
+    private ConsoleQueryApplicationService queryApplicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleFilePipelineObservabilityController(
-            queryApplicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleFilePipelineObservabilityController(queryApplicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("兼容旧路径的文件流水线列表查询返回分页数据")
-  void shouldReturnFilePipelinesFromLegacyPath() throws Exception {
-    when(queryApplicationService.filePipelines(any()))
-        .thenReturn(new PageResponse<>(
-            1L,
-            1,
-            20,
-            List.of(new ConsoleFilePipelineResponse(
-                1L,
-                "t1",
-                "file-001",
-                "IMPORT",
-                2001L,
-                3001L,
-                "RECEIVE",
-                "PARSE",
-                "RUNNING",
-                "trace-1",
-                Instant.EPOCH,
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH))));
+    @Test
+    @DisplayName("兼容旧路径的文件流水线列表查询返回分页数据")
+    void shouldReturnFilePipelinesFromLegacyPath() throws Exception {
+        when(queryApplicationService.filePipelines(any()))
+                .thenReturn(new PageResponse<>(
+                        1L,
+                        1,
+                        20,
+                        List.of(new ConsoleFilePipelineResponse(
+                                1L,
+                                "t1",
+                                "file-001",
+                                "IMPORT",
+                                2001L,
+                                3001L,
+                                "RECEIVE",
+                                "PARSE",
+                                "RUNNING",
+                                "trace-1",
+                                Instant.EPOCH,
+                                null,
+                                Instant.EPOCH,
+                                Instant.EPOCH))));
 
-    mockMvc
-        .perform(get("/api/console/file-pipeline-observability").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.items[0].jobCode").value("file-001"))
-        .andExpect(jsonPath("$.data.items[0].runStatus").value("RUNNING"));
-  }
+        mockMvc.perform(get("/api/console/file-pipeline-observability").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items[0].jobCode").value("file-001"))
+                .andExpect(jsonPath("$.data.items[0].runStatus").value("RUNNING"));
+    }
 
-  @Test
-  @DisplayName("兼容旧路径的文件流水线详情查询返回运行状态")
-  void shouldReturnFilePipelineDetailFromLegacyPath() throws Exception {
-    when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
-        .thenReturn(new ConsoleFilePipelineResponse(
-            1L,
-            "t1",
-            "file-001",
-            "IMPORT",
-            2001L,
-            3001L,
-            "RECEIVE",
-            "PARSE",
-            "SUCCESS",
-            "trace-1",
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH));
+    @Test
+    @DisplayName("兼容旧路径的文件流水线详情查询返回运行状态")
+    void shouldReturnFilePipelineDetailFromLegacyPath() throws Exception {
+        when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
+                .thenReturn(new ConsoleFilePipelineResponse(
+                        1L,
+                        "t1",
+                        "file-001",
+                        "IMPORT",
+                        2001L,
+                        3001L,
+                        "RECEIVE",
+                        "PARSE",
+                        "SUCCESS",
+                        "trace-1",
+                        Instant.EPOCH,
+                        Instant.EPOCH,
+                        Instant.EPOCH,
+                        Instant.EPOCH));
 
-    mockMvc
-        .perform(get("/api/console/file-pipeline-observability/1").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.jobCode").value("file-001"))
-        .andExpect(jsonPath("$.data.runStatus").value("SUCCESS"));
-  }
+        mockMvc.perform(get("/api/console/file-pipeline-observability/1").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.jobCode").value("file-001"))
+                .andExpect(jsonPath("$.data.runStatus").value("SUCCESS"));
+    }
 }

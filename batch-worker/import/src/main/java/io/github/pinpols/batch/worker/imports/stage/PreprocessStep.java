@@ -57,573 +57,560 @@ import org.springframework.stereotype.Component;
 @SuppressWarnings("java:S2259")
 public class PreprocessStep implements ImportStageStep {
 
-  private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";
+    private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";
 
-  /** 错误参数使用稳定的默认序列化策略，不受业务载荷 mapper 定制影响。 */
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+    /** 错误参数使用稳定的默认序列化策略，不受业务载荷 mapper 定制影响。 */
+    private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformFileRecordRepository fileRecords;
+    private final PlatformFileRecordRepository fileRecords;
 
-  private final PlatformFileTemplateRepository pipelineDefinitions;
+    private final PlatformFileTemplateRepository pipelineDefinitions;
 
-  private final BatchSecurityProperties batchSecurityProperties;
-  private final BatchObjectCryptoService cryptoService;
-  /** 解码内存阈值与单文件上限由绑定配置提供；对象读取协作者统一落实大小和临时文件边界。 */
-  private final WorkerImportPayloadProperties payloadProperties;
+    private final BatchSecurityProperties batchSecurityProperties;
+    private final BatchObjectCryptoService cryptoService;
+    /** 解码内存阈值与单文件上限由绑定配置提供；对象读取协作者统一落实大小和临时文件边界。 */
+    private final WorkerImportPayloadProperties payloadProperties;
 
-  private final ObjectMapper objectMapper;
-  private final ImportPreprocessObjectSource objectSource;
+    private final ObjectMapper objectMapper;
+    private final ImportPreprocessObjectSource objectSource;
 
-  @Override
-  public ImportStage stage() {
-    return ImportStage.PREPROCESS;
-  }
-
-  @Override
-  public ImportStageResult execute(ImportJobContext context) {
-    if (context == null) {
-      return ImportStageResult.failure(
-          stage(),
-          ERROR_CODE_PREPROCESS_INVALID,
-          "error.import.preprocess.invalid",
-          new Object[] {"context is null"},
-          "context is null",
-          ERROR_OBJECT_MAPPER);
+    @Override
+    public ImportStage stage() {
+        return ImportStage.PREPROCESS;
     }
-    Map<String, Object> attrs = context.getAttributes();
-    ImportPayload importPayload =
-        attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
-            ? payload
-            : null;
-    boolean rawPayloadIsBlank = !Texts.hasText(context.getRawPayload());
-    if (rawPayloadIsBlank) {
-      boolean importPayloadHasNoSource = EmptyChecks.isNull(importPayload)
-          || (!Texts.hasText(importPayload.content())
-              && !Texts.hasText(importPayload.contentBase64())
-              // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
-              && !Texts.hasText(importPayload.storagePath()));
-      if (importPayloadHasNoSource) {
-        return ImportStageResult.failure(
-            stage(),
-            ERROR_CODE_PREPROCESS_INVALID,
-            "error.import.preprocess.invalid",
-            new Object[] {"raw payload is blank"},
-            "raw payload is blank",
-            ERROR_OBJECT_MAPPER);
-      }
-    }
-    try {
-      boolean templateSnapshotNeedsLoading = EmptyChecks.isNotNull(importPayload)
-          && Texts.hasText(importPayload.templateCode())
-          && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-      if (templateSnapshotNeedsLoading) {
-        Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
-            context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
-        if (!templateConfig.isEmpty()) {
-          attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+
+    @Override
+    public ImportStageResult execute(ImportJobContext context) {
+        if (context == null) {
+            return ImportStageResult.failure(
+                    stage(),
+                    ERROR_CODE_PREPROCESS_INVALID,
+                    "error.import.preprocess.invalid",
+                    new Object[] {"context is null"},
+                    "context is null",
+                    ERROR_OBJECT_MAPPER);
         }
-      }
-      Object templateConfigObject = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-      Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
-
-      // 越权防护:任何从 payload.storagePath 拉对象前,先核对该路径确实是本租户已登记 file_record 的
-      // storage_path(逐字相等)。payload 来自上游消息,storagePath/storageBucket 字段一旦被篡改/伪造即可
-      // 指向他租户对象;这里 fail-fast 把"裸信任 payload 直接拉取"收敛成"只拉本租户登记的那个对象"。
-      if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
-        objectSource.assertObjectBelongsToTenant(context, importPayload);
-      }
-
-      long directStreamObjectBytes = directStreamObjectBytes(importPayload, templateConfig);
-      if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
-        // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
-        // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
-        Integer partitionNo = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_NO));
-        Integer partitionCount = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT));
-        Charset directCharset = resolveCharset(importPayload, templateConfigObject);
-        // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
-        // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
-        boolean sourceSupportsDirectRangeSlice =
-            EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
-                && objectSource.supportsRangeRead()
-                && ImportPreprocessObjectSource.rangeSliceEligible(
-                    importPayload, templateConfig, partitionNo, partitionCount, directCharset);
-        if (sourceSupportsDirectRangeSlice) {
-          return objectSource.streamObjectRangeToSpool(
-              context,
-              importPayload,
-              templateConfig,
-              templateConfigObject,
-              new ImportPreprocessObjectSource.RangeSlice(
-                  directCharset, directStreamObjectBytes, partitionNo, partitionCount));
+        Map<String, Object> attrs = context.getAttributes();
+        ImportPayload importPayload =
+                attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload ? payload : null;
+        boolean rawPayloadIsBlank = !Texts.hasText(context.getRawPayload());
+        if (rawPayloadIsBlank) {
+            boolean importPayloadHasNoSource = EmptyChecks.isNull(importPayload)
+                    || (!Texts.hasText(importPayload.content())
+                            && !Texts.hasText(importPayload.contentBase64())
+                            // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
+                            && !Texts.hasText(importPayload.storagePath()));
+            if (importPayloadHasNoSource) {
+                return ImportStageResult.failure(
+                        stage(),
+                        ERROR_CODE_PREPROCESS_INVALID,
+                        "error.import.preprocess.invalid",
+                        new Object[] {"raw payload is blank"},
+                        "raw payload is blank",
+                        ERROR_OBJECT_MAPPER);
+            }
         }
-        return objectSource.streamObjectToSpoolAndReturn(
-            context, importPayload, templateConfig, templateConfigObject);
-      }
+        try {
+            boolean templateSnapshotNeedsLoading = EmptyChecks.isNotNull(importPayload)
+                    && Texts.hasText(importPayload.templateCode())
+                    && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+            if (templateSnapshotNeedsLoading) {
+                Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
+                        context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
+                if (!templateConfig.isEmpty()) {
+                    attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+                }
+            }
+            Object templateConfigObject = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+            Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
 
-      byte[] rawBytes = objectSource.resolveRawBytes(context, importPayload, templateConfigObject);
-      // 覆盖同一局部变量，解密后不再持有原始字节引用，保持单份堆峰值。
-      rawBytes = decryptImportBytes(rawBytes);
-      byte[] processed = ImportPreprocessPipeline.run(
-          rawBytes,
-          importPayload,
-          templateConfig,
-          batchSecurityProperties.isBypassMode(),
-          payloadProperties,
-          objectMapper);
+            // 越权防护:任何从 payload.storagePath 拉对象前,先核对该路径确实是本租户已登记 file_record 的
+            // storage_path(逐字相等)。payload 来自上游消息,storagePath/storageBucket 字段一旦被篡改/伪造即可
+            // 指向他租户对象;这里 fail-fast 把"裸信任 payload 直接拉取"收敛成"只拉本租户登记的那个对象"。
+            if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+                objectSource.assertObjectBelongsToTenant(context, importPayload);
+            }
 
-      return completePreprocess(
-          context, importPayload, attrs, processed, templateConfig, templateConfigObject);
-    } catch (ImportPreprocessException ex) {
-      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
+            long directStreamObjectBytes = directStreamObjectBytes(importPayload, templateConfig);
+            if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
+                // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
+                // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
+                Integer partitionNo = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_NO));
+                Integer partitionCount = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT));
+                Charset directCharset = resolveCharset(importPayload, templateConfigObject);
+                // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
+                // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
+                boolean sourceSupportsDirectRangeSlice =
+                        EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
+                                && objectSource.supportsRangeRead()
+                                && ImportPreprocessObjectSource.rangeSliceEligible(
+                                        importPayload, templateConfig, partitionNo, partitionCount, directCharset);
+                if (sourceSupportsDirectRangeSlice) {
+                    return objectSource.streamObjectRangeToSpool(
+                            context,
+                            importPayload,
+                            templateConfig,
+                            templateConfigObject,
+                            new ImportPreprocessObjectSource.RangeSlice(
+                                    directCharset, directStreamObjectBytes, partitionNo, partitionCount));
+                }
+                return objectSource.streamObjectToSpoolAndReturn(
+                        context, importPayload, templateConfig, templateConfigObject);
+            }
 
-      ImportStage failureStage = stage();
-      String failureCode = ex.errorCode();
-      String localizedMessageArgument = ex.getMessage();
-      String fallbackMessage = ex.getMessage();
-      return ImportStageResult.failure(
-          failureStage,
-          failureCode,
-          "error.import.preprocess.failed",
-          new Object[] {localizedMessageArgument},
-          fallbackMessage,
-          ERROR_OBJECT_MAPPER);
-    }
-  }
+            byte[] rawBytes = objectSource.resolveRawBytes(context, importPayload, templateConfigObject);
+            // 覆盖同一局部变量，解密后不再持有原始字节引用，保持单份堆峰值。
+            rawBytes = decryptImportBytes(rawBytes);
+            byte[] processed = ImportPreprocessPipeline.run(
+                    rawBytes,
+                    importPayload,
+                    templateConfig,
+                    batchSecurityProperties.isBypassMode(),
+                    payloadProperties,
+                    objectMapper);
 
-  /**
-   * 大文件流式直载的对象字节数；不满足直载条件时返回 -1。
-   *
-   * <p>无内联内容、带 storagePath、纯文本且无变换时，把对象流式落到 spool 文件，交给 PARSE 逐行消费，全程不把整文件读进堆
-   * （突破 byte[] / MAX_OBJECT_BYTES 内存上限，支撑 GB 级、千万行、宽表长字段）。需要变换（压缩、加密、preprocess_pipeline）
-   * 或二进制格式时回退 byte[] 路径。只有大对象（≥ spool 阈值 16MB，本就要落盘）走流式直载；小文件继续走轻量的内存
-   * byte[] 路径（设置 normalizedPayload，没有临时文件开销）。
-   */
-  private long directStreamObjectBytes(
-      ImportPayload importPayload, Map<String, Object> templateConfig) {
-    boolean objectCanStreamDirect = EmptyChecks.isNotNull(importPayload)
-        && Texts.hasText(importPayload.storagePath())
-        && !Texts.hasText(importPayload.content())
-        && !Texts.hasText(importPayload.contentBase64())
-        && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig);
-    return objectCanStreamDirect ? objectSource.objectSizeBytes(importPayload) : -1L;
-  }
+            return completePreprocess(context, importPayload, attrs, processed, templateConfig, templateConfigObject);
+        } catch (ImportPreprocessException ex) {
+            SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
 
-  /**
-   * 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）；bypass-mode 下原样返回。
-   *
-   * <p>处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，在此处透明解密后再进入预处理 pipeline。
-   *
-   * <p>⚠2 (2026-05-03)：大文件走 spool 路径，避免 byte[] 双倍峰值。之前 cryptoService.decrypt(rawBytes) 内部
-   * ByteArrayInputStream → readAllBytes()，100 MB 输入瞬间产生 200 MB 堆峰。现在超过 spool 阈值且已加密时，走 Path → Path
-   * 流式解密，完成后释放 rawBytes 引用让 GC 回收，堆峰降为单份 100 MB。
-   */
-  private byte[] decryptImportBytes(byte[] rawBytes) {
-    if (batchSecurityProperties.isBypassMode()) {
-      return rawBytes;
-    }
-    if (rawBytes.length > payloadProperties.getPreprocessSpoolBytes()
-        && cryptoService.isEncryptedContent(rawBytes)) {
-      return decryptViaSpool(rawBytes);
-    }
-    return cryptoService.decrypt(rawBytes);
-  }
-
-  private boolean hasTemplateConfigSnapshot(Object value) {
-    return value instanceof Map<?, ?> map && EmptyChecks.isNotEmpty(map);
-  }
-
-  /**
-   * 预处理管道产物收尾：文本格式字节级剥 UTF-8 BOM → 按格式分支（二进制保留字节 / 文本解码或 spool）→ 写
-   * PARSING 状态与编码守卫 metadata。抽离自 {@link #execute}，控制 NCSS（PMD methodReportLevel=60）。
-   */
-  private ImportStageResult completePreprocess(
-      ImportJobContext context,
-      ImportPayload importPayload,
-      Map<String, Object> attrs,
-      byte[] processed,
-      Map<String, Object> templateConfig,
-      Object templateConfigObject) {
-    String formatType =
-        ImportPreprocessObjectSource.resolveFileFormatType(importPayload, templateConfig);
-    // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
-    // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
-    if (!ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
-      processed = EncodingUtils.stripUtf8Bom(processed);
-    }
-    if (ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
-      attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
-      context.setRawPayload("");
-      attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-    } else {
-      DecodingSpec spec = resolveDecodingSpec(importPayload, templateConfigObject);
-      Charset charset = spec.charset();
-      if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
-        spoolLargePayload(processed, charset, context);
-      } else {
-        String normalized = decodeWithGuards(processed, spec, context);
-        context.setRawPayload(normalized);
-        attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
-        attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-      }
+            ImportStage failureStage = stage();
+            String failureCode = ex.errorCode();
+            String localizedMessageArgument = ex.getMessage();
+            String fallbackMessage = ex.getMessage();
+            return ImportStageResult.failure(
+                    failureStage,
+                    failureCode,
+                    "error.import.preprocess.failed",
+                    new Object[] {localizedMessageArgument},
+                    fallbackMessage,
+                    ERROR_OBJECT_MAPPER);
+        }
     }
 
-    Map<String, Object> fileMetadata = new LinkedHashMap<>();
-    fileMetadata.put("preprocessed", Boolean.TRUE);
-    fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
-    // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
-    Object charsetSuspect = attrs.get(ImportRuntimeKeys.CHARSET_SUSPECT);
-    if (charsetSuspect != null) {
-      fileMetadata.put(ImportRuntimeKeys.CHARSET_SUSPECT, charsetSuspect);
+    /**
+     * 大文件流式直载的对象字节数；不满足直载条件时返回 -1。
+     *
+     * <p>无内联内容、带 storagePath、纯文本且无变换时，把对象流式落到 spool 文件，交给 PARSE 逐行消费，全程不把整文件读进堆
+     * （突破 byte[] / MAX_OBJECT_BYTES 内存上限，支撑 GB 级、千万行、宽表长字段）。需要变换（压缩、加密、preprocess_pipeline）
+     * 或二进制格式时回退 byte[] 路径。只有大对象（≥ spool 阈值 16MB，本就要落盘）走流式直载；小文件继续走轻量的内存
+     * byte[] 路径（设置 normalizedPayload，没有临时文件开销）。
+     */
+    private long directStreamObjectBytes(ImportPayload importPayload, Map<String, Object> templateConfig) {
+        boolean objectCanStreamDirect = EmptyChecks.isNotNull(importPayload)
+                && Texts.hasText(importPayload.storagePath())
+                && !Texts.hasText(importPayload.content())
+                && !Texts.hasText(importPayload.contentBase64())
+                && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig);
+        return objectCanStreamDirect ? objectSource.objectSizeBytes(importPayload) : -1L;
     }
-    Object replacementMeta = attrs.get(ImportRuntimeKeys.REPLACEMENT_COUNT);
-    if (replacementMeta != null) {
-      fileMetadata.put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementMeta);
-    }
-    // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
-    Object detectedCharset = attrs.get(ImportRuntimeKeys.DETECTED_CHARSET);
-    if (detectedCharset != null) {
-      fileMetadata.put(ImportRuntimeKeys.DETECTED_CHARSET, detectedCharset);
-    }
-    ImportStageSupport.updateFileStatusRecoverAware(
-        fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
-    return ImportStageResult.success(stage());
-  }
 
-  private static Integer intOrNull(Object value) {
-    if (value == null) {
-      return null;
+    /**
+     * 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）；bypass-mode 下原样返回。
+     *
+     * <p>处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，在此处透明解密后再进入预处理 pipeline。
+     *
+     * <p>⚠2 (2026-05-03)：大文件走 spool 路径，避免 byte[] 双倍峰值。之前 cryptoService.decrypt(rawBytes) 内部
+     * ByteArrayInputStream → readAllBytes()，100 MB 输入瞬间产生 200 MB 堆峰。现在超过 spool 阈值且已加密时，走 Path → Path
+     * 流式解密，完成后释放 rawBytes 引用让 GC 回收，堆峰降为单份 100 MB。
+     */
+    private byte[] decryptImportBytes(byte[] rawBytes) {
+        if (batchSecurityProperties.isBypassMode()) {
+            return rawBytes;
+        }
+        if (rawBytes.length > payloadProperties.getPreprocessSpoolBytes()
+                && cryptoService.isEncryptedContent(rawBytes)) {
+            return decryptViaSpool(rawBytes);
+        }
+        return cryptoService.decrypt(rawBytes);
     }
-    if (value instanceof Number n) {
-      return n.intValue();
-    }
-    try {
-      String rawText = String.valueOf(value);
-      String text = rawText.trim();
-      return Integer.parseInt(text);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:NumberFormatException", ignored);
-      return null;
-    }
-  }
 
-  private static Map<String, Object> toStringKeyMap(Object templateConfigObject) {
-    if (!(templateConfigObject instanceof Map<?, ?> raw)) {
-      return Map.of();
+    private boolean hasTemplateConfigSnapshot(Object value) {
+        return value instanceof Map<?, ?> map && EmptyChecks.isNotEmpty(map);
     }
-    Map<String, Object> out = new LinkedHashMap<>();
-    raw.forEach((k, v) -> out.put(String.valueOf(k), v));
-    return out;
-  }
 
-  private String normalizeText(String source) {
-    if (source == null) {
-      return "";
-    }
-    String normalizedLineEndings = source.replace("\r\n", "\n");
-    String normalized = normalizedLineEndings.replace('\r', '\n');
-    if (!normalized.isEmpty() && normalized.charAt(0) == '\uFEFF') {
-      normalized = normalized.substring(1);
-    }
-    return normalized.trim();
-  }
+    /**
+     * 预处理管道产物收尾：文本格式字节级剥 UTF-8 BOM → 按格式分支（二进制保留字节 / 文本解码或 spool）→ 写
+     * PARSING 状态与编码守卫 metadata。抽离自 {@link #execute}，控制 NCSS（PMD methodReportLevel=60）。
+     */
+    private ImportStageResult completePreprocess(
+            ImportJobContext context,
+            ImportPayload importPayload,
+            Map<String, Object> attrs,
+            byte[] processed,
+            Map<String, Object> templateConfig,
+            Object templateConfigObject) {
+        String formatType = ImportPreprocessObjectSource.resolveFileFormatType(importPayload, templateConfig);
+        // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
+        // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
+        if (!ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
+            processed = EncodingUtils.stripUtf8Bom(processed);
+        }
+        if (ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
+            attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
+            context.setRawPayload("");
+            attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        } else {
+            DecodingSpec spec = resolveDecodingSpec(importPayload, templateConfigObject);
+            Charset charset = spec.charset();
+            if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
+                spoolLargePayload(processed, charset, context);
+            } else {
+                String normalized = decodeWithGuards(processed, spec, context);
+                context.setRawPayload(normalized);
+                attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
+                attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+            }
+        }
 
-  private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object targetCharset = templateConfig.get("target_charset");
-      if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
-        String targetCharsetName = String.valueOf(targetCharset);
-        return EncodingUtils.resolve(targetCharsetName);
-      }
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        String charsetName = String.valueOf(charset);
-        return EncodingUtils.resolve(charsetName);
-      }
+        Map<String, Object> fileMetadata = new LinkedHashMap<>();
+        fileMetadata.put("preprocessed", Boolean.TRUE);
+        fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
+        // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
+        Object charsetSuspect = attrs.get(ImportRuntimeKeys.CHARSET_SUSPECT);
+        if (charsetSuspect != null) {
+            fileMetadata.put(ImportRuntimeKeys.CHARSET_SUSPECT, charsetSuspect);
+        }
+        Object replacementMeta = attrs.get(ImportRuntimeKeys.REPLACEMENT_COUNT);
+        if (replacementMeta != null) {
+            fileMetadata.put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementMeta);
+        }
+        // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
+        Object detectedCharset = attrs.get(ImportRuntimeKeys.DETECTED_CHARSET);
+        if (detectedCharset != null) {
+            fileMetadata.put(ImportRuntimeKeys.DETECTED_CHARSET, detectedCharset);
+        }
+        ImportStageSupport.updateFileStatusRecoverAware(fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
+        return ImportStageResult.success(stage());
     }
-    if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
-      return EncodingUtils.resolve(importPayload.targetCharset());
+
+    private static Integer intOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            String rawText = String.valueOf(value);
+            String text = rawText.trim();
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(PreprocessStep.class, "catch:NumberFormatException", ignored);
+            return null;
+        }
     }
-    if (importPayload != null && Texts.hasText(importPayload.charset())) {
-      return EncodingUtils.resolve(importPayload.charset());
+
+    private static Map<String, Object> toStringKeyMap(Object templateConfigObject) {
+        if (!(templateConfigObject instanceof Map<?, ?> raw)) {
+            return Map.of();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        raw.forEach((k, v) -> out.put(String.valueOf(k), v));
+        return out;
     }
-    return StandardCharsets.UTF_8;
-  }
 
-  /** 内存路径解码规格：charset + 是否显式配置 + 非法字符策略 + 是否开启探测回退。 */
-  private record DecodingSpec(
-      Charset charset,
-      boolean explicitlyConfigured,
-      CodingErrorAction invalidCharAction,
-      boolean charsetDetectionEnabled) {}
+    private String normalizeText(String source) {
+        if (source == null) {
+            return "";
+        }
+        String normalizedLineEndings = source.replace("\r\n", "\n");
+        String normalized = normalizedLineEndings.replace('\r', '\n');
+        if (!normalized.isEmpty() && normalized.charAt(0) == '\uFEFF') {
+            normalized = normalized.substring(1);
+        }
+        return normalized.trim();
+    }
 
-  /**
-   * 解析内存路径的解码规格。字符集仍走 {@link #resolveCharset} 的三级降级；探测回退（UTF-8 严格解码失败 → GB18030）
-   * 是<b>保守默认</b>：仅当模板显式 {@code charset_detect=true} 且「未显式配置 charset」时于 {@link #decodeWithGuards}
-   * 内触发；默认保持 fail-fast（GB18030 是超集、接受大量字节序列，盲目回退会把非 GB 系编码静默解成乱码入库）。
-   */
-  private DecodingSpec resolveDecodingSpec(
-      ImportPayload importPayload, Object templateConfigObject) {
-    Charset charset = resolveCharset(importPayload, templateConfigObject);
-    boolean explicit = hasExplicitCharset(importPayload, templateConfigObject);
-    CodingErrorAction invalidCharAction = resolveInvalidCharAction(templateConfigObject);
-    boolean detectionEnabled = charsetDetectionEnabled(templateConfigObject);
-    return new DecodingSpec(charset, explicit, invalidCharAction, detectionEnabled);
-  }
+    private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object targetCharset = templateConfig.get("target_charset");
+            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+                String targetCharsetName = String.valueOf(targetCharset);
+                return EncodingUtils.resolve(targetCharsetName);
+            }
+            Object charset = templateConfig.get("charset");
+            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+                String charsetName = String.valueOf(charset);
+                return EncodingUtils.resolve(charsetName);
+            }
+        }
+        if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
+            return EncodingUtils.resolve(importPayload.targetCharset());
+        }
+        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+            return EncodingUtils.resolve(importPayload.charset());
+        }
+        return StandardCharsets.UTF_8;
+    }
 
-  /** 探测回退开关：模板 {@code charset_detect=true} 才允许自动尝试 GB18030。 */
-  private static boolean charsetDetectionEnabled(Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object raw = templateConfig.get("charset_detect");
-      if (EmptyChecks.isNull(raw)) {
+    /** 内存路径解码规格：charset + 是否显式配置 + 非法字符策略 + 是否开启探测回退。 */
+    private record DecodingSpec(
+            Charset charset,
+            boolean explicitlyConfigured,
+            CodingErrorAction invalidCharAction,
+            boolean charsetDetectionEnabled) {}
+
+    /**
+     * 解析内存路径的解码规格。字符集仍走 {@link #resolveCharset} 的三级降级；探测回退（UTF-8 严格解码失败 → GB18030）
+     * 是<b>保守默认</b>：仅当模板显式 {@code charset_detect=true} 且「未显式配置 charset」时于 {@link #decodeWithGuards}
+     * 内触发；默认保持 fail-fast（GB18030 是超集、接受大量字节序列，盲目回退会把非 GB 系编码静默解成乱码入库）。
+     */
+    private DecodingSpec resolveDecodingSpec(ImportPayload importPayload, Object templateConfigObject) {
+        Charset charset = resolveCharset(importPayload, templateConfigObject);
+        boolean explicit = hasExplicitCharset(importPayload, templateConfigObject);
+        CodingErrorAction invalidCharAction = resolveInvalidCharAction(templateConfigObject);
+        boolean detectionEnabled = charsetDetectionEnabled(templateConfigObject);
+        return new DecodingSpec(charset, explicit, invalidCharAction, detectionEnabled);
+    }
+
+    /** 探测回退开关：模板 {@code charset_detect=true} 才允许自动尝试 GB18030。 */
+    private static boolean charsetDetectionEnabled(Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object raw = templateConfig.get("charset_detect");
+            if (EmptyChecks.isNull(raw)) {
+                return false;
+            }
+            String rawText = String.valueOf(raw);
+            String text = rawText.trim();
+            return "true".equalsIgnoreCase(text);
+        }
         return false;
-      }
-      String rawText = String.valueOf(raw);
-      String text = rawText.trim();
-      return "true".equalsIgnoreCase(text);
     }
-    return false;
-  }
 
-  private static boolean hasExplicitCharset(
-      ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object targetCharset = templateConfig.get("target_charset");
-      if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
-        return true;
-      }
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return true;
-      }
-    }
-    return importPayload != null
-        && (Texts.hasText(importPayload.targetCharset()) || Texts.hasText(importPayload.charset()));
-  }
-
-  /**
-   * 非法字符策略：模板 {@code invalid_char_policy} = {@code REPLACE} 时用 U+FFFD 替换（配合
-   * replacementCount 观测），默认 {@code FAIL}（严格 REPORT，解码失败直接 PREPROCESS_FAILED）。
-   */
-  private static CodingErrorAction resolveInvalidCharAction(Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object policy = templateConfig.get("invalid_char_policy");
-      String presenceText = EmptyChecks.isNull(policy) ? null : String.valueOf(policy);
-      if (EmptyChecks.isNotNull(policy) && Texts.hasText(presenceText)) {
-        String rawPolicy = String.valueOf(policy);
-        String raw = rawPolicy.trim();
-        if ("REPLACE".equalsIgnoreCase(raw)) {
-          return CodingErrorAction.REPLACE;
+    private static boolean hasExplicitCharset(ImportPayload importPayload, Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object targetCharset = templateConfig.get("target_charset");
+            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+                return true;
+            }
+            Object charset = templateConfig.get("charset");
+            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+                return true;
+            }
         }
-        if ("FAIL".equalsIgnoreCase(raw)) {
-          return CodingErrorAction.REPORT;
-        }
-        throw new ImportPreprocessException(
-            "IMPORT_PREPROCESS_INVALID_POLICY", "unsupported invalid_char_policy: " + raw);
-      }
+        return importPayload != null
+                && (Texts.hasText(importPayload.targetCharset()) || Texts.hasText(importPayload.charset()));
     }
-    return CodingErrorAction.REPORT;
-  }
 
-  /**
-   * P1-11 流式 buffer 大小:8KB,与 BufferedInputStream / ByteArrayOutputStream 配合避免 readAllBytes
-   * 的一次性巨块分配。
-   */
-  private static final int DECRYPT_STREAM_BUFFER_BYTES = 8 * 1024;
+    /**
+     * 非法字符策略：模板 {@code invalid_char_policy} = {@code REPLACE} 时用 U+FFFD 替换（配合
+     * replacementCount 观测），默认 {@code FAIL}（严格 REPORT，解码失败直接 PREPROCESS_FAILED）。
+     */
+    private static CodingErrorAction resolveInvalidCharAction(Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object policy = templateConfig.get("invalid_char_policy");
+            String presenceText = EmptyChecks.isNull(policy) ? null : String.valueOf(policy);
+            if (EmptyChecks.isNotNull(policy) && Texts.hasText(presenceText)) {
+                String rawPolicy = String.valueOf(policy);
+                String raw = rawPolicy.trim();
+                if ("REPLACE".equalsIgnoreCase(raw)) {
+                    return CodingErrorAction.REPLACE;
+                }
+                if ("FAIL".equalsIgnoreCase(raw)) {
+                    return CodingErrorAction.REPORT;
+                }
+                throw new ImportPreprocessException(
+                        "IMPORT_PREPROCESS_INVALID_POLICY", "unsupported invalid_char_policy: " + raw);
+            }
+        }
+        return CodingErrorAction.REPORT;
+    }
 
-  /**
-   * ⚠2 (2026-05-03): 大文件加密内容走 Path → Path 流式解密. 之前 cryptoService.decrypt(rawBytes) 内部
-   * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
-   * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
-   */
-  private byte[] decryptViaSpool(byte[] rawBytes) {
-    Path encrypted = null;
-    Path decrypted = null;
-    try {
-      encrypted = PrivateTempFiles.createTempFile("batch-preprocess-enc-", ".raw");
-      decrypted = PrivateTempFiles.createTempFile("batch-preprocess-dec-", ".raw");
-      Files.write(
-          encrypted, rawBytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-      cryptoService.decrypt(encrypted, decrypted);
-      // P1-11: 用 8K BufferedInputStream + Files.copy(InputStream, OutputStream) 取代
-      // Files.readAllBytes 一次性大块分配,降低 GC 抖动 + 避免 JDK 内部 grow buffer 的 2x 峰值。
-      // ByteArrayOutputStream 按文件大小预分配,Files.copy 内部用 BufferedInputStream 提供的 8K buffer 流式
-      // transfer。
-      long size = Files.size(decrypted);
-      long maxByteArrayCapacity = Integer.MAX_VALUE - 8L;
-      int initialCapacity = (int) Math.min(size, maxByteArrayCapacity);
-      try (InputStream in = new BufferedInputStream(
-              Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
-          ByteArrayOutputStream out = new ByteArrayOutputStream(initialCapacity)) {
-        in.transferTo(out);
-        return out.toByteArray();
-      }
-    } catch (IOException ex) {
-      throw new IllegalStateException("failed to spool-decrypt large payload", ex);
-    } finally {
-      if (encrypted != null) {
+    /**
+     * P1-11 流式 buffer 大小:8KB,与 BufferedInputStream / ByteArrayOutputStream 配合避免 readAllBytes
+     * 的一次性巨块分配。
+     */
+    private static final int DECRYPT_STREAM_BUFFER_BYTES = 8 * 1024;
+
+    /**
+     * ⚠2 (2026-05-03): 大文件加密内容走 Path → Path 流式解密. 之前 cryptoService.decrypt(rawBytes) 内部
+     * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
+     * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
+     */
+    private byte[] decryptViaSpool(byte[] rawBytes) {
+        Path encrypted = null;
+        Path decrypted = null;
         try {
-          Files.deleteIfExists(encrypted);
-        } catch (IOException ignored) {
-          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+            encrypted = PrivateTempFiles.createTempFile("batch-preprocess-enc-", ".raw");
+            decrypted = PrivateTempFiles.createTempFile("batch-preprocess-dec-", ".raw");
+            Files.write(encrypted, rawBytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            cryptoService.decrypt(encrypted, decrypted);
+            // P1-11: 用 8K BufferedInputStream + Files.copy(InputStream, OutputStream) 取代
+            // Files.readAllBytes 一次性大块分配,降低 GC 抖动 + 避免 JDK 内部 grow buffer 的 2x 峰值。
+            // ByteArrayOutputStream 按文件大小预分配,Files.copy 内部用 BufferedInputStream 提供的 8K buffer 流式
+            // transfer。
+            long size = Files.size(decrypted);
+            long maxByteArrayCapacity = Integer.MAX_VALUE - 8L;
+            int initialCapacity = (int) Math.min(size, maxByteArrayCapacity);
+            try (InputStream in =
+                            new BufferedInputStream(Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
+                    ByteArrayOutputStream out = new ByteArrayOutputStream(initialCapacity)) {
+                in.transferTo(out);
+                return out.toByteArray();
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to spool-decrypt large payload", ex);
+        } finally {
+            if (encrypted != null) {
+                try {
+                    Files.deleteIfExists(encrypted);
+                } catch (IOException ignored) {
+                    SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
 
-          // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
+                    // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
+                }
+            }
+            if (decrypted != null) {
+                try {
+                    Files.deleteIfExists(decrypted);
+                } catch (IOException ignored) {
+                    SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+
+                    // 同上
+                }
+            }
         }
-      }
-      if (decrypted != null) {
+    }
+
+    /**
+     * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码， 避免 byte[] → UTF-16 String 的
+     * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
+     * {@link ImportPreprocessException} 以对齐主链路异常语义。
+     */
+    private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
+        Path spool;
         try {
-          Files.deleteIfExists(decrypted);
-        } catch (IOException ignored) {
-          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
-
-          // 同上
+            spool = PrivateTempFiles.createTempFile("batch-preprocess-", ".raw");
+            Files.write(spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (IOException ex) {
+            throw new ImportPreprocessException(
+                    "IMPORT_PREPROCESS_SPOOL_FAILED",
+                    "failed to spool large payload to temp file: " + ex.getMessage(),
+                    ex);
         }
-      }
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
+        context.setRawPayload("");
+        context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+        log.info(
+                "[ImportPreprocess] large payload {} bytes spooled to {}; PARSE will stream decode as {}",
+                processed.length,
+                spool,
+                charset);
     }
-  }
 
-  /**
-   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码， 避免 byte[] → UTF-16 String 的
-   * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
-   * {@link ImportPreprocessException} 以对齐主链路异常语义。
-   */
-  private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
-    Path spool;
-    try {
-      spool = PrivateTempFiles.createTempFile("batch-preprocess-", ".raw");
-      Files.write(spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-    } catch (IOException ex) {
-      throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_SPOOL_FAILED",
-          "failed to spool large payload to temp file: " + ex.getMessage(),
-          ex);
-    }
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
-    context.setRawPayload("");
-    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-    log.info(
-        "[ImportPreprocess] large payload {} bytes spooled to {}; PARSE will stream decode as {}",
-        processed.length,
-        spool,
-        charset);
-  }
-
-  /**
-   * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
-   *
-   * <ul>
-   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED}, 避免默认 REPLACE 让
-   *       U+FFFD 静默入库
-   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入 {@code charsetSuspect=LIKELY_UTF8},
-   *       让下游把标记写进 {@code file_record.metadata}
-   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
-   *       replacementCount}
-   *   <li>D2 — 编码探测回退（保守默认，opt-in）：模板 {@code charset_detect=true} 且未显式配置 charset、UTF-8 严格解码
-   *       失败、字节含非 ASCII 时，尝试 GB18030（GBK 超集）；命中则 context 写入 {@code detectedCharset}，解码继续。
-   *       默认关闭——GB18030 解码接受度远高于 UTF-8，自动回退可能把 Shift-JIS/Latin-1 等静默解成乱码，宁可失败让人工配 charset。
-   * </ul>
-   */
-  private String decodeWithGuards(byte[] processed, DecodingSpec spec, ImportJobContext context) {
-    Charset charset = spec.charset();
-    String decoded;
-    try {
-      decoded = decodeStrict(processed, charset, spec.invalidCharAction());
-    } catch (ImportPreprocessException ex) {
-      // D2：仅「显式开启探测 + 未显式配置」时回退；显式配置解码失败仍 fail-fast（设计：配置即契约）。
-      boolean defaultUtf8NeedsCharsetDetection = spec.charsetDetectionEnabled()
-          && !spec.explicitlyConfigured()
-          && StandardCharsets.UTF_8.equals(charset)
-          && hasNonAscii(processed);
-      if (defaultUtf8NeedsCharsetDetection) {
+    /**
+     * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
+     *
+     * <ul>
+     *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED}, 避免默认 REPLACE 让
+     *       U+FFFD 静默入库
+     *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入 {@code charsetSuspect=LIKELY_UTF8},
+     *       让下游把标记写进 {@code file_record.metadata}
+     *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
+     *       replacementCount}
+     *   <li>D2 — 编码探测回退（保守默认，opt-in）：模板 {@code charset_detect=true} 且未显式配置 charset、UTF-8 严格解码
+     *       失败、字节含非 ASCII 时，尝试 GB18030（GBK 超集）；命中则 context 写入 {@code detectedCharset}，解码继续。
+     *       默认关闭——GB18030 解码接受度远高于 UTF-8，自动回退可能把 Shift-JIS/Latin-1 等静默解成乱码，宁可失败让人工配 charset。
+     * </ul>
+     */
+    private String decodeWithGuards(byte[] processed, DecodingSpec spec, ImportJobContext context) {
+        Charset charset = spec.charset();
+        String decoded;
         try {
-          decoded = decodeStrict(processed, EncodingUtils.GB18030, CodingErrorAction.REPORT);
-          charset = EncodingUtils.GB18030;
-          log.warn(
-              "[ImportPreprocess] UTF-8 strict decode failed and no explicit charset configured;"
-                  + " detected GB18030 (GBK superset). See file_record.metadata.detectedCharset");
-          context.getAttributes().put(ImportRuntimeKeys.DETECTED_CHARSET, charset.name());
-        } catch (ImportPreprocessException ignored) {
-          SwallowedExceptionLogger.info(
-              PreprocessStep.class, "catch:ImportPreprocessException", ignored);
-          throw ex;
+            decoded = decodeStrict(processed, charset, spec.invalidCharAction());
+        } catch (ImportPreprocessException ex) {
+            // D2：仅「显式开启探测 + 未显式配置」时回退；显式配置解码失败仍 fail-fast（设计：配置即契约）。
+            boolean defaultUtf8NeedsCharsetDetection = spec.charsetDetectionEnabled()
+                    && !spec.explicitlyConfigured()
+                    && StandardCharsets.UTF_8.equals(charset)
+                    && hasNonAscii(processed);
+            if (defaultUtf8NeedsCharsetDetection) {
+                try {
+                    decoded = decodeStrict(processed, EncodingUtils.GB18030, CodingErrorAction.REPORT);
+                    charset = EncodingUtils.GB18030;
+                    log.warn("[ImportPreprocess] UTF-8 strict decode failed and no explicit charset configured;"
+                            + " detected GB18030 (GBK superset). See file_record.metadata.detectedCharset");
+                    context.getAttributes().put(ImportRuntimeKeys.DETECTED_CHARSET, charset.name());
+                } catch (ImportPreprocessException ignored) {
+                    SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ignored);
+                    throw ex;
+                }
+            } else {
+                throw ex;
+            }
         }
-      } else {
-        throw ex;
-      }
+        boolean decodedTextMayActuallyBeUtf8 =
+                !StandardCharsets.UTF_8.equals(charset) && hasNonAscii(processed) && looksLikeUtf8(processed);
+        if (decodedTextMayActuallyBeUtf8) {
+            log.warn(
+                    "[ImportPreprocess] declared charset={} but bytes also pass UTF-8 strict decode;"
+                            + " source may actually be UTF-8. See file_record.metadata.charsetSuspect",
+                    charset);
+            context.getAttributes().put(ImportRuntimeKeys.CHARSET_SUSPECT, "LIKELY_UTF8");
+        }
+        long replacementCount = countReplacement(decoded);
+        if (replacementCount > 0) {
+            log.warn(
+                    "[ImportPreprocess] decoded payload contains {} U+FFFD after decoding with {};"
+                            + " declared charset likely inaccurate, see file_record.metadata",
+                    replacementCount,
+                    charset);
+            context.getAttributes().put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementCount);
+        }
+        return normalizeText(decoded);
     }
-    boolean decodedTextMayActuallyBeUtf8 = !StandardCharsets.UTF_8.equals(charset)
-        && hasNonAscii(processed)
-        && looksLikeUtf8(processed);
-    if (decodedTextMayActuallyBeUtf8) {
-      log.warn(
-          "[ImportPreprocess] declared charset={} but bytes also pass UTF-8 strict decode;"
-              + " source may actually be UTF-8. See file_record.metadata.charsetSuspect",
-          charset);
-      context.getAttributes().put(ImportRuntimeKeys.CHARSET_SUSPECT, "LIKELY_UTF8");
-    }
-    long replacementCount = countReplacement(decoded);
-    if (replacementCount > 0) {
-      log.warn(
-          "[ImportPreprocess] decoded payload contains {} U+FFFD after decoding with {};"
-              + " declared charset likely inaccurate, see file_record.metadata",
-          replacementCount,
-          charset);
-      context.getAttributes().put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementCount);
-    }
-    return normalizeText(decoded);
-  }
 
-  private static String decodeStrict(byte[] bytes, Charset charset, CodingErrorAction action) {
-    CharsetDecoder decoder =
-        charset.newDecoder().onMalformedInput(action).onUnmappableCharacter(action);
-    try {
-      byte[] sourceBytes = EmptyChecks.isNull(bytes) ? new byte[0] : bytes;
-      ByteBuffer sourceBuffer = ByteBuffer.wrap(sourceBytes);
-      CharBuffer decodedBuffer = decoder.decode(sourceBuffer);
-      return decodedBuffer.toString();
-    } catch (CharacterCodingException ex) {
-      throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_DECODE_FAILED",
-          "failed to decode bytes as " + charset.name() + ": " + ex.getMessage(),
-          ex);
+    private static String decodeStrict(byte[] bytes, Charset charset, CodingErrorAction action) {
+        CharsetDecoder decoder = charset.newDecoder().onMalformedInput(action).onUnmappableCharacter(action);
+        try {
+            byte[] sourceBytes = EmptyChecks.isNull(bytes) ? new byte[0] : bytes;
+            ByteBuffer sourceBuffer = ByteBuffer.wrap(sourceBytes);
+            CharBuffer decodedBuffer = decoder.decode(sourceBuffer);
+            return decodedBuffer.toString();
+        } catch (CharacterCodingException ex) {
+            throw new ImportPreprocessException(
+                    "IMPORT_PREPROCESS_DECODE_FAILED",
+                    "failed to decode bytes as " + charset.name() + ": " + ex.getMessage(),
+                    ex);
+        }
     }
-  }
 
-  private static long countReplacement(String text) {
-    if (text == null || text.isEmpty()) {
-      return 0L;
+    private static long countReplacement(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0L;
+        }
+        return text.chars().filter(c -> c == '\uFFFD').count();
     }
-    return text.chars().filter(c -> c == '\uFFFD').count();
-  }
 
-  private static boolean looksLikeUtf8(byte[] bytes) {
-    if (bytes == null || bytes.length == 0) {
-      return false;
-    }
-    try {
-      StandardCharsets.UTF_8
-          .newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(bytes));
-      return true;
-    } catch (CharacterCodingException e) {
-      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:CharacterCodingException", e);
+    private static boolean looksLikeUtf8(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return false;
+        }
+        try {
+            StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes));
+            return true;
+        } catch (CharacterCodingException e) {
+            SwallowedExceptionLogger.info(PreprocessStep.class, "catch:CharacterCodingException", e);
 
-      return false;
+            return false;
+        }
     }
-  }
 
-  private static boolean hasNonAscii(byte[] bytes) {
-    if (bytes == null) {
-      return false;
+    private static boolean hasNonAscii(byte[] bytes) {
+        if (bytes == null) {
+            return false;
+        }
+        for (byte b : bytes) {
+            if ((b & 0x80) != 0) {
+                return true;
+            }
+        }
+        return false;
     }
-    for (byte b : bytes) {
-      if ((b & 0x80) != 0) {
-        return true;
-      }
-    }
-    return false;
-  }
 }

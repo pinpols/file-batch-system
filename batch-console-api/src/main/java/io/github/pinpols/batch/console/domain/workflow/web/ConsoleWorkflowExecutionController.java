@@ -24,20 +24,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/console/workflow-runs")
 @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 public class ConsoleWorkflowExecutionController {
-  private final WorkflowExecutionQueryService queryService;
-  private final ConsoleResponseFactory responseFactory;
-  private final WorkflowExecutionPushService pushService;
+    private final WorkflowExecutionQueryService queryService;
+    private final ConsoleResponseFactory responseFactory;
+    private final WorkflowExecutionPushService pushService;
 
-  @GetMapping(
-      value = "/{id}/execution-progress/events",
-      produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter events(@PathVariable @Positive Long id, @RequestParam String tenantId) {
-    return pushService.subscribe(tenantId, id);
-  }
+    @GetMapping(value = "/{id}/execution-progress/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter events(@PathVariable @Positive Long id, @RequestParam String tenantId) {
+        return pushService.subscribe(tenantId, id);
+    }
 
-  @GetMapping("/{id}/execution-progress")
-  public CommonResponse<WorkflowExecutionProgressResponse> progress(
-      @PathVariable @Positive Long id, @RequestParam String tenantId) {
-    return responseFactory.success(queryService.progress(tenantId, id));
-  }
+    @GetMapping("/{id}/execution-progress")
+    public CommonResponse<WorkflowExecutionProgressResponse> progress(
+            @PathVariable @Positive Long id, @RequestParam String tenantId) {
+        return responseFactory.success(queryService.progress(tenantId, id));
+    }
 }

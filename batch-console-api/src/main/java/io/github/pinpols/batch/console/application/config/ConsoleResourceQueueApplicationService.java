@@ -9,11 +9,11 @@ import io.github.pinpols.batch.console.application.contract.response.config.Reso
 /** 资源队列应用服务：管理资源队列的 CRUD 及启停操作。 */
 public interface ConsoleResourceQueueApplicationService {
 
-  PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request);
+    PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request);
 
-  ResourceQueueResponse create(ResourceQueueCreateRequest request);
+    ResourceQueueResponse create(ResourceQueueCreateRequest request);
 
-  ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request);
+    ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request);
 
-  void toggle(Long id, String tenantId, Boolean enabled);
+    void toggle(Long id, String tenantId, Boolean enabled);
 }

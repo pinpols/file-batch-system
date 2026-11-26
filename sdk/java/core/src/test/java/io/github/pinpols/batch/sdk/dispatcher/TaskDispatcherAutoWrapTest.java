@@ -41,417 +41,394 @@ import org.junit.jupiter.api.Test;
 @DisplayName("TaskDispatcher 自动织入 — 幂等与重试注解的识别及装饰执行语义")
 class TaskDispatcherAutoWrapTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("kafka:9092")
-      .kafkaTopicPattern("batch.task.dispatch.tx.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
+    private TaskDispatcher dispatcher;
 
-  @AfterEach
-  void tearDown() {
-    if (dispatcher != null) dispatcher.stop();
-  }
-
-  private TaskDispatchMessage msg(String taskType, Map<String, Object> params) {
-    return new TaskDispatchMessage(
-        42L, "tx", "job-1", taskType, "ti-9", params, Map.of("traceId", "abc"));
-  }
-
-  private void stubClaimPayload(PlatformHttpClient http) throws IOException {
-    when(http.claim(eq(42L), anyString(), any()))
-        .thenReturn(
-            new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"orderId\":\"o1\"}", null));
-  }
-
-  // ─── handlers ────────────────────────────────────────────────────────────────
-
-  /** 仅 @RetryOn:对 IllegalStateException 重试,前 N-1 次抛、第 N 次成功;计数执行次数。 */
-  @RetryOn(
-      value = IllegalStateException.class,
-      maxAttempts = 4,
-      initialDelayMillis = 1,
-      backoff = Backoff.FIXED)
-  static class RetryOnlyHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
-    final int failuresBeforeSuccess;
-
-    RetryOnlyHandler(int failuresBeforeSuccess) {
-      this.failuresBeforeSuccess = failuresBeforeSuccess;
+    @AfterEach
+    void tearDown() {
+        if (dispatcher != null) dispatcher.stop();
     }
 
-    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
-    @Override
-    public boolean isSafeToReplay(SdkTaskContext ctx) {
-      return true;
+    private TaskDispatchMessage msg(String taskType, Map<String, Object> params) {
+        return new TaskDispatchMessage(42L, "tx", "job-1", taskType, "ti-9", params, Map.of("traceId", "abc"));
     }
 
-    @Override
-    public String taskType() {
-      return "tt";
+    private void stubClaimPayload(PlatformHttpClient http) throws IOException {
+        when(http.claim(eq(42L), anyString(), any()))
+                .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"orderId\":\"o1\"}", null));
     }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      int n = executions.incrementAndGet();
-      if (n <= failuresBeforeSuccess) {
-        throw new IllegalStateException("transient boom " + n);
-      }
-      return SdkTaskResult.ok("done after " + n);
-    }
-  }
+    // ─── handlers ────────────────────────────────────────────────────────────────
 
-  /** 仅 @Idempotent。 */
-  @Idempotent(key = "import:{tenantId}:{orderId}")
-  static class IdempotentOnlyHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
+    /** 仅 @RetryOn:对 IllegalStateException 重试,前 N-1 次抛、第 N 次成功;计数执行次数。 */
+    @RetryOn(value = IllegalStateException.class, maxAttempts = 4, initialDelayMillis = 1, backoff = Backoff.FIXED)
+    static class RetryOnlyHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
+        final int failuresBeforeSuccess;
 
-    @Override
-    public String taskType() {
-      return "tt";
-    }
+        RetryOnlyHandler(int failuresBeforeSuccess) {
+            this.failuresBeforeSuccess = failuresBeforeSuccess;
+        }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      executions.incrementAndGet();
-      return SdkTaskResult.ok("imported", Map.of("rows", 7));
-    }
-  }
+        // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+        @Override
+        public boolean isSafeToReplay(SdkTaskContext ctx) {
+            return true;
+        }
 
-  /** 同时标两注解:瞬时抛 IllegalStateException 重试到成功,且幂等去重。 */
-  @Idempotent(key = "both:{tenantId}:{orderId}")
-  @RetryOn(
-      value = IllegalStateException.class,
-      maxAttempts = 4,
-      initialDelayMillis = 1,
-      backoff = Backoff.FIXED)
-  static class BothHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
-    int failuresBeforeSuccess;
+        @Override
+        public String taskType() {
+            return "tt";
+        }
 
-    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
-    @Override
-    public boolean isSafeToReplay(SdkTaskContext ctx) {
-      return true;
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            int n = executions.incrementAndGet();
+            if (n <= failuresBeforeSuccess) {
+                throw new IllegalStateException("transient boom " + n);
+            }
+            return SdkTaskResult.ok("done after " + n);
+        }
     }
 
-    @Override
-    public String taskType() {
-      return "tt";
+    /** 仅 @Idempotent。 */
+    @Idempotent(key = "import:{tenantId}:{orderId}")
+    static class IdempotentOnlyHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
+
+        @Override
+        public String taskType() {
+            return "tt";
+        }
+
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            executions.incrementAndGet();
+            return SdkTaskResult.ok("imported", Map.of("rows", 7));
+        }
     }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      int n = executions.incrementAndGet();
-      if (n <= failuresBeforeSuccess) {
-        throw new IllegalStateException("transient boom " + n);
-      }
-      return SdkTaskResult.ok("done", Map.of("rows", 1));
-    }
-  }
+    /** 同时标两注解:瞬时抛 IllegalStateException 重试到成功,且幂等去重。 */
+    @Idempotent(key = "both:{tenantId}:{orderId}")
+    @RetryOn(value = IllegalStateException.class, maxAttempts = 4, initialDelayMillis = 1, backoff = Backoff.FIXED)
+    static class BothHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
+        int failuresBeforeSuccess;
 
-  /** 标 @RetryOn 但只重试 IllegalStateException;execute 抛不匹配的 IllegalArgumentException。 */
-  @RetryOn(
-      value = IllegalStateException.class,
-      maxAttempts = 4,
-      initialDelayMillis = 1,
-      backoff = Backoff.FIXED)
-  static class MismatchHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
+        // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+        @Override
+        public boolean isSafeToReplay(SdkTaskContext ctx) {
+            return true;
+        }
 
-    // 仅抛模拟异常、不提交外部动作，保持本用例验证“异常类型不匹配”而非安全门提前退出。
-    @Override
-    public boolean isSafeToReplay(SdkTaskContext ctx) {
-      return true;
-    }
+        @Override
+        public String taskType() {
+            return "tt";
+        }
 
-    @Override
-    public String taskType() {
-      return "tt";
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            int n = executions.incrementAndGet();
+            if (n <= failuresBeforeSuccess) {
+                throw new IllegalStateException("transient boom " + n);
+            }
+            return SdkTaskResult.ok("done", Map.of("rows", 1));
+        }
     }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      executions.incrementAndGet();
-      throw new IllegalArgumentException("not retryable");
-    }
-  }
+    /** 标 @RetryOn 但只重试 IllegalStateException;execute 抛不匹配的 IllegalArgumentException。 */
+    @RetryOn(value = IllegalStateException.class, maxAttempts = 4, initialDelayMillis = 1, backoff = Backoff.FIXED)
+    static class MismatchHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
 
-  /** 同时标两注解,但 execute 永远抛匹配异常 → 重试耗尽仍失败,验证幂等外层不 record。 */
-  @Idempotent(key = "fail:{tenantId}:{orderId}")
-  @RetryOn(
-      value = IllegalStateException.class,
-      maxAttempts = 3,
-      initialDelayMillis = 1,
-      backoff = Backoff.FIXED)
-  static class AlwaysFailingBothHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
+        // 仅抛模拟异常、不提交外部动作，保持本用例验证“异常类型不匹配”而非安全门提前退出。
+        @Override
+        public boolean isSafeToReplay(SdkTaskContext ctx) {
+            return true;
+        }
 
-    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
-    @Override
-    public boolean isSafeToReplay(SdkTaskContext ctx) {
-      return true;
-    }
+        @Override
+        public String taskType() {
+            return "tt";
+        }
 
-    @Override
-    public String taskType() {
-      return "tt";
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            executions.incrementAndGet();
+            throw new IllegalArgumentException("not retryable");
+        }
     }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      executions.incrementAndGet();
-      throw new IllegalStateException("permanent boom");
-    }
-  }
+    /** 同时标两注解,但 execute 永远抛匹配异常 → 重试耗尽仍失败,验证幂等外层不 record。 */
+    @Idempotent(key = "fail:{tenantId}:{orderId}")
+    @RetryOn(value = IllegalStateException.class, maxAttempts = 3, initialDelayMillis = 1, backoff = Backoff.FIXED)
+    static class AlwaysFailingBothHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
 
-  /** 标两注解 + 自定义 descriptor / cancel,验证 auto-wrap 后元数据方法透传到原始 handler。 */
-  @Idempotent(key = "meta:{tenantId}:{orderId}")
-  @RetryOn(
-      value = IllegalStateException.class,
-      maxAttempts = 2,
-      initialDelayMillis = 1,
-      backoff = Backoff.FIXED)
-  static class MetadataHandler implements SdkTaskHandler {
-    final AtomicInteger cancelCalls = new AtomicInteger();
-    String lastCancelArg;
-    final SdkTaskTypeDescriptor descriptor =
-        SdkTaskTypeDescriptor.builder().code("ignored-by-framework").build();
+        // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+        @Override
+        public boolean isSafeToReplay(SdkTaskContext ctx) {
+            return true;
+        }
 
-    @Override
-    public String taskType() {
-      return "meta_type";
-    }
+        @Override
+        public String taskType() {
+            return "tt";
+        }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      return SdkTaskResult.ok();
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            executions.incrementAndGet();
+            throw new IllegalStateException("permanent boom");
+        }
     }
 
-    @Override
-    public void cancel(String taskInstanceId) {
-      cancelCalls.incrementAndGet();
-      this.lastCancelArg = taskInstanceId;
+    /** 标两注解 + 自定义 descriptor / cancel,验证 auto-wrap 后元数据方法透传到原始 handler。 */
+    @Idempotent(key = "meta:{tenantId}:{orderId}")
+    @RetryOn(value = IllegalStateException.class, maxAttempts = 2, initialDelayMillis = 1, backoff = Backoff.FIXED)
+    static class MetadataHandler implements SdkTaskHandler {
+        final AtomicInteger cancelCalls = new AtomicInteger();
+        String lastCancelArg;
+        final SdkTaskTypeDescriptor descriptor =
+                SdkTaskTypeDescriptor.builder().code("ignored-by-framework").build();
+
+        @Override
+        public String taskType() {
+            return "meta_type";
+        }
+
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            return SdkTaskResult.ok();
+        }
+
+        @Override
+        public void cancel(String taskInstanceId) {
+            cancelCalls.incrementAndGet();
+            this.lastCancelArg = taskInstanceId;
+        }
+
+        @Override
+        public SdkTaskTypeDescriptor descriptor() {
+            return descriptor;
+        }
     }
 
-    @Override
-    public SdkTaskTypeDescriptor descriptor() {
-      return descriptor;
-    }
-  }
+    /** 无注解。 */
+    static class PlainHandler implements SdkTaskHandler {
+        final AtomicInteger executions = new AtomicInteger();
 
-  /** 无注解。 */
-  static class PlainHandler implements SdkTaskHandler {
-    final AtomicInteger executions = new AtomicInteger();
+        @Override
+        public String taskType() {
+            return "tt";
+        }
 
-    @Override
-    public String taskType() {
-      return "tt";
-    }
-
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      executions.incrementAndGet();
-      return SdkTaskResult.ok("plain");
-    }
-  }
-
-  /** 记录调用的 fake store(可预置命中结果)。 */
-  static final class RecordingStore implements SdkIdempotencyStore {
-    final Map<String, SdkIdempotencySnapshot> map = new HashMap<>();
-    final Set<String> placeholders = new HashSet<>();
-    final AtomicInteger findCalls = new AtomicInteger();
-    final AtomicInteger recordCalls = new AtomicInteger();
-
-    @Override
-    public boolean tryAcquire(String key, long ttlMillis) {
-      if (map.containsKey(key) || placeholders.contains(key)) {
-        return false;
-      }
-      placeholders.add(key);
-      return true;
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            executions.incrementAndGet();
+            return SdkTaskResult.ok("plain");
+        }
     }
 
-    @Override
-    public Optional<SdkIdempotencySnapshot> find(String key) {
-      findCalls.incrementAndGet();
-      return Optional.ofNullable(map.get(key));
+    /** 记录调用的 fake store(可预置命中结果)。 */
+    static final class RecordingStore implements SdkIdempotencyStore {
+        final Map<String, SdkIdempotencySnapshot> map = new HashMap<>();
+        final Set<String> placeholders = new HashSet<>();
+        final AtomicInteger findCalls = new AtomicInteger();
+        final AtomicInteger recordCalls = new AtomicInteger();
+
+        @Override
+        public boolean tryAcquire(String key, long ttlMillis) {
+            if (map.containsKey(key) || placeholders.contains(key)) {
+                return false;
+            }
+            placeholders.add(key);
+            return true;
+        }
+
+        @Override
+        public Optional<SdkIdempotencySnapshot> find(String key) {
+            findCalls.incrementAndGet();
+            return Optional.ofNullable(map.get(key));
+        }
+
+        @Override
+        public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
+            recordCalls.incrementAndGet();
+            map.put(key, entity);
+            placeholders.remove(key);
+        }
+
+        @Override
+        public void release(String key) {
+            placeholders.remove(key);
+        }
     }
 
-    @Override
-    public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
-      recordCalls.incrementAndGet();
-      map.put(key, entity);
-      placeholders.remove(key);
+    // ─── tests ───────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("仅 @RetryOn:4 参 dispatcher 构造后,匹配异常会重试到成功")
+    void shouldRetry_whenRetryOnHandlerThrowsTransient() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        RetryOnlyHandler handler = new RetryOnlyHandler(2); // 前 2 次抛,第 3 次成功
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
+
+        // 执行
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+
+        // 断言
+        assertThat(handler.executions.get()).isEqualTo(3);
     }
 
-    @Override
-    public void release(String key) {
-      placeholders.remove(key);
+    @Test
+    @DisplayName("仅 @Idempotent + store:同 key 第二次命中缓存,handler 不再执行")
+    void shouldHitCache_whenSameKeyDispatchedTwice() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        IdempotentOnlyHandler handler = new IdempotentOnlyHandler();
+        RecordingStore store = new RecordingStore();
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
+
+        // 执行
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+
+        // 断言
+        assertThat(handler.executions.get()).isEqualTo(1);
+        assertThat(store.recordCalls.get()).isEqualTo(1);
+        assertThat(store.findCalls.get()).isEqualTo(1);
     }
-  }
 
-  // ─── tests ───────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("同时标两注解(idempotent 外/retry 内):单次重试到成功 + 记一次幂等;再次同 key 命中、不重试")
+    void shouldRetryThenIdempotent_whenBothAnnotated() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        BothHandler handler = new BothHandler();
+        handler.failuresBeforeSuccess = 1; // 第一次执行内:1 次瞬时失败 + 1 次成功
+        RecordingStore store = new RecordingStore();
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
 
-  @Test
-  @DisplayName("仅 @RetryOn:4 参 dispatcher 构造后,匹配异常会重试到成功")
-  void shouldRetry_whenRetryOnHandlerThrowsTransient() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    RetryOnlyHandler handler = new RetryOnlyHandler(2); // 前 2 次抛,第 3 次成功
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
+        // 执行 — 第一次:retry 内层吃掉瞬时异常,成功后 idempotent 外层 record
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // 执行
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+        // 断言 (a) + (b)
+        assertThat(handler.executions.get()).isEqualTo(2); // 1 失败 + 1 成功
+        assertThat(store.recordCalls.get()).isEqualTo(1);
 
-    // 断言
-    assertThat(handler.executions.get()).isEqualTo(3);
-  }
+        // 执行 — 第二次同 key:idempotent 命中,handler 不再被调,也不进 retry
+        handler.failuresBeforeSuccess = 99; // 若再被调用必失败 → 证明根本没调
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-  @Test
-  @DisplayName("仅 @Idempotent + store:同 key 第二次命中缓存,handler 不再执行")
-  void shouldHitCache_whenSameKeyDispatchedTwice() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    IdempotentOnlyHandler handler = new IdempotentOnlyHandler();
-    RecordingStore store = new RecordingStore();
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
+        // 断言 (c)
+        assertThat(handler.executions.get()).isEqualTo(2); // 没增加
+        assertThat(store.recordCalls.get()).isEqualTo(1); // 没再记
+        assertThat(store.findCalls.get()).isEqualTo(1);
+    }
 
-    // 执行
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+    @Test
+    @DisplayName("@Idempotent 但 store=null(3 参构造器)→ 构造期抛 IllegalStateException,消息含 taskType")
+    void shouldFailFast_whenIdempotentHandlerButNoStore() {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        Map<String, SdkTaskHandler> handlers = Map.of("tt", new IdempotentOnlyHandler());
 
-    // 断言
-    assertThat(handler.executions.get()).isEqualTo(1);
-    assertThat(store.recordCalls.get()).isEqualTo(1);
-    assertThat(store.findCalls.get()).isEqualTo(1);
-  }
+        // 执行并断言
+        assertThatThrownBy(() -> new TaskDispatcher(config, handlers, http))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("tt")
+                .hasMessageContaining("SdkIdempotencyStore");
+    }
 
-  @Test
-  @DisplayName("同时标两注解(idempotent 外/retry 内):单次重试到成功 + 记一次幂等;再次同 key 命中、不重试")
-  void shouldRetryThenIdempotent_whenBothAnnotated() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    BothHandler handler = new BothHandler();
-    handler.failuresBeforeSuccess = 1; // 第一次执行内:1 次瞬时失败 + 1 次成功
-    RecordingStore store = new RecordingStore();
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
+    @Test
+    @DisplayName("无注解 handler → 原样,不包装,行为不变")
+    void shouldNotWrap_whenNoAnnotation() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        PlainHandler handler = new PlainHandler();
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // 执行 — 第一次:retry 内层吃掉瞬时异常,成功后 idempotent 外层 record
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+        // 执行
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // 断言 (a) + (b)
-    assertThat(handler.executions.get()).isEqualTo(2); // 1 失败 + 1 成功
-    assertThat(store.recordCalls.get()).isEqualTo(1);
+        // 断言
+        assertThat(handler.executions.get()).isEqualTo(1);
+    }
 
-    // 执行 — 第二次同 key:idempotent 命中,handler 不再被调,也不进 retry
-    handler.failuresBeforeSuccess = 99; // 若再被调用必失败 → 证明根本没调
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+    @Test
+    @DisplayName("两注解 + 重试耗尽仍 fail → idempotent 外层不 record;同 key 再来仍会重新执行")
+    void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        AlwaysFailingBothHandler handler = new AlwaysFailingBothHandler();
+        RecordingStore store = new RecordingStore();
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
 
-    // 断言 (c)
-    assertThat(handler.executions.get()).isEqualTo(2); // 没增加
-    assertThat(store.recordCalls.get()).isEqualTo(1); // 没再记
-    assertThat(store.findCalls.get()).isEqualTo(1);
-  }
+        // 执行 — retry 内层把 3 次都吃掉仍失败,idempotent 外层拿到失败结果(success=false)
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-  @Test
-  @DisplayName("@Idempotent 但 store=null(3 参构造器)→ 构造期抛 IllegalStateException,消息含 taskType")
-  void shouldFailFast_whenIdempotentHandlerButNoStore() {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    Map<String, SdkTaskHandler> handlers = Map.of("tt", new IdempotentOnlyHandler());
+        // 断言:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
+        assertThat(handler.executions.get()).isEqualTo(3);
+        assertThat(store.recordCalls.get()).isZero();
+        assertThat(store.findCalls.get()).isZero();
 
-    // 执行并断言
-    assertThatThrownBy(() -> new TaskDispatcher(config, handlers, http))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("tt")
-        .hasMessageContaining("SdkIdempotencyStore");
-  }
+        // 执行 — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-  @Test
-  @DisplayName("无注解 handler → 原样,不包装,行为不变")
-  void shouldNotWrap_whenNoAnnotation() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    PlainHandler handler = new PlainHandler();
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
+        // 断言
+        assertThat(handler.executions.get()).isEqualTo(6); // 又跑 3 次
+        assertThat(store.recordCalls.get()).isZero();
+        assertThat(store.findCalls.get()).isZero();
+    }
 
-    // 执行
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+    @Test
+    @DisplayName("auto-wrap 后 taskType / descriptor / cancel 透传到原始 handler(装饰器不丢元数据)")
+    void shouldDelegateMetadataMethods_whenWrapped() {
+        // 准备:按 TaskDispatcher.decorate 同样的顺序(retry 内 / idempotent 外)织入两层装饰器
+        MetadataHandler original = new MetadataHandler();
+        SdkTaskHandler retryWrapped = SdkRetryableHandler.wrapAround(original, original);
+        SdkTaskHandler wrapped = SdkIdempotentHandler.wrapAround(original, retryWrapped, new RecordingStore());
 
-    // 断言
-    assertThat(handler.executions.get()).isEqualTo(1);
-  }
+        // 断言:不是原始实例(已被两层装饰),但元数据方法全透传
+        assertThat(wrapped).isNotSameAs(original);
+        assertThat(wrapped.taskType()).isEqualTo("meta_type");
+        assertThat(wrapped.descriptor()).isSameAs(original.descriptor);
 
-  @Test
-  @DisplayName("两注解 + 重试耗尽仍 fail → idempotent 外层不 record;同 key 再来仍会重新执行")
-  void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    AlwaysFailingBothHandler handler = new AlwaysFailingBothHandler();
-    RecordingStore store = new RecordingStore();
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
+        // 执行并断言:cancel 透传到底层原始 handler
+        wrapped.cancel("ti-77");
+        assertThat(original.cancelCalls.get()).isEqualTo(1);
+        assertThat(original.lastCancelArg).isEqualTo("ti-77");
+    }
 
-    // 执行 — retry 内层把 3 次都吃掉仍失败,idempotent 外层拿到失败结果(success=false)
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+    @Test
+    @DisplayName("retryOn 不匹配的异常透传,不重试(IOException 不在 value 列表)")
+    void shouldNotRetry_whenExceptionTypeMismatch() throws IOException {
+        // 准备
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubClaimPayload(http);
+        MismatchHandler handler = new MismatchHandler();
+        dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // 断言:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
-    assertThat(handler.executions.get()).isEqualTo(3);
-    assertThat(store.recordCalls.get()).isZero();
-    assertThat(store.findCalls.get()).isZero();
+        // 执行 — dispatcher 回退把异常转 fail report,不抛出
+        dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // 执行 — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
-
-    // 断言
-    assertThat(handler.executions.get()).isEqualTo(6); // 又跑 3 次
-    assertThat(store.recordCalls.get()).isZero();
-    assertThat(store.findCalls.get()).isZero();
-  }
-
-  @Test
-  @DisplayName("auto-wrap 后 taskType / descriptor / cancel 透传到原始 handler(装饰器不丢元数据)")
-  void shouldDelegateMetadataMethods_whenWrapped() {
-    // 准备:按 TaskDispatcher.decorate 同样的顺序(retry 内 / idempotent 外)织入两层装饰器
-    MetadataHandler original = new MetadataHandler();
-    SdkTaskHandler retryWrapped = SdkRetryableHandler.wrapAround(original, original);
-    SdkTaskHandler wrapped =
-        SdkIdempotentHandler.wrapAround(original, retryWrapped, new RecordingStore());
-
-    // 断言:不是原始实例(已被两层装饰),但元数据方法全透传
-    assertThat(wrapped).isNotSameAs(original);
-    assertThat(wrapped.taskType()).isEqualTo("meta_type");
-    assertThat(wrapped.descriptor()).isSameAs(original.descriptor);
-
-    // 执行并断言:cancel 透传到底层原始 handler
-    wrapped.cancel("ti-77");
-    assertThat(original.cancelCalls.get()).isEqualTo(1);
-    assertThat(original.lastCancelArg).isEqualTo("ti-77");
-  }
-
-  @Test
-  @DisplayName("retryOn 不匹配的异常透传,不重试(IOException 不在 value 列表)")
-  void shouldNotRetry_whenExceptionTypeMismatch() throws IOException {
-    // 准备
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubClaimPayload(http);
-    MismatchHandler handler = new MismatchHandler();
-    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
-
-    // 执行 — dispatcher 回退把异常转 fail report,不抛出
-    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
-
-    // 断言
-    assertThat(handler.executions.get()).isEqualTo(1);
-  }
+        // 断言
+        assertThat(handler.executions.get()).isEqualTo(1);
+    }
 }

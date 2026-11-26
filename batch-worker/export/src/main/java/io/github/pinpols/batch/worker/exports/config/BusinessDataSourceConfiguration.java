@@ -29,97 +29,81 @@ import org.springframework.core.env.Environment;
  * 业务数据源配置，提供导出任务所需的业务库 MyBatis SqlSession。装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。
  */
 @Configuration(value = "exportWorkerBusinessDataSourceConfiguration", proxyBeanMethods = false)
-@EnableConfigurationProperties({
-  BusinessDataSourceProperties.class,
-  BusinessRoutingProperties.class,
-  RlsProperties.class
+@EnableConfigurationProperties({BusinessDataSourceProperties.class, BusinessRoutingProperties.class, RlsProperties.class
 })
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "exportBusinessHikariConfig")
-  @ConfigurationProperties("batch.datasource.business.hikari")
-  public HikariConfig exportBusinessHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "exportBusinessHikariConfig")
+    @ConfigurationProperties("batch.datasource.business.hikari")
+    public HikariConfig exportBusinessHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "exportBusinessDataSource", destroyMethod = "close")
-  public DataSource exportBusinessDataSource(
-      BusinessDataSourceProperties properties,
-      BusinessRoutingProperties routingProperties,
-      BusinessTenantPlacementMapper placementMapper,
-      @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
-    String appName = ApplicationNameProvider.resolve(environment, "batch-worker-export");
-    return WorkerDataSourceSupport.buildBusinessDataSource(
-        hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
-  }
+    @Bean(name = "exportBusinessDataSource", destroyMethod = "close")
+    public DataSource exportBusinessDataSource(
+            BusinessDataSourceProperties properties,
+            BusinessRoutingProperties routingProperties,
+            BusinessTenantPlacementMapper placementMapper,
+            @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
+        String appName = ApplicationNameProvider.resolve(environment, "batch-worker-export");
+        return WorkerDataSourceSupport.buildBusinessDataSource(
+                hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
+    }
 
-  @Bean(name = "exportBusinessSqlSessionFactory")
-  public SqlSessionFactory exportBusinessSqlSessionFactory(
-      @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) throws Exception {
-    return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(exportBusinessDataSource);
-  }
+    @Bean(name = "exportBusinessSqlSessionFactory")
+    public SqlSessionFactory exportBusinessSqlSessionFactory(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) throws Exception {
+        return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(exportBusinessDataSource);
+    }
 
-  @Bean(name = "exportBusinessSqlSessionTemplate")
-  public SqlSessionTemplate exportBusinessSqlSessionTemplate(
-      @Qualifier("exportBusinessSqlSessionFactory")
-          SqlSessionFactory exportBusinessSqlSessionFactory) {
-    return new SqlSessionTemplate(exportBusinessSqlSessionFactory);
-  }
+    @Bean(name = "exportBusinessSqlSessionTemplate")
+    public SqlSessionTemplate exportBusinessSqlSessionTemplate(
+            @Qualifier("exportBusinessSqlSessionFactory") SqlSessionFactory exportBusinessSqlSessionFactory) {
+        return new SqlSessionTemplate(exportBusinessSqlSessionFactory);
+    }
 
-  /**
-   * RLS 闭世界健康探针 —— export worker 也读 biz 库,与 process 同等守护(缺 ENABLE/FORCE/合规 policy 即 DOWN)。 默认开,经
-   * {@code batch.business.rls.health-check.enabled=false} 关(测试库未跑 rls-phase-a)。
-   */
-  @Bean(name = "exportRlsPolicyHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public RlsPolicyHealthIndicator exportRlsPolicyHealthIndicator(
-      @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(
-        exportBusinessDataSource, rlsProperties);
-  }
+    /**
+     * RLS 闭世界健康探针 —— export worker 也读 biz 库,与 process 同等守护(缺 ENABLE/FORCE/合规 policy 即 DOWN)。 默认开,经
+     * {@code batch.business.rls.health-check.enabled=false} 关(测试库未跑 rls-phase-a)。
+     */
+    @Bean(name = "exportRlsPolicyHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public RlsPolicyHealthIndicator exportRlsPolicyHealthIndicator(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(exportBusinessDataSource, rlsProperties);
+    }
 
-  /** 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启；测试库必须显式关闭。 */
-  @Bean(name = "exportRlsStartupFailFastCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "exportBusinessDataSource")
-  public RlsStartupFailFastCheck exportRlsStartupFailFastCheck(
-      @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource,
-      RlsProperties rlsProperties) {
-    return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(
-        exportBusinessDataSource, rlsProperties);
-  }
+    /** 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启；测试库必须显式关闭。 */
+    @Bean(name = "exportRlsStartupFailFastCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "exportBusinessDataSource")
+    public RlsStartupFailFastCheck exportRlsStartupFailFastCheck(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource, RlsProperties rlsProperties) {
+        return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(exportBusinessDataSource, rlsProperties);
+    }
 
-  @Bean(name = "exportBusinessDataSourceRoleHealthIndicator")
-  @ConditionalOnProperty(
-      name = "batch.business.rls.health-check.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  public BusinessDataSourceRoleHealthIndicator exportBusinessDataSourceRoleHealthIndicator(
-      @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(
-        exportBusinessDataSource);
-  }
+    @Bean(name = "exportBusinessDataSourceRoleHealthIndicator")
+    @ConditionalOnProperty(
+            name = "batch.business.rls.health-check.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    public BusinessDataSourceRoleHealthIndicator exportBusinessDataSourceRoleHealthIndicator(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(exportBusinessDataSource);
+    }
 
-  @Bean(name = "exportBusinessDataSourceRoleStartupCheck")
-  @ConditionalOnProperty(
-      name = "batch.rls.startup-fail-fast",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnBean(name = "exportBusinessDataSource")
-  public BusinessDataSourceRoleStartupCheck exportBusinessDataSourceRoleStartupCheck(
-      @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) {
-    return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(
-        exportBusinessDataSource);
-  }
+    @Bean(name = "exportBusinessDataSourceRoleStartupCheck")
+    @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(name = "exportBusinessDataSource")
+    public BusinessDataSourceRoleStartupCheck exportBusinessDataSourceRoleStartupCheck(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) {
+        return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(exportBusinessDataSource);
+    }
 }

@@ -22,18 +22,16 @@ import org.springframework.http.MediaType;
  *   <li>同 tenantId + channelCode 重复 → 唯一约束撞
  * </ul>
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("文件通道写路径: 编码与通道类型校验,落库字段透传与唯一约束")
 class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code) {
-    return body(code, "SFTP");
-  }
+    private String body(String code) {
+        return body(code, "SFTP");
+    }
 
-  private String body(String code, String channelType) {
-    return """
+    private String body(String code, String channelType) {
+        return """
         {
           "tenantId": "int-fc-ta",
           "channelCode": "%s",
@@ -46,280 +44,260 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
           "enabled": false
         }
         """.formatted(code, channelType).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建文件通道: 返回成功,落库的租户,编码与通道类型与请求一致")
-  void shouldCreateFileChannelWithValidCode() {
-    String code = "int_fc_create_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建文件通道: 返回成功,落库的租户,编码与通道类型与请求一致")
+    void shouldCreateFileChannelWithValidCode() {
+        String code = "int_fc_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String selectCreatedChannelSql = """
+        String selectCreatedChannelSql = """
         SELECT tenant_id, channel_code, channel_type, target_endpoint
         FROM batch.file_channel_config
         WHERE channel_code = ?
         """;
-    var row = jdbcTemplate.queryForMap(selectCreatedChannelSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-fc-ta");
-    assertThat(row).containsEntry("channel_code", code);
-    assertThat(row).containsEntry("channel_type", "SFTP");
+        var row = jdbcTemplate.queryForMap(selectCreatedChannelSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-fc-ta");
+        assertThat(row).containsEntry("channel_code", code);
+        assertThat(row).containsEntry("channel_type", "SFTP");
 
-    String deleteCreatedChannelSql = """
+        String deleteCreatedChannelSql = """
         DELETE FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    jdbcTemplate.update(deleteCreatedChannelSql, code);
-  }
+        jdbcTemplate.update(deleteCreatedChannelSql, code);
+    }
 
-  @Test
-  @DisplayName("非法通道 JSON: 返回请求错误且不落库")
-  void shouldRejectInvalidChannelConfigJson() {
-    String code = "int_fc_invalid_json_" + System.currentTimeMillis();
-    String requestBody = body(code)
-        .replace(
-            "\"enabled\": false",
-            "\"enabled\": false, \"configJson\": " + JsonUtils.toJson("{invalid"));
+    @Test
+    @DisplayName("非法通道 JSON: 返回请求错误且不落库")
+    void shouldRejectInvalidChannelConfigJson() {
+        String code = "int_fc_invalid_json_" + System.currentTimeMillis();
+        String requestBody = body(code)
+                .replace("\"enabled\": false", "\"enabled\": false, \"configJson\": " + JsonUtils.toJson("{invalid"));
 
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-invalid-json-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(requestBody)
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-invalid-json-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
-    String invalidJsonChannelCountSql = """
+        String invalidJsonChannelCountSql = """
         SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    Long count = jdbcTemplate.queryForObject(invalidJsonChannelCountSql, Long.class, code);
-    assertThat(count).isZero();
-  }
+        Long count = jdbcTemplate.queryForObject(invalidJsonChannelCountSql, Long.class, code);
+        assertThat(count).isZero();
+    }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误且不落库")
-  void shouldRejectInvalidChannelCodeWithSpaces() {
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("编码含空格: 返回校验错误且不落库")
+    void shouldRejectInvalidChannelCodeWithSpaces() {
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    String spaceCodeChannelCountSql = """
+        String spaceCodeChannelCountSql = """
         SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    Long channelCount = jdbcTemplate.queryForObject(spaceCodeChannelCountSql, Long.class, "q q q");
-    assertThat(channelCount).isZero();
-  }
+        Long channelCount = jdbcTemplate.queryForObject(spaceCodeChannelCountSql, Long.class, "q q q");
+        assertThat(channelCount).isZero();
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChineseChannelCode() {
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("中文渠道"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChineseChannelCode() {
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("中文渠道"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("创建时传入不支持的通道类型: 返回参数非法且不落库")
-  void shouldRejectUnsupportedChannelTypeBeforeDatabaseWrite() {
-    String code = "int_fc_bad_type_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建时传入不支持的通道类型: 返回参数非法且不落库")
+    void shouldRejectUnsupportedChannelTypeBeforeDatabaseWrite() {
+        String code = "int_fc_bad_type_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-type-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code, "WEBHOOK_RAW"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-type-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code, "WEBHOOK_RAW"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
 
-    String unsupportedTypeChannelCountSql = """
+        String unsupportedTypeChannelCountSql = """
         SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    Long channelCount =
-        jdbcTemplate.queryForObject(unsupportedTypeChannelCountSql, Long.class, code);
-    assertThat(channelCount).isZero();
-  }
+        Long channelCount = jdbcTemplate.queryForObject(unsupportedTypeChannelCountSql, Long.class, code);
+        assertThat(channelCount).isZero();
+    }
 
-  @Test
-  @DisplayName("更新为不支持的通道类型: 返回参数非法,库内通道类型保持原值")
-  void shouldRejectUnsupportedChannelTypeOnUpdate() {
-    String code = "int_fc_upd_bad_type_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("更新为不支持的通道类型: 返回参数非法,库内通道类型保持原值")
+    void shouldRejectUnsupportedChannelTypeOnUpdate() {
+        String code = "int_fc_upd_bad_type_" + System.currentTimeMillis();
 
-    // arrange: create a valid channel first (channelType=SFTP)
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-upd-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        // arrange: create a valid channel first (channelType=SFTP)
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-upd-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String findChannelIdSql = """
+        String findChannelIdSql = """
         SELECT id FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    Long id = jdbcTemplate.queryForObject(findChannelIdSql, Long.class, code);
+        Long id = jdbcTemplate.queryForObject(findChannelIdSql, Long.class, code);
 
-    // 执行：PUT 请求将 channelType 改为未知值，服务必须拒绝。
-    String updateBody =
-        "{" + "\"tenantId\":\"int-fc-ta\"," + "\"channelType\":\"WEBHOOK_RAW\"" + "}";
-    client
-        .put()
-        .uri("/api/console/file-channels/" + id)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(updateBody)
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
+        // 执行：PUT 请求将 channelType 改为未知值，服务必须拒绝。
+        String updateBody = "{" + "\"tenantId\":\"int-fc-ta\"," + "\"channelType\":\"WEBHOOK_RAW\"" + "}";
+        client.put()
+                .uri("/api/console/file-channels/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updateBody)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
 
-    // assert: stored channel_type unchanged
-    String findChannelTypeSql = """
+        // assert: stored channel_type unchanged
+        String findChannelTypeSql = """
         SELECT channel_type FROM batch.file_channel_config WHERE id = ?
         """;
-    String channelType = jdbcTemplate.queryForObject(findChannelTypeSql, String.class, id);
-    assertThat(channelType).isEqualTo("SFTP");
+        String channelType = jdbcTemplate.queryForObject(findChannelTypeSql, String.class, id);
+        assertThat(channelType).isEqualTo("SFTP");
 
-    String deleteChannelSql = """
+        String deleteChannelSql = """
         DELETE FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    jdbcTemplate.update(deleteChannelSql, code);
-  }
+        jdbcTemplate.update(deleteChannelSql, code);
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复通道")
-  void shouldRejectDuplicateChannelCode() {
-    String code = "int_fc_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复通道")
+    void shouldRejectDuplicateChannelCode() {
+        String code = "int_fc_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    String deleteDuplicateChannelSql = """
+        String deleteDuplicateChannelSql = """
         DELETE FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    jdbcTemplate.update(deleteDuplicateChannelSql, code);
-  }
+        jdbcTemplate.update(deleteDuplicateChannelSql, code);
+    }
 
-  @Test
-  @DisplayName("查询响应递归脱敏通道凭据且更新回传掩码不会覆盖存量凭据")
-  void shouldRedactChannelSecretsAndPreserveMaskedValuesOnUpdate() {
-    String code = "int_fc_secret_" + System.currentTimeMillis();
-    String configJson = "{\"endpoint\":\"sftp.example\",\"auth\":{"
-        + "\"password\":\"secret-pass\",\"apiKey\":\"secret-key\"}}";
-    String createBody = body(code)
-        .replace(
-            "sftp://example.com:22/inbox",
-            "sftp://user:pass@sftp.example:22/inbox?token=endpoint-token")
-        .replace(
-            "\"enabled\": false",
-            "\"enabled\": false, \"configJson\": " + JsonUtils.toJson(configJson));
-    String createResponse = client
-        .post()
-        .uri("/api/console/file-channels")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-secret-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(createBody)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .returnResult()
-        .getResponseBody();
+    @Test
+    @DisplayName("查询响应递归脱敏通道凭据且更新回传掩码不会覆盖存量凭据")
+    void shouldRedactChannelSecretsAndPreserveMaskedValuesOnUpdate() {
+        String code = "int_fc_secret_" + System.currentTimeMillis();
+        String configJson = "{\"endpoint\":\"sftp.example\",\"auth\":{"
+                + "\"password\":\"secret-pass\",\"apiKey\":\"secret-key\"}}";
+        String createBody = body(code)
+                .replace("sftp://example.com:22/inbox", "sftp://user:pass@sftp.example:22/inbox?token=endpoint-token")
+                .replace("\"enabled\": false", "\"enabled\": false, \"configJson\": " + JsonUtils.toJson(configJson));
+        String createResponse = client.post()
+                .uri("/api/console/file-channels")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-secret-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(createBody)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
 
-    assertThat(createResponse)
-        .contains("****")
-        .doesNotContain("secret-pass", "secret-key", "user:pass", "endpoint-token");
+        assertThat(createResponse)
+                .contains("****")
+                .doesNotContain("secret-pass", "secret-key", "user:pass", "endpoint-token");
 
-    String findSecretChannelIdSql = """
+        String findSecretChannelIdSql = """
         SELECT id FROM batch.file_channel_config WHERE channel_code = ?
         """;
-    Long id = jdbcTemplate.queryForObject(findSecretChannelIdSql, Long.class, code);
-    String maskedConfig =
-        "{\"endpoint\":\"new.example\",\"auth\":{" + "\"password\":\"****\",\"apiKey\":\"****\"}}";
-    String updateBody = JsonUtils.toJson(Map.of(
-        "tenantId",
-        "int-fc-ta",
-        "channelName",
-        "updated channel",
-        "targetEndpoint",
-        "sftp://****@sftp.example:22/inbox?token=****",
-        "configJson",
-        maskedConfig));
+        Long id = jdbcTemplate.queryForObject(findSecretChannelIdSql, Long.class, code);
+        String maskedConfig =
+                "{\"endpoint\":\"new.example\",\"auth\":{" + "\"password\":\"****\",\"apiKey\":\"****\"}}";
+        String updateBody = JsonUtils.toJson(Map.of(
+                "tenantId",
+                "int-fc-ta",
+                "channelName",
+                "updated channel",
+                "targetEndpoint",
+                "sftp://****@sftp.example:22/inbox?token=****",
+                "configJson",
+                maskedConfig));
 
-    client
-        .put()
-        .uri("/api/console/file-channels/" + id)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(updateBody)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(response -> assertThat(response)
-            .contains("new.example", "****")
-            .doesNotContain("secret-pass", "secret-key"));
+        client.put()
+                .uri("/api/console/file-channels/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updateBody)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(response -> assertThat(response)
+                        .contains("new.example", "****")
+                        .doesNotContain("secret-pass", "secret-key"));
 
-    String storedConfigSql = """
+        String storedConfigSql = """
         SELECT config_json::text FROM batch.file_channel_config WHERE id = ?
         """;
-    String storedConfig = jdbcTemplate.queryForObject(storedConfigSql, String.class, id);
-    assertThat(storedConfig)
-        .contains("secret-pass", "secret-key", "new.example")
-        .doesNotContain("****");
-    String storedEndpointSql = """
+        String storedConfig = jdbcTemplate.queryForObject(storedConfigSql, String.class, id);
+        assertThat(storedConfig)
+                .contains("secret-pass", "secret-key", "new.example")
+                .doesNotContain("****");
+        String storedEndpointSql = """
         SELECT target_endpoint FROM batch.file_channel_config WHERE id = ?
         """;
-    String storedEndpoint = jdbcTemplate.queryForObject(storedEndpointSql, String.class, id);
-    assertThat(storedEndpoint)
-        .isEqualTo("sftp://user:pass@sftp.example:22/inbox?token=endpoint-token");
+        String storedEndpoint = jdbcTemplate.queryForObject(storedEndpointSql, String.class, id);
+        assertThat(storedEndpoint).isEqualTo("sftp://user:pass@sftp.example:22/inbox?token=endpoint-token");
 
-    String deleteSecretChannelSql = """
+        String deleteSecretChannelSql = """
         DELETE FROM batch.file_channel_config WHERE id = ?
         """;
-    jdbcTemplate.update(deleteSecretChannelSql, id);
-  }
+        jdbcTemplate.update(deleteSecretChannelSql, id);
+    }
 }

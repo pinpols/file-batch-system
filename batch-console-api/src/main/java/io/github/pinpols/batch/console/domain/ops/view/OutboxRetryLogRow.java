@@ -9,14 +9,14 @@ import java.time.Instant;
  * next_retry_at 为 TIMESTAMPTZ 可空。
  */
 public record OutboxRetryLogRow(
-    Long id,
-    Long outboxEventId,
-    String tenantId,
-    String eventType,
-    String eventKey,
-    String retryStatus,
-    Integer retryCount,
-    String retryPolicy,
-    Instant nextRetryAt,
-    Instant createdAt,
-    Instant updatedAt) {}
+        Long id,
+        Long outboxEventId,
+        String tenantId,
+        String eventType,
+        String eventKey,
+        String retryStatus,
+        Integer retryCount,
+        String retryPolicy,
+        Instant nextRetryAt,
+        Instant createdAt,
+        Instant updatedAt) {}

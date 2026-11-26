@@ -31,71 +31,68 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * <p>用 MyBatis 实际生成的 SQL 做 PREPARE，分别强制 generic 与 custom plan 并关闭顺序扫描，验证规划器能够使用重投候选索引。
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("Webhook 旧式重投扫描的候选索引:PENDING 与 EXHAUSTED 在 generic/custom 计划下都可走索引")
 class WebhookRetryCandidateIndexIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String RETRY_INDEX = "idx_webhook_delivery_log_legacy_retry";
+    private static final String RETRY_INDEX = "idx_webhook_delivery_log_legacy_retry";
 
-  @Autowired
-  private SqlSessionFactory sqlSessionFactory;
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
 
-  @Autowired
-  private DataSource dataSource;
+    @Autowired
+    private DataSource dataSource;
 
-  @ParameterizedTest(name = "{0}")
-  @ValueSource(strings = {"force_generic_plan", "force_custom_plan"})
-  @DisplayName("重投候选扫描在 generic 与 custom 计划下都使用重投候选索引")
-  void shouldUseRetryCandidateIndex_whenPlanningRelayScan(String planCacheMode) throws Exception {
-    Map<String, Object> parameters = new HashMap<>();
-    parameters.put("now", Instant.parse("2026-11-05T00:00:00Z"));
-    parameters.put("limit", 50);
-    parameters.put("eligibleStatuses", List.of("PENDING", "EXHAUSTED"));
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"force_generic_plan", "force_custom_plan"})
+    @DisplayName("重投候选扫描在 generic 与 custom 计划下都使用重投候选索引")
+    void shouldUseRetryCandidateIndex_whenPlanningRelayScan(String planCacheMode) throws Exception {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("now", Instant.parse("2026-11-05T00:00:00Z"));
+        parameters.put("limit", 50);
+        parameters.put("eligibleStatuses", List.of("PENDING", "EXHAUSTED"));
 
-    String plan = explainPrepared("findEligibleRetriesByStatuses", parameters, planCacheMode);
+        String plan = explainPrepared("findEligibleRetriesByStatuses", parameters, planCacheMode);
 
-    assertThat(plan).contains(RETRY_INDEX);
-  }
-
-  private String explainPrepared(
-      String statementId, Map<String, Object> parameters, String planCacheMode) throws Exception {
-    MappedStatement statement = sqlSessionFactory
-        .getConfiguration()
-        .getMappedStatement(ConsoleWebhookDeliveryLogMapper.class.getName() + "." + statementId);
-    BoundSql bound = statement.getBoundSql(parameters);
-    StringBuilder positional = new StringBuilder();
-    int index = 0;
-    for (char c : bound.getSql().toCharArray()) {
-      positional.append(c == '?' ? "$" + ++index : String.valueOf(c));
+        assertThat(plan).contains(RETRY_INDEX);
     }
-    MetaObject values = statement.getConfiguration().newMetaObject(parameters);
-    List<String> literals = new ArrayList<>();
-    for (ParameterMapping mapping : bound.getParameterMappings()) {
-      String property = mapping.getProperty();
-      Object value = bound.hasAdditionalParameter(property)
-          ? bound.getAdditionalParameter(property)
-          : values.getValue(property);
-      literals.add(value instanceof Number ? value.toString() : "'" + value + "'");
-    }
-    StringBuilder plan = new StringBuilder();
-    try (Connection connection = dataSource.getConnection();
-        Statement sql = connection.createStatement()) {
-      connection.setAutoCommit(false);
-      sql.execute("set local plan_cache_mode = " + planCacheMode);
-      sql.execute("set local enable_seqscan = off");
-      sql.execute("prepare relay_scan as " + positional);
-      try (ResultSet rows =
-          sql.executeQuery("explain execute relay_scan(" + String.join(", ", literals) + ")")) {
-        while (rows.next()) {
-          plan.append(rows.getString(1)).append('\n');
+
+    private String explainPrepared(String statementId, Map<String, Object> parameters, String planCacheMode)
+            throws Exception {
+        MappedStatement statement = sqlSessionFactory
+                .getConfiguration()
+                .getMappedStatement(ConsoleWebhookDeliveryLogMapper.class.getName() + "." + statementId);
+        BoundSql bound = statement.getBoundSql(parameters);
+        StringBuilder positional = new StringBuilder();
+        int index = 0;
+        for (char c : bound.getSql().toCharArray()) {
+            positional.append(c == '?' ? "$" + ++index : String.valueOf(c));
         }
-      } finally {
-        sql.execute("deallocate relay_scan");
-        connection.rollback();
-      }
+        MetaObject values = statement.getConfiguration().newMetaObject(parameters);
+        List<String> literals = new ArrayList<>();
+        for (ParameterMapping mapping : bound.getParameterMappings()) {
+            String property = mapping.getProperty();
+            Object value = bound.hasAdditionalParameter(property)
+                    ? bound.getAdditionalParameter(property)
+                    : values.getValue(property);
+            literals.add(value instanceof Number ? value.toString() : "'" + value + "'");
+        }
+        StringBuilder plan = new StringBuilder();
+        try (Connection connection = dataSource.getConnection();
+                Statement sql = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            sql.execute("set local plan_cache_mode = " + planCacheMode);
+            sql.execute("set local enable_seqscan = off");
+            sql.execute("prepare relay_scan as " + positional);
+            try (ResultSet rows = sql.executeQuery("explain execute relay_scan(" + String.join(", ", literals) + ")")) {
+                while (rows.next()) {
+                    plan.append(rows.getString(1)).append('\n');
+                }
+            } finally {
+                sql.execute("deallocate relay_scan");
+                connection.rollback();
+            }
+        }
+        return plan.toString();
     }
-    return plan.toString();
-  }
 }

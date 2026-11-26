@@ -25,39 +25,37 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleJobDependencyWaitControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestrator;
+    @Mock
+    private ConsoleOrchestratorPort orchestrator;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(metadataResolver);
-    when(metadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleJobDependencyWaitController(orchestrator, responseFactory))
-        .setControllerAdvice(ConsoleApiExceptionHandler.forStandaloneTest(responseFactory))
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(metadataResolver);
+        when(metadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleJobDependencyWaitController(orchestrator, responseFactory))
+                .setControllerAdvice(ConsoleApiExceptionHandler.forStandaloneTest(responseFactory))
+                .build();
+    }
 
-  @DisplayName("租户查询等待且不暴露启动载荷")
-  @Test
-  void shouldListTenantScopedWaitsWithoutExposingLaunchPayload() throws Exception {
-    when(orchestrator.listJobDependencyWaits("tenant-a", "WAITING", "JOB_B", 50))
-        .thenReturn(List.of());
+    @DisplayName("租户查询等待且不暴露启动载荷")
+    @Test
+    void shouldListTenantScopedWaitsWithoutExposingLaunchPayload() throws Exception {
+        when(orchestrator.listJobDependencyWaits("tenant-a", "WAITING", "JOB_B", 50))
+                .thenReturn(List.of());
 
-    mockMvc
-        .perform(get("/api/console/job-dependency-waits")
-            .param("tenantId", "tenant-a")
-            .param("waitStatus", "WAITING")
-            .param("jobCode", "JOB_B")
-            .param("limit", "50"))
-        .andExpect(status().isOk());
+        mockMvc.perform(get("/api/console/job-dependency-waits")
+                        .param("tenantId", "tenant-a")
+                        .param("waitStatus", "WAITING")
+                        .param("jobCode", "JOB_B")
+                        .param("limit", "50"))
+                .andExpect(status().isOk());
 
-    verify(orchestrator).listJobDependencyWaits("tenant-a", "WAITING", "JOB_B", 50);
-  }
+        verify(orchestrator).listJobDependencyWaits("tenant-a", "WAITING", "JOB_B", 50);
+    }
 }

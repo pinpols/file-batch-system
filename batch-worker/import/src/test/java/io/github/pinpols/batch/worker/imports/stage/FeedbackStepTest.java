@@ -26,104 +26,104 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("导入反馈阶段单测:审计聚合,演练跳过与空上下文回退")
 class FeedbackStepTest {
 
-  @Mock
-  private PlatformFileAuditRepository runtimeRepository;
+    @Mock
+    private PlatformFileAuditRepository runtimeRepository;
 
-  @InjectMocks
-  private FeedbackStep step;
+    @InjectMocks
+    private FeedbackStep step;
 
-  @Test
-  @DisplayName("访问阶段属性时返回反馈阶段标识")
-  void shouldReturnStageFeedback_whenStageAccessed() {
-    assertThat(step.stage()).isEqualTo(ImportStage.FEEDBACK);
-  }
+    @Test
+    @DisplayName("访问阶段属性时返回反馈阶段标识")
+    void shouldReturnStageFeedback_whenStageAccessed() {
+        assertThat(step.stage()).isEqualTo(ImportStage.FEEDBACK);
+    }
 
-  @Test
-  @DisplayName("上下文为空时返回失败，不访问审计仓储")
-  void shouldFail_whenContextIsNull() {
-    ImportStageResult result = step.execute(null);
+    @Test
+    @DisplayName("上下文为空时返回失败，不访问审计仓储")
+    void shouldFail_whenContextIsNull() {
+        ImportStageResult result = step.execute(null);
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_FEEDBACK_CONTEXT_MISSING");
-    verifyNoInteractions(runtimeRepository);
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_FEEDBACK_CONTEXT_MISSING");
+        verifyNoInteractions(runtimeRepository);
+    }
 
-  @Test
-  @DisplayName("happy path: 汇总 parsed/validated/loaded 三段计数 + pipelineInstanceId 写 audit")
-  void shouldAggregateCountsIntoAudit_whenAllAttributesPresent() {
-    // 准备
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-1");
-    context.setWorkerId("worker-A");
-    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, "1001");
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L);
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L);
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L);
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
-    context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
+    @Test
+    @DisplayName("happy path: 汇总 parsed/validated/loaded 三段计数 + pipelineInstanceId 写 audit")
+    void shouldAggregateCountsIntoAudit_whenAllAttributesPresent() {
+        // 准备
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-1");
+        context.setWorkerId("worker-A");
+        context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, "1001");
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L);
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L);
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
+        context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
 
-    // 执行
-    ImportStageResult result = step.execute(context);
+        // 执行
+        ImportStageResult result = step.execute(context);
 
-    // 断言
-    assertThat(result.success()).isTrue();
-    ArgumentCaptor<FileAuditParam> captor = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(captor.capture());
-    FileAuditParam audit = captor.getValue();
-    assertThat(audit.getFileId()).isEqualTo(1001L);
-    assertThat(audit.getTenantId()).isEqualTo("tenant-1");
-    assertThat(audit.getOperationType()).isEqualTo("IMPORT_FEEDBACK");
-    assertThat(audit.getOperationResult()).isEqualTo("SUCCESS");
-    assertThat(audit.getOperatorType()).isEqualTo("SYSTEM");
-    assertThat(audit.getOperatorId()).isEqualTo("worker-A");
-    assertThat(audit.getTraceId()).isEqualTo("trace-xyz");
-    assertThat(audit.getDetailSummary())
-        .asInstanceOf(InstanceOfAssertFactories.MAP)
-        .containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L)
-        .containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L)
-        .containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L)
-        .containsEntry(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
-  }
+        // 断言
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<FileAuditParam> captor = ArgumentCaptor.forClass(FileAuditParam.class);
+        verify(runtimeRepository).appendAudit(captor.capture());
+        FileAuditParam audit = captor.getValue();
+        assertThat(audit.getFileId()).isEqualTo(1001L);
+        assertThat(audit.getTenantId()).isEqualTo("tenant-1");
+        assertThat(audit.getOperationType()).isEqualTo("IMPORT_FEEDBACK");
+        assertThat(audit.getOperationResult()).isEqualTo("SUCCESS");
+        assertThat(audit.getOperatorType()).isEqualTo("SYSTEM");
+        assertThat(audit.getOperatorId()).isEqualTo("worker-A");
+        assertThat(audit.getTraceId()).isEqualTo("trace-xyz");
+        assertThat(audit.getDetailSummary())
+                .asInstanceOf(InstanceOfAssertFactories.MAP)
+                .containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L)
+                .containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L)
+                .containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L)
+                .containsEntry(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
+    }
 
-  @Test
-  @DisplayName("dry-run 模式：直接返回 success，不写 audit / 不调 runtimeRepository")
-  void shouldSkipAudit_whenDryRunFlagSet() {
-    ImportJobContext context = new ImportJobContext();
-    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
+    @Test
+    @DisplayName("dry-run 模式：直接返回 success，不写 audit / 不调 runtimeRepository")
+    void shouldSkipAudit_whenDryRunFlagSet() {
+        ImportJobContext context = new ImportJobContext();
+        context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
-    ImportStageResult result = step.execute(context);
+        ImportStageResult result = step.execute(context);
 
-    assertThat(result.success()).isTrue();
-    verifyNoInteractions(runtimeRepository);
-  }
+        assertThat(result.success()).isTrue();
+        verifyNoInteractions(runtimeRepository);
+    }
 
-  @Test
-  @DisplayName("缺失 parsed/validated/loaded 等指标时：仍写 audit，detailSummary 字段含 null 值")
-  void shouldStillWriteAudit_whenMetricsMissing() {
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("t-x");
-    context.setWorkerId("w-x");
+    @Test
+    @DisplayName("缺失 parsed/validated/loaded 等指标时：仍写 audit，detailSummary 字段含 null 值")
+    void shouldStillWriteAudit_whenMetricsMissing() {
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("t-x");
+        context.setWorkerId("w-x");
 
-    ImportStageResult result = step.execute(context);
+        ImportStageResult result = step.execute(context);
 
-    assertThat(result.success()).isTrue();
-    ArgumentCaptor<FileAuditParam> captor = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(captor.capture());
-    assertThat(captor.getValue().getFileId()).isNull();
-    assertThat(captor.getValue().getDetailSummary())
-        .asInstanceOf(InstanceOfAssertFactories.MAP)
-        .containsKeys("parsedCount", "validatedCount", "loadedCount", "pipelineInstanceId");
-  }
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<FileAuditParam> captor = ArgumentCaptor.forClass(FileAuditParam.class);
+        verify(runtimeRepository).appendAudit(captor.capture());
+        assertThat(captor.getValue().getFileId()).isNull();
+        assertThat(captor.getValue().getDetailSummary())
+                .asInstanceOf(InstanceOfAssertFactories.MAP)
+                .containsKeys("parsedCount", "validatedCount", "loadedCount", "pipelineInstanceId");
+    }
 
-  @Test
-  @DisplayName("dryRun=\"true\" 字符串值同样被识别为 dry-run（DryRunGuard 兼容字符串）")
-  void shouldSkipAudit_whenDryRunStringTrue() {
-    ImportJobContext context = new ImportJobContext();
-    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, "true");
+    @Test
+    @DisplayName("dryRun=\"true\" 字符串值同样被识别为 dry-run（DryRunGuard 兼容字符串）")
+    void shouldSkipAudit_whenDryRunStringTrue() {
+        ImportJobContext context = new ImportJobContext();
+        context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, "true");
 
-    ImportStageResult result = step.execute(context);
+        ImportStageResult result = step.execute(context);
 
-    assertThat(result.success()).isTrue();
-    verify(runtimeRepository, never()).appendAudit(any());
-  }
+        assertThat(result.success()).isTrue();
+        verify(runtimeRepository, never()).appendAudit(any());
+    }
 }

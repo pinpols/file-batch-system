@@ -26,76 +26,71 @@ import org.springframework.beans.factory.ObjectProvider;
 @Slf4j
 public abstract class AbstractObjectStoreRunCompensator implements PipelineCompensator {
 
-  private final PlatformFileRecordRepository fileRecords;
-  private final ObjectProvider<BatchObjectStore> objectStoreProvider;
+    private final PlatformFileRecordRepository fileRecords;
+    private final ObjectProvider<BatchObjectStore> objectStoreProvider;
 
-  protected AbstractObjectStoreRunCompensator(
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<BatchObjectStore> objectStoreProvider) {
-    this.fileRecords = fileRecords;
-    this.objectStoreProvider = objectStoreProvider;
-  }
-
-  @Override
-  public CompensationResult compensate(
-      String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
-    try {
-      BatchObjectStore objectStore = objectStoreProvider.getIfAvailable();
-      if (objectStore == null) {
-        return CompensationResult.skipped(
-            "no BatchObjectStore bean available — cannot reverse object, SKIPPED");
-      }
-      if (fileId == null) {
-        return CompensationResult.skipped(
-            "no fileId on this run — no object produced, nothing to reverse");
-      }
-      Map<String, Object> fileRecord = resolveFileRecord(tenantId, fileId, attributes);
-      String storagePath = stringValue(fileRecord.get("storage_path"));
-      String storageBucket = stringValue(fileRecord.get("storage_bucket"));
-      if (!Texts.hasText(storagePath)) {
-        return CompensationResult.skipped(
-            "file_record(fileId=" + fileId + ") has no storage_path — nothing to reverse");
-      }
-      try {
-        objectStore.delete(storageBucket, storagePath);
-      } catch (ObjectNotFoundException notFound) {
-        // 幂等:对象已不存在 = 已反向。
-        SwallowedExceptionLogger.info(getClass(), "catch:ObjectNotFoundException", notFound);
-        return CompensationResult.reversed(
-            0L,
-            "object already absent (idempotent): bucket=" + storageBucket + ", key=" + storagePath);
-      }
-      log.info(
-          "{} compensation deleted run object: tenantId={}, pipelineInstanceId={}, fileId={},"
-              + " bucket={}, key={}",
-          pipelineType(),
-          tenantId,
-          pipelineInstanceId,
-          fileId,
-          storageBucket,
-          storagePath);
-      return CompensationResult.reversed(
-          1L, "deleted run object: bucket=" + storageBucket + ", key=" + storagePath);
-    } catch (RuntimeException ex) {
-      // best-effort：不掩盖原始失败。
-      SwallowedExceptionLogger.warn(getClass(), "catch:RuntimeException", ex);
-      return CompensationResult.failed(
-          pipelineType() + " object reverse-delete failed: " + ex.getMessage());
+    protected AbstractObjectStoreRunCompensator(
+            PlatformFileRecordRepository fileRecords, ObjectProvider<BatchObjectStore> objectStoreProvider) {
+        this.fileRecords = fileRecords;
+        this.objectStoreProvider = objectStoreProvider;
     }
-  }
 
-  private Map<String, Object> resolveFileRecord(
-      String tenantId, Long fileId, Map<String, Object> attributes) {
-    Object cached = attributes.get(PipelineRuntimeKeys.FILE_RECORD);
-    if (cached instanceof Map<?, ?> map && map.get("storage_path") != null) {
-      @SuppressWarnings("unchecked")
-      Map<String, Object> typed = (Map<String, Object>) map;
-      return typed;
+    @Override
+    public CompensationResult compensate(
+            String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
+        try {
+            BatchObjectStore objectStore = objectStoreProvider.getIfAvailable();
+            if (objectStore == null) {
+                return CompensationResult.skipped(
+                        "no BatchObjectStore bean available — cannot reverse object, SKIPPED");
+            }
+            if (fileId == null) {
+                return CompensationResult.skipped("no fileId on this run — no object produced, nothing to reverse");
+            }
+            Map<String, Object> fileRecord = resolveFileRecord(tenantId, fileId, attributes);
+            String storagePath = stringValue(fileRecord.get("storage_path"));
+            String storageBucket = stringValue(fileRecord.get("storage_bucket"));
+            if (!Texts.hasText(storagePath)) {
+                return CompensationResult.skipped(
+                        "file_record(fileId=" + fileId + ") has no storage_path — nothing to reverse");
+            }
+            try {
+                objectStore.delete(storageBucket, storagePath);
+            } catch (ObjectNotFoundException notFound) {
+                // 幂等:对象已不存在 = 已反向。
+                SwallowedExceptionLogger.info(getClass(), "catch:ObjectNotFoundException", notFound);
+                return CompensationResult.reversed(
+                        0L, "object already absent (idempotent): bucket=" + storageBucket + ", key=" + storagePath);
+            }
+            log.info(
+                    "{} compensation deleted run object: tenantId={}, pipelineInstanceId={}, fileId={},"
+                            + " bucket={}, key={}",
+                    pipelineType(),
+                    tenantId,
+                    pipelineInstanceId,
+                    fileId,
+                    storageBucket,
+                    storagePath);
+            return CompensationResult.reversed(
+                    1L, "deleted run object: bucket=" + storageBucket + ", key=" + storagePath);
+        } catch (RuntimeException ex) {
+            // best-effort：不掩盖原始失败。
+            SwallowedExceptionLogger.warn(getClass(), "catch:RuntimeException", ex);
+            return CompensationResult.failed(pipelineType() + " object reverse-delete failed: " + ex.getMessage());
+        }
     }
-    return fileRecords.loadFileRecord(tenantId, fileId);
-  }
 
-  private static String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
+    private Map<String, Object> resolveFileRecord(String tenantId, Long fileId, Map<String, Object> attributes) {
+        Object cached = attributes.get(PipelineRuntimeKeys.FILE_RECORD);
+        if (cached instanceof Map<?, ?> map && map.get("storage_path") != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> typed = (Map<String, Object>) map;
+            return typed;
+        }
+        return fileRecords.loadFileRecord(tenantId, fileId);
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
 }

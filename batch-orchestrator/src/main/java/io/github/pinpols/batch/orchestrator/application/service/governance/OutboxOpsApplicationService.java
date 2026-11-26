@@ -32,117 +32,111 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxOpsApplicationService {
 
-  private static final List<String> REPUBLISHABLE_FROM_STATUSES =
-      List.of(OutboxPublishStatus.FAILED.code(), OutboxPublishStatus.GIVE_UP.code());
+    private static final List<String> REPUBLISHABLE_FROM_STATUSES =
+            List.of(OutboxPublishStatus.FAILED.code(), OutboxPublishStatus.GIVE_UP.code());
 
-  private final OutboxEventMapper outboxEventMapper;
-  private final JobExecutionLogMapper jobExecutionLogMapper;
+    private final OutboxEventMapper outboxEventMapper;
+    private final JobExecutionLogMapper jobExecutionLogMapper;
 
-  /**
-   * 删除指定租户中 PUBLISHED + GIVE_UP、且 updated_at 早于 retainDays 的事件。dryRun=true 时只 count 不删。
-   *
-   * @return key=published / giveUp 的删除条数;dryRun 时是预估候选数
-   */
-  @Transactional
-  public OutboxCleanupResponse cleanup(
-      String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
-    return cleanupInternal(tenantId, retainDays, dryRun, operatorId, reason);
-  }
-
-  private OutboxCleanupResponse cleanupInternal(
-      String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
-    if (retainDays <= 0) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    /**
+     * 删除指定租户中 PUBLISHED + GIVE_UP、且 updated_at 早于 retainDays 的事件。dryRun=true 时只 count 不删。
+     *
+     * @return key=published / giveUp 的删除条数;dryRun 时是预估候选数
+     */
+    @Transactional
+    public OutboxCleanupResponse cleanup(
+            String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
+        return cleanupInternal(tenantId, retainDays, dryRun, operatorId, reason);
     }
-    Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
-    int published;
-    int giveUp;
-    if (dryRun) {
-      published = outboxEventMapper.countPublishedBefore(tenantId, cutoff);
-      giveUp = outboxEventMapper.countGiveUpBefore(tenantId, cutoff);
-    } else {
-      published = outboxEventMapper.deletePublishedBefore(tenantId, cutoff);
-      giveUp = outboxEventMapper.deleteGiveUpBefore(tenantId, cutoff);
+
+    private OutboxCleanupResponse cleanupInternal(
+            String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
+        if (retainDays <= 0) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+        }
+        Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
+        int published;
+        int giveUp;
+        if (dryRun) {
+            published = outboxEventMapper.countPublishedBefore(tenantId, cutoff);
+            giveUp = outboxEventMapper.countGiveUpBefore(tenantId, cutoff);
+        } else {
+            published = outboxEventMapper.deletePublishedBefore(tenantId, cutoff);
+            giveUp = outboxEventMapper.deleteGiveUpBefore(tenantId, cutoff);
+        }
+        appendOutboxAudit(
+                tenantId,
+                AuditLogConstants.AUDIT_OP_OUTBOX_CLEANUP,
+                operatorId,
+                reason,
+                Map.of(
+                        "retainDays", retainDays,
+                        "cutoff", cutoff.toString(),
+                        "dryRun", dryRun,
+                        "publishedAffected", published,
+                        "giveUpAffected", giveUp));
+        return new OutboxCleanupResponse(published, giveUp);
     }
-    appendOutboxAudit(
-        tenantId,
-        AuditLogConstants.AUDIT_OP_OUTBOX_CLEANUP,
-        operatorId,
-        reason,
-        Map.of(
-            "retainDays", retainDays,
-            "cutoff", cutoff.toString(),
-            "dryRun", dryRun,
-            "publishedAffected", published,
-            "giveUpAffected", giveUp));
-    return new OutboxCleanupResponse(published, giveUp);
-  }
 
-  /** 重投递:把指定 id 中、FAILED/GIVE_UP 的事件 reset 回 NEW;dryRun=true 时只 count 不改。 */
-  @Transactional
-  public OutboxRepublishResponse republish(
-      String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
-    return republishInternal(tenantId, ids, dryRun, operatorId, reason);
-  }
-
-  private OutboxRepublishResponse republishInternal(
-      String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
-    if (ids == null || ids.isEmpty()) {
-      return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
+    /** 重投递:把指定 id 中、FAILED/GIVE_UP 的事件 reset 回 NEW;dryRun=true 时只 count 不改。 */
+    @Transactional
+    public OutboxRepublishResponse republish(
+            String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
+        return republishInternal(tenantId, ids, dryRun, operatorId, reason);
     }
-    int affected;
-    if (dryRun) {
-      affected = outboxEventMapper.countResettable(tenantId, ids, REPUBLISHABLE_FROM_STATUSES);
-    } else {
-      affected = outboxEventMapper.resetToNew(tenantId, ids, REPUBLISHABLE_FROM_STATUSES);
+
+    private OutboxRepublishResponse republishInternal(
+            String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
+        if (ids == null || ids.isEmpty()) {
+            return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
+        }
+        int affected;
+        if (dryRun) {
+            affected = outboxEventMapper.countResettable(tenantId, ids, REPUBLISHABLE_FROM_STATUSES);
+        } else {
+            affected = outboxEventMapper.resetToNew(tenantId, ids, REPUBLISHABLE_FROM_STATUSES);
+        }
+        appendOutboxAudit(
+                tenantId,
+                AuditLogConstants.AUDIT_OP_OUTBOX_REPUBLISH,
+                operatorId,
+                reason,
+                Map.of(
+                        "requestedIds", ids.size(),
+                        "affected", affected,
+                        "dryRun", dryRun));
+        return new OutboxRepublishResponse(ids.size(), affected, dryRun ? 1 : 0);
     }
-    appendOutboxAudit(
-        tenantId,
-        AuditLogConstants.AUDIT_OP_OUTBOX_REPUBLISH,
-        operatorId,
-        reason,
-        Map.of(
-            "requestedIds", ids.size(),
-            "affected", affected,
-            "dryRun", dryRun));
-    return new OutboxRepublishResponse(ids.size(), affected, dryRun ? 1 : 0);
-  }
 
-  // ── 向后兼容入口(老 controller 路径,无 dryRun/operatorId)──────────────────────────
-  @Transactional
-  public OutboxCleanupResponse cleanup(String tenantId, int retainDays) {
-    return cleanupInternal(tenantId, retainDays, false, null, null);
-  }
+    // ── 向后兼容入口(老 controller 路径,无 dryRun/operatorId)──────────────────────────
+    @Transactional
+    public OutboxCleanupResponse cleanup(String tenantId, int retainDays) {
+        return cleanupInternal(tenantId, retainDays, false, null, null);
+    }
 
-  @Transactional
-  public OutboxRepublishResponse republish(String tenantId, List<Long> ids) {
-    return republishInternal(tenantId, ids, false, null, null);
-  }
+    @Transactional
+    public OutboxRepublishResponse republish(String tenantId, List<Long> ids) {
+        return republishInternal(tenantId, ids, false, null, null);
+    }
 
-  private void appendOutboxAudit(
-      String tenantId,
-      String operation,
-      String operatorId,
-      String reason,
-      Map<String, Object> extras) {
-    JobExecutionLogEntity audit = new JobExecutionLogEntity();
-    audit.setTenantId(tenantId);
-    audit.setLogLevel("INFO");
-    audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
-    audit.setMessage(operation);
-    audit.setDetailRef(AuditLogConstants.DETAIL_REF_OUTBOX_EVENT);
-    Map<String, Object> extra = new LinkedHashMap<>(extras);
-    extra.put(
-        "operatorId",
-        Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
-    extra.put(
-        "operatorType",
-        Texts.hasText(operatorId)
-            ? AuditLogConstants.OPERATOR_TYPE_REQUEST
-            : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-    extra.put("reason", reason);
-    String extraJson = JsonUtils.toJson(extra);
-    audit.setExtraJson(extraJson);
-    jobExecutionLogMapper.insert(audit);
-  }
+    private void appendOutboxAudit(
+            String tenantId, String operation, String operatorId, String reason, Map<String, Object> extras) {
+        JobExecutionLogEntity audit = new JobExecutionLogEntity();
+        audit.setTenantId(tenantId);
+        audit.setLogLevel("INFO");
+        audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+        audit.setMessage(operation);
+        audit.setDetailRef(AuditLogConstants.DETAIL_REF_OUTBOX_EVENT);
+        Map<String, Object> extra = new LinkedHashMap<>(extras);
+        extra.put("operatorId", Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put(
+                "operatorType",
+                Texts.hasText(operatorId)
+                        ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+                        : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+        extra.put("reason", reason);
+        String extraJson = JsonUtils.toJson(extra);
+        audit.setExtraJson(extraJson);
+        jobExecutionLogMapper.insert(audit);
+    }
 }

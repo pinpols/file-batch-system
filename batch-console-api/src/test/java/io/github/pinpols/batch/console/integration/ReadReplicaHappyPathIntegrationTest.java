@@ -47,187 +47,181 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>故障入场（fail-open 单点失败计数）由姐妹 IT {@link ReadReplicaWiringIntegrationTest} 用不可达 URL 覆盖。
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestPropertySource(
-    properties = {
-      "batch.console.read-replica.enabled=true",
-      "batch.console.read-replica.failure-threshold=2",
-      "batch.console.read-replica.quarantine-seconds=2",
-      "batch.console.replica.lag-monitor-initial-delay-millis=600000",
-      "batch.console.replica.lag-monitor-interval-millis=600000"
-    })
+        properties = {
+            "batch.console.read-replica.enabled=true",
+            "batch.console.read-replica.failure-threshold=2",
+            "batch.console.read-replica.quarantine-seconds=2",
+            "batch.console.replica.lag-monitor-initial-delay-millis=600000",
+            "batch.console.replica.lag-monitor-interval-millis=600000"
+        })
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("读副本路由: 只读事务命中副本,写事务与强制主库提示命中主库,隔离期满自动恢复")
 class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String REPLICA_DB_NAME = "batch_replica";
+    private static final String REPLICA_DB_NAME = "batch_replica";
 
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer REPLICA_PG = TestPostgresContainers.create(
-          REPLICA_DB_NAME)
-      // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
-      // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
-      // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。
-      .withUrlParam("socketTimeout", "2")
-      .withUrlParam("loginTimeout", "2")
-      .withInitScript("db/platform-init.sql");
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer REPLICA_PG = TestPostgresContainers.create(REPLICA_DB_NAME)
+            // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
+            // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
+            // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。
+            .withUrlParam("socketTimeout", "2")
+            .withUrlParam("loginTimeout", "2")
+            .withInitScript("db/platform-init.sql");
 
-  @BeforeAll
-  static void startReplica() {
-    REPLICA_PG.start();
-  }
-
-  @AfterAll
-  static void stopReplica() {
-    REPLICA_PG.stop();
-  }
-
-  @DynamicPropertySource
-  static void registerReadReplicaProperties(DynamicPropertyRegistry registry) {
-    registry.add(
-        "batch.console.read-replica.primary.url", AbstractIntegrationTest::platformJdbcUrl);
-    registry.add("batch.console.read-replica.primary.username", () -> "batch_user");
-    registry.add("batch.console.read-replica.primary.password", () -> "batch_pass_123");
-    registry.add("batch.console.read-replica.primary.minimum-idle", () -> "0");
-    registry.add("batch.console.read-replica.primary.maximum-pool-size", () -> "4");
-
-    registry.add("batch.console.read-replica.replica.url", REPLICA_PG::getJdbcUrl);
-    registry.add("batch.console.read-replica.replica.username", REPLICA_PG::getUsername);
-    registry.add("batch.console.read-replica.replica.password", REPLICA_PG::getPassword);
-    registry.add("batch.console.read-replica.replica.minimum-idle", () -> "0");
-    registry.add("batch.console.read-replica.replica.maximum-pool-size", () -> "4");
-    // 1.5s 连接超时：replica 暂停后 fail-open 触发足够快，避免单测耗时拖长
-    registry.add("batch.console.read-replica.replica.connection-timeout-millis", () -> "1500");
-    registry.add("batch.console.read-replica.replica.validation-timeout-millis", () -> "1000");
-  }
-
-  @Autowired
-  private DataSource dataSource;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
-
-  @Autowired
-  private MeterRegistry meterRegistry;
-
-  @Test
-  @Order(1)
-  @DisplayName("装配检查: 启用副本后主数据源被延迟路由代理包裹")
-  void shouldInjectRoutingDataSource_whenReplicaEnabled() {
-    assertThat(dataSource)
-        .as("read-replica.enabled=true 应让 @Primary DataSource 走 routing DS")
-        .isInstanceOf(LazyConnectionDataSourceProxy.class);
-  }
-
-  @Test
-  @Order(2)
-  @DisplayName("只读事务: 查询实际落在副本库")
-  void shouldRouteToReplica_whenTransactionReadOnly() {
-    assertThat(dbFromTransaction(true))
-        .as("readOnly 事务应命中独立 replica 容器")
-        .isEqualTo(REPLICA_DB_NAME);
-  }
-
-  @Test
-  @Order(3)
-  @DisplayName("非只读事务: 查询实际落在主库")
-  void shouldRouteToPrimary_whenTransactionWrites() {
-    assertThat(dbFromTransaction(false))
-        .as("非 readOnly 事务应命中 primary 容器")
-        .isEqualTo("batch_platform");
-  }
-
-  @Test
-  @Order(4)
-  @DisplayName("强制主库提示: 只读事务内仍路由到主库")
-  void shouldForcePrimary_whenHintAppliedInReadOnlyTransaction() {
-    String[] db = new String[1];
-    RoutingHints.forcePrimary(() -> db[0] = dbFromTransaction(true));
-    assertThat(db[0])
-        .as("RoutingHints.forcePrimary（@RouteToPrimary 注解的底层机制）应在 readOnly 事务内强制走 primary")
-        .isEqualTo("batch_platform");
-  }
-
-  @Test
-  @Order(5)
-  @DisplayName("副本暂停再恢复: 先降级到主库并累计计数,隔离期满后只读事务自动回到副本")
-  void shouldRecoverAfterQuarantine_whenReplicaResumes() throws Exception {
-    double failoverBefore = currentFailoverCount();
-
-    // 1. pause replica 容器（cgroup 冻结，端口映射保留），后续 readOnly 查询连接超时 → fail-open
-    REPLICA_PG.getDockerClient().pauseContainerCmd(REPLICA_PG.getContainerId()).exec();
-    try {
-      // 2. 触发 failureThreshold (=2) 次失败，第二次进入 quarantine。
-      // 两类预期表现都算成功 fail-open：
-      //   (a) 静默降级返回 "batch_platform"（pause 后才发起新连接）
-      //   (b) 抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断，I/O error）
-      // 任一发生 → failover 计数器都会 +1（ReadReplicaRoutingDataSource catch 后递增）。
-      tolerantReadOnlyAttempt(
-          "replica 暂停 → 第 1 次 readOnly", "tolerated-io-error-readonly-attempt-1");
-      tolerantReadOnlyAttempt(
-          "replica 暂停 → 第 2 次 readOnly（被 quarantine 静默捕获并抑制）",
-          "tolerated-io-error-readonly-attempt-2-quarantined");
-      // 第 1 次失败后 quarantine 立即生效，第 2 次不再调 replica → counter 只 +1。
-      // 关键证据是「fail-open 触发过 ≥ 1 次」+ 期满后能自动恢复（下方第 4 步断言）。
-      assertThat(currentFailoverCount() - failoverBefore)
-          .as("至少观察到 1 次降级计数（quarantine 生效后第 2 次被静默吞）")
-          .isGreaterThanOrEqualTo(1d);
-    } finally {
-      // 3. 恢复 replica
-      REPLICA_PG
-          .getDockerClient()
-          .unpauseContainerCmd(REPLICA_PG.getContainerId())
-          .exec();
+    @BeforeAll
+    static void startReplica() {
+        REPLICA_PG.start();
     }
 
-    // 4. quarantine 2s 期满 + 一点缓冲后，下一次 readOnly 应自动回到 replica
-    Thread.sleep(2_500L);
-    assertThat(dbFromTransaction(true))
-        .as("quarantine 期满后 readOnly 应自动重新尝试 replica 并成功")
-        .isEqualTo(REPLICA_DB_NAME);
-  }
+    @AfterAll
+    static void stopReplica() {
+        REPLICA_PG.stop();
+    }
 
-  private String dbFromTransaction(boolean readOnly) {
-    final String selectCurrentDatabaseSql = """
+    @DynamicPropertySource
+    static void registerReadReplicaProperties(DynamicPropertyRegistry registry) {
+        registry.add("batch.console.read-replica.primary.url", AbstractIntegrationTest::platformJdbcUrl);
+        registry.add("batch.console.read-replica.primary.username", () -> "batch_user");
+        registry.add("batch.console.read-replica.primary.password", () -> "batch_pass_123");
+        registry.add("batch.console.read-replica.primary.minimum-idle", () -> "0");
+        registry.add("batch.console.read-replica.primary.maximum-pool-size", () -> "4");
+
+        registry.add("batch.console.read-replica.replica.url", REPLICA_PG::getJdbcUrl);
+        registry.add("batch.console.read-replica.replica.username", REPLICA_PG::getUsername);
+        registry.add("batch.console.read-replica.replica.password", REPLICA_PG::getPassword);
+        registry.add("batch.console.read-replica.replica.minimum-idle", () -> "0");
+        registry.add("batch.console.read-replica.replica.maximum-pool-size", () -> "4");
+        // 1.5s 连接超时：replica 暂停后 fail-open 触发足够快，避免单测耗时拖长
+        registry.add("batch.console.read-replica.replica.connection-timeout-millis", () -> "1500");
+        registry.add("batch.console.read-replica.replica.validation-timeout-millis", () -> "1000");
+    }
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    @Test
+    @Order(1)
+    @DisplayName("装配检查: 启用副本后主数据源被延迟路由代理包裹")
+    void shouldInjectRoutingDataSource_whenReplicaEnabled() {
+        assertThat(dataSource)
+                .as("read-replica.enabled=true 应让 @Primary DataSource 走 routing DS")
+                .isInstanceOf(LazyConnectionDataSourceProxy.class);
+    }
+
+    @Test
+    @Order(2)
+    @DisplayName("只读事务: 查询实际落在副本库")
+    void shouldRouteToReplica_whenTransactionReadOnly() {
+        assertThat(dbFromTransaction(true)).as("readOnly 事务应命中独立 replica 容器").isEqualTo(REPLICA_DB_NAME);
+    }
+
+    @Test
+    @Order(3)
+    @DisplayName("非只读事务: 查询实际落在主库")
+    void shouldRouteToPrimary_whenTransactionWrites() {
+        assertThat(dbFromTransaction(false)).as("非 readOnly 事务应命中 primary 容器").isEqualTo("batch_platform");
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("强制主库提示: 只读事务内仍路由到主库")
+    void shouldForcePrimary_whenHintAppliedInReadOnlyTransaction() {
+        String[] db = new String[1];
+        RoutingHints.forcePrimary(() -> db[0] = dbFromTransaction(true));
+        assertThat(db[0])
+                .as("RoutingHints.forcePrimary（@RouteToPrimary 注解的底层机制）应在 readOnly 事务内强制走 primary")
+                .isEqualTo("batch_platform");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("副本暂停再恢复: 先降级到主库并累计计数,隔离期满后只读事务自动回到副本")
+    void shouldRecoverAfterQuarantine_whenReplicaResumes() throws Exception {
+        double failoverBefore = currentFailoverCount();
+
+        // 1. pause replica 容器（cgroup 冻结，端口映射保留），后续 readOnly 查询连接超时 → fail-open
+        REPLICA_PG
+                .getDockerClient()
+                .pauseContainerCmd(REPLICA_PG.getContainerId())
+                .exec();
+        try {
+            // 2. 触发 failureThreshold (=2) 次失败，第二次进入 quarantine。
+            // 两类预期表现都算成功 fail-open：
+            //   (a) 静默降级返回 "batch_platform"（pause 后才发起新连接）
+            //   (b) 抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断，I/O error）
+            // 任一发生 → failover 计数器都会 +1（ReadReplicaRoutingDataSource catch 后递增）。
+            tolerantReadOnlyAttempt("replica 暂停 → 第 1 次 readOnly", "tolerated-io-error-readonly-attempt-1");
+            tolerantReadOnlyAttempt(
+                    "replica 暂停 → 第 2 次 readOnly（被 quarantine 静默捕获并抑制）",
+                    "tolerated-io-error-readonly-attempt-2-quarantined");
+            // 第 1 次失败后 quarantine 立即生效，第 2 次不再调 replica → counter 只 +1。
+            // 关键证据是「fail-open 触发过 ≥ 1 次」+ 期满后能自动恢复（下方第 4 步断言）。
+            assertThat(currentFailoverCount() - failoverBefore)
+                    .as("至少观察到 1 次降级计数（quarantine 生效后第 2 次被静默吞）")
+                    .isGreaterThanOrEqualTo(1d);
+        } finally {
+            // 3. 恢复 replica
+            REPLICA_PG
+                    .getDockerClient()
+                    .unpauseContainerCmd(REPLICA_PG.getContainerId())
+                    .exec();
+        }
+
+        // 4. quarantine 2s 期满 + 一点缓冲后，下一次 readOnly 应自动回到 replica
+        Thread.sleep(2_500L);
+        assertThat(dbFromTransaction(true))
+                .as("quarantine 期满后 readOnly 应自动重新尝试 replica 并成功")
+                .isEqualTo(REPLICA_DB_NAME);
+    }
+
+    private String dbFromTransaction(boolean readOnly) {
+        final String selectCurrentDatabaseSql = """
         SELECT current_database()
     """;
 
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    tx.setReadOnly(readOnly);
-    return tx.execute(status ->
-        new JdbcTemplate(dataSource).queryForObject(selectCurrentDatabaseSql, String.class));
-  }
-
-  /**
-   * 容忍 fail-open 的两种合法表现：
-   *
-   * <ul>
-   *   <li>正常返回 "batch_platform"（pause 后才发起新连接，路由到 primary）
-   *   <li>抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断 I/O error）
-   * </ul>
-   *
-   * 两类都应递增 failover 计数器 → 由调用方汇总断言。
-   */
-  private void tolerantReadOnlyAttempt(String description, String where) {
-    try {
-      String db = dbFromTransaction(true);
-      assertThat(db).as(description + " — 静默 fail-open 应落 primary").isEqualTo("batch_platform");
-    } catch (DataAccessResourceFailureException ex) {
-      // I/O error 路径：pause 截断 in-flight 连接，等价于 fail-open 触发但没机会切换 routing key。
-      // ReadReplicaRoutingDataSource 在 catch 内已递增 failover 计数器；下次请求 quarantine 生效。
-      // 这里不 fail，只记日志便于调试。
-      // where 用 kebab-case 标签（SwallowedExceptionLogger 口径），中文描述只进断言消息。
-      SwallowedExceptionLogger.info(ReadReplicaHappyPathIntegrationTest.class, where, ex);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        tx.setReadOnly(readOnly);
+        return tx.execute(
+                status -> new JdbcTemplate(dataSource).queryForObject(selectCurrentDatabaseSql, String.class));
     }
-  }
 
-  private double currentFailoverCount() {
-    // 同名 counter 按 reason tag 拆成多个实例（connection_failure / no_streaming_replicas / lag_exceeded），
-    // find().counter() 只返回第一个，需要按 name 汇总所有 tagged 实例
-    Collection<Counter> counters =
-        meterRegistry.find("batch.console.replica.failover.count").counters();
-    return counters.stream().mapToDouble(Counter::count).sum();
-  }
+    /**
+     * 容忍 fail-open 的两种合法表现：
+     *
+     * <ul>
+     *   <li>正常返回 "batch_platform"（pause 后才发起新连接，路由到 primary）
+     *   <li>抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断 I/O error）
+     * </ul>
+     *
+     * 两类都应递增 failover 计数器 → 由调用方汇总断言。
+     */
+    private void tolerantReadOnlyAttempt(String description, String where) {
+        try {
+            String db = dbFromTransaction(true);
+            assertThat(db).as(description + " — 静默 fail-open 应落 primary").isEqualTo("batch_platform");
+        } catch (DataAccessResourceFailureException ex) {
+            // I/O error 路径：pause 截断 in-flight 连接，等价于 fail-open 触发但没机会切换 routing key。
+            // ReadReplicaRoutingDataSource 在 catch 内已递增 failover 计数器；下次请求 quarantine 生效。
+            // 这里不 fail，只记日志便于调试。
+            // where 用 kebab-case 标签（SwallowedExceptionLogger 口径），中文描述只进断言消息。
+            SwallowedExceptionLogger.info(ReadReplicaHappyPathIntegrationTest.class, where, ex);
+        }
+    }
+
+    private double currentFailoverCount() {
+        // 同名 counter 按 reason tag 拆成多个实例（connection_failure / no_streaming_replicas / lag_exceeded），
+        // find().counter() 只返回第一个，需要按 name 汇总所有 tagged 实例
+        Collection<Counter> counters =
+                meterRegistry.find("batch.console.replica.failover.count").counters();
+        return counters.stream().mapToDouble(Counter::count).sum();
+    }
 }

@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/ops/persistent-waits")
 @RequiredArgsConstructor
 public class PersistentWaitReadInternalController {
-  private final PersistentWaitReadService service;
+    private final PersistentWaitReadService service;
 
-  @GetMapping
-  public PersistentWaitPage list(@Valid @ModelAttribute PersistentWaitReadQuery query) {
-    return service.list(query);
-  }
+    @GetMapping
+    public PersistentWaitPage list(@Valid @ModelAttribute PersistentWaitReadQuery query) {
+        return service.list(query);
+    }
 }

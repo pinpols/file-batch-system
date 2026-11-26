@@ -14,13 +14,13 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleMetaQueryMapper {
 
-  List<SimpleOptionView> queueOptions(@Param("tenantId") String tenantId);
+    List<SimpleOptionView> queueOptions(@Param("tenantId") String tenantId);
 
-  List<SimpleOptionView> calendarOptions(@Param("tenantId") String tenantId);
+    List<SimpleOptionView> calendarOptions(@Param("tenantId") String tenantId);
 
-  List<SimpleOptionView> windowOptions(@Param("tenantId") String tenantId);
+    List<SimpleOptionView> windowOptions(@Param("tenantId") String tenantId);
 
-  List<SimpleOptionView> workerGroupOptions(@Param("tenantId") String tenantId);
+    List<SimpleOptionView> workerGroupOptions(@Param("tenantId") String tenantId);
 
-  List<SimpleOptionView> bizTypeOptions(@Param("tenantId") String tenantId);
+    List<SimpleOptionView> bizTypeOptions(@Param("tenantId") String tenantId);
 }

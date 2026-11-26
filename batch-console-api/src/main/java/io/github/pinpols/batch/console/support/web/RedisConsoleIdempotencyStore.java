@@ -12,46 +12,46 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisConsoleIdempotencyStore implements ConsoleIdempotencyStore {
 
-  private static final DefaultRedisScript<Long> REPLACE = new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> REPLACE = new DefaultRedisScript<>("""
       if redis.call('GET', KEYS[1]) == ARGV[1] then
         redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
         return 1
       end
       return 0
       """, Long.class);
-  private static final DefaultRedisScript<Long> DELETE = new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> DELETE = new DefaultRedisScript<>("""
       if redis.call('GET', KEYS[1]) == ARGV[1] then
         return redis.call('DEL', KEYS[1])
       end
       return 0
       """, Long.class);
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  @Override
-  public String get(String key) {
-    return redisTemplate.opsForValue().get(key);
-  }
+    @Override
+    public String get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
 
-  @Override
-  public Boolean setIfAbsent(String key, String value, Duration ttl) {
-    return redisTemplate.opsForValue().setIfAbsent(key, value, ttl);
-  }
+    @Override
+    public Boolean setIfAbsent(String key, String value, Duration ttl) {
+        return redisTemplate.opsForValue().setIfAbsent(key, value, ttl);
+    }
 
-  @Override
-  public boolean compareAndSet(String key, String expected, String value, Duration ttl) {
-    Long successResult = Long.valueOf(1);
-    List<String> redisKeys = List.of(key);
-    long ttlMillis = ttl.toMillis();
-    String ttlMillisArgument = Long.toString(ttlMillis);
-    Long result = redisTemplate.execute(REPLACE, redisKeys, expected, value, ttlMillisArgument);
-    return successResult.equals(result);
-  }
+    @Override
+    public boolean compareAndSet(String key, String expected, String value, Duration ttl) {
+        Long successResult = Long.valueOf(1);
+        List<String> redisKeys = List.of(key);
+        long ttlMillis = ttl.toMillis();
+        String ttlMillisArgument = Long.toString(ttlMillis);
+        Long result = redisTemplate.execute(REPLACE, redisKeys, expected, value, ttlMillisArgument);
+        return successResult.equals(result);
+    }
 
-  @Override
-  public boolean deleteIfValue(String key, String expected) {
-    Long successResult = Long.valueOf(1);
-    Long result = redisTemplate.execute(DELETE, List.of(key), expected);
-    return successResult.equals(result);
-  }
+    @Override
+    public boolean deleteIfValue(String key, String expected) {
+        Long successResult = Long.valueOf(1);
+        Long result = redisTemplate.execute(DELETE, List.of(key), expected);
+        return successResult.equals(result);
+    }
 }

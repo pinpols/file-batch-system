@@ -24,230 +24,230 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("处理位点存储: 位点读取语义, 委托透传与失败指标")
 class DefaultProcessingPositionStoreTest {
 
-  private static final String TENANT = "t1";
-  private static final long INSTANCE = 1001L;
+    private static final String TENANT = "t1";
+    private static final long INSTANCE = 1001L;
 
-  @Mock
-  PipelineProgressMapper mapper;
+    @Mock
+    PipelineProgressMapper mapper;
 
-  @Mock
-  ObjectProvider<MeterRegistry> meterRegistryProvider;
+    @Mock
+    ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  private SimpleMeterRegistry meterRegistry;
-  private DefaultProcessingPositionStore store;
+    private SimpleMeterRegistry meterRegistry;
+    private DefaultProcessingPositionStore store;
 
-  @BeforeEach
-  void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    store = new DefaultProcessingPositionStore(mapper, meterRegistryProvider);
-  }
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+        store = new DefaultProcessingPositionStore(mapper, meterRegistryProvider);
+    }
 
-  @Test
-  @DisplayName("load:无行返回 empty(),首次跑场景")
-  void shouldReturnEmpty_whenNoRow() {
-    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(null);
+    @Test
+    @DisplayName("load:无行返回 empty(),首次跑场景")
+    void shouldReturnEmpty_whenNoRow() {
+        when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(null);
 
-    ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
+        ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
 
-    assertThat(pos).isEqualTo(ProcessingPosition.empty());
-    assertThat(pos.completed()).isFalse();
-    assertThat(pos.positionMarker()).isNull();
-    assertThat(pos.processedCount()).isZero();
-    assertMetric("LOAD", "load", "empty", 1.0);
-  }
+        assertThat(pos).isEqualTo(ProcessingPosition.empty());
+        assertThat(pos.completed()).isFalse();
+        assertThat(pos.positionMarker()).isNull();
+        assertThat(pos.processedCount()).isZero();
+        assertMetric("LOAD", "load", "empty", 1.0);
+    }
 
-  @Test
-  @DisplayName("load:completed=true 行返回 completed 标记,marker 字段不再有意义")
-  void shouldReturnCompleted_whenRowCompleted() {
-    PipelineProgressEntity row = new PipelineProgressEntity(
-        1L,
-        TENANT,
-        INSTANCE,
-        "GENERATE",
-        "stale-marker",
-        999L,
-        true,
-        OffsetDateTime.now(),
-        OffsetDateTime.now(),
-        OffsetDateTime.now());
-    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "GENERATE")).thenReturn(row);
+    @Test
+    @DisplayName("load:completed=true 行返回 completed 标记,marker 字段不再有意义")
+    void shouldReturnCompleted_whenRowCompleted() {
+        PipelineProgressEntity row = new PipelineProgressEntity(
+                1L,
+                TENANT,
+                INSTANCE,
+                "GENERATE",
+                "stale-marker",
+                999L,
+                true,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                OffsetDateTime.now());
+        when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "GENERATE")).thenReturn(row);
 
-    ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.GENERATE);
+        ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.GENERATE);
 
-    assertThat(pos.completed()).isTrue();
-    assertThat(pos.processedCount()).isEqualTo(999L);
-    // P1-2:completed 行保留 position_marker(Export 完成 marker 含文件字节数指纹供跳过前校验)。
-    assertThat(pos.positionMarker()).isEqualTo("stale-marker");
-    assertMetric("GENERATE", "load", "completed", 1.0);
-  }
+        assertThat(pos.completed()).isTrue();
+        assertThat(pos.processedCount()).isEqualTo(999L);
+        // P1-2:completed 行保留 position_marker(Export 完成 marker 含文件字节数指纹供跳过前校验)。
+        assertThat(pos.positionMarker()).isEqualTo("stale-marker");
+        assertMetric("GENERATE", "load", "completed", 1.0);
+    }
 
-  @Test
-  @DisplayName("load:未完成行如实返回 marker + count")
-  void shouldReturnInProgress_whenRowNotCompleted() {
-    PipelineProgressEntity row = new PipelineProgressEntity(
-        2L,
-        TENANT,
-        INSTANCE,
-        "LOAD",
-        "row:12345",
-        12345L,
-        false,
-        null,
-        OffsetDateTime.now(),
-        OffsetDateTime.now());
-    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
+    @Test
+    @DisplayName("load:未完成行如实返回 marker + count")
+    void shouldReturnInProgress_whenRowNotCompleted() {
+        PipelineProgressEntity row = new PipelineProgressEntity(
+                2L,
+                TENANT,
+                INSTANCE,
+                "LOAD",
+                "row:12345",
+                12345L,
+                false,
+                null,
+                OffsetDateTime.now(),
+                OffsetDateTime.now());
+        when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
 
-    ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
+        ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
 
-    assertThat(pos.completed()).isFalse();
-    assertThat(pos.positionMarker()).isEqualTo("row:12345");
-    assertThat(pos.processedCount()).isEqualTo(12345L);
-    assertMetric("LOAD", "load", "resumable", 1.0);
-    // 命中续跑 → 跳过的记录数(=已处理 count)进入 resume.skipped counter
-    assertResumeSkipped("LOAD", 12345.0);
-  }
+        assertThat(pos.completed()).isFalse();
+        assertThat(pos.positionMarker()).isEqualTo("row:12345");
+        assertThat(pos.processedCount()).isEqualTo(12345L);
+        assertMetric("LOAD", "load", "resumable", 1.0);
+        // 命中续跑 → 跳过的记录数(=已处理 count)进入 resume.skipped counter
+        assertResumeSkipped("LOAD", 12345.0);
+    }
 
-  @Test
-  @DisplayName("resume skipped:命中续跑但 processedCount=0(位点在但无已提交记录)不增 skipped counter")
-  void shouldNotRecordResumeSkipped_whenProcessedCountZero() {
-    PipelineProgressEntity row = new PipelineProgressEntity(
-        3L, TENANT, INSTANCE, "LOAD", "row:0", 0L, false, null, OffsetDateTime.now(), null);
-    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
+    @Test
+    @DisplayName("resume skipped:命中续跑但 processedCount=0(位点在但无已提交记录)不增 skipped counter")
+    void shouldNotRecordResumeSkipped_whenProcessedCountZero() {
+        PipelineProgressEntity row = new PipelineProgressEntity(
+                3L, TENANT, INSTANCE, "LOAD", "row:0", 0L, false, null, OffsetDateTime.now(), null);
+        when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
 
-    store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
+        store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
 
-    // 命中次数仍计,但跳过记录数为 0 时不注册 skipped counter(避免 0 值噪声)
-    assertMetric("LOAD", "load", "resumable", 1.0);
-    assertThat(meterRegistry
-            .find(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
-            .counter())
-        .isNull();
-  }
+        // 命中次数仍计,但跳过记录数为 0 时不注册 skipped counter(避免 0 值噪声)
+        assertMetric("LOAD", "load", "resumable", 1.0);
+        assertThat(meterRegistry
+                        .find(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
+                        .counter())
+                .isNull();
+    }
 
-  @Test
-  @DisplayName("advance:透传到 mapper,使用 stage.code() 作为 DB 列值")
-  void shouldDelegateAdvance() {
-    when(mapper.advance(PipelineProgressAdvanceParam.builder()
-            .tenantId(TENANT)
-            .pipelineInstanceId(INSTANCE)
-            .stage("LOAD")
-            .positionMarker("row:500")
-            .processedCountIncrement(500L)
-            .build()))
-        .thenReturn(1);
-    store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L);
+    @Test
+    @DisplayName("advance:透传到 mapper,使用 stage.code() 作为 DB 列值")
+    void shouldDelegateAdvance() {
+        when(mapper.advance(PipelineProgressAdvanceParam.builder()
+                        .tenantId(TENANT)
+                        .pipelineInstanceId(INSTANCE)
+                        .stage("LOAD")
+                        .positionMarker("row:500")
+                        .processedCountIncrement(500L)
+                        .build()))
+                .thenReturn(1);
+        store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L);
 
-    verify(mapper)
-        .advance(PipelineProgressAdvanceParam.builder()
-            .tenantId(TENANT)
-            .pipelineInstanceId(INSTANCE)
-            .stage("LOAD")
-            .positionMarker("row:500")
-            .processedCountIncrement(500L)
-            .build());
-    assertMetric("LOAD", "advance", "success", 1.0);
-  }
+        verify(mapper)
+                .advance(PipelineProgressAdvanceParam.builder()
+                        .tenantId(TENANT)
+                        .pipelineInstanceId(INSTANCE)
+                        .stage("LOAD")
+                        .positionMarker("row:500")
+                        .processedCountIncrement(500L)
+                        .build());
+        assertMetric("LOAD", "advance", "success", 1.0);
+    }
 
-  @Test
-  @DisplayName("markCompleted:透传到 mapper")
-  void shouldDelegateMarkCompleted() {
-    when(mapper.markCompleted(TENANT, INSTANCE, "GENERATE")).thenReturn(1);
-    store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE);
+    @Test
+    @DisplayName("markCompleted:透传到 mapper")
+    void shouldDelegateMarkCompleted() {
+        when(mapper.markCompleted(TENANT, INSTANCE, "GENERATE")).thenReturn(1);
+        store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE);
 
-    verify(mapper).markCompleted(TENANT, INSTANCE, "GENERATE");
-    assertMetric("GENERATE", "complete", "success", 1.0);
-  }
+        verify(mapper).markCompleted(TENANT, INSTANCE, "GENERATE");
+        assertMetric("GENERATE", "complete", "success", 1.0);
+    }
 
-  @Test
-  @DisplayName("advance 影响零行时拒绝成功并记录失败指标")
-  void shouldRejectAdvanceWhenPipelineGuardMatchesNoRows() {
-    assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Pipeline checkpoint write rejected");
-    assertMetric("LOAD", "advance", "failure", 1.0);
-    assertThat(meterRegistry
-            .find(DefaultProcessingPositionStore.METRIC_OPERATIONS)
-            .tags("stage", "LOAD", "operation", "advance", "outcome", "success")
-            .counter())
-        .isNull();
-  }
+    @Test
+    @DisplayName("advance 影响零行时拒绝成功并记录失败指标")
+    void shouldRejectAdvanceWhenPipelineGuardMatchesNoRows() {
+        assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Pipeline checkpoint write rejected");
+        assertMetric("LOAD", "advance", "failure", 1.0);
+        assertThat(meterRegistry
+                        .find(DefaultProcessingPositionStore.METRIC_OPERATIONS)
+                        .tags("stage", "LOAD", "operation", "advance", "outcome", "success")
+                        .counter())
+                .isNull();
+    }
 
-  @Test
-  @DisplayName("完成位点影响零行时拒绝成功并记录失败指标")
-  void shouldRejectCompletionWhenPipelineGuardMatchesNoRows() {
-    assertThatThrownBy(() -> store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Pipeline checkpoint write rejected");
-    assertMetric("GENERATE", "complete", "failure", 1.0);
-  }
+    @Test
+    @DisplayName("完成位点影响零行时拒绝成功并记录失败指标")
+    void shouldRejectCompletionWhenPipelineGuardMatchesNoRows() {
+        assertThatThrownBy(() -> store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Pipeline checkpoint write rejected");
+        assertMetric("GENERATE", "complete", "failure", 1.0);
+    }
 
-  @Test
-  @DisplayName("deleteAllStages:透传到 mapper.deleteByInstance,记 stage=ALL 指标(补偿清位点)")
-  void shouldDelegateDeleteAllStages() {
-    store.deleteAllStages(TENANT, INSTANCE);
+    @Test
+    @DisplayName("deleteAllStages:透传到 mapper.deleteByInstance,记 stage=ALL 指标(补偿清位点)")
+    void shouldDelegateDeleteAllStages() {
+        store.deleteAllStages(TENANT, INSTANCE);
 
-    verify(mapper).deleteByInstance(TENANT, INSTANCE);
-    assertMetric("ALL", "delete", "success", 1.0);
-  }
+        verify(mapper).deleteByInstance(TENANT, INSTANCE);
+        assertMetric("ALL", "delete", "success", 1.0);
+    }
 
-  @Test
-  @DisplayName("deleteAllStages 存储异常:记 failure 指标并保留原异常")
-  void deleteAllStages_recordsFailureAndRethrows() {
-    IllegalStateException failure = new IllegalStateException("database unavailable");
-    doThrow(failure).when(mapper).deleteByInstance(TENANT, INSTANCE);
+    @Test
+    @DisplayName("deleteAllStages 存储异常:记 failure 指标并保留原异常")
+    void deleteAllStages_recordsFailureAndRethrows() {
+        IllegalStateException failure = new IllegalStateException("database unavailable");
+        doThrow(failure).when(mapper).deleteByInstance(TENANT, INSTANCE);
 
-    assertThatThrownBy(() -> store.deleteAllStages(TENANT, INSTANCE)).isSameAs(failure);
+        assertThatThrownBy(() -> store.deleteAllStages(TENANT, INSTANCE)).isSameAs(failure);
 
-    assertMetric("ALL", "delete", "failure", 1.0);
-  }
+        assertMetric("ALL", "delete", "failure", 1.0);
+    }
 
-  @Test
-  @DisplayName("存储异常:记录 failure 指标并保留原异常")
-  void shouldRecordFailureAndRethrow() {
-    IllegalStateException failure = new IllegalStateException("database unavailable");
-    doThrow(failure)
-        .when(mapper)
-        .advance(PipelineProgressAdvanceParam.builder()
-            .tenantId(TENANT)
-            .pipelineInstanceId(INSTANCE)
-            .stage("LOAD")
-            .positionMarker("row:500")
-            .processedCountIncrement(500L)
-            .build());
+    @Test
+    @DisplayName("存储异常:记录 failure 指标并保留原异常")
+    void shouldRecordFailureAndRethrow() {
+        IllegalStateException failure = new IllegalStateException("database unavailable");
+        doThrow(failure)
+                .when(mapper)
+                .advance(PipelineProgressAdvanceParam.builder()
+                        .tenantId(TENANT)
+                        .pipelineInstanceId(INSTANCE)
+                        .stage("LOAD")
+                        .positionMarker("row:500")
+                        .processedCountIncrement(500L)
+                        .build());
 
-    assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
-        .isSameAs(failure);
+        assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
+                .isSameAs(failure);
 
-    assertMetric("LOAD", "advance", "failure", 1.0);
-  }
+        assertMetric("LOAD", "advance", "failure", 1.0);
+    }
 
-  @Test
-  @DisplayName("load 是只读路径,不会触发 advance / markCompleted")
-  void shouldNotMutate_whenLoadingPosition() {
-    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(null);
+    @Test
+    @DisplayName("load 是只读路径,不会触发 advance / markCompleted")
+    void shouldNotMutate_whenLoadingPosition() {
+        when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(null);
 
-    store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
+        store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
 
-    // findByInstanceAndStage 触发(by when()),advance / markCompleted 不触发
-    verify(mapper).findByInstanceAndStage(TENANT, INSTANCE, "LOAD");
-  }
+        // findByInstanceAndStage 触发(by when()),advance / markCompleted 不触发
+        verify(mapper).findByInstanceAndStage(TENANT, INSTANCE, "LOAD");
+    }
 
-  private void assertResumeSkipped(String stage, double expected) {
-    assertThat(meterRegistry
-            .get(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
-            .tags("stage", stage)
-            .counter()
-            .count())
-        .isEqualTo(expected);
-  }
+    private void assertResumeSkipped(String stage, double expected) {
+        assertThat(meterRegistry
+                        .get(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
+                        .tags("stage", stage)
+                        .counter()
+                        .count())
+                .isEqualTo(expected);
+    }
 
-  private void assertMetric(String stage, String operation, String outcome, double expected) {
-    assertThat(meterRegistry
-            .get(DefaultProcessingPositionStore.METRIC_OPERATIONS)
-            .tags("stage", stage, "operation", operation, "outcome", outcome)
-            .counter()
-            .count())
-        .isEqualTo(expected);
-  }
+    private void assertMetric(String stage, String operation, String outcome, double expected) {
+        assertThat(meterRegistry
+                        .get(DefaultProcessingPositionStore.METRIC_OPERATIONS)
+                        .tags("stage", stage, "operation", operation, "outcome", outcome)
+                        .counter()
+                        .count())
+                .isEqualTo(expected);
+    }
 }

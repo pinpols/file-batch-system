@@ -22,68 +22,66 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 @DisplayName("处理阶段 Bean 注册:启动时先清空旧注册,再把阶段步骤与计算插件按模块写入注册表")
 class ProcessStepBeanRegistrarTest {
 
-  @Test
-  @DisplayName("启动注册时先按模块清空旧条目,再分别写入阶段步骤与计算插件的实现码")
-  void registerStepBeansOnStartup_registersStageStepsAndComputePlugins() {
-    ApplicationContext applicationContext = mock(ApplicationContext.class);
-    StepRegistryMapper mapper = mock(StepRegistryMapper.class);
-    ProcessStageStep stageStep = new ProcessStageStep() {
-      @Override
-      public ProcessStage stage() {
-        return ProcessStage.COMPUTE;
-      }
+    @Test
+    @DisplayName("启动注册时先按模块清空旧条目,再分别写入阶段步骤与计算插件的实现码")
+    void registerStepBeansOnStartup_registersStageStepsAndComputePlugins() {
+        ApplicationContext applicationContext = mock(ApplicationContext.class);
+        StepRegistryMapper mapper = mock(StepRegistryMapper.class);
+        ProcessStageStep stageStep = new ProcessStageStep() {
+            @Override
+            public ProcessStage stage() {
+                return ProcessStage.COMPUTE;
+            }
 
-      @Override
-      public String implCode() {
-        return "PROCESS_COMPUTE";
-      }
+            @Override
+            public String implCode() {
+                return "PROCESS_COMPUTE";
+            }
 
-      @Override
-      public ProcessStageResult execute(ProcessJobContext context) {
-        return ProcessStageResult.success(ProcessStage.COMPUTE);
-      }
-    };
-    ProcessComputePlugin plugin = new ProcessComputePlugin() {
-      @Override
-      public String implCode() {
-        return "sqlTransformCompute";
-      }
+            @Override
+            public ProcessStageResult execute(ProcessJobContext context) {
+                return ProcessStageResult.success(ProcessStage.COMPUTE);
+            }
+        };
+        ProcessComputePlugin plugin = new ProcessComputePlugin() {
+            @Override
+            public String implCode() {
+                return "sqlTransformCompute";
+            }
 
-      @Override
-      public ProcessStageResult compute(ProcessJobContext context) {
-        return ProcessStageResult.success(ProcessStage.COMPUTE);
-      }
-    };
+            @Override
+            public ProcessStageResult compute(ProcessJobContext context) {
+                return ProcessStageResult.success(ProcessStage.COMPUTE);
+            }
+        };
 
-    when(applicationContext.getBeansOfType(ProcessStageStep.class))
-        .thenReturn(Map.of("computeStep", stageStep));
-    when(applicationContext.getBeansOfType(ProcessComputePlugin.class))
-        .thenReturn(Map.of("sqlTransformComputePlugin", plugin));
+        when(applicationContext.getBeansOfType(ProcessStageStep.class)).thenReturn(Map.of("computeStep", stageStep));
+        when(applicationContext.getBeansOfType(ProcessComputePlugin.class))
+                .thenReturn(Map.of("sqlTransformComputePlugin", plugin));
 
-    PlatformTransactionManager txManager = new PlatformTransactionManager() {
-      @Override
-      public TransactionStatus getTransaction(TransactionDefinition definition) {
-        return new SimpleTransactionStatus();
-      }
+        PlatformTransactionManager txManager = new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(TransactionDefinition definition) {
+                return new SimpleTransactionStatus();
+            }
 
-      @Override
-      public void commit(TransactionStatus status) {
-        // 无需执行实际操作：注册器测试不需要真实完成事务。
-      }
+            @Override
+            public void commit(TransactionStatus status) {
+                // 无需执行实际操作：注册器测试不需要真实完成事务。
+            }
 
-      @Override
-      public void rollback(TransactionStatus status) {
-        // 无需执行实际操作：注册器测试不需要真实回滚事务。
-      }
-    };
+            @Override
+            public void rollback(TransactionStatus status) {
+                // 无需执行实际操作：注册器测试不需要真实回滚事务。
+            }
+        };
 
-    new ProcessStepBeanRegistrar(applicationContext, mapper, txManager)
-        .registerStepBeansOnStartup();
+        new ProcessStepBeanRegistrar(applicationContext, mapper, txManager).registerStepBeansOnStartup();
 
-    verify(mapper).deleteByModule("PROCESS");
-    verify(mapper)
-        .insertEntry("PROCESS", "PROCESS_COMPUTE", stageStep.getClass().getName());
-    verify(mapper)
-        .insertEntry("PROCESS", "sqlTransformCompute", plugin.getClass().getName());
-  }
+        verify(mapper).deleteByModule("PROCESS");
+        verify(mapper)
+                .insertEntry("PROCESS", "PROCESS_COMPUTE", stageStep.getClass().getName());
+        verify(mapper)
+                .insertEntry("PROCESS", "sqlTransformCompute", plugin.getClass().getName());
+    }
 }

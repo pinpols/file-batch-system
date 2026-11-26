@@ -13,22 +13,21 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleWebhookSubscriptionMapper {
 
-  List<WebhookSubscriptionEntity> findAllByTenant(@Param("tenantId") String tenantId);
+    List<WebhookSubscriptionEntity> findAllByTenant(@Param("tenantId") String tenantId);
 
-  Optional<WebhookSubscriptionEntity> findByTenantAndId(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    Optional<WebhookSubscriptionEntity> findByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  Optional<WebhookSubscriptionEntity> findByTenantAndName(
-      @Param("tenantId") String tenantId, @Param("name") String name);
+    Optional<WebhookSubscriptionEntity> findByTenantAndName(
+            @Param("tenantId") String tenantId, @Param("name") String name);
 
-  List<WebhookSubscriptionEntity> findEnabledByTenant(@Param("tenantId") String tenantId);
+    List<WebhookSubscriptionEntity> findEnabledByTenant(@Param("tenantId") String tenantId);
 
-  /** 统计租户当前有效订阅数，用于创建时的配额校验；已软删的行不计入。 */
-  long countByTenant(@Param("tenantId") String tenantId);
+    /** 统计租户当前有效订阅数，用于创建时的配额校验；已软删的行不计入。 */
+    long countByTenant(@Param("tenantId") String tenantId);
 
-  void insert(ConsoleWebhookSubscriptionInsertParam parameters);
+    void insert(ConsoleWebhookSubscriptionInsertParam parameters);
 
-  void update(ConsoleWebhookSubscriptionUpdateParam parameters);
+    void update(ConsoleWebhookSubscriptionUpdateParam parameters);
 
-  void deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
+    void deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

@@ -12,32 +12,32 @@ import org.springframework.stereotype.Component;
 @Component
 public class PrepareStep implements ProcessStageStep {
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+    private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  @Override
-  public ProcessStage stage() {
-    return ProcessStage.PREPARE;
-  }
+    @Override
+    public ProcessStage stage() {
+        return ProcessStage.PREPARE;
+    }
 
-  @Override
-  public ProcessStageResult execute(ProcessJobContext context) {
-    // P2-5:DefaultProcessStageExecutor 解析时发现 step_definition.impl_code 显式配了某 plugin code
-    // 但 plugin 注册表里找不到 → 这里 fail-fast 拒掉整个 task,避免 typo 静默 success。
-    Object missing = context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND);
-    if (EmptyChecks.isNotNull(missing)) {
-      return ProcessStageResult.failure(
-          stage(),
-          "PROCESS_COMPUTE_PLUGIN_NOT_FOUND",
-          "error.process.compute.plugin_not_found",
-          new Object[] {missing},
-          "process compute plugin not found: " + missing,
-          ERROR_OBJECT_MAPPER);
+    @Override
+    public ProcessStageResult execute(ProcessJobContext context) {
+        // P2-5:DefaultProcessStageExecutor 解析时发现 step_definition.impl_code 显式配了某 plugin code
+        // 但 plugin 注册表里找不到 → 这里 fail-fast 拒掉整个 task,避免 typo 静默 success。
+        Object missing = context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND);
+        if (EmptyChecks.isNotNull(missing)) {
+            return ProcessStageResult.failure(
+                    stage(),
+                    "PROCESS_COMPUTE_PLUGIN_NOT_FOUND",
+                    "error.process.compute.plugin_not_found",
+                    new Object[] {missing},
+                    "process compute plugin not found: " + missing,
+                    ERROR_OBJECT_MAPPER);
+        }
+        ProcessComputePlugin plugin = context.getResolvedPlugin();
+        if (EmptyChecks.isNull(plugin)) {
+            return ProcessStageResult.success(stage());
+        }
+        plugin.prepare(context);
+        return ProcessStageResult.success(stage());
     }
-    ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (EmptyChecks.isNull(plugin)) {
-      return ProcessStageResult.success(stage());
-    }
-    plugin.prepare(context);
-    return ProcessStageResult.success(stage());
-  }
 }

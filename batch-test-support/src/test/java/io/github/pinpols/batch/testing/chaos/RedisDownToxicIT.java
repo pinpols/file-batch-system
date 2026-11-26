@@ -31,80 +31,80 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @DisplayName("Redis 全断注入 — ShedLock redis provider 必快速失败,可被 jdbc fallback 接管;恢复后无副作用")
 class RedisDownToxicIT extends AbstractChaosIntegrationTest {
 
-  @Test
-  @DisplayName("Redis 断 → Lettuce 短 timeout 必抛 RedisConnectionFailure — 上层可 catch 切 jdbc fallback")
-  void shouldFailFastWhenRedisDown() throws Exception {
-    LettuceConnectionFactory factory = newLettuceFactory();
-    try {
-      // 健康路径预热:确认非故障时可正常 ping
-      StringRedisTemplate template = new StringRedisTemplate(factory);
-      assertThat(template.getConnectionFactory().getConnection().ping()).isEqualTo("PONG");
+    @Test
+    @DisplayName("Redis 断 → Lettuce 短 timeout 必抛 RedisConnectionFailure — 上层可 catch 切 jdbc fallback")
+    void shouldFailFastWhenRedisDown() throws Exception {
+        LettuceConnectionFactory factory = newLettuceFactory();
+        try {
+            // 健康路径预热:确认非故障时可正常 ping
+            StringRedisTemplate template = new StringRedisTemplate(factory);
+            assertThat(template.getConnectionFactory().getConnection().ping()).isEqualTo("PONG");
 
-      withDown(
-          ProxyTarget.REDIS,
-          () -> assertThatThrownBy(
-                  () -> template.getConnectionFactory().getConnection().ping())
-              .isInstanceOf(DataAccessException.class));
-    } finally {
-      factory.destroy();
+            withDown(
+                    ProxyTarget.REDIS,
+                    () -> assertThatThrownBy(() -> template.getConnectionFactory()
+                                    .getConnection()
+                                    .ping())
+                            .isInstanceOf(DataAccessException.class));
+        } finally {
+            factory.destroy();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("Redis 断 + RedisLockProvider.lock → 抛连接异常(应用可 catch 走 jdbc fallback 分支)")
-  void redisLockProvider_whenRedisDown_shouldThrow() throws Exception {
-    LettuceConnectionFactory factory = newLettuceFactory();
-    try {
-      LockProvider provider = ShedLockProviderFactory.redisLockProvider(factory, "chaos");
-      LockConfiguration cfg = new LockConfiguration(
-          BatchDateTimeSupport.utcNow(),
-          "chaos-redis-down-" + System.nanoTime(),
-          Duration.ofSeconds(30),
-          Duration.ZERO);
+    @Test
+    @DisplayName("Redis 断 + RedisLockProvider.lock → 抛连接异常(应用可 catch 走 jdbc fallback 分支)")
+    void redisLockProvider_whenRedisDown_shouldThrow() throws Exception {
+        LettuceConnectionFactory factory = newLettuceFactory();
+        try {
+            LockProvider provider = ShedLockProviderFactory.redisLockProvider(factory, "chaos");
+            LockConfiguration cfg = new LockConfiguration(
+                    BatchDateTimeSupport.utcNow(),
+                    "chaos-redis-down-" + System.nanoTime(),
+                    Duration.ofSeconds(30),
+                    Duration.ZERO);
 
-      // 故障前:lock 正常
-      SimpleLock pre = provider.lock(cfg).orElseThrow();
-      pre.unlock();
+            // 故障前:lock 正常
+            SimpleLock pre = provider.lock(cfg).orElseThrow();
+            pre.unlock();
 
-      withDown(
-          ProxyTarget.REDIS,
-          () ->
-              // Spring Data Redis 把 Lettuce 连接/超时异常封装为 DataAccessException 子类:
-              // RedisConnectionFailure / RedisSystemException / QueryTimeoutException 等都属此分类。
-              assertThatThrownBy(() -> provider.lock(cfg)).isInstanceOf(DataAccessException.class));
+            withDown(
+                    ProxyTarget.REDIS,
+                    () ->
+                            // Spring Data Redis 把 Lettuce 连接/超时异常封装为 DataAccessException 子类:
+                            // RedisConnectionFailure / RedisSystemException / QueryTimeoutException 等都属此分类。
+                            assertThatThrownBy(() -> provider.lock(cfg)).isInstanceOf(DataAccessException.class));
 
-      // 故障消除后恢复 — Lettuce 持久连接需要短暂时间重连,轮询最多 5s 内必恢复
-      SimpleLock post = pollUntilLockSucceeds(provider, cfg, Duration.ofSeconds(5));
-      post.unlock();
-    } finally {
-      factory.destroy();
+            // 故障消除后恢复 — Lettuce 持久连接需要短暂时间重连,轮询最多 5s 内必恢复
+            SimpleLock post = pollUntilLockSucceeds(provider, cfg, Duration.ofSeconds(5));
+            post.unlock();
+        } finally {
+            factory.destroy();
+        }
     }
-  }
 
-  private SimpleLock pollUntilLockSucceeds(
-      LockProvider provider, LockConfiguration cfg, Duration timeout) throws InterruptedException {
-    long deadline = System.nanoTime() + timeout.toNanos();
-    RuntimeException last = null;
-    while (System.nanoTime() < deadline) {
-      try {
-        return provider.lock(cfg).orElseThrow();
-      } catch (RuntimeException ex) {
-        last = ex;
-        Thread.sleep(100);
-      }
+    private SimpleLock pollUntilLockSucceeds(LockProvider provider, LockConfiguration cfg, Duration timeout)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        RuntimeException last = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                return provider.lock(cfg).orElseThrow();
+            } catch (RuntimeException ex) {
+                last = ex;
+                Thread.sleep(100);
+            }
+        }
+        throw new AssertionError("RedisLockProvider 未在恢复窗口内自愈", last);
     }
-    throw new AssertionError("RedisLockProvider 未在恢复窗口内自愈", last);
-  }
 
-  private LettuceConnectionFactory newLettuceFactory() {
-    RedisStandaloneConfiguration cfg =
-        new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
-    LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
-        .commandTimeout(Duration.ofSeconds(2))
-        .shutdownTimeout(Duration.ZERO)
-        .build();
-    LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
-    factory.afterPropertiesSet();
-    return factory;
-  }
+    private LettuceConnectionFactory newLettuceFactory() {
+        RedisStandaloneConfiguration cfg = new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
+        LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofSeconds(2))
+                .shutdownTimeout(Duration.ZERO)
+                .build();
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
+        factory.afterPropertiesSet();
+        return factory;
+    }
 }

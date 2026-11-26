@@ -8,20 +8,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class LocalDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  private final DispatchRuntimeProperties runtimeProperties;
+    private final DispatchRuntimeProperties runtimeProperties;
 
-  public LocalDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
-    this.runtimeProperties = runtimeProperties;
-  }
+    public LocalDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
+        this.runtimeProperties = runtimeProperties;
+    }
 
-  @Override
-  public boolean supports(String channelType) {
-    return FileChannelType.LOCAL.code().equalsIgnoreCase(channelType);
-  }
+    @Override
+    public boolean supports(String channelType) {
+        return FileChannelType.LOCAL.code().equalsIgnoreCase(channelType);
+    }
 
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-        command, false, null, runtimeProperties);
-  }
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        return LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, false, null, runtimeProperties);
+    }
 }

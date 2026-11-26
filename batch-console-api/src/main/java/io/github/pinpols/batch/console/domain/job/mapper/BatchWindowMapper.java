@@ -10,28 +10,26 @@ import org.apache.ibatis.annotations.Param;
 
 public interface BatchWindowMapper {
 
-  List<BatchWindowRow> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("windowCode") String windowCode,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+    List<BatchWindowRow> selectByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("windowCode") String windowCode,
+            @Param("enabled") Boolean enabled,
+            @Param("pageRequest") PageRequest pageRequest);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("windowCode") String windowCode,
-      @Param("enabled") Boolean enabled);
+    long countByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("windowCode") String windowCode,
+            @Param("enabled") Boolean enabled);
 
-  BatchWindowRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    BatchWindowRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  BatchWindowRow selectByUniqueKey(
-      @Param("tenantId") String tenantId, @Param("windowCode") String windowCode);
+    BatchWindowRow selectByUniqueKey(@Param("tenantId") String tenantId, @Param("windowCode") String windowCode);
 
-  int upsertBatchWindow(BatchWindowUpsertParam param);
+    int upsertBatchWindow(BatchWindowUpsertParam param);
 
-  int insert(BatchWindowInsertParam params);
+    int insert(BatchWindowInsertParam params);
 
-  int update(BatchWindowUpdateParam params);
+    int update(BatchWindowUpdateParam params);
 
-  int toggleEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    int toggleEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 }

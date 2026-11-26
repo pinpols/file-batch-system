@@ -9,5 +9,4 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * 参数缺失时对应键不出现。故用 {@code NON_NULL} 省略 null 字段，保持键集与历史 wire 一致。 值均为系统参数原始字符串。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ConsoleTenantUsageSummaryResponse(
-    String runningJobs, String dailyTriggers, String fileCount) {}
+public record ConsoleTenantUsageSummaryResponse(String runningJobs, String dailyTriggers, String fileCount) {}

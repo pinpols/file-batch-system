@@ -23,75 +23,66 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class TriggerApiApplicationService {
-  private final TriggerService triggerService;
-  private final TriggerDrainService drainService;
-  private final TriggerLaunchAdmissionService launchAdmissionService;
-  private final TriggerRequestPolicy requestPolicy;
+    private final TriggerService triggerService;
+    private final TriggerDrainService drainService;
+    private final TriggerLaunchAdmissionService launchAdmissionService;
+    private final TriggerRequestPolicy requestPolicy;
 
-  public LaunchResponse launch(
-      TriggerApiKeyPrincipal principal,
-      TriggerLaunchInput input,
-      String idempotencyKey,
-      String requestId,
-      String traceId) {
-    requestPolicy.authorizeLaunch(
-        principal, input.triggerType(), input.tenantId(), input.externalEventSource());
-    drainService.ensureAcceptingLaunches();
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(input, idempotencyKey, finalRequestId, finalTraceId);
-    return launchAdmissionService.execute(() -> triggerService.launch(command));
-  }
-
-  public ExternalEventLaunchResponse launchEvent(
-      TriggerApiKeyPrincipal principal,
-      ExternalEventLaunchInput input,
-      String idempotencyKey,
-      String requestId,
-      String traceId) {
-    requestPolicy.authorizeExternalEvent(principal, input.tenantId());
-    drainService.ensureAcceptingLaunches();
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("event") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
-        input, principal.keyName(), idempotencyKey, finalRequestId, finalTraceId);
-    return launchAdmissionService.execute(() -> triggerService.launchExternalEvent(command));
-  }
-
-  public ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
-      ScheduledOccurrenceCatchUpInput input,
-      String idempotencyKey,
-      String requestId,
-      String traceId) {
-    drainService.ensureAcceptingLaunches();
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    ScheduledOccurrenceCatchUpCommand command =
-        new ScheduledOccurrenceCatchUpCommand(input, idempotencyKey, finalRequestId, finalTraceId);
-    return launchAdmissionService.execute(() -> triggerService.catchUpRejectedOccurrence(command));
-  }
-
-  public ExternalEventLaunchStatus externalEventStatus(
-      TriggerApiKeyPrincipal principal, String tenantId, String idempotencyKey) {
-    requestPolicy.authorizeExternalEvent(principal, tenantId);
-    return triggerService.findExternalEventStatus(tenantId, principal.keyName(), idempotencyKey);
-  }
-
-  public TriggerLaunchStatus launchStatus(
-      TriggerApiKeyPrincipal principal, String tenantId, String idempotencyKey) {
-    if (EmptyChecks.isNull(principal)) {
-      return triggerService.findLaunchStatus(tenantId, idempotencyKey);
+    public LaunchResponse launch(
+            TriggerApiKeyPrincipal principal,
+            TriggerLaunchInput input,
+            String idempotencyKey,
+            String requestId,
+            String traceId) {
+        requestPolicy.authorizeLaunch(principal, input.triggerType(), input.tenantId(), input.externalEventSource());
+        drainService.ensureAcceptingLaunches();
+        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
+        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        TriggerLaunchCommand command = new TriggerLaunchCommand(input, idempotencyKey, finalRequestId, finalTraceId);
+        return launchAdmissionService.execute(() -> triggerService.launch(command));
     }
-    requestPolicy.authorizeExternalEvent(principal, tenantId);
-    return triggerService.findLaunchStatus(tenantId, idempotencyKey, principal.keyName());
-  }
 
-  public LaunchResponse approveCatchUp(PendingCatchUpApprovalCommand command) {
-    drainService.ensureAcceptingLaunches();
-    return triggerService.approvePendingCatchUp(command);
-  }
+    public ExternalEventLaunchResponse launchEvent(
+            TriggerApiKeyPrincipal principal,
+            ExternalEventLaunchInput input,
+            String idempotencyKey,
+            String requestId,
+            String traceId) {
+        requestPolicy.authorizeExternalEvent(principal, input.tenantId());
+        drainService.ensureAcceptingLaunches();
+        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("event") : requestId;
+        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
+                input, principal.keyName(), idempotencyKey, finalRequestId, finalTraceId);
+        return launchAdmissionService.execute(() -> triggerService.launchExternalEvent(command));
+    }
+
+    public ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
+            ScheduledOccurrenceCatchUpInput input, String idempotencyKey, String requestId, String traceId) {
+        drainService.ensureAcceptingLaunches();
+        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
+        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        ScheduledOccurrenceCatchUpCommand command =
+                new ScheduledOccurrenceCatchUpCommand(input, idempotencyKey, finalRequestId, finalTraceId);
+        return launchAdmissionService.execute(() -> triggerService.catchUpRejectedOccurrence(command));
+    }
+
+    public ExternalEventLaunchStatus externalEventStatus(
+            TriggerApiKeyPrincipal principal, String tenantId, String idempotencyKey) {
+        requestPolicy.authorizeExternalEvent(principal, tenantId);
+        return triggerService.findExternalEventStatus(tenantId, principal.keyName(), idempotencyKey);
+    }
+
+    public TriggerLaunchStatus launchStatus(TriggerApiKeyPrincipal principal, String tenantId, String idempotencyKey) {
+        if (EmptyChecks.isNull(principal)) {
+            return triggerService.findLaunchStatus(tenantId, idempotencyKey);
+        }
+        requestPolicy.authorizeExternalEvent(principal, tenantId);
+        return triggerService.findLaunchStatus(tenantId, idempotencyKey, principal.keyName());
+    }
+
+    public LaunchResponse approveCatchUp(PendingCatchUpApprovalCommand command) {
+        drainService.ensureAcceptingLaunches();
+        return triggerService.approvePendingCatchUp(command);
+    }
 }
