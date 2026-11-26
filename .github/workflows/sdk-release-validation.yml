@@ -100,7 +100,13 @@ jobs:
           package-manager-cache: false
       - name: TypeScript conformance + parity
         if: matrix.lang == 'typescript'
-        run: node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
+        working-directory: sdk/typescript
+        # 测试会 import kafkajs 等运行时依赖；发布校验必须与 contract job 一样先装依赖，
+        # 否则在到达 package + smoke 之前就以 ERR_MODULE_NOT_FOUND 失败。
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          cd "$GITHUB_WORKSPACE"
+          node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
 
       - name: Set up Go
         if: matrix.lang == 'go'
