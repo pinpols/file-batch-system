@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `0ce367ee4` + 当前工作区改动。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `e1bb569fc`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,404 | 828,687 | 442,301 | 53.4% |
+| 6,400 | 820,232 | 438,488 | 53.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,954 | 417,019 | 229,936 | 55.1% |
+| test | 1,950 | 408,564 | 226,123 | 55.3% |
 | prod | 3,528 | 323,026 | 157,431 | 48.7% |
 | script | 742 | 69,534 | 42,498 | 61.1% |
 | config | 68 | 10,283 | 7,684 | 74.7% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,829 | 640,760 | 347,942 | 54.3% |
+| Java | 4,825 | 632,305 | 344,129 | 54.4% |
 | Python | 353 | 53,571 | 29,378 | 54.8% |
 | Shell | 219 | 36,285 | 28,722 | 79.2% |
 | YAML | 110 | 15,074 | 11,648 | 77.3% |
@@ -47,9 +47,7 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,776 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,039 | 1,370 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,039 | 1,370 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,039 | 1,370 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,981 | 1,346 |
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,461 | 1,336 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,588 | 1,328 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,586 | 1,328 |
@@ -59,6 +57,8 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DispatchPipelineE2eIT.java` | test | Java | 1,965 | 988 |
 | `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,474 | 954 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,544 | 951 |
+| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 1,031 | 940 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,774 | 928 |
 
 ## 复跑
 
