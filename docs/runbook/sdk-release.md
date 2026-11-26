@@ -36,7 +36,8 @@ flowchart TB
    - **TypeScript**:`npm run build`(tsc 编译 `src/*.ts` → `dist/*.js + *.d.ts`)→ `npm pack` 出 tarball → 新临时目录 `npm i <tarball>` + 跑最小脚本 `classifyHttp(500,1)`。
      > ⚠️ TS SDK **必须编译后发布**:Node 拒绝对 `node_modules` 下的 `.ts` 做 type-stripping,直接发原始 `.ts` 装上后 `import` 即 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`。`package.json` 的 `exports`/`main`/`types` 指向 `dist/`,`files` 只含 `dist`。
    - **Python**:`python -m build` 出 sdist + wheel → 全新 venv `pip install <wheel>` → `import batch_worker_sdk` + 引用公共 SPI(`SdkAbstractTaskHandler` / `SdkTaskResult`)。
-   - **Java**:`mvn -pl sdk/java/core -am install` 装到本地 m2 → 独立消费 pom 引 `io.github.pinpols.batch:batch-worker-sdk:${revision}` 编译最小 handler,证明发布 jar 的入口 + 依赖闭包能被外部工程解析。
+   - **Java**:`mvn -pl sdk/java/core,sdk/java/spring -am install` 装 core + starter → 独立消费 pom 同时引 `batch-worker-sdk` 与 `batch-worker-sdk-spring-boot-starter`，编译后用 `exec:java` 启动最小 `SpringApplication` 上下文（`batch.worker-sdk.enabled=false`），验证打包后的 starter 自动装配、属性绑定和依赖闭包能在外部工程加载。
+     > starter 目前只做本地打包/消费冒烟，尚未纳入 `publish-maven` 的 Central 发布集合；正式发布范围见 [`docs/sdk/RELEASING.md`](../sdk/RELEASING.md) §Java。
    - **Go**:tag-based 无产物 → `go vet` + `go build` + `go list -m`(模块可解析)。
    - **Rust**:`cargo package --no-verify` 产 `.crate`,校验打包元数据完整。
 4. **supply-chain(best-effort,失败不挂)**:syft 生成 SBOM(SPDX-JSON,上传 artifact);oasdiff 对上个 release 生成 protocol changelog(上传 artifact)。

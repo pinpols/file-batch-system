@@ -143,7 +143,12 @@ git commit -m "release: X.Y.Z"
 包含作业实例 `exactJobCode` 筛选的联合版本，需先更新并核验所有接收 Console 查询的后端实例，再加载使用该参数的前端；现有 Compose 一次更新多个服务并不保证此顺序。旧 Console 会忽略新参数，退回模糊筛选，不能据此认定精确结果正确。已打开页面跨版本及滚动混版需单独验证，不能将同版本制品本身作为兼容证据。
 
 将该 Release Manifest 部署到 staging，完成后端门禁、真实前后端 E2E、前端可访问性与 Lighthouse、
-升级和回滚检查。只有同一组 SHA/digest 的发布候选通过验收，才能在两个仓库对应 commit 上创建同名
+升级和回滚检查。staging 验收至少还应覆盖以下跨边界入口，未执行时不得记为实现验证：
+
+- **Ingress 入口**：经真实域名与路径前缀验证 OIDC 回跳、`Location` 响应头与 SSE 长连接；仓库默认 Ingress 关闭且示例路径为 `/`，不能替代目标环境的注解、前缀与代理策略。
+- **混合版本**：在同一 staging 存量数据上验证上一版本 Worker 与新版本 Orchestrator（例如 4.1 Worker + 4.2 Orchestrator）的领取、回报、租约接管与重复投递；CI/E2E 通过不能作为混跑兼容证据。
+
+只有同一组 SHA/digest 的发布候选通过验收，才能在两个仓库对应 commit 上创建同名
 版本 tag，并分别生成 GitHub Release；后端 tag 继续遵循 §6 的 annotated tag 要求：
 
 ```bash

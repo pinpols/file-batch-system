@@ -98,6 +98,8 @@ mvn -pl sdk/java/core -am -DskipTests -Prelease -Dgpg.skip=true package
 
 > ⚠ 真发前务必先做 §0.1:把根 `<groupId>` 从 `io.github.pinpols.batch` 改成自有已验证命名空间,否则 Central 上传会被拒。
 
+> **starter 发布范围**：当前 `publish-maven` 只 deploy `sdk/java/core`。`sdk/java/spring` 的 starter 已纳入发布冒烟（本地安装 + 独立消费者启动最小上下文），但尚无 `release` profile，也不在 Central 发布集合；对外承诺 starter 依赖前需先补 release profile、发布范围与凭证验收。
+
 ---
 
 ## 3. 发布后

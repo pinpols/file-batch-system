@@ -200,10 +200,15 @@ cleanup_orphan_testcontainers() {
 }
 
 run_mvn() {
+  local include_extra=1
+  if [[ "${1:-}" == "--no-extra" ]]; then
+    include_extra=0
+    shift
+  fi
   local mvn_bin
   mvn_bin="$(batch_resolve_maven_command "$ROOT_DIR")"
   local -a cmd=("$mvn_bin" -T "$MAVEN_THREADS" --no-transfer-progress "$@")
-  if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
+  if (( include_extra == 1 && ${#EXTRA_MVN_ARGS[@]} > 0 )); then
     cmd+=("${EXTRA_MVN_ARGS[@]}")
   fi
   printf -- '> %s\n\n' "${cmd[*]}"
@@ -431,17 +436,25 @@ fi
 #   - 单独执行能通过，但聚合执行时误报失败
 #
 # 当前策略：
-#   1. 先对核心模块执行一次 clean install -DskipTests
-#   2. 再按模块逐个执行 test，避免把所有模块绑在同一个 test reactor 里
+#   1. 先安装根 POM（-N install），确保子模块从本地仓库解析到与源码一致的父 POM
+#   2. 再对核心模块执行一次 clean install -DskipTests
+#   3. 再按模块逐个执行 test，避免把所有模块绑在同一个 test reactor 里
 #
 # 这样做的目标不是“掩盖真实失败”，而是把模块隔离开，确保失败定位到
 # 真实的模块自身，而不是 Maven / mvnd 的聚合执行副作用。
 # -------------------------------------------------------------
 
+install_root_pom() {
+  # 子模块在 -pl 模式下会从本地仓库解析父 POM；缓存落后会让测试混用旧依赖管理。
+  # 透传参数可能含 -pl，而 -N 与 -pl 互斥，根安装固定不携带透传参数。
+  run_mvn --no-extra -N install -DskipTests
+}
+
 build_core_modules() {
-  run_mvn clean install \
-    -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
-    -DskipTests
+  install_root_pom && \
+    run_mvn clean install \
+      -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
+      -DskipTests
 }
 
 # 仅在未设置 --skip-build 时执行构建；已构建时直接返回 0
