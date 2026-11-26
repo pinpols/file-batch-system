@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `6a8d03116`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `e4dd14069`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,400 | 840,495 | 438,930 | 52.2% |
+| 6,400 | 840,493 | 438,932 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,950 | 420,410 | 226,214 | 53.8% |
+| test | 1,950 | 420,408 | 226,216 | 53.8% |
 | prod | 3,528 | 331,443 | 157,782 | 47.6% |
 | script | 742 | 69,534 | 42,498 | 61.1% |
 | config | 68 | 10,283 | 7,684 | 74.7% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,825 | 652,568 | 344,571 | 52.8% |
+| Java | 4,825 | 652,566 | 344,573 | 52.8% |
 | Python | 353 | 53,571 | 29,378 | 54.8% |
 | Shell | 219 | 36,285 | 28,722 | 79.2% |
 | YAML | 110 | 15,074 | 11,648 | 77.3% |
@@ -47,7 +47,7 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,916 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,072 | 1,348 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,071 | 1,350 |
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,461 | 1,336 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,588 | 1,328 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,586 | 1,328 |
