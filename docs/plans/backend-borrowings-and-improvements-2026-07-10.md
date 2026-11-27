@@ -285,6 +285,56 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 
 各批实现后回填实际范围、执行命令及结果，在对应计划记录采纳或暂缓原因。应用范围内的复用变更以各自代码差异回退，告警按已有开关回滚。本阶段保留方案与基线证据。
 
+<a id="remaining-self-built-components-2026-11-27"></a>
+
+## 8. 剩余自研组件抽取与替换复核（2026-11-27）
+
+基线与前节一致（`origin/main` `699229706`）。复核范围是 main 代码中「依赖已在 classpath」或「同仓已有等价实现」却仍自研的基础方法。对同名类做了字节级比对，未发现完全相同的副本，因此下列各项均为**同功能、不同实现**，不是复制粘贴。本轮只出方案，未改动代码。
+
+### 8.1 判定总表
+
+| 项 | 现状与证据 | 判定 |
+|---|---|---|
+| SHA-256 私有方法 | 18 处：String→hex 14 处（replay 6 处，`AlertFingerprints` / `AliyunSmsProvider` / `TencentSmsProvider` / `JobPushIntakeService` / `RedisOidcAuthorizationRequestRepository` / `DefaultConsoleAiApplicationService` / `BatchDayCatchUpOperationStore` / `ImportIngressScanner` 各 1 处）、byte[]→hex 2 处、Map→hex 1 处、文件流 1 处；另有 `DispatchManifestSupport` 的 `MessageDigest` 工厂 1 处；输出统一为小写 hex | 采纳：抽取 |
+| Webhook 重试 | `WebhookDispatcher` 1 处、`SubscriptionRuleWebhookDispatcher` 2 处，均为 3 次尝试、250ms 起、逐次翻倍；`sleep` 实现重复 2 份 | 采纳：抽取 |
+| Console Redis 熔断器 | [RedisRateLimitCircuitBreaker](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/RedisRateLimitCircuitBreaker.java) 92 行手写 CAS 状态机；orchestrator 同名类已用 Resilience4j，[DownstreamFallback](../../batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java) 已有共享 `CircuitBreakerRegistry` 先例 | 采纳：替换 |
+| 空值/字符串工具 | `EmptyChecks` 4 547 处调用 / 734 个文件，`Texts` 1 097 / 266，`Nullables` 111，`Guard` 517；另有 3 处仍用 Spring `StringUtils` | 不采纳整体替换，仅对齐 3 处 |
+| 限流算法 | console `SlidingWindowRateLimiter`（Redis ZSET + Lua）与 orchestrator `TokenBucketRateLimiter`（Bucket4j）并存，语义不同 | 暂缓 |
+| Pipeline 进度缓存 | `PipelineStageProgressCache` 253 行，3 个 `ConcurrentHashMap` + 每分钟扫除 | 暂缓 |
+| 时间源 | `BatchDateTimeSupport` 之外 10+ 生产类直接 `Instant.now()` / `System.currentTimeMillis()` | 暂缓（单独批次） |
+| 跨模块 POJO/Mapper | 58 个同名文件（6 个 `package-info`），集中为 `JobInstanceEntity`、`ApprovalCommandEntity`、`RetryScheduleEntity` 等 | 另立项 |
+
+`EmptyChecks` 的调用量决定了整体替换的收益为负：改动 5 000 余处、行为零变化，且回退面覆盖全部模块。只把 [TenantConfigReferenceResolver](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigReferenceResolver.java) 第 128 行、[DefaultConsoleTenantConfigCopyService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java) 第 872 行的 3 处 `StringUtils.hasText` 改为 `Texts.hasText`，同时修正 `Texts` 注释中「全仓仅用到 hasText」的过期描述。SDK 的 `EmptyChecks` 保持独立，SDK 不依赖 Spring。
+
+### 8.2 批次 1：哈希收敛（抽取，零语义变化）
+
+1. 在 [Hashes](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/Hashes.java) 增加 `sha256Hex(String)` 与 `sha256Hex(byte[])`，沿用现有 `sha256Short` 的异常处理（算法不可用抛 `IllegalStateException`）。输出必须是小写 hex，与 `HexFormat.of().formatHex` 一致。
+2. 替换 String→hex 的 14 处与 byte[]→hex 的 2 处；`ImportIngressOwnershipIdentity` 的 Map 版本先经现有 `JsonUtils` 序列化后调用 `sha256Hex(byte[])`，保持键序稳定；`AlertFingerprints` 的 `String.format("%02x")` 一并改为 `HexFormat`（输出不变）。文件流式的 `StoreStep.sha256Hex(Path)` 保留，避免整文件读入内存。
+3. 验收：新增 `HashesTest` 覆盖空串、中文、长文本、字节数组与旧实现逐字节一致；`AlertFingerprintsTest` 通过；受影响模块 `test-compile`。回退为单批代码差异。
+
+### 8.3 批次 2：Webhook 重试抽取（抽取，行为不变）
+
+1. 新增 `BurstRetryExecutor`（console `support/notification`），入参为最大尝试次数、初始退避、单次尝试 `Supplier` 与成功判定，返回「实际尝试次数 + 最后一次结果」；中断时记录并恢复中断标志，不再继续尝试。
+2. `WebhookDispatcher.deliverPersisted` 与 `SubscriptionRuleWebhookDispatcher` 的两处循环改用它；成功/失败的投递日志持久化移到循环之后，使用返回的尝试次数与最后结果；两份 `sleep` 合并为一份。
+3. 验收：`WebhookDispatcherTest`、`SubscriptionRuleWebhookDispatcherTest`、`WebhookDeliveryRelayTest` 保持通过；新增用例断言实际请求次数、退避间隔序列、中断后不再尝试、最后一次响应/错误摘要与投递日志状态。不引入 `resilience4j-retry`：三个调用点的持久化回调差异较大，抽取执行器比套库更小且更易回退。
+
+### 8.4 批次 3：Console 熔断器改 R4J（替换）
+
+1. 用共享 `CircuitBreakerRegistry`（`ObjectProvider` 取，缺省 `CircuitBreakerRegistry.ofDefaults()`）注册 `consoleRateLimitRedis`：`slidingWindowSize = minimumNumberOfCalls = redisFailureThreshold`、`failureRateThreshold = 100`、`waitDurationInOpenState = redisCircuitOpenSeconds`、`permittedNumberOfCallsInHalfOpenState = 1`。这与现有「连续 N 次失败才打开、冷却期只放一个探针」等价。
+2. 调用侧语义不变：`allowRedisCall` → `tryAcquirePermission`，`recordSuccess` / `recordFailure` → `onSuccess` / `onError`，`isOpen` → `getState() == OPEN`。保留 `batch.console.rate_limit.redis.failure` 与 `batch.console.rate_limit.redis.circuit.open` 两个指标名和 fail-open 方向。
+3. 验收：`RedisRateLimitCircuitBreakerTest`、`ConsoleRateLimitFilterTest`、`ConsoleOidcAuthorizationRateLimitFilterTest`；补充「阈值前放行、达到阈值后短路、冷却期仅一个探针、成功后清零」用例，并核对指标名未变。
+
+### 8.5 暂缓项的触发条件
+
+- **限流统一到 Bucket4j**：先取得 login/敏感操作的阈值清单与边界突发要求，再用同一组场景对照严格窗口与 greedy refill 的放行差异；差异可接受才进入实施。当前两套算法各自有注释说明取舍，不在本批合并。
+- **`PipelineStageProgressCache` 收编 Caffeine**：只有该类再次因容量或淘汰被改动时，才把 `taskStore` 的 TTL 与扫除换成 `expireAfterWrite + removalListener`；反向索引与 claim 身份仍自管。
+- **时间源注入**：作为独立批次逐类确认是否刻意取墙钟，避免把「必须取系统时间」的路径误改为业务时钟。
+- **跨模块 POJO/Mapper**：需要模块所有权与契约边界的专项，先定共享读模型的归属，不在基础组件复用的范围内推进。
+
+### 8.6 交付方式
+
+三批互不依赖，各自一个 PR，可按批次独立回退；均不新增依赖（Caffeine、Resilience4j 已在 `pom.xml`），无需 SBOM 变更。本轮未运行任何构建或测试，上述验收条件全部待实施时执行。
+
 ---
 
 *依据:2026-07 两轮深度审计 + 对抗式复扫(#766–784),及范围边界文档。工作量为单人粗估,多 agent 并行可压缩 wall-clock。*
