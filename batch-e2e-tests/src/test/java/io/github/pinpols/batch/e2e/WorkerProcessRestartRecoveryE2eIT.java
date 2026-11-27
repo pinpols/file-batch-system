@@ -33,6 +33,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -115,7 +116,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             Path.of(System.getProperty("java.home"), "bin", "java").toString();
     private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
     private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
-
+    private static final int WORKER_BUILD_LOG_TAIL_LINES = 40;
     private final WorkflowRunLaunchService launchService;
 
     private final ConsoleConfigSyncApplicationService configSyncService;
@@ -759,16 +760,38 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         try {
             if (!process.waitFor(WORKER_BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
                 process.destroyForcibly();
-                throw new IllegalStateException("timed out building batch-worker-dispatch; see " + logFile);
+                throw new IllegalStateException(
+                        "timed out building batch-worker-dispatch; " + buildFailureDetail(rootDir, logFile));
             }
             if (process.exitValue() != 0) {
-                throw new IllegalStateException("failed to build batch-worker-dispatch; see " + logFile);
+                throw new IllegalStateException(
+                        "failed to build batch-worker-dispatch; " + buildFailureDetail(rootDir, logFile));
             }
         } finally {
             if (process.isAlive()) {
                 process.destroyForcibly();
             }
         }
+    }
+
+    // 内嵌 mvn 的临时日志不会被 CI 归档，失败时把日志落到 logs/verification 并附上尾部输出，
+    // 否则只剩「构建失败」一句结论，无法判断是依赖解析还是插件执行的问题。
+    private String buildFailureDetail(Path rootDir, Path logFile) {
+        Path archived = rootDir.resolve("logs/verification/e2e/worker-dispatch-build.log");
+        try {
+            Files.createDirectories(archived.getParent());
+            Files.copy(logFile, archived, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            return "see " + logFile;
+        }
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(logFile);
+        } catch (IOException e) {
+            return "see " + archived;
+        }
+        List<String> tail = lines.subList(Math.max(0, lines.size() - WORKER_BUILD_LOG_TAIL_LINES), lines.size());
+        return "see " + archived + System.lineSeparator() + String.join(System.lineSeparator(), tail);
     }
 
     private Path findLatestExecJar(Path targetDir) throws IOException {
