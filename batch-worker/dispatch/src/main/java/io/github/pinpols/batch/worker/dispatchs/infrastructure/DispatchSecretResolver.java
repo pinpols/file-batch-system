@@ -42,7 +42,7 @@ public class DispatchSecretResolver {
             throw new DispatchSecretBlockedException("DISPATCH_SECRET_VERSION_INVALID");
         }
         Object rawId = binding.get("secretVersionId");
-        if (EmptyChecks.isNull(rawId)) {
+        if (rawId == null) {
             throw new DispatchSecretBlockedException("DISPATCH_SECRET_VERSION_MISSING");
         }
         Long secretVersionId;
@@ -76,7 +76,7 @@ public class DispatchSecretResolver {
     private Map<String, Object> parseCredentials(String json) {
         try {
             Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<>() {});
-            return EmptyChecks.isNull(parsed) ? Map.of() : parsed;
+            return parsed == null ? Map.of() : parsed;
         } catch (Exception exception) {
             throw new DispatchSecretBlockedException("DISPATCH_SECRET_PAYLOAD_INVALID");
         }

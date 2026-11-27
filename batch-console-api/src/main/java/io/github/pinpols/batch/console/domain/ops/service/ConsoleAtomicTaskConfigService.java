@@ -154,7 +154,7 @@ public class ConsoleAtomicTaskConfigService {
                 continue;
             }
             Object value = parameters.get(spec.name());
-            boolean requiredParameterIsMissing = EmptyChecks.isNull(value)
+            boolean requiredParameterIsMissing = value == null
                     || (value instanceof String strValue && strValue.isBlank())
                     || (value instanceof Map<?, ?> mapValue && EmptyChecks.isEmpty(mapValue));
             if (requiredParameterIsMissing) {
@@ -171,7 +171,7 @@ public class ConsoleAtomicTaskConfigService {
         Set<String> wrongTypes = new TreeSet<>();
         for (ParamSpec spec : schema.parameters()) {
             Object value = parameters.get(spec.name());
-            if (EmptyChecks.isNotNull(value)
+            if (value != null
                     && (!matchesType(spec.type(), value)
                             || invalidTimeout(spec.name(), value)
                             || invalidShellArguments(schema.taskType(), spec.name(), value))) {
@@ -220,14 +220,14 @@ public class ConsoleAtomicTaskConfigService {
     }
 
     private static String requireTaskType(String taskType) {
-        if (taskType == null || taskType.isBlank()) {
+        if (EmptyChecks.isBlank(taskType)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.atomic_task_config.task_type_required");
         }
         return taskType.trim();
     }
 
     private static String requireName(String name) {
-        if (name == null || name.isBlank()) {
+        if (EmptyChecks.isBlank(name)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.atomic_task_config.name_required");
         }
         return name.trim();

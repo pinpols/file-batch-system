@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerDrainRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerTenantRequest;
@@ -74,9 +73,9 @@ public class WorkerController {
     @PostMapping("/{workerCode}/drain")
     public WorkerRegistryResponse drain(
             @PathVariable String workerCode, @RequestBody WorkerDrainRequest request, HttpServletRequest httpRequest) {
-        String requestedTenantId = EmptyChecks.isNull(request) ? null : request.tenantId();
+        String requestedTenantId = request == null ? null : request.tenantId();
         String tenantId = InternalRequestTenantGuard.resolveTenant(httpRequest, requestedTenantId);
-        Integer requestedTimeoutSeconds = EmptyChecks.isNull(request) ? null : request.timeoutSeconds();
+        Integer requestedTimeoutSeconds = request == null ? null : request.timeoutSeconds();
         WorkerRegistryEntity worker =
                 workerDrainGovernanceService.startDrain(tenantId, workerCode, requestedTimeoutSeconds);
         return WorkerRegistryResponse.from(worker);

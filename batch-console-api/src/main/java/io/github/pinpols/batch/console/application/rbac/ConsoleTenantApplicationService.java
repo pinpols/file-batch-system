@@ -89,7 +89,7 @@ public class ConsoleTenantApplicationService {
     /** sourceTenantId 为 null/blank 表示不复制配置；mode 为 null 时落 SKIP_EXISTING 默认。 */
     public record ConfigInitOption(String sourceTenantId, InitMode mode) {
         public boolean enabled() {
-            return sourceTenantId != null && !sourceTenantId.isBlank();
+            return EmptyChecks.isNotBlank(sourceTenantId);
         }
     }
 
@@ -342,8 +342,8 @@ public class ConsoleTenantApplicationService {
     }
 
     private ConsoleTenantResponse toResponse(TenantRow row) {
-        String createdAtText = EmptyChecks.isNull(row.createdAt()) ? null : String.valueOf(row.createdAt());
-        String updatedAtText = EmptyChecks.isNull(row.updatedAt()) ? null : String.valueOf(row.updatedAt());
+        String createdAtText = row.createdAt() == null ? null : String.valueOf(row.createdAt());
+        String updatedAtText = row.updatedAt() == null ? null : String.valueOf(row.updatedAt());
         return new ConsoleTenantResponse(
                 row.id(),
                 row.tenantId(),

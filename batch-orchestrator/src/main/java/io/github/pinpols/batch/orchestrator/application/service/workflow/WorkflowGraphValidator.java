@@ -282,13 +282,13 @@ public class WorkflowGraphValidator {
             boolean gateway = WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType());
             String configuredMode = readNodeJoinMode(n.getNodeParams());
             boolean missingRequiredMode = gateway && incomingCount >= 2 && !Texts.hasText(configuredMode);
-            boolean unknownMode = Texts.hasText(configuredMode)
-                    && EmptyChecks.isNull(DictEnum.fromCode(WorkflowJoinMode.class, configuredMode));
+            boolean unknownMode =
+                    Texts.hasText(configuredMode) && DictEnum.fromCode(WorkflowJoinMode.class, configuredMode) == null;
             if (missingRequiredMode || unknownMode) {
                 errors.add(issue("V9", "Node joinMode must be ALL, ANY or N_OF", n.getNodeCode()));
             }
             int[] thresholdAndTotal = parseJoinMode(n.getNodeParams(), incomingCount);
-            if (EmptyChecks.isNull(thresholdAndTotal)) continue;
+            if (thresholdAndTotal == null) continue;
             int required = thresholdAndTotal[0];
             int total = thresholdAndTotal[1];
             if (required < 1 || required > total || total != incomingCount) {
@@ -318,12 +318,11 @@ public class WorkflowGraphValidator {
             }
             JobDefinitionView def =
                     jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(node.getTenantId(), jobCode, true);
-            boolean jobNodeDefinitionIsUnavailable =
-                    jobNode && (EmptyChecks.isNull(def) || !Boolean.TRUE.equals(def.enabled()));
+            boolean jobNodeDefinitionIsUnavailable = jobNode && (def == null || !Boolean.TRUE.equals(def.enabled()));
             if (jobNodeDefinitionIsUnavailable) {
                 errors.add(issue(
                         "JOB_REF_NOT_FOUND", "JOB reference not found or disabled: " + jobCode, node.getNodeCode()));
-            } else if (EmptyChecks.isNotNull(def)) {
+            } else if (def != null) {
                 result.put(jobCode, def);
             }
         }
@@ -389,9 +388,8 @@ public class WorkflowGraphValidator {
                 // V4 已经报；这里跳过 V5/V12
                 continue;
             }
-            JobDefinitionView refJobDef = EmptyChecks.isNull(refNode.getRelatedJobCode())
-                    ? null
-                    : jobDefByCode.get(refNode.getRelatedJobCode());
+            JobDefinitionView refJobDef =
+                    refNode.getRelatedJobCode() == null ? null : jobDefByCode.get(refNode.getRelatedJobCode());
             if (refJobDef == null) {
                 // 未关联 job_definition → 跳过 V5/V12（向后兼容）
                 continue;
@@ -461,7 +459,7 @@ public class WorkflowGraphValidator {
         Map<String, List<String>> adj = new HashMap<>();
         for (WorkflowEdgeEntity e : edges) {
             boolean workflowEdgeIdentityIsIncomplete =
-                    EmptyChecks.isNull(e) || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
+                    e == null || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
             if (workflowEdgeIdentityIsIncomplete) continue;
             String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
             String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();
@@ -527,7 +525,7 @@ public class WorkflowGraphValidator {
             if (!dep.hasSupportedStrategy() || !dep.hasValidVersionSelector()) {
                 errors.add(issue("V6", "cross_day_dep has unsupported consume version strategy", node.getNodeCode()));
             }
-            boolean dependencyScopeIsUnsupported = EmptyChecks.isNotNull(dep.scope())
+            boolean dependencyScopeIsUnsupported = dep.scope() != null
                     && !CrossDayDependencySpec.SCOPE_REQUIRED.equalsIgnoreCase(dep.scope())
                     && !CrossDayDependencySpec.SCOPE_OPTIONAL.equalsIgnoreCase(dep.scope());
             if (dependencyScopeIsUnsupported) {
@@ -577,8 +575,8 @@ public class WorkflowGraphValidator {
         if (!Texts.hasText(nodeParams)) return null;
         try {
             Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
-            Object mode = EmptyChecks.isNull(params) ? null : params.get("joinMode");
-            return EmptyChecks.isNull(mode) ? null : mode.toString();
+            Object mode = params == null ? null : params.get("joinMode");
+            return mode == null ? null : mode.toString();
         } catch (IllegalArgumentException invalid) {
             return null;
         }
@@ -596,7 +594,7 @@ public class WorkflowGraphValidator {
             String joinModeText = trimmedJoinMode.toUpperCase(Locale.ROOT);
             if ("N_OF".equals(joinModeText) && incomingCount >= 2) {
                 Integer threshold = WorkflowJoinThreshold.parse(map.get("joinThreshold"));
-                int required = EmptyChecks.isNull(threshold) ? 0 : threshold;
+                int required = threshold == null ? 0 : threshold;
                 return new int[] {required, incomingCount};
             }
             if (joinModeText.matches("^\\d+_OF_\\d+$")) {

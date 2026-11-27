@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.persistence.mybatis;
 
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
@@ -155,7 +156,7 @@ public class AuditFieldsInterceptor implements Interceptor {
     }
 
     private void setIfNullString(Object entity, Field f, String value) {
-        if (f == null || value == null || value.isBlank()) {
+        if (f == null || EmptyChecks.isBlank(value)) {
             return;
         }
         try {

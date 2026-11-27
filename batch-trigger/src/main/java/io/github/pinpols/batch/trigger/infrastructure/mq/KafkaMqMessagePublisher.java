@@ -3,7 +3,6 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.mq.MqPublishResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -29,7 +28,7 @@ public class KafkaMqMessagePublisher implements MqMessagePublisher {
         ProducerRecord<String, String> producerRecord =
                 new ProducerRecord<>(message.topic(), message.key(), message.payload());
         message.headers().forEach((name, value) -> {
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 byte[] encodedHeaderValue = value.getBytes(StandardCharsets.UTF_8);
                 RecordHeader recordHeader = new RecordHeader(name, encodedHeaderValue);
                 producerRecord.headers().add(recordHeader);

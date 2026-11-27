@@ -27,14 +27,14 @@ final class NodePartitionProgressCalculator {
 
         Map<Long, String> statusById = new LinkedHashMap<>();
         for (PartitionStatusRef ref : statusRefs) {
-            if (EmptyChecks.isNotNull(ref) && EmptyChecks.isNotNull(ref.id())) {
+            if (ref != null && ref.id() != null) {
                 statusById.put(ref.id(), ref.partitionStatus());
             }
         }
 
         Set<Long> nodePartitionIds = new LinkedHashSet<>();
         for (NodePartitionAssignment assignment : assignments) {
-            if (EmptyChecks.isNull(assignment) || EmptyChecks.isNull(assignment.jobPartitionId())) {
+            if (assignment == null || assignment.jobPartitionId() == null) {
                 continue;
             }
             String taskNodeCode = resolveTaskNodeCode(assignment.nodeCode(), workflowRun, nodeCode);
@@ -68,7 +68,7 @@ final class NodePartitionProgressCalculator {
         if (EmptyChecks.isNotBlank(payloadNodeCode)) {
             return payloadNodeCode;
         }
-        String currentNodeCode = EmptyChecks.isNull(workflowRun) ? null : workflowRun.getCurrentNodeCode();
+        String currentNodeCode = workflowRun == null ? null : workflowRun.getCurrentNodeCode();
         if (EmptyChecks.isNotBlank(currentNodeCode)) {
             Set<String> activeNodes = TaskOutcomeStatePolicy.parseActiveNodes(currentNodeCode);
             if (activeNodes.size() == 1) {

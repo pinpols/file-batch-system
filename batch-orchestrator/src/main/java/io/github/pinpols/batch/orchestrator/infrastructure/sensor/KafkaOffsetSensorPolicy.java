@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
@@ -75,11 +74,8 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
         String topic = SensorSpecs.string(spec, "topic");
         Integer partition = SensorSpecs.intValue(spec, "partition");
         Long minOffset = SensorSpecs.longValue(spec, "minOffset");
-        boolean kafkaOffsetTargetIsIncomplete = !Texts.hasText(topic)
-                || EmptyChecks.isNull(partition)
-                || partition < 0
-                || EmptyChecks.isNull(minOffset)
-                || minOffset < 0;
+        boolean kafkaOffsetTargetIsIncomplete =
+                !Texts.hasText(topic) || partition == null || partition < 0 || minOffset == null || minOffset < 0;
         if (kafkaOffsetTargetIsIncomplete) {
             return SensorProbeResult.error(
                     "error.workflow.sensor_spec_invalid",
@@ -139,7 +135,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
             if (stopping.get()) {
                 throw new IllegalStateException("Kafka offset sensor is stopping");
             }
-            if (EmptyChecks.isNull(adminClient)) {
+            if (adminClient == null) {
                 adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
             }
             return adminClient;
@@ -150,7 +146,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
     void closeAdminClient() {
         stopping.set(true);
         synchronized (adminClientMonitor) {
-            if (EmptyChecks.isNotNull(adminClient)) {
+            if (adminClient != null) {
                 adminClient.close(Duration.ZERO);
                 adminClient = null;
             }

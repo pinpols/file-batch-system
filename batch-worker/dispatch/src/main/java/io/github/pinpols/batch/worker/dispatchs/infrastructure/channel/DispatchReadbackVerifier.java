@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
@@ -16,7 +15,7 @@ public final class DispatchReadbackVerifier {
     /** {@code readback_verify_enabled=true} 时启用投递后回读对账。 */
     public static boolean enabled(Map<String, Object> channelConfig) {
         Object raw = channelConfig == null ? null : channelConfig.get("readback_verify_enabled");
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return false;
         }
         String rawValue = String.valueOf(raw);
@@ -36,7 +35,7 @@ public final class DispatchReadbackVerifier {
         if (raw instanceof Number number) {
             return number.longValue();
         }
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return null;
         }
         String presenceText = String.valueOf(raw);

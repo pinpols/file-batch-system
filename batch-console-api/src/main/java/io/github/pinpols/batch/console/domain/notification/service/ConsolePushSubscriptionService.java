@@ -64,12 +64,12 @@ public class ConsolePushSubscriptionService {
      * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
      */
     private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
-        boolean subscriptionIsInvalid = EmptyChecks.isNull(request)
+        boolean subscriptionIsInvalid = request == null
                 || request.endpoint() == null
                 || request.endpoint().isBlank()
                 || request.keys() == null
                 || request.keys().p256dh() == null
-                || EmptyChecks.isNull(request.keys().auth());
+                || request.keys().auth() == null;
         if (subscriptionIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.invalid_subscription");
         }
@@ -93,7 +93,7 @@ public class ConsolePushSubscriptionService {
     @Transactional
     public void unsubscribe(String tenantId, String username, String endpoint) {
         requireEnabled();
-        if (endpoint == null || endpoint.isBlank()) {
+        if (EmptyChecks.isBlank(endpoint)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.endpoint_required");
         }
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);

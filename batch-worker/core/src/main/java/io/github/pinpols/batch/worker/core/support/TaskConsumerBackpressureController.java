@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -97,12 +96,12 @@ final class TaskConsumerBackpressureController {
     void resumeIfPaused(String containerId) {
         Semaphore current = semaphore.get();
         boolean taskConsumptionIsBackpressured =
-                platformDraining.get() || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0);
+                platformDraining.get() || (current != null && current.availablePermits() <= 0);
         if (taskConsumptionIsBackpressured) {
             return;
         }
         MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
-        if (EmptyChecks.isNull(container)) {
+        if (container == null) {
             return;
         }
         try {

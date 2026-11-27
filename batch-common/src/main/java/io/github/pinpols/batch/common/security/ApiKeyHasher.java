@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.security;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -85,7 +86,7 @@ public final class ApiKeyHasher {
         if (rawKey == null || storedHash == null || algo == null) return false;
         String computed;
         if (ALGO_PBKDF2.equals(algo)) {
-            if (storedSalt == null || storedSalt.isBlank()) return false;
+            if (EmptyChecks.isBlank(storedSalt)) return false;
             computed = pbkdf2(rawKey, storedSalt);
         } else if (ALGO_SHA256_LEGACY.equals(algo)) {
             computed = legacySha256Hex(rawKey);

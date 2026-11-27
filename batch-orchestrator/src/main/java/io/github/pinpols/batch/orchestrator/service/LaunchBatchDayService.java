@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -139,7 +138,7 @@ public class LaunchBatchDayService {
         doUpsertBatchDayInstance(
                 request,
                 jobDefinition,
-                EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode(),
+                jobDefinition == null ? null : jobDefinition.calendarCode(),
                 effectiveParams,
                 batchDaySlaDeadlineAt);
     }
@@ -350,11 +349,11 @@ public class LaunchBatchDayService {
 
     Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
         BusinessCalendarEntity calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
-        if (EmptyChecks.isNull(calendar)) {
+        if (calendar == null) {
             return null;
         }
         Integer slaOffsetMinutes = calendar.slaOffsetMin();
-        if (EmptyChecks.isNull(slaOffsetMinutes) || slaOffsetMinutes <= 0) {
+        if (slaOffsetMinutes == null || slaOffsetMinutes <= 0) {
             return null;
         }
         Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
@@ -444,10 +443,8 @@ public class LaunchBatchDayService {
      * 跳过窗口检查; 其余路径 (EVENT/SCHEDULED/API/MANUAL) 都按 batch_day 状态决定走 LATE_ACCEPTED 还是翻 CATCH_UP 路由补跑.
      */
     LaunchRequest routeLateArrivalIfNeeded(LaunchRequest request, LaunchLoadResult loaded) {
-        boolean lateArrivalContextIncomplete = EmptyChecks.isNull(request)
-                || loaded == null
-                || loaded.jobDefinition() == null
-                || EmptyChecks.isNull(request.bizDate());
+        boolean lateArrivalContextIncomplete =
+                request == null || loaded == null || loaded.jobDefinition() == null || request.bizDate() == null;
         if (lateArrivalContextIncomplete) {
             return request;
         }

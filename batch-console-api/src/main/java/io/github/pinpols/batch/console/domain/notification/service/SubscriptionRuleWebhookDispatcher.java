@@ -139,7 +139,7 @@ public class SubscriptionRuleWebhookDispatcher {
             return;
         }
         Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);
-        Instant effectiveEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
+        Instant effectiveEmittedAt = emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt;
         WebhookEventPayload payload =
                 new WebhookEventPayload(tenantId, normalizedEventType, stream, cursor, effectiveEmittedAt, data);
         String payloadJson = JsonUtils.toJson(payload);
@@ -232,7 +232,7 @@ public class SubscriptionRuleWebhookDispatcher {
     private WebhookSubscriptionEntity toSyntheticSubscription(String channelCode, EnabledSubscriptionRuleRow rule) {
         Map<String, Object> config = dispatchPolicy.parseConfig(rule.configJson());
         String url = str(config, CONFIG_KEY_URL);
-        if (url == null || url.isBlank()) {
+        if (EmptyChecks.isBlank(url)) {
             log.warn("subscription_rule WEBHOOK channel missing config url; skipping: channelCode={}", channelCode);
             return null;
         }

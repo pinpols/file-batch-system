@@ -24,14 +24,14 @@ public record FrozenFileTemplateSnapshot(
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     public FrozenFileTemplateSnapshot {
-        boolean snapshotFieldsAreInvalid = EmptyChecks.isNull(schemaVersion)
+        boolean snapshotFieldsAreInvalid = schemaVersion == null
                 || schemaVersion != CURRENT_SCHEMA_VERSION
                 || EmptyChecks.isBlank(tenantId)
                 || EmptyChecks.isBlank(templateCode)
                 || EmptyChecks.isBlank(templateType)
-                || EmptyChecks.isNull(templateId)
+                || templateId == null
                 || templateId <= 0
-                || EmptyChecks.isNull(templateVersion)
+                || templateVersion == null
                 || templateVersion <= 0
                 || EmptyChecks.isEmpty(configuration);
         if (snapshotFieldsAreInvalid) {
@@ -128,7 +128,7 @@ public record FrozenFileTemplateSnapshot(
             });
             return Collections.unmodifiableList(copy);
         }
-        boolean valueIsSupportedImmutableScalar = EmptyChecks.isNull(value)
+        boolean valueIsSupportedImmutableScalar = value == null
                 || value instanceof String
                 || value instanceof Boolean
                 || value instanceof Byte

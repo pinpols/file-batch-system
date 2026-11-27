@@ -129,9 +129,8 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         LocalTime completionDeadlineLocalTime = Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())
                 ? null
                 : request.getCompletionDeadlineLocalTime();
-        int completionDeadlineDayOffset = EmptyChecks.isNull(completionDeadlineLocalTime)
-                ? 0
-                : valueOrZero(request.getCompletionDeadlineDayOffset());
+        int completionDeadlineDayOffset =
+                completionDeadlineLocalTime == null ? 0 : valueOrZero(request.getCompletionDeadlineDayOffset());
         entity.setExecutionHandler(request.getExecutionHandler());
         entity.setParamSchema(request.getParamSchema());
         String defaultParams = resolveDefaultParams(request.getDefaultParams(), null);
@@ -181,14 +180,13 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         validateDependencies(tenantId, existing.getJobCode(), dependencyCodes);
         String dependsOnJobCode = EmptyChecks.isEmpty(dependencyCodes) ? null : dependencyCodes.get(0);
         LocalTime completionDeadlineLocalTime = resolveCompletionDeadlineLocalTime(request, existing);
-        boolean enabledCompletionDeadlineIsMissing = Boolean.TRUE.equals(request.getCompletionDeadlineEnabled())
-                && EmptyChecks.isNull(completionDeadlineLocalTime);
+        boolean enabledCompletionDeadlineIsMissing =
+                Boolean.TRUE.equals(request.getCompletionDeadlineEnabled()) && completionDeadlineLocalTime == null;
         if (enabledCompletionDeadlineIsMissing) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
         }
 
-        boolean useExistingDependencyCompletionWindow =
-                EmptyChecks.isNull(request.getDependencyCompletionWindowSeconds());
+        boolean useExistingDependencyCompletionWindow = request.getDependencyCompletionWindowSeconds() == null;
         Integer effectiveDependencyCompletionWindowSeconds = useExistingDependencyCompletionWindow
                 ? existing.getDependencyCompletionWindowSeconds()
                 : request.getDependencyCompletionWindowSeconds();
@@ -261,7 +259,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         param.setExecutionHandler(Nullables.coalesce(request.getExecutionHandler(), existing.getExecutionHandler()));
         param.setParamSchema(Nullables.coalesce(request.getParamSchema(), existing.getParamSchema()));
         param.setPriority(Nullables.coalesce(request.getPriority(), existing.getPriority()));
-        if (EmptyChecks.isNotNull(request.getDefaultParams())) {
+        if (request.getDefaultParams() != null) {
             String defaultParams = resolveDefaultParams(request.getDefaultParams(), existing.getDefaultParams());
             param.setDefaultParams(defaultParams);
             param.setDefaultParamsSpecified(true);
@@ -276,10 +274,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         entity.setBizType(request.getBizType());
         entity.setScheduleType(request.getScheduleType());
         entity.setScheduleExpr(request.getScheduleExpr());
-        entity.setTimezone(
-                EmptyChecks.isNull(request.getTimezone())
-                        ? CommonConstants.DEFAULT_TIMEZONE_ID
-                        : request.getTimezone());
+        entity.setTimezone(request.getTimezone() == null ? CommonConstants.DEFAULT_TIMEZONE_ID : request.getTimezone());
         // 显式给出的触发模式必须与调度类型兼容；未给时按调度类型取默认值（此前一律 SCHEDULED，手动作业也会被标成定时）
         if (!ScheduleTriggerModes.isCompatible(request.getScheduleType(), request.getTriggerMode())) {
             throw BizException.of(
@@ -293,11 +288,11 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(request.getQueueCode()));
         entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(request.getCalendarCode()));
         entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(request.getWindowCode()));
-        entity.setDagEnabled(EmptyChecks.isNotNull(request.getDagEnabled()) && request.getDagEnabled());
-        entity.setShardStrategy(EmptyChecks.isNull(request.getShardStrategy()) ? "NONE" : request.getShardStrategy());
-        entity.setExecutionMode(EmptyChecks.isNull(request.getExecutionMode()) ? "FULL" : request.getExecutionMode());
+        entity.setDagEnabled(request.getDagEnabled() != null && request.getDagEnabled());
+        entity.setShardStrategy(request.getShardStrategy() == null ? "NONE" : request.getShardStrategy());
+        entity.setExecutionMode(request.getExecutionMode() == null ? "FULL" : request.getExecutionMode());
         entity.setWatermarkField(request.getWatermarkField());
-        entity.setRetryPolicy(EmptyChecks.isNull(request.getRetryPolicy()) ? "NONE" : request.getRetryPolicy());
+        entity.setRetryPolicy(request.getRetryPolicy() == null ? "NONE" : request.getRetryPolicy());
         entity.setRetryMaxCount(request.getRetryMaxCount());
         entity.setTimeoutSeconds(request.getTimeoutSeconds());
     }
@@ -386,7 +381,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     private static boolean changed(String requested, String existing) {
-        if (EmptyChecks.isNull(requested)) {
+        if (requested == null) {
             return false;
         }
         String normalizedRequest = Texts.hasText(requested) ? requested.trim() : null;
@@ -493,7 +488,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         List<JobDependencyRuleResponse> existingDependencyResponses = resolveExistingDependencyResponses(e);
         boolean monitoringEnabled = ("CRON".equals(e.getScheduleType())
                         && !Texts.hasText(e.getDependsOnJobCode())
-                        && EmptyChecks.isNotNull(e.getCompletionDeadlineLocalTime()))
+                        && e.getCompletionDeadlineLocalTime() != null)
                 || (Texts.hasText(e.getDependsOnJobCode())
                         && valueOrZero(e.getDependencyCompletionWindowSeconds()) > 0);
         String maskedDefaultParams = SecretMasking.maskSensitiveJson(e.getDefaultParams());
@@ -546,7 +541,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     private List<JobDependencyRuleRequest> resolveCreateDependencyRules(JobDefinitionCreateRequest request) {
-        if (EmptyChecks.isNotNull(request.getJobDependencyRules())) {
+        if (request.getJobDependencyRules() != null) {
             List<JobDependencyRuleRequest> rules = normalizeDependencyRules(request.getJobDependencyRules());
             List<String> legacyCodes =
                     normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
@@ -562,18 +557,18 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
 
     private List<JobDependencyRuleRequest> resolveUpdateDependencyRules(
             JobDefinitionUpdateRequest request, JobDefinitionView existing) {
-        if (EmptyChecks.isNotNull(request.getJobDependencyRules())) {
+        if (request.getJobDependencyRules() != null) {
             List<JobDependencyRuleRequest> rules = normalizeDependencyRules(request.getJobDependencyRules());
             List<String> legacyCodes =
                     normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
             validateLegacyDependencyCodes(rules, legacyCodes);
             return rules;
         }
-        if (EmptyChecks.isNotNull(request.getDependsOnJobCodes())) {
+        if (request.getDependsOnJobCodes() != null) {
             List<String> requestedCodes = normalizeDependencies(request.getDependsOnJobCodes(), null);
             return preserveAlignments(requestedCodes, existing);
         }
-        if (EmptyChecks.isNotNull(request.getDependsOnJobCode())) {
+        if (request.getDependsOnJobCode() != null) {
             List<String> requestedCodes = normalizeDependencies(null, request.getDependsOnJobCode());
             return preserveAlignments(requestedCodes, existing);
         }
@@ -594,8 +589,8 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     private static List<JobDependencyRuleRequest> normalizeDependencyRules(List<JobDependencyRuleRequest> rules) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         if (rules.stream()
-                .anyMatch(rule -> EmptyChecks.isNull(rule)
-                        || EmptyChecks.isNull(CodeNormalizer.trimToNull(rule.upstreamJobCode()))
+                .anyMatch(rule -> rule == null
+                        || (CodeNormalizer.trimToNull(rule.upstreamJobCode()) == null)
                         || !Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY").contains(rule.bizDateAlignment()))) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
         }
@@ -606,7 +601,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
                     String normalizedBizDateAlignment = trimmedBizDateAlignment.toUpperCase(Locale.ROOT);
                     return new JobDependencyRuleRequest(upstreamJobCode, normalizedBizDateAlignment);
                 })
-                .filter(rule -> EmptyChecks.isNotNull(rule.upstreamJobCode()) && seen.add(rule.upstreamJobCode()))
+                .filter(rule -> rule.upstreamJobCode() != null && seen.add(rule.upstreamJobCode()))
                 .toList();
     }
 
@@ -622,14 +617,14 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
 
     private static List<String> normalizeDependencies(List<String> codes, String legacyCode) {
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
-        if (EmptyChecks.isNotNull(codes)) {
+        if (codes != null) {
             for (String code : codes) {
                 String value = CodeNormalizer.trimToNull(code);
-                if (EmptyChecks.isNotNull(value)) normalized.add(value);
+                if (value != null) normalized.add(value);
             }
         } else {
             String value = CodeNormalizer.trimToNull(legacyCode);
-            if (EmptyChecks.isNotNull(value)) normalized.add(value);
+            if (value != null) normalized.add(value);
         }
         if (normalized.size() > MAX_UPSTREAM_DEPENDENCIES) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
@@ -638,12 +633,11 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     private static List<String> resolveExistingDependencies(JobDefinitionView entity) {
-        if (EmptyChecks.isNotNull(entity.getDependsOnJobCodes())
-                && EmptyChecks.isNotEmpty(entity.getDependsOnJobCodes())) {
+        if (entity.getDependsOnJobCodes() != null && EmptyChecks.isNotEmpty(entity.getDependsOnJobCodes())) {
             return entity.getDependsOnJobCodes();
         }
         String legacy = CodeNormalizer.trimToNull(entity.getDependsOnJobCode());
-        return EmptyChecks.isNull(legacy) ? List.of() : List.of(legacy);
+        return legacy == null ? List.of() : List.of(legacy);
     }
 
     private static List<JobDependencyRuleRequest> resolveExistingDependencyRules(JobDefinitionView entity) {
@@ -654,8 +648,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     private static List<JobDependencyRuleResponse> resolveExistingDependencyResponses(JobDefinitionView entity) {
-        if (EmptyChecks.isNotNull(entity.getJobDependencyRules())
-                && EmptyChecks.isNotEmpty(entity.getJobDependencyRules())) {
+        if (entity.getJobDependencyRules() != null && EmptyChecks.isNotEmpty(entity.getJobDependencyRules())) {
             return entity.getJobDependencyRules().stream()
                     .map(rule -> new JobDependencyRuleResponse(rule.upstreamJobCode(), rule.bizDateAlignment()))
                     .toList();
@@ -676,8 +669,8 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
             }
         }
         for (String upstream : upstreams) {
-            boolean upstreamIsSelfOrUnknown = downstream.equals(upstream)
-                    || EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, upstream));
+            boolean upstreamIsSelfOrUnknown =
+                    downstream.equals(upstream) || jobDefinitionMapper.selectByUniqueKey(tenantId, upstream) == null;
             if (upstreamIsSelfOrUnknown) {
                 throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
             }
@@ -700,7 +693,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         if (!Texts.hasText(submitted)) {
             return null;
         }
-        String resolved = EmptyChecks.isNull(stored) ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+        String resolved = stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
         if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
         }
@@ -709,14 +702,14 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
 
     private static Integer resolveCompletionDeadlineDayOffset(
             LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
-        if (EmptyChecks.isNull(deadlineTime)) {
+        if (deadlineTime == null) {
             return 0;
         }
-        return EmptyChecks.isNull(requestedOffset) ? valueOrZero(existingOffset) : requestedOffset;
+        return requestedOffset == null ? valueOrZero(existingOffset) : requestedOffset;
     }
 
     private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
-        return valueOrZero(EmptyChecks.isNull(requested) ? existing : requested);
+        return valueOrZero(requested == null ? existing : requested);
     }
 
     private static LocalTime resolveCompletionDeadlineLocalTime(
@@ -724,31 +717,31 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         if (Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())) {
             return null;
         }
-        return EmptyChecks.isNull(request.getCompletionDeadlineLocalTime())
+        return request.getCompletionDeadlineLocalTime() == null
                 ? existing.getCompletionDeadlineLocalTime()
                 : request.getCompletionDeadlineLocalTime();
     }
 
     private static Integer valueOrZero(Integer value) {
-        return EmptyChecks.isNull(value) ? 0 : value;
+        return value == null ? 0 : value;
     }
 
     private static int resolveStartGraceSeconds(
             String scheduleType, String dependsOnJobCode, Integer requested, JobMonitoringDefaultsProperties defaults) {
-        if (EmptyChecks.isNotNull(requested)) {
+        if (requested != null) {
             return requested;
         }
         return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode) ? defaults.getStartGraceSeconds() : 0;
     }
 
     private static int resolveSoftRuntimeSeconds(Integer requested, JobMonitoringDefaultsProperties defaults) {
-        return EmptyChecks.isNull(requested) ? defaults.getSoftRuntimeSeconds() : requested;
+        return requested == null ? defaults.getSoftRuntimeSeconds() : requested;
     }
 
     /** 策略资格由运行事实判定；配置侧只校验两种完成期限不能同时启用。 */
     private static void validateMonitoringCompletionMode(
             LocalTime completionDeadlineLocalTime, Integer dependencyCompletionWindowSeconds) {
-        boolean localDeadlineConfigured = EmptyChecks.isNotNull(completionDeadlineLocalTime);
+        boolean localDeadlineConfigured = completionDeadlineLocalTime != null;
         boolean relativeWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
         if (localDeadlineConfigured && relativeWindowConfigured) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.monitoring_completion_modes_exclusive");
@@ -756,7 +749,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     private static String resolveMonitoringSeverity(String requested, String existing) {
-        return severityOrWarn(EmptyChecks.isNull(requested) ? existing : requested);
+        return severityOrWarn(requested == null ? existing : requested);
     }
 
     private static String severityOrWarn(String severity) {

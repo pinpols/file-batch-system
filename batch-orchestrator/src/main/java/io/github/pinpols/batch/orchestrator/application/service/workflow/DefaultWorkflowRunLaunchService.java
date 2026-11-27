@@ -81,9 +81,9 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         ReplayOperationEntity replayOperation = findReplayOperation(request);
         WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = null;
         LaunchRequest effectiveRequest = request;
-        if (EmptyChecks.isNotNull(replayOperation)
+        if (replayOperation != null
                 && ReplayOperationType.WORKFLOW_RUN.code().equals(replayOperation.operationType())) {
-            boolean replayOperationCannotStartNewRun = EmptyChecks.isNull(existing)
+            boolean replayOperationCannotStartNewRun = existing == null
                     && (!ReplayOperationStatus.RUNNING.code().equals(replayOperation.status())
                             || !request.requestId().equals(replayOperation.targetRequestId()));
             if (replayOperationCannotStartNewRun) {
@@ -91,7 +91,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
                 throw BizException.of(
                         ResultCode.STATE_CONFLICT, "error.workflow.workflow_run_replay_approval_state_invalid");
             }
-            if (EmptyChecks.isNull(existing) && EmptyChecks.isNull(capacitySnapshot)) {
+            if (existing == null && capacitySnapshot == null) {
                 try {
                     replaySnapshot = replaySnapshotResolver.resolve(replayOperation, request.requestId());
                 } catch (BizException invalidSnapshot) {
@@ -99,7 +99,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
                     throw invalidSnapshot;
                 }
             }
-            boolean requestDiffersFromReplaySnapshot = EmptyChecks.isNotNull(replaySnapshot)
+            boolean requestDiffersFromReplaySnapshot = replaySnapshot != null
                     && (!Objects.equals(request.workflowDefinitionId(), replaySnapshot.workflowDefinitionId())
                             || !Objects.equals(request.bizDate(), replaySnapshot.bizDate())
                             || Boolean.TRUE.equals(request.dryRun()) != Boolean.TRUE.equals(replaySnapshot.dryRun())
@@ -109,7 +109,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
                 rejectIfUnprepared(request);
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
             }
-            if (EmptyChecks.isNotNull(replaySnapshot)) {
+            if (replaySnapshot != null) {
                 effectiveRequest = request.toBuilder()
                         .workflowDefinitionId(replaySnapshot.workflowDefinitionId())
                         .bizDate(replaySnapshot.bizDate())
@@ -155,40 +155,38 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         validateRequest(request);
         TriggerRequestEntity triggerRequest =
                 triggerRequestMapper.selectByTenantAndRequestId(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(triggerRequest) || !LaunchRequestIdentityGuard.matches(request, triggerRequest)) {
+        if (triggerRequest == null || !LaunchRequestIdentityGuard.matches(request, triggerRequest)) {
             // 不匹配的载荷不拥有原请求，不能改变其状态或关联的重放操作。
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
         }
         WorkflowRunEntity existing =
                 workflowRunMapper.selectByTenantAndTriggerRequestId(request.tenantId(), triggerRequest.getId());
         WorkflowLaunchWaitSnapshot capacitySnapshot =
-                EmptyChecks.isNull(existing) ? waitingLaunchService.findSnapshot(request) : null;
+                existing == null ? waitingLaunchService.findSnapshot(request) : null;
         ReplayResolution replayResolution = resolveReplayResolution(request, existing, capacitySnapshot);
         ReplayOperationEntity replayOperation = replayResolution.operation();
         WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = replayResolution.snapshot();
         LaunchRequest effectiveRequest = replayResolution.effectiveRequest();
-        if (EmptyChecks.isNotNull(capacitySnapshot)) {
+        if (capacitySnapshot != null) {
             requireCapacityReplayAuthorization(request, capacitySnapshot, replayOperation);
             effectiveRequest = capacitySnapshot.effectiveRequest();
         }
         WorkflowDefinitionView definition = null;
-        boolean approvedReplay = EmptyChecks.isNotNull(replayOperation)
+        boolean approvedReplay = replayOperation != null
                 && ReplayOperationType.WORKFLOW_RUN.code().equals(replayOperation.operationType());
-        if (EmptyChecks.isNull(existing) && !approvedReplay) {
+        if (existing == null && !approvedReplay) {
             definition = loadAdmissibleDefinition(request);
-            if (EmptyChecks.isNull(definition)) {
+            if (definition == null) {
                 rejectIfUnprepared(request);
                 throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
             }
         }
-        if (EmptyChecks.isNull(existing)
-                && EmptyChecks.isNull(replaySnapshot)
-                && EmptyChecks.isNull(capacitySnapshot)) {
+        if (existing == null && replaySnapshot == null && capacitySnapshot == null) {
             validateParentInstanceReference(request);
         }
-        boolean newRunScheduleVersionDoesNotMatch = EmptyChecks.isNull(existing)
-                && EmptyChecks.isNull(replaySnapshot)
-                && EmptyChecks.isNull(capacitySnapshot)
+        boolean newRunScheduleVersionDoesNotMatch = existing == null
+                && replaySnapshot == null
+                && capacitySnapshot == null
                 && !scheduledWorkflowVersionMatches(request, definition);
         if (newRunScheduleVersionDoesNotMatch) {
             rejectIfUnprepared(request);
@@ -196,19 +194,19 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         }
         String requestedTraceId = request.traceId();
         String traceId = EmptyChecks.isBlank(requestedTraceId) ? IdGenerator.newTraceId() : requestedTraceId;
-        if (EmptyChecks.isNotNull(capacitySnapshot)) {
+        if (capacitySnapshot != null) {
             traceId = capacitySnapshot.traceId();
         }
         RunPreparation preparation = new RunPreparation(
                 effectiveRequest, request, triggerRequest, definition, traceId, replaySnapshot, capacitySnapshot);
         WorkflowRunEntity run = prepareRunWithSerializationRetry(preparation);
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return new LaunchResponse(request.requestId(), traceId);
         }
         String eventCalendarCode = null;
         boolean eventLaunchHasBusinessDate = TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
-                && EmptyChecks.isNotNull(triggerRequest.getExternalEventCode())
-                && EmptyChecks.isNotNull(request.bizDate());
+                && triggerRequest.getExternalEventCode() != null
+                && request.bizDate() != null;
         if (eventLaunchHasBusinessDate) {
             eventCalendarCode = resolveWorkflowCalendarCode(run, definition);
         }
@@ -234,10 +232,10 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     private boolean requireCapacityReplayAuthorization(
             LaunchRequest request, WorkflowLaunchWaitSnapshot snapshot, ReplayOperationEntity operation) {
         Long expectedOperationId = snapshot.replayOperationId();
-        if (EmptyChecks.isNull(expectedOperationId)) {
+        if (expectedOperationId == null) {
             return false;
         }
-        if (EmptyChecks.isNull(operation)
+        if (operation == null
                 || !Objects.equals(expectedOperationId, operation.id())
                 || !ReplayOperationType.WORKFLOW_RUN.code().equals(operation.operationType())
                 || !ReplayOperationStatus.RUNNING.code().equals(operation.status())
@@ -250,14 +248,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
     private String resolveWorkflowCalendarCode(WorkflowRunEntity run, WorkflowDefinitionView definition) {
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        if (EmptyChecks.isNotNull(snapshot)) {
+        if (snapshot != null) {
             String calendarCode = snapshot.workflowCalendarCode();
             if (EmptyChecks.isBlank(calendarCode)) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
             }
             return calendarCode;
         }
-        if (EmptyChecks.isNotNull(definition)) {
+        if (definition != null) {
             String calendarCode = definition.calendarCode();
             if (EmptyChecks.isNotBlank(calendarCode)) {
                 return calendarCode;
@@ -267,13 +265,13 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
 
     private void validateParentInstanceReference(LaunchRequest request) {
-        Long parentInstanceId = launchParamResolver.resolveParentInstanceId(
-                EmptyChecks.isNull(request.params()) ? Map.of() : request.params());
-        if (EmptyChecks.isNull(parentInstanceId)) {
+        Long parentInstanceId =
+                launchParamResolver.resolveParentInstanceId(request.params() == null ? Map.of() : request.params());
+        if (parentInstanceId == null) {
             return;
         }
         JobInstanceEntity parentInstance = jobInstanceMapper.selectById(request.tenantId(), parentInstanceId);
-        if (EmptyChecks.isNotNull(parentInstance) && request.tenantId().equals(parentInstance.getTenantId())) {
+        if (parentInstance != null && request.tenantId().equals(parentInstance.getTenantId())) {
             return;
         }
         rejectIfUnprepared(request);
@@ -287,12 +285,12 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     private void validateBundleFileReferences(LaunchRequest request, WorkflowNodeEntity node, JobDefinitionView job) {
         JobType jobType = DictEnum.fromCode(JobType.class, job.jobType());
         boolean nodeCannotProvideBundleJob =
-                !Boolean.TRUE.equals(node.getEnabled()) || EmptyChecks.isNull(jobType) || !jobType.isBundle();
+                !Boolean.TRUE.equals(node.getEnabled()) || jobType == null || !jobType.isBundle();
         if (nodeCannotProvideBundleJob) {
             return;
         }
         Map<String, Object> effectiveParams = new LinkedHashMap<>();
-        if (EmptyChecks.isNotNull(job.defaultParams())) {
+        if (job.defaultParams() != null) {
             effectiveParams.putAll(job.defaultParams());
         }
         if (EmptyChecks.isNotBlank(node.getNodeParams())) {
@@ -307,7 +305,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             }
         }
         // 与子节点启动一致：Job 默认参数 < 节点默认参数 < 显式根请求参数。
-        if (EmptyChecks.isNotNull(request.params())) {
+        if (request.params() != null) {
             effectiveParams.putAll(request.params());
         }
         for (BundlePlanParams.BundleFile bundleFile : BundlePlanParams.extract(effectiveParams, jobType)) {
@@ -318,12 +316,12 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     private WorkflowDefinitionView loadAdmissibleDefinition(LaunchRequest request) {
         WorkflowDefinitionView enabled = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
                 request.tenantId(), request.workflowDefinitionId(), true);
-        if (EmptyChecks.isNotNull(enabled)) {
+        if (enabled != null) {
             return enabled;
         }
         // 完整停用只例外接纳已有 misfire；不能凭 CATCH_UP 类型绕过执行准入。
         boolean requestIsNotPersistedMisfireRecovery = request.triggerType() != TriggerType.CATCH_UP
-                || EmptyChecks.isNull(request.dataIntervalStart())
+                || request.dataIntervalStart() == null
                 || !triggerRequestMapper.isPersistedMisfireRecovery(
                         request.tenantId(),
                         request.workflowDefinitionId(),
@@ -338,14 +336,13 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
     /** 定时 Quartz 触发固定使用已同步到 JobDataMap 的 Workflow 版本。 */
     private boolean scheduledWorkflowVersionMatches(LaunchRequest request, WorkflowDefinitionView definition) {
-        Object rawVersion =
-                EmptyChecks.isNull(request.params()) ? null : request.params().get("workflowVersion");
-        if (EmptyChecks.isNull(rawVersion)) {
+        Object rawVersion = request.params() == null ? null : request.params().get("workflowVersion");
+        if (rawVersion == null) {
             return true;
         }
         try {
             int requestedVersion = Integer.parseInt(rawVersion.toString());
-            return EmptyChecks.isNotNull(definition.version()) && requestedVersion == definition.version();
+            return definition.version() != null && requestedVersion == definition.version();
         } catch (NumberFormatException invalidVersion) {
             return false;
         }
@@ -409,10 +406,10 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             Supplier<T> fromCapacity,
             Supplier<T> fromReplay,
             Supplier<T> fromDefinition) {
-        if (EmptyChecks.isNotNull(capacitySnapshot)) {
+        if (capacitySnapshot != null) {
             return fromCapacity.get();
         }
-        if (EmptyChecks.isNull(replaySnapshot)) {
+        if (replaySnapshot == null) {
             return fromDefinition.get();
         }
         return fromReplay.get();
@@ -423,7 +420,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         TriggerRequestEntity triggerRequest = preparation.triggerRequest();
         WorkflowRunEntity existing =
                 workflowRunMapper.selectByTenantAndTriggerRequestId(request.tenantId(), triggerRequest.getId());
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return existing;
         }
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
@@ -442,7 +439,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             // 所以这个 catch 必须留在事务外面，不能收进事务体。
             WorkflowRunEntity winner =
                     workflowRunMapper.selectByTenantAndTriggerRequestId(request.tenantId(), triggerRequest.getId());
-            if (EmptyChecks.isNotNull(winner)) {
+            if (winner != null) {
                 return winner;
             }
             throw duplicate;
@@ -457,14 +454,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         replayOperationMapper.setTenantContext(request.tenantId());
         WorkflowRunEntity concurrent = workflowRunMapper.selectByTenantAndTriggerRequestId(
                 request.tenantId(), preparation.triggerRequest().getId());
-        if (EmptyChecks.isNotNull(concurrent)) {
+        if (concurrent != null) {
             return concurrent;
         }
         lockPendingTriggerRequest(request);
         RunAdmission admission = admitRunInTransaction(preparation);
         Instant startedAt = BatchDateTimeSupport.utcNow();
         WorkflowRunEntity created = buildRunEntity(preparation, admission);
-        WorkflowLaunchWaitSnapshot snapshotForWait = EmptyChecks.isNotNull(preparation.capacitySnapshot())
+        WorkflowLaunchWaitSnapshot snapshotForWait = preparation.capacitySnapshot() != null
                 ? preparation.capacitySnapshot()
                 : WorkflowLaunchWaitSnapshot.capture(preparation.originalRequest(), request, created);
         insertWithActiveSlot(created, preparation, snapshotForWait);
@@ -481,7 +478,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             WorkflowRunEntity created, RunPreparation preparation, WorkflowLaunchWaitSnapshot snapshotForWait) {
         Integer configuredLimit = workflowDefinitionMapper.selectMaxActiveRunsPerBizDate(
                 created.getTenantId(), created.getWorkflowDefinitionId());
-        int maxActiveRuns = EmptyChecks.isNull(configuredLimit) || configuredLimit < 1 ? 1 : configuredLimit;
+        int maxActiveRuns = configuredLimit == null || configuredLimit < 1 ? 1 : configuredLimit;
         if (maxActiveRuns > 1 && workflowRunMapper.insertAtFirstVisibleFreeSlot(created, maxActiveRuns) == 1) {
             return;
         }
@@ -514,7 +511,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             }
             throw lockNotAvailable;
         }
-        boolean pendingRequestDoesNotMatchLaunch = EmptyChecks.isNull(pending)
+        boolean pendingRequestDoesNotMatchLaunch = pending == null
                 || !LaunchRequestIdentityGuard.matches(request, pending)
                 || !(TriggerRequestStatus.ACCEPTED.code().equals(pending.getRequestStatus())
                         || TriggerRequestStatus.PROCESSING.code().equals(pending.getRequestStatus()));
@@ -525,10 +522,10 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
     /** 按容量等待快照、实时定义、重放快照三种来源确定事务内定义与初始节点。 */
     private RunAdmission admitRunInTransaction(RunPreparation preparation) {
-        if (EmptyChecks.isNotNull(preparation.capacitySnapshot())) {
+        if (preparation.capacitySnapshot() != null) {
             return admitFromCapacitySnapshot(preparation);
         }
-        if (EmptyChecks.isNull(preparation.replaySnapshot())) {
+        if (preparation.replaySnapshot() == null) {
             return admitFromLiveDefinition(preparation);
         }
         return admitFromReplaySnapshot(preparation);
@@ -546,7 +543,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         WorkflowDefinitionView transactionDefinition = preparation.definition();
         if (!approvedCapacityReplay) {
             transactionDefinition = loadAdmissibleDefinition(request);
-            if (EmptyChecks.isNull(transactionDefinition)) {
+            if (transactionDefinition == null) {
                 throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
             }
         }
@@ -560,7 +557,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     private RunAdmission admitFromLiveDefinition(RunPreparation preparation) {
         LaunchRequest request = preparation.request();
         WorkflowDefinitionView transactionDefinition = loadAdmissibleDefinition(request);
-        if (EmptyChecks.isNull(transactionDefinition)
+        if (transactionDefinition == null
                 || !Objects.equals(preparation.definition().version(), transactionDefinition.version())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.definition_changed_during_launch");
         }
@@ -671,7 +668,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         }
         WorkflowNodeRunEntity start = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 run.getId(), WorkflowNodeCode.START.code());
-        if (EmptyChecks.isNull(start)) {
+        if (start == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         String protectedPayload = start.getSourcePayloadProtected();
@@ -707,7 +704,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
 
     private String serializeLaunchParams(LaunchRequest request) {
-        Map<String, Object> launchParams = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
+        Map<String, Object> launchParams = request.params() == null ? Map.of() : request.params();
         return JsonUtils.toJson(launchParams);
     }
 
@@ -716,21 +713,20 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             WorkflowDefinitionView definition,
             List<DagNodeResolution> initialNodes,
             LiveGraph liveGraph) {
-        List<WorkflowNodeEntity> nodes = EmptyChecks.isNotNull(liveGraph)
+        List<WorkflowNodeEntity> nodes = liveGraph != null
                 ? liveGraph.nodes()
                 : workflowNodeMapper.selectByWorkflowDefinitionId(definition.id());
-        List<WorkflowEdgeEntity> edges = EmptyChecks.isNotNull(liveGraph)
+        List<WorkflowEdgeEntity> edges = liveGraph != null
                 ? liveGraph.edges()
                 : workflowEdgeMapper.selectAllByWorkflowDefinitionId(definition.id());
         Map<String, Object> jobVersions = new LinkedHashMap<>();
         for (WorkflowNodeEntity node : nodes) {
-            if (!WorkflowNodeType.JOB.code().equals(node.getNodeType())
-                    || EmptyChecks.isNull(node.getRelatedJobCode())) {
+            if (!WorkflowNodeType.JOB.code().equals(node.getNodeType()) || node.getRelatedJobCode() == null) {
                 continue;
             }
             JobDefinitionView job =
                     configCacheService.findEnabledJobDefinition(request.tenantId(), node.getRelatedJobCode());
-            if (EmptyChecks.isNull(job)) {
+            if (job == null) {
                 reject(request);
                 throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
             }
@@ -788,7 +784,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
 
     private void validateRequest(LaunchRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
         }
         String tenantId = request.tenantId();
@@ -796,14 +792,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         Long workflowDefinitionId = request.workflowDefinitionId();
         boolean requiredLaunchFieldsAreInvalid = EmptyChecks.isBlank(tenantId)
                 || EmptyChecks.isBlank(requestId)
-                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
-                || EmptyChecks.isNull(request.bizDate());
+                || request.bizDate() == null;
         if (requiredLaunchFieldsAreInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
         }
-        boolean dataIntervalIsInvalid = EmptyChecks.isNotNull(request.dataIntervalStart())
-                && EmptyChecks.isNotNull(request.dataIntervalEnd())
+        boolean dataIntervalIsInvalid = request.dataIntervalStart() != null
+                && request.dataIntervalEnd() != null
                 && !request.dataIntervalStart().isBefore(request.dataIntervalEnd());
         if (dataIntervalIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
@@ -816,12 +812,12 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         transaction.executeWithoutResult(ignored -> {
             TriggerRequestEntity locked =
                     triggerRequestMapper.selectByTenantAndRequestIdForUpdate(request.tenantId(), request.requestId());
-            if (EmptyChecks.isNull(locked) || !LaunchRequestIdentityGuard.matches(request, locked)) {
+            if (locked == null || !LaunchRequestIdentityGuard.matches(request, locked)) {
                 return;
             }
             WorkflowRunEntity run =
                     workflowRunMapper.selectByTenantAndTriggerRequestId(request.tenantId(), locked.getId());
-            if (EmptyChecks.isNull(run)) {
+            if (run == null) {
                 reject(request);
             } else {
                 throw new OperationFailure(
@@ -837,7 +833,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             replayOperationMapper.setTenantContext(request.tenantId());
             ReplayOperationEntity operation =
                     replayOperationMapper.selectByTargetRequest(request.tenantId(), request.requestId());
-            if (EmptyChecks.isNotNull(operation)) {
+            if (operation != null) {
                 ReplayOperationWorkflowOutcomeParam outcome = ReplayOperationWorkflowOutcomeParam.builder()
                         .tenantId(request.tenantId())
                         .requestId(request.requestId())
@@ -864,7 +860,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     private void attachReplayOperationTarget(LaunchRequest request, WorkflowRunEntity workflowRun, Instant attachedAt) {
         ReplayOperationEntity operation =
                 replayOperationMapper.selectByTargetRequest(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(operation)) {
+        if (operation == null) {
             return;
         }
         int attached = replayOperationMapper.attachTargetWorkflowRun(

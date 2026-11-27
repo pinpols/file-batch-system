@@ -148,11 +148,11 @@ public class InternalAuthFilter extends OncePerRequestFilter {
                             apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE)
                     : apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
         }
-        if (EmptyChecks.isNotNull(path) && WORKER_READ_PATH.matcher(path).matches()) {
+        if (path != null && WORKER_READ_PATH.matcher(path).matches()) {
             return apiKeyVerifier.verifyWithAnyScope(
                     apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
         }
-        if (EmptyChecks.isNotNull(path) && OPS_MUTATION_PATH.matcher(path).matches()) {
+        if (path != null && OPS_MUTATION_PATH.matcher(path).matches()) {
             return apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_OPS);
         }
         // 未知 workers/tasks 路径不得由租户 key 触达，未来的新端点也不会被前缀自动放行。
@@ -160,7 +160,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     private static boolean isWorkerExecutionUri(String path) {
-        if (EmptyChecks.isNull(path)) {
+        if (path == null) {
             return false;
         }
         return WORKER_EXECUTION_PATHS.contains(path)
@@ -170,7 +170,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     private static boolean isInternalPath(String path) {
-        return "/internal".equals(path) || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
+        return "/internal".equals(path) || (path != null && path.startsWith("/internal/"));
     }
 
     private static void writeUnauthorized(HttpServletResponse response) throws IOException {

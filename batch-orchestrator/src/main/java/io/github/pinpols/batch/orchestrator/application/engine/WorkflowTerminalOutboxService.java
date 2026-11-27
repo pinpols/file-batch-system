@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
@@ -56,7 +55,7 @@ public class WorkflowTerminalOutboxService {
     // D-2: MANDATORY 强制 outbox 写入必须在调用方事务内执行，无事务时直接抛异常。
     @Transactional(propagation = Propagation.MANDATORY)
     public void writeTerminalEvent(WorkflowRunEntity workflowRun, String terminalStatus, Instant finishedAt) {
-        if (EmptyChecks.isNull(workflowRun) || !isTerminal(terminalStatus)) {
+        if (workflowRun == null || !isTerminal(terminalStatus)) {
             return;
         }
         updateReplayOperationOutcome(workflowRun, terminalStatus, finishedAt);
@@ -68,12 +67,12 @@ public class WorkflowTerminalOutboxService {
         payload.put("relatedJobInstanceId", workflowRun.getRelatedJobInstanceId());
         payload.put("runStatus", terminalStatus);
         LocalDate businessDate = workflowRun.getBizDate();
-        String businessDateText = EmptyChecks.isNull(businessDate) ? null : businessDate.toString();
+        String businessDateText = businessDate == null ? null : businessDate.toString();
         payload.put("bizDate", businessDateText);
         Instant startedAt = workflowRun.getStartedAt();
-        String startedAtText = EmptyChecks.isNull(startedAt) ? null : startedAt.toString();
+        String startedAtText = startedAt == null ? null : startedAt.toString();
         payload.put("startedAt", startedAtText);
-        String finishedAtText = EmptyChecks.isNull(finishedAt) ? null : finishedAt.toString();
+        String finishedAtText = finishedAt == null ? null : finishedAt.toString();
         payload.put("finishedAt", finishedAtText);
         payload.put("traceId", workflowRun.getTraceId());
 

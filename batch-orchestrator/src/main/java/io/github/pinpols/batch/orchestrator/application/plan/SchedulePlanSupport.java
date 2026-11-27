@@ -36,14 +36,14 @@ public final class SchedulePlanSupport {
      * 两者合并去重后一次性参加准入，避免束内任一故障渠道绕过健康闸门。
      */
     private static List<String> resolveDownstreamChannelCodes(SchedulePlan plan) {
-        if (EmptyChecks.isNull(plan) || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
+        if (plan == null || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
             return List.of();
         }
         Set<String> channels = new LinkedHashSet<>();
         if (EmptyChecks.isNotBlank(plan.getDownstreamChannelCode())) {
             channels.add(plan.getDownstreamChannelCode());
         }
-        if (EmptyChecks.isNotNull(plan.getPartitions())) {
+        if (plan.getPartitions() != null) {
             plan.getPartitions().stream()
                     .map(SchedulePlan.PartitionPlan::getTargetRef)
                     .filter(EmptyChecks::isNotBlank)

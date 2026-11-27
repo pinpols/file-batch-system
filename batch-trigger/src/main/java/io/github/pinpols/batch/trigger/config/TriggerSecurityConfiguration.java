@@ -143,8 +143,7 @@ public class TriggerSecurityConfiguration {
             }
 
             String header = request.getHeader(HEADER_NAME);
-            if (EmptyChecks.isNotNull(header)
-                    && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
+            if (header != null && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
                 setAuthenticated();
                 chain.doFilter(request, response);
             } else {

@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
@@ -219,9 +218,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private boolean isWithinWindow(BatchWindowEntity window) {
-        boolean batchWindowIsIncomplete = EmptyChecks.isNull(window)
-                || EmptyChecks.isNull(window.startTime())
-                || EmptyChecks.isNull(window.endTime());
+        boolean batchWindowIsIncomplete = window == null || window.startTime() == null || window.endTime() == null;
         if (batchWindowIsIncomplete) {
             return true;
         }
@@ -341,7 +338,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        boolean queueJobQueryContextIncomplete = EmptyChecks.isNull(request)
+        boolean queueJobQueryContextIncomplete = request == null
                 || !Texts.hasText(request.getTenantId())
                 || queue == null
                 || !Texts.hasText(queue.queueCode());
@@ -357,7 +354,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        boolean queuePartitionQueryContextIncomplete = EmptyChecks.isNull(request)
+        boolean queuePartitionQueryContextIncomplete = request == null
                 || !Texts.hasText(request.getTenantId())
                 || queue == null
                 || !Texts.hasText(queue.workerGroup());
@@ -389,7 +386,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
                     default -> 100L;
                 };
         int normalizedPriority;
-        if (EmptyChecks.isNull(weights.priority())) {
+        if (weights.priority() == null) {
             normalizedPriority = 5;
         } else {
             int requestedPriority = weights.priority();
@@ -408,7 +405,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private long resolveAgingBonus(ResourceSchedulingRequest request) {
-        boolean priorityAgingUnavailable = EmptyChecks.isNull(request)
+        boolean priorityAgingUnavailable = request == null
                 || request.getWaitingSince() == null
                 || !resourceSchedulerProperties.isPriorityAgingEnabled();
         if (priorityAgingUnavailable) {

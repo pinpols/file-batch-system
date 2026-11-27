@@ -110,7 +110,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     private boolean recoverOne(JobInstanceEntity jobInstance) {
         TriggerRequestEntity triggerRequest =
                 triggerRequestMapper.selectById(jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
-        if (EmptyChecks.isNull(triggerRequest) || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
+        if (triggerRequest == null || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
             return false;
         }
 
@@ -134,7 +134,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
         LaunchValidationService.LaunchLoadResult validatedLaunch = launchValidationService.load(request);
         JobDefinitionView executionDefinition = validatedLaunch.jobDefinition();
-        boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
+        boolean recoveredDefinitionIdentityDoesNotMatch = executionDefinition == null
                 || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
                 || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());
         if (recoveredDefinitionIdentityDoesNotMatch) {
@@ -150,7 +150,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
             partitionDispatchService.dispatch(dispatchContext);
         } catch (RuntimeException ex) {
             BizException invalidBundle = findPermanentBundleFailure(ex);
-            if (EmptyChecks.isNull(invalidBundle)) {
+            if (invalidBundle == null) {
                 throw ex;
             }
             launchService.finalizeDispatchFailure(request, jobInstance, invalidBundle);
@@ -185,7 +185,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
     private BizException findPermanentBundleFailure(RuntimeException exception) {
         Throwable current = exception;
-        while (EmptyChecks.isNotNull(current)) {
+        while (current != null) {
             if (current instanceof BizException bizException && isPermanentBundleFailure(bizException)) {
                 return bizException;
             }

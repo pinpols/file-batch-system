@@ -100,7 +100,7 @@ public class EmailNotificationSender implements NotificationSender {
         String body = buildBody(message);
         mailMessage.setText(body);
         String from = str(config, CONFIG_KEY_FROM);
-        if (from != null && !from.isBlank()) {
+        if (EmptyChecks.isNotBlank(from)) {
             mailMessage.setFrom(from);
         }
 
@@ -124,11 +124,11 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private String resolveSubject(String configured, NotificationMessage message) {
-        if (configured != null && !configured.isBlank()) {
+        if (EmptyChecks.isNotBlank(configured)) {
             return configured;
         }
         String eventType = message.payload() == null ? null : message.payload().eventType();
-        return "[batch] " + (eventType == null || eventType.isBlank() ? "notification" : eventType);
+        return "[batch] " + (EmptyChecks.isBlank(eventType) ? "notification" : eventType);
     }
 
     private String buildBody(NotificationMessage message) {
@@ -138,7 +138,7 @@ public class EmailNotificationSender implements NotificationSender {
                 .append(eventType == null ? "UNKNOWN" : eventType)
                 .append('\n');
         String payloadJson = message.payloadJson();
-        if (payloadJson != null && !payloadJson.isBlank()) {
+        if (EmptyChecks.isNotBlank(payloadJson)) {
             body.append(truncate(payloadJson));
         }
         return body.toString();
@@ -152,7 +152,7 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private String[] parseRecipients(String to) {
-        if (to == null || to.isBlank()) {
+        if (EmptyChecks.isBlank(to)) {
             return new String[0];
         }
         return Arrays.stream(to.split(","))
@@ -164,7 +164,7 @@ public class EmailNotificationSender implements NotificationSender {
     /** 按域名白名单过滤收件人;白名单为空 = 不限制。 */
     private String[] filterAllowedRecipients(String[] recipients) {
         List<String> allowed = notificationProperties.getEmailAllowedDomains();
-        if (allowed == null || allowed.isEmpty()) {
+        if (EmptyChecks.isEmpty(allowed)) {
             return recipients;
         }
         return Arrays.stream(recipients)
@@ -181,7 +181,7 @@ public class EmailNotificationSender implements NotificationSender {
         String trimmedDomain = rawDomain.trim();
         String domain = trimmedDomain.toLowerCase(Locale.ROOT);
         for (String allowed : allowedDomains) {
-            if (EmptyChecks.isNull(allowed)) {
+            if (allowed == null) {
                 continue;
             }
             String trimmedAllowedDomain = allowed.trim();
@@ -194,7 +194,7 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private Map<String, Object> parseConfig(String configJson) {
-        if (configJson == null || configJson.isBlank()) {
+        if (EmptyChecks.isBlank(configJson)) {
             return Map.of();
         }
         try {

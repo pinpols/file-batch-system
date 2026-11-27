@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -120,8 +119,8 @@ public class WorkflowRunStuckReconciler {
         // 再判断过期根运行是否应进入终态；派发守卫会安全处理已活动节点。
         workflowRunResumeProgressor.resume(candidate.getTenantId(), candidate.getId());
         WorkflowRunEntity refreshed = workflowRunMapper.selectById(candidate.getTenantId(), candidate.getId());
-        boolean refreshedRunIsMissingOrNotRunning = EmptyChecks.isNull(refreshed)
-                || !WorkflowRunStatus.RUNNING.code().equals(refreshed.getRunStatus());
+        boolean refreshedRunIsMissingOrNotRunning =
+                refreshed == null || !WorkflowRunStatus.RUNNING.code().equals(refreshed.getRunStatus());
         if (refreshedRunIsMissingOrNotRunning) {
             return CandidateResult.NO_ACTION;
         }

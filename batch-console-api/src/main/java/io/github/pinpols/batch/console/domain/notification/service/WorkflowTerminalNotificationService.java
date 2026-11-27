@@ -36,7 +36,7 @@ public class WorkflowTerminalNotificationService {
     @Transactional(transactionManager = "transactionManager")
     public void accept(String eventKey, String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, EVENT_DATA_TYPE);
-        if (EmptyChecks.isNull(data) || !"v2".equals(data.get("schemaVersion"))) {
+        if (data == null || !"v2".equals(data.get("schemaVersion"))) {
             throw new IllegalArgumentException("invalid Workflow terminal identity or schema");
         }
         if (!(data.get("tenantId") instanceof String tenant) || EmptyChecks.isBlank(tenant)) {
@@ -63,7 +63,7 @@ public class WorkflowTerminalNotificationService {
     @Transactional(transactionManager = "transactionManager")
     public void acceptJob(String eventKey, String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, EVENT_DATA_TYPE);
-        boolean notificationPayloadIsNotJobInstanceV1 = EmptyChecks.isNull(data)
+        boolean notificationPayloadIsNotJobInstanceV1 = data == null
                 || !"v1".equals(data.get("schemaVersion"))
                 || !"JOB_INSTANCE".equals(data.get("entityType"));
         if (notificationPayloadIsNotJobInstanceV1) {
@@ -123,7 +123,7 @@ public class WorkflowTerminalNotificationService {
             return;
         }
         if ("job-instances".equals(stream)) push.accept(tenant, eventKey, data);
-        if (EmptyChecks.isNull(eventType)) return;
+        if (eventType == null) return;
         String notification =
                 JsonUtils.toJson(new WebhookEventPayload(tenant, eventType, stream, eventKey, finished, data));
         for (WebhookSubscriptionEntity subscription : subscriptions.findEnabledByTenant(tenant)) {

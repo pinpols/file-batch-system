@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
 import jakarta.annotation.PostConstruct;
@@ -45,7 +44,7 @@ public class ConsoleAiAuditRetentionJob {
 
     @PreDestroy
     void stop() {
-        if (EmptyChecks.isNotNull(executor)) {
+        if (executor != null) {
             executor.shutdownNow();
         }
     }

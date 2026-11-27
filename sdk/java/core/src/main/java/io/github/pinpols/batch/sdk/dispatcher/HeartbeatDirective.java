@@ -35,7 +35,7 @@ public record HeartbeatDirective(
         }
         Object paused = response.get("pausedTaskTypes");
         Object platformStatusForDefaultCheck = response.get("platformStatus");
-        String platformStatus = EmptyChecks.isNull(platformStatusForDefaultCheck)
+        String platformStatus = platformStatusForDefaultCheck == null
                 ? STATUS_NORMAL
                 : response.get("platformStatus").toString();
         Integer desiredMaxConcurrent = integerValue(response.get("desiredMaxConcurrent"));

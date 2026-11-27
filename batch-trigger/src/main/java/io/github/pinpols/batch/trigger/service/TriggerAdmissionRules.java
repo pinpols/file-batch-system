@@ -2,7 +2,6 @@ package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.mapper.TenantStatusMapper;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +31,6 @@ final class TriggerAdmissionRules {
     }
 
     int workflowVersion(TriggerDescriptor descriptor) {
-        return EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        return descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
     }
 }

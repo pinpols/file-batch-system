@@ -49,7 +49,7 @@ public record JdbcMappedExportSpec(
         String detailFk = required(root, "detailFkColumn");
         String orderCol = required(root, "detailOrderByColumn");
         String tiebreakerCol = optional(root.get("detailTiebreakerColumn"), root.get("detail_tiebreaker_column"));
-        if (EmptyChecks.isNotNull(tiebreakerCol) && tiebreakerCol.equalsIgnoreCase(orderCol)) {
+        if (tiebreakerCol != null && tiebreakerCol.equalsIgnoreCase(orderCol)) {
             throw new IllegalArgumentException(
                     "jdbc_mapped_export.detailTiebreakerColumn must differ from detailOrderByColumn");
         }
@@ -111,7 +111,7 @@ public record JdbcMappedExportSpec(
 
     private static String optional(Object... values) {
         for (Object value : values) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 continue;
             }
             String rawValue = String.valueOf(value);
@@ -124,7 +124,7 @@ public record JdbcMappedExportSpec(
 
     private static String required(Map<String, Object> root, String key) {
         Object v = root.get(key);
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
         }
         String presenceText = String.valueOf(v);

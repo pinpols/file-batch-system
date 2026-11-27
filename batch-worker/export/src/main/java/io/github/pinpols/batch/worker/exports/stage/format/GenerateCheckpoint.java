@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -83,7 +82,7 @@ public final class GenerateCheckpoint {
                 GenerateCursorCodec.Marker m = codec.decodeMarker(marker);
                 Object decodedCursor = codec.decodeCursor(m.encodedCursor());
                 boolean checkpointFileCanResume = m.byteOffset() > 0
-                        && EmptyChecks.isNotNull(decodedCursor)
+                        && decodedCursor != null
                         && Files.exists(generatedFile)
                         && Files.size(generatedFile) >= m.byteOffset();
                 if (checkpointFileCanResume) {

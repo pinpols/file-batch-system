@@ -164,7 +164,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         SystemPipelineDefinition systemPipeline =
                 SystemPipelineCatalog.forJobType(pipelineType()).orElse(null);
-        if (EmptyChecks.isNull(systemPipeline)) {
+        if (systemPipeline == null) {
             BizException exception = BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
             return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
         }
@@ -174,12 +174,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
             return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
         }
         BizException identityMismatch = validateSystemPipelineIdentity(attributes, systemPipeline);
-        if (EmptyChecks.isNotNull(identityMismatch)) {
+        if (identityMismatch != null) {
             return StepExecutionResponse.failure(identityMismatch, ERROR_OBJECT_MAPPER);
         }
         Map<String, Object> fileRecord =
-                EmptyChecks.isNull(fileId) ? Map.of() : fileRecords.loadFileRecord(request.tenantId(), fileId);
-        if (EmptyChecks.isNotNull(fileId) && EmptyChecks.isEmpty(Objects.requireNonNull(fileRecord))) {
+                fileId == null ? Map.of() : fileRecords.loadFileRecord(request.tenantId(), fileId);
+        if (fileId != null && EmptyChecks.isEmpty(Objects.requireNonNull(fileRecord))) {
             BizException exception = BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
             return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
         }
@@ -240,7 +240,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         Long fileId = createParam.fileId();
         String traceId = createParam.traceId();
         String jobCode = createParam.jobCode();
-        if (EmptyChecks.isNotNull(fileId)) {
+        if (fileId != null) {
             attributes.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
         }
         attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
@@ -249,10 +249,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         attributes.put(PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION, createParam.systemPipelineVersion());
         attributes.put(
                 PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
-                EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId());
+                pipelineRun == null ? null : pipelineRun.pipelineInstanceId());
         attributes.put(
-                PipelineRuntimeKeys.PIPELINE_RUN_STARTED_AT,
-                EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.startedAt());
+                PipelineRuntimeKeys.PIPELINE_RUN_STARTED_AT, pipelineRun == null ? null : pipelineRun.startedAt());
         attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
         // ADR-026: dry-run 标记从 task payload (orchestrator 写) 提取到 attributes,
         // step plugin 调用 DryRunGuard.fromAttributes(attributes) 拿 guard 包副作用。
@@ -279,7 +278,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         //  - 软告警（fatal=false）：失败仅落 attributes.verifierFailures，pipeline 继续 SUCCESS
         //  - 硬中止（fatal=true）：把 pipeline 翻为 FAILED，错误码 VERIFIER_FATAL
         PipelineVerifierHook.VerifierHookResult verifierResult;
-        if (EmptyChecks.isNull(verifierHook)) {
+        if (verifierHook == null) {
             verifierResult = PipelineVerifierHook.VerifierHookResult.NO_FATAL;
         } else {
             Object jobInstanceIdValue = attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID);
@@ -295,10 +294,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
             // 安全增量补偿(opt-in):若开关 on 且注册了 compensator,先 COMPENSATING + 反向动作,再落 FAILED 终态。
             runCompensationIfEnabled(request.tenantId(), pipelineRun, attributes);
             pipelineRuns.markPipelineFailed(pipelineRun, successStage, lastSuccessfulStage(attributes));
-            String fatalCode = EmptyChecks.isNull(verifierResult.firstFatalCode())
-                    ? "VERIFIER_FATAL"
-                    : verifierResult.firstFatalCode();
-            String fatalMessage = EmptyChecks.isNull(verifierResult.firstFatalMessage())
+            String fatalCode =
+                    verifierResult.firstFatalCode() == null ? "VERIFIER_FATAL" : verifierResult.firstFatalCode();
+            String fatalMessage = verifierResult.firstFatalMessage() == null
                     ? "ContentVerifier reported fatal failure"
                     : verifierResult.firstFatalMessage();
             handlePipelineFailureWithoutDetails(attributes, fatalCode, fatalMessage);
@@ -350,7 +348,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
                 .orElseThrow(
                         () -> new IllegalStateException("worker has no system pipeline mapping: " + pipelineType()));
         BizException identityMismatch = validateSystemPipelineIdentity(attributes, definition);
-        if (EmptyChecks.isNotNull(identityMismatch)) {
+        if (identityMismatch != null) {
             throw identityMismatch;
         }
         return systemSteps(definition, attributes);
@@ -358,7 +356,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
     private Map<String, Object> resolveStepParams(Map<String, Object> attributes) {
         Object configured = attributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
-        if (EmptyChecks.isNull(configured)) {
+        if (configured == null) {
             Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
             if (rawPayload instanceof String payload && EmptyChecks.isNotBlank(payload)) {
                 try {
@@ -372,7 +370,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
                 }
             }
         }
-        if (EmptyChecks.isNull(configured)) {
+        if (configured == null) {
             return Map.of();
         }
         if (configured instanceof Map<?, ?> rawMap) {
@@ -482,7 +480,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
      */
     @SuppressWarnings("unchecked")
     private String extractFromPayloadJson(Map<String, Object> attributes, String fieldName) {
-        Object raw = EmptyChecks.isNull(attributes) ? null : attributes.get(PipelineRuntimeKeys.PAYLOAD);
+        Object raw = attributes == null ? null : attributes.get(PipelineRuntimeKeys.PAYLOAD);
         if (!(raw instanceof String payload) || payload.isBlank()) {
             return null;
         }

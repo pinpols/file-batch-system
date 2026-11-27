@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -95,7 +94,7 @@ final class NasCopyExecutor {
             if (cause instanceof UncheckedIOException uncheckedIOException) {
                 throw uncheckedIOException.getCause();
             }
-            Throwable failureCause = EmptyChecks.isNull(cause) ? exception : cause;
+            Throwable failureCause = cause == null ? exception : cause;
             throw new IOException("NAS Files.copy failed", failureCause);
         }
     }

@@ -30,13 +30,13 @@ public final class WorkflowRunReportLock {
     public void acquireForJobInstance(String tenantId, Long jobInstanceId) {
         WorkflowRunEntity workflowRun =
                 workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, jobInstanceId);
-        if (EmptyChecks.isNull(workflowRun)) {
+        if (workflowRun == null) {
             return;
         }
 
         String calendarCode = resolveCalendarCode(workflowRun);
         LocalDate bizDate = workflowRun.getBizDate();
-        if (EmptyChecks.isBlank(calendarCode) || EmptyChecks.isNull(bizDate)) {
+        if (EmptyChecks.isBlank(calendarCode) || bizDate == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
 
@@ -44,14 +44,14 @@ public final class WorkflowRunReportLock {
         Long workflowRunId = workflowRun.getId();
         WorkflowRunEntity lockedRun =
                 workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(tenantId, workflowRunId);
-        if (EmptyChecks.isNull(lockedRun)) {
+        if (lockedRun == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
     }
 
     private String resolveCalendarCode(WorkflowRunEntity workflowRun) {
         WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-        if (EmptyChecks.isNotNull(executionSnapshot)) {
+        if (executionSnapshot != null) {
             String calendarCode = executionSnapshot.workflowCalendarCode();
             if (EmptyChecks.isNotBlank(calendarCode)) {
                 return calendarCode;
@@ -59,7 +59,7 @@ public final class WorkflowRunReportLock {
         }
         Long workflowDefinitionId = workflowRun.getWorkflowDefinitionId();
         WorkflowDefinitionView workflowDefinition = workflowDefinitionMapper.selectById(workflowDefinitionId);
-        if (EmptyChecks.isNull(workflowDefinition)) {
+        if (workflowDefinition == null) {
             return null;
         }
         return workflowDefinition.calendarCode();

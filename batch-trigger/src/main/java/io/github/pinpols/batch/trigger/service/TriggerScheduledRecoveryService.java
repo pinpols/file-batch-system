@@ -73,14 +73,14 @@ final class TriggerScheduledRecoveryService {
             TriggerRequestEntity request, Long pendingId, boolean approvePending, Instant scheduledFireTime) {}
 
     ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(ScheduledOccurrenceCatchUpCommand command) {
-        if (EmptyChecks.isNull(command) || EmptyChecks.isNull(command.request())) {
+        if (command == null || command.request() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         ScheduledOccurrenceCatchUpInput request = command.request();
         boolean requiredCatchUpFieldsAreMissing = EmptyChecks.isBlank(request.tenantId())
-                || EmptyChecks.isNull(request.workflowDefinitionId())
-                || EmptyChecks.isNull(request.scheduledFireTime())
-                || EmptyChecks.isNull(request.bizDate())
+                || request.workflowDefinitionId() == null
+                || request.scheduledFireTime() == null
+                || request.bizDate() == null
                 || EmptyChecks.isBlank(request.reason())
                 || EmptyChecks.isBlank(request.requestedBy())
                 || EmptyChecks.isBlank(command.idempotencyKey())
@@ -95,7 +95,7 @@ final class TriggerScheduledRecoveryService {
         Instant scheduledFireTime = request.scheduledFireTime();
         TriggerDescriptor descriptor =
                 triggerDefinitionLoader.loadByWorkflowDefinitionId(request.tenantId(), request.workflowDefinitionId());
-        if (EmptyChecks.isNull(descriptor) || !descriptor.isWorkflowEnabled()) {
+        if (descriptor == null || !descriptor.isWorkflowEnabled()) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
         }
         CatchUpPolicyType catchUpPolicy = CatchUpPolicyType.fromCode(descriptor.getCatchUpPolicy());
@@ -130,7 +130,7 @@ final class TriggerScheduledRecoveryService {
             }
             TriggerRequestEntity existing =
                     triggerRequestMapper.selectByTenantAndDedupKey(request.tenantId(), dedupKey);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 return occurrenceCatchUpResponse(existing.getRequestId(), occurrenceStatus);
             }
             TriggerRequestEntity accepted = requestPersistence.buildAcceptedEntity(launchRequest, dedupKey);
@@ -211,11 +211,11 @@ final class TriggerScheduledRecoveryService {
         assertScheduledWorkflowAdmitted(command);
         ScheduledOccurrenceObservation observed = occurrenceRecorder.observed(command.descriptor(), command.fireTime());
         LaunchResponse settled = settledOccurrenceResponse(command, observed);
-        if (EmptyChecks.isNotNull(settled)) {
+        if (settled != null) {
             return settled;
         }
         LaunchRequest launchRequest = resolveScheduledRequest(command, observed);
-        if (EmptyChecks.isNull(launchRequest.bizDate())) {
+        if (launchRequest.bizDate() == null) {
             occurrenceRecorder.record(
                     command.descriptor(), command.fireTime(), null, ScheduledOccurrenceStatus.SKIPPED_CALENDAR, null);
             return skipScheduled(command);
@@ -243,7 +243,7 @@ final class TriggerScheduledRecoveryService {
                 ScheduledOccurrenceObservation latest =
                         occurrenceRecorder.observed(command.descriptor(), command.fireTime());
                 LaunchResponse latestResponse = settledOccurrenceResponse(command, latest);
-                if (EmptyChecks.isNotNull(latestResponse)) {
+                if (latestResponse != null) {
                     return latestResponse;
                 }
             }
@@ -262,15 +262,15 @@ final class TriggerScheduledRecoveryService {
 
     private LaunchResponse settledOccurrenceResponse(
             ScheduledTriggerCommand command, ScheduledOccurrenceObservation observed) {
-        if (EmptyChecks.isNull(observed)) {
+        if (observed == null) {
             return null;
         }
         if (ScheduledOccurrenceStatus.REQUESTED.code().equals(observed.status())
                 || (ScheduledOccurrenceStatus.MISFIRE_PENDING.code().equals(observed.status())
-                        && EmptyChecks.isNotNull(observed.requestId()))) {
+                        && observed.requestId() != null)) {
             TriggerRequestEntity accepted = triggerRequestMapper.selectByTenantAndRequestId(
                     command.descriptor().getTenantId(), observed.requestId());
-            if (EmptyChecks.isNull(accepted)
+            if (accepted == null
                     || !Objects.equals(
                             accepted.getWorkflowDefinitionId(),
                             command.descriptor().getWorkflowDefinitionId())
@@ -294,12 +294,12 @@ final class TriggerScheduledRecoveryService {
 
     private LaunchRequest resolveScheduledRequest(
             ScheduledTriggerCommand command, ScheduledOccurrenceObservation observed) {
-        if (EmptyChecks.isNotNull(observed)) {
+        if (observed != null) {
             String calendarCode =
                     CodeNormalizer.toConfigFormOrNull(command.descriptor().getCalendarCode());
             if (!Objects.equals(observed.scheduleVersion(), admissionRules.workflowVersion(command.descriptor()))
                     || !Objects.equals(observed.calendarCode(), calendarCode)
-                    || EmptyChecks.isNull(observed.bizDate())) {
+                    || observed.bizDate() == null) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
             }
             return launchAdapterService.fromObservedScheduledTrigger(command, observed.bizDate());
@@ -315,14 +315,14 @@ final class TriggerScheduledRecoveryService {
      * <p>无声明(绝大多数存量触发器)→ 直接放行,行为不变。
      */
     private Optional<Instant> upstreamReadyAt(ScheduledTriggerCommand command, LaunchRequest launchRequest) {
-        List<String> dependencies = EmptyChecks.isNull(command.descriptor().getDependsOnJobCodes())
+        List<String> dependencies = command.descriptor().getDependsOnJobCodes() == null
                 ? List.of()
                 : command.descriptor().getDependsOnJobCodes().stream()
                         .filter(Texts::hasText)
                         .map(String::trim)
                         .distinct()
                         .toList();
-        if (EmptyChecks.isNull(command.descriptor().getDependsOnJobCodes())
+        if (command.descriptor().getDependsOnJobCodes() == null
                 && Texts.hasText(command.descriptor().getDependsOnJobCode())) {
             String dependencyJobCode = command.descriptor().getDependsOnJobCode();
             String trimmedDependencyJobCode = dependencyJobCode.trim();
@@ -343,7 +343,7 @@ final class TriggerScheduledRecoveryService {
                         dependency,
                         launchRequest.bizDate());
             }
-            if (EmptyChecks.isNull(latestReadyAt) || readyAt.get().isAfter(latestReadyAt)) {
+            if (latestReadyAt == null || readyAt.get().isAfter(latestReadyAt)) {
                 latestReadyAt = readyAt.get();
             }
         }
@@ -355,11 +355,11 @@ final class TriggerScheduledRecoveryService {
         assertScheduledWorkflowAdmitted(command);
         ScheduledOccurrenceObservation observed = occurrenceRecorder.observed(command.descriptor(), command.fireTime());
         LaunchResponse settled = settledOccurrenceResponse(command, observed);
-        if (EmptyChecks.isNotNull(settled)) {
+        if (settled != null) {
             return settled;
         }
         LaunchRequest launchRequest = resolveScheduledRequest(command, observed);
-        if (EmptyChecks.isNull(launchRequest.bizDate())) {
+        if (launchRequest.bizDate() == null) {
             occurrenceRecorder.record(
                     command.descriptor(), command.fireTime(), null, ScheduledOccurrenceStatus.SKIPPED_CALENDAR, null);
             return skipScheduled(command);
@@ -376,13 +376,13 @@ final class TriggerScheduledRecoveryService {
         admissionRules.assertTenantActive(command.getTenantId());
 
         PendingApprovalTarget pendingTarget = resolveRequestFromPending(command);
-        TriggerRequestEntity requestFromPending = EmptyChecks.isNull(pendingTarget) ? null : pendingTarget.request();
+        TriggerRequestEntity requestFromPending = pendingTarget == null ? null : pendingTarget.request();
 
         // 5.6:幂等 —— 若已有相同 key 的请求被 launch 过,则提前返回
-        if (EmptyChecks.isNull(requestFromPending) && EmptyChecks.isNotBlank(command.getIdempotencyKey())) {
+        if (requestFromPending == null && EmptyChecks.isNotBlank(command.getIdempotencyKey())) {
             TriggerRequestEntity existing =
                     triggerRequestMapper.selectByTenantAndDedupKey(command.getTenantId(), command.getIdempotencyKey());
-            if (EmptyChecks.isNotNull(existing)
+            if (existing != null
                     && TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(existing.getRequestStatus())) {
                 return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
             }
@@ -401,7 +401,7 @@ final class TriggerScheduledRecoveryService {
             PendingCatchUpApprovalCommand command,
             PendingApprovalTarget pendingTarget,
             TriggerRequestEntity requestFromPending) {
-        TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
+        TriggerRequestEntity pendingRequest = requestFromPending != null
                 ? triggerRequestMapper.selectById(requestFromPending.getId())
                 : triggerRequestMapper.selectByTenantAndRequestId(command.getTenantId(), command.getRequestId());
         Guard.requireFound(pendingRequest, "pending catch-up request not found");
@@ -425,23 +425,22 @@ final class TriggerScheduledRecoveryService {
             // 另一实例正在处理；返回当前状态，重试方需重新查询
             return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
         }
-        boolean pendingTargetRequiresApproval = EmptyChecks.isNotNull(pendingTarget) && pendingTarget.approvePending();
+        boolean pendingTargetRequiresApproval = pendingTarget != null && pendingTarget.approvePending();
         if (pendingTargetRequiresApproval) {
             int approved = triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
             if (approved != 1) {
                 TriggerMisfirePendingEntity current = triggerMisfirePendingMapper.selectById(pendingTarget.pendingId());
-                if (EmptyChecks.isNull(current)
-                        || !MisfirePendingStatus.APPROVED.code().equals(current.getStatus())) {
+                if (current == null || !MisfirePendingStatus.APPROVED.code().equals(current.getStatus())) {
                     throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.pending_approval_changed");
                 }
             }
         }
-        Map<String, Object> restoredParams = EmptyChecks.isNull(original.params()) ? Map.of() : original.params();
+        Map<String, Object> restoredParams = original.params() == null ? Map.of() : original.params();
         Map<String, Object> approvalParams = new LinkedHashMap<>(restoredParams);
         approvalParams.put("operationType", "CATCH_UP_APPROVAL");
         approvalParams.put("approvalMode", "MANUAL_APPROVAL");
         approvalParams.put("catchUpApproved", true);
-        String approvalReason = EmptyChecks.isNull(command.getReason()) ? "" : command.getReason();
+        String approvalReason = command.getReason() == null ? "" : command.getReason();
         approvalParams.put("reason", approvalReason);
         LaunchRequest launchRequest =
                 original.toBuilder().params(approvalParams).build();
@@ -451,9 +450,8 @@ final class TriggerScheduledRecoveryService {
         requestPersistence.publishLaunchOutbox(launchRequest, dedupKey);
         // 进程可能在恢复状态提交后、事务提交回调触发 DAG
         // 推进前停止。先根据已持久化的成功节点运行记录协调，
-        boolean pendingMisfireCanBeApproved = EmptyChecks.isNotNull(pendingTarget)
-                && pendingTarget.approvePending()
-                && EmptyChecks.isNotNull(pendingTarget.scheduledFireTime());
+        boolean pendingMisfireCanBeApproved =
+                pendingTarget != null && pendingTarget.approvePending() && pendingTarget.scheduledFireTime() != null;
         if (pendingMisfireCanBeApproved) {
             occurrenceRecorder.transition(
                     command.getTenantId(),
@@ -475,7 +473,7 @@ final class TriggerScheduledRecoveryService {
         } catch (IllegalArgumentException invalidPayload) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.pending_snapshot_invalid");
         }
-        boolean pendingLaunchSnapshotIsInconsistent = EmptyChecks.isNull(original)
+        boolean pendingLaunchSnapshotIsInconsistent = original == null
                 || !Objects.equals(original.tenantId(), pending.getTenantId())
                 || !Objects.equals(original.requestId(), pending.getRequestId())
                 || !Objects.equals(original.workflowDefinitionId(), pending.getWorkflowDefinitionId())
@@ -500,7 +498,7 @@ final class TriggerScheduledRecoveryService {
                 launchRequest.bizDate());
         TriggerRequestEntity existing =
                 triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             linkMisfirePending(command, existing);
             return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
         }
@@ -512,7 +510,7 @@ final class TriggerScheduledRecoveryService {
     }
 
     private void linkMisfirePending(ScheduledTriggerCommand command, TriggerRequestEntity request) {
-        if (EmptyChecks.isNull(command) || EmptyChecks.isNull(request)) {
+        if (command == null || request == null) {
             return;
         }
         TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
@@ -530,9 +528,7 @@ final class TriggerScheduledRecoveryService {
                     command.descriptor().getWorkflowDefinitionId(),
                     command.fireTime());
         }
-        boolean canAssociateCatchUpRequest = EmptyChecks.isNotNull(pending)
-                && EmptyChecks.isNotNull(pending.getId())
-                && EmptyChecks.isNotNull(request.getId());
+        boolean canAssociateCatchUpRequest = pending != null && pending.getId() != null && request.getId() != null;
         if (canAssociateCatchUpRequest) {
             triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
         }
@@ -540,10 +536,10 @@ final class TriggerScheduledRecoveryService {
 
     private PendingApprovalTarget resolveRequestFromPending(PendingCatchUpApprovalCommand command) {
         TriggerMisfirePendingEntity pending;
-        if (EmptyChecks.isNull(command.getPendingId())) {
+        if (command.getPendingId() == null) {
             pending = triggerMisfirePendingMapper.selectByCatchUpRequest(command.getTenantId(), command.getRequestId());
             // BatchDay 审批没有 Quartz 待办；有待办时必须在本次事务内完成原义务审批。
-            if (EmptyChecks.isNull(pending)) {
+            if (pending == null) {
                 return null;
             }
         } else {
@@ -559,7 +555,7 @@ final class TriggerScheduledRecoveryService {
             throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
         }
         Long requestId = pending.getCatchUpRequestId();
-        if (EmptyChecks.isNull(requestId)) {
+        if (requestId == null) {
             throw BizException.of(
                     ResultCode.BUSINESS_ERROR,
                     ResultCode.BUSINESS_ERROR.detailKey(),
@@ -577,7 +573,7 @@ final class TriggerScheduledRecoveryService {
         // Instant.toString() 输出会按精度自动调整（如 "...:00Z" vs "...:00.000Z"），不同 JVM /
         // 序列化路径可能产生不同字符串，导致同一 fireTime 算出不同 dedupKey，去重失效。
         // toEpochMilli() 是稳定的 long → String，跨 JVM 一致。
-        String target = EmptyChecks.isNull(command.descriptor().getWorkflowDefinitionId())
+        String target = command.descriptor().getWorkflowDefinitionId() == null
                 ? "job:" + command.descriptor().getJobCode()
                 : "workflow:" + command.descriptor().getWorkflowDefinitionId();
         return command.descriptor().getTenantId()
@@ -616,12 +612,11 @@ final class TriggerScheduledRecoveryService {
     }
 
     private void validatePendingApproval(PendingCatchUpApprovalCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "approval command is required");
+        Guard.require(command != null, "approval command is required");
         if (EmptyChecks.isBlank(command.getTenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
-        boolean approvalTargetIsMissing =
-                EmptyChecks.isNull(command.getPendingId()) && EmptyChecks.isBlank(command.getRequestId());
+        boolean approvalTargetIsMissing = command.getPendingId() == null && EmptyChecks.isBlank(command.getRequestId());
         if (approvalTargetIsMissing) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_id_required");
         }

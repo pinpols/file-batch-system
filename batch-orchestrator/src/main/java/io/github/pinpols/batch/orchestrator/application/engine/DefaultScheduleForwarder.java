@@ -192,12 +192,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
 
     private List<OutboxEventEntity> pollPending(SchedulePlan plan) {
         OutboxEventQuery pendingQuery = OutboxEventQuery.builder()
-                .tenantId(EmptyChecks.isNull(plan) ? null : plan.getTenantId())
+                .tenantId(plan == null ? null : plan.getTenantId())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
                 .batchSize(governance.outbox().getBatchSize())
-                .shardTotal(EmptyChecks.isNull(plan) ? 1 : plan.getShardTotal())
-                .shardIndex(EmptyChecks.isNull(plan) ? 0 : plan.getShardIndex())
+                .shardTotal(plan == null ? 1 : plan.getShardTotal())
+                .shardIndex(plan == null ? 0 : plan.getShardIndex())
                 .build();
         long pollStartNanos = System.nanoTime();
         List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
@@ -239,7 +239,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
         for (OutboxEventEntity event : pendingEvents) {
             Integer claimAttempt = claimAttemptById.get(event.getId());
-            if (EmptyChecks.isNull(claimAttempt)) {
+            if (claimAttempt == null) {
                 continue;
             }
             CompletableFuture<Boolean> future;
@@ -249,7 +249,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                 future = CompletableFuture.completedFuture(false);
             }
             CompletableFuture<Boolean> publishFuture =
-                    EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
+                    future != null ? future : CompletableFuture.completedFuture(false);
             inFlight.add(new InFlight(event, claimAttempt, publishFuture));
         }
         return inFlight;
@@ -475,7 +475,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         retry.setOutboxEventCreatedAt(event.getCreatedAt());
         retry.setEventKey(event.getEventKey());
         retry.setPublishAttempt(publishAttemptNo);
-        boolean retryIsExhausted = EmptyChecks.isNull(nextRetryAt);
+        boolean retryIsExhausted = nextRetryAt == null;
         retry.setRetryStatus(
                 retryIsExhausted ? RetryScheduleStatus.EXHAUSTED.code() : RetryScheduleStatus.FAILED.code());
         retry.setRetryReason(reason);

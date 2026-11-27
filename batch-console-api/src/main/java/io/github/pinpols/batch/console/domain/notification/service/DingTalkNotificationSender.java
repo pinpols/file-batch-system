@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -74,13 +75,13 @@ public class DingTalkNotificationSender implements NotificationSender {
             return WebhookDeliveryResult.failure(null, "invalid dingtalk config");
         }
 
-        if (url == null || url.isBlank()) {
+        if (EmptyChecks.isBlank(url)) {
             return WebhookDeliveryResult.failure(null, "missing dingtalk url");
         }
 
         String requestUrl;
         try {
-            requestUrl = (secret == null || secret.isBlank()) ? url : signedUrl(url, secret);
+            requestUrl = (EmptyChecks.isBlank(secret)) ? url : signedUrl(url, secret);
         } catch (Exception ex) {
             String channelCodeForLog = LogSanitizer.value(message.channelCode());
             String reasonForLog = ex.getClass().getSimpleName();

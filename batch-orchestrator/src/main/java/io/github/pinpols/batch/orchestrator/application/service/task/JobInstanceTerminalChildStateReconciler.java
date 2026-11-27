@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.StepInstanceStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -30,7 +29,7 @@ public class JobInstanceTerminalChildStateReconciler {
      */
     public void reconcile(String tenantId, Long jobInstanceId, String terminalInstanceStatus) {
         Targets targets = resolveTargets(terminalInstanceStatus);
-        if (EmptyChecks.isNull(targets)) {
+        if (targets == null) {
             return;
         }
         int partitions = jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
@@ -60,7 +59,7 @@ public class JobInstanceTerminalChildStateReconciler {
 
     private Targets resolveTargets(String instanceStatusCode) {
         JobInstanceStatus st = DictEnum.fromCode(JobInstanceStatus.class, instanceStatusCode);
-        if (EmptyChecks.isNull(st)) {
+        if (st == null) {
             return null;
         }
         return switch (st) {

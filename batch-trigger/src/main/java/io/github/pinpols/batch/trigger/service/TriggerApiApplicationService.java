@@ -74,7 +74,7 @@ public class TriggerApiApplicationService {
     }
 
     public TriggerLaunchStatus launchStatus(TriggerApiKeyPrincipal principal, String tenantId, String idempotencyKey) {
-        if (EmptyChecks.isNull(principal)) {
+        if (principal == null) {
             return triggerService.findLaunchStatus(tenantId, idempotencyKey);
         }
         requestPolicy.authorizeExternalEvent(principal, tenantId);

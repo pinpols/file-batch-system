@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
 import io.github.pinpols.batch.common.mapper.InformationSchemaColumnView;
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -207,7 +206,7 @@ public class ArchiveSchemaDriftCheck {
         List<InformationSchemaColumnView> rows = informationSchemaMapper.listColumnsWithTypes(schema, table);
         Map<String, ColumnMeta> map = new LinkedHashMap<>();
         for (InformationSchemaColumnView row : rows) {
-            if (EmptyChecks.isNotNull(row.columnName())) {
+            if (row.columnName() != null) {
                 map.put(
                         row.columnName(),
                         new ColumnMeta(

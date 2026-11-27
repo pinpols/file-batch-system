@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
@@ -98,8 +97,7 @@ public class ConsoleWorkflowRunController {
 
     private static String currentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNotNull(authentication)
-                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             return principal.username();
         }
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");

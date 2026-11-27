@@ -127,7 +127,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     @Override
     public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
-        if (items == null || items.isEmpty()) {
+        if (EmptyChecks.isEmpty(items)) {
             return List.of();
         }
         List<TaskClaimResult> out = new ArrayList<>(items.size());
@@ -199,19 +199,19 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private List<TaskClaimResult> mapClaimChunkOrFallback(List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
-        List<ClaimBatchHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
-        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+        List<ClaimBatchHttpResult> responseResults = response == null ? null : response.results();
+        if (responseResults == null || responseResults.size() != chunk.size()) {
             log.warn(
                     "claim-batch response mismatch: chunk size {}, response results {}",
                     chunk.size(),
-                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+                    responseResults == null ? null : responseResults.size());
             return fallbackClaimChunk(chunk);
         }
         Map<Long, ClaimBatchHttpResult> resultsByTaskId = new LinkedHashMap<>();
         for (ClaimBatchHttpResult row : responseResults) {
-            boolean responseIdentityIsInvalid = EmptyChecks.isNull(row)
-                    || EmptyChecks.isNull(row.taskId())
-                    || EmptyChecks.isNull(row.claimed())
+            boolean responseIdentityIsInvalid = row == null
+                    || row.taskId() == null
+                    || row.claimed() == null
                     || resultsByTaskId.containsKey(row.taskId());
             if (responseIdentityIsInvalid) {
                 return fallbackClaimChunk(chunk);
@@ -222,7 +222,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         List<TaskClaimResult> out = new ArrayList<>(chunk.size());
         for (TaskClaimItem requested : chunk) {
             ClaimBatchHttpResult row = resultsByTaskId.get(requested.taskId());
-            if (EmptyChecks.isNull(row) || !claimConfigMatchesRequest(requested, row)) {
+            if (row == null || !claimConfigMatchesRequest(requested, row)) {
                 return fallbackClaimChunk(chunk);
             }
             EffectiveTaskConfig claimedConfig = row.claimed() ? row.config() : null;
@@ -233,13 +233,12 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private boolean claimConfigMatchesRequest(TaskClaimItem requested, ClaimBatchHttpResult result) {
         EffectiveTaskConfig config = result.config();
-        if (EmptyChecks.isNull(config)) {
+        if (config == null) {
             return !Boolean.TRUE.equals(result.claimed());
         }
-        boolean taskIdentityMatches =
-                EmptyChecks.isNull(config.taskId()) || Objects.equals(requested.taskId(), config.taskId());
+        boolean taskIdentityMatches = config.taskId() == null || Objects.equals(requested.taskId(), config.taskId());
         boolean tenantIdentityMatches =
-                EmptyChecks.isNull(config.tenantId()) || Objects.equals(requested.tenantId(), config.tenantId());
+                config.tenantId() == null || Objects.equals(requested.tenantId(), config.tenantId());
         return taskIdentityMatches && tenantIdentityMatches;
     }
 
@@ -308,13 +307,13 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                         .retrieve()
                         .body(TaskHeartbeatHttpResponse.class));
         TaskHeartbeatHttpResponse heartbeat = outcome.body();
-        boolean cancelRequested = EmptyChecks.isNotNull(heartbeat) && heartbeat.cancelRequested();
+        boolean cancelRequested = heartbeat != null && heartbeat.cancelRequested();
         return new TaskLeaseRenewResult(item.taskId(), outcome.success(), cancelRequested);
     }
 
     @Override
     public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
-        if (items == null || items.isEmpty()) {
+        if (EmptyChecks.isEmpty(items)) {
             return Map.of();
         }
         Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
@@ -398,19 +397,19 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
             List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
-        List<BatchRenewHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
-        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+        List<BatchRenewHttpResult> responseResults = response == null ? null : response.results();
+        if (responseResults == null || responseResults.size() != chunk.size()) {
             log.warn(
                     "renew-batch response mismatch: chunk size {}, response results {}",
                     chunk.size(),
-                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+                    responseResults == null ? null : responseResults.size());
             return fallbackRenewChunk(chunk);
         }
         Map<Long, BatchRenewHttpResult> resultsByTaskId = new LinkedHashMap<>();
         for (BatchRenewHttpResult row : responseResults) {
-            boolean responseIdentityOrOutcomeIsInvalid = EmptyChecks.isNull(row)
-                    || EmptyChecks.isNull(row.taskId())
-                    || EmptyChecks.isNull(row.renewed())
+            boolean responseIdentityOrOutcomeIsInvalid = row == null
+                    || row.taskId() == null
+                    || row.renewed() == null
                     || resultsByTaskId.containsKey(row.taskId());
             if (responseIdentityOrOutcomeIsInvalid) {
                 return fallbackRenewChunk(chunk);
@@ -422,7 +421,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         for (TaskLeaseRenewItem requested : chunk) {
             Long taskId = requested.taskId();
             BatchRenewHttpResult row = resultsByTaskId.get(taskId);
-            if (EmptyChecks.isNull(row)) {
+            if (row == null) {
                 return fallbackRenewChunk(chunk);
             }
             boolean renewed = Boolean.TRUE.equals(row.renewed());
@@ -465,9 +464,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         long reportStartNanos = System.nanoTime();
         String outcome = "success";
         try {
-            boolean reportCanBeBatched = EmptyChecks.isNotNull(reportBatcher)
-                    && EmptyChecks.isNotNull(report)
-                    && EmptyChecks.isNotNull(report.getTaskId());
+            boolean reportCanBeBatched = reportBatcher != null && report != null && report.getTaskId() != null;
             TaskReportBatcher.SubmissionResult batchResult = reportCanBeBatched
                     ? reportBatcher.submit(report)
                     : TaskReportBatcher.SubmissionResult.NOT_SUBMITTED;
@@ -477,7 +474,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
             }
         } catch (RuntimeException rex) {
             WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
-            boolean reportWasDeferredToOutbox = EmptyChecks.isNotNull(coordinator) && coordinator.enqueue(report);
+            boolean reportWasDeferredToOutbox = coordinator != null && coordinator.enqueue(report);
             if (reportWasDeferredToOutbox) {
                 outcome = "deferred_outbox";
             } else {
@@ -501,7 +498,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     /** 关闭微批接纳，唤醒尚未提交的调用者，使其继续走单条交付而非丢弃内存结果。 */
     @PreDestroy
     void closeReportBatcher() {
-        if (EmptyChecks.isNotNull(reportBatcher)) {
+        if (reportBatcher != null) {
             reportBatcher.close();
         }
     }
@@ -536,7 +533,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private Set<Long> confirmedReportTaskIds(List<TaskExecutionReport> reports, ReportBatchHttpResponse response) {
-        if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.results())) {
+        if (response == null || response.results() == null) {
             return Set.of();
         }
         Set<Long> requestedIds = new HashSet<>();
@@ -547,7 +544,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         Set<Long> duplicateIds = new HashSet<>();
         Set<Long> acceptedIds = new HashSet<>();
         for (ReportBatchHttpResult item : response.results()) {
-            if (EmptyChecks.isNull(item) || !requestedIds.contains(item.taskId())) {
+            if (item == null || !requestedIds.contains(item.taskId())) {
                 continue;
             }
             if (!seenIds.add(item.taskId())) {

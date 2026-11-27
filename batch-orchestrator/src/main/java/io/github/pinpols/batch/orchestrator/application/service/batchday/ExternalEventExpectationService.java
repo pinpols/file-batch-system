@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
@@ -119,7 +118,7 @@ public class ExternalEventExpectationService {
     public boolean deleteDefinition(String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {
         boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
                 || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
-                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
                 || !valid(eventCode, EVENT_CODE_MAX_LENGTH);
         if (eventDefinitionIdentityIsInvalid) {
@@ -156,7 +155,7 @@ public class ExternalEventExpectationService {
             batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
             BatchDayInstanceEntity batchDay =
                     batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
-            boolean existingBatchDayIsTerminal = EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus());
+            boolean existingBatchDayIsTerminal = batchDay != null && isTerminal(batchDay.dayStatus());
             if (existingBatchDayIsTerminal) {
                 throw new OperationFailure(
                         Kind.CONFLICT, "Cannot materialize an external-event expectation for a terminal batch day");
@@ -168,9 +167,8 @@ public class ExternalEventExpectationService {
                 Long workflowDefinitionId = definition.workflowDefinitionId();
                 String eventCode = definition.eventCode();
                 Instant expectedAt = resolve(bizDate, definition.expectedLocalTime(), zone);
-                Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
-                        ? null
-                        : resolve(bizDate, definition.dueLocalTime(), zone);
+                Instant dueAt =
+                        definition.dueLocalTime() == null ? null : resolve(bizDate, definition.dueLocalTime(), zone);
                 ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
                         ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
                                 .tenantId(tenantId)
@@ -215,7 +213,7 @@ public class ExternalEventExpectationService {
                     request.tenantId(), request.calendarCode(), request.bizDate());
             TriggerRequestEntity triggerRequest =
                     triggerRequestMapper.selectByTenantAndRequestId(request.tenantId(), request.triggerRequestId());
-            boolean launchedEventMatchesExpectation = EmptyChecks.isNotNull(triggerRequest)
+            boolean launchedEventMatchesExpectation = triggerRequest != null
                     && request.workflowDefinitionId().equals(triggerRequest.getWorkflowDefinitionId())
                     && request.bizDate().equals(triggerRequest.getBizDate())
                     && TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
@@ -249,7 +247,7 @@ public class ExternalEventExpectationService {
         WorkflowDefinitionView workflow =
                 workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, true);
         boolean workflowIsMissingOrUsesAnotherCalendar =
-                EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
+                workflow == null || !calendarCode.equals(workflow.calendarCode());
         if (workflowIsMissingOrUsesAnotherCalendar) {
             throw new OperationFailure(
                     Kind.INVALID_CONFIGURATION,
@@ -261,11 +259,11 @@ public class ExternalEventExpectationService {
             String tenantId, String calendarCode, Long workflowDefinitionId) {
         WorkflowDefinitionView workflow =
                 workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, true);
-        if (EmptyChecks.isNull(workflow)) {
+        if (workflow == null) {
             workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(tenantId, workflowDefinitionId, false);
         }
         boolean workflowIsMissingOrUsesAnotherCalendar =
-                EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
+                workflow == null || !calendarCode.equals(workflow.calendarCode());
         if (workflowIsMissingOrUsesAnotherCalendar) {
             throw new OperationFailure(
                     Kind.INVALID_CONFIGURATION,
@@ -287,15 +285,15 @@ public class ExternalEventExpectationService {
     }
 
     private static void validate(DefinitionRequest request) {
-        boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+        boolean requiredFieldsAreValid = request != null
                 && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
                 && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() != null
                 && request.workflowDefinitionId() > 0
                 && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.expectedLocalTime());
+                && request.expectedLocalTime() != null;
         boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
-                || EmptyChecks.isNull(request.dueLocalTime())
+                || request.dueLocalTime() == null
                 || request.dueLocalTime().isAfter(request.expectedLocalTime());
         boolean definitionIsValid = requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
         if (!definitionIsValid) {
@@ -305,14 +303,14 @@ public class ExternalEventExpectationService {
     }
 
     private static void validate(SatisfactionRequest request) {
-        boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+        boolean requestHasRequiredFields = request != null
                 && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
                 && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() != null
                 && request.workflowDefinitionId() > 0
                 && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
                 && valid(request.triggerRequestId(), TRIGGER_REQUEST_ID_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.bizDate());
+                && request.bizDate() != null;
         if (!requestHasRequiredFields) {
             throw new IllegalArgumentException(
                     "tenant, calendar, workflowDefinitionId, eventCode, bizDate and triggerRequestId are required");

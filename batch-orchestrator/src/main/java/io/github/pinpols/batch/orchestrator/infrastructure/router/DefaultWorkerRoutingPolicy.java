@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRoutingPolicy;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,12 +24,12 @@ public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
             return null;
         }
         WorkerRouteModel fallback =
-                candidates.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
-        if (EmptyChecks.isNull(fallback)) {
+                candidates.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        if (fallback == null) {
             return null;
         }
         return candidates.stream()
-                .filter(EmptyChecks::isNotNull)
+                .filter(Objects::nonNull)
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getAvailable()))
                 .max(Comparator.comparingInt(candidate -> Nullables.coalesce(candidate.getPriority(), 0)))
                 .orElseGet(() -> fallback);

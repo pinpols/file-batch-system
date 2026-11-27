@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.processes.sql;
 
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.stream.Collectors;
 
@@ -86,7 +85,7 @@ final class SqlTransformComputeSqlBuilder {
                 .filter(column -> column.target().equals(spec.watermarkColumn()))
                 .findFirst()
                 .orElse(null);
-        if (ignoresConflicts && EmptyChecks.isNotNull(watermarkMapping)) {
+        if (ignoresConflicts && watermarkMapping != null) {
             String directPublishSql = buildDirectPublishSql(spec, "source_rows");
             String sourceWatermark = JdbcMappedSqlValidator.quotePg(watermarkMapping.source());
             // 发布与水位读取同一批物化源数据，冲突跳过的行仍属于已处理的输入。

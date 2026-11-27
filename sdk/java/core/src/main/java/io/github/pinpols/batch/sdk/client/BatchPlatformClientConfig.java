@@ -208,20 +208,20 @@ public class BatchPlatformClientConfig {
         }
 
         String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
-        if (maxConcurrent != null && !maxConcurrent.isBlank()) {
+        if (EmptyChecks.isNotBlank(maxConcurrent)) {
             String maxConcurrentValue = maxConcurrent.trim();
             int maxConcurrentTasks = Integer.parseInt(maxConcurrentValue);
             builder.maxConcurrentTasks(maxConcurrentTasks);
         }
         String heartbeat = env.apply(prefix + "HEARTBEAT_INTERVAL_SECONDS");
-        if (heartbeat != null && !heartbeat.isBlank()) {
+        if (EmptyChecks.isNotBlank(heartbeat)) {
             String heartbeatValue = heartbeat.trim();
             long heartbeatSeconds = Long.parseLong(heartbeatValue);
             Duration heartbeatInterval = Duration.ofSeconds(heartbeatSeconds);
             builder.heartbeatInterval(heartbeatInterval);
         }
         String httpTimeout = env.apply(prefix + "HTTP_TIMEOUT_SECONDS");
-        if (httpTimeout != null && !httpTimeout.isBlank()) {
+        if (EmptyChecks.isNotBlank(httpTimeout)) {
             String httpTimeoutValue = httpTimeout.trim();
             long httpTimeoutSeconds = Long.parseLong(httpTimeoutValue);
             Duration httpTimeoutDuration = Duration.ofSeconds(httpTimeoutSeconds);
@@ -229,7 +229,7 @@ public class BatchPlatformClientConfig {
         }
         // Lane I:lease 续约间隔也开放 env 覆盖,方便运维联调 heartbeat / lease 配比
         String leaseRenew = env.apply(prefix + "LEASE_RENEW_INTERVAL_SECONDS");
-        if (leaseRenew != null && !leaseRenew.isBlank()) {
+        if (EmptyChecks.isNotBlank(leaseRenew)) {
             String leaseRenewValue = leaseRenew.trim();
             long leaseRenewSeconds = Long.parseLong(leaseRenewValue);
             Duration leaseRenewInterval = Duration.ofSeconds(leaseRenewSeconds);
@@ -270,13 +270,13 @@ public class BatchPlatformClientConfig {
         // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
         // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。
         String requestSigning = env.apply(prefix + "REQUEST_SIGNING_ENABLED");
-        if (requestSigning != null && !requestSigning.isBlank()) {
+        if (EmptyChecks.isNotBlank(requestSigning)) {
             String requestSigningValue = requestSigning.trim();
             boolean requestSigningEnabled = parseBoolean(requestSigningValue);
             builder.requestSigningEnabled(requestSigningEnabled);
         }
         String strictTiming = env.apply(prefix + "STRICT_TIMING");
-        if (strictTiming != null && !strictTiming.isBlank()) {
+        if (EmptyChecks.isNotBlank(strictTiming)) {
             String strictTimingValue = strictTiming.trim();
             boolean strictTimingEnabled = parseBoolean(strictTimingValue);
             builder.strictTimingValidation(strictTimingEnabled);
@@ -294,7 +294,7 @@ public class BatchPlatformClientConfig {
 
     private static String required(UnaryOperator<String> env, String prefix, String key, List<String> missing) {
         String value = env.apply(prefix + key);
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             missing.add(prefix + key);
             return null;
         }
@@ -316,7 +316,7 @@ public class BatchPlatformClientConfig {
 
     /** 调度器不接受零或负周期；该结构约束不能被 WARN 降级，否则 client 会在后台线程启动后失败。 */
     private static void requirePositiveSchedulerInterval(String name, Duration interval) {
-        if (EmptyChecks.isNull(interval) || interval.isZero() || interval.isNegative()) {
+        if (interval == null || interval.isZero() || interval.isNegative()) {
             throw new IllegalArgumentException(name + " must be > 0, got " + interval);
         }
     }

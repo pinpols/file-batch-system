@@ -98,7 +98,7 @@ public class WorkflowLaunchWaitResumeTrigger {
         }
         round.whenComplete((ignored, failure) -> {
             resumingTenants.remove(tenantId);
-            if (EmptyChecks.isNotNull(failure)) {
+            if (failure != null) {
                 log.warn(
                         "workflow launch wait resume round failed: tenantId={}, error={}",
                         tenantId,

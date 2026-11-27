@@ -63,7 +63,7 @@ public class OrchestratorDataSourceConfiguration {
         hikariConfig.setJdbcUrl(properties.determineUrl());
         hikariConfig.setUsername(properties.determineUsername());
         hikariConfig.setPassword(properties.determinePassword());
-        if (EmptyChecks.isNull(hikariConfig.getDriverClassName())
+        if (hikariConfig.getDriverClassName() == null
                 || EmptyChecks.isBlank(Objects.requireNonNull(hikariConfig.getDriverClassName()))) {
             hikariConfig.setDriverClassName(properties.determineDriverClassName());
         }

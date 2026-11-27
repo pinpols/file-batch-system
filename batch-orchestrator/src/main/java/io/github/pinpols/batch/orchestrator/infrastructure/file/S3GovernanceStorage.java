@@ -83,7 +83,7 @@ public class S3GovernanceStorage {
         long remaining = cursor.revisitRemaining();
         String lane;
         if ("REVISIT".equals(cursor.nextLane())) {
-            if (EmptyChecks.isNull(marker) || remaining <= 1) {
+            if (marker == null || remaining <= 1) {
                 revisitMarker = null;
                 budget = budget > Long.MAX_VALUE / 2 ? Long.MAX_VALUE : budget * 2;
                 remaining = budget;
@@ -94,8 +94,8 @@ public class S3GovernanceStorage {
             lane = "FORWARD";
         } else {
             nextMarker = marker;
-            lane = EmptyChecks.isNull(marker) ? "FORWARD" : "REVISIT";
-            if (EmptyChecks.isNull(marker)) {
+            lane = marker == null ? "FORWARD" : "REVISIT";
+            if (marker == null) {
                 revisitMarker = null;
                 budget = 1;
                 remaining = 1;
@@ -114,7 +114,7 @@ public class S3GovernanceStorage {
 
     public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
         try {
-            String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
             int minimumExpirySeconds = Math.max(MIN_PRESIGN_EXPIRY_SECONDS, expirySeconds);
             Duration expiry = Duration.ofSeconds(minimumExpirySeconds);
             return objectStore.presign(targetBucket, objectName, expiry);
@@ -125,7 +125,7 @@ public class S3GovernanceStorage {
 
     public long objectSize(String bucket, String objectName) {
         try {
-            String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
             return objectStore.statSize(targetBucket, objectName);
         } catch (ObjectNotFoundException exception) {
             throw exception;
@@ -136,7 +136,7 @@ public class S3GovernanceStorage {
 
     public boolean objectExists(String bucket, String objectName) {
         try {
-            String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
             return objectStore.exists(targetBucket, objectName);
         } catch (Exception exception) {
             throw new IllegalStateException("failed to check object: " + objectName, exception);

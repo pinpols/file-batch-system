@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
@@ -63,7 +64,7 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
 
     @Override
     public CaptchaResult verify(String token, String clientIp) {
-        if (token == null || token.isBlank()) {
+        if (EmptyChecks.isBlank(token)) {
             return CaptchaResult.fail("missing token");
         }
         try {

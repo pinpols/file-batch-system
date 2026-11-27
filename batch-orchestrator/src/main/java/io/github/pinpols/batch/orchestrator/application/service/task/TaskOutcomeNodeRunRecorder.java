@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -45,7 +44,7 @@ final class TaskOutcomeNodeRunRecorder {
     WorkflowNodeRunEntity recordFinish(NodeRunFinishCommand command) {
         WorkflowNodeRunEntity current = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
                 command.workflowRunId(), command.nodeCode());
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             current = recordStart(command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
         }
         long duration = resolveDuration(command.startedAt(), command.finishedAt());
@@ -71,10 +70,10 @@ final class TaskOutcomeNodeRunRecorder {
     Instant resolveStartedAt(Long workflowRunId, String nodeCode, Instant workflowStartedAt, Instant finishedAt) {
         WorkflowNodeRunEntity latestNodeRun =
                 workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
-        if (EmptyChecks.isNotNull(latestNodeRun) && EmptyChecks.isNotNull(latestNodeRun.getStartedAt())) {
+        if (latestNodeRun != null && latestNodeRun.getStartedAt() != null) {
             return latestNodeRun.getStartedAt();
         }
-        return EmptyChecks.isNotNull(workflowStartedAt) ? workflowStartedAt : finishedAt;
+        return workflowStartedAt != null ? workflowStartedAt : finishedAt;
     }
 
     private WorkflowNodeRunEntity insertOrSelectLatest(WorkflowNodeRunEntity entity) {
@@ -105,7 +104,7 @@ final class TaskOutcomeNodeRunRecorder {
     private int nextRunSeq(Long workflowRunId, String nodeCode) {
         WorkflowNodeRunEntity current =
                 workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
-        return EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getRunSeq()) ? 1 : current.getRunSeq() + 1;
+        return current == null || current.getRunSeq() == null ? 1 : current.getRunSeq() + 1;
     }
 
     private String resolveStatus(NodeRunFinishCommand command) {
@@ -113,7 +112,7 @@ final class TaskOutcomeNodeRunRecorder {
     }
 
     private long resolveDuration(Instant startedAt, Instant finishedAt) {
-        if (EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)) {
+        if (startedAt == null || finishedAt == null) {
             return 0L;
         }
         Duration elapsed = Duration.between(startedAt, finishedAt);

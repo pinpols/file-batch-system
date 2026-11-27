@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -139,7 +138,7 @@ public class DeadLetterPublisher {
                 failureCounter.increment();
             }
             Throwable cause = ex.getCause();
-            Throwable reportedFailure = EmptyChecks.isNull(cause) ? ex : cause;
+            Throwable reportedFailure = cause == null ? ex : cause;
             String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
             log.error(
                     "DLQ publish failed: sourceTopic={}, workerType={}, error={}",

@@ -76,8 +76,7 @@ public class JobDependencyWaitingLaunchService {
             String trimmedStatus = waitStatus.trim();
             status = trimmedStatus.toUpperCase(Locale.ROOT);
         }
-        if (EmptyChecks.isNotNull(status)
-                && !List.of("WAITING", "RELEASED", "CANCELLED").contains(status)) {
+        if (status != null && !List.of("WAITING", "RELEASED", "CANCELLED").contains(status)) {
             throw new IllegalArgumentException("Unsupported job dependency wait status");
         }
         String normalizedJobCode = EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
@@ -124,7 +123,7 @@ public class JobDependencyWaitingLaunchService {
     /** 恢复前同时绑定等待行与原请求；仅解析持久载荷，不执行数据库或外部副作用。 */
     public Optional<LaunchRequest> restoreWaitRequest(
             JobDependencyWaitingLaunchEntity waiting, TriggerRequestEntity original) {
-        if (EmptyChecks.isNull(waiting) || EmptyChecks.isNull(original)) {
+        if (waiting == null || original == null) {
             return Optional.empty();
         }
         try {
@@ -153,7 +152,7 @@ public class JobDependencyWaitingLaunchService {
         TriggerRequestEntity original = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(tenantId, requestId);
         JobDependencyWaitingLaunchEntity current =
                 waitingMapper.selectByTenantAndRequestIdForUpdate(tenantId, requestId);
-        boolean observedWaitIsStillCurrent = EmptyChecks.isNotNull(current)
+        boolean observedWaitIsStillCurrent = current != null
                 && "WAITING".equals(current.waitStatus())
                 && Objects.equals(observed.id(), current.id())
                 && Objects.equals(observed.jobCode(), current.jobCode())
@@ -162,7 +161,7 @@ public class JobDependencyWaitingLaunchService {
         if (!observedWaitIsStillCurrent) {
             return;
         }
-        if (EmptyChecks.isNull(original)) {
+        if (original == null) {
             int cancelled = waitingMapper.markCancelled(tenantId, requestId);
             requireWaitWrite(cancelled);
             return;
@@ -234,7 +233,7 @@ public class JobDependencyWaitingLaunchService {
         String existingRequestId = request.requestId();
         JobDependencyWaitingLaunchEntity existing =
                 waitingMapper.selectByTenantAndRequestId(existingTenantId, existingRequestId);
-        boolean existingWaitConflictsWithRequest = EmptyChecks.isNotNull(existing)
+        boolean existingWaitConflictsWithRequest = existing != null
                 && (!Objects.equals(existing.tenantId(), request.tenantId())
                         || !Objects.equals(existing.requestId(), request.requestId())
                         || !Objects.equals(existing.jobCode(), request.jobCode())
@@ -244,7 +243,7 @@ public class JobDependencyWaitingLaunchService {
             throw waitConflict();
         }
         List<DependencySnapshot> dependencies;
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             String tenantId = request.tenantId();
             String jobCode = request.jobCode();
             LocalDate businessDate = request.bizDate();
@@ -260,17 +259,17 @@ public class JobDependencyWaitingLaunchService {
         List<DependencyResultReference> references = new ArrayList<>(dependencies.size());
         // 等待行只能由非空依赖建立；损坏快照不能退化为「无依赖」并放行新实例。
         String notReadyReason;
-        if (EmptyChecks.isNotNull(existing) && EmptyChecks.isEmpty(dependencies)) {
+        if (existing != null && EmptyChecks.isEmpty(dependencies)) {
             notReadyReason = INVALID_DEPENDENCY_SNAPSHOT;
         } else {
             String tenantId = request.tenantId();
             LocalDate businessDate = request.bizDate();
             notReadyReason = captureDependencyResults(tenantId, businessDate, dependencies, references);
         }
-        if (EmptyChecks.isNull(notReadyReason)) {
+        if (notReadyReason == null) {
             return Optional.of(List.copyOf(references));
         }
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             persistInitialWait(request, dependencies);
         }
         String checkTenantId = request.tenantId();
@@ -326,10 +325,10 @@ public class JobDependencyWaitingLaunchService {
             List<DependencySnapshot> dependencies,
             List<DependencyResultReference> references) {
         for (DependencySnapshot dependency : dependencies) {
-            if (EmptyChecks.isNotNull(dependency.resolutionError())) {
+            if (dependency.resolutionError() != null) {
                 return dependency.resolutionError();
             }
-            LocalDate upstreamBizDate = EmptyChecks.isNull(dependency.upstreamBizDate())
+            LocalDate upstreamBizDate = dependency.upstreamBizDate() == null
                     ? resolveUpstreamBizDate(downstreamBizDate, dependency.bizDateAlignment())
                     : dependency.upstreamBizDate();
             Optional<AssetPartitionSnapshot> partition = assetPartitionService.findEffectiveJobPartition(
@@ -356,7 +355,7 @@ public class JobDependencyWaitingLaunchService {
 
     public boolean allDependenciesReady(String tenantId, String jobCode, LocalDate bizDate, String dependencySnapshot) {
         String notReadyReason = findNotReadyReason(tenantId, jobCode, bizDate, dependencySnapshot);
-        return EmptyChecks.isNull(notReadyReason);
+        return notReadyReason == null;
     }
 
     public String findNotReadyReason(
@@ -377,10 +376,10 @@ public class JobDependencyWaitingLaunchService {
             return null;
         }
         for (DependencySnapshot dependency : dependencies) {
-            if (EmptyChecks.isNotNull(dependency.resolutionError())) {
+            if (dependency.resolutionError() != null) {
                 return dependency.resolutionError();
             }
-            LocalDate upstreamBizDate = EmptyChecks.isNull(dependency.upstreamBizDate())
+            LocalDate upstreamBizDate = dependency.upstreamBizDate() == null
                     ? resolveUpstreamBizDate(bizDate, dependency.bizDateAlignment())
                     : dependency.upstreamBizDate();
             if (!assetPartitionService.isJobPartitionReady(tenantId, dependency.upstreamJobCode(), upstreamBizDate)) {
@@ -406,7 +405,7 @@ public class JobDependencyWaitingLaunchService {
         BusinessCalendarEntity calendar = EmptyChecks.isBlank(calendarCode)
                 ? null
                 : businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-        boolean missingCalendar = EmptyChecks.isNotBlank(calendarCode) && EmptyChecks.isNull(calendar);
+        boolean missingCalendar = EmptyChecks.isNotBlank(calendarCode) && calendar == null;
         return rules.stream()
                 .map(rule -> {
                     if (!JobDependencyRule.PREVIOUS_BIZ_DAY.equals(rule.bizDateAlignment())) {
@@ -420,10 +419,10 @@ public class JobDependencyWaitingLaunchService {
                                 null,
                                 "DEPENDENCY_CALENDAR_UNAVAILABLE:" + calendarCode);
                     }
-                    LocalDate previousDate = EmptyChecks.isNull(calendar)
+                    LocalDate previousDate = calendar == null
                             ? bizDateArithmetic.previousBusinessDay(downstreamBizDate)
                             : planCalendarMapper.selectPreviousBusinessDate(tenantId, calendarCode, downstreamBizDate);
-                    return EmptyChecks.isNull(previousDate)
+                    return previousDate == null
                             ? new DependencySnapshot(
                                     rule.upstreamJobCode(),
                                     rule.bizDateAlignment(),
@@ -444,7 +443,7 @@ public class JobDependencyWaitingLaunchService {
                     if (JobDependencyRule.PREVIOUS_BIZ_DAY.equals(dependency.bizDateAlignment())) {
                         value.put(
                                 "upstreamBizDate",
-                                EmptyChecks.isNull(dependency.upstreamBizDate())
+                                dependency.upstreamBizDate() == null
                                         ? null
                                         : dependency.upstreamBizDate().toString());
                         value.put("resolutionError", dependency.resolutionError());
@@ -456,7 +455,7 @@ public class JobDependencyWaitingLaunchService {
     }
 
     private List<DependencySnapshot> decodeDependencies(String json, LocalDate downstreamBizDate) {
-        if (EmptyChecks.isBlank(json) || EmptyChecks.isNull(downstreamBizDate)) {
+        if (EmptyChecks.isBlank(json) || downstreamBizDate == null) {
             return List.of();
         }
         try {
@@ -486,22 +485,21 @@ public class JobDependencyWaitingLaunchService {
         }
         Object rawError = values.get("resolutionError");
         String resolutionError = rawError instanceof String text ? text : null;
-        boolean legacyResolutionErrorNeedsDecoding =
-                EmptyChecks.isNotNull(rawError) && (EmptyChecks.isBlank(resolutionError));
+        boolean legacyResolutionErrorNeedsDecoding = rawError != null && (EmptyChecks.isBlank(resolutionError));
         if (legacyResolutionErrorNeedsDecoding) {
             throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
         }
         Object rawDate = values.get("upstreamBizDate");
         if (JobDependencyRule.SAME_DAY.equals(alignment)) {
-            boolean dependencyResolutionDoesNotMatchBusinessDate = EmptyChecks.isNotNull(resolutionError)
-                    || (EmptyChecks.isNotNull(rawDate) && !downstreamBizDate.equals(decodeUpstreamDate(rawDate)));
+            boolean dependencyResolutionDoesNotMatchBusinessDate = resolutionError != null
+                    || (rawDate != null && !downstreamBizDate.equals(decodeUpstreamDate(rawDate)));
             if (dependencyResolutionDoesNotMatchBusinessDate) {
                 throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
             }
             return new DependencySnapshot(upstreamJobCode, alignment, downstreamBizDate, null);
         }
-        if (EmptyChecks.isNotNull(resolutionError)) {
-            if (EmptyChecks.isNotNull(rawDate)) {
+        if (resolutionError != null) {
+            if (rawDate != null) {
                 throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
             }
             return new DependencySnapshot(upstreamJobCode, alignment, null, resolutionError);

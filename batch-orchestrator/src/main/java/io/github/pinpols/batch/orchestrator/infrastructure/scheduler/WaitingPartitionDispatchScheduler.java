@@ -88,9 +88,8 @@ public class WaitingPartitionDispatchScheduler {
         List<WaitingDispatchCandidate> sorted =
                 candidates.stream().sorted(comparator).toList();
         for (WaitingDispatchCandidate candidate : sorted) {
-            String tenantId = EmptyChecks.isNull(candidate.partition())
-                    ? null
-                    : candidate.partition().getTenantId();
+            String tenantId =
+                    candidate.partition() == null ? null : candidate.partition().getTenantId();
             if (EmptyChecks.isBlank(tenantId)) {
                 continue;
             }
@@ -130,7 +129,7 @@ public class WaitingPartitionDispatchScheduler {
                 String tenantTag = partition == null ? null : partition.getTenantId();
                 BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
                 try {
-                    if (tenantTag == null || tenantTag.isBlank()) {
+                    if (EmptyChecks.isBlank(tenantTag)) {
                         // 没 tenantId 的 partition 进不了 RLS 路径，直接退回回退（与原行为等价：buildCandidate 会再判 null）
                         candidate = buildCandidate(partition);
                     } else {
@@ -166,7 +165,7 @@ public class WaitingPartitionDispatchScheduler {
 
     private List<JobPartitionEntity> selectWaitingCandidates(int batchSize) {
         WaitingPartitionScanCursor scanCursor = jobMappers.jobPartitionMapper.selectWaitingPartitionScanCursor();
-        if (EmptyChecks.isNull(scanCursor)) {
+        if (scanCursor == null) {
             throw new IllegalStateException("Waiting partition scan cursor is missing");
         }
         long cursor = scanCursor.lastPartitionId();
@@ -263,7 +262,7 @@ public class WaitingPartitionDispatchScheduler {
             JobTaskEntity task,
             JobInstanceEntity jobInstance,
             ResourceSchedulingDecision decision) {
-        boolean waitingDispatchContextIncomplete = EmptyChecks.isNull(partition)
+        boolean waitingDispatchContextIncomplete = partition == null
                 || task == null
                 || jobInstance == null
                 || decision == null
@@ -298,9 +297,7 @@ public class WaitingPartitionDispatchScheduler {
         // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 无限循环。
         String partitionQueueCode = extractInputField(partition, "queueCode");
         request.setQueueCode(
-                partitionQueueCode != null && !partitionQueueCode.isBlank()
-                        ? partitionQueueCode
-                        : jobInstance.getQueueCode());
+                EmptyChecks.isNotBlank(partitionQueueCode) ? partitionQueueCode : jobInstance.getQueueCode());
         request.setWorkerGroup(
                 partition.getWorkerGroup() == null ? jobInstance.getWorkerGroup() : partition.getWorkerGroup());
         request.setWorkerType(task.getTaskType());
@@ -316,7 +313,7 @@ public class WaitingPartitionDispatchScheduler {
         // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
         String partitionWindowCode = extractInputField(partition, "windowCode");
         request.setWindowCode(
-                partitionWindowCode != null && !partitionWindowCode.isBlank()
+                EmptyChecks.isNotBlank(partitionWindowCode)
                         ? partitionWindowCode
                         : (jobDefinition == null ? null : jobDefinition.windowCode()));
         return request;

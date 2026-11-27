@@ -47,7 +47,7 @@ public interface LaunchValidationService {
                     triggerRequest,
                     jobDefinition,
                     workflowDefinition,
-                    EmptyChecks.isNull(workflowDefinition) ? null : workflowDefinition.calendarCode(),
+                    workflowDefinition == null ? null : workflowDefinition.calendarCode(),
                     existingInstance);
         }
 
@@ -55,7 +55,7 @@ public interface LaunchValidationService {
             if (EmptyChecks.isNotBlank(workflowCalendarCode)) {
                 return workflowCalendarCode;
             }
-            return EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode();
+            return jobDefinition == null ? null : jobDefinition.calendarCode();
         }
     }
 
@@ -70,14 +70,12 @@ public interface LaunchValidationService {
             Map<String, Object> dispatchSecretBindings) {
 
         public WorkflowReplayExecutionBinding {
-            protectedFileTemplateSnapshots = EmptyChecks.isNull(protectedFileTemplateSnapshots)
-                    ? Map.of()
-                    : Map.copyOf(protectedFileTemplateSnapshots);
-            protectedDispatchChannelSnapshots = EmptyChecks.isNull(protectedDispatchChannelSnapshots)
+            protectedFileTemplateSnapshots =
+                    protectedFileTemplateSnapshots == null ? Map.of() : Map.copyOf(protectedFileTemplateSnapshots);
+            protectedDispatchChannelSnapshots = protectedDispatchChannelSnapshots == null
                     ? Map.of()
                     : Map.copyOf(protectedDispatchChannelSnapshots);
-            dispatchSecretBindings =
-                    EmptyChecks.isNull(dispatchSecretBindings) ? Map.of() : Map.copyOf(dispatchSecretBindings);
+            dispatchSecretBindings = dispatchSecretBindings == null ? Map.of() : Map.copyOf(dispatchSecretBindings);
         }
     }
 }

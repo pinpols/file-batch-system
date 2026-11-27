@@ -140,12 +140,12 @@ public class BatchDayReplayService {
         List<BatchDayReplayEntryEntity> entries = prepared.entries();
         Instant tokenValidationTime = dateTimeSupport.nowInstant();
         BatchDayReplayPreviewTokenEntity token = lockValidPreviewToken(command, prepared, tokenValidationTime);
-        if (EmptyChecks.isNotNull(token.consumedAt())) {
-            if (EmptyChecks.isNull(token.sessionId())) {
+        if (token.consumedAt() != null) {
+            if (token.sessionId() == null) {
                 throw invalidPreviewToken();
             }
             BatchDayReplaySessionEntity existing = sessionMapper.selectById(command.tenantId(), token.sessionId());
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 throw invalidPreviewToken();
             }
             return existing;
@@ -336,10 +336,10 @@ public class BatchDayReplayService {
         } catch (PessimisticLockingFailureException concurrentConsumption) {
             throw invalidPreviewToken();
         }
-        if (EmptyChecks.isNull(token) || !token.requestHash().equals(requestHash(command, prepared))) {
+        if (token == null || !token.requestHash().equals(requestHash(command, prepared))) {
             throw invalidPreviewToken();
         }
-        if (EmptyChecks.isNull(token.consumedAt())) {
+        if (token.consumedAt() == null) {
             if (!token.expiresAt().isAfter(now)) {
                 throw invalidPreviewToken();
             }
@@ -484,8 +484,8 @@ public class BatchDayReplayService {
     public BatchDayReplaySessionEntity retryFailedSubmission(
             String tenantId, Long sessionId, Long entryId, String operatorId, String reason) {
         boolean retrySubmissionIdentityIsIncomplete = !Texts.hasText(tenantId)
-                || EmptyChecks.isNull(sessionId)
-                || EmptyChecks.isNull(entryId)
+                || sessionId == null
+                || entryId == null
                 || !Texts.hasText(operatorId)
                 || !Texts.hasText(reason);
         if (retrySubmissionIdentityIsIncomplete) {
@@ -497,9 +497,9 @@ public class BatchDayReplayService {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
         }
         BatchDayReplayEntryEntity entry = entryMapper.selectByIdForUpdate(tenantId, sessionId, entryId);
-        boolean replayEntryCannotBeRetried = EmptyChecks.isNull(entry)
+        boolean replayEntryCannotBeRetried = entry == null
                 || !BatchDayReplayEntryStatus.FAILED.code().equals(entry.status())
-                || EmptyChecks.isNotNull(entry.rerunInstanceId());
+                || entry.rerunInstanceId() != null;
         if (replayEntryCannotBeRetried) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_entry_invalid");
         }
@@ -660,7 +660,7 @@ public class BatchDayReplayService {
     }
 
     private void refreshReplayOperation(BatchDayReplaySessionEntity session, Instant now) {
-        if (EmptyChecks.isNotNull(session.replayOperationId())) {
+        if (session.replayOperationId() != null) {
             replayOperationMapper.setTenantContext(session.tenantId());
             replayOperationMapper.refreshFromChildSessions(session.tenantId(), session.replayOperationId(), now);
         }
@@ -669,7 +669,7 @@ public class BatchDayReplayService {
     // ── helpers ─────────────────────────────────────────────────────────────
 
     private void validateCommand(BatchDayReplaySubmitCommand command) {
-        boolean replaySubmitCommandIsInvalid = EmptyChecks.isNull(command)
+        boolean replaySubmitCommandIsInvalid = command == null
                 || !Texts.hasText(command.tenantId())
                 || !Texts.hasText(command.calendarCode())
                 || command.bizDate() == null
@@ -713,8 +713,8 @@ public class BatchDayReplayService {
     private String normalizeConfigVersionPolicy(String value, Integer configVersion) {
         String requested = defaultIfBlank(value, ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code());
         ConfigVersionPolicy policy = ConfigVersionPolicy.fromCodeOrNull(requested);
-        boolean configVersionSelectionIsInvalid = EmptyChecks.isNull(policy)
-                || (policy == ConfigVersionPolicy.USE_SPECIFIED_VERSION && EmptyChecks.isNull(configVersion));
+        boolean configVersionSelectionIsInvalid =
+                policy == null || (policy == ConfigVersionPolicy.USE_SPECIFIED_VERSION && configVersion == null);
         if (configVersionSelectionIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
@@ -765,7 +765,7 @@ public class BatchDayReplayService {
         }
         BatchDayReplayScope scopeType = BatchDayReplayScope.fromCodeOrNull(scope);
         ReplayScopeMaterializer materializer = replayScopeMaterializers().get(scopeType);
-        if (EmptyChecks.isNull(materializer)) {
+        if (materializer == null) {
             return List.of();
         }
         return materializer.materialize(command, now);
@@ -807,10 +807,8 @@ public class BatchDayReplayService {
                 jobInstanceMapper.selectBatchDayCandidates(jobInstanceBatchDayCandidatesQuery);
         List<BatchDayReplayEntryEntity> entries = new ArrayList<>(candidates.size());
         for (JobInstanceEntity ji : candidates) {
-            boolean candidateCannotBeMaterialized = EmptyChecks.isNull(ji)
-                    || ji.getJobCode() == null
-                    || ji.getJobCode().isBlank()
-                    || EmptyChecks.isNull(ji.getId());
+            boolean candidateCannotBeMaterialized =
+                    ji == null || ji.getJobCode() == null || ji.getJobCode().isBlank() || ji.getId() == null;
             if (candidateCannotBeMaterialized) {
                 continue;
             }
@@ -901,7 +899,7 @@ public class BatchDayReplayService {
 
     private boolean isSchedulePlanCandidate(
             JobDefinitionView definition, String calendarCode, LocalDate bizDate, List<String> requestedCodes) {
-        boolean replayDefinitionCalendarDoesNotMatch = EmptyChecks.isNull(definition)
+        boolean replayDefinitionCalendarDoesNotMatch = definition == null
                 || !Texts.hasText(definition.jobCode())
                 || !calendarCode.equals(definition.calendarCode());
         if (replayDefinitionCalendarDoesNotMatch) {
@@ -925,7 +923,7 @@ public class BatchDayReplayService {
             CronExpression schedule = CronExpression.parse(definition.scheduleExpr());
             ZonedDateTime searchStart = dayStart.minusNanos(1);
             ZonedDateTime next = schedule.next(searchStart);
-            if (EmptyChecks.isNull(next)) {
+            if (next == null) {
                 return false;
             }
             ZonedDateTime nextDayStart = bizDate.plusDays(1).atStartOfDay(zone);
@@ -1142,16 +1140,16 @@ public class BatchDayReplayService {
 
     private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(String tenantId, Long sessionId) {
         BatchDayReplaySessionEntity candidate = loadOrThrow(tenantId, sessionId);
-        if (EmptyChecks.isNotNull(candidate.replayOperationId())) {
+        if (candidate.replayOperationId() != null) {
             replayOperationMapper.setTenantContext(tenantId);
             Long lockedOperationId =
                     replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId());
-            if (EmptyChecks.isNull(lockedOperationId)) {
+            if (lockedOperationId == null) {
                 throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.operation_not_found");
             }
         }
         BatchDayReplaySessionEntity locked = sessionMapper.selectForUpdate(tenantId, sessionId);
-        if (EmptyChecks.isNull(locked)) {
+        if (locked == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.not_found");
         }
         if (!Objects.equals(candidate.replayOperationId(), locked.replayOperationId())) {

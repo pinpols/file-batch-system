@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.audit.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
@@ -45,9 +44,9 @@ public class OperationAuditQueryService {
         String resolvedTenantId = tenantGuard.resolveTenant(req.getTenantId());
         String tenantId = TenantScope.requireTenant(resolvedTenantId);
         mapper.bindTenant(tenantId);
-        boolean cursorMode = EmptyChecks.isNotNull(req.getCursor());
-        int requestedPageNo = EmptyChecks.isNull(req.getPageNo()) ? 1 : req.getPageNo();
-        int requestedPageSize = EmptyChecks.isNull(req.getPageSize()) ? DEFAULT_PAGE_SIZE : req.getPageSize();
+        boolean cursorMode = req.getCursor() != null;
+        int requestedPageNo = req.getPageNo() == null ? 1 : req.getPageNo();
+        int requestedPageSize = req.getPageSize() == null ? DEFAULT_PAGE_SIZE : req.getPageSize();
         PageRequest pageRequest = new PageRequest(cursorMode ? 1 : requestedPageNo, requestedPageSize);
         OperationAuditQuery operationAuditQuery = OperationAuditQuery.builder()
                 .tenantId(tenantId)

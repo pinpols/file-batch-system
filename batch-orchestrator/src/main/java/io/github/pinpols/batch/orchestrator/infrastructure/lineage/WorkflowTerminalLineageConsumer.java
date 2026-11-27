@@ -76,7 +76,7 @@ public class WorkflowTerminalLineageConsumer {
     @SuppressWarnings("unchecked")
     static TerminalSnapshot parse(String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, Map.class);
-        if (EmptyChecks.isNull(data)) {
+        if (data == null) {
             throw new IllegalArgumentException("payload is null");
         }
         if (!"v2".equals(text(data.get("schemaVersion")))) {
@@ -85,9 +85,8 @@ public class WorkflowTerminalLineageConsumer {
         String tenantId = text(data.get("tenantId"));
         Long runId = number(data.get("workflowRunId"));
         String status = text(data.get("runStatus"));
-        boolean workflowTerminalEventIsInvalid = !Texts.hasText(tenantId)
-                || EmptyChecks.isNull(runId)
-                || !WorkflowTerminalOutboxService.isTerminal(status);
+        boolean workflowTerminalEventIsInvalid =
+                !Texts.hasText(tenantId) || runId == null || !WorkflowTerminalOutboxService.isTerminal(status);
         if (workflowTerminalEventIsInvalid) {
             throw new IllegalArgumentException("tenantId, workflowRunId or terminal status is invalid");
         }
@@ -105,7 +104,7 @@ public class WorkflowTerminalLineageConsumer {
     }
 
     private static String text(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     private static Long number(Object value) {

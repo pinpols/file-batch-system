@@ -99,7 +99,7 @@ public class JobMonitoringScheduler {
                 scanSignals.get(violation).recordSuccess();
                 meterRegistry
                         .summary("batch.job.monitoring.scan.candidates", VIOLATION_TYPE_TAG, violation.name())
-                        .record(EmptyChecks.isNull(candidates) ? 0 : candidates.size());
+                        .record(candidates == null ? 0 : candidates.size());
                 boolean alertPersistenceSucceeded = scanCandidates(candidates, violation);
                 if (alertPersistenceSucceeded) {
                     alertSignals.get(violation).recordSuccess();
@@ -122,10 +122,9 @@ public class JobMonitoringScheduler {
         }
         boolean allAlertsPersisted = true;
         for (JobMonitoringAlertCandidate candidate : candidates) {
-            if (EmptyChecks.isNull(candidate)
-                    || EmptyChecks.isNull(candidate.tenantId())
-                    || (EmptyChecks.isNull(candidate.jobInstanceId())
-                            && EmptyChecks.isNull(candidate.triggerRequestId()))) {
+            if (candidate == null
+                    || candidate.tenantId() == null
+                    || (candidate.jobInstanceId() == null && candidate.triggerRequestId() == null)) {
                 continue;
             }
             try {

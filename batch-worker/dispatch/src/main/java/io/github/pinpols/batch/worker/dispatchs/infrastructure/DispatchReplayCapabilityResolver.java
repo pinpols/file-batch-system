@@ -32,17 +32,17 @@ public class DispatchReplayCapabilityResolver {
     }
 
     public ReplayCapabilityDeclaration resolve(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(request.tenantId())) {
+        if (request == null || EmptyChecks.isBlank(request.tenantId())) {
             return DispatchReplayCapability.unknown();
         }
         Object payloadValue =
-                EmptyChecks.isNull(request.context()) ? null : request.context().get(PipelineRuntimeKeys.PAYLOAD);
+                request.context() == null ? null : request.context().get(PipelineRuntimeKeys.PAYLOAD);
         if (!(payloadValue instanceof String rawPayload) || EmptyChecks.isBlank(rawPayload)) {
             return DispatchReplayCapability.unknown();
         }
         try {
             JsonNode payloadNode = objectMapper.readTree(rawPayload);
-            boolean payloadIsNotWorkflowRunReplay = EmptyChecks.isNull(payloadNode)
+            boolean payloadIsNotWorkflowRunReplay = payloadNode == null
                     || !payloadNode.isObject()
                     || !ReplayOperationType.WORKFLOW_RUN
                             .code()
@@ -51,7 +51,7 @@ public class DispatchReplayCapabilityResolver {
                 return DispatchReplayCapability.unknown();
             }
             DispatchPayload dispatchPayload = objectMapper.treeToValue(payloadNode, DispatchPayload.class);
-            boolean dispatchPayloadIsInvalid = EmptyChecks.isNull(dispatchPayload)
+            boolean dispatchPayloadIsInvalid = dispatchPayload == null
                     || !hasPositiveFileId(dispatchPayload.fileId())
                     || EmptyChecks.isBlank(dispatchPayload.channelCode());
             if (dispatchPayloadIsInvalid) {

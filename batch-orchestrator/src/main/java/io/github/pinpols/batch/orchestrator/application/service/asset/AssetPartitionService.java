@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -65,8 +64,8 @@ public class AssetPartitionService {
         if (materialized != null && latest.isEmpty()) {
             return Optional.of(materialized);
         }
-        boolean materializedMatchesLatestVersion = EmptyChecks.isNotNull(materialized)
-                && Objects.equals(latest.get().id(), materialized.resultVersionId());
+        boolean materializedMatchesLatestVersion =
+                materialized != null && Objects.equals(latest.get().id(), materialized.resultVersionId());
         if (materializedMatchesLatestVersion) {
             return Optional.of(materialized);
         }
@@ -85,7 +84,7 @@ public class AssetPartitionService {
         String tenantId = instance.getTenantId();
         String jobCode = instance.getJobCode();
         Long assetId = resolveDataAssetId(new DataAssetKey(tenantId, jobCode, ASSET_TYPE_JOB));
-        if (EmptyChecks.isNull(assetId)) {
+        if (assetId == null) {
             log.warn(
                     "asset partition materialization skipped: data_asset missing after upsert,"
                             + " tenantId={}, jobCode={}, jobInstanceId={}",
@@ -115,11 +114,11 @@ public class AssetPartitionService {
 
     private Long resolveDataAssetId(DataAssetKey key) {
         Long committedId = dataAssetIdCache.getIfPresent(key);
-        if (EmptyChecks.isNotNull(committedId)) {
+        if (committedId != null) {
             return committedId;
         }
         Long assetId = ensureDataAssetId(key);
-        if (EmptyChecks.isNotNull(assetId)) {
+        if (assetId != null) {
             publishCommittedDataAssetId(key, assetId);
         }
         return assetId;

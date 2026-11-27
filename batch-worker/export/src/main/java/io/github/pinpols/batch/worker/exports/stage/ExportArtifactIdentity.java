@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -19,7 +18,7 @@ final class ExportArtifactIdentity {
         Long currentJob = jobInstanceId(context);
         Map<?, ?> metadata = metadata(record);
         Long owner = positiveLong(metadata.get(PipelineRuntimeKeys.JOB_INSTANCE_ID));
-        return EmptyChecks.isNotNull(currentJob) && currentJob.equals(owner);
+        return currentJob != null && currentJob.equals(owner);
     }
 
     static Map<?, ?> metadata(Map<String, Object> record) {
@@ -27,7 +26,7 @@ final class ExportArtifactIdentity {
         if (value instanceof Map<?, ?> map) {
             return map;
         }
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             try {
                 Object parsed = JsonUtils.fromJson(value.toString(), Object.class);
                 if (parsed instanceof Map<?, ?> map) {
@@ -41,7 +40,7 @@ final class ExportArtifactIdentity {
     }
 
     private static Long positiveLong(Object value) {
-        if (EmptyChecks.isNull(value)) return null;
+        if (value == null) return null;
         try {
             long number = Long.parseLong(value.toString());
             return number > 0 ? number : null;

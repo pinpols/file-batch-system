@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.math.BigDecimal;
 import java.math.MathContext;
 
@@ -23,7 +22,7 @@ public record ExportKeysetRange(
      */
     static ExportKeysetRange equalWidth(BigDecimal lo, BigDecimal hi, int partitionCount, int partitionNo) {
         boolean keysetRangeCannotBePartitioned =
-                EmptyChecks.isNull(lo) || EmptyChecks.isNull(hi) || lo.compareTo(hi) >= 0 || partitionCount <= 1;
+                lo == null || hi == null || lo.compareTo(hi) >= 0 || partitionCount <= 1;
         if (keysetRangeCannotBePartitioned) {
             return inactiveFor(partitionCount, partitionNo);
         }

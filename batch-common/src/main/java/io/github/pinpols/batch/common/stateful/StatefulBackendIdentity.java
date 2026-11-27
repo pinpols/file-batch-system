@@ -85,13 +85,12 @@ public final class StatefulBackendIdentity {
                 return stripAuthorityUserInfo(value);
             }
             // 协议和DNS主机名可统一大小写，资源路径及其百分号编码必须按连接位置保留。
-            String scheme =
-                    EmptyChecks.isNull(uri.getScheme()) ? null : uri.getScheme().toLowerCase(Locale.ROOT);
+            String scheme = uri.getScheme() == null ? null : uri.getScheme().toLowerCase(Locale.ROOT);
             URI authority =
                     new URI(scheme, null, uri.getHost().toLowerCase(Locale.ROOT), uri.getPort(), null, null, null);
-            String resourcePath = EmptyChecks.isNull(uri.getRawPath()) ? "" : uri.getRawPath();
-            String parameters = EmptyChecks.isNull(uri.getRawQuery()) ? "" : "?" + uri.getRawQuery();
-            String fragment = EmptyChecks.isNull(uri.getRawFragment()) ? "" : "#" + uri.getRawFragment();
+            String resourcePath = uri.getRawPath() == null ? "" : uri.getRawPath();
+            String parameters = uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery();
+            String fragment = uri.getRawFragment() == null ? "" : "#" + uri.getRawFragment();
             return prefix + authority + resourcePath + parameters + fragment;
         } catch (URISyntaxException ex) {
             return stripAuthorityUserInfo(value);
@@ -116,10 +115,10 @@ public final class StatefulBackendIdentity {
     }
 
     private static String trimmed(String value) {
-        return EmptyChecks.isNull(value) ? "" : value.trim();
+        return value == null ? "" : value.trim();
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return EmptyChecks.isNotBlank(value);
     }
 }

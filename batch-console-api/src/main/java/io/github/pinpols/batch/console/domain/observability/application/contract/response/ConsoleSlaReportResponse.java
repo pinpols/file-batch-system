@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import java.math.BigDecimal;
@@ -33,15 +32,15 @@ public record ConsoleSlaReportResponse(String tenantId, Integer periodDays, List
             return SlaJobEntry.builder()
                     .jobCode(row.jobCode())
                     .jobName(row.jobName())
-                    .totalInstances(EmptyChecks.isNull(row.totalInstances()) ? 0L : row.totalInstances())
-                    .successCount(EmptyChecks.isNull(row.successCount()) ? 0L : row.successCount())
-                    .failedCount(EmptyChecks.isNull(row.failedCount()) ? 0L : row.failedCount())
-                    .slaBreached(EmptyChecks.isNull(row.slaBreached()) ? 0L : row.slaBreached())
-                    .slaOnTime(EmptyChecks.isNull(row.slaOnTime()) ? 0L : row.slaOnTime())
-                    .slaTotalWithSla(EmptyChecks.isNull(row.slaTotalWithSla()) ? 0L : row.slaTotalWithSla())
+                    .totalInstances(row.totalInstances() == null ? 0L : row.totalInstances())
+                    .successCount(row.successCount() == null ? 0L : row.successCount())
+                    .failedCount(row.failedCount() == null ? 0L : row.failedCount())
+                    .slaBreached(row.slaBreached() == null ? 0L : row.slaBreached())
+                    .slaOnTime(row.slaOnTime() == null ? 0L : row.slaOnTime())
+                    .slaTotalWithSla(row.slaTotalWithSla() == null ? 0L : row.slaTotalWithSla())
                     .avgDurationSeconds(row.avgDurationSeconds())
                     .maxDurationSeconds(row.maxDurationSeconds())
-                    .totalPartitions(EmptyChecks.isNull(row.totalPartitions()) ? 0L : row.totalPartitions())
+                    .totalPartitions(row.totalPartitions() == null ? 0L : row.totalPartitions())
                     .build();
         }
     }

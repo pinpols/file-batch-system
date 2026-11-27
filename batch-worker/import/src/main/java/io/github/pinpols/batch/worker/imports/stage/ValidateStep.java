@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -304,7 +303,7 @@ public class ValidateStep implements ImportStageStep {
                     SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
 
                     ImportStageResult failureResult = handleUnparsableLine(context, recordNo, line, exception);
-                    if (EmptyChecks.isNotNull(failureResult)) {
+                    if (failureResult != null) {
                         return new StreamingValidationResult(validatedCount, loadedCandidateCount, failureResult);
                     }
                     continue;

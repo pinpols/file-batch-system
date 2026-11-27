@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 
 import io.github.pinpols.batch.common.enums.FailureClass;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import java.sql.SQLException;
@@ -33,7 +32,7 @@ public class SpringTechnicalFailureClassificationAdapter implements TechnicalFai
 
     @Override
     public FailureClass classify(Throwable throwable) {
-        for (Throwable cursor = throwable; EmptyChecks.isNotNull(cursor); cursor = cursor.getCause()) {
+        for (Throwable cursor = throwable; cursor != null; cursor = cursor.getCause()) {
             boolean isTechnicalTimeout = cursor instanceof TimeoutException
                     || cursor instanceof QueryTimeoutException
                     || cursor instanceof SQLTimeoutException;

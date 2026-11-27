@@ -210,7 +210,7 @@ public class TenantConfigPackageExcelApplyService {
             ResourceQueueRow existing = resourceQueueMapper.selectByUniqueKey(ctx.tenantId(), queue.queueCode());
             ResourceQueueUpsertParam queueParam = ResourceQueueExcelRowParser.toUpsertParam(queue, ctx.operatorId());
             resourceQueueMapper.upsertResourceQueue(queueParam);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 inserted++;
             } else {
                 updated++;
@@ -233,12 +233,12 @@ public class TenantConfigPackageExcelApplyService {
             String calendarOperatorId = safeOp(ctx.operatorId());
             BusinessCalendarUpsertParam calendarParam =
                     BusinessCalendarExcelRowParser.toUpsertParam(calendar, calendarOperatorId);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 preserveCalendarOptionalValues(row, existing, calendarParam);
             }
             businessCalendarMapper.upsertBusinessCalendar(calendarParam);
             applyCalendarHolidays(ctx.tenantId(), calendar);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 inserted++;
             } else {
                 updated++;
@@ -258,7 +258,7 @@ public class TenantConfigPackageExcelApplyService {
             }
             BatchWindowRow existing = batchWindowMapper.selectByUniqueKey(ctx.tenantId(), window.windowCode());
             BatchWindowUpsertParam windowParam = BatchWindowExcelRowParser.toUpsertParam(window);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 preserveWindowOptionalValues(row, existing, windowParam);
             }
             BatchWindowRules.validate(
@@ -267,7 +267,7 @@ public class TenantConfigPackageExcelApplyService {
                     windowParam.getEndTime(),
                     windowParam.getAllowCrossDay());
             batchWindowMapper.upsertBatchWindow(windowParam);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 inserted++;
             } else {
                 updated++;
@@ -279,7 +279,7 @@ public class TenantConfigPackageExcelApplyService {
     private void applyCalendarHolidays(String tenantId, CalendarRow calendar) {
         CalendarQueryRow saved =
                 businessCalendarMapper.selectByTenantAndCalendarCode(tenantId, calendar.calendarCode());
-        if (EmptyChecks.isNull(saved) || EmptyChecks.isNull(saved.id())) {
+        if (saved == null || saved.id() == null) {
             return;
         }
         Long calendarId = saved.id();
@@ -424,7 +424,7 @@ public class TenantConfigPackageExcelApplyService {
     private boolean applyJob(Map<String, String> row, ApplyContext ctx) {
         String jobCode = normalize(row.get(COL_JOB_CODE));
         JobDefinitionView existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             insertJob(row, ctx, jobCode);
             return true;
         }
@@ -437,7 +437,7 @@ public class TenantConfigPackageExcelApplyService {
         jobDefinitionMapper.insert(entity);
         // INSERT 的 SQL 缺省值不会回填 Java 对象,受管 Workflow 必须继承实际落库的时区与模式。
         JobDefinitionView persistedJob = jobDefinitionMapper.selectById(ctx.tenantId(), entity.getId());
-        if (EmptyChecks.isNull(persistedJob)) {
+        if (persistedJob == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
         }
         singleJobWorkflowProvisioner.provision(persistedJob);
@@ -570,7 +570,7 @@ public class TenantConfigPackageExcelApplyService {
 
     private static Integer mergeInteger(Map<String, String> row, String key, Integer currentValue) {
         Integer requested = parseInteger(row.get(key));
-        return EmptyChecks.isNull(requested) ? currentValue : requested;
+        return requested == null ? currentValue : requested;
     }
 
     private static String mergeConfigCode(Map<String, String> row, String key, String currentValue) {
@@ -587,7 +587,7 @@ public class TenantConfigPackageExcelApplyService {
         for (Map<String, String> row : rows) {
             String jobCode = normalize(row.get(COL_JOB_CODE));
             JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
-            if (EmptyChecks.isNull(job)) {
+            if (job == null) {
                 throw invalidParsedRow(
                         JOB_MONITORING_POLICY_SHEET, List.of("job_code does not exist for tenant: " + jobCode));
             }
@@ -662,7 +662,7 @@ public class TenantConfigPackageExcelApplyService {
             Integer version = parseInteger(row.get(COL_WORKFLOW_VERSION));
             WorkflowDefinitionEntity definition =
                     workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), workflowCode, version);
-            if (EmptyChecks.isNull(definition)) {
+            if (definition == null) {
                 throw invalidParsedRow(
                         WORKFLOW_MONITORING_POLICY_SHEET,
                         List.of("workflow_code + workflow_version does not exist for tenant: " + workflowCode
@@ -676,39 +676,37 @@ public class TenantConfigPackageExcelApplyService {
             policy.setSoftRuntimeSeconds(valueOrExisting(
                     row,
                     COL_SOFT_RUNTIME_SECONDS,
-                    EmptyChecks.isNull(existing) ? 0 : existing.getSoftRuntimeSeconds(),
+                    existing == null ? 0 : existing.getSoftRuntimeSeconds(),
                     TenantConfigPackageExcelApplyService::parseNonNegativeMonitoringValue));
             policy.setSoftRuntimeSeverity(valueOrExisting(
                     row,
                     COL_SOFT_RUNTIME_SEVERITY,
-                    EmptyChecks.isNull(existing) ? DEFAULT_MONITORING_SEVERITY : existing.getSoftRuntimeSeverity(),
+                    existing == null ? DEFAULT_MONITORING_SEVERITY : existing.getSoftRuntimeSeverity(),
                     TenantConfigPackageExcelApplyService::resolveMonitoringSeverity));
             policy.setStartGraceSeconds(valueOrExisting(
                     row,
                     COL_START_GRACE_SECONDS,
-                    EmptyChecks.isNull(existing) ? 0 : existing.getStartGraceSeconds(),
+                    existing == null ? 0 : existing.getStartGraceSeconds(),
                     TenantConfigPackageExcelApplyService::parseNonNegativeMonitoringValue));
             policy.setStartGraceSeverity(valueOrExisting(
                     row,
                     COL_START_GRACE_SEVERITY,
-                    EmptyChecks.isNull(existing) ? DEFAULT_MONITORING_SEVERITY : existing.getStartGraceSeverity(),
+                    existing == null ? DEFAULT_MONITORING_SEVERITY : existing.getStartGraceSeverity(),
                     TenantConfigPackageExcelApplyService::resolveMonitoringSeverity));
             policy.setCompletionDeadlineLocalTime(valueOrExisting(
                     row,
                     COL_COMPLETION_DEADLINE_LOCAL_TIME,
-                    EmptyChecks.isNull(existing) ? null : existing.getCompletionDeadlineLocalTime(),
+                    existing == null ? null : existing.getCompletionDeadlineLocalTime(),
                     value -> parseMonitoringTime(value, WORKFLOW_MONITORING_POLICY_SHEET)));
             policy.setCompletionDeadlineDayOffset(valueOrExisting(
                     row,
                     COL_COMPLETION_DEADLINE_DAY_OFFSET,
-                    EmptyChecks.isNull(existing) ? 0 : existing.getCompletionDeadlineDayOffset(),
+                    existing == null ? 0 : existing.getCompletionDeadlineDayOffset(),
                     TenantConfigPackageExcelApplyService::parseNonNegativeMonitoringValue));
             policy.setCompletionDeadlineSeverity(valueOrExisting(
                     row,
                     COL_COMPLETION_DEADLINE_SEVERITY,
-                    EmptyChecks.isNull(existing)
-                            ? DEFAULT_MONITORING_SEVERITY
-                            : existing.getCompletionDeadlineSeverity(),
+                    existing == null ? DEFAULT_MONITORING_SEVERITY : existing.getCompletionDeadlineSeverity(),
                     TenantConfigPackageExcelApplyService::resolveMonitoringSeverity));
             workflowMonitoringPolicyMapper.upsert(policy);
         }
@@ -725,12 +723,12 @@ public class TenantConfigPackageExcelApplyService {
 
     private static Integer parseNonNegativeMonitoringValue(String value) {
         Integer parsed = parseInteger(value);
-        return EmptyChecks.isNull(parsed) ? 0 : parsed;
+        return parsed == null ? 0 : parsed;
     }
 
     private int parseStartGraceSeconds(String value, JobDefinitionView job) {
         Integer configured = parseInteger(value);
-        if (EmptyChecks.isNotNull(configured)) {
+        if (configured != null) {
             return configured;
         }
         return isStartGraceMonitored(job) ? monitoringDefaults.getStartGraceSeconds() : 0;
@@ -774,9 +772,7 @@ public class TenantConfigPackageExcelApplyService {
             String code = normalize(row.get(COL_CHANNEL_CODE));
             FileChannelConfigQueryView existing = fileChannelConfigMapper.selectByUniqueKey(ctx.tenantId(), code);
             Map<String, String> values = mergeExistingValues(
-                    row,
-                    EmptyChecks.isNull(existing) ? null : existing.toMap(),
-                    ConfigPackageExcelSchema.FileChannel.COLUMNS);
+                    row, existing == null ? null : existing.toMap(), ConfigPackageExcelSchema.FileChannel.COLUMNS);
             FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();
             param.setTenantId(ctx.tenantId());
             param.setChannelCode(code);
@@ -786,7 +782,7 @@ public class TenantConfigPackageExcelApplyService {
             param.setAuthType(normalizeEnum(values.get(COL_AUTH_TYPE)));
             String configJson = values.get(COL_CONFIG_JSON);
             if (!Texts.hasText(configJson)) {
-                if (EmptyChecks.isNull(existing) && !"NONE".equals(param.getAuthType())) {
+                if (existing == null && !"NONE".equals(param.getAuthType())) {
                     throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_package.channel_config_required");
                 }
                 configJson = "{}";
@@ -802,7 +798,7 @@ public class TenantConfigPackageExcelApplyService {
             param.setCreatedBy(safeOp(ctx.operatorId()));
             param.setUpdatedBy(safeOp(ctx.operatorId()));
             fileChannelConfigMapper.upsertFileChannelConfig(param);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 inserted++;
             } else {
                 updated++;
@@ -826,15 +822,13 @@ public class TenantConfigPackageExcelApplyService {
             FileTemplateConfigQueryView existing = fileTemplateConfigMapper.selectByUniqueKey(
                     ctx.tenantId(), template.templateCode(), template.version());
             Map<String, String> values = mergeExistingValues(
-                    row,
-                    EmptyChecks.isNull(existing) ? null : existing.toMap(),
-                    ConfigPackageExcelSchema.FileTemplate.COLUMNS);
+                    row, existing == null ? null : existing.toMap(), ConfigPackageExcelSchema.FileTemplate.COLUMNS);
             template = FileTemplateExcelRowParser.parseRow(ctx.tenantId(), 0, values, issues);
             FileTemplateConfigUpsertParam templateParam =
                     FileTemplateExcelRowParser.toUpsertParam(ctx.tenantId(), template, ctx.operatorId());
             ImportEncryptTypeValidation.validate(fileTemplateConfigMapper, ctx.tenantId(), templateParam);
             fileTemplateConfigMapper.upsertFileTemplateConfig(templateParam);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 inserted++;
             } else {
                 updated++;
@@ -864,28 +858,28 @@ public class TenantConfigPackageExcelApplyService {
             JobDefinitionView singleJob = Texts.hasText(singleJobCode)
                     ? jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), singleJobCode)
                     : null;
-            if (Texts.hasText(singleJobCode) && EmptyChecks.isNull(singleJob)) {
+            if (Texts.hasText(singleJobCode) && singleJob == null) {
                 throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
             }
             WorkflowDefinitionEntity existing =
                     workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), sourceWorkflowCode, sourceVersion);
-            if (EmptyChecks.isNull(existing) && EmptyChecks.isNotNull(singleJob)) {
+            if (existing == null && singleJob != null) {
                 existing = workflowDefinitionMapper.selectBySingleJobDefinitionId(ctx.tenantId(), singleJob.getId());
             }
-            boolean existingSingleJobBindingWouldChange = EmptyChecks.isNotNull(existing)
-                    && EmptyChecks.isNotNull(singleJob)
+            boolean existingSingleJobBindingWouldChange = existing != null
+                    && singleJob != null
                     && !singleJob.getId().equals(existing.getSingleJobDefinitionId());
             if (existingSingleJobBindingWouldChange) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.single_job_relation_conflict");
             }
-            String targetWorkflowCode = EmptyChecks.isNull(existing) ? sourceWorkflowCode : existing.getWorkflowCode();
-            int currentVersion = EmptyChecks.isNull(existing) ? sourceVersion : existing.getVersion();
+            String targetWorkflowCode = existing == null ? sourceWorkflowCode : existing.getWorkflowCode();
+            int currentVersion = existing == null ? sourceVersion : existing.getVersion();
             WorkflowDefinitionUpsertParam defParam = new WorkflowDefinitionUpsertParam();
             defParam.setTenantId(ctx.tenantId());
             defParam.setWorkflowCode(targetWorkflowCode);
             defParam.setVersion(currentVersion);
             populateWorkflowDefinitionFields(defParam, row, existing, singleJob, ctx.operatorId());
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 String existingCalendarCode = CodeNormalizer.toConfigFormOrNull(existing.getCalendarCode());
                 String requestedCalendarCode = CodeNormalizer.toConfigFormOrNull(defParam.getCalendarCode());
                 boolean calendarCodeChanged = !Objects.equals(existingCalendarCode, requestedCalendarCode);
@@ -923,7 +917,7 @@ public class TenantConfigPackageExcelApplyService {
                 updated++;
             }
 
-            WorkflowDefinitionEntity saved = EmptyChecks.isNull(existing)
+            WorkflowDefinitionEntity saved = existing == null
                     ? workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), targetWorkflowCode, currentVersion)
                     : existing;
             if (saved == null || saved.getId() == null) {
@@ -934,7 +928,7 @@ public class TenantConfigPackageExcelApplyService {
             applyWfNodes(ctx.tenantId(), defId, nodesByWf.getOrDefault(wfKey, List.of()));
             applyWfEdges(ctx.tenantId(), defId, edgesByWf.getOrDefault(wfKey, List.of()));
             cacheInvalidationService.evictWorkflowDefinition(ctx.tenantId(), targetWorkflowCode);
-            int snapshotVersion = EmptyChecks.isNull(existing) ? currentVersion : currentVersion + 1;
+            int snapshotVersion = existing == null ? currentVersion : currentVersion + 1;
             appendAppliedWorkflowSnapshot(ctx, defId, targetWorkflowCode, snapshotVersion, defParam);
         }
         return new ApplyStats(inserted, updated);
@@ -972,10 +966,10 @@ public class TenantConfigPackageExcelApplyService {
     }
 
     private static Long singleJobDefinitionId(JobDefinitionView singleJob, WorkflowDefinitionEntity existing) {
-        if (EmptyChecks.isNotNull(singleJob)) {
+        if (singleJob != null) {
             return singleJob.getId();
         }
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             return null;
         }
         return existing.getSingleJobDefinitionId();
@@ -988,15 +982,15 @@ public class TenantConfigPackageExcelApplyService {
             WorkflowDefinitionEntity existing,
             JobDefinitionView singleJob,
             String operatorId) {
-        String currentWorkflowName = EmptyChecks.isNull(existing) ? null : existing.getWorkflowName();
+        String currentWorkflowName = existing == null ? null : existing.getWorkflowName();
         String workflowName = mergeText(row, COL_WORKFLOW_NAME, currentWorkflowName);
         defParam.setWorkflowName(workflowName);
-        String currentWorkflowType = EmptyChecks.isNull(existing) ? null : existing.getWorkflowType();
+        String currentWorkflowType = existing == null ? null : existing.getWorkflowType();
         String workflowType = mergeEnum(row, COL_WORKFLOW_TYPE, currentWorkflowType);
         defParam.setWorkflowType(workflowType);
 
         String requestedEnabled = row.get(COL_ENABLED);
-        boolean currentEnabled = EmptyChecks.isNull(existing) || existing.getEnabled();
+        boolean currentEnabled = existing == null || existing.getEnabled();
         boolean enabled = parseBoolean(requestedEnabled, currentEnabled);
         defParam.setEnabled(enabled);
 
@@ -1004,32 +998,30 @@ public class TenantConfigPackageExcelApplyService {
         defParam.setSingleJobDefinitionId(workflowDefinitionId);
 
         String requestedScheduleEnabled = row.get(COL_SCHEDULE_ENABLED);
-        boolean currentScheduleEnabled =
-                EmptyChecks.isNotNull(existing) && Boolean.TRUE.equals(existing.getScheduleEnabled());
+        boolean currentScheduleEnabled = existing != null && Boolean.TRUE.equals(existing.getScheduleEnabled());
         boolean scheduleEnabled = parseBoolean(requestedScheduleEnabled, currentScheduleEnabled);
         defParam.setScheduleEnabled(scheduleEnabled);
 
-        String currentScheduleType = EmptyChecks.isNull(existing) ? "MANUAL" : existing.getScheduleType();
+        String currentScheduleType = existing == null ? "MANUAL" : existing.getScheduleType();
         String scheduleType = mergeEnum(row, COL_SCHEDULE_TYPE, currentScheduleType);
         defParam.setScheduleType(scheduleType);
-        String currentScheduleExpr = EmptyChecks.isNull(existing) ? null : existing.getScheduleExpr();
+        String currentScheduleExpr = existing == null ? null : existing.getScheduleExpr();
         String scheduleExpr = mergeText(row, COL_SCHEDULE_EXPR, currentScheduleExpr);
         defParam.setScheduleExpr(scheduleExpr);
-        String currentTimezone =
-                EmptyChecks.isNull(existing) ? CommonConstants.DEFAULT_TIMEZONE_ID : existing.getTimezone();
+        String currentTimezone = existing == null ? CommonConstants.DEFAULT_TIMEZONE_ID : existing.getTimezone();
         String timezone = mergeText(row, COL_TIMEZONE, currentTimezone);
         defParam.setTimezone(timezone);
-        String currentTriggerMode = EmptyChecks.isNull(existing) ? "MANUAL" : existing.getTriggerMode();
+        String currentTriggerMode = existing == null ? "MANUAL" : existing.getTriggerMode();
         String triggerMode = mergeEnum(row, COL_TRIGGER_MODE, currentTriggerMode);
         defParam.setTriggerMode(triggerMode);
-        String currentCalendarCode = EmptyChecks.isNull(existing) ? null : existing.getCalendarCode();
+        String currentCalendarCode = existing == null ? null : existing.getCalendarCode();
         String mergedCalendarCode = mergeText(row, COL_CALENDAR_CODE, currentCalendarCode);
         String calendarCode = CodeNormalizer.toConfigFormOrNull(mergedCalendarCode);
         defParam.setCalendarCode(calendarCode);
-        String currentDependsOnJobCode = EmptyChecks.isNull(existing) ? null : existing.getDependsOnJobCode();
+        String currentDependsOnJobCode = existing == null ? null : existing.getDependsOnJobCode();
         String dependsOnJobCode = mergeText(row, COL_DEPENDS_ON_JOB_CODE, currentDependsOnJobCode);
         defParam.setDependsOnJobCode(dependsOnJobCode);
-        String currentDescription = EmptyChecks.isNull(existing) ? null : existing.getDescription();
+        String currentDescription = existing == null ? null : existing.getDescription();
         String description = mergeText(row, COL_DESCRIPTION, currentDescription);
         defParam.setDescription(description);
         String createdBy = safeOp(operatorId);
@@ -1091,13 +1083,13 @@ public class TenantConfigPackageExcelApplyService {
                             ? null
                             : existing.getTimeoutSeconds())); // empty-check: allow - Sonar S2259
             String requestedNodeParams = values.get(COL_NODE_PARAMS);
-            String existingNodeParams = EmptyChecks.isNull(existing) ? null : existing.getNodeParams();
+            String existingNodeParams = existing == null ? null : existing.getNodeParams();
             String mergedNodeParams = mergeNodeParams(requestedNodeParams, existingNodeParams);
             String normalizedNodeParams = TenantConfigReferenceResolver.normalizeConfigReferences(mergedNodeParams);
             FileArrivalChannelNodeValidation.validate(p.getNodeType(), normalizedNodeParams);
             p.setNodeParams(normalizedNodeParams); // empty-check: allow - Sonar S2259
             String configuredEnabled = values.get(COL_ENABLED);
-            boolean existingEnabled = EmptyChecks.isNull(existing) || existing.getEnabled();
+            boolean existingEnabled = existing == null || existing.getEnabled();
             p.setEnabled(parseBoolean(configuredEnabled, existingEnabled)); // empty-check: allow - Sonar S2259
             p.setCrossDayDependencies(
                     existing == null // empty-check: allow - Sonar S2259
@@ -1136,7 +1128,7 @@ public class TenantConfigPackageExcelApplyService {
                             ? null
                             : existing.getConditionExpr())); // empty-check: allow - Sonar S2259
             String configuredEnabled = values.get(COL_ENABLED);
-            boolean existingEnabled = EmptyChecks.isNull(existing) || existing.getEnabled();
+            boolean existingEnabled = existing == null || existing.getEnabled();
             p.setEnabled(parseBoolean(configuredEnabled, existingEnabled)); // empty-check: allow - Sonar S2259
             workflowEdgeMapper.upsertWorkflowEdge(p);
         }
@@ -1187,10 +1179,10 @@ public class TenantConfigPackageExcelApplyService {
                 continue;
             }
             Object current = existing.get(column);
-            if (EmptyChecks.isNull(current)) {
+            if (current == null) {
                 current = existing.get(toDatabaseColumn(column));
             }
-            if (EmptyChecks.isNotNull(current)) {
+            if (current != null) {
                 merged.put(
                         column,
                         current instanceof Map<?, ?> || current instanceof List<?>

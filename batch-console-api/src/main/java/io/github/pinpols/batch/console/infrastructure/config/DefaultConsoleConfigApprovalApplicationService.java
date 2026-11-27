@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -105,7 +104,7 @@ public class DefaultConsoleConfigApprovalApplicationService implements ConsoleCo
         }
         configReleaseApplyService.validate(release.getConfigType(), release.getConfigKey(), release.getConfigPayload());
         ConfigApprovalRow latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
-        if (EmptyChecks.isNotNull(latest) && STATUS_PENDING.equals(latest.approvalStatus())) {
+        if (latest != null && STATUS_PENDING.equals(latest.approvalStatus())) {
             throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
         }
         String submittedBy = currentOperator();
@@ -131,7 +130,7 @@ public class DefaultConsoleConfigApprovalApplicationService implements ConsoleCo
         String resolved = tenantGuard.resolveTenant(tenantId);
         ConfigReleaseEntity release = loadRelease(resolved, releaseId);
         ConfigApprovalRow approval = configApprovalMapper.selectLatestByRelease(resolved, releaseId);
-        ConsoleConfigApprovalDetailResponse.ApprovalRow responseApproval = EmptyChecks.isNull(approval)
+        ConsoleConfigApprovalDetailResponse.ApprovalRow responseApproval = approval == null
                 ? null
                 : ConsoleConfigApprovalDetailResponse.ApprovalRow.builder()
                         .id(approval.id())

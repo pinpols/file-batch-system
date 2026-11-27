@@ -84,7 +84,7 @@ public class JobDependencyWaitingLaunchReconciler {
         List<JobDependencyWaitingLaunchEntity> waiting =
                 waitingLaunchService.selectWaiting(tenantId, TENANT_BATCH_SIZE);
         for (JobDependencyWaitingLaunchEntity entry :
-                EmptyChecks.isNull(waiting) ? List.<JobDependencyWaitingLaunchEntity>of() : waiting) {
+                waiting == null ? List.<JobDependencyWaitingLaunchEntity>of() : waiting) {
             try {
                 reconcileOne(tenantId, entry);
             } catch (RuntimeException failure) {
@@ -111,7 +111,7 @@ public class JobDependencyWaitingLaunchReconciler {
 
     void reconcileOne(String tenantId, JobDependencyWaitingLaunchEntity entry) {
         TriggerRequestEntity triggerRequest = waitingLaunchService.selectOriginalRequest(tenantId, entry.requestId());
-        if (EmptyChecks.isNull(triggerRequest)) {
+        if (triggerRequest == null) {
             waitingLaunchService.markWaitCancelled(tenantId, entry.requestId());
             return;
         }
@@ -141,7 +141,7 @@ public class JobDependencyWaitingLaunchReconciler {
 
         String notReadyReason = waitingLaunchService.findNotReadyReason(
                 tenantId, entry.jobCode(), entry.bizDate(), entry.dependencySnapshot());
-        if (EmptyChecks.isNotNull(notReadyReason)) {
+        if (notReadyReason != null) {
             waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), notReadyReason);
             maybeEmitTimeoutAlert(tenantId, entry, triggerRequest, notReadyReason);
             return;
@@ -150,7 +150,7 @@ public class JobDependencyWaitingLaunchReconciler {
         try {
             LaunchRequest launchRequest = restored.get();
             LaunchResponse response = launchServiceProvider.getObject().launch(launchRequest);
-            if (EmptyChecks.isNotNull(response) && EmptyChecks.isNotNull(response.instanceNo())) {
+            if (response != null && response.instanceNo() != null) {
                 waitingLaunchService.markWaitReleased(tenantId, entry.requestId());
             } else {
                 waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), "LAUNCH_BLOCKED_BY_OTHER_GATE");
@@ -173,8 +173,8 @@ public class JobDependencyWaitingLaunchReconciler {
             TriggerRequestEntity triggerRequest,
             String notReadyReason) {
         boolean dependencyWaitNeedsNoTimeoutAlert = dependencyWaitProperties.getTimeoutAlertSeconds() <= 0
-                || EmptyChecks.isNull(entry.createdAt())
-                || EmptyChecks.isNotNull(entry.timeoutAlertedAt());
+                || entry.createdAt() == null
+                || entry.timeoutAlertedAt() != null;
         if (dependencyWaitNeedsNoTimeoutAlert) {
             return;
         }
@@ -194,7 +194,7 @@ public class JobDependencyWaitingLaunchReconciler {
         detail.put("createdAt", entry.createdAt().toString());
         detail.put("timeoutSeconds", dependencyWaitProperties.getTimeoutAlertSeconds());
         detail.put("requestId", entry.requestId());
-        if (EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
+        if (triggerRequest.getParentWorkflowRunId() != null) {
             detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId());
         }
         if (!EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {

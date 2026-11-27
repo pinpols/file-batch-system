@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -70,10 +71,10 @@ public final class SensorSqlValidator {
                     + statement.getClass().getSimpleName());
         }
         checkNoSelectStar(select);
-        if (forbiddenFunctions != null && !forbiddenFunctions.isEmpty()) {
+        if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }
-        if (allowedSchemas != null && !allowedSchemas.isEmpty()) {
+        if (EmptyChecks.isNotEmpty(allowedSchemas)) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
         return sql;

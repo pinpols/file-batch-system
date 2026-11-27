@@ -64,8 +64,7 @@ public class OrchestratorApprovalClient {
     public String submitApproval(ApprovalSubmitCommand command) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
         String requesterId = ConsoleTextSanitizer.safeInput(
-                EmptyChecks.isNotNull(command.requesterId()) ? command.requesterId() : metadata.operatorId(),
-                REQUESTER_ID_MAX_LENGTH);
+                command.requesterId() != null ? command.requesterId() : metadata.operatorId(), REQUESTER_ID_MAX_LENGTH);
         String tenantId = command.tenantId();
         String approvalType = command.approvalType();
         String actionType = command.actionType();
@@ -118,8 +117,8 @@ public class OrchestratorApprovalClient {
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, sourceIdempotencyKey)
                 .retrieve()
                 .body(ApprovalSourceLookupResponse.class);
-        ApprovalSourceRecord record = EmptyChecks.isNull(response) ? null : response.record();
-        if (EmptyChecks.isNull(record)
+        ApprovalSourceRecord record = response == null ? null : response.record();
+        if (record == null
                 || !tenantId.equals(record.tenantId())
                 || !sourceIdempotencyKey.equals(record.sourceIdempotencyKey())
                 || !hasText(record.approvalNo())) {
@@ -132,7 +131,7 @@ public class OrchestratorApprovalClient {
      * 按已冻结且与提交载荷一致的参数校验回查记录；未查到或不匹配均不能证明可重新提交。
      */
     public ApprovalSourceRecord lookupVerifiedSubmission(ApprovalSubmitCommand expected) {
-        if (EmptyChecks.isNull(expected)
+        if (expected == null
                 || !hasText(expected.tenantId())
                 || !hasText(expected.idempotencyKey())
                 || !hasText(expected.approvalType())
@@ -151,7 +150,7 @@ public class OrchestratorApprovalClient {
         try {
             Object expectedPayload = JsonUtils.fromJsonStrict(expected.payloadJson(), Object.class);
             Object actualPayload = JsonUtils.fromJsonStrict(record.payloadJson(), Object.class);
-            if (!sameIdentity || EmptyChecks.isNull(expectedPayload) || !expectedPayload.equals(actualPayload)) {
+            if (!sameIdentity || expectedPayload == null || !expectedPayload.equals(actualPayload)) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.idempotency_conflict");
             }
         } catch (IllegalArgumentException invalidPayload) {
@@ -175,7 +174,7 @@ public class OrchestratorApprovalClient {
     public void requireApprovedExecution(
             String tenantId, String approvalNo, String actionType, Object executionPayload) {
         ApprovalRecord approval = loadApprovedApproval(tenantId, approvalNo);
-        if (!actionType.equals(approval.actionType()) || EmptyChecks.isNull(executionPayload)) {
+        if (!actionType.equals(approval.actionType()) || executionPayload == null) {
             throw executionMismatch();
         }
         Object approvedPayload;
@@ -184,7 +183,7 @@ public class OrchestratorApprovalClient {
         } catch (IllegalArgumentException invalidPayload) {
             throw executionMismatch();
         }
-        if (EmptyChecks.isNull(approvedPayload)) {
+        if (approvedPayload == null) {
             throw executionMismatch();
         }
         Map<String, Object> approvedBusinessPayload = businessPayload(approvedPayload);
@@ -222,7 +221,7 @@ public class OrchestratorApprovalClient {
     }
 
     private static boolean hasText(String text) {
-        return text != null && !text.isBlank();
+        return EmptyChecks.isNotBlank(text);
     }
 
     /**
@@ -250,7 +249,7 @@ public class OrchestratorApprovalClient {
         /** 文件下载场景：{@code targetType=FILE} + {@code targetId=fileId}，沿用文件专属的错误文案。 */
         public static ApprovalTargetBinding file(Long fileId) {
             return new ApprovalTargetBinding(
-                    "FILE", EmptyChecks.isNull(fileId) ? null : String.valueOf(fileId), FILE_TARGET_MISMATCH_MESSAGE);
+                    "FILE", fileId == null ? null : String.valueOf(fileId), FILE_TARGET_MISMATCH_MESSAGE);
         }
 
         boolean matches(ApprovalRecord record) {

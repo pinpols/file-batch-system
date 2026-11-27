@@ -39,7 +39,7 @@ public record OutboundHttpRequest(
         if (method == OutboundHttpMethod.POST && EmptyChecks.isBlank(mediaType)) {
             throw new IllegalArgumentException("outbound HTTP POST requires mediaType");
         }
-        headers = EmptyChecks.isNull(headers) ? Map.of() : Map.copyOf(headers);
+        headers = headers == null ? Map.of() : Map.copyOf(headers);
     }
 
     public static OutboundHttpRequest get(
@@ -104,7 +104,7 @@ public record OutboundHttpRequest(
                 + ", headerNames="
                 + headers.keySet()
                 + ", bodyLength="
-                + (EmptyChecks.isNull(body) ? 0 : body.length())
+                + (body == null ? 0 : body.length())
                 + ", addressPolicy="
                 + addressPolicy
                 + ']';

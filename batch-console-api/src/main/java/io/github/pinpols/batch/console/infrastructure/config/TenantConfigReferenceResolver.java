@@ -63,7 +63,7 @@ public class TenantConfigReferenceResolver {
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> normalized = new LinkedHashMap<>();
             map.forEach((key, entryValue) -> {
-                String name = EmptyChecks.isNull(key) ? "" : key.toString();
+                String name = key == null ? "" : key.toString();
                 boolean exactFileArrivalChannel = fileArrivalSpec && "channelCode".equals(name);
                 if (entryValue instanceof String reference
                         && !exactFileArrivalChannel

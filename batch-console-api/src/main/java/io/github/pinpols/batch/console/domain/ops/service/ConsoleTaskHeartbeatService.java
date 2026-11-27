@@ -33,7 +33,7 @@ public class ConsoleTaskHeartbeatService {
     public TaskHeartbeatDetailsResponse getHeartbeatDetails(String tenantId, Long taskId) {
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
         JobTaskHeartbeatView heartbeat = jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
-        if (EmptyChecks.isNull(heartbeat)) {
+        if (heartbeat == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
         }
         Long heartbeatTaskId = heartbeat.getId();
@@ -48,7 +48,7 @@ public class ConsoleTaskHeartbeatService {
 
     /** JSONB 文本解析成 JSON 结构;空 = null;解析异常降级为 null(不让坏数据 500),并 WARN 带 taskId。 */
     private Object parseDetails(String raw, Long taskId) {
-        if (raw == null || raw.isBlank()) {
+        if (EmptyChecks.isBlank(raw)) {
             return null;
         }
         try {

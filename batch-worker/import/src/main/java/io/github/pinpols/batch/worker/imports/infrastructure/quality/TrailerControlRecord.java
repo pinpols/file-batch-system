@@ -47,12 +47,12 @@ public final class TrailerControlRecord {
 
     /** trailer_template 是否声明了 trailer 行(present=true);ParseStep 用它决定是否剥离末行。 */
     public static boolean isPresentEnabled(Map<String, Object> trailerTemplate) {
-        return trailerTemplate != null && !trailerTemplate.isEmpty() && boolOr(trailerTemplate.get("present"), false);
+        return EmptyChecks.isNotEmpty(trailerTemplate) && boolOr(trailerTemplate.get("present"), false);
     }
 
     /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
     public static TrailerControlRecord parse(String trailerLine, Map<String, Object> trailerTemplate) {
-        if (EmptyChecks.isNull(trailerLine) || EmptyChecks.isEmpty(trailerTemplate)) {
+        if (trailerLine == null || EmptyChecks.isEmpty(trailerTemplate)) {
             return new TrailerControlRecord(null, null);
         }
         boolean present = boolOr(trailerTemplate.get("present"), false);
@@ -103,7 +103,7 @@ public final class TrailerControlRecord {
     }
 
     private static String strOr(Object value, String fallback) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return fallback;
         }
         String presenceText = String.valueOf(value);
@@ -119,7 +119,7 @@ public final class TrailerControlRecord {
             return number.intValue();
         }
         try {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return fallback;
             }
             String rawText = String.valueOf(value);

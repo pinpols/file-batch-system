@@ -41,7 +41,7 @@ public class WorkflowNodeTerminalFinalizer {
     public void finalizeIfAllNodesTerminal(WorkflowRunEntity workflowRun) {
         WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
                 workflowRun.getTenantId(), workflowRun.getId());
-        if (EmptyChecks.isNull(currentRun) || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
+        if (currentRun == null || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
             return;
         }
         List<WorkflowNodeRunEntity> allNodeRuns =
@@ -55,7 +55,7 @@ public class WorkflowNodeTerminalFinalizer {
         }
         // 尚未派发的并行分支没有 node_run，必须以冻结图确认节点是否齐全。
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(currentRun);
-        if (EmptyChecks.isNotNull(snapshot)) {
+        if (snapshot != null) {
             boolean missingNode = snapshot.nodes().stream()
                     .filter(node -> !Boolean.FALSE.equals(node.getEnabled()))
                     // END 是控制边界；跳过全部业务分支时允许它不被激活。

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
@@ -81,10 +80,9 @@ public class ConsoleOidcController {
     }
 
     private String resolveUsername(Authentication authentication) {
-        if (EmptyChecks.isNotNull(authentication)
-                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             return principal.username();
         }
-        return EmptyChecks.isNull(authentication) ? null : authentication.getName();
+        return authentication == null ? null : authentication.getName();
     }
 }

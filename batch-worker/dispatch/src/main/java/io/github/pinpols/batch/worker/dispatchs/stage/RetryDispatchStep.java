@@ -4,7 +4,6 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -54,7 +53,7 @@ public class RetryDispatchStep implements DispatchStageStep {
     @Override
     public DispatchStageResult execute(DispatchJobContext context) {
         // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
             return DispatchStageResult.success(stage());
         }

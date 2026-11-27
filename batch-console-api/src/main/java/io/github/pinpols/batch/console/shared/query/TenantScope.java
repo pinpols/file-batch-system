@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.shared.query;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 
 /**
  * 租户作用域的通用非空断言。
@@ -21,7 +22,7 @@ public final class TenantScope {
      * @throws BizException null / 空 / 全空白 → {@code FORBIDDEN error.tenant.context_missing}
      */
     public static String requireTenant(String tenantId) {
-        if (tenantId == null || tenantId.isBlank()) {
+        if (EmptyChecks.isBlank(tenantId)) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
         }
         return tenantId;

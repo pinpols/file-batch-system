@@ -96,7 +96,7 @@ public class JobSlaScheduler {
             return;
         }
         String severity = governance.sla().getEscalationSeverity();
-        String resolvedSeverity = severity == null || severity.isBlank() ? "ERROR" : severity;
+        String resolvedSeverity = EmptyChecks.isBlank(severity) ? "ERROR" : severity;
         for (JobSlaCandidate candidate : escalations) {
             if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
                 continue;

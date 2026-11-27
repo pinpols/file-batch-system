@@ -93,7 +93,7 @@ final class TaskConsumerBatchExecutionCoordinator {
                 }
                 if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
                     String workerType = workerTypeSupplier.get();
-                    Long taskId = EmptyChecks.isNull(execution.message())
+                    Long taskId = execution.message() == null
                             ? null
                             : execution.message().taskId();
                     String errorSummary = SwallowedExceptionLogger.summary(execution.error());
@@ -119,9 +119,8 @@ final class TaskConsumerBatchExecutionCoordinator {
                     continue;
                 }
                 String workerType = workerTypeSupplier.get();
-                Long taskId = EmptyChecks.isNull(execution.message())
-                        ? null
-                        : execution.message().taskId();
+                Long taskId =
+                        execution.message() == null ? null : execution.message().taskId();
                 String errorSummary = SwallowedExceptionLogger.summary(execution.error());
                 log.error(
                         "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"

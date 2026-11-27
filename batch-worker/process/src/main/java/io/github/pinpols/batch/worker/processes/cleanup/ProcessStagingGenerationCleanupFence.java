@@ -36,7 +36,7 @@ public class ProcessStagingGenerationCleanupFence {
 
     private boolean isStaleUnderFence(ProcessStagingGenerationCandidate candidate) {
         Long instanceId = platformMapper.selectTaskInstanceId(candidate.getTenantId(), candidate.getTaskId());
-        if (EmptyChecks.isNull(instanceId)) {
+        if (instanceId == null) {
             return false;
         }
         platformMapper.acquireInstanceFence(candidate.getTenantId(), instanceId);

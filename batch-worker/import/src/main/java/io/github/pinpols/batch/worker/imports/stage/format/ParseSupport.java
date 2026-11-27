@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -125,7 +126,7 @@ public class ParseSupport {
     }
 
     public void collectSchemaFields(ImportJobContext context, Map<String, ?> row) {
-        if (context == null || row == null || row.isEmpty()) {
+        if (context == null || EmptyChecks.isEmpty(row)) {
             return;
         }
         LinkedHashSet<String> fields = existingSchemaFields(context);

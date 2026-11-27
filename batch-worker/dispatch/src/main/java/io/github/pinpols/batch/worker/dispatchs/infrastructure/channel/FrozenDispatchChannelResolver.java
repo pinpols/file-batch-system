@@ -49,7 +49,7 @@ public class FrozenDispatchChannelResolver {
             String plaintext = secretPayloadProtector.revealEncrypted(protectedSnapshot);
             FrozenDispatchChannelSnapshot snapshot =
                     JsonUtils.fromJsonStrict(plaintext, FrozenDispatchChannelSnapshot.class);
-            if (EmptyChecks.isNull(snapshot)) {
+            if (snapshot == null) {
                 throw invalidSnapshot();
             }
             snapshot.requireIdentity(tenantId, channelCode);
@@ -93,7 +93,7 @@ public class FrozenDispatchChannelResolver {
                     parser.skipChildren();
                 }
             }
-            if (EmptyChecks.isNotNull(parser.nextToken())) {
+            if (parser.nextToken() != null) {
                 throw invalidSnapshot();
             }
             return new PayloadSelection(operationType, Map.copyOf(snapshots));
@@ -119,8 +119,7 @@ public class FrozenDispatchChannelResolver {
                 throw invalidSnapshot();
             }
             String snapshotForInsert = parser.getText();
-            boolean duplicateChannelSnapshot =
-                    EmptyChecks.isNotNull(snapshots.putIfAbsent(channelCode, snapshotForInsert));
+            boolean duplicateChannelSnapshot = snapshots.putIfAbsent(channelCode, snapshotForInsert) != null;
             if (duplicateChannelSnapshot) {
                 throw invalidSnapshot();
             }

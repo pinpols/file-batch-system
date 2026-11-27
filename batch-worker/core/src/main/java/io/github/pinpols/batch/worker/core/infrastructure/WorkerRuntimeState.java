@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.Collection;
 import java.util.Map;
@@ -23,9 +22,9 @@ public class WorkerRuntimeState {
 
     /** 仅更新发请求时的同一注册实例，迟到响应不能复活下线项或覆盖同标识的新注册。 */
     public boolean replaceIfCurrent(String workerId, WorkerRegistration expected, WorkerRegistration replacement) {
-        if (EmptyChecks.isNull(workerId)
-                || EmptyChecks.isNull(expected)
-                || EmptyChecks.isNull(replacement)
+        if (workerId == null
+                || expected == null
+                || replacement == null
                 || !workerId.equals(replacement.getWorkerId())) {
             return false;
         }

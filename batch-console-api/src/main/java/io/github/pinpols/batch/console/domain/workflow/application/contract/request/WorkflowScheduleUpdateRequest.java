@@ -49,7 +49,7 @@ public class WorkflowScheduleUpdateRequest {
                 return false;
             }
         }
-        if (EmptyChecks.isNull(scheduleType)) {
+        if (scheduleType == null) {
             return false;
         }
         String effectiveTriggerMode = triggerMode;

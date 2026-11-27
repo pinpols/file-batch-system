@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ public class AlertmanagerReemitService {
         int limit = Math.max(1, properties.getReemitBatchSize());
         for (AlertEventEntity alert : mapper.selectActiveForReemit(tenantId, limit)) {
             AlertEventEntity closed = mapper.closeEligibleMonitoringAlert(alert, AlertStatus.CLOSED.code());
-            if (EmptyChecks.isNull(closed)) {
+            if (closed == null) {
                 schedule(alert, false);
             }
         }

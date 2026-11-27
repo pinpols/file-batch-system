@@ -28,11 +28,11 @@ public class WorkflowConditionEvaluator {
         // P2-4 fail-closed：CONDITION 边的 condition_expr 为空属配置错误。
         // 旧行为 "blank → true" 让空表达式静默退化成 ALWAYS，无法区分用户意图。
         // 现在抛出 BizException，让运维在静态校验 / 配置 save 期间就发现问题。
-        if (conditionExpr == null || conditionExpr.isBlank()) {
+        if (EmptyChecks.isBlank(conditionExpr)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.condition_expr_blank");
         }
         Map<String, Object> payload = Collections.emptyMap();
-        if (payloadJson != null && !payloadJson.isBlank()) {
+        if (EmptyChecks.isNotBlank(payloadJson)) {
             try {
                 Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
                 if (payloadObject instanceof Map<?, ?> payloadMap) {
@@ -401,7 +401,7 @@ public class WorkflowConditionEvaluator {
 
     @SuppressWarnings("unchecked")
     private Object readPath(Map<String, Object> payload, String keyPath) {
-        if (payload == null || keyPath == null || keyPath.isBlank()) {
+        if (payload == null || EmptyChecks.isBlank(keyPath)) {
             return null;
         }
         Object current = payload;

@@ -66,11 +66,11 @@ public class BatchDayOperationService {
      */
     @Transactional
     public BatchDayOperationResult operate(BatchDayOperateCommand command) {
-        boolean operationCommandIsInvalid = EmptyChecks.isNull(command)
+        boolean operationCommandIsInvalid = command == null
                 || !Texts.hasText(command.tenantId())
                 || !Texts.hasText(command.calendarCode())
                 || command.bizDate() == null
-                || EmptyChecks.isNull(command.action());
+                || command.action() == null;
         if (operationCommandIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day.operation.invalid");
         }
@@ -160,7 +160,7 @@ public class BatchDayOperationService {
         }
         BatchDayInstanceMetrics metrics =
                 jobInstanceMapper.selectBatchDayMetrics(current.tenantId(), current.calendarCode(), current.bizDate());
-        boolean metricsMissing = EmptyChecks.isNull(metrics);
+        boolean metricsMissing = metrics == null;
         boolean hasJobs = !metricsMissing && value(metrics.getTotalCount()) != 0L;
         if (metricsMissing || hasJobs) {
             Object reportedTotalCount = metricsMissing ? "unknown" : value(metrics.getTotalCount());
@@ -226,7 +226,7 @@ public class BatchDayOperationService {
     }
 
     private long value(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : value;
+        return value == null ? 0L : value;
     }
 
     private record ExpectedWorkAuditChanges(
@@ -298,20 +298,13 @@ public class BatchDayOperationService {
         detail.put("sourceKey", occurrence.sourceKey());
         detail.put(
                 "bizDate",
-                EmptyChecks.isNull(occurrence.bizDate())
-                        ? null
-                        : occurrence.bizDate().toString());
+                occurrence.bizDate() == null ? null : occurrence.bizDate().toString());
         detail.put("previousStatus", occurrence.occurrenceStatus());
         detail.put(
                 "expectedAt",
-                EmptyChecks.isNull(occurrence.expectedAt())
-                        ? null
-                        : occurrence.expectedAt().toString());
+                occurrence.expectedAt() == null ? null : occurrence.expectedAt().toString());
         detail.put(
-                "dueAt",
-                EmptyChecks.isNull(occurrence.dueAt())
-                        ? null
-                        : occurrence.dueAt().toString());
+                "dueAt", occurrence.dueAt() == null ? null : occurrence.dueAt().toString());
         detail.put("triggerRequestId", occurrence.triggerRequestId());
         return detail;
     }

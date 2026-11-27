@@ -92,7 +92,7 @@ final class TenantConfigMatrixBuilder {
         JobDefinitionSpec job = maybeJob.orElseThrow();
         List<WorkflowDefinitionSpec> relatedWorkflows = filter(
                 bundle.getWorkflowDefinitions(),
-                workflow -> EmptyChecks.isNotNull(workflow.getNodes())
+                workflow -> workflow.getNodes() != null
                         && workflow.getNodes().stream().anyMatch(node -> jobCode.equals(node.getRelatedJobCode())));
         TenantConfigReferenceResolver.References refs = referenceResolver.resolve(job, relatedWorkflows);
         List<String> templateCodes = EmptyChecks.isEmpty(refs.templateCodes())
@@ -134,7 +134,7 @@ final class TenantConfigMatrixBuilder {
     }
 
     private static JobMatrixRow withDrift(JobMatrixRow row, JobMatrixRow baseline) {
-        if (EmptyChecks.isNull(baseline) || Objects.equals(row.tenantId(), baseline.tenantId())) {
+        if (baseline == null || Objects.equals(row.tenantId(), baseline.tenantId())) {
             return row;
         }
         List<String> fields = new ArrayList<>();

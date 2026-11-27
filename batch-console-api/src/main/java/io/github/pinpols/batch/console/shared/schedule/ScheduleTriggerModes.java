@@ -15,7 +15,7 @@ public final class ScheduleTriggerModes {
 
     /** 调度类型对应的默认触发模式。 */
     public static String defaultFor(String scheduleType) {
-        if (EmptyChecks.isNull(scheduleType)) {
+        if (scheduleType == null) {
             return "MANUAL";
         }
         return switch (scheduleType) {
@@ -33,7 +33,7 @@ public final class ScheduleTriggerModes {
         if ("MIXED".equals(triggerMode)) {
             return true;
         }
-        String type = EmptyChecks.isNull(scheduleType) ? "MANUAL" : scheduleType;
+        String type = scheduleType == null ? "MANUAL" : scheduleType;
         return switch (type) {
             case "CRON", "FIXED_RATE" -> "SCHEDULED".equals(triggerMode);
             case "EVENT" -> "EVENT".equals(triggerMode);

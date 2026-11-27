@@ -45,7 +45,7 @@ public final class EncodingUtils {
      * <p>空/空白输入返回 {@link #UTF_8}；非法字符集名抛 {@link IllegalArgumentException}。
      */
     public static String normalize(@Nullable String raw) {
-        if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(raw)) {
             return UTF_8;
         }
         String normalized = raw.trim();
@@ -59,7 +59,7 @@ public final class EncodingUtils {
 
     /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
     public static Charset resolve(@Nullable String raw) {
-        if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(raw)) {
             return StandardCharsets.UTF_8;
         }
         String normalized = raw.trim();

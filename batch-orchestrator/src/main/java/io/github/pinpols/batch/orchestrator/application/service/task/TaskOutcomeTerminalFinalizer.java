@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
@@ -58,7 +57,7 @@ final class TaskOutcomeTerminalFinalizer {
             List<JobPartitionEntity> partitions) {
         jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
                 command.tenantId(), jobInstance, instanceStatus, finishedAt, instanceFailureClass);
-        if (EmptyChecks.isNotNull(instanceFailureClass)) {
+        if (instanceFailureClass != null) {
             meterRegistry
                     .counter(
                             "batch.job.failure",
@@ -75,7 +74,7 @@ final class TaskOutcomeTerminalFinalizer {
         Map<String, Object> successfulOutputs =
                 TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command);
         resultVersionWriter.writeOnTerminal(jobInstance, successfulOutputs);
-        if (EmptyChecks.isNotNull(jobInstance.getReplaySessionId())) {
+        if (jobInstance.getReplaySessionId() != null) {
             replayTerminalReconciler.reconcileOnTerminal(
                     jobInstance.getTenantId(),
                     jobInstance.getReplaySessionId(),

@@ -12,7 +12,7 @@ public final class BatchKafkaTopicNamespace {
     private final String namespace;
 
     public BatchKafkaTopicNamespace(String namespace) {
-        this.namespace = EmptyChecks.isNull(namespace) ? "" : namespace.trim();
+        this.namespace = namespace == null ? "" : namespace.trim();
         boolean namespaceIsInvalid = !EmptyChecks.isEmpty(Objects.requireNonNull(this.namespace))
                 && !VALID_NAMESPACE.matcher(this.namespace).matches();
         if (namespaceIsInvalid) {

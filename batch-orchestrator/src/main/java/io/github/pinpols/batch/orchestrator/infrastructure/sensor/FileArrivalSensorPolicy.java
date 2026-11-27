@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
@@ -73,7 +72,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         boolean requireCompleteGroup = Boolean.TRUE.equals(spec.get("requireCompleteGroup"));
         boolean bindWorkflowBizDate = Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
         boolean fileArrivalFreshnessCheckIsUnavailable =
-                !Texts.hasText(pattern) || EmptyChecks.isNull(maxAgeSeconds) || maxAgeSeconds <= 0;
+                !Texts.hasText(pattern) || maxAgeSeconds == null || maxAgeSeconds <= 0;
         if (fileArrivalFreshnessCheckIsUnavailable) {
             return specError("pattern/maxAgeSeconds required");
         }
@@ -97,10 +96,10 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         if (requireCompleteGroup && !Texts.hasText(fileGroupCode)) {
             return specError("fileGroupCode required when requireCompleteGroup=true");
         }
-        if (requireCompleteGroup && EmptyChecks.isNull(bizDate)) {
+        if (requireCompleteGroup && bizDate == null) {
             return specError("bizDate or bindWorkflowBizDate required when requireCompleteGroup=true");
         }
-        if (requireCompleteGroup && EmptyChecks.isNull(ctx.workflowDefinitionId())) {
+        if (requireCompleteGroup && ctx.workflowDefinitionId() == null) {
             return specError("Workflow definition is required for a complete file group");
         }
 
@@ -141,7 +140,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
                 return SensorProbeResult.notYet();
             }
             Map<String, Object> output = hit.toProbeOutput();
-            if (EmptyChecks.isNotNull(resolved.channelCode()) && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
+            if (resolved.channelCode() != null && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
                 log.warn(
                         "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
                         ctx.tenantId(),

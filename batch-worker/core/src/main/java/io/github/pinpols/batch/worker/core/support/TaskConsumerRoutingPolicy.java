@@ -63,11 +63,10 @@ final class TaskConsumerRoutingPolicy {
         String configuredWorkerCode = configuration.workerCode();
         String nodeDirect = resolveNodeDirectSuffix(baseTopic, configuredWorkerCode);
 
-        WorkerKafkaSubscribeProperties.Mode mode = EmptyChecks.isNull(properties)
-                ? WorkerKafkaSubscribeProperties.Mode.PATTERN
-                : properties.getSubscribeMode();
+        WorkerKafkaSubscribeProperties.Mode mode =
+                properties == null ? WorkerKafkaSubscribeProperties.Mode.PATTERN : properties.getSubscribeMode();
         if (mode == WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY) {
-            if (EmptyChecks.isNull(nodeDirect)) {
+            if (nodeDirect == null) {
                 throw new IllegalStateException("batch.worker.kafka.subscribe-mode=DIRECT_ONLY requires a worker code");
             }
             return "^" + safeBase + nodeDirect + "$";
@@ -78,14 +77,14 @@ final class TaskConsumerRoutingPolicy {
                     case TENANT_SCOPED -> tenantScopedSuffix(nodeDirect, properties);
                     default -> joinAlt(nodeDirect, "\\.[^.]+");
                 };
-        if (EmptyChecks.isNull(suffixAlt)) {
+        if (suffixAlt == null) {
             return "^" + safeBase + "$";
         }
         return "^" + safeBase + "(" + suffixAlt + ")?$";
     }
 
     private static String tenantScopedSuffix(String nodeDirect, WorkerKafkaSubscribeProperties properties) {
-        List<String> allow = EmptyChecks.isNull(properties) || EmptyChecks.isNull(properties.getTenantAllowlist())
+        List<String> allow = properties == null || properties.getTenantAllowlist() == null
                 ? List.of()
                 : properties.getTenantAllowlist();
         String tenantAlt = allow.stream()
@@ -93,7 +92,7 @@ final class TaskConsumerRoutingPolicy {
                 .map(TaskConsumerRoutingPolicy::escapeRegex)
                 .reduce((left, right) -> left + "|" + right)
                 .orElse(null);
-        return joinAlt(nodeDirect, EmptyChecks.isNull(tenantAlt) ? null : "\\.(" + tenantAlt + ")");
+        return joinAlt(nodeDirect, tenantAlt == null ? null : "\\.(" + tenantAlt + ")");
     }
 
     static boolean accepts(
@@ -101,20 +100,20 @@ final class TaskConsumerRoutingPolicy {
             WorkerRegistration registration,
             WorkerConfiguration configuration,
             BiPredicate<WorkerConfiguration, TaskDispatchMessage> tenantScope) {
-        boolean dispatchMessageIdentityIsIncomplete = EmptyChecks.isNull(message)
-                || EmptyChecks.isNull(message.taskId())
-                || EmptyChecks.isNull(message.tenantId())
-                || EmptyChecks.isNull(message.workerType());
+        boolean dispatchMessageIdentityIsIncomplete = message == null
+                || message.taskId() == null
+                || message.tenantId() == null
+                || message.workerType() == null;
         if (dispatchMessageIdentityIsIncomplete) {
             return false;
         }
-        boolean configuredWorkerTypeDoesNotMatchMessage = EmptyChecks.isNull(configuration.workerType())
+        boolean configuredWorkerTypeDoesNotMatchMessage = configuration.workerType() == null
                 || !configuration.workerType().equalsIgnoreCase(message.workerType());
         if (configuredWorkerTypeDoesNotMatchMessage) {
             return false;
         }
-        boolean selectedWorkerDoesNotMatchRegistration = EmptyChecks.isNotNull(message.selectedWorkerId())
-                && (EmptyChecks.isNull(registration)
+        boolean selectedWorkerDoesNotMatchRegistration = message.selectedWorkerId() != null
+                && (registration == null
                         || (!message.selectedWorkerId().equals(registration.getWorkerCode())
                                 && !message.selectedWorkerId().equals(registration.getWorkerId())));
         if (selectedWorkerDoesNotMatchRegistration) {
@@ -144,7 +143,7 @@ final class TaskConsumerRoutingPolicy {
     }
 
     private static String resolveTopicByWorkerCode(String workerCode) {
-        String normalized = EmptyChecks.isNull(workerCode) ? "" : workerCode.toLowerCase(Locale.ROOT);
+        String normalized = workerCode == null ? "" : workerCode.toLowerCase(Locale.ROOT);
         return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
                 .filter(entry -> normalized.contains(entry.getKey()))
                 .map(Map.Entry::getValue)
@@ -163,10 +162,10 @@ final class TaskConsumerRoutingPolicy {
     }
 
     private static String joinAlt(String left, String right) {
-        if (EmptyChecks.isNull(left)) {
+        if (left == null) {
             return right;
         }
-        if (EmptyChecks.isNull(right)) {
+        if (right == null) {
             return left;
         }
         return left + "|" + right;

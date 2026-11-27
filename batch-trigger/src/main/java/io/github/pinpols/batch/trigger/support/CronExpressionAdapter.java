@@ -63,7 +63,7 @@ public class CronExpressionAdapter {
         // setTimeZone 不再调（已在构建时固化），避免跨线程写
         Date afterDate = Date.from(after);
         Date nextFire = expression.getNextValidTimeAfter(afterDate);
-        return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
+        return nextFire == null ? null : nextFire.toInstant();
     }
 
     /** 校验 cron 表达式合法。Reconciler 同步前预检用。 */

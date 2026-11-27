@@ -83,7 +83,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         String endpoint = channelConfig.get("target_endpoint") == null
                 ? null
                 : String.valueOf(channelConfig.get("target_endpoint"));
-        if (endpoint == null || endpoint.isBlank()) {
+        if (EmptyChecks.isBlank(endpoint)) {
             return DispatchResult.failureWithoutReceipt("target endpoint missing");
         }
         String evidenceEndpoint = SecretMasking.maskEndpoint(endpoint);
@@ -106,16 +106,15 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
         if ("API_PUSH".equalsIgnoreCase(ct)) {
             Object apiKey = channelConfig.get("api_push_api_key");
-            String apiKeyPresenceText = EmptyChecks.isNull(apiKey) ? null : String.valueOf(apiKey);
-            if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
+            String apiKeyPresenceText = apiKey == null ? null : String.valueOf(apiKey);
+            if (apiKey != null && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
                 String rawApiKey = String.valueOf(apiKey);
                 String normalizedApiKey = rawApiKey.trim();
                 builder.addHeader("X-Api-Key", normalizedApiKey);
             }
             Object authorization = channelConfig.get("authorization");
-            String authorizationPresenceText = EmptyChecks.isNull(authorization) ? null : String.valueOf(authorization);
-            if (EmptyChecks.isNotNull(authorization)
-                    && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
+            String authorizationPresenceText = authorization == null ? null : String.valueOf(authorization);
+            if (authorization != null && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
                 String rawAuthorization = String.valueOf(authorization);
                 String normalizedAuthorization = rawAuthorization.trim();
                 builder.addHeader("Authorization", normalizedAuthorization);

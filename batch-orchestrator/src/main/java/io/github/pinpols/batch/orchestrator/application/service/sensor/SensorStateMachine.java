@@ -92,7 +92,7 @@ public class SensorStateMachine {
             return;
         }
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(wfRun);
-        WorkflowNodeEntity node = EmptyChecks.isNull(snapshot)
+        WorkflowNodeEntity node = snapshot == null
                 ? nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
                         wfRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
                 : snapshot.node(nodeRun.getNodeCode());
@@ -191,7 +191,7 @@ public class SensorStateMachine {
             }
             case NOT_YET -> {
                 Instant next = nextProbeOrDeadline(now, startedAt, cfg, 1);
-                if (EmptyChecks.isNull(next)) {
+                if (next == null) {
                     failInvalidProbeTime(wfRun, nodeRun, cfg, now);
                     return;
                 }
@@ -219,7 +219,7 @@ public class SensorStateMachine {
                     int boundedBackoffExponent = Math.min(newErrors, 3);
                     long cappedBackoffMultiplier = Math.min(1L << boundedBackoffExponent, 5L);
                     Instant retryAt = nextProbeOrDeadline(now, startedAt, cfg, cappedBackoffMultiplier);
-                    if (EmptyChecks.isNull(retryAt)) {
+                    if (retryAt == null) {
                         failInvalidProbeTime(wfRun, nodeRun, cfg, now);
                         return;
                     }
@@ -240,10 +240,10 @@ public class SensorStateMachine {
     private static Instant nextProbeOrDeadline(Instant now, Instant startedAt, SensorConfig cfg, long multiplier) {
         Instant next = nextProbeTime(now, cfg.pollIntervalSeconds, multiplier);
         Instant deadline = nextProbeTime(startedAt, cfg.timeoutSeconds, 1);
-        if (EmptyChecks.isNull(deadline)) {
+        if (deadline == null) {
             return next;
         }
-        return EmptyChecks.isNull(next) || deadline.isBefore(next) ? deadline : next;
+        return next == null || deadline.isBefore(next) ? deadline : next;
     }
 
     private static Instant nextProbeTime(Instant now, long intervalSeconds, long multiplier) {
@@ -380,7 +380,7 @@ public class SensorStateMachine {
     }
 
     private long resolveDuration(Instant startedAt, Instant finishedAt) {
-        return EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)
+        return startedAt == null || finishedAt == null
                 ? 0L
                 : Duration.between(startedAt, finishedAt).toMillis();
     }
@@ -398,7 +398,7 @@ public class SensorStateMachine {
      */
     private void advanceDownstream(WorkflowRunEntity wfRun, String currentNodeCode, boolean success, Instant now) {
         JobInstanceEntity jobInstance = loadJobInstanceForDispatch(wfRun);
-        if (EmptyChecks.isNull(jobInstance) && EmptyChecks.isNotNull(wfRun.getRelatedJobInstanceId())) {
+        if (jobInstance == null && wfRun.getRelatedJobInstanceId() != null) {
             log.warn(
                     "advanceDownstream skipped: single-job workflow_run={} has no related job_instance", wfRun.getId());
             return;
@@ -409,7 +409,7 @@ public class SensorStateMachine {
         if (EmptyChecks.isNotEmpty(nextNodes)) {
             WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
             for (DagNodeResolution next : nextNodes) {
-                if (EmptyChecks.isNull(next)) {
+                if (next == null) {
                     continue;
                 }
                 if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
@@ -429,7 +429,7 @@ public class SensorStateMachine {
 
     private String resolveSourcePayloadForDownstream(WorkflowRunEntity wfRun, String nodeCode) {
         WorkflowNodeRunEntity nodeRun = nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(wfRun.getId(), nodeCode);
-        if (EmptyChecks.isNull(nodeRun) || !Texts.hasText(nodeRun.getSourcePayloadProtected())) {
+        if (nodeRun == null || !Texts.hasText(nodeRun.getSourcePayloadProtected())) {
             return null;
         }
         String protectedSourcePayload = nodeRun.getSourcePayloadProtected();
@@ -480,7 +480,7 @@ public class SensorStateMachine {
     }
 
     private String serializeOutput(Map<String, Object> output) {
-        if (output == null || output.isEmpty()) {
+        if (EmptyChecks.isEmpty(output)) {
             return null;
         }
         try {
@@ -491,7 +491,7 @@ public class SensorStateMachine {
     }
 
     private String serializeArgs(List<String> args) {
-        if (args == null || args.isEmpty()) {
+        if (EmptyChecks.isEmpty(args)) {
             return null;
         }
         try {
@@ -525,13 +525,13 @@ public class SensorStateMachine {
             Long interval = SensorSpecs.longValue(params, "poll_interval_seconds");
             String onTimeoutCode = stringOf(params.get("on_timeout"));
             SensorTimeoutAction onTimeout = onTimeoutCode == null ? null : tryParseAction(onTimeoutCode);
-            boolean sensorConfigIsInvalid = EmptyChecks.isNull(type)
+            boolean sensorConfigIsInvalid = type == null
                     || !(spec instanceof Map)
                     || timeout == null
                     || timeout <= 0
                     || interval == null
                     || interval <= 0
-                    || EmptyChecks.isNull(onTimeout);
+                    || onTimeout == null;
             if (sensorConfigIsInvalid) {
                 return null;
             }

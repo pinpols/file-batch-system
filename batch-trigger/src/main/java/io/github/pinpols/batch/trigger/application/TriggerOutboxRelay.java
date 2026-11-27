@@ -187,7 +187,7 @@ public class TriggerOutboxRelay {
             return;
         }
         ScheduledFuture<?> task = scheduledTask.getAndSet(null);
-        if (EmptyChecks.isNotNull(task)) {
+        if (task != null) {
             task.cancel(true);
         }
         log.info("TriggerOutboxRelay stopping: cancelled scheduled polling");
@@ -234,7 +234,7 @@ public class TriggerOutboxRelay {
             lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
         } catch (DataAccessException dae) {
             Throwable mostSpecificCause = dae.getMostSpecificCause();
-            Throwable failureCause = EmptyChecks.isNull(mostSpecificCause) ? dae : dae.getMostSpecificCause();
+            Throwable failureCause = mostSpecificCause == null ? dae : dae.getMostSpecificCause();
             String failureSummary = SwallowedExceptionLogger.summary(failureCause);
             log.warn("TriggerOutboxRelay transient DB failure; retrying on the next cycle: {}", failureSummary);
         } catch (Exception t) {
@@ -251,9 +251,9 @@ public class TriggerOutboxRelay {
 
     private static boolean isRedisStopping(Throwable throwable) {
         Throwable current = throwable;
-        while (EmptyChecks.isNotNull(current)) {
+        while (current != null) {
             String message = current.getMessage();
-            if (EmptyChecks.isNotNull(message) && message.contains("LettuceConnectionFactory is STOPPING")) {
+            if (message != null && message.contains("LettuceConnectionFactory is STOPPING")) {
                 return true;
             }
             current = current.getCause();
@@ -328,7 +328,7 @@ public class TriggerOutboxRelay {
             }
             long startedNanos = System.nanoTime();
             LaunchEnvelope envelope = deserializeOrGiveUp(event, claimToken, startedNanos);
-            if (EmptyChecks.isNull(envelope)) {
+            if (envelope == null) {
                 continue;
             }
             String messageKey = event.getTenantId() + ":" + event.getRequestId();
@@ -348,7 +348,7 @@ public class TriggerOutboxRelay {
                         TriggerEventPublisher.PublishResult.fail(publishError);
                 future = CompletableFuture.completedFuture(failedResult);
             }
-            CompletableFuture<TriggerEventPublisher.PublishResult> resolvedFuture = EmptyChecks.isNotNull(future)
+            CompletableFuture<TriggerEventPublisher.PublishResult> resolvedFuture = future != null
                     ? future
                     : CompletableFuture.completedFuture(
                             TriggerEventPublisher.PublishResult.fail("null publish future"));
@@ -422,11 +422,11 @@ public class TriggerOutboxRelay {
             return TriggerEventPublisher.PublishResult.fail("kafka publish future failed");
         }
         TriggerEventPublisher.PublishResult result = future.getNow(null);
-        return EmptyChecks.isNotNull(result) ? result : TriggerEventPublisher.PublishResult.fail("null publish result");
+        return result != null ? result : TriggerEventPublisher.PublishResult.fail("null publish result");
     }
 
     private void recordPublishLatency(boolean success, long startedNanos) {
-        if (EmptyChecks.isNotNull(publishLatencyOk)) {
+        if (publishLatencyOk != null) {
             recordLatencySample(
                     success ? publishLatencyOk : publishLatencyFail,
                     negativePublishLatencyCounter,
@@ -505,7 +505,7 @@ public class TriggerOutboxRelay {
                     event.getId());
             return false;
         }
-        if (EmptyChecks.isNotNull(giveUpCounter)) {
+        if (giveUpCounter != null) {
             giveUpCounter.increment();
         }
         return true;

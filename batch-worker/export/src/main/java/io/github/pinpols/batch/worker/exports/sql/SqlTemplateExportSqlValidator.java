@@ -60,12 +60,12 @@ public class SqlTemplateExportSqlValidator {
             checkNoSelectStar(select);
         }
 
-        List<String> allowedSchemas = EmptyChecks.isNull(security) ? null : security.getAllowedSchemas();
+        List<String> allowedSchemas = security == null ? null : security.getAllowedSchemas();
         if (EmptyChecks.isNotEmpty(allowedSchemas)) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
 
-        List<String> forbiddenFunctions = EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
+        List<String> forbiddenFunctions = security == null ? null : security.getForbiddenFunctions();
         if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }

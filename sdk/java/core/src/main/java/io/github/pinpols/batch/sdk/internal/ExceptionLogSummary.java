@@ -31,7 +31,7 @@ public final class ExceptionLogSummary {
     }
 
     private static String sanitize(String message) {
-        if (message == null || message.isBlank()) { // empty-check: allow - SDK 保持 JDK-only
+        if (EmptyChecks.isBlank(message)) { // empty-check: allow - SDK 保持 JDK-only
             return "";
         }
         String controlCharactersReplaced = CONTROL_CHARACTERS.matcher(message).replaceAll(" ");

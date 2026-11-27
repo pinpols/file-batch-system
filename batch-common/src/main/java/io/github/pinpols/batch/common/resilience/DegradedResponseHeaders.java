@@ -22,7 +22,7 @@ public final class DegradedResponseHeaders {
      */
     public static void mark(String service) {
         String normalized = normalize(service);
-        if (EmptyChecks.isNull(normalized)) {
+        if (normalized == null) {
             return;
         }
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
@@ -38,7 +38,7 @@ public final class DegradedResponseHeaders {
         if (EmptyChecks.isNotBlank(current)) {
             for (String source : current.split(",")) {
                 String value = normalize(source);
-                if (EmptyChecks.isNotNull(value)) {
+                if (value != null) {
                     sources.add(value);
                 }
             }

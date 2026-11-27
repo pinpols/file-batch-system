@@ -119,7 +119,7 @@ public class ConsoleAiKnowledgeBase {
         List<Chunk> chunks = new ArrayList<>(documents.size());
         for (int i = 0; i < documents.size() && i < vectors.size(); i++) {
             Object source = documents.get(i).getMetadata().get("source");
-            String chunkSource = EmptyChecks.isNull(source) ? "knowledge" : source.toString();
+            String chunkSource = source == null ? "knowledge" : source.toString();
             chunks.add(new Chunk(chunkSource, texts.get(i), vectors.get(i)));
         }
         log.info(
@@ -135,7 +135,7 @@ public class ConsoleAiKnowledgeBase {
         for (String location : properties.getRag().getLocations()) {
             for (Resource resource : resolve(location)) {
                 String text = read(resource);
-                if (text == null || text.isBlank()) {
+                if (EmptyChecks.isBlank(text)) {
                     continue;
                 }
                 String source = resource.getFilename() == null ? location : resource.getFilename();

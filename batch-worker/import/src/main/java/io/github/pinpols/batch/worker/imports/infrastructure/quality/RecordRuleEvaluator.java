@@ -39,7 +39,7 @@ public class RecordRuleEvaluator {
 
     public Map<Long, ValidationIssue> evaluate(
             ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyChecks.isEmpty(rows)) {
             return Map.of();
         }
         Map<String, Object> nullCheck = configSupport.firstMap(session.ruleSet(), "nullCheck", "null_check");
@@ -151,17 +151,13 @@ public class RecordRuleEvaluator {
         }
         BigDecimal numberValue = decimalValue(value);
         BigDecimal minValue = decimalValue(rule.get(KEY_MIN));
-        boolean numberIsBelowMinimum = EmptyChecks.isNotNull(minValue)
-                && EmptyChecks.isNotNull(numberValue)
-                && numberValue.compareTo(minValue) < 0;
+        boolean numberIsBelowMinimum = minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0;
         if (numberIsBelowMinimum) {
             String message = defaultText(explicitMessage, field + " must be >= " + minValue);
             return new ValidationIssue(recordNo, errorCode, message, row);
         }
         BigDecimal maxValue = decimalValue(rule.get(KEY_MAX));
-        boolean numberExceedsMaximum = EmptyChecks.isNotNull(maxValue)
-                && EmptyChecks.isNotNull(numberValue)
-                && numberValue.compareTo(maxValue) > 0;
+        boolean numberExceedsMaximum = maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0;
         if (numberExceedsMaximum) {
             String message = defaultText(explicitMessage, field + " must be <= " + maxValue);
             return new ValidationIssue(recordNo, errorCode, message, row);

@@ -216,7 +216,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         dagValidator.validate(resolvedTenant, body);
 
         WorkflowDefinitionEntity effectiveDefinition = new WorkflowDefinitionEntity();
-        effectiveDefinition.setEnabled(EmptyChecks.isNotNull(body.getEnabled()) ? body.getEnabled() : def.getEnabled());
+        effectiveDefinition.setEnabled(body.getEnabled() != null ? body.getEnabled() : def.getEnabled());
         effectiveDefinition.setScheduleEnabled(def.getScheduleEnabled());
         requirePublishedJobReferences(resolvedTenant, effectiveDefinition, body.getNodes());
 
@@ -226,7 +226,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
                 .expectedVersion(request.getExpectedVersion())
                 .workflowName(body.getWorkflowName())
                 .workflowType(body.getWorkflowType())
-                .enabled(EmptyChecks.isNotNull(body.getEnabled()) ? body.getEnabled() : def.getEnabled())
+                .enabled(body.getEnabled() != null ? body.getEnabled() : def.getEnabled())
                 .scheduleType(def.getScheduleType())
                 .scheduleExpr(def.getScheduleExpr())
                 .timezone(def.getTimezone())
@@ -304,7 +304,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.not_found", id);
         }
         WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
-        if (EmptyChecks.isNotNull(def)) {
+        if (def != null) {
             cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
         }
         publishRefresh(resolvedTenant, "workflow-schedule-toggled");
@@ -383,10 +383,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         }
         String jobCode = requestedJobCode.trim();
         JobDefinitionView upstream = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-        if (EmptyChecks.isNull(upstream)) {
+        if (upstream == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.schedule_dependency_job_not_found", jobCode);
         }
-        if (EmptyChecks.isNotNull(managedJobDefinitionId) && managedJobDefinitionId.equals(upstream.getId())) {
+        if (managedJobDefinitionId != null && managedJobDefinitionId.equals(upstream.getId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.schedule_self_dependency");
         }
         return jobCode;
@@ -426,7 +426,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         if (!Texts.hasText(calendarCode)) {
             return null;
         }
-        if (EmptyChecks.isNull(businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode))) {
+        if (businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode) == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.calendar_not_found", calendarCode);
         }
         return calendarCode;
@@ -473,7 +473,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     }
 
     private void assertNodeRoutingOnCreate(List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
-        if (EmptyChecks.isNull(nodes)) {
+        if (nodes == null) {
             return;
         }
         for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
@@ -486,7 +486,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     /** 在调用方事务中创建受管的单 Job Workflow。 */
     private void assertManagedSingleJobGraph(
             String tenantId, WorkflowDefinitionEntity definition, WorkflowDefinitionSaveRequest request) {
-        if (EmptyChecks.isNull(definition.getSingleJobDefinitionId())) {
+        if (definition.getSingleJobDefinitionId() == null) {
             return;
         }
         List<NodeItem> submittedNodes = request.getNodes();
@@ -500,7 +500,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         Map<String, NodeItem> nodesByCode = new HashMap<>();
         for (NodeItem node : submittedNodes) {
             NodeItem existingNode = nodesByCode.putIfAbsent(node.getNodeCode(), node);
-            if (EmptyChecks.isNotNull(existingNode)) {
+            if (existingNode != null) {
                 throw managedGraphConflict();
             }
         }
@@ -521,7 +521,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         }
         Set<String> edges = submittedEdges.stream()
                 .map(edge -> edge.getFromNodeCode() + ">" + edge.getToNodeCode() + ":"
-                        + (EmptyChecks.isNull(edge.getEdgeType()) ? "SUCCESS" : edge.getEdgeType()))
+                        + (edge.getEdgeType() == null ? "SUCCESS" : edge.getEdgeType()))
                 .collect(Collectors.toSet());
         boolean defaultEdges = edges.size() == 2
                 && edges.contains("START>JOB:SUCCESS")
@@ -543,16 +543,16 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             return false;
         }
         String requestedWorkflowType = request.getWorkflowType();
-        if (EmptyChecks.isNotNull(requestedWorkflowType) && !"DAG".equals(request.getWorkflowType())) {
+        if (requestedWorkflowType != null && !"DAG".equals(request.getWorkflowType())) {
             return false;
         }
-        if (EmptyChecks.isNull(submittedNodes)) {
+        if (submittedNodes == null) {
             return false;
         }
         if (submittedNodes.size() != 3 || submittedNodes.stream().anyMatch(Objects::isNull)) {
             return false;
         }
-        if (EmptyChecks.isNull(submittedEdges)) {
+        if (submittedEdges == null) {
             return false;
         }
         return submittedEdges.size() == 2 && !submittedEdges.stream().anyMatch(Objects::isNull);
@@ -560,7 +560,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     private static boolean isManagedNode(
             NodeItem node, String nodeCode, String nodeType, int nodeOrder, String relatedJobCode) {
-        if (EmptyChecks.isNull(node)) {
+        if (node == null) {
             return false;
         }
         boolean nodeIdentityMatches = nodeCode.equals(node.getNodeCode())
@@ -581,11 +581,11 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         if (!retryPolicyIsDefault) {
             return false;
         }
-        boolean retryCountIsDefault = EmptyChecks.isNull(node.getRetryMaxCount()) || node.getRetryMaxCount() == 0;
+        boolean retryCountIsDefault = node.getRetryMaxCount() == null || node.getRetryMaxCount() == 0;
         if (!retryCountIsDefault) {
             return false;
         }
-        boolean timeoutIsDefault = EmptyChecks.isNull(node.getTimeoutSeconds()) || node.getTimeoutSeconds() == 0;
+        boolean timeoutIsDefault = node.getTimeoutSeconds() == null || node.getTimeoutSeconds() == 0;
         if (!timeoutIsDefault) {
             return false;
         }
@@ -600,8 +600,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     private static void applyScheduleConfiguration(
             WorkflowDefinitionEntity target, WorkflowDefinitionSaveRequest request, WorkflowDefinitionEntity existing) {
         String requestedType = request.getScheduleType();
-        boolean shouldInheritExistingScheduleConfiguration =
-                !Texts.hasText(requestedType) && EmptyChecks.isNotNull(existing);
+        boolean shouldInheritExistingScheduleConfiguration = !Texts.hasText(requestedType) && existing != null;
         if (shouldInheritExistingScheduleConfiguration) {
             request.setScheduleType(existing.getScheduleType());
             request.setScheduleExpr(existing.getScheduleExpr());
@@ -616,7 +615,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         String triggerMode = request.getTriggerMode();
         if (!Texts.hasText(triggerMode)) {
             boolean existingScheduleCanSupplyTriggerMode =
-                    EmptyChecks.isNotNull(existing) && scheduleType.equals(existing.getScheduleType());
+                    existing != null && scheduleType.equals(existing.getScheduleType());
             triggerMode =
                     existingScheduleCanSupplyTriggerMode ? existing.getTriggerMode() : defaultTriggerMode(scheduleType);
         }
@@ -641,7 +640,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     private void assertAndPreserveNodeRouting(
             String tenantId, Long definitionId, List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
-        if (EmptyChecks.isNull(nodes)) {
+        if (nodes == null) {
             return;
         }
         Map<String, String> existingGroups = new HashMap<>();
@@ -662,8 +661,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
             String existingGroup = existingGroups.get(node.getNodeCode());
             resourceAssignmentGuard.assertWorkerGroupUpdateAllowed(node.getWorkerGroup(), existingGroup);
-            boolean shouldInheritExistingWorkerGroup =
-                    EmptyChecks.isNull(node.getWorkerGroup()) && EmptyChecks.isNotNull(existingGroup);
+            boolean shouldInheritExistingWorkerGroup = node.getWorkerGroup() == null && existingGroup != null;
             if (shouldInheritExistingWorkerGroup) {
                 node.setWorkerGroup(existingGroup);
             }

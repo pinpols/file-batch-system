@@ -68,7 +68,7 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
             // 只有明确回滚才能记为失败；事务提交或连接异常可能发生在提交成功后，必须停止并向上传播。
             try {
                 result = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-                    if (EmptyChecks.isNull(context) || dryRun) {
+                    if (context == null || dryRun) {
                         return tenantExecutor.execute(tenantId, request, operator, dryRun);
                     }
                     return tenantExecutor.executeRecoverable(tenantId, request, operator, context, targetOrdinal);
@@ -83,7 +83,7 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
                 String failureMessage = TenantConfigFailureMessages.forFailure(ex);
                 result = TenantInitResult.failed(tenantId, failureMessage);
             }
-            if (EmptyChecks.isNotNull(context) && !dryRun && !result.success()) {
+            if (context != null && !dryRun && !result.success()) {
                 TenantInitResult rolledBackResult = result;
                 RlsTenantContextHolder.runWithTenant(tenantId, () -> {
                     tenantExecutor.recordRolledBack(context, targetOrdinal, tenantId, rolledBackResult);

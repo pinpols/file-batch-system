@@ -73,7 +73,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
             case GET -> builder.get();
             case HEAD -> builder.head();
             case POST -> {
-                boolean bodyIsNull = EmptyChecks.isNull(request.body());
+                boolean bodyIsNull = request.body() == null;
                 String bodyText = bodyIsNull ? "" : request.body();
                 MediaType mediaType = MediaType.get(request.mediaType());
                 RequestBody requestBody = RequestBody.create(bodyText, mediaType);
@@ -89,8 +89,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
             throw new IOException("outbound HTTP response exceeds " + MAX_RESPONSE_BYTES + " bytes");
         }
         MediaType contentType = responseBody.contentType();
-        Charset charset =
-                EmptyChecks.isNull(contentType) ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
+        Charset charset = contentType == null ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
         return new String(bytes, charset);
     }
 

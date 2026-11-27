@@ -98,7 +98,7 @@ public class TerminalNotificationArchiveService {
         // 锁顺序与 Kafka 接纳一致；锁之后的新语句才能看到已提交的冷热迁移结果。
         receipts.lockReceipt(candidate.tenantId(), candidate.eventKey());
         Boolean cleanupEnabled = archive.lockReadyReceipt(candidate);
-        if (EmptyChecks.isNull(cleanupEnabled)) {
+        if (cleanupEnabled == null) {
             return false;
         }
         for (Family family : COPY_ORDER) {

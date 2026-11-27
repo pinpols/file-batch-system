@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
 import java.io.IOException;
@@ -19,7 +18,7 @@ public class ConfigurationGovernanceCatalog {
 
     public ConfigurationGovernanceCatalog() {
         try (InputStream input = ConfigurationGovernanceCatalog.class.getResourceAsStream(RESOURCE)) {
-            if (EmptyChecks.isNull(input)) {
+            if (input == null) {
                 throw new IllegalStateException("Missing configuration governance registry: " + RESOURCE);
             }
             byte[] registryBytes = input.readAllBytes();

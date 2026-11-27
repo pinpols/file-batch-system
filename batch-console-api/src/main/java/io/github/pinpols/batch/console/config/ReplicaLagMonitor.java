@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -190,7 +189,7 @@ public class ReplicaLagMonitor {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
-            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+            boolean isConnectionShutdownMessage = message != null
                     && (message.contains("has been closed")
                             || message.contains("Connection pool shut down")
                             || message.contains("Interrupted"));

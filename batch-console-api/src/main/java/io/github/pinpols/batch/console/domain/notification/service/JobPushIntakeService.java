@@ -35,12 +35,12 @@ public class JobPushIntakeService {
     @Transactional(transactionManager = "transactionManager", propagation = Propagation.MANDATORY)
     public void accept(String tenant, String eventKey, Map<String, Object> job) {
         Object rawOperator = job.get("operatorId");
-        if (EmptyChecks.isNotNull(rawOperator) && !(rawOperator instanceof String)) {
+        if (rawOperator != null && !(rawOperator instanceof String)) {
             throw new IllegalArgumentException("invalid Job terminal operator identity");
         }
         String operator = (String) rawOperator;
         JobInstanceStatus state = JobInstanceStatus.fromCodeOrNull((String) job.get("instanceStatus"));
-        if (EmptyChecks.isNull(state)) throw new IllegalArgumentException("invalid Job terminal status");
+        if (state == null) throw new IllegalArgumentException("invalid Job terminal status");
         long jobId = ((Number) job.get("jobInstanceId")).longValue();
         String eventType = "JOB_" + job.get("instanceStatus");
         String decision = Boolean.TRUE.equals(job.get("dryRun")) || state.isDryRunTerminal()
@@ -55,7 +55,7 @@ public class JobPushIntakeService {
         for (ConsolePushSubscriptionEntity device : devices) {
             boolean deviceDoesNotMatchFrozenJobOperator = !tenant.equals(device.getTenantId())
                     || !operator.equals(device.getUsername())
-                    || EmptyChecks.isNull(device.getId())
+                    || device.getId() == null
                     || device.getId() <= 0;
             if (deviceDoesNotMatchFrozenJobOperator) {
                 throw new IllegalStateException("Push device does not belong to the frozen Job operator");

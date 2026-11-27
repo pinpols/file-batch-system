@@ -2,7 +2,6 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedCodec;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.BufferedWriter;
@@ -99,7 +98,7 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
             List<String> values = new ArrayList<>(cols);
             for (int i = 1; i <= cols; i++) {
                 Object o = rs.getObject(i);
-                values.add(EmptyChecks.isNull(o) ? "" : o.toString());
+                values.add(o == null ? "" : o.toString());
             }
             writer.write(DelimitedCodec.encode(values, delim, quote));
             writer.newLine();

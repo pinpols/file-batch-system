@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,7 +55,7 @@ public class ImportEventArrivalService {
 
     // 对日志展示使用白名单，不改变扫描器处理对象 key 的规则。
     private static String logSafe(String value) {
-        return EmptyChecks.isNull(value) ? null : value.replaceAll("[^\\w.:/@=-]", "_");
+        return value == null ? null : value.replaceAll("[^\\w.:/@=-]", "_");
     }
 
     public record Result(boolean triggered, String reason) {}

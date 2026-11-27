@@ -146,7 +146,7 @@ final class TaskReportBatcher implements AutoCloseable {
                 List<TaskExecutionReport> reports =
                         batch.stream().map(item -> item.report).toList();
                 Set<Long> submittedTaskIds = submitBatch.apply(reports);
-                if (EmptyChecks.isNotNull(submittedTaskIds)) {
+                if (submittedTaskIds != null) {
                     acceptedTaskIds = submittedTaskIds;
                 }
             }

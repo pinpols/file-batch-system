@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.support.excel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +76,7 @@ public interface TenantConfigPackageExcelImportStore {
             Set<String> permissionScope) {
 
         public PackageExcelSession {
-            if (EmptyChecks.isNull(workflowMonitoringPolicyRows)) {
+            if (workflowMonitoringPolicyRows == null) {
                 workflowMonitoringPolicyRows = List.of();
             }
         }
@@ -85,7 +84,7 @@ public interface TenantConfigPackageExcelImportStore {
         public PackageExcelSession withUploadContext(String actorId, Set<String> authorities) {
             return toBuilder()
                     .uploadedBy(actorId)
-                    .permissionScope(EmptyChecks.isNull(authorities) ? Set.of() : Set.copyOf(authorities))
+                    .permissionScope(authorities == null ? Set.of() : Set.copyOf(authorities))
                     .build();
         }
 

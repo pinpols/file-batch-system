@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.workflow.application;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
@@ -68,7 +67,7 @@ public class WorkflowExecutionPushService {
         Watch watch;
         synchronized (watches) {
             watch = watches.get(key);
-            if (EmptyChecks.isNull(watch)) {
+            if (watch == null) {
                 if (watches.size() >= MAX_WATCHES) {
                     throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.realtime.subscription_limit_exceeded");
                 }
@@ -99,7 +98,7 @@ public class WorkflowExecutionPushService {
             events.publishChanged(key.tenantId(), stream(key.runId()), "workflow-execution-progress", initial);
             return emitter;
         } catch (RuntimeException failure) {
-            if (EmptyChecks.isNotNull(emitter)) {
+            if (emitter != null) {
                 try {
                     streams.close(emitter);
                 } catch (RuntimeException cleanupFailure) {

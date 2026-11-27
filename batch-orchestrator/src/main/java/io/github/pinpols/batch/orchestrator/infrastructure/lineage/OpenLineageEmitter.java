@@ -79,8 +79,7 @@ public class OpenLineageEmitter {
      * @throws IllegalStateException 配置未就绪、HTTP 非 2xx 或传输失败
      */
     public void emitWorkflowTerminalReliably(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
-        boolean lineageEmissionIsUnavailable =
-                !enabled || EmptyChecks.isNull(run) || EmptyChecks.isNull(terminalStatus);
+        boolean lineageEmissionIsUnavailable = !enabled || run == null || terminalStatus == null;
         if (lineageEmissionIsUnavailable) {
             throw new IllegalStateException("OpenLineage endpoint is not configured");
         }
@@ -197,14 +196,14 @@ public class OpenLineageEmitter {
     }
 
     private List<Map<String, Object>> buildDatasets(List<OpenLineageDatasetRow> rows, boolean input) {
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyChecks.isEmpty(rows)) {
             return List.of();
         }
         List<Map<String, Object>> result = new ArrayList<>();
         LinkedHashSet<Long> seen = new LinkedHashSet<>();
         for (OpenLineageDatasetRow row : rows) {
             boolean fileLineageReferenceIsMissingOrDuplicate =
-                    EmptyChecks.isNull(row) || EmptyChecks.isNull(row.fileId()) || seen.contains(row.fileId());
+                    row == null || row.fileId() == null || seen.contains(row.fileId());
             if (fileLineageReferenceIsMissingOrDuplicate) {
                 continue;
             }

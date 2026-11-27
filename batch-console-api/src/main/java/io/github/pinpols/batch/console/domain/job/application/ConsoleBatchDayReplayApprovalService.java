@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.job.application;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
@@ -31,7 +30,7 @@ public class ConsoleBatchDayReplayApprovalService {
 
     private String authenticatedApprover() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNull(authentication)
+        if (authentication == null
                 || !authentication.isAuthenticated()
                 || !(authentication.getPrincipal() instanceof ConsolePrincipal principal)
                 || !Texts.hasText(principal.username())) {

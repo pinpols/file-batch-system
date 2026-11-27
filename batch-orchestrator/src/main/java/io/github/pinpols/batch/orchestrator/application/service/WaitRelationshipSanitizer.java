@@ -55,7 +55,7 @@ public class WaitRelationshipSanitizer {
         }
         try {
             String value = row.getDependencySnapshot();
-            if (EmptyChecks.isNull(value) || value.length() > MAX_SNAPSHOT_LENGTH) throw new IllegalArgumentException();
+            if (value == null || value.length() > MAX_SNAPSHOT_LENGTH) throw new IllegalArgumentException();
             String safe =
                     switch (row.getWaitType()) {
                         case "CALENDAR" -> sanitizeJson(value, true, row.getBizDate());
@@ -75,7 +75,7 @@ public class WaitRelationshipSanitizer {
         JsonNode parsed = json.reader()
                 .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .readTree(raw);
-        if (EmptyChecks.isNull(parsed) || !parsed.isArray()) throw new IllegalArgumentException();
+        if (parsed == null || !parsed.isArray()) throw new IllegalArgumentException();
         boolean emptyArray = parsed.isEmpty(); // empty-check: allow - Jackson JsonNode 不是集合
         if (emptyArray || parsed.size() > MAX_DEPENDENCIES) throw new IllegalArgumentException();
         ArrayNode safe = json.createArrayNode();
@@ -99,7 +99,7 @@ public class WaitRelationshipSanitizer {
                 item.put("bizDateAlignment", alignment);
                 JsonNode date = dependency.get("upstreamBizDate");
                 LocalDate upstreamDate = null;
-                if (EmptyChecks.isNotNull(date) && !date.isNull()) {
+                if (date != null && !date.isNull()) {
                     String dateText = code(date);
                     try {
                         upstreamDate = LocalDate.parse(dateText);
@@ -110,18 +110,17 @@ public class WaitRelationshipSanitizer {
                 }
                 JsonNode error = dependency.get("resolutionError");
                 String safeError = null;
-                if (EmptyChecks.isNotNull(error) && !error.isNull()) {
+                if (error != null && !error.isNull()) {
                     safeError = safeReason(code(error), RESOLUTION_ERRORS);
-                    if (EmptyChecks.isNull(safeError)) throw new IllegalArgumentException();
+                    if (safeError == null) throw new IllegalArgumentException();
                     item.put("resolutionError", safeError);
                 }
-                if (EmptyChecks.isNull(bizDate)) throw new IllegalArgumentException();
+                if (bizDate == null) throw new IllegalArgumentException();
                 if ("SAME_DAY".equals(alignment)) {
-                    if (EmptyChecks.isNotNull(safeError)
-                            || (EmptyChecks.isNotNull(upstreamDate) && !bizDate.equals(upstreamDate)))
+                    if (safeError != null || (upstreamDate != null && !bizDate.equals(upstreamDate)))
                         throw new IllegalArgumentException();
-                } else if (EmptyChecks.isNull(upstreamDate) == EmptyChecks.isNull(safeError)
-                        || (EmptyChecks.isNotNull(upstreamDate) && !upstreamDate.isBefore(bizDate))) {
+                } else if ((upstreamDate == null) == (safeError == null)
+                        || (upstreamDate != null && !upstreamDate.isBefore(bizDate))) {
                     throw new IllegalArgumentException();
                 }
             }
@@ -136,7 +135,7 @@ public class WaitRelationshipSanitizer {
     }
 
     private static String code(JsonNode node) {
-        if (EmptyChecks.isNull(node) || !node.isTextual()) throw new IllegalArgumentException();
+        if (node == null || !node.isTextual()) throw new IllegalArgumentException();
         return code(node.textValue());
     }
 
@@ -148,7 +147,7 @@ public class WaitRelationshipSanitizer {
     }
 
     private static String safeReason(String value, Set<String> allowed) {
-        if (EmptyChecks.isNull(value)) return null;
+        if (value == null) return null;
         int colon = value.indexOf(':');
         String code = colon < 0 ? value : value.substring(0, colon);
         return allowed.contains(code) ? code : null;

@@ -85,8 +85,8 @@ public class ExportStepExecutionAdapter
         context.setBizDate(bizDate);
         context.setFileId(fileId == null ? "" : String.valueOf(fileId));
         Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-        boolean rawExportPayloadNeedsDecoding = EmptyChecks.isNull(exportPayload)
-                && EmptyChecks.isNotNull(context.getRawPayload())
+        boolean rawExportPayloadNeedsDecoding = exportPayload == null
+                && context.getRawPayload() != null
                 && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
         if (rawExportPayloadNeedsDecoding) {
             exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
@@ -97,12 +97,12 @@ public class ExportStepExecutionAdapter
 
     @Override
     public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+        if (request == null || !pipelineType().equalsIgnoreCase(request.stepCode())) {
             return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
         }
         Map<String, Object> requestContext = request.context();
         Map<String, Object> attributes =
-                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+                requestContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
         resolveSystemPipelineSteps(attributes);
         Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         ExportJobContext context;

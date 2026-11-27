@@ -3,7 +3,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot;
@@ -46,7 +45,7 @@ public class FileDispatchRepository {
             return Map.of();
         }
         PlatformFileRecordView fileRecord = fileDispatchMapper.selectFileRecord(tenantId, fileId);
-        return EmptyChecks.isNull(fileRecord) ? Map.of() : fileRecord.toPluginValues();
+        return fileRecord == null ? Map.of() : fileRecord.toPluginValues();
     }
 
     public Map<String, Object> loadChannel(String tenantId, String channelCode) {
@@ -54,7 +53,7 @@ public class FileDispatchRepository {
             return Map.of();
         }
         DispatchChannelConfigView channelConfig = fileDispatchMapper.selectChannelConfig(tenantId, channelCode);
-        return EmptyChecks.isNull(channelConfig) ? Map.of() : channelConfig.toPluginValues();
+        return channelConfig == null ? Map.of() : channelConfig.toPluginValues();
     }
 
     public boolean isChannelActive(String tenantId, String channelCode) {
@@ -65,7 +64,7 @@ public class FileDispatchRepository {
     }
 
     public Optional<DispatchRecordSnapshot> latestDispatchRecord(String tenantId, Long fileId, String channelCode) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(fileId) || !Texts.hasText(channelCode)) {
+        if (!Texts.hasText(tenantId) || fileId == null || !Texts.hasText(channelCode)) {
             return Optional.empty();
         }
         DispatchRecordSnapshot latestRecord =
@@ -116,10 +115,10 @@ public class FileDispatchRepository {
     public int beginVerifiedExternalOutcomeAttempt(
             String tenantId, Long fileId, String channelCode, Long jobInstanceId, Long pipelineInstanceId) {
         boolean contextMissing = !Texts.hasText(tenantId)
-                || EmptyChecks.isNull(fileId)
+                || fileId == null
                 || !Texts.hasText(channelCode)
-                || EmptyChecks.isNull(jobInstanceId)
-                || EmptyChecks.isNull(pipelineInstanceId);
+                || jobInstanceId == null
+                || pipelineInstanceId == null;
         if (contextMissing) {
             return 0;
         }

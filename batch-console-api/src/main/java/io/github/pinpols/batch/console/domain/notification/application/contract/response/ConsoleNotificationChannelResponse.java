@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
@@ -54,7 +53,7 @@ public record ConsoleNotificationChannelResponse(
     }
 
     private static Object safeConfig(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {

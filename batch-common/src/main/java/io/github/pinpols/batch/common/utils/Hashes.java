@@ -30,7 +30,7 @@ public final class Hashes {
      */
     @Nullable
     public static String sha256Short(@Nullable String raw) {
-        if (raw == null || raw.isEmpty()) {
+        if (EmptyChecks.isEmpty(raw)) {
             return null;
         }
         try {

@@ -83,7 +83,7 @@ public class BatchDayReplayDispatcher {
                 continue;
             }
             String tenantId = session.tenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyChecks.isBlank(tenantId)) {
                 continue;
             }
             // RLS Phase B：dispatchSession → dispatchEntry → compensationService.submit 全链路要带租户，

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.jdbc;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.SQLException;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -12,7 +11,7 @@ public final class JdbcExceptionSupport {
 
     /** 按异常因果链识别数据库状态，不用展示消息替代状态判断。 */
     public static boolean hasSqlState(Throwable failure, String expectedSqlState) {
-        for (Throwable current = failure; EmptyChecks.isNotNull(current); current = current.getCause()) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
             if (current instanceof SQLException sql && expectedSqlState.equals(sql.getSQLState())) {
                 return true;
             }
@@ -25,10 +24,10 @@ public final class JdbcExceptionSupport {
 
     /** 状态和约束名必须在同一条 JDBC 异常上，防止把无关包装消息误映射为业务冲突。 */
     public static boolean isForeignKeyConstraintViolation(Throwable failure, String constraintName) {
-        for (Throwable current = failure; EmptyChecks.isNotNull(current); current = current.getCause()) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
             if (current instanceof SQLException sql
                     && FOREIGN_KEY_SQL_STATE.equals(sql.getSQLState())
-                    && EmptyChecks.isNotNull(sql.getMessage())
+                    && sql.getMessage() != null
                     && sql.getMessage().contains(constraintName)) {
                 return true;
             }
@@ -43,12 +42,11 @@ public final class JdbcExceptionSupport {
     public static boolean isForeignKeyConstraintViolationInChain(Throwable failure, String constraintName) {
         boolean foreignKeyViolation = false;
         boolean expectedConstraint = false;
-        for (Throwable current = failure; EmptyChecks.isNotNull(current); current = current.getCause()) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
             if (current instanceof SQLException sql && FOREIGN_KEY_SQL_STATE.equals(sql.getSQLState())) {
                 foreignKeyViolation = true;
             }
-            if (EmptyChecks.isNotNull(current.getMessage())
-                    && current.getMessage().contains(constraintName)) {
+            if (current.getMessage() != null && current.getMessage().contains(constraintName)) {
                 expectedConstraint = true;
             }
             if (current == current.getCause()) {

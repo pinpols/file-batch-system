@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.application.realtime;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -62,7 +61,7 @@ public class ConsoleProgressSnapshotPublisher {
         Watch attached;
         synchronized (watches) {
             Watch watch = watches.get(key);
-            if (EmptyChecks.isNull(watch)) {
+            if (watch == null) {
                 if (watches.size() >= MAX_WATCHES)
                     throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.realtime.subscription_limit_exceeded");
                 watch = new Watch(() -> state(loader, fingerprint), fingerprint.apply(initial));
@@ -94,7 +93,7 @@ public class ConsoleProgressSnapshotPublisher {
             events.publishChanged(tenant, stream, event, initial);
             return emitter;
         } catch (RuntimeException failure) {
-            if (EmptyChecks.isNotNull(emitter)) {
+            if (emitter != null) {
                 try {
                     subscriptions.close(emitter);
                 } catch (RuntimeException cleanupFailure) {

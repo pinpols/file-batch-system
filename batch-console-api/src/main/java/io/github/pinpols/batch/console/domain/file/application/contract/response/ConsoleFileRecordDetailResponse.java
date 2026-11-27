@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
@@ -38,7 +37,7 @@ public record ConsoleFileRecordDetailResponse(
     }
 
     private static Object normalizeMetadata(Object metadata) {
-        if (EmptyChecks.isNull(metadata)
+        if (metadata == null
                 || metadata instanceof Map<?, ?>
                 || metadata instanceof List<?>
                 || metadata instanceof String
@@ -47,7 +46,7 @@ public record ConsoleFileRecordDetailResponse(
             return metadata;
         }
         String json = PostgresqlJsonbTexts.tryExtract(metadata);
-        if (EmptyChecks.isNull(json)) {
+        if (json == null) {
             throw new IllegalStateException("Unsupported file metadata representation");
         }
         return JsonUtils.fromJson(json, Object.class);

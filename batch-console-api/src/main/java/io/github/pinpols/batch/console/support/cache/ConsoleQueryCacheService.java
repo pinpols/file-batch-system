@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.support.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -128,7 +127,7 @@ public class ConsoleQueryCacheService {
         }
         T result = loader.get();
         try {
-            if (EmptyChecks.isNotNull(result)) {
+            if (result != null) {
                 ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
                 String resultJson = JsonUtils.toJson(result);
                 valueOperations.set(fullKey, resultJson, ttl);
@@ -141,7 +140,7 @@ public class ConsoleQueryCacheService {
     }
 
     private void increment(Counter counter) {
-        if (EmptyChecks.isNotNull(counter)) {
+        if (counter != null) {
             counter.increment();
         }
     }
@@ -223,7 +222,7 @@ public class ConsoleQueryCacheService {
     }
 
     private static String logValue(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return "";
         }
         String withoutCarriageReturns = value.replace('\r', '_');

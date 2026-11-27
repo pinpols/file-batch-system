@@ -182,7 +182,7 @@ public class AuditAspect {
                     .action(ann.action())
                     .operatorId(op.operatorId())
                     .operatorRole(op.operatorRole())
-                    .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
+                    .result(errorCode == null ? "SUCCESS" : "FAILED")
                     .errorCode(errorCode)
                     .errorMessage(truncate(errorMsg, AUDIT_ERROR_MESSAGE_MAX_LENGTH))
                     .paramsJson(paramsJson)
@@ -238,7 +238,7 @@ public class AuditAspect {
     /** SpEL 求 aggregateId,失败回退「-」。 */
     private String resolveAggregateId(AuditAction ann, Method method, Object[] args) {
         String expr = ann.aggregateId();
-        if (expr == null || expr.isEmpty()) return "-";
+        if (EmptyChecks.isEmpty(expr)) return "-";
         try {
             // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
             // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
@@ -338,14 +338,14 @@ public class AuditAspect {
     }
 
     private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {
-        if (targetTenantId != null && !targetTenantId.isBlank()) {
+        if (EmptyChecks.isNotBlank(targetTenantId)) {
             return targetTenantId;
         }
-        if (principalTenantId != null && !principalTenantId.isBlank()) {
+        if (EmptyChecks.isNotBlank(principalTenantId)) {
             return principalTenantId;
         }
         String mdcTenant = MDC.get("tenant");
-        if (mdcTenant != null && !mdcTenant.isBlank()) {
+        if (EmptyChecks.isNotBlank(mdcTenant)) {
             return mdcTenant;
         }
         return "system";
@@ -364,7 +364,7 @@ public class AuditAspect {
      */
     private String resolveTargetTenant(AuditAction ann, Method method, Object[] args) {
         String expr = ann.targetTenantParam();
-        if (expr == null || expr.isEmpty()) return null;
+        if (EmptyChecks.isEmpty(expr)) return null;
         try {
             String[] names = paramNameDiscoverer.getParameterNames(method);
             if (expr.startsWith("#")) {

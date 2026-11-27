@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -31,7 +30,7 @@ final class DispatchManifestSupport {
 
     static boolean enabled(Map<String, Object> channelConfig) {
         Object raw = channelConfig == null ? null : channelConfig.get("dispatch_manifest_enabled");
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return true;
         }
         String rawValue = String.valueOf(raw);
@@ -42,7 +41,7 @@ final class DispatchManifestSupport {
     static String suffix(Map<String, Object> channelConfig) {
         Object raw = channelConfig == null ? null : channelConfig.get("dispatch_manifest_suffix");
         String value = null;
-        if (EmptyChecks.isNotNull(raw)) {
+        if (raw != null) {
             String rawValue = String.valueOf(raw);
             value = rawValue.trim();
         }
@@ -97,7 +96,7 @@ final class DispatchManifestSupport {
         body.put(PipelineRuntimeKeys.BIZ_DATE, text(bizDate));
         body.put(
                 DispatchRuntimeKeys.CHANNEL_CODE,
-                EmptyChecks.isNull(command.payload()) ? null : command.payload().channelCode());
+                command.payload() == null ? null : command.payload().channelCode());
         body.put("manifestRef", manifestRef);
         String serializedBody = JsonUtils.toJson(body);
         byte[] bytes = serializedBody.getBytes(StandardCharsets.UTF_8);

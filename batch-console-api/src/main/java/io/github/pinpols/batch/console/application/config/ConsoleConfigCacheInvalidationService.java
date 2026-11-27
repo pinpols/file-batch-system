@@ -294,7 +294,7 @@ public class ConsoleConfigCacheInvalidationService {
     }
 
     private void increment(Counter counter) {
-        if (EmptyChecks.isNotNull(counter)) {
+        if (counter != null) {
             counter.increment();
         }
     }

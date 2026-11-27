@@ -107,7 +107,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     private SensorProbeResult probeRowsInTransaction(String sql, Map<String, Object> params) {
         RlsTenantSessionSupport.applyIfPresent(dataSource);
         List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-        if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
+        if (EmptyChecks.isEmpty(rows) || rows.get(0) == null) {
             return SensorProbeResult.notYet();
         }
         Map<String, Object> output = new LinkedHashMap<>();
@@ -133,7 +133,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
             return Map.of();
         }
         Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, Object> vars = EmptyChecks.isNull(ctx.workflowRunVars()) ? Map.of() : ctx.workflowRunVars();
+        Map<String, Object> vars = ctx.workflowRunVars() == null ? Map.of() : ctx.workflowRunVars();
         for (Map.Entry<String, Object> entry : ((Map<String, Object>) raw).entrySet()) {
             Object v = entry.getValue();
             if (v instanceof String s && s.startsWith("$.workflowRun.")) {

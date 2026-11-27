@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
@@ -43,7 +44,7 @@ public class DefaultHeartbeatService implements HeartbeatService {
 
     @Override
     public void beat(String workerId) {
-        if (workerId == null || workerId.isBlank()) {
+        if (EmptyChecks.isBlank(workerId)) {
             return;
         }
         WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);

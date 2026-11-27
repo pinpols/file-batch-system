@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.workflow.application;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowMonitoringPolicyRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -28,7 +27,7 @@ public class WorkflowMonitoringPolicyService {
         requireDefinition(tenant, definitionId);
         policyMapper.setTenantContext(tenant);
         WorkflowMonitoringPolicyEntity policy = policyMapper.selectByDefinition(tenant, definitionId);
-        if (EmptyChecks.isNull(policy)) {
+        if (policy == null) {
             policy = new WorkflowMonitoringPolicyEntity();
             policy.setTenantId(tenant);
             policy.setWorkflowDefinitionId(definitionId);
@@ -53,7 +52,7 @@ public class WorkflowMonitoringPolicyService {
         policy.setCompletionDeadlineSeverity(request.getCompletionDeadlineSeverity());
         policyMapper.upsert(policy);
         WorkflowMonitoringPolicyEntity saved = policyMapper.selectByDefinition(tenant, definitionId);
-        if (EmptyChecks.isNull(saved)) {
+        if (saved == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.monitoring_policy_not_persisted");
         }
         return saved;

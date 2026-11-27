@@ -104,7 +104,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -145,7 +145,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -172,7 +172,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -212,7 +212,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -247,7 +247,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -269,7 +269,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -291,7 +291,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -327,7 +327,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     @Override
     public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -458,7 +458,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     }
 
     private static String safeOutboxDeliveryError(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
@@ -574,7 +574,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
     private ConsoleBatchDayWindowResponse toBatchDayWindowResponse(
             String tenantId, String calendarCode, LocalDate bizDate, BatchDayView row) {
-        boolean hasBatchDay = EmptyChecks.isNotNull(row);
+        boolean hasBatchDay = row != null;
         Instant cutoffAt = hasBatchDay ? row.cutoffAt() : null;
         Instant slaDeadlineAt = hasBatchDay ? row.slaDeadlineAt() : null;
         Instant now = BatchDateTimeSupport.utcNow();
@@ -613,7 +613,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
                 lateArrivalWindowClosesAt,
                 jobs,
                 scheduledOccurrences,
-                EmptyChecks.isNull(row) ? null : row.frozen());
+                row == null ? null : row.frozen());
     }
 
     private List<ConsoleBatchDaySummaryResponse> loadBatchDaySummaries(
@@ -623,7 +623,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         }
         List<BatchDayJobSummaryView> rows =
                 opsMappers.batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyChecks.isEmpty(rows)) {
             return List.of();
         }
         return rows.stream().map(this::toBatchDaySummaryResponse).toList();
@@ -657,7 +657,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     }
 
     private Integer intValue(Number value) {
-        return EmptyChecks.isNull(value) ? null : value.intValue();
+        return value == null ? null : value.intValue();
     }
 
     private int safeInt(Integer value) {
@@ -670,7 +670,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         }
         ActiveCalendarRow calendar =
                 opsMappers.businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
-        Integer tolerance = EmptyChecks.isNull(calendar) ? null : calendar.lateArrivalToleranceMin();
+        Integer tolerance = calendar == null ? null : calendar.lateArrivalToleranceMin();
         if (tolerance == null || tolerance <= 0) {
             return cutoffAt;
         }
@@ -803,7 +803,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         String workerGroup = display(entity.getWorkerGroup());
         String status = display(entity.getStatus());
         String taskCapabilitiesJson = entity.getTaskCapabilitiesJson();
-        List<WorkerTaskCapabilityDto> taskCapabilities = EmptyChecks.isNull(taskCapabilitiesJson)
+        List<WorkerTaskCapabilityDto> taskCapabilities = taskCapabilitiesJson == null
                 ? List.of()
                 : JsonUtils.fromJson(taskCapabilitiesJson, new TypeReference<List<WorkerTaskCapabilityDto>>() {});
         return ConsoleWorkerRegistryResponse.builder()

@@ -158,13 +158,11 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
             String eventType = envelope.eventType();
             String cursor = envelope.cursor();
             Object eventData = null;
-            if (EmptyChecks.isNotNull(envelope.dataJson())
-                    && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
+            if (envelope.dataJson() != null && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
                 String eventDataJson = envelope.dataJson();
                 eventData = JsonUtils.fromJson(eventDataJson, Object.class);
             }
-            Instant emittedAt =
-                    EmptyChecks.isNull(envelope.emittedAt()) ? BatchDateTimeSupport.utcNow() : envelope.emittedAt();
+            Instant emittedAt = envelope.emittedAt() == null ? BatchDateTimeSupport.utcNow() : envelope.emittedAt();
             ConsoleSseEvent event = new ConsoleSseEvent(tenantId, stream, eventType, cursor, eventData, emittedAt);
             realtimeEventHub.publish(event);
         } catch (Exception exception) {
@@ -182,8 +180,8 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         if (!envelope.summaryRefresh()) {
             return false;
         }
-        boolean eventDataMissing = EmptyChecks.isNull(envelope.dataJson())
-                || EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()));
+        boolean eventDataMissing =
+                envelope.dataJson() == null || EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()));
         return eventDataMissing;
     }
 
@@ -207,7 +205,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
-            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+            boolean isConnectionShutdownMessage = message != null
                     && (message.contains("LettuceConnectionFactory is STOPPING")
                             || message.contains("has been closed")
                             || message.contains("Connection pool shut down"));

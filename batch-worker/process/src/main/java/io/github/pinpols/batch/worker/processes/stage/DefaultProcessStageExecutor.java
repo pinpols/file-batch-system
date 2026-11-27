@@ -155,9 +155,8 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             String batchKey = generateBatchKey(context);
             context.setBatchKey(batchKey);
         }
-        boolean shouldCreateFallbackStagingGeneration =
-                EmptyChecks.isNull(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID))
-                        && !Texts.hasText(context.getStagingGenerationId());
+        boolean shouldCreateFallbackStagingGeneration = context.getAttributes().get(PipelineRuntimeKeys.TASK_ID) == null
+                && !Texts.hasText(context.getStagingGenerationId());
         if (shouldCreateFallbackStagingGeneration) {
             // 仅供低基数运维指标使用的跨租户汇总。
             UUID generationUuid = UUID.randomUUID();
@@ -177,7 +176,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
      */
     private void resolvePluginAndAttachToContext(ProcessJobContext context, List<PipelineStepDefinition> steps) {
         PipelineStepDefinition computeStep = findComputeStep(steps);
-        if (EmptyChecks.isNotNull(computeStep) && EmptyChecks.isNotNull(computeStep.stepParams())) {
+        if (computeStep != null && computeStep.stepParams() != null) {
             // 把 COMPUTE step 的 step_params 暴露在 context 里,供 plugin 在所有 5 个 lifecycle 方法都能读到 spec
             // (各 stage 跑时 PIPELINE_CURRENT_STEP_PARAMS 是各自 step 的 params,无法统一拿 COMPUTE 的 spec)。
             context.getAttributes().put(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, computeStep.stepParams());
@@ -187,7 +186,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             return;
         }
         ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
-        if (EmptyChecks.isNotNull(plugin)) {
+        if (plugin != null) {
             context.setResolvedPlugin(plugin);
             return;
         }
@@ -197,11 +196,11 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     }
 
     private PipelineStepDefinition findComputeStep(List<PipelineStepDefinition> steps) {
-        if (EmptyChecks.isNull(steps)) {
+        if (steps == null) {
             return null;
         }
         for (PipelineStepDefinition step : steps) {
-            if (EmptyChecks.isNull(step)) {
+            if (step == null) {
                 continue;
             }
             if (ProcessStage.COMPUTE.name().equals(step.stageCode())) {
@@ -216,7 +215,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     }
 
     private String resolvePluginCode(Map<String, Object> attributes, PipelineStepDefinition computeStep) {
-        if (EmptyChecks.isNotNull(computeStep)) {
+        if (computeStep != null) {
             String implCode = computeStep.implCode();
             boolean hasExplicitComputePlugin = Texts.hasText(implCode)
                     && !ProcessStage.COMPUTE.name().equals(implCode)
@@ -226,7 +225,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             }
         }
         Object fallback = attributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
-        return EmptyChecks.isNull(fallback) ? null : String.valueOf(fallback);
+        return fallback == null ? null : String.valueOf(fallback);
     }
 
     /**
@@ -240,14 +239,14 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
         Map<String, Object> attributes = context.getAttributes();
         Object taskIdValue = attributes.get(PipelineRuntimeKeys.TASK_ID);
         Long taskId = toLong(taskIdValue);
-        if (EmptyChecks.isNotNull(taskId)) {
+        if (taskId != null) {
             return "process-" + taskId;
         }
         return "process-" + Thread.currentThread().threadId() + "-" + System.nanoTime();
     }
 
     private static Long toLong(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         if (value instanceof Number number) {
@@ -271,7 +270,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     /** 通过冻结 PROCESS 定义选定的插件解析重放元数据。 */
     public ReplayCapabilityDeclaration replayCapability(String implCode, Map<String, Object> frozenProcessConfig) {
         ProcessComputePlugin plugin = pluginsByImplCode.get(implCode);
-        if (EmptyChecks.isNull(plugin)) {
+        if (plugin == null) {
             throw new IllegalStateException("no ProcessComputePlugin registered for implCode: " + implCode);
         }
         return plugin.replayCapability(frozenProcessConfig);
@@ -286,13 +285,11 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             return ReplayCapabilityDeclaration.unknown("PROCESS");
         }
         ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
-        if (EmptyChecks.isNull(plugin)) {
+        if (plugin == null) {
             return ReplayCapabilityDeclaration.unknown(pluginCode);
         }
         Map<String, Object> frozenProcessConfig =
-                EmptyChecks.isNull(computeStep) || EmptyChecks.isNull(computeStep.stepParams())
-                        ? Map.of()
-                        : computeStep.stepParams();
+                computeStep == null || computeStep.stepParams() == null ? Map.of() : computeStep.stepParams();
         return plugin.replayCapability(frozenProcessConfig);
     }
 
@@ -318,7 +315,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     protected ProcessStageResult executeOneStep(ProcessJobContext context, PipelineStepDefinition step) {
         ProcessStage stage = toStage(step.stageCode());
         ProcessStageStep stageStep = stepsByStage.get(stage);
-        if (EmptyChecks.isNull(stageStep)) {
+        if (stageStep == null) {
             return ProcessStageResult.failure(
                     stage,
                     StageFailureCode.STEP_NOT_FOUND.name(),
@@ -432,13 +429,12 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             return Map.of();
         }
         for (ProcessComputePlugin plugin : plugins) {
-            boolean pluginIsMissingOrHasNoImplementationCode =
-                    EmptyChecks.isNull(plugin) || !Texts.hasText(plugin.implCode());
+            boolean pluginIsMissingOrHasNoImplementationCode = plugin == null || !Texts.hasText(plugin.implCode());
             if (pluginIsMissingOrHasNoImplementationCode) {
                 continue;
             }
             ProcessComputePlugin existingPlugin = indexed.putIfAbsent(plugin.implCode(), plugin);
-            if (EmptyChecks.isNotNull(existingPlugin)) {
+            if (existingPlugin != null) {
                 throw new IllegalStateException("duplicate process compute plugin: " + plugin.implCode());
             }
         }
@@ -451,11 +447,11 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             return Map.of();
         }
         for (ProcessStageStep step : steps) {
-            if (EmptyChecks.isNull(step)) {
+            if (step == null) {
                 continue;
             }
             ProcessStageStep existingStep = indexed.putIfAbsent(step.stage(), step);
-            if (EmptyChecks.isNotNull(existingStep)) {
+            if (existingStep != null) {
                 throw new IllegalStateException(
                         "duplicate process stage registered: " + step.stage().name());
             }
@@ -473,7 +469,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
                 ProcessStage.COMMIT,
                 ProcessStage.FEEDBACK)) {
             ProcessStageStep step = stepsByStage.get(stage);
-            if (EmptyChecks.isNull(step)) {
+            if (step == null) {
                 throw new IllegalStateException("missing process step bean for stage: " + stage.name());
             }
             PipelineStepTemplate template = PipelineStepTemplate.builder()

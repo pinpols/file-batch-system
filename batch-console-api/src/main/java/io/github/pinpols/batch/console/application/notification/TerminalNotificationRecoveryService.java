@@ -78,11 +78,11 @@ public class TerminalNotificationRecoveryService {
                 () -> transaction.executeWithoutResult(status -> {
                     mapper.bindTenant(tenant);
                     TerminalDeliveryRecoveryResponse row = mapper.lock(tenant, source.name(), id);
-                    if (EmptyChecks.isNull(row)) {
+                    if (row == null) {
                         // 归档仅移动已闭合投递；原人工请求仍须通过冷审计识别幂等。
                         row = mapper.archived(tenant, source.name(), id);
                     }
-                    if (EmptyChecks.isNull(row)) {
+                    if (row == null) {
                         throw BizException.of(ResultCode.NOT_FOUND, "error.notification.delivery_not_found");
                     }
                     String reason = request.reason().trim();
@@ -91,7 +91,7 @@ public class TerminalNotificationRecoveryService {
                     RecoveryAuditEvidence evidence = new RecoveryAuditEvidence(
                             reason, reconciliationReference, request.expectedAttempt(), true, row.terminalEventKey());
                     String existing = mapper.replayAudit(tenant, aggregateId, request.requestId());
-                    if (EmptyChecks.isNotNull(existing)) {
+                    if (existing != null) {
                         Map<?, ?> existingEvidence = JsonUtils.fromJson(existing, Map.class);
                         // 保留完整 JSON 字段集合比较，不能因 DTO 忽略未知字段而误判为同一人工请求。
                         Map<String, Object> requestedEvidenceFields = JsonUtils.toMap(evidence);

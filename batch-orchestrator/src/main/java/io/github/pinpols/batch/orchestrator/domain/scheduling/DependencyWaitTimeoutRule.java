@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 
 /**
@@ -13,7 +12,7 @@ public final class DependencyWaitTimeoutRule {
 
     public static boolean isAlertDue(
             Instant firstWaitingAt, Instant timeoutAlertedAt, long timeoutSeconds, Instant now) {
-        if (EmptyChecks.isNull(firstWaitingAt) || EmptyChecks.isNotNull(timeoutAlertedAt) || timeoutSeconds <= 0) {
+        if (firstWaitingAt == null || timeoutAlertedAt != null || timeoutSeconds <= 0) {
             return false;
         }
         Instant timeoutAt = firstWaitingAt.plusSeconds(timeoutSeconds);

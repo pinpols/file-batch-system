@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaResult;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaVerifier;
@@ -45,7 +46,7 @@ public class LoginProtectionService {
         }
         CaptchaResult result = captchaVerifier.verify(captchaToken, clientIp);
         if (!result.success()) {
-            boolean provided = captchaToken != null && !captchaToken.isBlank();
+            boolean provided = EmptyChecks.isNotBlank(captchaToken);
             String sanitizedUsername = LogSanitizer.value(username);
             String usernameForLog = truncateForLog(sanitizedUsername);
             String sanitizedClientIp = LogSanitizer.value(clientIp);

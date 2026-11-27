@@ -52,7 +52,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
                 .allTopicNames()
                 .get(timeout, TimeUnit.MILLISECONDS)
                 .get(launchTopic);
-        if (EmptyChecks.isNull(topic)) {
+        if (topic == null) {
             return UNKNOWN_LAG;
         }
         Map<TopicPartition, OffsetSpec> requests = new LinkedHashMap<>();
@@ -71,9 +71,8 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
         long lag = 0L;
         for (Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : endOffsets.entrySet()) {
             OffsetAndMetadata offset = committed.get(entry.getKey());
-            long committedOffset = EmptyChecks.isNull(offset)
-                    ? earliestOffsets.get(entry.getKey()).offset()
-                    : offset.offset();
+            long committedOffset =
+                    offset == null ? earliestOffsets.get(entry.getKey()).offset() : offset.offset();
             long endOffset = entry.getValue().offset();
             long partitionLag = Math.max(0L, endOffset - committedOffset);
             lag = Math.addExact(lag, partitionLag);
@@ -86,7 +85,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
             if (stopping.get()) {
                 throw new IllegalStateException("Trigger launch lag query adapter is stopping");
             }
-            if (EmptyChecks.isNull(adminClient)) {
+            if (adminClient == null) {
                 adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
             }
             return adminClient;
@@ -97,7 +96,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
     void closeAdminClient() {
         stopping.set(true);
         synchronized (adminClientMonitor) {
-            if (EmptyChecks.isNotNull(adminClient)) {
+            if (adminClient != null) {
                 adminClient.close(Duration.ZERO);
                 adminClient = null;
             }

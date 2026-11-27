@@ -66,17 +66,17 @@ public class ConsoleAuthApplicationService {
 
     /** 在认证用例入口解密登录凭据，并执行加密登录策略。 */
     private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
         }
         if (request.isEncrypted()) {
             String plaintext =
                     loginKeyPairService.decrypt(request.getEncryptedKey(), request.getIv(), request.getCiphertext());
             ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
-            if (EmptyChecks.isNull(decoded)) {
+            if (decoded == null) {
                 throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
             }
-            if (EmptyChecks.isNull(decoded.getCaptchaToken())) {
+            if (decoded.getCaptchaToken() == null) {
                 decoded.setCaptchaToken(request.getCaptchaToken());
             }
             return decoded;
@@ -108,7 +108,7 @@ public class ConsoleAuthApplicationService {
 
     /** OIDC 只负责证明外部身份；签发平台会话时仍重新读取本地账号状态和角色。 */
     public ConsoleAuthTokenResponse issueToken(ConsolePrincipal principal) {
-        if (EmptyChecks.isNull(principal) || !ConsoleRoles.isFormalRoleSet(principal.authorities())) {
+        if (principal == null || !ConsoleRoles.isFormalRoleSet(principal.authorities())) {
             throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
         }
         ConsoleUserAccount account = userAccountService
@@ -143,7 +143,7 @@ public class ConsoleAuthApplicationService {
     }
 
     private boolean mustChangePassword(String username) {
-        return EmptyChecks.isNotNull(username)
+        return username != null
                 && userAccountService
                         .findByUsername(username)
                         .map(ConsoleUserAccount::mustChangePassword)
@@ -168,7 +168,7 @@ public class ConsoleAuthApplicationService {
         // 返回全 null 字段的 mock metadata；对 null 的链式调用会 NPE。这里整段防御。
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
         String resolved = metadata == null ? null : metadata.tenantId();
-        return resolved == null || resolved.isBlank() ? securityProperties.getDefaultTenantId() : resolved;
+        return EmptyChecks.isBlank(resolved) ? securityProperties.getDefaultTenantId() : resolved;
     }
 
     // S2259 无法识别 EmptyChecks 的空值契约及下方 instanceof 守卫。
@@ -176,11 +176,11 @@ public class ConsoleAuthApplicationService {
     private Set<String> authorities(Authentication authentication) {
         Set<String> resolved = new LinkedHashSet<>();
         boolean hasConsolePrincipal =
-                EmptyChecks.isNotNull(authentication) && authentication.getPrincipal() instanceof ConsolePrincipal;
+                authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal;
         if (hasConsolePrincipal) {
             ConsolePrincipal principal = (ConsolePrincipal) authentication.getPrincipal();
             resolved.addAll(principal.authorities());
-        } else if (EmptyChecks.isNotNull(authentication)) {
+        } else if (authentication != null) {
             for (GrantedAuthority grantedAuthority : authentication.getAuthorities()) {
                 resolved.add(grantedAuthority.getAuthority());
             }

@@ -46,7 +46,7 @@ public class ValidationRuleSetMerger {
     }
 
     private Map<String, Object> deriveRequiredRulesFromFieldMappings(Map<String, Object> templateConfig) {
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
             return Map.of();
         }
         Object raw = firstNonNull(templateConfig.get("field_mappings"), templateConfig.get("fieldMappings"));
@@ -72,7 +72,7 @@ public class ValidationRuleSetMerger {
 
     @SuppressWarnings("unchecked")
     private void deepMerge(Map<String, Object> target, Map<String, Object> source) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyChecks.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {

@@ -37,14 +37,14 @@ public class ReadinessRecoveryService {
      */
     public RecoveryLaunchOutcome recover(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
         if (EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
-                || EmptyChecks.isNull(scheduledFireTime)) {
+                || scheduledFireTime == null) {
             return RecoveryLaunchOutcome.INVALID_REQUEST;
         }
         TriggerDescriptor descriptor =
                 triggerDefinitionLoader.loadByWorkflowDefinitionId(tenantId, workflowDefinitionId);
-        if (EmptyChecks.isNull(descriptor)) {
+        if (descriptor == null) {
             return RecoveryLaunchOutcome.NOT_FOUND;
         }
         try {
@@ -54,7 +54,7 @@ public class ReadinessRecoveryService {
                     TriggerType.SCHEDULED,
                     IdGenerator.newBusinessNo("readiness"),
                     IdGenerator.newTraceId()));
-            if (EmptyChecks.isNull(launchResponse) || EmptyChecks.isNull(launchResponse.instanceNo())) {
+            if (launchResponse == null || launchResponse.instanceNo() == null) {
                 return RecoveryLaunchOutcome.ALREADY_TERMINATED;
             }
             return RecoveryLaunchOutcome.LAUNCHED;

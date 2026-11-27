@@ -69,7 +69,7 @@ public class ResultVersionWriter {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
-        boolean instanceIsNotEligibleForResultVersion = EmptyChecks.isNull(instance)
+        boolean instanceIsNotEligibleForResultVersion = instance == null
                 || instance.getId() == null
                 || !Texts.hasText(instance.getTenantId())
                 || !isSuccessTerminal(instance.getInstanceStatus());
@@ -247,7 +247,7 @@ public class ResultVersionWriter {
     }
 
     private String serializeOutputs(Map<String, Object> outputs) {
-        if (outputs == null || outputs.isEmpty()) {
+        if (EmptyChecks.isEmpty(outputs)) {
             return "{}";
         }
         return JsonUtils.toJson(outputs);

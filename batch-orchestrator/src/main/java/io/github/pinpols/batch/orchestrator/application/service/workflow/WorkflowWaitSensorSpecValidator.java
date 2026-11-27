@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
@@ -53,7 +52,7 @@ final class WorkflowWaitSensorSpecValidator {
             errors.add(issue("V16", validationMessage, nodeCode));
             return;
         }
-        if (EmptyChecks.isNull(params)) params = Map.of();
+        if (params == null) params = Map.of();
 
         String sensorType = asString(params.get("sensor_type"));
         if (!Texts.hasText(sensorType)) {
@@ -102,7 +101,7 @@ final class WorkflowWaitSensorSpecValidator {
     private void validateSensorSpecByType(
             String sensorType, Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
         SensorSpecValidator validator = sensorSpecValidators().get(sensorType);
-        if (EmptyChecks.isNotNull(validator)) {
+        if (validator != null) {
             validator.validate(spec, nodeCode, errors);
         }
     }
@@ -186,12 +185,12 @@ final class WorkflowWaitSensorSpecValidator {
             errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
         }
         Integer partition = SensorSpecs.intValue(spec, "partition");
-        if (EmptyChecks.isNull(partition) || partition < 0) {
+        if (partition == null || partition < 0) {
             errors.add(
                     issue(V16C, "KAFKA_OFFSET sensor_spec.partition must be a non-negative 32-bit integer", nodeCode));
         }
         Long minimumOffset = SensorSpecs.longValue(spec, "minOffset");
-        if (EmptyChecks.isNull(minimumOffset) || minimumOffset < 0) {
+        if (minimumOffset == null || minimumOffset < 0) {
             errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset must be a non-negative integer", nodeCode));
         }
     }
@@ -216,7 +215,7 @@ final class WorkflowWaitSensorSpecValidator {
     }
 
     private static String asString(Object value) {
-        return EmptyChecks.isNull(value) ? null : value.toString();
+        return value == null ? null : value.toString();
     }
 
     private static Optional<Map<String, Object>> stringKeyedMap(Object value) {

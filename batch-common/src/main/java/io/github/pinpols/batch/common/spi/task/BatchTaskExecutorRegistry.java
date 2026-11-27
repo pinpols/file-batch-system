@@ -96,10 +96,8 @@ public class BatchTaskExecutorRegistry {
     private void registerWithFilter(
             Map<String, BatchTaskExecutor> merged, Set<String> filteredOut, BatchTaskExecutor exec, String source) {
         String type = exec.taskType();
-        boolean taskTypeIsExcludedByEnabledFilter = EmptyChecks.isNotNull(type)
-                && !type.isBlank()
-                && !enabledFilter.isEmpty()
-                && !enabledFilter.contains(type);
+        boolean taskTypeIsExcludedByEnabledFilter =
+                type != null && !type.isBlank() && !enabledFilter.isEmpty() && !enabledFilter.contains(type);
         if (taskTypeIsExcludedByEnabledFilter) {
             filteredOut.add(type);
             return;
@@ -109,7 +107,7 @@ public class BatchTaskExecutorRegistry {
 
     private static void register(Map<String, BatchTaskExecutor> merged, BatchTaskExecutor exec, String source) {
         String type = exec.taskType();
-        if (type == null || type.isBlank()) {
+        if (EmptyChecks.isBlank(type)) {
             throw new IllegalStateException("BatchTaskExecutor "
                     + exec.getClass().getName()
                     + " returned null/blank taskType() (source="
@@ -145,7 +143,7 @@ public class BatchTaskExecutorRegistry {
     /** 使用运行期实际选定的执行器实例解析元数据。 */
     public ReplayCapabilityDeclaration replayCapability(String taskType, Map<String, Object> frozenConfig) {
         BatchTaskExecutor executor = find(taskType);
-        if (EmptyChecks.isNull(executor)) {
+        if (executor == null) {
             throw new IllegalStateException("no BatchTaskExecutor registered for taskType: " + taskType);
         }
         return executor.replayCapability(frozenConfig);

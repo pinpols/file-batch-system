@@ -33,7 +33,7 @@ final class SqlStatementSplitter {
             // 顶层(非引号/注释内)的 dollar-quote 开标签:整段(含开/闭标签)一次性消费,体内 ; 引号 注释全字面
             if (sc.atTopLevel() && c == '$') {
                 String openTag = matchDollarTag(sql, i);
-                if (EmptyChecks.isNotNull(openTag)) {
+                if (openTag != null) {
                     i = consumeDollarQuote(sql, i, openTag, sc.buf);
                     prev = '$';
                     continue;

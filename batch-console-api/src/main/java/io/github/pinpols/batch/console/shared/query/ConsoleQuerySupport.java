@@ -56,7 +56,7 @@ public final class ConsoleQuerySupport {
 
     /** 空游标表示第一页；非空游标必须包含可解析的 id，避免损坏 token 静默回到第一页。 */
     public static Long decodeCursorId(String token) {
-        if (token == null || token.isBlank()) {
+        if (EmptyChecks.isBlank(token)) {
             return null;
         }
         Object raw = CursorCodec.decode(token).get("id");
@@ -92,7 +92,7 @@ public final class ConsoleQuerySupport {
     }
 
     public static Instant parseInstant(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         try {
@@ -108,7 +108,7 @@ public final class ConsoleQuerySupport {
      * 对齐。
      */
     public static Instant parseFlexibleInstant(String value, String fieldName, ZoneId zone) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         String trimmed = value.trim();
@@ -145,7 +145,7 @@ public final class ConsoleQuerySupport {
      * @see #parseFlexibleInstant(String, String, ZoneId)
      */
     public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName, ZoneId zone) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         String trimmed = value.trim();
@@ -165,14 +165,14 @@ public final class ConsoleQuerySupport {
     }
 
     public static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
+        if (EmptyChecks.isNotBlank(first)) {
             return first;
         }
         return second;
     }
 
     public static LocalDate parseLocalDate(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         try {
@@ -183,7 +183,7 @@ public final class ConsoleQuerySupport {
     }
 
     public static Long parseLong(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         try {
@@ -195,7 +195,7 @@ public final class ConsoleQuerySupport {
 
     public static String stringValue(Map<String, Object> row, String key) {
         Object value = row == null ? null : row.get(key);
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String rawText = String.valueOf(value);

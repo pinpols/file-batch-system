@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
@@ -23,7 +22,7 @@ class ConfigSyncTargetExecutor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     TenantInitResult execute(Target target, TenantConfigBatchInitRequest request, String operator) {
         TenantInitResult existing = readReceipt(target);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return existing;
         }
         TenantInitResult result =
@@ -41,7 +40,7 @@ class ConfigSyncTargetExecutor {
             throw new IllegalArgumentException("Committed results must be recorded with target changes");
         }
         TenantInitResult existing = readReceipt(target);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             if (!existing.equals(result)) {
                 throw new IllegalStateException("Config sync receipt already records a different outcome");
             }
@@ -58,7 +57,7 @@ class ConfigSyncTargetExecutor {
     private TenantInitResult readReceipt(Target target) {
         receiptMapper.setTenantContext(target.tenantId());
         String json = receiptMapper.selectResult(target.auditTenantId(), target.logId(), target.tenantId());
-        if (EmptyChecks.isNull(json)) {
+        if (json == null) {
             return null;
         }
         TenantInitResult result = JsonUtils.fromJsonStrict(json, TenantInitResult.class);

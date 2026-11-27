@@ -38,8 +38,7 @@ public class NotificationRoutePreviewService {
         // 与各生产者的实际载荷对齐：Job 终态有 jobCode，升级告警有 severity。
         if (jobEvent) data.put("jobCode", jobCode.trim());
         if ("ALERT_ESCALATED".equals(event)) {
-            String normalizedSeverity =
-                    EmptyChecks.isNull(severity) ? "" : severity.trim().toUpperCase(Locale.ROOT);
+            String normalizedSeverity = severity == null ? "" : severity.trim().toUpperCase(Locale.ROOT);
             if (!ALERT_SEVERITIES.contains(normalizedSeverity)) {
                 throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.notification.preview_severity_invalid");
             }
@@ -50,7 +49,7 @@ public class NotificationRoutePreviewService {
                 .map(rule -> new Rule(rule.id(), rule.ruleName(), rule.channelCode(), rule.channelType()))
                 .toList();
         List<Webhook> matchedWebhooks = subscriptions.findEnabledByTenant(tenant).stream()
-                .filter(subscription -> EmptyChecks.isNotNull(subscription.getId()))
+                .filter(subscription -> subscription.getId() != null)
                 .filter(subscription ->
                         SubscriptionRuleDispatchPolicy.eventTypeMatches(subscription.getEventTypes(), event))
                 .map(subscription -> new Webhook(subscription.getId(), subscription.getName()))

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -11,7 +12,7 @@ public enum QuotaResetPolicy {
     SLIDING_WINDOW;
 
     public static QuotaResetPolicy from(String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return NONE;
         }
         try {

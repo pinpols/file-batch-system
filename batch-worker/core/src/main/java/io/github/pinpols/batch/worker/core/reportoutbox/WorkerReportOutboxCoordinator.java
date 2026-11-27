@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
@@ -114,7 +113,7 @@ public class WorkerReportOutboxCoordinator {
 
     private void recordGiveUpMetric() {
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (EmptyChecks.isNotNull(registry)) {
+        if (registry != null) {
             registry.counter("batch.worker.report.outbox.give_up.total").increment();
         }
     }

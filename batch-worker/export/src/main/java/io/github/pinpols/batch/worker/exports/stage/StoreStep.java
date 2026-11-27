@@ -112,7 +112,7 @@ public class StoreStep implements ExportStageStep {
             }
 
             ExportStageResult committed = reuseRegisteredArtifact(context, objectName, generatedFile);
-            if (EmptyChecks.isNotNull(committed)) {
+            if (committed != null) {
                 return committed;
             }
 
@@ -152,7 +152,7 @@ public class StoreStep implements ExportStageStep {
                     fallbackMessage,
                     ERROR_OBJECT_MAPPER);
         } finally {
-            if (EmptyChecks.isNotNull(encryption)) {
+            if (encryption != null) {
                 closeEncryptedTempFile(encryption.temporaryFile());
             }
         }
@@ -161,7 +161,7 @@ public class StoreStep implements ExportStageStep {
     /** 重领只复用同一 Job 已登记且校验通过的产物，禁止新运行丢弃本次生成内容并借用旧对象。 */
     private ExportStageResult reuseRegisteredArtifact(ExportJobContext context, String objectName, Path generatedFile)
             throws IOException {
-        if (EmptyChecks.isNull(fileRecords) || EmptyChecks.isNull(storageProperties)) {
+        if (fileRecords == null || storageProperties == null) {
             return null;
         }
         Map<String, Object> record = fileRecords.loadFileRecordByStoragePath(
@@ -207,11 +207,11 @@ public class StoreStep implements ExportStageStep {
     }
 
     private String text(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     private void closeEncryptedTempFile(PrivateTempFiles.LockedTempFile file) {
-        if (EmptyChecks.isNull(file)) {
+        if (file == null) {
             return;
         }
         try {
@@ -256,7 +256,7 @@ public class StoreStep implements ExportStageStep {
     private String resolveContentType(ExportJobContext context) {
         String fileFormatType = String.valueOf(context.getAttributes()
                 .getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
-        if (EmptyChecks.isNull(formatStrategyRegistry)) {
+        if (formatStrategyRegistry == null) {
             return ExportFormatStrategy.contentTypeFor(fileFormatType);
         }
         return formatStrategyRegistry.resolve(fileFormatType).contentType();

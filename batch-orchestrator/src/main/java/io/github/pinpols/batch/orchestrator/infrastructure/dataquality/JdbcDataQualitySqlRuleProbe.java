@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dataquality;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualitySqlRuleProbe;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
@@ -28,7 +27,7 @@ public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
     @Override
     public long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule) {
         NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        if (EmptyChecks.isNull(jdbcTemplate)) {
+        if (jdbcTemplate == null) {
             throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
         }
         String sql = rule.getExpression();
@@ -52,6 +51,6 @@ public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
         } catch (DataAccessException dae) {
             throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
         }
-        return EmptyChecks.isNull(result) ? 0L : result.longValue();
+        return result == null ? 0L : result.longValue();
     }
 }

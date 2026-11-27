@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowLaunchWaitInsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim;
@@ -64,7 +63,7 @@ public class WorkflowLaunchWaitService {
         WorkflowLaunchWaitClaim previous =
                 waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
         String launchPayload;
-        if (EmptyChecks.isNotNull(previous)) {
+        if (previous != null) {
             WorkflowLaunchWaitSnapshot first = restore(previous);
             first.requireSameRequest(request);
             launchPayload = previous.launchPayload();
@@ -96,7 +95,7 @@ public class WorkflowLaunchWaitService {
                 triggerRequestMapper.selectByTenantAndRequestIdForUpdate(request.tenantId(), request.requestId());
         LaunchRequestIdentityGuard.requirePending(request, original);
         WorkflowLaunchWaitClaim waiting = waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(waiting)) {
+        if (waiting == null) {
             return null;
         }
         WorkflowLaunchWaitSnapshot snapshot = restore(waiting);
@@ -115,7 +114,7 @@ public class WorkflowLaunchWaitService {
                 triggerRequestMapper.selectByTenantAndRequestIdForUpdate(request.tenantId(), request.requestId());
         LaunchRequestIdentityGuard.requirePending(request, original);
         WorkflowLaunchWaitClaim waiting = waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(waiting)) {
+        if (waiting == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
         }
     }
@@ -130,7 +129,7 @@ public class WorkflowLaunchWaitService {
     private WorkflowLaunchWaitSnapshot restore(WorkflowLaunchWaitClaim claim) {
         try {
             Envelope envelope = JsonUtils.fromJsonStrict(claim.launchPayload(), Envelope.class);
-            boolean envelopeDoesNotMatch = EmptyChecks.isNull(envelope)
+            boolean envelopeDoesNotMatch = envelope == null
                     || !FORMAT.equals(envelope.format())
                     || !Objects.equals(claim.tenantId(), envelope.tenantId())
                     || !Objects.equals(claim.requestId(), envelope.requestId())
@@ -142,7 +141,7 @@ public class WorkflowLaunchWaitService {
             }
             String plaintext = secretPayloadProtector.revealEncrypted(envelope.sealedSnapshotPayload());
             WorkflowLaunchWaitSnapshot snapshot = JsonUtils.fromJsonStrict(plaintext, WorkflowLaunchWaitSnapshot.class);
-            if (EmptyChecks.isNull(snapshot)) {
+            if (snapshot == null) {
                 throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
             }
             snapshot.validate();
@@ -167,8 +166,7 @@ public class WorkflowLaunchWaitService {
         waitingMapper.setTenantContext(request.tenantId());
         TriggerRequestEntity original =
                 triggerRequestMapper.selectByTenantAndRequestIdForUpdate(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(original)
-                || !TriggerRequestStatus.LAUNCHED.code().equals(original.getRequestStatus())) {
+        if (original == null || !TriggerRequestStatus.LAUNCHED.code().equals(original.getRequestStatus())) {
             return;
         }
         // 与拒绝相同的原请求 → 等待行锁顺序；已收敛的零行不能复活 REJECTED。
@@ -192,7 +190,7 @@ public class WorkflowLaunchWaitService {
         waitingMapper.setTenantContext(tenantId);
         // 与 defer 保持原请求 → 等待行的统一锁顺序。
         TriggerRequestEntity original = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(tenantId, requestId);
-        if (EmptyChecks.isNull(original)) {
+        if (original == null) {
             // NO ACTION要求先显式清理等待；并发清理后的重复拒绝不创建新状态。
             return;
         }

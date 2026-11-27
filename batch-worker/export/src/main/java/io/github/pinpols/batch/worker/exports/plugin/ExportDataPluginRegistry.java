@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,7 +42,7 @@ public class ExportDataPluginRegistry {
      * @throws IllegalStateException id 为空或未找到插件时抛出
      */
     public ExportDataPlugin require(String id) {
-        if (id == null || id.isBlank()) {
+        if (EmptyChecks.isBlank(id)) {
             throw new IllegalStateException(
                     "export_data_ref is required in template config: use 'jdbc_mapped_export' or"
                             + " 'sql_template_export'");

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.sdk.handler;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
@@ -41,7 +40,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
             // ADR-037 决策三:协作式取消停在已提交安全点 → cancelled 终态,而非 fail。
             String handlerName = getClass().getSimpleName();
             String currentTaskType = taskType();
-            Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+            Long currentTaskId = ctx == null ? null : ctx.taskId();
             Map<String, Object> stoppedPositionForLog = stopped.breakPosition();
             log.info(
                     "SDK handler {} stopped cooperatively (taskType={}, taskId={}) at {}",
@@ -53,7 +52,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
         } catch (Exception t) {
             String handlerName = getClass().getSimpleName();
             String currentTaskType = taskType();
-            Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+            Long currentTaskId = ctx == null ? null : ctx.taskId();
             String exceptionSummary = ExceptionLogSummary.of(t);
             log.error(
                     "SDK handler {} failed (taskType={}, taskId={}): {}",
@@ -63,8 +62,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
                     exceptionSummary,
                     t);
             String exceptionMessage = t.getMessage();
-            String failureMessage =
-                    EmptyChecks.isNull(exceptionMessage) ? t.getClass().getSimpleName() : t.getMessage();
+            String failureMessage = exceptionMessage == null ? t.getClass().getSimpleName() : t.getMessage();
             return SdkTaskResult.fail(failureMessage, t);
         } finally {
             if (started) {

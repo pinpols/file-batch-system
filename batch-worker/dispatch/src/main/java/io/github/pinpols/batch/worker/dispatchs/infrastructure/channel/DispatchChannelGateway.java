@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.LinkedHashMap;
@@ -52,8 +51,7 @@ public class DispatchChannelGateway {
         // P0: 旧实现走 String.valueOf(null) 得到字面量 "null",再 supports("null") 一路 false 抛
         // IllegalStateException,被外层包成 INFRA_ERROR,掩盖"配置漏字段"这一业务原因。改为提前
         // 判 null 返回业务失败,根因可读。
-        boolean channelTypeIsMissingOrBlank =
-                EmptyChecks.isNull(rawChannelType) || !Texts.hasText(String.valueOf(rawChannelType));
+        boolean channelTypeIsMissingOrBlank = rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType));
         if (channelTypeIsMissingOrBlank) {
             deliveryMetrics.recordDelivery(null, false, false);
             return DispatchResult.failureWithoutReceipt("channel_type missing in channel_config");
@@ -115,8 +113,7 @@ public class DispatchChannelGateway {
         Map<String, Object> channelConfig = command.channelConfig();
         Object rawChannelType =
                 channelConfig == null ? null : channelConfig.get(DispatchGatewayConstants.CHANNEL_TYPE_KEY);
-        boolean channelTypeIsMissingOrBlank =
-                EmptyChecks.isNull(rawChannelType) || !Texts.hasText(String.valueOf(rawChannelType));
+        boolean channelTypeIsMissingOrBlank = rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType));
         if (channelTypeIsMissingOrBlank) {
             return OptionalLong.empty();
         }
@@ -139,13 +136,13 @@ public class DispatchChannelGateway {
 
     private DispatchChannelAdapter resolveAdapter(String channelType) {
         DispatchChannelAdapter adapter = adaptersByType.get(channelType);
-        if (EmptyChecks.isNull(adapter)) {
+        if (adapter == null) {
             throw new IllegalStateException("unsupported channel type: " + channelType);
         }
         return adapter;
     }
 
-    // S2259 无法识别 EmptyChecks.isNotNull(matched) 对后续解引用的保护。
+    // S2259 无法识别 matched != null 对后续解引用的保护。
     @SuppressWarnings("java:S2259")
     private static Map<String, DispatchChannelAdapter> buildAdapterRegistry(List<DispatchChannelAdapter> adapters) {
         Map<String, DispatchChannelAdapter> registry = new LinkedHashMap<>();
@@ -155,7 +152,7 @@ public class DispatchChannelGateway {
                 if (!adapter.supports(channelType)) {
                     continue;
                 }
-                if (EmptyChecks.isNotNull(matched) && matched != adapter) {
+                if (matched != null && matched != adapter) {
                     throw new IllegalStateException("duplicate dispatch channel adapter for channelType="
                             + channelType
                             + ": "
@@ -165,7 +162,7 @@ public class DispatchChannelGateway {
                 }
                 matched = adapter;
             }
-            if (EmptyChecks.isNotNull(matched)) {
+            if (matched != null) {
                 registry.put(channelType, matched);
             }
         }

@@ -105,7 +105,7 @@ public class WorkerReportOutboxRepository {
             hasExpectedIdentity |= columns.equals(expectedIdentity);
             hasLegacyIdentity |= columns.equals(legacyIdentity);
         }
-        if (EmptyChecks.isNull(requiredColumns) || requiredColumns != 2 || !hasExpectedIdentity || hasLegacyIdentity) {
+        if (requiredColumns == null || requiredColumns != 2 || !hasExpectedIdentity || hasLegacyIdentity) {
             // 旧运行队列不在ADR-048切换范围内；保留原文件并失败关闭，不能自动清表或搬运。
             throw new IllegalStateException(
                     "SQLite report outbox schema is incompatible; preserve the existing file and prepare a fresh deployment store");
@@ -113,7 +113,7 @@ public class WorkerReportOutboxRepository {
     }
 
     private static void requireClaim(WorkerReportOutboxRow row) {
-        if (EmptyChecks.isNull(row) || !Texts.hasText(row.claimToken())) {
+        if (row == null || !Texts.hasText(row.claimToken())) {
             throw new IllegalArgumentException("A current report outbox claim token is required");
         }
     }
@@ -124,8 +124,7 @@ public class WorkerReportOutboxRepository {
         }
         long now = BatchDateTimeSupport.utcEpochMillis();
         String payload = JsonUtils.toJson(report);
-        String invocationId =
-                EmptyChecks.isNull(report.getPartitionInvocationId()) ? "" : report.getPartitionInvocationId();
+        String invocationId = report.getPartitionInvocationId() == null ? "" : report.getPartitionInvocationId();
         String traceId = report.getTraceId() == null ? null : report.getTraceId();
         WorkerReportOutboxUpsertParam p = new WorkerReportOutboxUpsertParam(
                 report.getTenantId(),
@@ -354,7 +353,7 @@ public class WorkerReportOutboxRepository {
         @Override
         public Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis, String claimToken) {
             Long id = mapper.pickNextNewId(nowEpochMillis, OutboxPublishStatus.NEW.code());
-            if (EmptyChecks.isNull(id)) {
+            if (id == null) {
                 return Optional.empty();
             }
             WorkerReportOutboxSqliteClaimParam claim = WorkerReportOutboxSqliteClaimParam.builder()

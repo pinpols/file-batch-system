@@ -27,7 +27,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
      * @throws IllegalArgumentException 配置缺失或 SQL 为空时抛出
      */
     public static SqlTemplateExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
             throw new WorkerConfigException("template config missing");
         }
         Object rawDetailSql = firstNonNull(
@@ -58,7 +58,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
 
         String tiebreakerColumn =
                 textValue(firstNonNull(spec.get("cursorTiebreakerColumn"), spec.get("cursor_tiebreaker_column")));
-        if (EmptyChecks.isNotNull(tiebreakerColumn)) {
+        if (tiebreakerColumn != null) {
             tiebreakerColumn = JdbcMappedSqlValidator.requireIdentifier(tiebreakerColumn, "cursorTiebreakerColumn");
             if (tiebreakerColumn.equalsIgnoreCase(cursorColumn)) {
                 throw new IllegalArgumentException(
@@ -78,7 +78,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
                     + "` to the SELECT list, or set sqlTemplateExport.cursorColumn to a column actually"
                     + " selected by the query.");
         }
-        if (EmptyChecks.isNotNull(tiebreakerColumn) && !mentionsIdentifier(trimmedSql, tiebreakerColumn)) {
+        if (tiebreakerColumn != null && !mentionsIdentifier(trimmedSql, tiebreakerColumn)) {
             throw new IllegalArgumentException(
                     "sql_template_export default_query_sql must reference cursorTiebreakerColumn `"
                             + tiebreakerColumn

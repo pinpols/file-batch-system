@@ -60,7 +60,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
             mapper.setTenantContext(tenantId);
             mapper.lockUploadQuota(tenantId);
             ConsoleAiAttachmentEntity existing = mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
-            if (EmptyChecks.isNotNull(existing)) return new UploadReservation(existing, false);
+            if (existing != null) return new UploadReservation(existing, false);
             ConsoleAiProperties.Image limits = aiProperties.getImage();
             boolean uploadWouldExceedQuota =
                     mapper.activeDraftCount(tenantId, ownerUserId) >= limits.getMaxDraftsPerUser()
@@ -89,8 +89,8 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
             ConsoleAiAttachmentEntity currentRow = mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
             return new UploadReservation(currentRow, inserted);
         });
-        ConsoleAiAttachmentEntity row = EmptyChecks.isNull(reservation) ? null : reservation.row();
-        if (EmptyChecks.isNull(row)) throw unavailable();
+        ConsoleAiAttachmentEntity row = reservation == null ? null : reservation.row();
+        if (row == null) throw unavailable();
         if (!inputSha256.equals(row.getInputSha256())) {
             throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
         }
@@ -139,7 +139,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
             mapper.setTenantContext(tenantId);
             ConsoleAiAttachmentEntity row = mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
             boolean attachmentIsMissingOrExpired =
-                    EmptyChecks.isNull(row) || row.getExpiresAt().isBefore(Instant.now());
+                    row == null || row.getExpiresAt().isBefore(Instant.now());
             if (attachmentIsMissingOrExpired) throw notFound();
             return view(row);
         });
@@ -173,9 +173,8 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
         template().executeWithoutResult(status -> {
             mapper.setTenantContext(tenantId);
             ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-            boolean attachmentCannotBeDeletedByOwner = EmptyChecks.isNull(row)
-                    || !ownerUserId.equals(row.getOwnerUserId())
-                    || "BOUND".equals(row.getStatus());
+            boolean attachmentCannotBeDeletedByOwner =
+                    row == null || !ownerUserId.equals(row.getOwnerUserId()) || "BOUND".equals(row.getStatus());
             if (attachmentCannotBeDeletedByOwner) throw notFound();
             mapper.enqueueOne(tenantId, id);
             mapper.deleteOne(tenantId, id);
@@ -194,7 +193,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
         List<ConsoleAiAttachmentEntity> rows = ids.stream()
                 .map(id -> {
                     ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-                    boolean draftIdentityOrStatusIsInvalid = EmptyChecks.isNull(row)
+                    boolean draftIdentityOrStatusIsInvalid = row == null
                             || !ownerUserId.equals(row.getOwnerUserId())
                             || !"DRAFT".equals(row.getStatus());
                     if (draftIdentityOrStatusIsInvalid) {
@@ -275,7 +274,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
             mapper.setTenantContext(tenantId);
             return mapper.cleanupKeys(tenantId, CLEANUP_BATCH_SIZE);
         });
-        if (EmptyChecks.isNull(keys)) return;
+        if (keys == null) return;
         for (String key : keys) {
             try {
                 objectStore.delete(attachmentBucket(), key);
@@ -301,7 +300,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
             mapper.setTenantContext(tenantId);
             return mapper.byId(tenantId, id);
         });
-        boolean attachmentIsUnavailableToOwner = EmptyChecks.isNull(row)
+        boolean attachmentIsUnavailableToOwner = row == null
                 || !ownerUserId.equals(row.getOwnerUserId())
                 || !row.getExpiresAt().isAfter(Instant.now());
         if (attachmentIsUnavailableToOwner) throw notFound();

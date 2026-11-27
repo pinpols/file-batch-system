@@ -85,7 +85,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
         Map<String, Object> params = ctx.parameters();
         String url = asString(params.get("url"));
-        if (url == null || url.isBlank()) {
+        if (EmptyChecks.isBlank(url)) {
             throw new IllegalArgumentException("missing required parameter: url");
         }
         Object methodValue = params.get("method");
@@ -101,7 +101,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
 
         URI uri = URI.create(url);
         String host = uri.getHost();
-        if (host == null || host.isBlank()) {
+        if (EmptyChecks.isBlank(host)) {
             throw new IllegalArgumentException("invalid url, no host: " + url);
         }
 

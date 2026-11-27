@@ -46,7 +46,7 @@ public final class ExportRegionResolver {
 
         String region = Texts.hasText(triggerRegion) ? triggerRegion : defaultRegion;
         if (!EmptyChecks.isEmpty(Objects.requireNonNull(allowed))) {
-            boolean regionMissing = EmptyChecks.isNull(region);
+            boolean regionMissing = region == null;
             boolean regionNotAllowed = !regionMissing && !allowed.contains(region);
             if (regionMissing || regionNotAllowed) {
                 throw new WorkerConfigException(
@@ -62,7 +62,7 @@ public final class ExportRegionResolver {
      */
     private static Map<String, Object> regionConfig(Map<String, Object> templateConfig) {
         Map<String, Object> out = new LinkedHashMap<>();
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
             return out;
         }
         Object qps = templateConfig.get("query_param_schema");
@@ -98,7 +98,7 @@ public final class ExportRegionResolver {
     }
 
     private static String stringValue(Object v) {
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             return null;
         }
         String valueText = String.valueOf(v);
@@ -122,7 +122,7 @@ public final class ExportRegionResolver {
         }
         return list.stream()
                 .filter(value -> {
-                    if (EmptyChecks.isNull(value)) {
+                    if (value == null) {
                         return false;
                     }
                     String filterText = String.valueOf(value);

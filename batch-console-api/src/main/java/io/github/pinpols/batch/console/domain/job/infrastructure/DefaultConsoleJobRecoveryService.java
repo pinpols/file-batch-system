@@ -119,11 +119,11 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
         if (!ops.hasText(request.getApprovalId())) {
             if (workflowNodeReplay) {
-                boolean workflowNodeReplayRequestIsIncomplete = EmptyChecks.isNull(request.getSourceWorkflowRunId())
-                        || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
+                boolean workflowNodeReplayRequestIsIncomplete = request.getSourceWorkflowRunId() == null
+                        || request.getSourceWorkflowNodeRunId() == null
                         || !ops.hasText(request.getOperationKey())
                         || !ops.hasText(request.getPreviewToken())
-                        || EmptyChecks.isNotNull(request.getReplayOperationId());
+                        || request.getReplayOperationId() != null;
                 if (workflowNodeReplayRequestIsIncomplete) {
                     throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
                 }
@@ -145,7 +145,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             ops.publishRefresh(tenantId);
             return result;
         }
-        if (workflowNodeReplay && EmptyChecks.isNull(request.getReplayOperationId())) {
+        if (workflowNodeReplay && request.getReplayOperationId() == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_required");
         }
         ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
@@ -229,7 +229,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         if (ops.hasText(request.getApprovalId())) {
             ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
         }
-        String compensationType = EmptyChecks.isNull(request.getCompensationType())
+        String compensationType = request.getCompensationType() == null
                         || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
                 ? "JOB"
                 : request.getCompensationType();

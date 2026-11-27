@@ -29,7 +29,7 @@ public record ReplayCapabilityDeclaration(
         if (externalEffectCategories.stream().anyMatch(EmptyChecks::isBlank)) {
             throw new IllegalArgumentException("externalEffectCategories must not contain blanks");
         }
-        if (EmptyChecks.isNull(idempotencyCapability)) {
+        if (idempotencyCapability == null) {
             throw new IllegalArgumentException("idempotencyCapability must not be null");
         }
         if (EmptyChecks.isBlank(idempotencyKeyScope)) {
@@ -71,7 +71,7 @@ public record ReplayCapabilityDeclaration(
     public boolean covers(ReplayCapabilityDeclaration actual) {
         boolean capabilitiesAreDeclared = isFullyDeclared()
                 && idempotencyCapability != IdempotencyCapability.NONE
-                && EmptyChecks.isNotNull(actual)
+                && actual != null
                 && actual.isFullyDeclared()
                 && actual.idempotencyCapability() != IdempotencyCapability.NONE;
         if (!capabilitiesAreDeclared) {

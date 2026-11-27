@@ -42,8 +42,7 @@ public class ConsoleAiCostService {
             }
             return;
         }
-        boolean hasProviderWithoutUsableRate =
-                providerNames.stream().anyMatch(provider -> EmptyChecks.isNull(rateFor(provider)));
+        boolean hasProviderWithoutUsableRate = providerNames.stream().anyMatch(provider -> rateFor(provider) == null);
         if (hasProviderWithoutUsableRate) {
             throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
         }
@@ -84,7 +83,7 @@ public class ConsoleAiCostService {
     @Transactional
     public CostResult settleMeasured(Reservation reservation, MeasuredUsage usage) {
         Objects.requireNonNull(usage, "usage");
-        boolean reservationIsMissingOrUnpriced = EmptyChecks.isNull(reservation) || !reservation.priced();
+        boolean reservationIsMissingOrUnpriced = reservation == null || !reservation.priced();
         if (reservationIsMissingOrUnpriced) {
             return new CostResult(null, "UNPRICED");
         }
@@ -95,7 +94,7 @@ public class ConsoleAiCostService {
     /** 模型调用未返回可靠用量时，按已预留金额保守结算。 */
     @Transactional
     public CostResult settleReserved(Reservation reservation) {
-        boolean reservationIsMissingOrUnpriced = EmptyChecks.isNull(reservation) || !reservation.priced();
+        boolean reservationIsMissingOrUnpriced = reservation == null || !reservation.priced();
         if (reservationIsMissingOrUnpriced) {
             return new CostResult(null, "UNPRICED");
         }
@@ -122,7 +121,7 @@ public class ConsoleAiCostService {
 
     @Transactional
     public void release(Reservation reservation) {
-        if (EmptyChecks.isNotNull(reservation) && reservation.budgetReserved()) {
+        if (reservation != null && reservation.budgetReserved()) {
             mapper.setTenantContext(reservation.tenantId());
             mapper.release(reservation.tenantId(), reservation.billingMonth(), reservation.reservedAmount());
         }
@@ -133,7 +132,7 @@ public class ConsoleAiCostService {
         mapper.setTenantContext(tenantId);
         LocalDate billingMonth = month.atDay(1);
         ConsoleAiMonthlyUsageView usage = mapper.find(tenantId, billingMonth);
-        if (EmptyChecks.isNull(usage)) {
+        if (usage == null) {
             return new CostSummary(
                     month, 0, 0, 0, ZERO_COST, ZERO_COST, properties.getCost().getMonthlyBudgetUsd());
         }
@@ -170,7 +169,7 @@ public class ConsoleAiCostService {
 
     private BigDecimal calculate(String provider, int promptTokens, int completionTokens) {
         ConsoleAiProperties.ProviderRate rate = rateFor(provider);
-        if (EmptyChecks.isNull(rate)) {
+        if (rate == null) {
             throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
         }
         int nonNegativePromptTokens = Math.max(0, promptTokens);
@@ -209,9 +208,9 @@ public class ConsoleAiCostService {
     }
 
     private static boolean isUsable(ConsoleAiProperties.ProviderRate rate) {
-        return EmptyChecks.isNotNull(rate)
-                && EmptyChecks.isNotNull(rate.getInputUsdPerMillionTokens())
-                && EmptyChecks.isNotNull(rate.getOutputUsdPerMillionTokens())
+        return rate != null
+                && rate.getInputUsdPerMillionTokens() != null
+                && rate.getOutputUsdPerMillionTokens() != null
                 && (rate.getInputUsdPerMillionTokens().signum() > 0
                         || rate.getOutputUsdPerMillionTokens().signum() > 0);
     }
@@ -226,11 +225,11 @@ public class ConsoleAiCostService {
     }
 
     private static long bytes(String value) {
-        return EmptyChecks.isNull(value) ? 0 : value.getBytes(StandardCharsets.UTF_8).length;
+        return value == null ? 0 : value.getBytes(StandardCharsets.UTF_8).length;
     }
 
     private static String normalize(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return "";
         }
         String trimmedValue = value.trim();
@@ -244,7 +243,7 @@ public class ConsoleAiCostService {
         }
 
         private boolean priced() {
-            return EmptyChecks.isNotNull(reservedAmount);
+            return reservedAmount != null;
         }
     }
 

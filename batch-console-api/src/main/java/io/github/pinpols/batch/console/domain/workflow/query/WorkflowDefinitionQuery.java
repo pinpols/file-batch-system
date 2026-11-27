@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.query;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Builder;
 
 @Builder
@@ -22,7 +23,7 @@ public record WorkflowDefinitionQuery(
      * canonical 构造期就拦截 null/blank, 把跨租漏洞失败前移到构造点而非 SQL 触发点。
      */
     public WorkflowDefinitionQuery {
-        if (tenantId == null || tenantId.isBlank()) {
+        if (EmptyChecks.isBlank(tenantId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.tenant_id_required");
         }
     }

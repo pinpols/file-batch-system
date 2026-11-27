@@ -51,7 +51,7 @@ public final class SwallowedExceptionLogger {
      * {@link Throwable} 作为日志末参数输出完整堆栈。
      */
     public static String summary(Throwable t) {
-        if (EmptyChecks.isNull(t)) {
+        if (t == null) {
             return "(null)";
         }
         String type = t.getClass().getSimpleName();
@@ -70,7 +70,7 @@ public final class SwallowedExceptionLogger {
 
     /** 按调用方的字段长度上限净化失败消息；先遮蔽凭据，再截断文本。 */
     public static String safeMessage(String message, int maxLength) {
-        if (EmptyChecks.isNull(message)) {
+        if (message == null) {
             return null;
         }
         if (maxLength < 4) {

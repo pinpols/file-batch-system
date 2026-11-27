@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.view;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,43 +24,43 @@ public record FileChannelConfigQueryView(
     /** 复刻 resultType=map 键集：snake_case、null 值不出键。仅用于 Map 消费边界。 */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
-        if (EmptyChecks.isNotNull(id)) {
+        if (id != null) {
             map.put("id", id);
         }
-        if (EmptyChecks.isNotNull(tenantId)) {
+        if (tenantId != null) {
             map.put("tenant_id", tenantId);
         }
-        if (EmptyChecks.isNotNull(channelCode)) {
+        if (channelCode != null) {
             map.put("channel_code", channelCode);
         }
-        if (EmptyChecks.isNotNull(channelName)) {
+        if (channelName != null) {
             map.put("channel_name", channelName);
         }
-        if (EmptyChecks.isNotNull(channelType)) {
+        if (channelType != null) {
             map.put("channel_type", channelType);
         }
-        if (EmptyChecks.isNotNull(targetEndpoint)) {
+        if (targetEndpoint != null) {
             map.put("target_endpoint", targetEndpoint);
         }
-        if (EmptyChecks.isNotNull(authType)) {
+        if (authType != null) {
             map.put("auth_type", authType);
         }
-        if (EmptyChecks.isNotNull(configJson)) {
+        if (configJson != null) {
             map.put("config_json", configJson);
         }
-        if (EmptyChecks.isNotNull(receiptPolicy)) {
+        if (receiptPolicy != null) {
             map.put("receipt_policy", receiptPolicy);
         }
-        if (EmptyChecks.isNotNull(timeoutSeconds)) {
+        if (timeoutSeconds != null) {
             map.put("timeout_seconds", timeoutSeconds);
         }
-        if (EmptyChecks.isNotNull(enabled)) {
+        if (enabled != null) {
             map.put("enabled", enabled);
         }
-        if (EmptyChecks.isNotNull(createdAt)) {
+        if (createdAt != null) {
             map.put("created_at", createdAt);
         }
-        if (EmptyChecks.isNotNull(updatedAt)) {
+        if (updatedAt != null) {
             map.put("updated_at", updatedAt);
         }
         return map;

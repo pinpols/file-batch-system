@@ -148,10 +148,10 @@ public class InstanceManagementApplicationService {
                     .failureClass(null)
                     .expectedVersion(task.getVersion())
                     .build());
-            if (EmptyChecks.isNull(cancelledTask)) {
+            if (cancelledTask == null) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
             }
-            if (EmptyChecks.isNull(progressTask)) {
+            if (progressTask == null) {
                 progressTask = cancelledTask;
             }
         }
@@ -168,7 +168,7 @@ public class InstanceManagementApplicationService {
                         .terminalStatus4(PartitionStatus.TERMINATED.code())
                         .expectedVersion(partition.getVersion())
                         .build());
-        if (EmptyChecks.isNull(progressedInstance)) {
+        if (progressedInstance == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
         }
 
@@ -230,7 +230,7 @@ public class InstanceManagementApplicationService {
 
     private String manualRetryEventKey(String tenantId, JobPartitionEntity partition) {
         Long partitionVersion = partition.getVersion();
-        Long version = EmptyChecks.isNull(partitionVersion) ? 0L : partitionVersion;
+        Long version = partitionVersion == null ? 0L : partitionVersion;
         Long partitionId = partition.getId();
         return tenantId + ":manual-partition-retry:" + partitionId + ":" + version;
     }

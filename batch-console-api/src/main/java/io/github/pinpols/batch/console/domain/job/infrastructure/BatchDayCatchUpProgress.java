@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -22,11 +21,11 @@ final class BatchDayCatchUpProgress {
     record Item(String jobCode, String sourceKey, ItemStatus status, String referenceNo) {
 
         Item {
-            if (!Texts.hasText(jobCode) || !Texts.hasText(sourceKey) || EmptyChecks.isNull(status)) {
+            if (!Texts.hasText(jobCode) || !Texts.hasText(sourceKey) || status == null) {
                 throw new IllegalArgumentException("invalid catch-up item identity");
             }
             if ((status == ItemStatus.ACCEPTED && !Texts.hasText(referenceNo))
-                    || (status != ItemStatus.ACCEPTED && EmptyChecks.isNotNull(referenceNo))) {
+                    || (status != ItemStatus.ACCEPTED && referenceNo != null)) {
                 throw new IllegalArgumentException("invalid catch-up receipt");
             }
         }
@@ -99,14 +98,14 @@ final class BatchDayCatchUpProgress {
     }
 
     private static void validate(List<Item> items) {
-        if (EmptyChecks.isNull(items)) {
+        if (items == null) {
             throw new IllegalArgumentException("catch-up items are required");
         }
         Set<String> sourceKeys = new HashSet<>();
         Set<String> jobs = new HashSet<>();
         boolean sawUnconfirmed = false;
         for (Item item : items) {
-            if (EmptyChecks.isNull(item) || !sourceKeys.add(item.sourceKey()) || !jobs.add(item.jobCode())) {
+            if (item == null || !sourceKeys.add(item.sourceKey()) || !jobs.add(item.jobCode())) {
                 throw new IllegalArgumentException("duplicate or missing catch-up item identity");
             }
             if (item.status() == ItemStatus.ACCEPTED && sawUnconfirmed) {

@@ -244,7 +244,7 @@ public class AlertmanagerNotifyService {
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return EmptyChecks.isNotBlank(value);
     }
 
     private WebhookDeliveryResult deliver(
@@ -296,7 +296,7 @@ public class AlertmanagerNotifyService {
     }
 
     private static String safeFailureText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));

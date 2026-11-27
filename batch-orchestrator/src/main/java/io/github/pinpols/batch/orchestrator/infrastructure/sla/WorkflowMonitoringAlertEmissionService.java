@@ -48,12 +48,12 @@ public class WorkflowMonitoringAlertEmissionService {
         detail.put("workflowCode", candidate.workflowCode());
         detail.put(
                 "workflowRunId",
-                EmptyChecks.isNull(candidate.workflowRunId())
+                candidate.workflowRunId() == null
                         ? null
                         : candidate.workflowRunId().toString());
         detail.put(
                 "occurrenceId",
-                EmptyChecks.isNull(candidate.occurrenceId())
+                candidate.occurrenceId() == null
                         ? null
                         : candidate.occurrenceId().toString());
         detail.put("bizDate", candidate.bizDate());

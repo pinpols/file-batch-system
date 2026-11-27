@@ -29,11 +29,11 @@ final class ConsoleAiContextSanitizer {
         if (!"v1".equals(contextVersion)) {
             throw invalid("unsupported context version");
         }
-        boolean bothContextSourcesWereProvided = EmptyChecks.isNotEmpty(context) && EmptyChecks.isNotNull(pageContext);
+        boolean bothContextSourcesWereProvided = EmptyChecks.isNotEmpty(context) && pageContext != null;
         if (bothContextSourcesWereProvided) {
             throw invalid("context and pageContext cannot both be provided");
         }
-        Map<String, Object> normalized = EmptyChecks.isNull(pageContext) ? context : pageContextMap(pageContext);
+        Map<String, Object> normalized = pageContext == null ? context : pageContextMap(pageContext);
         if (EmptyChecks.isEmpty(normalized)) {
             return "{}";
         }
@@ -70,7 +70,7 @@ final class ConsoleAiContextSanitizer {
     }
 
     private static void addIfPresent(Map<String, Object> context, String key, String value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             context.put(key, value);
         }
     }

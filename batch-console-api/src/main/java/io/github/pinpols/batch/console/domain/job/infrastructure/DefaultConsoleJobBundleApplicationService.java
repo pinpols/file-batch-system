@@ -105,7 +105,7 @@ public class DefaultConsoleJobBundleApplicationService implements ConsoleJobBund
             String operator,
             BatchOperationIdentity identity,
             ConsoleJobBundleSummaryResponse summary) {
-        if (EmptyChecks.isNull(identity.requestHash()) || request.isDryRun()) {
+        if (identity.requestHash() == null || request.isDryRun()) {
             return initApplicationService.batchInit(request, operator, identity.operationId());
         }
         List<String> targets = request.getTargetTenantIds();
@@ -147,6 +147,6 @@ public class DefaultConsoleJobBundleApplicationService implements ConsoleJobBund
 
     private String operator() {
         String operator = metadataResolver.current().operatorId();
-        return operator == null || operator.isBlank() ? "system" : operator;
+        return EmptyChecks.isBlank(operator) ? "system" : operator;
     }
 }

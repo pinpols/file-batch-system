@@ -112,8 +112,7 @@ public class GenerateStep implements ExportStageStep {
 
     @Override
     public ExportStageResult execute(ExportJobContext context) {
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+        Object payload = context == null ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
         if (!(payload instanceof ExportPayload exportPayload) || !Texts.hasText(exportPayload.batchNo())) {
             return ExportStageResult.failure(
                     stage(),
@@ -160,7 +159,7 @@ public class GenerateStep implements ExportStageStep {
         }
         Object batchId = batch.get("id");
         ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
-        if (EmptyChecks.isNotNull(rowLimitFailure)) {
+        if (rowLimitFailure != null) {
             return rowLimitFailure;
         }
         int pageSize = resolvePageSize(context);
@@ -177,7 +176,7 @@ public class GenerateStep implements ExportStageStep {
         // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
         // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
         Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
-        boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
+        boolean checkpointEnabled = checkpointInstanceId != null;
         attempt.generatedFile = checkpointEnabled
                 ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
                 : createGeneratedFile(context, exportPayload, fileFormatType);
@@ -235,7 +234,7 @@ public class GenerateStep implements ExportStageStep {
                 .build();
         long recordCount = strategy.generate(formatCtx);
 
-        if (EmptyChecks.isNotNull(checkpoint)) {
+        if (checkpoint != null) {
             // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
             checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
         }
@@ -255,8 +254,7 @@ public class GenerateStep implements ExportStageStep {
         long maxRows = effectiveMaxRows();
         Object totalCountObj = batch.get("total_count");
         Number totalCount = totalCountObj instanceof Number number ? number : null;
-        boolean totalCountExceedsMaxRows =
-                EmptyChecks.isNotNull(totalCount) && maxRows > 0 && totalCount.longValue() > maxRows;
+        boolean totalCountExceedsMaxRows = totalCount != null && maxRows > 0 && totalCount.longValue() > maxRows;
         if (totalCountExceedsMaxRows) {
             return ExportStageResult.failure(
                     stage(),
@@ -392,7 +390,7 @@ public class GenerateStep implements ExportStageStep {
 
     private String resolveExportDataRef(Map<String, Object> tc) {
         Object v = tc.get("export_data_ref");
-        if (EmptyChecks.isNotNull(v)) {
+        if (v != null) {
             String presenceText = String.valueOf(v);
             if (Texts.hasText(presenceText)) {
                 String rawExportDataRef = String.valueOf(v);
@@ -405,7 +403,7 @@ public class GenerateStep implements ExportStageStep {
         Object qps = tc.get("query_param_schema");
         Map<String, Object> qpsMap = toStringKeyMap(qps);
         Object nested = qpsMap.get("export_data_ref");
-        if (EmptyChecks.isNotNull(nested)) {
+        if (nested != null) {
             String nestedPresenceText = String.valueOf(nested);
             if (Texts.hasText(nestedPresenceText)) {
                 String rawNestedExportDataRef = String.valueOf(nested);
@@ -463,7 +461,7 @@ public class GenerateStep implements ExportStageStep {
         Map<String, Object> tc = templateConfigMap(context);
         Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
         String target = "";
-        if (EmptyChecks.isNotNull(targetRaw)) {
+        if (targetRaw != null) {
             String rawTarget = String.valueOf(targetRaw);
             target = rawTarget.trim();
         }
@@ -485,7 +483,7 @@ public class GenerateStep implements ExportStageStep {
     }
 
     private static Object firstConfigured(Object first, Object second) {
-        if (EmptyChecks.isNull(first)) {
+        if (first == null) {
             return second;
         }
         String firstText = String.valueOf(first);
@@ -496,7 +494,7 @@ public class GenerateStep implements ExportStageStep {
         if (value instanceof Boolean b) {
             return b;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         String textValue = String.valueOf(value);

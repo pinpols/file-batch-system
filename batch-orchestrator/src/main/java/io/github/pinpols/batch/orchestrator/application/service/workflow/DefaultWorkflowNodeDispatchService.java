@@ -116,17 +116,17 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             WorkflowDagService.DagNodeResolution node,
             String sourcePayload,
             String traceId) {
-        if (EmptyChecks.isNull(workflowRun) || EmptyChecks.isNull(node)) {
+        if (workflowRun == null || node == null) {
             return 0;
         }
-        if (EmptyChecks.isNotNull(workflowRun.getRelatedJobInstanceId())) {
+        if (workflowRun.getRelatedJobInstanceId() != null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.root_job_launch_retired");
         }
         WorkflowRunExecutionSnapshot frozenSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-        String calendarCode = EmptyChecks.isNotNull(frozenSnapshot)
+        String calendarCode = frozenSnapshot != null
                 ? frozenSnapshot.workflowCalendarCode()
                 : resolveCurrentCalendarCode(workflowRun);
-        if (EmptyChecks.isBlank(calendarCode) || EmptyChecks.isNull(workflowRun.getBizDate())) {
+        if (EmptyChecks.isBlank(calendarCode) || workflowRun.getBizDate() == null) {
             return 0;
         }
         // 与子请求准入的加锁顺序保持一致：先获取批次日围栏，再锁定父记录。
@@ -135,14 +135,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 workflowRun.getTenantId(), calendarCode, workflowRun.getBizDate());
         WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
                 workflowRun.getTenantId(), workflowRun.getId());
-        boolean currentRunIsMissingOrTerminal = EmptyChecks.isNull(currentRun)
-                || WorkflowRunStatus.terminalCodes().contains(currentRun.getRunStatus());
+        boolean currentRunIsMissingOrTerminal =
+                currentRun == null || WorkflowRunStatus.terminalCodes().contains(currentRun.getRunStatus());
         if (currentRunIsMissingOrTerminal) {
             log.info(
                     "downstream node dispatch skipped for terminal WorkflowRun: workflowRunId={}, nodeCode={}, status={}",
                     workflowRun.getId(),
                     node.nodeCode(),
-                    EmptyChecks.isNull(currentRun) ? "MISSING" : currentRun.getRunStatus());
+                    currentRun == null ? "MISSING" : currentRun.getRunStatus());
             return 0;
         }
         workflowRun = currentRun;
@@ -164,7 +164,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             return 0;
         }
         WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-        WorkflowNodeEntity workflowNode = EmptyChecks.isNull(executionSnapshot)
+        WorkflowNodeEntity workflowNode = executionSnapshot == null
                 ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
                         workflowRun.getWorkflowDefinitionId(), node.nodeCode())
                 : executionSnapshot.node(node.nodeCode());
@@ -199,7 +199,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             return dispatchWaitNode(workflowRun, node, effectivePayload);
         }
 
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.legacy_task_node_requires_job_migration");
         }
         return dispatchTaskNode(jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
@@ -207,7 +207,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
 
     private String resolveCurrentCalendarCode(WorkflowRunEntity workflowRun) {
         WorkflowDefinitionView definition = workflowDefinitionMapper.selectById(workflowRun.getWorkflowDefinitionId());
-        if (EmptyChecks.isNull(definition) || !Objects.equals(definition.tenantId(), workflowRun.getTenantId())) {
+        if (definition == null || !Objects.equals(definition.tenantId(), workflowRun.getTenantId())) {
             return null;
         }
         return definition.calendarCode();
@@ -218,9 +218,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     public void rejectDeferredChildRequest(String tenantId, String requestId) {
         waitingLaunchMapper.setTenantContext(tenantId);
         TriggerRequestEntity original = jobMappers.triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
-        boolean deferredChildRequestCannotBeRejected = EmptyChecks.isNull(original)
+        boolean deferredChildRequestCannotBeRejected = original == null
                 || !TriggerRequestStatus.REJECTED.code().equals(original.getRequestStatus())
-                || EmptyChecks.isNull(original.getParentWorkflowRunId())
+                || original.getParentWorkflowRunId() == null
                 || EmptyChecks.isBlank(original.getParentNodeCode())
                 || waitingLaunchMapper.hasJobInstanceForRequest(tenantId, original.getId());
         if (deferredChildRequestCannotBeRejected) {
@@ -228,27 +228,27 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         }
         WorkflowRunEntity parent =
                 workflowMappers.workflowRunMapper.selectById(tenantId, original.getParentWorkflowRunId());
-        if (EmptyChecks.isNull(parent)
+        if (parent == null
                 || !List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code())
                         .contains(parent.getRunStatus())) {
             return;
         }
         JobDependencyWaitingLaunchEntity waiting = waitingLaunchMapper.selectByTenantAndRequestId(tenantId, requestId);
-        if (EmptyChecks.isNull(waiting)
+        if (waiting == null
                 || !JobDependencyWaitingLaunchMapper.WaitStatus.CANCELLED.name().equals(waiting.waitStatus())) {
             return;
         }
         WorkflowNodeRunEntity node = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
                 original.getParentWorkflowRunId(), original.getParentNodeCode());
-        boolean deferredChildNodeIsNotReady = EmptyChecks.isNull(node)
+        boolean deferredChildNodeIsNotReady = node == null
                 || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
                 || !WorkflowNodeRunStatus.READY.code().equals(node.getNodeStatus())
-                || EmptyChecks.isNotNull(node.getJobInstanceId());
+                || node.getJobInstanceId() != null;
         if (deferredChildNodeIsNotReady) {
             return;
         }
         LaunchRequest frozen = JsonUtils.fromJson(original.getLaunchPayload(), LaunchRequest.class);
-        if (!LaunchRequestIdentityGuard.matches(frozen, original) || EmptyChecks.isNull(frozen.params())) {
+        if (!LaunchRequestIdentityGuard.matches(frozen, original) || frozen.params() == null) {
             return;
         }
         Long frozenParentNodeRunId = integerIdentity(frozen.params().get("_parentNodeRunId"));
@@ -265,7 +265,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         }
         WorkflowRunEntity run =
                 workflowMappers.workflowRunMapper.selectById(tenantId, original.getParentWorkflowRunId());
-        boolean parentRunNoLongerMatchesDeferredChild = EmptyChecks.isNull(run)
+        boolean parentRunNoLongerMatchesDeferredChild = run == null
                 || !List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code())
                         .contains(run.getRunStatus())
                 || !Objects.equals(original.getBizDate(), run.getBizDate())
@@ -274,8 +274,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             return;
         }
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        WorkflowNodeEntity definition = EmptyChecks.isNull(snapshot) ? null : snapshot.node(node.getNodeCode());
-        if (EmptyChecks.isNull(definition) || !Objects.equals(definition.getRelatedJobCode(), original.getJobCode())) {
+        WorkflowNodeEntity definition = snapshot == null ? null : snapshot.node(node.getNodeCode());
+        if (definition == null || !Objects.equals(definition.getRelatedJobCode(), original.getJobCode())) {
             return;
         }
         String sourcePayload = EmptyChecks.isBlank(node.getSourcePayloadProtected())
@@ -331,16 +331,15 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             WorkflowDagService.DagNodeResolution node,
             String sourcePayload) {
         String jsonSpec = workflowNode.getCrossDayDependencies();
-        if (jsonSpec == null || jsonSpec.isBlank()) {
+        if (EmptyChecks.isBlank(jsonSpec)) {
             return CrossDayDependencyOutcome.proceed(sourcePayload);
         }
-        String tenantId = EmptyChecks.isNull(jobInstance) ? workflowRun.getTenantId() : jobInstance.getTenantId();
-        LocalDate bizDate = EmptyChecks.isNull(jobInstance) ? workflowRun.getBizDate() : jobInstance.getBizDate();
+        String tenantId = jobInstance == null ? workflowRun.getTenantId() : jobInstance.getTenantId();
+        LocalDate bizDate = jobInstance == null ? workflowRun.getBizDate() : jobInstance.getBizDate();
         if (isJobRerun(sourcePayload)) {
             return restoreRerunCrossDaySnapshot(tenantId, jsonSpec, workflowNode, workflowRun, node, sourcePayload);
         }
-        boolean workflowReplay = EmptyChecks.isNotNull(executionSnapshot)
-                && EmptyChecks.isNotNull(executionSnapshot.replayOperationId());
+        boolean workflowReplay = executionSnapshot != null && executionSnapshot.replayOperationId() != null;
         ResolutionResult result;
         if (workflowReplay) {
             CrossDayDependencyResolver pinnedResolver = crossDayDependencyResolver;
@@ -391,10 +390,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         try {
             Map<String, Object> requestParams = WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload);
             Long sourceInstanceId = positiveLong(requestParams.get("parentInstanceId"));
-            JobInstanceEntity source = EmptyChecks.isNull(sourceInstanceId)
+            JobInstanceEntity source = sourceInstanceId == null
                     ? null
                     : jobMappers.jobInstanceMapper.selectById(tenantId, sourceInstanceId);
-            boolean sourceJobIdentityDoesNotMatch = EmptyChecks.isNull(source)
+            boolean sourceJobIdentityDoesNotMatch = source == null
                     || !tenantId.equals(source.getTenantId())
                     || !Objects.equals(currentNode.getRelatedJobCode(), source.getJobCode());
             if (sourceJobIdentityDoesNotMatch) {
@@ -403,7 +402,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
 
             WorkflowRunEntity sourceRun =
                     workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, sourceInstanceId);
-            if (EmptyChecks.isNull(sourceRun)) {
+            if (sourceRun == null) {
                 return failRerunCrossDaySnapshot(rerunRun, node, "SOURCE_RUN_MISSING");
             }
             WorkflowNodeRunEntity sourceNodeRun =
@@ -412,22 +411,22 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                             .findFirst()
                             .orElse(null);
             WorkflowRunExecutionSnapshot sourceSnapshot = WorkflowRunExecutionSnapshot.from(sourceRun);
-            WorkflowNodeEntity sourceNode = EmptyChecks.isNull(sourceNodeRun) || EmptyChecks.isNull(sourceSnapshot)
+            WorkflowNodeEntity sourceNode = sourceNodeRun == null || sourceSnapshot == null
                     ? null
                     : sourceSnapshot.node(sourceNodeRun.getNodeCode());
-            if (EmptyChecks.isNull(sourceNode)
+            if (sourceNode == null
                     || !sameDependencySpec(sourceNode.getCrossDayDependencies(), currentDependencySpec)) {
                 return failRerunCrossDaySnapshot(rerunRun, node, "DEPENDENCY_SPEC_CHANGED");
             }
 
             Map<String, Object> sourceParams = JsonUtils.fromJson(source.getParamsSnapshot(), new TypeReference<>() {});
-            Object effectiveParamsValue = EmptyChecks.isNull(sourceParams) ? null : sourceParams.get("effectiveParams");
+            Object effectiveParamsValue = sourceParams == null ? null : sourceParams.get("effectiveParams");
             if (!(effectiveParamsValue instanceof Map<?, ?> effectiveParams)) {
                 return failRerunCrossDaySnapshot(rerunRun, node, "DEPENDENCY_SNAPSHOT_MISSING");
             }
             Map<String, Object> pinnedCrossDay = new LinkedHashMap<>();
             Object rawCrossDay = effectiveParams.get("crossDay");
-            if (EmptyChecks.isNotNull(rawCrossDay) && !(rawCrossDay instanceof Map<?, ?>)) {
+            if (rawCrossDay != null && !(rawCrossDay instanceof Map<?, ?>)) {
                 return failRerunCrossDaySnapshot(rerunRun, node, "DEPENDENCY_SNAPSHOT_INVALID");
             }
             if (rawCrossDay instanceof Map<?, ?> crossDay) {
@@ -484,7 +483,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     /** 把 resolver 返回的 alias map 合并到 sourcePayload 的 {@code crossDay} 字段下，供 ADR-009 DSL 引用。 */
     @SuppressWarnings("unchecked")
     private String mergeCrossDayPayload(String sourcePayload, Map<String, Object> crossDay) {
-        if (crossDay == null || crossDay.isEmpty()) {
+        if (EmptyChecks.isEmpty(crossDay)) {
             return sourcePayload;
         }
         Map<String, Object> base;
@@ -515,7 +514,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         waiting.setRetryCount(0);
         waiting.setDurationMs(0L);
         waiting.setErrorCode("CROSS_DAY_DEP_WAITING");
-        List<String> resolvedWaitingReasons = EmptyChecks.isNull(waitingReasons) ? List.of() : waitingReasons;
+        List<String> resolvedWaitingReasons = waitingReasons == null ? List.of() : waitingReasons;
         waiting.setErrorMessage(String.join("; ", resolvedWaitingReasons));
         // ADR-018 Stage 7: 显式记录等待起点，reconciler 计算超时窗口
         waiting.setStartedAt(BatchDateTimeSupport.utcNow());
@@ -567,7 +566,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             String traceId) {
         WorkflowNodeRunEntity nodeRun =
                 recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType(), sourcePayload);
-        if (EmptyChecks.isNull(nodeRun)) {
+        if (nodeRun == null) {
             return 0;
         }
         String targetJobCode = workflowNode.getRelatedJobCode() == null
@@ -580,8 +579,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         String baseTaskPayload = payloadBuilder.buildTaskPayload(
                 sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
         SchedulePlan plan = buildTaskNodeSchedulePlan(baseTaskPayload, jobInstance, targetJobCode);
-        boolean planIsMissingOrHasNoPartitions = EmptyChecks.isNull(plan)
-                || EmptyChecks.isNull(plan.getPartitions())
+        boolean planIsMissingOrHasNoPartitions = plan == null
+                || plan.getPartitions() == null
                 || EmptyChecks.isEmpty(Objects.requireNonNull(plan.getPartitions()));
         if (planIsMissingOrHasNoPartitions) {
             return 0;
@@ -694,7 +693,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
         String windowCode = workflowNode.getWindowCode();
         plan.setWindowCode(EmptyChecks.isBlank(windowCode) ? plan.getWindowCode() : windowCode);
-        boolean hasNonBlankWorkerGroupOverride = EmptyChecks.isNotNull(workflowNode.getWorkerGroup())
+        boolean hasNonBlankWorkerGroupOverride = workflowNode.getWorkerGroup() != null
                 && !EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getWorkerGroup()));
         if (hasNonBlankWorkerGroupOverride) {
             plan.setWorkerGroup(workflowNode.getWorkerGroup());
@@ -721,11 +720,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             partitionPlan.setPartitionNo(nextPartitionNo++);
             partitionPlan.setPartitionKey(
                     partitionPlan.getPartitionKey() + ":" + node.nodeCode() + ":" + partitionPlan.getPartitionNo());
-            partitionPlan.setBusinessKey((EmptyChecks.isNull(partitionPlan.getBusinessKey())
-                            ? targetJobCode
-                            : partitionPlan.getBusinessKey())
-                    + ":"
-                    + node.nodeCode());
+            partitionPlan.setBusinessKey(
+                    (partitionPlan.getBusinessKey() == null ? targetJobCode : partitionPlan.getBusinessKey())
+                            + ":"
+                            + node.nodeCode());
         }
     }
 
@@ -805,7 +803,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                     workflowRun,
                     nextNode,
                     sourcePayload,
-                    EmptyChecks.isNull(jobInstance) ? workflowRun.getTraceId() : jobInstance.getTraceId());
+                    jobInstance == null ? workflowRun.getTraceId() : jobInstance.getTraceId());
         }
         workflowDagService.cascadeSkipDownstreamForRun(workflowRun, node.nodeCode(), sourcePayload);
         workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(workflowRun);
@@ -856,7 +854,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 .errorMessage(rejection.getMessage())
                 .errorKey(rejection.getMessageKey());
         Object[] messageArgs = rejection.getMessageArgs();
-        String errorArgs = EmptyChecks.isNull(messageArgs) ? null : JsonUtils.toJson(messageArgs);
+        String errorArgs = messageArgs == null ? null : JsonUtils.toJson(messageArgs);
         int updated = workflowMappers.workflowNodeRunMapper.updateStatus(updateParamBuilder
                 .errorArgs(errorArgs)
                 .durationMs(0L)
@@ -912,8 +910,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
-        boolean partitionHasAssignedWorker = EmptyChecks.isNotNull(partition)
-                && EmptyChecks.isNotNull(partition.getWorkerCode())
+        boolean partitionHasAssignedWorker = partition != null
+                && partition.getWorkerCode() != null
                 && !EmptyChecks.isBlank(Objects.requireNonNull(partition.getWorkerCode()));
         if (partitionHasAssignedWorker) {
             return partition.getWorkerCode();

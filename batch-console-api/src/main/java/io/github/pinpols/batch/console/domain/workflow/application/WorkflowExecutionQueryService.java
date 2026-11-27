@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.workflow.application;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowExecutionMapper;
 import io.github.pinpols.batch.console.domain.workflow.view.WorkflowExecutionSnapshotView;
@@ -32,7 +31,7 @@ public class WorkflowExecutionQueryService {
         TenantScope.requireTenant(tenantId);
         mapper.setTenantContext(tenantId);
         WorkflowExecutionSnapshotView run = mapper.selectSnapshot(tenantId, id);
-        if (EmptyChecks.isNull(run)) throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.run_not_found");
+        if (run == null) throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.run_not_found");
         return WorkflowExecutionGraphAssembler.assemble(run, mapper.selectLatestNodes(tenantId, id));
     }
 }

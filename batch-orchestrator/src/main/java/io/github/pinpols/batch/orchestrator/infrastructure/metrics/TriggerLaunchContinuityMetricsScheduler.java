@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.TriggerLaunchContinuityMetricsProperties;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerLaunchContinuityMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -62,15 +61,14 @@ public class TriggerLaunchContinuityMetricsScheduler {
             Instant completedBefore = now.minus(COMPLETED_WINDOW);
             TriggerLaunchContinuityMetrics metrics =
                     triggerRequestMapper.selectLaunchContinuityMetrics(staleBefore, completedBefore);
-            if (EmptyChecks.isNull(metrics)) {
+            if (metrics == null) {
                 throw new IllegalStateException("trigger launch continuity metrics query returned no row");
             }
             staleAcceptedCount.set(nonNegative(metrics.staleAcceptedCount()));
             oldestStaleAcceptedAgeSeconds.set(nonNegative(metrics.oldestStaleAcceptedAgeSeconds()));
             recentLaunchedCount.set(nonNegative(metrics.recentLaunchedCount()));
-            double observedP95Seconds = EmptyChecks.isNull(metrics.requestToInstanceP95Seconds())
-                    ? 0.0
-                    : metrics.requestToInstanceP95Seconds();
+            double observedP95Seconds =
+                    metrics.requestToInstanceP95Seconds() == null ? 0.0 : metrics.requestToInstanceP95Seconds();
             requestToInstanceP95Seconds.set(Math.max(0.0, observedP95Seconds));
         } catch (RuntimeException failure) {
             meterRegistry
@@ -82,6 +80,6 @@ public class TriggerLaunchContinuityMetricsScheduler {
     }
 
     private long nonNegative(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : Math.max(0L, value);
+        return value == null ? 0L : Math.max(0L, value);
     }
 }

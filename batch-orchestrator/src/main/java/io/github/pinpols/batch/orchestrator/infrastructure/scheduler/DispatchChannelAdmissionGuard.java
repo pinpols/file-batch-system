@@ -21,7 +21,7 @@ public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request) {
-        boolean dispatchAdmissionIsNotApplicable = EmptyChecks.isNull(request)
+        boolean dispatchAdmissionIsNotApplicable = request == null
                 || !"DISPATCH".equalsIgnoreCase(request.getWorkerType())
                 || !Texts.hasText(request.getTenantId());
         if (dispatchAdmissionIsNotApplicable) {
@@ -44,7 +44,7 @@ public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
         if (Texts.hasText(request.getDownstreamChannelCode())) {
             channelCodes.add(request.getDownstreamChannelCode());
         }
-        if (EmptyChecks.isNotNull(request.getDownstreamChannelCodes())) {
+        if (request.getDownstreamChannelCodes() != null) {
             request.getDownstreamChannelCodes().stream()
                     .filter(Texts::hasText)
                     .map(String::trim)

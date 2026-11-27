@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.DayOfWeek;
@@ -120,7 +121,7 @@ public class CutoffScheduleResolver {
     }
 
     private LocalTime parseLocalTime(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyChecks.isBlank(text)) return null;
         try {
             String trimmedTime = text.trim();
             return LocalTime.parse(trimmedTime);
@@ -131,7 +132,7 @@ public class CutoffScheduleResolver {
     }
 
     private LocalDate parseLocalDate(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyChecks.isBlank(text)) return null;
         try {
             String trimmedDate = text.trim();
             return LocalDate.parse(trimmedDate);
@@ -142,7 +143,7 @@ public class CutoffScheduleResolver {
     }
 
     private DayOfWeek parseDayOfWeek(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyChecks.isBlank(text)) return null;
         try {
             String trimmedWeekday = text.trim();
             String normalizedWeekday = trimmedWeekday.toUpperCase(Locale.ROOT);

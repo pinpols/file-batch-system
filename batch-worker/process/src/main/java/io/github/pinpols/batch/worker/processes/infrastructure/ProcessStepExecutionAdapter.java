@@ -83,12 +83,12 @@ public class ProcessStepExecutionAdapter
 
     @Override
     public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
         }
         Map<String, Object> requestContext = request.context();
         Map<String, Object> attributes =
-                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+                requestContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
         Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
         if (rawPayload instanceof String payload) {
             try {
@@ -112,7 +112,7 @@ public class ProcessStepExecutionAdapter
             Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
             payloadAttributes.forEach(attributes::putIfAbsent);
             Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
-            if (EmptyChecks.isNotNull(processImplCode)) {
+            if (processImplCode != null) {
                 attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
             }
             Object systemStepParams = payloadAttributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
@@ -136,7 +136,7 @@ public class ProcessStepExecutionAdapter
 
     @Override
     protected boolean isSuccess(ProcessStageResult result) {
-        return EmptyChecks.isNotNull(result) && result.success();
+        return result != null && result.success();
     }
 
     @Override
@@ -177,7 +177,7 @@ public class ProcessStepExecutionAdapter
         // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
         // stagedCount)。
         Object processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
-        if (EmptyChecks.isNull(processOutputCount)) {
+        if (processOutputCount == null) {
             processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
         }
         putIfPresent(outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));

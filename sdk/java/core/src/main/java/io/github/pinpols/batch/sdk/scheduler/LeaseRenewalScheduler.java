@@ -2,7 +2,6 @@ package io.github.pinpols.batch.sdk.scheduler;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
@@ -126,7 +125,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
         log.info("LeaseRenewalScheduler stopping");
         scheduler.shutdown();
         try {
-            long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+            long requestedTimeoutMillis = timeout == null ? 0L : timeout.toMillis();
             long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
             if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
                 scheduler.shutdownNow();

@@ -155,7 +155,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 request.setApprovalId(approvalNo);
                 ConsolePresignDownloadResponse downloadResponse =
                         consoleFileApplicationService.presignDownload(request, approvalNo);
-                yield EmptyChecks.isNull(downloadResponse) ? null : downloadResponse.downloadUrl();
+                yield downloadResponse == null ? null : downloadResponse.downloadUrl();
             }
             case "CATCH_UP" -> {
                 ConsoleCatchUpApprovalRequest request =
@@ -176,8 +176,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
         WorkflowRunReplayApprovalPayload payload =
                 JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
-        boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
-                || EmptyChecks.isNull(payload.replayOperationId())
+        boolean workflowRunReplayApprovalIsInvalid = payload == null
+                || payload.replayOperationId() == null
                 || payload.replayOperationId() <= 0
                 || !tenantId.equals(payload.tenantId())
                 || EmptyChecks.isBlank(operatorId);
@@ -228,9 +228,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         }
         CompensationCommandRequest request =
                 JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
-        boolean isWorkflowNodeReplayApproval = EmptyChecks.isNotNull(request)
+        boolean isWorkflowNodeReplayApproval = request != null
                 && "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType())
-                && EmptyChecks.isNotNull(request.getReplayOperationId());
+                && request.getReplayOperationId() != null;
         if (isWorkflowNodeReplayApproval) {
             orchestratorInternalRestClient.rejectWorkflowNodeReplayOperation(request.getReplayOperationId(), tenantId);
         }
@@ -239,8 +239,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private void rejectAssociatedWorkflowRunReplay(String tenantId, ApprovalRecord approvalRecord) {
         WorkflowRunReplayApprovalPayload payload =
                 JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
-        boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
-                || EmptyChecks.isNull(payload.replayOperationId())
+        boolean workflowRunReplayApprovalIsInvalid = payload == null
+                || payload.replayOperationId() == null
                 || payload.replayOperationId() <= 0
                 || !tenantId.equals(payload.tenantId());
         if (workflowRunReplayApprovalIsInvalid) {
@@ -252,7 +252,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     @Override
     public List<ConsoleBatchApprovalResultResponse> batchApprove(
             String tenantId, List<String> approvalNos, String operatorId, String reason) {
-        if (approvalNos == null || approvalNos.isEmpty()) {
+        if (EmptyChecks.isEmpty(approvalNos)) {
             return List.of();
         }
         List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
@@ -275,7 +275,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     @Override
     public List<ConsoleBatchApprovalResultResponse> batchReject(
             String tenantId, List<String> approvalNos, String operatorId, String reason) {
-        if (approvalNos == null || approvalNos.isEmpty()) {
+        if (EmptyChecks.isEmpty(approvalNos)) {
             return List.of();
         }
         List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
@@ -298,7 +298,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
         ApprovalRecordResponse response =
                 orchestratorInternalRestClient.loadApproval(tenantId, approvalNo, ApprovalRecordResponse.class);
-        ApprovalRecord approvalRecord = EmptyChecks.isNull(response) ? null : response.getRecord();
+        ApprovalRecord approvalRecord = response == null ? null : response.getRecord();
         Guard.requireFound(approvalRecord, "approval request not found");
         return response;
     }
@@ -342,7 +342,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
     private void requireMatchingDecision(
             String tenantId, String approvalNo, ApprovalRecord expected, ApprovalDecision actual) {
-        boolean sameDecision = EmptyChecks.isNotNull(actual)
+        boolean sameDecision = actual != null
                 && tenantId.equals(actual.tenantId())
                 && approvalNo.equals(actual.approvalNo())
                 && Objects.equals(expected.getActionType(), actual.actionType())

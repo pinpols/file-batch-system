@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.time.Duration;
@@ -57,7 +58,7 @@ public class SlackNotificationSender implements NotificationSender {
     @Override
     public WebhookDeliveryResult send(NotificationMessage message) {
         String url = resolveUrl(message.configJson());
-        if (url == null || url.isBlank()) {
+        if (EmptyChecks.isBlank(url)) {
             return WebhookDeliveryResult.failure(null, "missing slack url");
         }
         String body;
@@ -113,7 +114,7 @@ public class SlackNotificationSender implements NotificationSender {
 
     /** 从 config_json 取 {@code url}；解析失败返回 null（视为缺失，不抛异常）。 */
     private String resolveUrl(String configJson) {
-        if (configJson == null || configJson.isBlank()) {
+        if (EmptyChecks.isBlank(configJson)) {
             return null;
         }
         try {

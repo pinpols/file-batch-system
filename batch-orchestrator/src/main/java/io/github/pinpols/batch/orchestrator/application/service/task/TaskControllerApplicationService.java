@@ -69,7 +69,7 @@ public class TaskControllerApplicationService {
     public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
         enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
         JobTaskEntity task = taskAssignmentService.assignWorker(request.tenantId(), taskId, request.workerId());
-        if (EmptyChecks.isNull(task)) {
+        if (task == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
         }
         if (!isClaimedBy(task, request.workerId())) {
@@ -106,8 +106,7 @@ public class TaskControllerApplicationService {
 
     public TaskClaimBatchResult claimBatch(String admissionTenantId, TaskClaimBatchCommand request) {
         enforceRateLimit(admissionTenantId, RateLimitAction.TASK_CLAIM);
-        List<TaskClaimItemCommand> items =
-                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+        List<TaskClaimItemCommand> items = request == null || request.items() == null ? List.of() : request.items();
         int cap = batchClaimProperties.effectiveBatchSize();
         if (items.size() > cap) {
             throw BizException.of(
@@ -120,13 +119,13 @@ public class TaskControllerApplicationService {
         // PERF(5.2c): 请求级 memo —— 同一批内同 (tenant,workerCode) 的 worker_registry 解析只查一次库。
         TaskAssignmentService.WorkerLookupMemo workerMemo = new TaskAssignmentService.WorkerLookupMemo();
         for (TaskClaimItemCommand item : items) {
-            if (EmptyChecks.isNull(item)) {
+            if (item == null) {
                 results.add(new TaskClaimItemResult(null, false, null));
                 continue;
             }
             JobTaskEntity task =
                     taskAssignmentService.assignWorker(item.tenantId(), item.taskId(), item.workerId(), workerMemo);
-            if (EmptyChecks.isNotNull(task) && isClaimedBy(task, item.workerId())) {
+            if (task != null && isClaimedBy(task, item.workerId())) {
                 // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
                 EffectiveTaskConfig config = taskAssignmentService.loadEffectiveConfig(item.tenantId(), task);
                 results.add(new TaskClaimItemResult(item.taskId(), true, config));
@@ -174,7 +173,7 @@ public class TaskControllerApplicationService {
     public TaskReportBatchResult reportBatch(String admissionTenantId, TaskReportBatchCommand request) {
         enforceRateLimit(admissionTenantId, RateLimitAction.TASK_REPORT);
         List<TaskExecutionReportCommand> items =
-                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+                request == null || request.items() == null ? List.of() : request.items();
         int cap = batchClaimProperties.effectiveBatchSize();
         if (items.size() > cap) {
             throw BizException.of(
@@ -185,7 +184,7 @@ public class TaskControllerApplicationService {
         List<TaskReportItemResult> results = new ArrayList<>(items.size());
         int ok = 0;
         for (TaskExecutionReportCommand item : items) {
-            if (EmptyChecks.isNull(item)) {
+            if (item == null) {
                 results.add(new TaskReportItemResult(null, false, "batch item is null"));
                 continue;
             }
@@ -240,7 +239,7 @@ public class TaskControllerApplicationService {
 
     /** details 非空时序列化为 JSON 文本(存 job_task.heartbeat_details);序列化失败降级为跳过 details,不阻塞续租。 */
     private String serializeDetails(Long taskId, Object details) {
-        if (EmptyChecks.isNull(details)) {
+        if (details == null) {
             return null;
         }
         try {
@@ -261,7 +260,7 @@ public class TaskControllerApplicationService {
      */
     public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
         List<TaskLeaseRenewItemCommand> items =
-                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+                request == null || request.items() == null ? List.of() : request.items();
         if (EmptyChecks.isEmpty(items)) {
             return new TaskLeaseRenewBatchResult(List.of());
         }
@@ -270,7 +269,7 @@ public class TaskControllerApplicationService {
         List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
         List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
         for (TaskLeaseRenewItemCommand item : items) {
-            if (EmptyChecks.isNull(item)) {
+            if (item == null) {
                 results.add(new TaskLeaseRenewItemResult(null, false, false));
                 continue;
             }
@@ -281,18 +280,18 @@ public class TaskControllerApplicationService {
         }
         List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
                 EmptyChecks.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
-        if (EmptyChecks.isNull(outcomes)) {
+        if (outcomes == null) {
             outcomes = List.of();
         }
         int outcomeIndex = 0;
         for (int i = 0; i < items.size(); i++) {
-            if (EmptyChecks.isNull(items.get(i))) {
+            if (items.get(i) == null) {
                 continue;
             }
             TaskAssignmentService.TaskHeartbeatResult result = outcomeIndex < outcomes.size()
                     ? outcomes.get(outcomeIndex++)
                     : new TaskAssignmentService.TaskHeartbeatResult(false, false);
-            if (EmptyChecks.isNull(result)) {
+            if (result == null) {
                 result = new TaskAssignmentService.TaskHeartbeatResult(false, false);
             }
             results.set(
@@ -304,15 +303,15 @@ public class TaskControllerApplicationService {
     }
 
     private boolean isClaimedBy(JobTaskEntity task, String workerId) {
-        return EmptyChecks.isNotNull(task)
+        return task != null
                 && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
-                && EmptyChecks.isNotNull(workerId)
+                && workerId != null
                 && workerId.equals(task.getAssignedWorkerCode());
     }
 
     /** 仍是无人认领的 READY。此时 409 会让 worker 提交 offset，消息丢失后没有第二次投递。 */
     private static boolean isStillUnclaimedReady(JobTaskEntity task) {
-        return TaskStatus.READY.code().equals(task.getTaskStatus()) && EmptyChecks.isNull(task.getAssignedWorkerCode());
+        return TaskStatus.READY.code().equals(task.getTaskStatus()) && task.getAssignedWorkerCode() == null;
     }
 
     private void enforceRateLimit(String tenantId, RateLimitAction action) {

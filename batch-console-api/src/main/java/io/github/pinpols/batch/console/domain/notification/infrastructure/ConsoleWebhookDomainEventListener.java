@@ -34,8 +34,8 @@ public class ConsoleWebhookDomainEventListener {
     @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
-        boolean eventIsMissingTenant = EmptyChecks.isNull(event)
-                || EmptyChecks.isNull(event.tenantId())
+        boolean eventIsMissingTenant = event == null
+                || event.tenantId() == null
                 || EmptyChecks.isBlank(Objects.requireNonNull(event.tenantId()));
         if (eventIsMissingTenant) {
             return;

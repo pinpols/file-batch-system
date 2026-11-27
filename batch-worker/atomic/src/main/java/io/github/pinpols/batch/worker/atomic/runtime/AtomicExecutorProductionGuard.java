@@ -97,11 +97,11 @@ public class AtomicExecutorProductionGuard {
                 enforced.add(normalizedProfile);
             }
         }
-        if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
+        if (EmptyChecks.isEmpty(enforced) || activeProfiles == null) {
             return false;
         }
         for (String active : activeProfiles) {
-            if (EmptyChecks.isNotNull(active)) {
+            if (active != null) {
                 String trimmedProfile = active.trim();
                 String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
                 if (enforced.contains(normalizedProfile)) {
@@ -116,7 +116,7 @@ public class AtomicExecutorProductionGuard {
     List<String> collectViolations() {
         List<String> violations = new ArrayList<>();
         SqlExecutorProperties sql = sqlProps.getIfAvailable();
-        boolean enabledSqlHasNoDataSourceAllowlist = EmptyChecks.isNotNull(sql)
+        boolean enabledSqlHasNoDataSourceAllowlist = sql != null
                 && sql.isEnabled()
                 && EmptyChecks.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
         if (enabledSqlHasNoDataSourceAllowlist) {
@@ -124,25 +124,24 @@ public class AtomicExecutorProductionGuard {
                     + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
                     + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
         }
-        if (EmptyChecks.isNotNull(sql) && sql.isEnabled()) {
+        if (sql != null && sql.isEnabled()) {
             addBusinessDataSourceViolations(
                     violations, "sql", sql.getDataSourceBeanName(), sql.getAllowedDataSourceBeans());
         }
         StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
-        boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
-                && sp.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
+        boolean enabledStoredProcedureHasNoSchemaAllowlist =
+                sp != null && sp.isEnabled() && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
         if (enabledStoredProcedureHasNoSchemaAllowlist) {
             violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
                     + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
                     + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
         }
-        if (EmptyChecks.isNotNull(sp) && sp.isEnabled()) {
+        if (sp != null && sp.isEnabled()) {
             addBusinessDataSourceViolations(
                     violations, "stored-proc", sp.getDataSourceBeanName(), sp.getAllowedDataSourceBeans());
         }
         HttpExecutorProperties http = httpProps.getIfAvailable();
-        boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
+        boolean httpEnabledWithEmptyUnenforcedAllowlist = http != null
                 && http.isEnabled()
                 && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
                 && !http.isEnforceAllowlist();
@@ -154,7 +153,7 @@ public class AtomicExecutorProductionGuard {
                     + " fail-closed 拒绝全部");
         }
         ShellExecutorProperties shell = shellProps.getIfAvailable();
-        boolean enabledShellHasNoCommandAllowlist = EmptyChecks.isNotNull(shell)
+        boolean enabledShellHasNoCommandAllowlist = shell != null
                 && shell.isEnabled()
                 && EmptyChecks.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
         if (enabledShellHasNoCommandAllowlist) {
@@ -163,7 +162,7 @@ public class AtomicExecutorProductionGuard {
                     + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
         }
         SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-        boolean enabledSparkHasNoResourceAllowlist = EmptyChecks.isNotNull(spark)
+        boolean enabledSparkHasNoResourceAllowlist = spark != null
                 && spark.isEnabled()
                 && EmptyChecks.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
         if (enabledSparkHasNoResourceAllowlist) {

@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.Builder;
@@ -141,7 +142,7 @@ public record SqlTransformComputeSpec(
     }
 
     private static int parseMaxStagedRows(Object raw) {
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return DEFAULT_MAX_STAGED_ROWS;
         }
         int value;
@@ -232,7 +233,7 @@ public record SqlTransformComputeSpec(
                 throw new IllegalArgumentException(
                         "sqlTransformCompute.params contains reserved parameter: " + paramName);
             }
-            if (EmptyChecks.isNotNull(paramName) && paramName.startsWith(METADATA_PARAM_PREFIX)) {
+            if (paramName != null && paramName.startsWith(METADATA_PARAM_PREFIX)) {
                 throw new IllegalArgumentException("sqlTransformCompute.params must not start with reserved prefix '"
                         + METADATA_PARAM_PREFIX
                         + "' (this namespace is for payload.metadata expansion): "
@@ -267,7 +268,7 @@ public record SqlTransformComputeSpec(
             return WriteMode.INSERT;
         }
         String value = text(raw);
-        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(value)) {
             return WriteMode.INSERT;
         }
         String trimmedValue = value.trim();
@@ -286,7 +287,7 @@ public record SqlTransformComputeSpec(
             return EmptyResultPolicy.SUCCESS;
         }
         String value = text(raw);
-        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(value)) {
             return EmptyResultPolicy.SUCCESS;
         }
         String trimmedValue = value.trim();
@@ -303,7 +304,7 @@ public record SqlTransformComputeSpec(
             return StagingMode.JSONB;
         }
         String value = text(raw);
-        if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(value)) {
             return StagingMode.JSONB;
         }
         String trimmedValue = value.trim();
@@ -380,11 +381,11 @@ public record SqlTransformComputeSpec(
     }
 
     private static Object firstNonNull(Object... values) {
-        return Arrays.stream(values).filter(EmptyChecks::isNotNull).findFirst().orElse(null);
+        return Arrays.stream(values).filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     private static String text(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String rawText = String.valueOf(value);

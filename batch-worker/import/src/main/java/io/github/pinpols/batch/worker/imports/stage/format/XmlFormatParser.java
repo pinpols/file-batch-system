@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
@@ -64,7 +63,7 @@ public class XmlFormatParser implements FormatParser {
                     if (children.item(j) instanceof Element child) {
                         String fieldName = localElementName(child);
                         String childText = child.getTextContent();
-                        String trimmedChildText = EmptyChecks.isNull(childText) ? null : childText.trim();
+                        String trimmedChildText = childText == null ? null : childText.trim();
                         row.put(fieldName, trimmedChildText);
                     }
                 }
@@ -91,7 +90,7 @@ public class XmlFormatParser implements FormatParser {
     private String resolveXmlRecordElement(Object templateConfigObject) {
         Map<String, Object> hints = support.parseHints(templateConfigObject);
         Object v = hints.get("xmlRecordElement");
-        if (EmptyChecks.isNotNull(v)) {
+        if (v != null) {
             String presenceText = String.valueOf(v);
             if (Texts.hasText(presenceText)) {
                 String rawRecordElement = String.valueOf(v);
@@ -100,7 +99,7 @@ public class XmlFormatParser implements FormatParser {
         }
         if (templateConfigObject instanceof Map<?, ?> map) {
             Object direct = map.get("xml_record_element");
-            if (EmptyChecks.isNotNull(direct)) {
+            if (direct != null) {
                 String presenceText = String.valueOf(direct);
                 if (Texts.hasText(presenceText)) {
                     String rawRecordElement = String.valueOf(direct);

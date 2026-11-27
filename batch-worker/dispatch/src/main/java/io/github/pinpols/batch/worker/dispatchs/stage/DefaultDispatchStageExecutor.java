@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplateParam;
@@ -65,7 +64,7 @@ public class DefaultDispatchStageExecutor extends AbstractStageExecutor<Dispatch
         // 全流程 stage loop；只有全部阶段成功才计入”成功回执”指标。
         List<DispatchStageResult> results = runStageLoop(context);
         boolean retryRecovered = Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
-        boolean overallSuccess = EmptyChecks.isNull(DispatchStageOutcome.failure(results, retryRecovered));
+        boolean overallSuccess = DispatchStageOutcome.failure(results, retryRecovered) == null;
         if (overallSuccess) {
             recordDispatchReceiptMetric();
         }

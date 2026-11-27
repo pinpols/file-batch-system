@@ -17,11 +17,11 @@ public record FrozenDispatchChannelSnapshot(
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     public FrozenDispatchChannelSnapshot {
-        boolean snapshotFieldsAreInvalid = EmptyChecks.isNull(schemaVersion)
+        boolean snapshotFieldsAreInvalid = schemaVersion == null
                 || schemaVersion != CURRENT_SCHEMA_VERSION
                 || EmptyChecks.isBlank(tenantId)
                 || EmptyChecks.isBlank(channelCode)
-                || EmptyChecks.isNull(channelId)
+                || channelId == null
                 || channelId <= 0
                 || EmptyChecks.isEmpty(configuration);
         if (snapshotFieldsAreInvalid) {
@@ -130,10 +130,7 @@ public record FrozenDispatchChannelSnapshot(
     }
 
     private static Object copyScalar(Object value) {
-        if (EmptyChecks.isNull(value)
-                || value instanceof String
-                || value instanceof Number
-                || value instanceof Boolean) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
             return value;
         }
         throw invalid();

@@ -22,14 +22,14 @@ final class BatchDayAlertDetails {
         detail.put("jobCode", request.jobCode());
         detail.put(
                 "bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-        if (EmptyChecks.isNotNull(request.workflowDefinitionId())) {
+        if (request.workflowDefinitionId() != null) {
             detail.put("workflowDefinitionId", request.workflowDefinitionId().toString());
         }
-        if (EmptyChecks.isNotNull(triggerRequest) && EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
+        if (triggerRequest != null && triggerRequest.getParentWorkflowRunId() != null) {
             detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId().toString());
         }
-        boolean requestHasParentWorkflowNode = EmptyChecks.isNotNull(triggerRequest)
-                && EmptyChecks.isNotNull(triggerRequest.getParentNodeCode())
+        boolean requestHasParentWorkflowNode = triggerRequest != null
+                && triggerRequest.getParentNodeCode() != null
                 && !EmptyChecks.isBlank(Objects.requireNonNull(triggerRequest.getParentNodeCode()));
         if (requestHasParentWorkflowNode) {
             detail.put("nodeCode", triggerRequest.getParentNodeCode());

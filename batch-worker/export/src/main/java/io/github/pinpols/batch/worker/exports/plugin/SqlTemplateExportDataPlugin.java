@@ -173,7 +173,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return pageJdbc.queryForList(finalSql, finalParams);
         });
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyChecks.isEmpty(rows)) {
             return DetailPage.empty();
         }
         boolean hasOverflowRow = rows.size() > limit;
@@ -188,7 +188,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
 
     private static List<Object> splitCursor(Object cursor) {
-        if (EmptyChecks.isNull(cursor)) {
+        if (cursor == null) {
             return List.of();
         }
         if (cursor instanceof List<?> values) {
@@ -233,7 +233,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
 
     private static void requireNonNullSortValue(Object value, String column) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             throw new WorkerConfigException("sql_template_export sort column `"
                     + column
                     + "` is NULL in the query result; keyset pagination cannot order NULL values."
@@ -305,7 +305,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             int candidate = n.intValue();
             return candidate > 0 ? candidate : null;
         }
-        boolean textualValueIsPresent = EmptyChecks.isNotNull(value) && Texts.hasText(String.valueOf(value));
+        boolean textualValueIsPresent = value != null && Texts.hasText(String.valueOf(value));
         if (textualValueIsPresent) {
             try {
                 String rawText = String.valueOf(value);
@@ -387,8 +387,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
         // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
         String cursorIdent = JdbcMappedSqlValidator.quotePg(cursorColumn);
-        String tiebreakerIdent =
-                EmptyChecks.isNull(tiebreakerColumn) ? null : JdbcMappedSqlValidator.quotePg(tiebreakerColumn);
+        String tiebreakerIdent = tiebreakerColumn == null ? null : JdbcMappedSqlValidator.quotePg(tiebreakerColumn);
         StringBuilder where = new StringBuilder();
         if (range != null && range.active()) {
             where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
@@ -405,13 +404,13 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             where.append(partitionPredicate);
         }
         if (hasCursor) {
-            String cursorPredicate = EmptyChecks.isNull(tiebreakerIdent)
+            String cursorPredicate = tiebreakerIdent == null
                     ? "base.%s > :__cursor%n".formatted(cursorIdent)
                     : "(base.%s > :__cursor0 OR (base.%s = :__cursor0 AND base.%s > :__cursor1))%n"
                             .formatted(cursorIdent, cursorIdent, tiebreakerIdent);
             where.append(EmptyChecks.isEmpty(where) ? "WHERE " : "AND ").append(cursorPredicate);
         }
-        String orderBy = EmptyChecks.isNull(tiebreakerIdent)
+        String orderBy = tiebreakerIdent == null
                 ? "base.%s ASC".formatted(cursorIdent)
                 : "base.%s ASC, base.%s ASC".formatted(cursorIdent, tiebreakerIdent);
         return """

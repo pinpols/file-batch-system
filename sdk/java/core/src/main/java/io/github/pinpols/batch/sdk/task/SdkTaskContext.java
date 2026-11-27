@@ -56,8 +56,7 @@ public record SdkTaskContext(
         Objects.requireNonNull(taskId, "taskId");
         parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
         runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
-        dependencyResultSnapshot =
-                EmptyChecks.isNull(dependencyResultSnapshot) ? List.of() : List.copyOf(dependencyResultSnapshot);
+        dependencyResultSnapshot = dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
         cancellation = cancellation == null ? new CancellationSignal() : cancellation;
         progress = progress == null ? new ProgressReporter() : progress;
         // ADR-037: 默认空协调器(内存断点 + 默认限流),让未走续跑模板的 handler 调 commit/checkpoint 也 null-safe。
@@ -78,7 +77,7 @@ public record SdkTaskContext(
             throw new IllegalArgumentException("cross-day alias is required");
         }
         Object rawCrossDay = parameters.get("crossDay");
-        if (EmptyChecks.isNull(rawCrossDay)) {
+        if (rawCrossDay == null) {
             return List.of();
         }
         if (!(rawCrossDay instanceof Map<?, ?> crossDay)) {
@@ -128,14 +127,14 @@ public record SdkTaskContext(
 
     private static long positiveLong(Object value, String field, String alias) {
         Long parsed = optionalLong(value, field, alias);
-        if (EmptyChecks.isNull(parsed) || parsed <= 0) {
+        if (parsed == null || parsed <= 0) {
             throw new IllegalArgumentException("cross-day " + field + " must be positive: " + alias);
         }
         return parsed;
     }
 
     private static Long optionalLong(Object value, String field, String alias) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         if (!(value instanceof Number number)) {
@@ -152,7 +151,7 @@ public record SdkTaskContext(
 
     private static int positiveInteger(Object value, String alias) {
         Long parsed = optionalLong(value, "versionNo", alias);
-        boolean versionNumberIsInvalid = EmptyChecks.isNull(parsed) || parsed <= 0 || parsed > Integer.MAX_VALUE;
+        boolean versionNumberIsInvalid = parsed == null || parsed <= 0 || parsed > Integer.MAX_VALUE;
         if (versionNumberIsInvalid) {
             throw new IllegalArgumentException("cross-day versionNo must be positive: " + alias);
         }

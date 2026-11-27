@@ -194,17 +194,17 @@ public class WebhookDispatcher {
     private List<PendingWebhookDelivery> persistPendingDeliveries(
             String tenantId, String eventType, String stream, String cursor, Object data, Instant emittedAt) {
         List<WebhookSubscriptionEntity> subscriptions = webhookService.findEnabledSubscriptions(tenantId);
-        if (subscriptions == null || subscriptions.isEmpty()) {
+        if (EmptyChecks.isEmpty(subscriptions)) {
             return List.of();
         }
         String normalizedEventType = normalizeEventType(eventType);
-        Instant payloadEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
+        Instant payloadEmittedAt = emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt;
         WebhookEventPayload payload =
                 new WebhookEventPayload(tenantId, normalizedEventType, stream, cursor, payloadEmittedAt, data);
         String payloadJson = JsonUtils.toJson(payload);
         List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
         for (WebhookSubscriptionEntity subscription : subscriptions) {
-            boolean subscriptionCannotReceiveEvent = EmptyChecks.isNull(subscription)
+            boolean subscriptionCannotReceiveEvent = subscription == null
                     || subscription.getId() == null
                     || !SubscriptionRuleDispatchPolicy.eventTypeMatches(
                             subscription.getEventTypes(), payload.eventType());
@@ -342,7 +342,7 @@ public class WebhookDispatcher {
 
     /** 包内可见供测试直接调用。 */
     String normalizeEventType(String eventType) {
-        if (EmptyChecks.isNull(eventType)) {
+        if (eventType == null) {
             return "UNKNOWN";
         }
         String trimmedEventType = eventType.trim();
@@ -371,7 +371,7 @@ public class WebhookDispatcher {
     }
 
     private static String readBoundedErrorBody(ResponseBody body) throws IOException {
-        if (EmptyChecks.isNull(body)) {
+        if (body == null) {
             return "";
         }
         byte[] bytes;
@@ -380,8 +380,7 @@ public class WebhookDispatcher {
         }
         int length = Math.min(bytes.length, MAX_ERROR_RESPONSE_BYTES);
         MediaType contentType = body.contentType();
-        Charset charset =
-                EmptyChecks.isNull(contentType) ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
+        Charset charset = contentType == null ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
         return new String(bytes, 0, length, charset);
     }
 

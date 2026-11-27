@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.domain;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -44,7 +43,7 @@ public final class ImportStagingFiles implements AutoCloseable {
                     file.releaseLock();
                 }
             } catch (IOException exception) {
-                if (EmptyChecks.isNull(failure)) {
+                if (failure == null) {
                     failure = exception;
                 } else {
                     failure.addSuppressed(exception);
@@ -52,7 +51,7 @@ public final class ImportStagingFiles implements AutoCloseable {
             }
         }
         files.clear();
-        if (EmptyChecks.isNotNull(failure)) {
+        if (failure != null) {
             throw failure;
         }
     }

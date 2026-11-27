@@ -281,7 +281,7 @@ final class RemoteFilesystemDispatchSupport {
             return true;
         }
         Throwable cause = failure.getCause();
-        while (EmptyChecks.isNotNull(cause)) {
+        while (cause != null) {
             if (cause instanceof AtomicMoveNotSupportedException) {
                 return true;
             }
@@ -469,7 +469,7 @@ final class RemoteFilesystemDispatchSupport {
         String rawChannelType = String.valueOf(channelTypeValue);
         String channelType = rawChannelType.toUpperCase(Locale.ROOT);
         FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return new DispatchChannelProbeResult(false, "unsupported health probe channel type: " + channelType, null);
         }
         return switch (type) {
@@ -561,8 +561,8 @@ final class RemoteFilesystemDispatchSupport {
         if (Texts.hasText(explicit)) {
             return sanitizeFileName(explicit);
         }
-        Object originalFileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
-        Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
+        Object originalFileName = fileRecord == null ? null : fileRecord.get("original_file_name");
+        Object fileName = fileRecord == null ? null : fileRecord.get("file_name");
         Object original = firstNonNull(originalFileName, fileName);
         String fallback = original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
         return sanitizeFileName(fallback);

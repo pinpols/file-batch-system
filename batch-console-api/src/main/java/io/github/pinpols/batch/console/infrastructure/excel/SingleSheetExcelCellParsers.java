@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
@@ -47,7 +46,7 @@ final class SingleSheetExcelCellParsers {
     static String requireEnum(
             Map<String, String> values, String key, Set<String> allowed, int maxLength, List<String> issues) {
         String normalized = requireText(values, key, maxLength, issues);
-        if (EmptyChecks.isNull(normalized)) {
+        if (normalized == null) {
             return null;
         }
         String upper = normalized.toUpperCase(Locale.ROOT);

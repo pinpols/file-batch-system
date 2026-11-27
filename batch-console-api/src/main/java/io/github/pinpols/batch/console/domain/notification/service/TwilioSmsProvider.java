@@ -72,16 +72,16 @@ public class TwilioSmsProvider implements SmsProvider {
         String authToken = properties.getTwilioAuthToken();
         String fromNumber = properties.getTwilioFromNumber();
 
-        if (accountSid == null || accountSid.isBlank()) {
+        if (EmptyChecks.isBlank(accountSid)) {
             return WebhookDeliveryResult.failure(null, "missing twilio accountSid");
         }
-        if (authToken == null || authToken.isBlank()) {
+        if (EmptyChecks.isBlank(authToken)) {
             return WebhookDeliveryResult.failure(null, "missing twilio authToken");
         }
-        if (fromNumber == null || fromNumber.isBlank()) {
+        if (EmptyChecks.isBlank(fromNumber)) {
             return WebhookDeliveryResult.failure(null, "missing twilio fromNumber");
         }
-        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+        if (EmptyChecks.isEmpty(phoneNumbers)) {
             return WebhookDeliveryResult.failure(null, "missing twilio phoneNumbers");
         }
 
@@ -93,7 +93,7 @@ public class TwilioSmsProvider implements SmsProvider {
         try {
             URI apiBaseUri = URI.create(apiBase);
             String apiBaseHost = apiBaseUri.getHost();
-            if (EmptyChecks.isNull(apiBaseHost)) {
+            if (apiBaseHost == null) {
                 return WebhookDeliveryResult.failure(null, "invalid twilio apiBase");
             }
         } catch (RuntimeException e) {
@@ -101,7 +101,7 @@ public class TwilioSmsProvider implements SmsProvider {
         }
 
         for (String phone : phoneNumbers) {
-            if (phone == null || phone.isBlank()) {
+            if (EmptyChecks.isBlank(phone)) {
                 continue;
             }
             String encodedPhone = urlEncode(phone);
@@ -150,7 +150,7 @@ public class TwilioSmsProvider implements SmsProvider {
     /** 末尾斜杠归一化，避免拼出 {@code //2010-04-01}。 */
     private String resolveApiBase() {
         String base = properties.getTwilioApiBase();
-        if (base == null || base.isBlank()) {
+        if (EmptyChecks.isBlank(base)) {
             base = "https://api.twilio.com";
         }
         while (base.endsWith("/")) {

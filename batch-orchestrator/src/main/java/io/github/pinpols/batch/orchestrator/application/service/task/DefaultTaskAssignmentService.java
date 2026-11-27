@@ -111,7 +111,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             String tenantId, Long taskId, String workerCode, WorkerLookupMemo workerMemo) {
         // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
         JobTaskEntity current = jobTaskMapper.selectForWorkerClaim(tenantId, taskId);
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             return null;
         }
         // PERF(5.2): 认领可行性评估与后续 partition lease claim 复用同一次 job_partition selectById。
@@ -131,10 +131,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 .readyStatus(TaskStatus.READY.code())
                 .expectedVersion(current.getVersion())
                 .build());
-        if (EmptyChecks.isNull(claimedTask)) {
+        if (claimedTask == null) {
             return jobTaskMapper.selectForWorkerClaim(tenantId, taskId);
         }
-        if (EmptyChecks.isNotNull(current.getJobPartitionId())) {
+        if (current.getJobPartitionId() != null) {
             // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
             int claimed =
                     claimPartitionLeaseForTask(tenantId, current.getJobPartitionId(), workerCode, eval.partition());
@@ -146,7 +146,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             }
         }
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
-        if (EmptyChecks.isNotNull(stepInstance)
+        if (stepInstance != null
                 && jobStepInstanceMapper.markRunning(MarkRunningParam.withDefaultStatuses()
                                 .tenantId(tenantId)
                                 .id(stepInstance.getId())
@@ -172,14 +172,14 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     public boolean markNonIdempotentExecutionStarted(
             String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
         boolean executionIdentityIsIncomplete = EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isNull(taskId)
+                || taskId == null
                 || EmptyChecks.isBlank(workerCode)
                 || EmptyChecks.isBlank(partitionInvocationId);
         if (executionIdentityIsIncomplete) {
             return false;
         }
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getJobInstanceId())) {
+        if (current == null || current.getJobInstanceId() == null) {
             return false;
         }
         // 将副作用前标记与 REPORT 和租约回收串行化。Worker 进入
@@ -190,10 +190,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return false;
         }
         JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
-        if (EmptyChecks.isNull(partition) || !partitionInvocationId.equals(partition.getCurrentInvocationId())) {
+        if (partition == null || !partitionInvocationId.equals(partition.getCurrentInvocationId())) {
             return false;
         }
-        if (EmptyChecks.isNotNull(current.getNonIdempotentStartedAt())) {
+        if (current.getNonIdempotentStartedAt() != null) {
             return true;
         }
         ExternalOutcomeAuthorization authorization = consumeExternalOutcomeAuthorization(current);
@@ -206,9 +206,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         // 同一任务中其他非幂等步骤重复写入标记时按幂等处理。
         current = jobTaskMapper.selectById(tenantId, taskId);
         partition = jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
-        boolean started = EmptyChecks.isNotNull(current.getNonIdempotentStartedAt())
+        boolean started = current.getNonIdempotentStartedAt() != null
                 && isCurrentExecutionOwner(current, tenantId, workerCode, partitionInvocationId)
-                && EmptyChecks.isNotNull(partition)
+                && partition != null
                 && partitionInvocationId.equals(partition.getCurrentInvocationId());
         if (!started && authorization == ExternalOutcomeAuthorization.CONSUMED) {
             // 不允许开始标记失败却提交授权消费；调用方重试时仍须使用同一根请求。
@@ -219,7 +219,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     private ExternalOutcomeAuthorization consumeExternalOutcomeAuthorization(JobTaskEntity task) {
         JobInstanceEntity instance = jobInstanceMapper.selectById(task.getTenantId(), task.getJobInstanceId());
-        if (EmptyChecks.isNull(instance)) {
+        if (instance == null) {
             return ExternalOutcomeAuthorization.REJECTED;
         }
         Map<String, Object> snapshot = parseInstanceSnapshot(instance);
@@ -227,8 +227,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         Map<?, ?> effective = parameters instanceof Map<?, ?> values ? values : Map.of();
         Object sourceId = effective.get("_externalOutcomeResolutionTaskId");
         Object sourceVersion = effective.get("_externalOutcomeResolutionVersion");
-        if (EmptyChecks.isNull(sourceId) && EmptyChecks.isNull(sourceVersion)) {
-            if (EmptyChecks.isNotNull(instance.getParentInstanceId())) {
+        if (sourceId == null && sourceVersion == null) {
+            if (instance.getParentInstanceId() != null) {
                 JobTaskQuery query = JobTaskQuery.ofJobInstance(task.getTenantId(), instance.getParentInstanceId());
                 boolean unknownParent = jobTaskMapper.selectByQuery(query).stream()
                         .anyMatch(source -> TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN.equals(source.getErrorCode()));
@@ -244,7 +244,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         } catch (IllegalArgumentException invalidIdentity) {
             return ExternalOutcomeAuthorization.REJECTED;
         }
-        if (EmptyChecks.isNull(sourceTaskId) || sourceTaskId <= 0 || EmptyChecks.isNull(version) || version < 0) {
+        if (sourceTaskId == null || sourceTaskId <= 0 || version == null || version < 0) {
             return ExternalOutcomeAuthorization.REJECTED;
         }
         ExternalOutcomeResolutionConsumeParam consumption =
@@ -262,11 +262,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     private static boolean isCurrentExecutionOwner(
             JobTaskEntity task, String tenantId, String workerCode, String partitionInvocationId) {
-        return EmptyChecks.isNotNull(task)
+        return task != null
                 && tenantId.equals(task.getTenantId())
                 && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
                 && workerCode.equals(task.getAssignedWorkerCode())
-                && EmptyChecks.isNotNull(task.getJobPartitionId())
+                && task.getJobPartitionId() != null
                 && EmptyChecks.isNotBlank(partitionInvocationId);
     }
 
@@ -276,13 +276,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
      */
     private boolean renewTaskLease(
             JobTaskEntity current, String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
-        if (EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getJobPartitionId())) {
+        if (current == null || current.getJobPartitionId() == null) {
             return false;
         }
         if (!TaskStatus.RUNNING.code().equals(current.getTaskStatus())) {
             return false;
         }
-        if (EmptyChecks.isNull(workerCode) || !workerCode.equals(current.getAssignedWorkerCode())) {
+        if (workerCode == null || !workerCode.equals(current.getAssignedWorkerCode())) {
             return false;
         }
         // R3-P1-10：invocationId 强制非空，避免多副本同 workerCode 续他人 lease。
@@ -318,21 +318,19 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
         boolean executionStarted = isExecutionStart(detailsJson);
         String executionAttemptId = executionStarted ? executionAttemptId(detailsJson) : null;
-        if (executionStarted && (EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getJobInstanceId()))) {
+        if (executionStarted && (current == null || current.getJobInstanceId() == null)) {
             return new TaskHeartbeatResult(false, false);
         }
-        if (EmptyChecks.isNotBlank(detailsJson)
-                && EmptyChecks.isNotNull(current)
-                && EmptyChecks.isNotNull(current.getJobInstanceId())) {
+        if (EmptyChecks.isNotBlank(detailsJson) && current != null && current.getJobInstanceId() != null) {
             Long instanceId = current.getJobInstanceId();
             jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, instanceId);
             current = jobTaskMapper.selectById(tenantId, taskId);
-            if (EmptyChecks.isNull(current) || !instanceId.equals(current.getJobInstanceId())) {
+            if (current == null || !instanceId.equals(current.getJobInstanceId())) {
                 return new TaskHeartbeatResult(false, false);
             }
         }
-        if (EmptyChecks.isNotNull(executionAttemptId)
-                && EmptyChecks.isNotNull(current.getExecutionAttemptId())
+        if (executionAttemptId != null
+                && current.getExecutionAttemptId() != null
                 && !executionAttemptId.equals(current.getExecutionAttemptId())) {
             return new TaskHeartbeatResult(false, false);
         }
@@ -342,7 +340,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         }
         boolean cancelRequested = Boolean.TRUE.equals(current.getCancelRequested());
         if (executionStarted && !cancelRequested) {
-            if (EmptyChecks.isNotNull(executionAttemptId)
+            if (executionAttemptId != null
                     && jobTaskMapper.confirmExecutionAttempt(tenantId, taskId, executionAttemptId) == 0) {
                 // 回滚本次续租，避免被拒绝的旧尝试延长当前租约。
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -365,15 +363,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return false;
         }
         JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
-        JsonNode marker = EmptyChecks.isNull(details) ? null : details.get("executionStarted");
-        return EmptyChecks.isNotNull(marker) && marker.isBoolean() && marker.booleanValue();
+        JsonNode marker = details == null ? null : details.get("executionStarted");
+        return marker != null && marker.isBoolean() && marker.booleanValue();
     }
 
     /** 旧客户端未提供标识时保持兼容；新客户端的无效标识不能降级为无围栏请求。 */
     private static String executionAttemptId(String detailsJson) {
         JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
-        JsonNode attempt = EmptyChecks.isNull(details) ? null : details.get("executionAttemptId");
-        if (EmptyChecks.isNull(attempt) || attempt.isNull()) {
+        JsonNode attempt = details == null ? null : details.get("executionAttemptId");
+        if (attempt == null || attempt.isNull()) {
             return null;
         }
         if (!attempt.isTextual()
@@ -408,7 +406,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         Instant leaseExpireAt = renewalTime.plusSeconds(leaseDurationSeconds);
         List<RenewLeaseBatchItem> sqlItems = new ArrayList<>(items.size());
         for (LeaseRenewCommand item : items) {
-            if (EmptyChecks.isNull(item)) {
+            if (item == null) {
                 continue;
             }
             String tenantId = item.tenantId();
@@ -416,7 +414,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 continue;
             }
             Long taskId = item.taskId();
-            if (EmptyChecks.isNull(taskId)) {
+            if (taskId == null) {
                 continue;
             }
             String workerCode = item.workerCode();
@@ -443,9 +441,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         }
         List<TaskHeartbeatResult> results = new ArrayList<>(items.size());
         for (LeaseRenewCommand item : items) {
-            RenewLeaseBatchRow row =
-                    EmptyChecks.isNull(item) ? null : renewedByKey.get(item.tenantId() + "\u0000" + item.taskId());
-            boolean taskFound = EmptyChecks.isNotNull(row);
+            RenewLeaseBatchRow row = item == null ? null : renewedByKey.get(item.tenantId() + "\u0000" + item.taskId());
+            boolean taskFound = row != null;
             boolean cancelRequested = taskFound && Boolean.TRUE.equals(row.getCancelRequested());
             results.add(new TaskHeartbeatResult(taskFound, cancelRequested));
         }
@@ -463,7 +460,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     public JobTaskEntity updateTaskStatus(
             String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage) {
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             return null;
         }
         jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
@@ -495,7 +492,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     @Transactional
     public JobTaskEntity markRunning(String tenantId, Long taskId, Instant startedAt) {
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             return null;
         }
         current.setStartedAt(startedAt);
@@ -510,7 +507,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 .expectedVersion(current.getVersion())
                 .build());
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
-        if (EmptyChecks.isNotNull(stepInstance)
+        if (stepInstance != null
                 && jobStepInstanceMapper.markRunning(MarkRunningParam.withDefaultStatuses()
                                 .tenantId(tenantId)
                                 .id(stepInstance.getId())
@@ -534,7 +531,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
      * createdAt 为 null(历史异常数据)直接跳过,不污染样本。
      */
     private void recordLaunchToRunning(JobTaskEntity task, Instant startedAt) {
-        if (EmptyChecks.isNull(task.getCreatedAt()) || EmptyChecks.isNull(startedAt)) {
+        if (task.getCreatedAt() == null || startedAt == null) {
             return;
         }
         Duration wait = Duration.between(task.getCreatedAt(), startedAt);
@@ -544,9 +541,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         Timer.Builder timerBuilder = Timer.builder("batch.task.launch_to_running.duration")
                 .description("Task NEW→RUNNING wait time (orchestrator dispatch → worker start)");
         String tenantId = task.getTenantId();
-        String tenantTag = EmptyChecks.isNull(tenantId) ? "unknown" : task.getTenantId();
+        String tenantTag = tenantId == null ? "unknown" : task.getTenantId();
         String taskType = task.getTaskType();
-        String taskTypeTag = EmptyChecks.isNull(taskType) ? "unknown" : task.getTaskType();
+        String taskTypeTag = taskType == null ? "unknown" : task.getTaskType();
         Tags tags = Tags.of("tenant_id", tenantTag, "task_type", taskTypeTag);
         timerBuilder
                 .tags(tags)
@@ -567,15 +564,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
      */
     @Override
     public EffectiveTaskConfig loadEffectiveConfig(String tenantId, JobTaskEntity task) {
-        if (EmptyChecks.isNull(task)) {
+        if (task == null) {
             return null;
         }
         Long taskId = task.getId();
         JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
-        if (EmptyChecks.isNull(instance)) {
+        if (instance == null) {
             return null;
         }
-        JobPartitionEntity partition = EmptyChecks.isNull(task.getJobPartitionId())
+        JobPartitionEntity partition = task.getJobPartitionId() == null
                 ? null
                 : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
         JobDefinitionView definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
@@ -607,26 +604,26 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         String traceId = instance.getTraceId();
         String executionMode = hasExecutionPolicySnapshot
                 ? textValue(executionPolicy.get("executionMode"))
-                : EmptyChecks.isNull(definition) ? null : definition.executionMode();
+                : definition == null ? null : definition.executionMode();
         String watermarkField = hasExecutionPolicySnapshot
                 ? textValue(executionPolicy.get("watermarkField"))
-                : EmptyChecks.isNull(definition) ? null : definition.watermarkField();
+                : definition == null ? null : definition.watermarkField();
         String highWaterMarkIn = instance.getHighWaterMarkIn();
         String retryPolicy = hasExecutionPolicySnapshot
                 ? textValue(executionPolicy.get("retryPolicy"))
-                : EmptyChecks.isNull(definition) ? null : definition.retryPolicy();
+                : definition == null ? null : definition.retryPolicy();
         Integer retryMaxCount = hasExecutionPolicySnapshot
                 ? intValue(executionPolicy.get("retryMaxCount"))
-                : EmptyChecks.isNull(definition) ? null : definition.retryMaxCount();
+                : definition == null ? null : definition.retryMaxCount();
         Integer timeoutSeconds = hasExecutionPolicySnapshot
                 ? intValue(executionPolicy.get("timeoutSeconds"))
-                : EmptyChecks.isNull(definition) ? null : definition.timeoutSeconds();
-        Integer partitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
+                : definition == null ? null : definition.timeoutSeconds();
+        Integer partitionNo = partition == null ? null : partition.getPartitionNo();
         Integer partitionCount = instance.getExpectedPartitionCount();
-        String partitionKey = EmptyChecks.isNull(partition) ? null : partition.getPartitionKey();
+        String partitionKey = partition == null ? null : partition.getPartitionKey();
         Instant dataIntervalStart = instance.getDataIntervalStart();
         Instant dataIntervalEnd = instance.getDataIntervalEnd();
-        String partitionInvocationId = EmptyChecks.isNull(partition) ? null : partition.getCurrentInvocationId();
+        String partitionInvocationId = partition == null ? null : partition.getCurrentInvocationId();
         List<DependencyResultReference> dependencyResultSnapshot = dependencyResultSnapshot(instanceSnapshot);
         ReplayExecutionGuard replayExecutionGuard = replayExecutionGuard(instanceSnapshot);
         EffectiveTaskConfig effectiveConfig = EffectiveTaskConfig.builder()
@@ -687,13 +684,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     private ReplayExecutionGuard replayExecutionGuard(Map<String, Object> instanceSnapshot) {
         Object value = instanceSnapshot.get("replayExecutionGuard");
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {
             String serializedGuard = JsonUtils.toJson(value);
             ReplayExecutionGuard guard = JsonUtils.fromJson(serializedGuard, ReplayExecutionGuard.class);
-            if (EmptyChecks.isNull(guard)) {
+            if (guard == null) {
                 throw new IllegalArgumentException("replay execution guard is empty");
             }
             return guard;
@@ -705,7 +702,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseInstanceSnapshot(JobInstanceEntity instance) {
-        if (EmptyChecks.isNull(instance)) {
+        if (instance == null) {
             return Map.of();
         }
         String paramsSnapshot = instance.getParamsSnapshot();
@@ -734,12 +731,12 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
 
     private String textValue(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> parsePartitionSnapshot(JobPartitionEntity partition) {
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             return Map.of();
         }
         String inputSnapshot = partition.getInputSnapshot();
@@ -788,22 +785,21 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             String tenantId, Long partitionId, String workerCode, JobPartitionEntity preloadedPartition) {
         // PERF(5.2): 优先复用认领评估阶段已读到的 partition（无 job_partition 写入介于其间，version 未漂移）；
         // 缺省（null）时回退到自读，保持与原实现完全一致的行为。
-        JobPartitionEntity partition = EmptyChecks.isNotNull(preloadedPartition)
-                ? preloadedPartition
-                : jobPartitionMapper.selectById(tenantId, partitionId);
-        if (EmptyChecks.isNull(partition)) {
+        JobPartitionEntity partition =
+                preloadedPartition != null ? preloadedPartition : jobPartitionMapper.selectById(tenantId, partitionId);
+        if (partition == null) {
             return 0;
         }
         JobPartitionEntity claimed = tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
-        if (EmptyChecks.isNotNull(claimed)) {
+        if (claimed != null) {
             return 1;
         }
         partition = jobPartitionMapper.selectById(tenantId, partitionId);
-        if (EmptyChecks.isNull(partition) || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())) {
+        if (partition == null || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())) {
             return 0;
         }
         JobPartitionEntity retriedClaim = tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
-        return EmptyChecks.isNotNull(retriedClaim) ? 1 : 0;
+        return retriedClaim != null ? 1 : 0;
     }
 
     private JobPartitionEntity tryClaimPartitionLeaseOnce(
@@ -827,7 +823,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
 
     private static String resolvePriorityBand(Integer priority) {
-        if (EmptyChecks.isNull(priority) || priority <= 3) {
+        if (priority == null || priority <= 3) {
             return SchedulingPriorityBand.HIGH.code();
         }
         if (priority <= 6) {
@@ -848,11 +844,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return new ClaimEval(false, null);
         }
         // PERF(5.2c): memo 非空时同 (tenant,workerCode) 只查一次 worker_registry（含缓存 miss）。
-        WorkerRegistryEntity workerRegistry = EmptyChecks.isNull(workerMemo)
+        WorkerRegistryEntity workerRegistry = workerMemo == null
                 ? resolveClaimableWorker(tenantId, workerCode)
                 : workerMemo.resolve(tenantId, workerCode, this::resolveClaimableWorker);
-        if (EmptyChecks.isNull(workerRegistry)
-                || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
+        if (workerRegistry == null || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
             return new ClaimEval(false, null);
         }
         // 调度记录可以绑定具体实例，也可以绑定稳定资源池。资源池中的任一在线实例均可竞争
@@ -873,7 +868,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return new ClaimEval(true, null);
         }
         JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             return new ClaimEval(true, partition);
         }
         String partitionWorkerGroup = partition.getWorkerGroup();
@@ -904,7 +899,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return null;
         }
         WorkerRegistryEntity fallback = workerRegistryMapper.selectByTenantAndWorkerCode(fallbackTenant, workerCode);
-        if (EmptyChecks.isNotNull(fallback)) {
+        if (fallback != null) {
             log.debug(
                     "worker claim resolved via shared tenant fallback: tenantId={}, fallbackTenant={},"
                             + " workerCode={}",
@@ -916,7 +911,6 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
 
     private static boolean isOnlineWorker(WorkerRegistryEntity worker) {
-        return EmptyChecks.isNotNull(worker)
-                && WorkerRegistryStatus.ONLINE.code().equals(worker.status());
+        return worker != null && WorkerRegistryStatus.ONLINE.code().equals(worker.status());
     }
 }

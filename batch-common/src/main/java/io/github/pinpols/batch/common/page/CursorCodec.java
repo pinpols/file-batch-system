@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.page;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -27,7 +28,7 @@ public final class CursorCodec {
 
     /** 把排序键 map 编码成 base64(JSON) token。空 map 返回 null。 */
     public static String encode(Map<String, Object> sortKey) {
-        if (sortKey == null || sortKey.isEmpty()) {
+        if (EmptyChecks.isEmpty(sortKey)) {
             return null;
         }
         String json = JsonUtils.toJson(sortKey);
@@ -43,7 +44,7 @@ public final class CursorCodec {
      * <p>empty map 本身不保证 SQL 返回空列表；调用方不得将损坏 token 静默解释为有效首页游标。
      */
     public static Map<String, Object> decode(String token) {
-        if (token == null || token.isBlank()) {
+        if (EmptyChecks.isBlank(token)) {
             return Collections.emptyMap();
         }
         try {

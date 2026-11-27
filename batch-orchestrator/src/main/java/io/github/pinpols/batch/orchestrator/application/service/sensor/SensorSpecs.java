@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -38,7 +37,7 @@ public final class SensorSpecs {
 
     public static Integer intValue(Map<String, Object> spec, String key) {
         Long value = longValue(spec, key);
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {

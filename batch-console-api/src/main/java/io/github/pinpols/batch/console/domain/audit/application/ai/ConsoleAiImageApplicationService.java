@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.audit.application.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
@@ -71,9 +70,7 @@ public class ConsoleAiImageApplicationService {
 
     private ConsoleRequestMetadata currentIdentity() {
         ConsoleRequestMetadata metadata = metadataResolver.current();
-        if (EmptyChecks.isNull(metadata)
-                || !Texts.hasText(metadata.tenantId())
-                || !Texts.hasText(metadata.operatorId())) {
+        if (metadata == null || !Texts.hasText(metadata.tenantId()) || !Texts.hasText(metadata.operatorId())) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
         return metadata;
@@ -81,8 +78,6 @@ public class ConsoleAiImageApplicationService {
 
     private boolean supportsImageInput() {
         ConsoleAiClients clients = clientsProvider.getIfAvailable();
-        return EmptyChecks.isNotNull(clients)
-                && EmptyChecks.isNotNull(clients.primary())
-                && clients.primary().imageInput();
+        return clients != null && clients.primary() != null && clients.primary().imageInput();
     }
 }

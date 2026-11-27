@@ -55,7 +55,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
         List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
         int snapshotted = 0;
         for (String tenantId : tenantIds) {
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyChecks.isBlank(tenantId)) {
                 continue;
             }
             try {
@@ -99,6 +99,6 @@ public class QuotaRuntimeStateSnapshotScheduler {
     }
 
     private int nonNegativeBurstLimit(Integer burstLimit) {
-        return EmptyChecks.isNull(burstLimit) ? 0 : Math.max(0, burstLimit);
+        return burstLimit == null ? 0 : Math.max(0, burstLimit);
     }
 }

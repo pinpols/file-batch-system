@@ -152,7 +152,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
 
     private static boolean notBlank(String s) {
-        return s != null && !s.isBlank();
+        return EmptyChecks.isNotBlank(s);
     }
 
     /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
@@ -462,7 +462,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         }
         Thread t = this.kafkaThread.get();
         if (t != null && t != Thread.currentThread()) {
-            long configuredJoinTimeoutMs = EmptyChecks.isNull(joinTimeout) ? 5_000L : joinTimeout.toMillis();
+            long configuredJoinTimeoutMs = joinTimeout == null ? 5_000L : joinTimeout.toMillis();
             long timeoutMs = Math.max(0L, configuredJoinTimeoutMs);
             if (timeoutMs > 0L) {
                 try {

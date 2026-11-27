@@ -42,7 +42,7 @@ public class ConsoleOidcIdentityService {
     @Transactional
     public ConsoleOidcIdentityResponse bind(String tenantId, ConsoleOidcIdentityRequest request, String linkedBy) {
         requireConfiguredTenant(tenantId);
-        if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(linkedBy)) {
+        if (request == null || EmptyChecks.isBlank(linkedBy)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
         }
         String subject = request.subject();
@@ -85,7 +85,7 @@ public class ConsoleOidcIdentityService {
 
     private void requireConfiguredTenant(String tenantId) {
         boolean oidcTenantIsNotEnabled =
-                !properties.isEnabled() || EmptyChecks.isNull(tenantId) || !tenantId.equals(properties.getTenantId());
+                !properties.isEnabled() || tenantId == null || !tenantId.equals(properties.getTenantId());
         if (oidcTenantIsNotEnabled) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.provider_unavailable");
         }

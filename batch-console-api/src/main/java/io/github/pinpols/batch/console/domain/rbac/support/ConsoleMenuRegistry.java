@@ -99,7 +99,7 @@ public class ConsoleMenuRegistry {
     }
 
     private static String normalizeRole(String role) {
-        if (EmptyChecks.isNull(role)) {
+        if (role == null) {
             return ACCESS_ADMIN;
         }
         String trimmedRole = role.trim();

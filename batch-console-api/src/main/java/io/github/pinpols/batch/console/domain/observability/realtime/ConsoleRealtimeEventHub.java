@@ -220,7 +220,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     }
 
     private void replay(Subscription subscription) {
-        if (subscription.cursor == null || subscription.cursor.isBlank()) {
+        if (EmptyChecks.isBlank(subscription.cursor)) {
             return;
         }
         RealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
@@ -287,11 +287,11 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     }
 
     private String normalizeStream(String stream) {
-        return (stream == null || stream.isBlank()) ? DEFAULT_STREAM : stream.trim();
+        return (EmptyChecks.isBlank(stream)) ? DEFAULT_STREAM : stream.trim();
     }
 
     private String normalizeFilter(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+        return EmptyChecks.isBlank(value) ? null : value.trim();
     }
 
     private static ConsoleSseEventResponse toResponse(ConsoleSseEvent event) {
@@ -299,8 +299,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
         String eventType = event.eventType();
         String cursor = event.cursor();
         Object data = event.data();
-        Instant emittedAt =
-                EmptyChecks.isNotNull(event.emittedAt()) ? event.emittedAt() : BatchDateTimeSupport.utcNow();
+        Instant emittedAt = event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow();
         return new ConsoleSseEventResponse(stream, eventType, cursor, data, emittedAt);
     }
 

@@ -30,7 +30,7 @@ public class FrozenFileTemplateResolver {
 
     public Map<String, Object> resolve(FileTemplateConfigRequest request) {
         Map<String, Object> payload = parsePayload(request.rawPayload());
-        Map<String, Object> attributes = EmptyChecks.isNull(request.attributes()) ? Map.of() : request.attributes();
+        Map<String, Object> attributes = request.attributes() == null ? Map.of() : request.attributes();
         if (payload.containsKey(FrozenFileTemplateSnapshot.PAYLOAD_KEY)) {
             return reveal(payload.get(FrozenFileTemplateSnapshot.PAYLOAD_KEY), request);
         }
@@ -58,7 +58,7 @@ public class FrozenFileTemplateResolver {
         }
         Map<String, Object> configuration = definitions.loadLatestTemplateConfig(
                 request.tenantId(), request.templateCode(), request.templateType());
-        return EmptyChecks.isNull(configuration) ? Map.of() : configuration;
+        return configuration == null ? Map.of() : configuration;
     }
 
     private Map<String, Object> reveal(Object protectedValue, FileTemplateConfigRequest request) {
@@ -68,7 +68,7 @@ public class FrozenFileTemplateResolver {
             }
             String plaintext = secretPayloadProtector.revealEncrypted(ciphertext);
             FrozenFileTemplateSnapshot snapshot = JsonUtils.fromJsonStrict(plaintext, FrozenFileTemplateSnapshot.class);
-            if (EmptyChecks.isNull(snapshot)) {
+            if (snapshot == null) {
                 throw invalidSnapshot();
             }
             snapshot.requireIdentity(request.tenantId(), request.templateCode(), request.templateType());
@@ -111,7 +111,7 @@ public class FrozenFileTemplateResolver {
                 // 内联文件内容可能很大，不应重复物化无关值。
                 parser.skipChildren();
             }
-            if (EmptyChecks.isNotNull(parser.nextToken())) {
+            if (parser.nextToken() != null) {
                 throw invalidSnapshot();
             }
             return selectedFields;

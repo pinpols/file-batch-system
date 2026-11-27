@@ -17,7 +17,7 @@ public final class CorrelationIds {
 
     public static String normalize(@Nullable String value, String fallback) {
         String normalized = normalize(value);
-        if (normalized == null || normalized.isBlank()) {
+        if (EmptyChecks.isBlank(normalized)) {
             return fallback;
         }
         return normalized;
@@ -25,7 +25,7 @@ public final class CorrelationIds {
 
     @Nullable
     public static String normalize(@Nullable String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return null;
         }
         int initialCapacity = Math.min(value.length(), MAX_HEADER_ID_LENGTH);

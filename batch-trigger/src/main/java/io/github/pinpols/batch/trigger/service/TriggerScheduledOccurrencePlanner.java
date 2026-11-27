@@ -38,15 +38,15 @@ public class TriggerScheduledOccurrencePlanner {
 
     @Transactional
     public int materialize(TriggerDescriptor descriptor, ScheduledFireTimeSource trigger, Instant now) {
-        boolean occurrenceInputIsIncomplete = EmptyChecks.isNull(descriptor)
-                || EmptyChecks.isNull(trigger)
+        boolean occurrenceInputIsIncomplete = descriptor == null
+                || trigger == null
                 || EmptyChecks.isBlank(descriptor.getTenantId())
-                || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
+                || descriptor.getWorkflowDefinitionId() == null
                 || EmptyChecks.isBlank(descriptor.getWorkflowCode());
         if (occurrenceInputIsIncomplete) {
             return 0;
         }
-        int scheduleVersion = EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        int scheduleVersion = descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
         long configurationRevision = occurrenceMapper.selectTenantConfigurationRevision(descriptor.getTenantId());
         Instant configurationUpdatedAt = occurrenceMapper.selectTenantConfigurationUpdatedAt(descriptor.getTenantId());
         String calendarCode = CodeNormalizer.toConfigFormOrNull(descriptor.getCalendarCode());
@@ -54,8 +54,8 @@ public class TriggerScheduledOccurrencePlanner {
         ZoneId fallbackZone = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
         ScheduledOccurrenceCoverage coverage = occurrenceMapper.selectCoverage(
                 descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), scheduleVersion, calendarCode);
-        Instant coverageFrom = EmptyChecks.isNull(coverage) ? now.minusMillis(1) : coverage.coverageFrom();
-        boolean coverageCurrent = EmptyChecks.isNotNull(coverage)
+        Instant coverageFrom = coverage == null ? now.minusMillis(1) : coverage.coverageFrom();
+        boolean coverageCurrent = coverage != null
                 && occurrenceMapper.isCoverageCurrentForTenantConfiguration(
                         descriptor.getTenantId(), descriptor.getWorkflowDefinitionId());
         Instant scanAfter;
@@ -63,7 +63,7 @@ public class TriggerScheduledOccurrencePlanner {
             scanAfter = coverage.coverageThrough().minusMillis(1);
         } else {
             Instant replanFrom = configurationUpdatedAt;
-            if (EmptyChecks.isNull(replanFrom)) {
+            if (replanFrom == null) {
                 replanFrom = now;
             }
             if (replanFrom.isBefore(coverageFrom)) {
@@ -73,7 +73,7 @@ public class TriggerScheduledOccurrencePlanner {
         }
         Instant requestedThrough = now.plus(LOOKAHEAD);
         Instant requestedCoverageThrough =
-                EmptyChecks.isNull(coverage) || coverage.coverageThrough().isBefore(requestedThrough)
+                coverage == null || coverage.coverageThrough().isBefore(requestedThrough)
                         ? requestedThrough
                         : coverage.coverageThrough();
         ScanWindow scanWindow = enumerateBoundedWindow(trigger, scanAfter, requestedCoverageThrough);

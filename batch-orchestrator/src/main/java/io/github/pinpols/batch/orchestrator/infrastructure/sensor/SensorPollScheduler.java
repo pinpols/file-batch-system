@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorStateMachine;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -65,7 +66,7 @@ public class SensorPollScheduler {
             try {
                 // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
                 String tenantId = resolveTenantId(nodeRun);
-                if (tenantId == null || tenantId.isBlank()) {
+                if (EmptyChecks.isBlank(tenantId)) {
                     // 所属工作流缺失或租户不可解析时不能在无租户上下文下执行状态变更。
                     log.warn(
                             "Skipping WAIT sensor probe because owning tenant could not be resolved:"

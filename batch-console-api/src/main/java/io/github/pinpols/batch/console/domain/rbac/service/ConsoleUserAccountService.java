@@ -76,13 +76,13 @@ public class ConsoleUserAccountService {
     public ConsoleUserAccountResponse create(
             String tenantId, String username, String password, String displayName, String authoritiesCsv) {
         Guard.require(Texts.hasText(username), USERNAME_REQUIRED);
-        Guard.require(password != null && !password.isBlank(), "password is required");
+        Guard.require(EmptyChecks.isNotBlank(password), "password is required");
         String effectiveTenantId = enforceTenantScope(tenantId);
         String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
         enforceGrantableAuthorities(normalizedAuthorities);
         enforceRoleTenantBinding(effectiveTenantId, normalizedAuthorities);
         ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
-        if (EmptyChecks.isNotNull(existingAccount)) {
+        if (existingAccount != null) {
             throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
         }
         ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
@@ -107,7 +107,7 @@ public class ConsoleUserAccountService {
         enforceGrantableAuthorities(normalizedRole);
         enforceRoleTenantBinding(effectiveTenantId, normalizedRole);
         ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
-        if (EmptyChecks.isNotNull(existingAccount)) {
+        if (existingAccount != null) {
             throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
         }
         ConsoleUserAccountInsertProvisionedParam consoleUserAccountInsertProvisionedParam =
@@ -149,8 +149,8 @@ public class ConsoleUserAccountService {
      */
     public void changeOwnPassword(String username, String currentPassword, String newPassword) {
         Guard.requireText(username, USERNAME_REQUIRED);
-        Guard.require(currentPassword != null && !currentPassword.isBlank(), "current password is required");
-        Guard.require(newPassword != null && !newPassword.isBlank(), "new password is required");
+        Guard.require(EmptyChecks.isNotBlank(currentPassword), "current password is required");
+        Guard.require(EmptyChecks.isNotBlank(newPassword), "new password is required");
         ConsoleUserAccountEntity account = userAccountMapper
                 .findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", username));
@@ -239,7 +239,7 @@ public class ConsoleUserAccountService {
             }
         }
         ConsolePrincipal principal = currentPrincipal();
-        if (EmptyChecks.isNull(principal) || isGlobalCaller(principal)) return;
+        if (principal == null || isGlobalCaller(principal)) return;
         for (String authority : requested) {
             if (!TENANT_ADMIN_GRANTABLE_ROLES.contains(authority)) {
                 throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);
@@ -275,7 +275,7 @@ public class ConsoleUserAccountService {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active");
         }
         TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
-        if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status())) {
+        if (tenant == null || !"ACTIVE".equals(tenant.status())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active", tenantId);
         }
     }
@@ -289,8 +289,8 @@ public class ConsoleUserAccountService {
 
     private ConsoleUserAccountResponse toResponse(ConsoleUserAccountRow row) {
         boolean enabled = Boolean.TRUE.equals(row.enabled());
-        String createdAtText = EmptyChecks.isNull(row.createdAt()) ? null : String.valueOf(row.createdAt());
-        String updatedAtText = EmptyChecks.isNull(row.updatedAt()) ? null : String.valueOf(row.updatedAt());
+        String createdAtText = row.createdAt() == null ? null : String.valueOf(row.createdAt());
+        String updatedAtText = row.updatedAt() == null ? null : String.valueOf(row.updatedAt());
         return new ConsoleUserAccountResponse(
                 row.id(),
                 row.tenantId(),
@@ -303,7 +303,7 @@ public class ConsoleUserAccountService {
     }
 
     private String normalizeAuthorities(String raw) {
-        if (raw == null || raw.isBlank()) {
+        if (EmptyChecks.isBlank(raw)) {
             return ConsoleRoles.TENANT_USER;
         }
         String trimmedAuthorities = raw.trim();

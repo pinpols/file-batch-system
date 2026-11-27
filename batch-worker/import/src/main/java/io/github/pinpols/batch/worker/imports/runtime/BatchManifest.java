@@ -47,7 +47,7 @@ public record BatchManifest(
 
     /** 是否带 v2 的逐文件映射(束作业据此判断走异构展开)。 */
     public boolean hasFileMapping() {
-        return fileMapping != null && !fileMapping.isEmpty();
+        return EmptyChecks.isNotEmpty(fileMapping);
     }
 
     /** 查某文件声明的模板 code(导入束);无映射 / 未声明 / 入参为空时返回 empty。 */
@@ -64,10 +64,10 @@ public record BatchManifest(
         if (fileMapping == null || fileName == null) {
             return Optional.empty();
         }
-        Stream<FileMapping> fileNameMatches = fileMapping.stream()
-                .filter(mapping -> EmptyChecks.isNotNull(mapping) && fileName.equals(mapping.fileName()));
+        Stream<FileMapping> fileNameMatches =
+                fileMapping.stream().filter(mapping -> mapping != null && fileName.equals(mapping.fileName()));
         return fileNameMatches
-                .filter(mapping -> EmptyChecks.isNotNull(extractor.apply(mapping)))
+                .filter(mapping -> extractor.apply(mapping) != null)
                 .map(extractor)
                 .findFirst();
     }
@@ -85,7 +85,7 @@ public record BatchManifest(
             return false;
         }
         boolean hasNoRequiredInputFiles =
-                EmptyChecks.isNull(requiredFiles) || EmptyChecks.isEmpty(Objects.requireNonNull(requiredFiles));
+                requiredFiles == null || EmptyChecks.isEmpty(Objects.requireNonNull(requiredFiles));
         if (!hasNoRequiredInputFiles) {
             return false;
         }

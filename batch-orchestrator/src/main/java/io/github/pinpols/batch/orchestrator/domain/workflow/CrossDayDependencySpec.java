@@ -47,8 +47,7 @@ public record CrossDayDependencySpec(
 
     /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
     public String resolvedStrategy() {
-        if (EmptyChecks.isNull(consumeVersionStrategy)
-                || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
+        if (consumeVersionStrategy == null || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
             return STRATEGY_EFFECTIVE_ONLY;
         }
         String trimmedStrategy = consumeVersionStrategy.trim();
@@ -64,8 +63,7 @@ public record CrossDayDependencySpec(
 
     public boolean hasValidVersionSelector() {
         String strategy = resolvedStrategy();
-        return !STRATEGY_SPECIFIC_VERSION.equals(strategy)
-                || (EmptyChecks.isNotNull(specificVersionNo) && specificVersionNo > 0);
+        return !STRATEGY_SPECIFIC_VERSION.equals(strategy) || (specificVersionNo != null && specificVersionNo > 0);
     }
 
     public boolean isOffsetMode() {
@@ -73,6 +71,6 @@ public record CrossDayDependencySpec(
     }
 
     public boolean isRangeMode() {
-        return bizDateRange != null && !bizDateRange.isBlank();
+        return EmptyChecks.isNotBlank(bizDateRange);
     }
 }

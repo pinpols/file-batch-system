@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.workflow.web.support;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
@@ -62,7 +61,7 @@ public final class WorkflowMermaidRenderer {
     private static String shapeFor(ConsoleWorkflowNodeResponse n) {
         String label = escapeLabel(displayLabel(n));
         WorkflowNodeType type = DictEnum.fromCode(WorkflowNodeType.class, n.nodeType());
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return "[" + label + "]";
         }
         return switch (type) {
@@ -82,7 +81,7 @@ public final class WorkflowMermaidRenderer {
 
     private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
         WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, e.edgeType());
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return " --> ";
         }
         if (type == WorkflowEdgeType.CONDITION) {

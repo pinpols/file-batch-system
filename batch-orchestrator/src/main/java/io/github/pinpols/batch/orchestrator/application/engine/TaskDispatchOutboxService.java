@@ -95,8 +95,8 @@ public class TaskDispatchOutboxService {
             String traceId,
             String eventKey,
             RunMode runModeOverride) {
-        Long jobPartitionId = EmptyChecks.isNotNull(partition) ? partition.getId() : null;
-        String idempotencyKey = EmptyChecks.isNotNull(partition)
+        Long jobPartitionId = partition != null ? partition.getId() : null;
+        String idempotencyKey = partition != null
                 ? partition.getIdempotencyKey()
                 : resolveIdempotencyKeyWithoutPartition(task, eventKey);
         // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
@@ -118,7 +118,7 @@ public class TaskDispatchOutboxService {
         String messageIdempotencyKey = idempotencyKey;
         Instant messageCreatedAt = BatchDateTimeSupport.utcNow();
         SchedulingContext schedulingContext = buildSchedulingContext(jobInstance);
-        Integer messagePartitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
+        Integer messagePartitionNo = partition == null ? null : partition.getPartitionNo();
         Integer partitionCount = resolvePartitionCount(jobInstance);
         W3cTraceContext traceContext = OtelTracePropagation.captureCurrent();
         TaskDispatchMessage message = new TaskDispatchMessage(
@@ -143,7 +143,7 @@ public class TaskDispatchOutboxService {
         // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
         // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
         // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
-        Integer priority = EmptyChecks.isNotNull(task.getPriority()) ? task.getPriority() : jobInstance.getPriority();
+        Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
         String resolvedKey = EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
         DomainEvent.Builder eventBuilder = DomainEvent.builder(task.getTenantId());
         Long eventAggregateId = task.getId();
@@ -175,7 +175,7 @@ public class TaskDispatchOutboxService {
         LocalDate bizDate = jobInstance.getBizDate();
         LocalDate prevBizDate = bizDateArithmetic.previousBusinessDay(bizDate);
         LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
-        Boolean isHoliday = EmptyChecks.isNotNull(bizDate) ? bizDateArithmetic.isWeekend(bizDate) : null;
+        Boolean isHoliday = bizDate != null ? bizDateArithmetic.isWeekend(bizDate) : null;
         return SchedulingContext.builder()
                 .bizDate(bizDate)
                 .prevBizDate(prevBizDate)
@@ -187,11 +187,11 @@ public class TaskDispatchOutboxService {
     }
 
     private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             return null;
         }
         Integer expected = jobInstance.getExpectedPartitionCount();
-        if (EmptyChecks.isNotNull(expected) && expected > 0) {
+        if (expected != null && expected > 0) {
             return expected;
         }
         Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
@@ -218,7 +218,7 @@ public class TaskDispatchOutboxService {
 
     @SuppressWarnings("unchecked")
     private Object nestedValue(Map<String, Object> params, String objectKey, String valueKey) {
-        if (EmptyChecks.isNull(params) || EmptyChecks.isNull(objectKey) || EmptyChecks.isNull(valueKey)) {
+        if (params == null || objectKey == null || valueKey == null) {
             return null;
         }
         Object nested = params.get(objectKey);
@@ -229,12 +229,12 @@ public class TaskDispatchOutboxService {
     }
 
     private Integer firstPositiveInt(Object... values) {
-        if (EmptyChecks.isNull(values)) {
+        if (values == null) {
             return null;
         }
         for (Object value : values) {
             Integer parsed = parsePositiveInt(value);
-            if (EmptyChecks.isNotNull(parsed)) {
+            if (parsed != null) {
                 return parsed;
             }
         }
@@ -263,11 +263,11 @@ public class TaskDispatchOutboxService {
      * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
      */
     private void persistRunModeOverride(JobInstanceEntity jobInstance, JobTaskEntity task, RunMode runModeOverride) {
-        if (EmptyChecks.isNull(runModeOverride) || EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getId())) {
+        if (runModeOverride == null || task == null || task.getId() == null) {
             return;
         }
-        if (EmptyChecks.isNotNull(jobInstance.getDryRun())
-                && EmptyChecks.isNotNull(task.getDryRun())
+        if (jobInstance.getDryRun() != null
+                && task.getDryRun() != null
                 && !jobInstance.getDryRun().equals(task.getDryRun())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
         }
@@ -292,8 +292,8 @@ public class TaskDispatchOutboxService {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
         }
         Object dryRun = payload.get("dryRun");
-        boolean payloadDryRun = EmptyChecks.isNotNull(dryRun) && "true".equalsIgnoreCase(dryRun.toString());
-        if (EmptyChecks.isNotNull(task.getDryRun()) && task.getDryRun() != payloadDryRun) {
+        boolean payloadDryRun = dryRun != null && "true".equalsIgnoreCase(dryRun.toString());
+        if (task.getDryRun() != null && task.getDryRun() != payloadDryRun) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
         }
         Map<String, Object> result = new LinkedHashMap<>();
@@ -333,7 +333,7 @@ public class TaskDispatchOutboxService {
     }
 
     private String resolvePriorityBand(Integer priority) {
-        if (EmptyChecks.isNull(priority) || priority <= 3) {
+        if (priority == null || priority <= 3) {
             return SchedulingPriorityBand.HIGH.code();
         }
         if (priority <= 6) {

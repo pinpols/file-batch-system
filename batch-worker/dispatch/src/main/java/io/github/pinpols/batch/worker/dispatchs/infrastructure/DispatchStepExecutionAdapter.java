@@ -79,8 +79,8 @@ public class DispatchStepExecutionAdapter
         String dispatchId = String.valueOf(taskIdValue);
         context.setDispatchId(dispatchId);
         Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-        boolean rawDispatchPayloadNeedsDecoding = EmptyChecks.isNull(dispatchPayload)
-                && EmptyChecks.isNotNull(context.getRawPayload())
+        boolean rawDispatchPayloadNeedsDecoding = dispatchPayload == null
+                && context.getRawPayload() != null
                 && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
         if (rawDispatchPayloadNeedsDecoding) {
             dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);

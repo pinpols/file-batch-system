@@ -101,7 +101,7 @@ public class TenantConfigPackageRowProjections {
                     m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
                     m.put(
                             COL_DEPENDS_ON_JOB_CODES,
-                            EmptyChecks.isNull(e.getDependsOnJobCodesCsv())
+                            e.getDependsOnJobCodesCsv() == null
                                     ? e.getDependsOnJobCode()
                                     : e.getDependsOnJobCodesCsv().replace('\u001f', ','));
                     m.put(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS, dependencyBizDateAlignments(e));

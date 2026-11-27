@@ -76,7 +76,7 @@ public class CrossDayDependencyReconciler {
         Instant now = dateTimeSupport.nowInstant();
         List<WorkflowNodeRunEntity> waiting = workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
                 STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
-        if (waiting == null || waiting.isEmpty()) {
+        if (EmptyChecks.isEmpty(waiting)) {
             return;
         }
         for (WorkflowNodeRunEntity entry : waiting) {
@@ -97,11 +97,11 @@ public class CrossDayDependencyReconciler {
         // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
         Long workflowRunId = nodeRun.getWorkflowRunId();
         WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByIdAnyTenant(workflowRunId);
-        if (EmptyChecks.isNull(workflowRun)) {
+        if (workflowRun == null) {
             return;
         }
         String tenantId = workflowRun.getTenantId();
-        if (tenantId == null || tenantId.isBlank()) {
+        if (EmptyChecks.isBlank(tenantId)) {
             return;
         }
         RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileOneBound(nodeRun, workflowRun, now));
@@ -110,12 +110,12 @@ public class CrossDayDependencyReconciler {
     /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
     private void reconcileOneBound(WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-        WorkflowNodeEntity workflowNode = EmptyChecks.isNull(snapshot)
+        WorkflowNodeEntity workflowNode = snapshot == null
                 ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
                         workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
                 : snapshot.node(nodeRun.getNodeCode());
-        boolean nodeHasNoCrossDayDependencies = EmptyChecks.isNull(workflowNode)
-                || EmptyChecks.isNull(workflowNode.getCrossDayDependencies())
+        boolean nodeHasNoCrossDayDependencies = workflowNode == null
+                || workflowNode.getCrossDayDependencies() == null
                 || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
         if (nodeHasNoCrossDayDependencies) {
             // 无可用依赖声明时失败关闭，避免无依据地派发。
@@ -136,7 +136,7 @@ public class CrossDayDependencyReconciler {
             WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
             WorkflowDagService.DagNodeResolution resolution =
                     new WorkflowDagService.DagNodeResolution(nodeRun.getNodeCode(), nodeRun.getNodeType());
-            String sourcePayload = EmptyChecks.isNull(nodeRun.getSourcePayloadProtected())
+            String sourcePayload = nodeRun.getSourcePayloadProtected() == null
                     ? null
                     : secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
             String traceId = workflowRun.getTraceId();
@@ -179,7 +179,7 @@ public class CrossDayDependencyReconciler {
                         .id(nodeRun.getId())
                         .nodeStatus(STATUS_FAILED)
                         .expectedStatus(STATUS_WAITING_DEPENDENCY)
-                        .errorCode(EmptyChecks.isNull(failureCode) ? "CROSS_DAY_DEP_FAILED" : failureCode)
+                        .errorCode(failureCode == null ? "CROSS_DAY_DEP_FAILED" : failureCode)
                         .errorMessage("cross-day dependency reconcile fail")
                         .durationMs(0L)
                         .finishedAt(now)
@@ -195,7 +195,7 @@ public class CrossDayDependencyReconciler {
         detail.put("nodeCode", nodeRun.getNodeCode());
         detail.put(
                 "bizDate",
-                EmptyChecks.isNull(workflowRun.getBizDate())
+                workflowRun.getBizDate() == null
                         ? null
                         : workflowRun.getBizDate().toString());
         detail.put("waitingReason", nodeRun.getErrorMessage());

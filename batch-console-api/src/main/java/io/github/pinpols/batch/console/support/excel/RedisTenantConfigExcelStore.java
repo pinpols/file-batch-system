@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.support.excel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PreviewSnapshot;
 import java.nio.charset.StandardCharsets;
@@ -111,7 +110,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     @Override
     public PackageExcelSession get(String uploadToken) {
         String payload = redisTemplate.<String, String>opsForHash().get(key(uploadToken), "payload");
-        return EmptyChecks.isNull(payload) ? null : decode(payload);
+        return payload == null ? null : decode(payload);
     }
 
     @Override
@@ -121,7 +120,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
         String previewToken = previewTokenUuidText.replace("-", "");
         String stored = redisTemplate.execute(
                 ISSUE_PREVIEW_SNAPSHOT, List.of(key(uploadToken)), previewToken, Long.toString(configurationRevision));
-        if (EmptyChecks.isNull(stored)) {
+        if (stored == null) {
             return null;
         }
         int revisionSeparator = stored.lastIndexOf(':');
@@ -145,7 +144,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
 
     @Override
     public boolean claimForApply(String uploadToken, String previewToken, String applyOwnerToken) {
-        if (EmptyChecks.isNull(previewToken) || EmptyChecks.isNull(applyOwnerToken)) {
+        if (previewToken == null || applyOwnerToken == null) {
             return false;
         }
         Long successResult = Long.valueOf(1);
@@ -162,7 +161,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
         String owner = redisTemplate.<String, String>opsForHash().get(sessionKey, "apply_owner");
         String revision = redisTemplate.<String, String>opsForHash().get(sessionKey, "preview_config_revision");
         boolean applyOwnershipIsInvalid =
-                !"APPLYING".equals(state) || !applyOwnerToken.equals(owner) || EmptyChecks.isNull(revision);
+                !"APPLYING".equals(state) || !applyOwnerToken.equals(owner) || revision == null;
         if (applyOwnershipIsInvalid) {
             throw new IllegalStateException("config upload apply claim lost its preview revision");
         }
@@ -176,7 +175,7 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
             PackageExcelSession session,
             String replacementPreviewToken,
             long configurationRevision) {
-        if (EmptyChecks.isNull(expectedPreviewToken) || EmptyChecks.isNull(replacementPreviewToken)) {
+        if (expectedPreviewToken == null || replacementPreviewToken == null) {
             return false;
         }
         Long successResult = Long.valueOf(1);

@@ -23,8 +23,8 @@ public class PersistentWaitReadService {
 
     @Transactional(readOnly = true)
     public PersistentWaitPage list(PersistentWaitReadQuery query) {
-        int normalizedPageNo = Math.max(1, EmptyChecks.isNull(query.pageNo()) ? 1 : query.pageNo());
-        int requestedPageSize = EmptyChecks.isNull(query.pageSize()) ? DEFAULT_PAGE_SIZE : query.pageSize();
+        int normalizedPageNo = Math.max(1, query.pageNo() == null ? 1 : query.pageNo());
+        int requestedPageSize = query.pageSize() == null ? DEFAULT_PAGE_SIZE : query.pageSize();
         int normalizedPageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize));
         long offset = ((long) normalizedPageNo - 1L) * normalizedPageSize;
         PersistentWaitReadFilter filter = new PersistentWaitReadFilter(

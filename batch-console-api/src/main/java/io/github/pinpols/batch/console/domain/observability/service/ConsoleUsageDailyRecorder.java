@@ -36,7 +36,7 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
     /** 使用独立事务，避免聚合写失败把外层业务或审计事务标记为回滚。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(String tenantId, String action, boolean success, Instant createdAt) {
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(createdAt)) {
+        if (EmptyChecks.isBlank(tenantId) || createdAt == null) {
             return;
         }
         mapper.setTenantContext(tenantId);

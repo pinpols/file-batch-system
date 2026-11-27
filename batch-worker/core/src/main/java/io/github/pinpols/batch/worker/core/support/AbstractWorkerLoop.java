@@ -157,7 +157,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
      * 后续沿既有重试路径再次尝试，避免把配置端口当作监听成功的证据。
      */
     private int resolveWorkerPort() {
-        int port = EmptyChecks.isNull(environment)
+        int port = environment == null
                 ? -1
                 : Objects.requireNonNullElse(environment.getProperty("local.server.port", Integer.class), -1);
         if (port < 1 || port > 65535) {
@@ -288,7 +288,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     // S2259 无法识别 Texts.hasText(instanceId) 已在使用前排除 null。
     @SuppressWarnings("java:S2259")
     private String buildWorkerId(String poolCode) {
-        String instanceId = EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
+        String instanceId = identityProperties == null ? null : identityProperties.getInstanceId();
         if (!Texts.hasText(instanceId)) {
             return poolCode;
         }
@@ -346,9 +346,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
             return top + registrationFailureHint(ex);
         }
         StringBuilder sb = new StringBuilder();
-        for (Throwable t = ex;
-                EmptyChecks.isNotNull(t) && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH;
-                t = t.getCause()) {
+        for (Throwable t = ex; t != null && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH; t = t.getCause()) {
             if (EmptyChecks.isNotEmpty(sb)) {
                 sb.append(" <- ");
             }

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
@@ -142,7 +143,7 @@ public class DefaultConsoleAlertRoutingApplicationService implements ConsoleAler
 
     private AlertRoutingConfigUpsertParam toParam(Long id, String tenantId, AlertRoutingSaveRequest request) {
         String operator = requestMetadataResolver.current().operatorId();
-        if (operator == null || operator.isBlank()) {
+        if (EmptyChecks.isBlank(operator)) {
             operator = "system";
         }
         AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();

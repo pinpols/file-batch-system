@@ -51,7 +51,7 @@ public record FileGovernanceLatencyMetrics(
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return 0L;
         }
         String numericText = String.valueOf(value);

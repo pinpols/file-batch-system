@@ -28,7 +28,7 @@ public final class PipelineStepFlowSupport {
     private PipelineStepFlowSupport() {}
 
     public static PipelineStepDefinition firstStep(List<PipelineStepDefinition> steps) {
-        return steps == null || steps.isEmpty() ? null : steps.get(0);
+        return EmptyChecks.isEmpty(steps) ? null : steps.get(0);
     }
 
     public static int maxTransitionGuard(List<PipelineStepDefinition> steps) {
@@ -41,13 +41,12 @@ public final class PipelineStepFlowSupport {
             List<PipelineStepDefinition> steps,
             Map<String, Object> attributes) {
         boolean terminalOnSuccess =
-                EmptyChecks.isNotNull(current) && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
+                current != null && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
         if (terminalOnSuccess) {
             return null;
         }
-        boolean terminalOnFailure = EmptyChecks.isNotNull(current)
-                && !success
-                && current.booleanParam("terminalOnFailure", "stopOnFailure");
+        boolean terminalOnFailure =
+                current != null && !success && current.booleanParam("terminalOnFailure", "stopOnFailure");
         if (terminalOnFailure) {
             return null;
         }
@@ -64,7 +63,7 @@ public final class PipelineStepFlowSupport {
                 return explicitNext;
             }
         }
-        boolean stepFlowCannotAdvance = !success || EmptyChecks.isNull(current) || EmptyChecks.isEmpty(steps);
+        boolean stepFlowCannotAdvance = !success || current == null || EmptyChecks.isEmpty(steps);
         if (stepFlowCannotAdvance) {
             return null;
         }
@@ -105,7 +104,7 @@ public final class PipelineStepFlowSupport {
             return null;
         }
         for (PipelineStepDefinition step : steps) {
-            boolean selectorMatchesStepOrStage = EmptyChecks.isNotNull(step)
+            boolean selectorMatchesStepOrStage = step != null
                     && (selector.equalsIgnoreCase(step.stepCode()) || selector.equalsIgnoreCase(step.stageCode()));
             if (selectorMatchesStepOrStage) {
                 return step;

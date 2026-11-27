@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -39,7 +38,7 @@ record SqlSplitDialect(boolean mysql, boolean backslashEscapes, boolean ansiQuot
 
     /** 按 MySQL 会话 {@code sql_mode} 文本构造 MySQL 规则;空值视为默认模式。 */
     static SqlSplitDialect mysql(String sqlMode) {
-        String normalizedMode = EmptyChecks.isNull(sqlMode) ? "" : sqlMode.toUpperCase(Locale.ROOT);
+        String normalizedMode = sqlMode == null ? "" : sqlMode.toUpperCase(Locale.ROOT);
         List<String> modes = List.of(normalizedMode.split(","));
         return new SqlSplitDialect(true, !modes.contains("NO_BACKSLASH_ESCAPES"), modes.contains("ANSI_QUOTES"));
     }
@@ -49,7 +48,7 @@ record SqlSplitDialect(boolean mysql, boolean backslashEscapes, boolean ansiQuot
         String productName;
         try {
             DatabaseMetaData meta = conn.getMetaData();
-            productName = EmptyChecks.isNull(meta) ? null : meta.getDatabaseProductName();
+            productName = meta == null ? null : meta.getDatabaseProductName();
         } catch (SQLException ex) {
             log.warn(
                     "read database product name failed, splitting SQL with PostgreSQL rules: {}",
@@ -67,7 +66,7 @@ record SqlSplitDialect(boolean mysql, boolean backslashEscapes, boolean ansiQuot
     }
 
     private static boolean isMySqlFamily(String productName) {
-        if (EmptyChecks.isNull(productName)) {
+        if (productName == null) {
             return false;
         }
         String normalizedName = productName.toLowerCase(Locale.ROOT);

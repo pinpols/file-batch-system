@@ -180,8 +180,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
                     LogSanitizer.value(ctx.jobCode()),
                     SwallowedExceptionLogger.summary(ex));
             String exceptionMessage = ex.getMessage();
-            String failureMessage =
-                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            String failureMessage = exceptionMessage == null ? ex.getClass().getSimpleName() : ex.getMessage();
             return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
     }

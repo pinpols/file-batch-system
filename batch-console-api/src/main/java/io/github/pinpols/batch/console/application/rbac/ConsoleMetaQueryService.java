@@ -137,7 +137,7 @@ public class ConsoleMetaQueryService {
     }
 
     public List<String> stepImpls(String module) {
-        if (module == null || module.isBlank()) {
+        if (EmptyChecks.isBlank(module)) {
             return stepRegistryQueryMapper.selectAllImplCodes();
         }
         String normalizedModule = module.toUpperCase(Locale.ROOT);
@@ -169,7 +169,7 @@ public class ConsoleMetaQueryService {
     static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
         String key = item.messageKey();
         String fallback = item.label();
-        if (EmptyChecks.isNull(key)) {
+        if (key == null) {
             return fallback;
         }
         return messageSource.getMessage(key, null, fallback, locale);

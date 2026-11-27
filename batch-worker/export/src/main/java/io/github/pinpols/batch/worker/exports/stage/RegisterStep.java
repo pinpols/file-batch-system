@@ -88,7 +88,7 @@ public class RegisterStep implements ExportStageStep {
     @Override
     public ExportStageResult execute(ExportJobContext context) {
         // ADR-026: 演练模式不创建 file_record / 不调 plugin.onRegistered（避免污染平台 file 视图）。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
         if (dryRun) {
             return ExportStageResult.success(stage());
@@ -142,7 +142,7 @@ public class RegisterStep implements ExportStageStep {
                 .originalFileName(fileName)
                 .fileFormatType(fileFormatType)
                 .charset(exportCharset(attrs))
-                .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
+                .fileSizeBytes(fileSizeBytes == null ? 0L : fileSizeBytes)
                 .checksumType(checksumType);
         String checksumValue = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
         fileRecordBuilder
@@ -176,7 +176,7 @@ public class RegisterStep implements ExportStageStep {
         ExportDataPlugin exportPlugin = resolvePlugin(context);
         ExportStageResult callbackFailure =
                 invokeRegistrationCallback(context, exportPlugin, exportPayload, batchId, exportVersion, traceId);
-        if (EmptyChecks.isNotNull(callbackFailure)) {
+        if (callbackFailure != null) {
             return callbackFailure;
         }
         return ExportStageResult.success(stage());
@@ -219,22 +219,22 @@ public class RegisterStep implements ExportStageStep {
         metadata.put("templateCode", exportPayload.templateCode());
         metadata.put(KEY_OBJECT_NAME, objectName);
         mergeSecurityMetadata(metadata, attrs);
-        if (EmptyChecks.isNotNull(attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT))) {
+        if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
             metadata.put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
         }
         // 编码资产登记：最终目标编码（file_record.charset 列）+ 换行符 / BOM 策略（metadata），
         // 与 GENERATE 实际写出的字节一致（设计 §9.4 编码规则）。
-        if (EmptyChecks.isNotNull(attrs.get(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR))) {
+        if (attrs.get(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR) != null) {
             metadata.put(
                     ExportRuntimeKeys.EXPORT_LINE_SEPARATOR,
                     String.valueOf(attrs.get(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR)));
         }
-        if (EmptyChecks.isNotNull(attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM))) {
+        if (attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM) != null) {
             metadata.put(ExportRuntimeKeys.EXPORT_WITH_BOM, attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM));
         }
         mergeUserMetadata(metadata, exportPayload.metadata());
         Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
-        if (EmptyChecks.isNull(jobInstanceId)) {
+        if (jobInstanceId == null) {
             metadata.remove(PipelineRuntimeKeys.JOB_INSTANCE_ID);
         } else {
             metadata.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, jobInstanceId);
@@ -273,7 +273,7 @@ public class RegisterStep implements ExportStageStep {
         ExportDataPlugin exportPlugin = resolvePlugin(context);
         ExportStageResult callbackFailure =
                 invokeRegistrationCallback(context, exportPlugin, exportPayload2, batchId, exportVersion, traceId);
-        if (EmptyChecks.isNotNull(callbackFailure)) {
+        if (callbackFailure != null) {
             return callbackFailure;
         }
         Map<String, Object> audit = new LinkedHashMap<>();
@@ -323,7 +323,7 @@ public class RegisterStep implements ExportStageStep {
         Map<String, Object> attributes = context.getAttributes();
         Long taskId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID));
         Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-        if (EmptyChecks.isNull(taskId)) {
+        if (taskId == null) {
             return false;
         }
         if (!Texts.hasText(context.getWorkerId())) {
@@ -372,7 +372,7 @@ public class RegisterStep implements ExportStageStep {
     }
 
     private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyChecks.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {
@@ -384,7 +384,7 @@ public class RegisterStep implements ExportStageStep {
     }
 
     private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> attributes) {
-        if (attributes == null || attributes.isEmpty()) {
+        if (EmptyChecks.isEmpty(attributes)) {
             return;
         }
         putIfPresent(target, attributes, "contentEncryptionEnabled");

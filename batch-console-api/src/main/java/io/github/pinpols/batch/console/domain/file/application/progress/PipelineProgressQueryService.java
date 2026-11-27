@@ -29,7 +29,7 @@ public class PipelineProgressQueryService {
     public static List<Long> normalize(List<Long> ids) {
         if (EmptyChecks.isEmpty(ids)
                 || ids.size() > MAX_IDS_PER_QUERY
-                || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
+                || ids.stream().anyMatch(id -> id == null || id <= 0))
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "pipelineInstanceIds");
         return ids.stream().distinct().sorted().toList();

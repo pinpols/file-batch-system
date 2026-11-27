@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,7 +24,7 @@ public final class SystemPipelineCatalog {
     }
 
     public static Optional<SystemPipelineDefinition> forJobType(JobType jobType) {
-        if (EmptyChecks.isNull(jobType)) {
+        if (jobType == null) {
             return Optional.empty();
         }
         return switch (jobType) {

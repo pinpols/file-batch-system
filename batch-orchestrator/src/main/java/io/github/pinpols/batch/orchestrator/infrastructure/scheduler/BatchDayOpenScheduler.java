@@ -55,7 +55,7 @@ public class BatchDayOpenScheduler {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         try {
             for (BusinessCalendarEntity calendar : calendars) {
-                if (EmptyChecks.isNull(calendar) || !Texts.hasText(calendar.tenantId())) {
+                if (calendar == null || !Texts.hasText(calendar.tenantId())) {
                     // openOne 内部也校验,这里先过滤一道,避免空 tenant 触发 holder NPE 路径。
                     continue;
                 }

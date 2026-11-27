@@ -78,7 +78,7 @@ public class ConsoleTenantReadinessService {
             boolean enabled = Boolean.TRUE.equals(row.enabled());
             boolean missingQuery = isBlank(row.defaultQuerySql());
             Object fieldMappings = row.fieldMappings();
-            String fieldMappingsText = EmptyChecks.isNull(fieldMappings) ? null : String.valueOf(fieldMappings);
+            String fieldMappingsText = fieldMappings == null ? null : String.valueOf(fieldMappings);
             boolean missingMappings = isBlankJson(fieldMappingsText);
             // IMPORT/EXPORT 模板必须有取数 SQL + 字段映射才能真正跑;SHARED 仅片段,不强制。
             boolean queryRelevant = "IMPORT".equals(type) || "EXPORT".equals(type);
@@ -145,7 +145,7 @@ public class ConsoleTenantReadinessService {
     }
 
     private static boolean isBlank(String v) {
-        return v == null || v.isBlank();
+        return EmptyChecks.isBlank(v);
     }
 
     private static boolean isBlankJson(String v) {

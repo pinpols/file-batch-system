@@ -48,7 +48,7 @@ public final class ExportFileNameResolver {
         String defaultFormatCode = FileTemplateFormat.JSON.code();
         String normalizedFormatCode = defaultText(fileFormatType, defaultFormatCode);
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, normalizedFormatCode);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.JSON_SUFFIX;
         }
         return switch (format) {

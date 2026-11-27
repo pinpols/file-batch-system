@@ -57,7 +57,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
                 .map(account ->
                         localPrincipal(account.getUsername(), account.getTenantId(), account.getAuthoritiesCsv()))
                 .orElse(null);
-        if (EmptyChecks.isNull(principal)) {
+        if (principal == null) {
             loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_UNBOUND");
             redirectFailure(response);
             return;
@@ -81,7 +81,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
             return Optional.empty();
         }
         // issuer 判空必须先于 toString()，避免 IdP 缺少 iss 时抛出空指针
-        if (EmptyChecks.isNull(oidcUser.getIssuer())
+        if (oidcUser.getIssuer() == null
                 || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())) {
             return Optional.empty();
         }
@@ -95,7 +95,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
     }
 
     private ConsolePrincipal localPrincipal(String username, String tenantId, String authoritiesCsv) {
-        if (EmptyChecks.isNull(username) || EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(authoritiesCsv)) {
+        if (username == null || tenantId == null || authoritiesCsv == null) {
             return null;
         }
         LinkedHashSet<String> authorities = Arrays.stream(authoritiesCsv.split(","))

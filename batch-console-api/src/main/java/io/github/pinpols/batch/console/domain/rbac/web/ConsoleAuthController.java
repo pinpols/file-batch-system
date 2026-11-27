@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ChangeOwnPasswordRequest;
@@ -124,7 +125,7 @@ public class ConsoleAuthController {
         for (Cookie cookie : cookies) {
             if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
                 String value = cookie.getValue();
-                return value == null || value.isBlank() ? null : value.trim();
+                return EmptyChecks.isBlank(value) ? null : value.trim();
             }
         }
         return null;

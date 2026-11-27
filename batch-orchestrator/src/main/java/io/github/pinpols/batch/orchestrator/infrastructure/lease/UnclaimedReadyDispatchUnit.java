@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
@@ -51,7 +50,7 @@ public class UnclaimedReadyDispatchUnit {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void redispatch(JobTaskEntity scanned) {
-        if (EmptyChecks.isNull(scanned) || EmptyChecks.isNull(scanned.getId())) {
+        if (scanned == null || scanned.getId() == null) {
             return;
         }
         String tenantId = scanned.getTenantId();
@@ -61,14 +60,14 @@ public class UnclaimedReadyDispatchUnit {
             return;
         }
         JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-        boolean partitionIsNotWaitingForClaim = EmptyChecks.isNull(partition)
+        boolean partitionIsNotWaitingForClaim = partition == null
                 || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())
-                || EmptyChecks.isNotNull(partition.getLeaseExpireAt());
+                || partition.getLeaseExpireAt() != null;
         if (partitionIsNotWaitingForClaim) {
             return;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             return;
         }
         int updated = jobTaskMapper.bumpVersionIfUnclaimedReady(tenantId, task.getId(), task.getVersion());
@@ -95,9 +94,9 @@ public class UnclaimedReadyDispatchUnit {
     }
 
     private static boolean isUnclaimedReady(JobTaskEntity task) {
-        return EmptyChecks.isNotNull(task)
+        return task != null
                 && TaskStatus.READY.code().equals(task.getTaskStatus())
-                && EmptyChecks.isNull(task.getAssignedWorkerCode())
-                && EmptyChecks.isNull(task.getNonIdempotentStartedAt());
+                && task.getAssignedWorkerCode() == null
+                && task.getNonIdempotentStartedAt() == null;
     }
 }

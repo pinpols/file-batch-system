@@ -54,7 +54,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
      */
     public RedisShardAssignmentProvider(
             StringRedisTemplate redis, String memberId, String membersKey, Duration memberTtl) {
-        if (memberId == null || memberId.isBlank()) {
+        if (EmptyChecks.isBlank(memberId)) {
             throw new IllegalArgumentException("memberId must not be blank");
         }
         if (EmptyChecks.isBlank(membersKey)) {
@@ -124,14 +124,14 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
             redis.opsForZSet().removeRangeByScore(membersKey, 0, cutoff);
             // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）
             Set<ZSetOperations.TypedTuple<String>> tuples = redis.opsForZSet().rangeWithScores(membersKey, 0, -1);
-            if (tuples == null || tuples.isEmpty()) {
+            if (EmptyChecks.isEmpty(tuples)) {
                 // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
                 coordinationHealthy.set(false);
                 return lastKnown.get();
             }
             String[] members = tuples.stream()
                     .map(ZSetOperations.TypedTuple::getValue)
-                    .filter(v -> v != null && !v.isBlank())
+                    .filter(v -> EmptyChecks.isNotBlank(v))
                     .sorted()
                     .toArray(String[]::new);
 

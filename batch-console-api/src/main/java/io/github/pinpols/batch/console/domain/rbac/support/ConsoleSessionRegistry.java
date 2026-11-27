@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -189,7 +188,7 @@ public class ConsoleSessionRegistry {
 
     private static Duration resolveTtl(ConsoleSecurityProperties props) {
         Duration ttl = props == null ? null : props.getSessionStateTtl();
-        return EmptyChecks.isNull(ttl) || ttl.isNegative() || ttl.isZero() ? DEFAULT_SESSION_STATE_TTL : ttl;
+        return ttl == null || ttl.isNegative() || ttl.isZero() ? DEFAULT_SESSION_STATE_TTL : ttl;
     }
 
     private String key(String username, String tenantId) {
@@ -197,7 +196,7 @@ public class ConsoleSessionRegistry {
     }
 
     private String normalize(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return "unknown";
         }
         String trimmedValue = value.trim();

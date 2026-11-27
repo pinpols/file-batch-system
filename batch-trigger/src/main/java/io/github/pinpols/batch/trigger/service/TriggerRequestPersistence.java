@@ -12,7 +12,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
@@ -59,10 +58,10 @@ final class TriggerRequestPersistence {
         externalEventDeliveryMapper.setTenantContext(launchRequest.tenantId());
         triggerRequestMapper.acquireIdempotencyFence(launchRequest.tenantId(), dedupKey);
         Long eventDeliveryId = externalEventDeliveryMapper.selectAliasDeliveryId(launchRequest.tenantId(), dedupKey);
-        if (EmptyChecks.isNotNull(eventDeliveryId) && eventDeliveryId > 0) {
+        if (eventDeliveryId != null && eventDeliveryId > 0) {
             throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
         }
-        if (EmptyChecks.isNotNull(launchRequest.externalEventSource())) {
+        if (launchRequest.externalEventSource() != null) {
             triggerRequestMapper.acquireExternalEventIdentityFence(
                     launchRequest.tenantId(), launchRequest.externalEventSource(), launchRequest.externalEventId());
         }
@@ -74,17 +73,17 @@ final class TriggerRequestPersistence {
                 launchRequest.workflowDefinitionId(),
                 launchRequest.jobCode(),
                 launchRequest.bizDate());
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             TriggerCatchUpIdentity.requireMatchingIfCatchUp(existing, launchRequest);
             assertSameExternalEvent(existing, launchRequest);
             registerExternalEventIdempotencyAlias(existing, launchRequest, dedupKey);
             recordScheduledRequest(launchRequest, scheduledCommand, existing.getRequestId());
             return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
         }
-        if (EmptyChecks.isNotNull(launchRequest.externalEventSource())) {
+        if (launchRequest.externalEventSource() != null) {
             ExternalEventDeliveryEntity delivery = externalEventDeliveryMapper.selectByIdentityForUpdate(
                     launchRequest.tenantId(), launchRequest.externalEventSource(), launchRequest.externalEventId());
-            if (EmptyChecks.isNotNull(delivery)
+            if (delivery != null
                     && !externalEventDeliveryMapper.containsWorkflowTarget(
                             launchRequest.tenantId(),
                             launchRequest.externalEventSource(),
@@ -94,7 +93,7 @@ final class TriggerRequestPersistence {
             }
         }
         Boolean admissionLocked = Boolean.TRUE;
-        if (EmptyChecks.isNotNull(scheduledCommand) && launchRequest.triggerType() == TriggerType.SCHEDULED) {
+        if (scheduledCommand != null && launchRequest.triggerType() == TriggerType.SCHEDULED) {
             int admissionWorkflowVersion = admissionRules.workflowVersion(scheduledCommand.descriptor());
             admissionLocked = triggerRequestMapper.lockScheduledWorkflowAdmission(
                     launchRequest.tenantId(),
@@ -102,7 +101,7 @@ final class TriggerRequestPersistence {
                     scheduledCommand.fireTime(),
                     admissionWorkflowVersion);
         }
-        boolean scheduledAdmissionLockIsMissing = EmptyChecks.isNotNull(scheduledCommand)
+        boolean scheduledAdmissionLockIsMissing = scheduledCommand != null
                 && launchRequest.triggerType() == TriggerType.SCHEDULED
                 && !Boolean.TRUE.equals(admissionLocked);
         if (scheduledAdmissionLockIsMissing) {
@@ -128,7 +127,7 @@ final class TriggerRequestPersistence {
         TriggerRequestMapper requestMapper = triggerRequestMapper;
         TriggerRequestEntity acceptedRequest = buildAcceptedEntity(launchRequest, dedupKey);
         int inserted = requestMapper.insert(acceptedRequest);
-        if (inserted == 0 && EmptyChecks.isNotNull(launchRequest.externalEventSource())) {
+        if (inserted == 0 && launchRequest.externalEventSource() != null) {
             TriggerRequestEntity eventExisting = triggerRequestMapper.selectByExternalEventIdentity(
                     launchRequest.tenantId(),
                     launchRequest.workflowDefinitionId(),
@@ -145,7 +144,7 @@ final class TriggerRequestPersistence {
     }
 
     private void assertSameExternalEvent(TriggerRequestEntity existing, LaunchRequest incoming) {
-        if (EmptyChecks.isNull(incoming.externalEventSource())) {
+        if (incoming.externalEventSource() == null) {
             return;
         }
         boolean externalEventIdentityMatches = incoming.externalEventSource().equals(existing.getExternalEventSource())
@@ -159,7 +158,7 @@ final class TriggerRequestPersistence {
 
     private void registerExternalEventIdempotencyAlias(
             TriggerRequestEntity existing, LaunchRequest incoming, String idempotencyKey) {
-        if (EmptyChecks.isNull(incoming.externalEventSource()) || idempotencyKey.equals(existing.getDedupKey())) {
+        if (incoming.externalEventSource() == null || idempotencyKey.equals(existing.getDedupKey())) {
             return;
         }
         triggerRequestMapper.insertIdempotencyAlias(existing.getTenantId(), idempotencyKey, existing.getRequestId());
@@ -172,7 +171,7 @@ final class TriggerRequestPersistence {
 
     private void recordScheduledRequest(
             LaunchRequest launchRequest, ScheduledTriggerCommand command, String requestId) {
-        if (EmptyChecks.isNull(command)) {
+        if (command == null) {
             return;
         }
         occurrenceRecorder.recordAccepted(
@@ -187,8 +186,8 @@ final class TriggerRequestPersistence {
      */
     void publishLaunchOutbox(LaunchRequest r, String dedupKey) {
         Instant sourceFireTime = (r.triggerType() == TriggerType.SCHEDULED || r.triggerType() == TriggerType.CATCH_UP)
-                        && EmptyChecks.isNotNull(r.dataIntervalStart())
-                        && EmptyChecks.isNotNull(r.params())
+                        && r.dataIntervalStart() != null
+                        && r.params() != null
                         && r.dataIntervalStart().toString().equals(r.params().get("scheduledAt"))
                 ? r.dataIntervalStart()
                 : BatchDateTimeSupport.utcNow();

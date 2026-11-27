@@ -50,9 +50,9 @@ public record DispatchPayload(
             @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
             @JsonProperty("metadata") Map<String, Object> metadata) {
         this(
-                EmptyChecks.isNotNull(bundleSourceFileId) ? bundleSourceFileId : fileId,
+                bundleSourceFileId != null ? bundleSourceFileId : fileId,
                 fileCode,
-                EmptyChecks.isNotNull(bundleTargetRef)
+                bundleTargetRef != null
                         ? bundleTargetRef
                         : resolveChannelCode(channelCode, dispatchChannelCode, targetChannelCode),
                 dispatchTarget,
@@ -66,7 +66,7 @@ public record DispatchPayload(
 
     private static String resolveChannelCode(String channelCode, String dispatchChannelCode, String targetChannelCode) {
         for (String value : new String[] {channelCode, dispatchChannelCode, targetChannelCode}) {
-            if (EmptyChecks.isNotNull(value) && !value.isBlank()) { // empty-check: allow - 保留 JDK 字符串空白判定
+            if (EmptyChecks.isNotBlank(value)) { // empty-check: allow - 保留 JDK 字符串空白判定
                 return value.trim();
             }
         }

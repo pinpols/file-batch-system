@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,13 +30,13 @@ public final class TenantExistsRule {
     public static List<WorkbookIssue> validate(
             Collection<String> referencedTenantIds, Collection<String> existingTenantIds) {
         List<WorkbookIssue> issues = new ArrayList<>();
-        if (referencedTenantIds == null || referencedTenantIds.isEmpty()) {
+        if (EmptyChecks.isEmpty(referencedTenantIds)) {
             return issues;
         }
         Set<String> existing = existingTenantIds == null ? Set.of() : new HashSet<>(existingTenantIds);
         Set<String> missing = new LinkedHashSet<>();
         for (String t : referencedTenantIds) {
-            if (t == null || t.isBlank()) {
+            if (EmptyChecks.isBlank(t)) {
                 continue;
             }
             if (!existing.contains(t)) {

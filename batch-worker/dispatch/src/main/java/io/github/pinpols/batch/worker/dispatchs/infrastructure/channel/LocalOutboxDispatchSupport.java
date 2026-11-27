@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
@@ -81,7 +80,7 @@ final class LocalOutboxDispatchSupport {
 
             String message;
             if (transportStub) {
-                String detail = EmptyChecks.isNull(stubDetail) ? "" : stubDetail;
+                String detail = stubDetail == null ? "" : stubDetail;
                 message = "transport stub: filesystem outbox only — " + detail;
             } else {
                 message = "dispatched via local filesystem outbox";
@@ -149,7 +148,7 @@ final class LocalOutboxDispatchSupport {
         envelope.put("payload", command.payload());
         if (transportStub) {
             envelope.put("transportStub", Boolean.TRUE);
-            envelope.put("transportStubDetail", EmptyChecks.isNull(stubDetail) ? "" : stubDetail);
+            envelope.put("transportStubDetail", stubDetail == null ? "" : stubDetail);
         }
         return envelope;
     }

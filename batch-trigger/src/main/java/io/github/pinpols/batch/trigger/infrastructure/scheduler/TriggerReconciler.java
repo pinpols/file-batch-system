@@ -123,7 +123,7 @@ public class TriggerReconciler {
                 materializeUpcomingOccurrences(key, descriptor);
                 misfireRecoveryListener.restorePendingMisfires(descriptor, key);
             } catch (IllegalArgumentException invalidDefinition) {
-                if (EmptyChecks.isNull(key)) {
+                if (key == null) {
                     identitiesComplete = false;
                 }
                 logInvalidDefinition(descriptor, invalidDefinition);
@@ -207,7 +207,7 @@ public class TriggerReconciler {
         try {
             List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
             Trigger primary = primaryTrigger(key, triggers);
-            if (EmptyChecks.isNull(primary)) {
+            if (primary == null) {
                 return;
             }
             occurrencePlanner.materialize(
@@ -236,17 +236,17 @@ public class TriggerReconciler {
                 return false;
             }
             Trigger quartzTrigger = primaryTrigger(key, triggers);
-            if (EmptyChecks.isNull(quartzTrigger)) {
+            if (quartzTrigger == null) {
                 // 同一个 Job 可能临时挂 recovery/readiness retry Trigger。不能用第一条辅助 Trigger
                 // 判断主调度漂移，否则会 delete-and-add 整个 Job，连恢复 Trigger 一起删掉。
                 return false;
             }
             ScheduleDriftChecker checker = driftCheckers().get(type.toUpperCase(Locale.ROOT));
-            if (EmptyChecks.isNotNull(checker) && checker.hasDrift(quartzTrigger, descriptor)) {
+            if (checker != null && checker.hasDrift(quartzTrigger, descriptor)) {
                 return true;
             }
             JobDetail storedJob = scheduler.getJobDetail(key);
-            if (EmptyChecks.isNull(storedJob)) {
+            if (storedJob == null) {
                 return true;
             }
             JobDataMap expectedData = TriggerSchedulerFacade.scheduledJobData(descriptor);
@@ -287,8 +287,7 @@ public class TriggerReconciler {
         if (!Objects.equals(ct.getCronExpression(), descriptor.getScheduleExpression())) {
             return true;
         }
-        String quartzTz =
-                EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
+        String quartzTz = ct.getTimeZone() == null ? null : ct.getTimeZone().getID();
         return !Objects.equals(quartzTz, descriptor.getTimezone());
     }
 

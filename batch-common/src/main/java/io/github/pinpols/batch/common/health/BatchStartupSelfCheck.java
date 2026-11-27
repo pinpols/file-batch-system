@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.health;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
@@ -232,7 +233,7 @@ public class BatchStartupSelfCheck {
     private void checkColumnExists(
             List<String> problems, String schemaName, String tableName, String columnName, String hint) {
         if (informationSchemaMapper.countColumn(schemaName, tableName, columnName) == 0) {
-            String suffix = hint == null || hint.isBlank() ? "" : "（请确认 " + hint + " 已执行）";
+            String suffix = EmptyChecks.isBlank(hint) ? "" : "（请确认 " + hint + " 已执行）";
             problems.add("缺少列：`" + schemaName + "." + tableName + "." + columnName + "`" + suffix + "。");
         }
     }

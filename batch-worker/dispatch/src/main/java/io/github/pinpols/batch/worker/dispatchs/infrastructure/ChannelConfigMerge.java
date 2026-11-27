@@ -104,7 +104,7 @@ public final class ChannelConfigMerge {
     private ChannelConfigMerge() {}
 
     public static Map<String, Object> merge(Map<String, Object> row, ObjectMapper objectMapper) {
-        if (row == null || row.isEmpty()) {
+        if (EmptyChecks.isEmpty(row)) {
             return Map.of();
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -117,8 +117,7 @@ public final class ChannelConfigMerge {
             mergeConfigJson(out, m);
             return out;
         }
-        boolean configJsonHasTextAndParserIsAvailable =
-                EmptyChecks.isNotNull(objectMapper) && Texts.hasText(String.valueOf(cj));
+        boolean configJsonHasTextAndParserIsAvailable = objectMapper != null && Texts.hasText(String.valueOf(cj));
         if (configJsonHasTextAndParserIsAvailable) {
             try {
                 String configJsonText = String.valueOf(cj);

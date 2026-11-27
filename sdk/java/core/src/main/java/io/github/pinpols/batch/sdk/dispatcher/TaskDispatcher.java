@@ -441,7 +441,7 @@ public class TaskDispatcher {
         claimBody.put(MDC_TENANT_ID, msg.tenantId());
         claimBody.put(KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
         String dispatchedInvocationId = extractPartitionInvocation(msg);
-        if (EmptyChecks.isNotNull(dispatchedInvocationId)) {
+        if (dispatchedInvocationId != null) {
             claimBody.put(KEY_PARTITION_INVOCATION_ID, dispatchedInvocationId);
         }
         TaskDispatcherRetryCoordinator.ClaimResult claimResult =
@@ -465,7 +465,7 @@ public class TaskDispatcher {
         }
         partitionInvocations.put(msg.taskId(), partitionInvocationId);
         inFlight.add(msg.taskId());
-        if (EmptyChecks.isNull(handler)) {
+        if (handler == null) {
             log.error(
                     "no SdkTaskHandler for taskType={} (registered: {}); reporting failure",
                     msg.taskType(),
@@ -507,7 +507,7 @@ public class TaskDispatcher {
             String claimPayload = payloadResponse.payload();
             Map<String, Object> effectiveConfig = parseClaimPayload(claimPayload);
             Map<String, Object> runtimeAttributes =
-                    new HashMap<>(EmptyChecks.isNull(msg.runtimeAttributes()) ? Map.of() : msg.runtimeAttributes());
+                    new HashMap<>(msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes());
             // Kafka 中的旧身份只能用于认领请求；执行、开始确认、续租和回报均使用 CLAIM 当前身份。
             runtimeAttributes.remove(KEY_PARTITION_INVOCATION_ID);
             String invocationId = partitionInvocations.get(taskId);
@@ -600,7 +600,7 @@ public class TaskDispatcher {
             return Map.of();
         }
         Map<String, Object> parsed = CLAIM_PAYLOAD_MAPPER.readValue(payload, CLAIM_PAYLOAD_TYPE);
-        if (EmptyChecks.isNull(parsed)) {
+        if (parsed == null) {
             throw new IllegalArgumentException("claimed task payload must be a JSON object");
         }
         return parsed;
@@ -725,9 +725,7 @@ public class TaskDispatcher {
      */
     private static String resolveErrorCode(SdkTaskResult result) {
         Map<String, Object> output = result.output();
-        if (EmptyChecks.isNotNull(output)
-                && output.get(KEY_ERROR_CODE) instanceof String s
-                && !EmptyChecks.isBlank(s)) {
+        if (output != null && output.get(KEY_ERROR_CODE) instanceof String s && !EmptyChecks.isBlank(s)) {
             return s;
         }
         if (result.success()) {
@@ -767,7 +765,7 @@ public class TaskDispatcher {
         try {
             Map<String, Object> summary = new HashMap<>();
             summary.put("code", code == null ? "UNKNOWN" : code);
-            summary.put(KEY_MESSAGE, EmptyChecks.isNull(message) ? "" : message);
+            summary.put(KEY_MESSAGE, message == null ? "" : message);
             return RESULT_SUMMARY_MAPPER.writeValueAsString(summary);
         } catch (Exception e) {
             return "{\"code\":\"UNKNOWN\",\"message\":\"\"}";

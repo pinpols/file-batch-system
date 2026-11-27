@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.common.KeyValues;
 import org.springframework.http.server.observation.DefaultServerRequestObservationConvention;
 import org.springframework.http.server.observation.ServerRequestObservationContext;
@@ -14,7 +13,7 @@ public class MaintenanceHttpObservationConvention extends DefaultServerRequestOb
 
     @Override
     public KeyValues getLowCardinalityKeyValues(ServerRequestObservationContext context) {
-        boolean planned = EmptyChecks.isNotNull(context.getCarrier())
+        boolean planned = context.getCarrier() != null
                 && Boolean.TRUE.equals(context.getCarrier().getAttribute(PLANNED_ATTRIBUTE));
         KeyValues standard = super.getLowCardinalityKeyValues(context);
         return standard.and("maintenance", planned ? "planned" : "none");

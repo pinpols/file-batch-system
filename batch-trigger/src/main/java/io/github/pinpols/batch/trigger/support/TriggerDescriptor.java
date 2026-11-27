@@ -43,7 +43,7 @@ public class TriggerDescriptor {
 
     /** 创建分区或批量写入前，先验证每个 bundle 来源，避免单个 */
     public void setDependsOnJobCodesCsv(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             dependsOnJobCodes = null;
             return;
         }

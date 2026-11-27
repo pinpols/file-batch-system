@@ -71,7 +71,7 @@ public class DatasetRuleEvaluator {
     }
 
     private static Integer expectedRowCount(Integer ruleExact, boolean fromManifest, Integer manifestExpectedCount) {
-        if (EmptyChecks.isNotNull(ruleExact)) {
+        if (ruleExact != null) {
             return ruleExact;
         }
         if (fromManifest) {
@@ -205,7 +205,7 @@ public class DatasetRuleEvaluator {
         Object configuredAlgorithmValue = firstNonNull(
                 rule.get("algorithm"),
                 rule.get(PipelineRuntimeKeys.CHECKSUM_TYPE),
-                EmptyChecks.isNull(importPayload) ? null : importPayload.checksumType());
+                importPayload == null ? null : importPayload.checksumType());
         String configuredAlgorithm = stringValue(configuredAlgorithmValue);
         String algorithm = !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
                 ? CryptoAlgorithms.SHA_256
@@ -213,7 +213,7 @@ public class DatasetRuleEvaluator {
         Object expectedChecksumValue = firstNonNull(
                 rule.get("expected"),
                 rule.get("expectedValue"),
-                EmptyChecks.isNull(importPayload) ? null : importPayload.checksumValue());
+                importPayload == null ? null : importPayload.checksumValue());
         String expectedChecksum = stringValue(expectedChecksumValue);
         if (!Texts.hasText(expectedChecksum) || normalizedPayload == null) {
             return;

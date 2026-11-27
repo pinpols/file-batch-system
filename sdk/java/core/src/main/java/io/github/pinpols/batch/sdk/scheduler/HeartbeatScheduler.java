@@ -177,7 +177,7 @@ public class HeartbeatScheduler implements AutoCloseable {
     }
 
     private static void putIfPresent(Map<String, Object> body, String key, String value) {
-        if (value != null && !value.isBlank()) {
+        if (EmptyChecks.isNotBlank(value)) {
             body.put(key, value);
         }
     }
@@ -196,7 +196,7 @@ public class HeartbeatScheduler implements AutoCloseable {
         }
         scheduler.shutdown();
         try {
-            long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+            long requestedTimeoutMillis = timeout == null ? 0L : timeout.toMillis();
             long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
             if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
                 scheduler.shutdownNow();

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
@@ -132,7 +131,7 @@ public class TriggerGracefulShutdown
     }
 
     private void publishReadiness(ReadinessState state) {
-        if (EmptyChecks.isNull(eventPublisher)) {
+        if (eventPublisher == null) {
             return;
         }
         try {

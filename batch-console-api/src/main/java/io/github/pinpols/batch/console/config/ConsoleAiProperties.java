@@ -196,17 +196,17 @@ public class ConsoleAiProperties {
         if (conversationHistoryLimitsAreInvalid) {
             throw new IllegalStateException("AI conversation history and page limits must be positive");
         }
-        boolean costSettingsAreInvalid = EmptyChecks.isNull(cost.getMonthlyBudgetUsd())
+        boolean costSettingsAreInvalid = cost.getMonthlyBudgetUsd() == null
                 || cost.getMonthlyBudgetUsd().signum() < 0
-                || EmptyChecks.isNull(cost.getReservationMargin())
+                || cost.getReservationMargin() == null
                 || cost.getReservationMargin().compareTo(BigDecimal.ONE) < 0;
         if (costSettingsAreInvalid) {
             throw new IllegalStateException("AI cost budget must be nonnegative and reservation margin at least one");
         }
         boolean hasUsableRate = cost.getProviderRates().values().stream()
-                .anyMatch(rate -> EmptyChecks.isNotNull(rate)
-                        && EmptyChecks.isNotNull(rate.getInputUsdPerMillionTokens())
-                        && EmptyChecks.isNotNull(rate.getOutputUsdPerMillionTokens())
+                .anyMatch(rate -> rate != null
+                        && rate.getInputUsdPerMillionTokens() != null
+                        && rate.getOutputUsdPerMillionTokens() != null
                         && (rate.getInputUsdPerMillionTokens().signum() > 0
                                 || rate.getOutputUsdPerMillionTokens().signum() > 0));
         if (cost.getMonthlyBudgetUsd().signum() > 0 && !hasUsableRate) {
@@ -214,9 +214,9 @@ public class ConsoleAiProperties {
         }
         cost.getProviderRates().forEach((providerName, rate) -> {
             boolean providerRateIsInvalid = EmptyChecks.isBlank(providerName)
-                    || EmptyChecks.isNull(rate)
-                    || EmptyChecks.isNull(rate.getInputUsdPerMillionTokens())
-                    || EmptyChecks.isNull(rate.getOutputUsdPerMillionTokens())
+                    || rate == null
+                    || rate.getInputUsdPerMillionTokens() == null
+                    || rate.getOutputUsdPerMillionTokens() == null
                     || rate.getInputUsdPerMillionTokens().signum() < 0
                     || rate.getOutputUsdPerMillionTokens().signum() < 0;
             if (providerRateIsInvalid) {

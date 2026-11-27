@@ -28,20 +28,20 @@ public record DomainEvent(
         Integer priority) {
 
     public DomainEvent {
-        if (tenantId == null || tenantId.isBlank()) {
+        if (EmptyChecks.isBlank(tenantId)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.tenant_id_blank");
         }
-        if (aggregateType == null || aggregateType.isBlank()) {
+        if (EmptyChecks.isBlank(aggregateType)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.aggregate_type_blank");
         }
-        if (eventType == null || eventType.isBlank()) {
+        if (EmptyChecks.isBlank(eventType)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_type_blank");
         }
-        if (eventKey == null || eventKey.isBlank()) {
+        if (EmptyChecks.isBlank(eventKey)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
         }
         // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
-        if (EmptyChecks.isNull(payload)) {
+        if (payload == null) {
             payload = Map.of();
         } else {
             Map<String, Object> payloadSnapshot = new LinkedHashMap<>(payload);

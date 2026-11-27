@@ -86,7 +86,7 @@ public class BatchDayWaitingReleaseScheduler {
                 continue;
             }
             String tenantId = entity.tenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyChecks.isBlank(tenantId)) {
                 continue;
             }
             LocalDate previousBizDate = entity.bizDate().minusDays(1);
@@ -130,7 +130,7 @@ public class BatchDayWaitingReleaseScheduler {
     private int releasePreviousDayInTenant(BatchDayWaitingLaunchEntity waiting, LocalDate previousBizDate) {
         BatchDayInstanceEntity previousDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
                 waiting.tenantId(), waiting.calendarCode(), previousBizDate);
-        if (EmptyChecks.isNull(previousDay) || !isReleasable(previousDay.dayStatus())) {
+        if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
             return 0;
         }
         int released = batchDayOperationService.releaseWaitingLaunchesForBatchDay(previousDay, AUTO_RELEASE_OPERATOR);

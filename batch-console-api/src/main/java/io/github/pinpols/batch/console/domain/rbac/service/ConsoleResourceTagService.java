@@ -32,7 +32,7 @@ public class ConsoleResourceTagService {
 
     public List<ResourceTagEntity> listByTagKey(String tenantId, String tagKey, String tagValue) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        if (tagValue != null && !tagValue.isBlank()) {
+        if (EmptyChecks.isNotBlank(tagValue)) {
             return repository.findByTagKeyAndValue(resolved, tagKey, tagValue);
         }
         return repository.findByTagKey(resolved, tagKey);
@@ -53,7 +53,7 @@ public class ConsoleResourceTagService {
         String operator = input.operator();
         Guard.requireText(resourceCode, "resourceCode is required");
         repository.lockResourceTagIdentity(resolvedTenant, normalizedType, resourceCode);
-        if (EmptyChecks.isNull(repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode))) {
+        if (repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode) == null) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     ResultCode.INVALID_ARGUMENT.detailKey(),
@@ -64,7 +64,7 @@ public class ConsoleResourceTagService {
                 .resourceType(normalizedType)
                 .resourceCode(resourceCode)
                 .tagKey(tagKey)
-                .tagValue(EmptyChecks.isNull(tagValue) ? "" : tagValue)
+                .tagValue(tagValue == null ? "" : tagValue)
                 .operator(operator)
                 .build();
         repository.upsert(consoleResourceTagUpsertParam);

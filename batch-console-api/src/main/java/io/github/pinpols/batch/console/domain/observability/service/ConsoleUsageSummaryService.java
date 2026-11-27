@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.observability.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
@@ -26,7 +25,7 @@ public class ConsoleUsageSummaryService {
 
     public List<ConsoleUsageSummaryResponse> query(
             String tenantId, LocalDate from, LocalDate to, String metricCode, String pageCode) {
-        boolean missingDateBoundary = EmptyChecks.isNull(from) || EmptyChecks.isNull(to);
+        boolean missingDateBoundary = from == null || to == null;
         boolean reversedDateRange = !missingDateBoundary && from.isAfter(to);
         boolean exceedsMaximumRange = !missingDateBoundary
                 && !reversedDateRange
@@ -56,7 +55,7 @@ public class ConsoleUsageSummaryService {
                         .successCount(row.successCount())
                         .failureCount(row.failureCount())
                         .lastSeenAt(
-                                EmptyChecks.isNull(row.lastSeenAt())
+                                row.lastSeenAt() == null
                                         ? null
                                         : row.lastSeenAt().toString())
                         .build())

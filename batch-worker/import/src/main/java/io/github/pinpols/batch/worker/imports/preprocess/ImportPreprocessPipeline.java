@@ -272,12 +272,12 @@ public final class ImportPreprocessPipeline {
     private static byte[] unzip(
             byte[] input, Map<String, Object> step, ImportPayload payload, WorkerImportPayloadProperties properties) {
         String entryName = stringProp(step, "entryName");
-        if (!Texts.hasText(entryName) && EmptyChecks.isNotNull(payload)) {
+        if (!Texts.hasText(entryName) && payload != null) {
             Map<String, Object> payloadMetadata = payload.metadata();
-            if (EmptyChecks.isNotNull(payloadMetadata)) {
+            if (payloadMetadata != null) {
                 Object metadataEntryName = payloadMetadata.get("zipEntryName");
                 boolean hasMetadataEntryName =
-                        EmptyChecks.isNotNull(metadataEntryName) && Texts.hasText(String.valueOf(metadataEntryName));
+                        metadataEntryName != null && Texts.hasText(String.valueOf(metadataEntryName));
                 if (hasMetadataEntryName) {
                     entryName = String.valueOf(metadataEntryName);
                 }
@@ -312,12 +312,12 @@ public final class ImportPreprocessPipeline {
     private static byte[] untar(
             byte[] input, Map<String, Object> step, ImportPayload payload, WorkerImportPayloadProperties properties) {
         String entryName = stringProp(step, "entryName");
-        if (!Texts.hasText(entryName) && EmptyChecks.isNotNull(payload)) {
+        if (!Texts.hasText(entryName) && payload != null) {
             Map<String, Object> payloadMetadata = payload.metadata();
-            if (EmptyChecks.isNotNull(payloadMetadata)) {
+            if (payloadMetadata != null) {
                 Object metadataEntryName = payloadMetadata.get("tarEntryName");
                 boolean hasMetadataEntryName =
-                        EmptyChecks.isNotNull(metadataEntryName) && Texts.hasText(String.valueOf(metadataEntryName));
+                        metadataEntryName != null && Texts.hasText(String.valueOf(metadataEntryName));
                 if (hasMetadataEntryName) {
                     entryName = String.valueOf(metadataEntryName);
                 }
@@ -449,7 +449,7 @@ public final class ImportPreprocessPipeline {
     }
 
     private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
-        String payloadChecksumType = EmptyChecks.isNull(payload) ? null : payload.checksumType();
+        String payloadChecksumType = payload == null ? null : payload.checksumType();
         if (Texts.hasText(payloadChecksumType) && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
             return normalizeDigestName(payloadChecksumType);
         }
@@ -491,7 +491,7 @@ public final class ImportPreprocessPipeline {
             throws GeneralSecurityException, SignatureException {
         String pem = stringProp(step, "publicKeyPem");
         String stepSignature = stringProp(step, "signatureBase64");
-        Map<String, Object> payloadMetadata = EmptyChecks.isNull(payload) ? Map.of() : payload.metadata();
+        Map<String, Object> payloadMetadata = payload == null ? Map.of() : payload.metadata();
         String metadataSignature = metaString(payloadMetadata, "signatureBase64");
         String signatureB64 = firstNonBlank(stepSignature, metadataSignature);
         pem = trimToNull(pem);
@@ -627,7 +627,7 @@ public final class ImportPreprocessPipeline {
     }
 
     private static String trimToNull(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String trimmed = value.trim();

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.support.LoginFailureStore;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -48,13 +47,13 @@ public class RedisLoginFailureStore implements LoginFailureStore {
                 String.valueOf(windowStart),
                 member,
                 String.valueOf(ttlSeconds));
-        return EmptyChecks.isNull(count) ? 0L : count;
+        return count == null ? 0L : count;
     }
 
     @Override
     public long count(String key, long windowStart) {
         Long count = redisTemplate.execute(COUNT_SCRIPT, List.of(key), String.valueOf(windowStart));
-        return EmptyChecks.isNull(count) ? 0L : count;
+        return count == null ? 0L : count;
     }
 
     @Override

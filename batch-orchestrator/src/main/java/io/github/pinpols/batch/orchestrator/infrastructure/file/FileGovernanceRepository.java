@@ -207,7 +207,7 @@ public class FileGovernanceRepository {
     FileGovernanceArrivalViews.ArrivalGroupBacklogView selectArrivalGroupBacklogMetrics() {
         FileGovernanceViews.ArrivalGroupBacklogRow row =
                 fileGovernanceMapper.selectArrivalGroupBacklogMetrics(storageId());
-        return EmptyChecks.isNull(row)
+        return row == null
                 ? new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L)
                 : FileGovernanceArrivalViews.arrivalGroupBacklog(row);
     }
@@ -414,7 +414,7 @@ public class FileGovernanceRepository {
     }
 
     public int updateArrivalGroupMetadataIfNonTerminal(String tenantId, Long fileId, Object metadata) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(fileId)) {
+        if (!Texts.hasText(tenantId) || fileId == null) {
             return 0;
         }
         String metadataJson = toJson(metadata);
@@ -433,7 +433,7 @@ public class FileGovernanceRepository {
     }
 
     public void appendAudit(FileAuditCommand command) {
-        boolean fileAuditCommandIsIncomplete = EmptyChecks.isNull(command)
+        boolean fileAuditCommandIsIncomplete = command == null
                 || !Texts.hasText(command.tenantId())
                 || command.fileId() == null
                 || !Texts.hasText(command.operationType())
@@ -445,10 +445,10 @@ public class FileGovernanceRepository {
         Long auditFileId = command.fileId();
         String auditOperationType = command.operationType();
         String auditOperationResult = command.operationResult();
-        String auditOperatorType = defaultText(
-                EmptyChecks.isNull(command.actor()) ? null : command.actor().operatorType(), "API");
+        String auditOperatorType =
+                defaultText(command.actor() == null ? null : command.actor().operatorType(), "API");
         String auditOperatorId =
-                EmptyChecks.isNull(command.actor()) ? null : command.actor().operatorId();
+                command.actor() == null ? null : command.actor().operatorId();
         String auditTraceId = command.traceId();
         String detailSummaryJson = toJson(command.detailSummary());
         FileGovernanceAuditInsertParam auditParams = FileGovernanceAuditInsertParam.builder()
@@ -489,7 +489,7 @@ public class FileGovernanceRepository {
             return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
         }
         return switch (format) {

@@ -57,7 +57,7 @@ public class JobTerminalNotificationConsumer {
     }
 
     private static String requireTenant(Map<?, ?> data) {
-        if (EmptyChecks.isNull(data)) {
+        if (data == null) {
             throw new IllegalArgumentException("missing terminal notification tenant");
         }
         Object tenantValue = data.get("tenantId");

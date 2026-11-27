@@ -72,7 +72,7 @@ public class DataQualityCheckExecutor {
         if (properties.getMode() == DataQualityProperties.Mode.OFF) {
             return DataQualityGateOutcome.noRules();
         }
-        boolean dataQualityInputIsIncomplete = EmptyChecks.isNull(instance)
+        boolean dataQualityInputIsIncomplete = instance == null
                 || instance.getId() == null
                 || !Texts.hasText(instance.getTenantId())
                 || !Texts.hasText(businessKey);

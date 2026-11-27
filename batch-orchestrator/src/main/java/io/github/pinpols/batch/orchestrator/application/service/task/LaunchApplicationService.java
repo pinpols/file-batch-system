@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
@@ -29,7 +28,7 @@ public class LaunchApplicationService {
     private final WorkflowRunLaunchService workflowRunLaunchService;
 
     public LaunchResponse launch(LaunchRequest request) {
-        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+        if (request == null || request.workflowDefinitionId() == null) {
             throw new OperationFailure(Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
         }
         boolean allowed = tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);
@@ -46,7 +45,7 @@ public class LaunchApplicationService {
      * 的幂等、租户隔离、配额和调度准入。
      */
     public LaunchResponse launchFromTrustedQueue(LaunchRequest request) {
-        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+        if (request == null || request.workflowDefinitionId() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.definition_id_required");
         }
         return workflowRunLaunchService.launch(request);

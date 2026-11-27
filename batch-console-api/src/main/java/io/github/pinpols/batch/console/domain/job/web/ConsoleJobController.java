@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
@@ -118,10 +117,10 @@ public class ConsoleJobController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody DeadLetterReplayRequest request,
             Principal principal) {
-        if (EmptyChecks.isNull(principal) && Boolean.TRUE.equals(request.getExternalActionVerifiedNotExecuted())) {
+        if (principal == null && Boolean.TRUE.equals(request.getExternalActionVerifiedNotExecuted())) {
             throw BizException.of(ResultCode.UNAUTHORIZED, "error.common.unauthorized_detail");
         }
-        if (EmptyChecks.isNotNull(principal)) {
+        if (principal != null) {
             request.setOperatorId(authenticatedUsername(principal));
         }
         return responseFactory.success(recoveryService.replayDeadLetter(request, idempotencyKey));

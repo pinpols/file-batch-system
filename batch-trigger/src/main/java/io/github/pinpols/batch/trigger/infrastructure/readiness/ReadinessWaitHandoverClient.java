@@ -41,7 +41,7 @@ public class ReadinessWaitHandoverClient {
             LocalDate bizDate,
             Instant deferredSince,
             Instant deadline) {
-        if (EmptyChecks.isNull(descriptor) || EmptyChecks.isNull(scheduledFireTime) || EmptyChecks.isNull(deadline)) {
+        if (descriptor == null || scheduledFireTime == null || deadline == null) {
             return;
         }
         Map<String, Object> body = new HashMap<>();
@@ -51,9 +51,9 @@ public class ReadinessWaitHandoverClient {
         body.put("calendarCode", descriptor.getCalendarCode());
         body.put("scheduleVersion", descriptor.getWorkflowVersion());
         body.put("dependsOnJobCodes", resolveDependsOnJobCodes(descriptor));
-        body.put("bizDate", EmptyChecks.isNull(bizDate) ? null : bizDate.toString());
+        body.put("bizDate", bizDate == null ? null : bizDate.toString());
         body.put("scheduledFireTime", scheduledFireTime.toString());
-        body.put("deferredSince", EmptyChecks.isNull(deferredSince) ? null : deferredSince.toString());
+        body.put("deferredSince", deferredSince == null ? null : deferredSince.toString());
         body.put("deadline", deadline.toString());
         try {
             orchestratorRestClient
@@ -76,7 +76,7 @@ public class ReadinessWaitHandoverClient {
 
     /** 正常 fire 成功后取消 Orchestrator 侧等待，避免重复恢复启动。 */
     public void close(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-        if (EmptyChecks.isNull(workflowDefinitionId) || EmptyChecks.isNull(scheduledFireTime)) {
+        if (workflowDefinitionId == null || scheduledFireTime == null) {
             return;
         }
         try {
@@ -110,7 +110,7 @@ public class ReadinessWaitHandoverClient {
                     .distinct()
                     .toList();
         }
-        if (EmptyChecks.isNull(descriptor.getDependsOnJobCode())) {
+        if (descriptor.getDependsOnJobCode() == null) {
             return List.of();
         }
         return List.of(descriptor.getDependsOnJobCode().trim());

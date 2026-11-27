@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
@@ -54,7 +53,7 @@ public class ConsoleAiConfiguration {
             ChatModel fallbackModel,
             boolean failoverEnabled,
             boolean imageInputEnabled) {
-        if (EmptyChecks.isNull(primaryModel)) {
+        if (primaryModel == null) {
             throw new IllegalStateException(
                     "configured console AI provider is unavailable; check batch.console.ai.provider and its credentials");
         }
@@ -64,7 +63,7 @@ public class ConsoleAiConfiguration {
         ConsoleAiClients.ProviderClient primary =
                 new ConsoleAiClients.ProviderClient(primaryName, primaryChatClient, imageInputEnabled);
         ConsoleAiClients.ProviderClient fallback = null;
-        if (failoverEnabled && EmptyChecks.isNotNull(fallbackModel)) {
+        if (failoverEnabled && fallbackModel != null) {
             ChatClient fallbackChatClient = ChatClient.create(fallbackModel);
             fallback = new ConsoleAiClients.ProviderClient(fallbackName, fallbackChatClient);
         }

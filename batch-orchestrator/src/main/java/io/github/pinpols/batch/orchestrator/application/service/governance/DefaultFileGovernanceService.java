@@ -270,10 +270,10 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         Long fileId = EmptyChecks.isEmpty(uploadGroupMetadata)
                 ? fileGovernanceRepository.createReconciledFileRecord(recordCommand)
                 : fileGovernanceRepository.createReconciledFileRecord(recordCommand, command.bizDate());
-        if (EmptyChecks.isNull(arrivalChannelCode)) {
+        if (arrivalChannelCode == null) {
             log.warn("上传文件渠道未通过租户渠道校验，文件等待不会按渠道匹配 tenant={} fileId={}", command.tenantId(), fileId);
         }
-        if (EmptyChecks.isNull(fileId)) {
+        if (fileId == null) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     ResultCode.STATE_CONFLICT.detailKey(),
@@ -359,7 +359,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
         Long pipelineInstanceId = dispatchRecord.pipelineInstanceId();
         Long relatedJobInstanceId = fileGovernanceRepository.loadRelatedJobInstanceId(pipelineInstanceId);
-        if (EmptyChecks.isNull(relatedJobInstanceId)) {
+        if (relatedJobInstanceId == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.pipeline_unbound");
         }
         JobInstanceEntity loadedJobInstance = jobInstanceMapper.selectById(command.tenantId(), relatedJobInstanceId);
@@ -450,7 +450,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         if ("SKIP_BATCH".equals(action) && !firstGroupFile.allowSkipBizDate()) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.skip_batch_not_allowed");
         }
-        long extensionSeconds = EmptyChecks.isNull(command.extendWaitSeconds()) || command.extendWaitSeconds() <= 0
+        long extensionSeconds = command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
                 ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
                 : command.extendWaitSeconds();
         String latestTolerableTime;
@@ -463,7 +463,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
         for (FileGovernanceArrivalViews.ArrivalGroupFileView groupFile : groupFiles) {
             Long fileId = groupFile.fileId();
-            if (EmptyChecks.isNull(fileId)) {
+            if (fileId == null) {
                 continue;
             }
             Map<String, Object> metadata = new LinkedHashMap<>();
@@ -596,7 +596,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
     private boolean matchesRedispatchTarget(JobTaskEntity task, Long fileId, String channelCode) {
         RedispatchTarget target = parseRedispatchTarget(task);
-        return EmptyChecks.isNotNull(target)
+        return target != null
                 && Objects.equals(fileId, target.fileId())
                 && Objects.equals(channelCode, target.channelCode());
     }
@@ -613,11 +613,9 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             // Worker 优先使用文件束绑定，避免普通字段遮盖实际投递目标。
             Object bundleFile = payload.get("bundleSourceFileId");
             Object bundleChannel = payload.get("bundleTargetRef");
-            Object payloadFile = EmptyChecks.isNotNull(bundleFile) ? bundleFile : payload.get("fileId");
-            Object payloadChannel = EmptyChecks.isNotNull(bundleChannel) ? bundleChannel : payload.get("channelCode");
-            if (EmptyChecks.isNull(payloadFile)
-                    || EmptyChecks.isNull(payloadChannel)
-                    || !Texts.hasText(payloadChannel.toString())) {
+            Object payloadFile = bundleFile != null ? bundleFile : payload.get("fileId");
+            Object payloadChannel = bundleChannel != null ? bundleChannel : payload.get("channelCode");
+            if (payloadFile == null || payloadChannel == null || !Texts.hasText(payloadChannel.toString())) {
                 return null;
             }
             Long fileId = Long.valueOf(payloadFile.toString());
@@ -650,7 +648,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             }
             return onlyTask;
         }
-        if (tasks.stream().anyMatch(task -> EmptyChecks.isNull(filesByTask.get(task.getId())))) {
+        if (tasks.stream().anyMatch(task -> (filesByTask.get(task.getId()) == null))) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.redispatch_task_ambiguous");
         }
         List<JobTaskEntity> fileTasks = tasks.stream()
@@ -658,7 +656,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 .toList();
         if (fileTasks.stream().anyMatch(task -> {
             RedispatchTarget target = parseRedispatchTarget(task);
-            return EmptyChecks.isNull(target) || !Objects.equals(fileId, target.fileId());
+            return target == null || !Objects.equals(fileId, target.fileId());
         })) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.redispatch_task_ambiguous");
         }
@@ -699,17 +697,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
 
     private void validateCommand(FileGovernanceCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "file governance command is required");
+        Guard.require(command != null, "file governance command is required");
         if (!Texts.hasText(command.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
-        if (EmptyChecks.isNull(command.fileId())) {
+        if (command.fileId() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
         }
     }
 
     private void validateArrivalGroupCommand(ArrivalGroupGovernanceCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "arrival group command is required");
+        Guard.require(command != null, "arrival group command is required");
         if (!Texts.hasText(command.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
@@ -722,7 +720,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
 
     private void validateUploadSessionCommand(FileUploadSessionCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "file upload session command is required");
+        Guard.require(command != null, "file upload session command is required");
         if (!Texts.hasText(command.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
@@ -736,18 +734,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
     private Map<String, Object> uploadGroupMetadata(FileUploadSessionCommand command, String fileName) {
         boolean bindingRequested = Texts.hasText(command.calendarCode())
-                || EmptyChecks.isNotNull(command.workflowDefinitionId())
+                || command.workflowDefinitionId() != null
                 || Texts.hasText(command.fileGroupCode())
-                || EmptyChecks.isNotNull(command.bizDate())
+                || command.bizDate() != null
                 || EmptyChecks.isNotEmpty(command.requiredFileNames())
                 || Texts.hasText(command.bundleTemplateCode());
         if (!bindingRequested) {
             return Map.of();
         }
         boolean bindingIsInvalid = !Texts.hasText(command.calendarCode())
-                || EmptyChecks.isNull(command.workflowDefinitionId())
+                || command.workflowDefinitionId() == null
                 || !Texts.hasText(command.fileGroupCode())
-                || EmptyChecks.isNull(command.bizDate())
+                || command.bizDate() == null
                 || EmptyChecks.isEmpty(command.requiredFileNames())
                 || command.requiredFileNames().size() > MAX_REQUIRED_FILE_NAMES
                 || !Texts.hasText(command.bundleTemplateCode())
@@ -824,7 +822,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
 
     private String safeUrlQuery(String value) {
-        return EmptyChecks.isNull(value) ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
+        return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private String fileFormatType(String fileName) {

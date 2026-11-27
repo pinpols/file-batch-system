@@ -189,12 +189,12 @@ public class DefaultLaunchService implements LaunchService {
 
     private void validateParentInstanceReference(LaunchRequest request, Map<String, Object> effectiveParams) {
         Long parentInstanceId = launchParamResolver.resolveParentInstanceId(effectiveParams);
-        if (EmptyChecks.isNull(parentInstanceId)) {
+        if (parentInstanceId == null) {
             return;
         }
         JobInstanceEntity parentInstance =
                 jobMappers.jobInstanceMapper.selectById(request.tenantId(), parentInstanceId);
-        if (EmptyChecks.isNotNull(parentInstance) && request.tenantId().equals(parentInstance.getTenantId())) {
+        if (parentInstance != null && request.tenantId().equals(parentInstance.getTenantId())) {
             return;
         }
         throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
@@ -299,9 +299,7 @@ public class DefaultLaunchService implements LaunchService {
     @Override
     public void finalizeDispatchFailure(
             LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
-        if (EmptyChecks.isNull(jobInstance)
-                || EmptyChecks.isNull(jobInstance.getId())
-                || EmptyChecks.isNull(dispatchFailure)) {
+        if (jobInstance == null || jobInstance.getId() == null || dispatchFailure == null) {
             return;
         }
         inNewTransaction(() -> markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure));
@@ -396,12 +394,12 @@ public class DefaultLaunchService implements LaunchService {
         LaunchValidationService.WorkflowReplayExecutionBinding replayBinding = loaded.workflowReplayExecutionBinding();
         Map<String, Object> executionParams;
         try {
-            Map<String, Object> credentialParams = EmptyChecks.isNull(replayBinding)
+            Map<String, Object> credentialParams = replayBinding == null
                     ? dispatchSecretSnapshotResolver.pin(
                             request.tenantId(), loaded.jobDefinition().jobType(), effectiveParams)
                     : effectiveParams;
-            if (EmptyChecks.isNotNull(replayBinding)) {
-                if (EmptyChecks.isNull(replayExecutionGuard)
+            if (replayBinding != null) {
+                if (replayExecutionGuard == null
                         || !Objects.equals(
                                 replayBinding.replayOperationId(), replayExecutionGuard.replayOperationId())) {
                     throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
@@ -503,7 +501,7 @@ public class DefaultLaunchService implements LaunchService {
         WorkflowNodeRunEntity nodeRun = workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 triggerRequest.getParentWorkflowRunId(), triggerRequest.getParentNodeCode());
         Guard.require(
-                EmptyChecks.isNotNull(nodeRun) && EmptyChecks.isNotNull(nodeRun.getId()),
+                nodeRun != null && nodeRun.getId() != null,
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.parent_node_launch_invalid");
         int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
@@ -512,16 +510,13 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private boolean hasWorkflowNodeParent(LaunchLoadResult loaded, JobInstanceEntity jobInstance) {
-        boolean parentLaunchContextIncomplete = EmptyChecks.isNull(loaded)
-                || EmptyChecks.isNull(loaded.triggerRequest())
-                || EmptyChecks.isNull(jobInstance)
-                || EmptyChecks.isNull(jobInstance.getId());
+        boolean parentLaunchContextIncomplete =
+                loaded == null || loaded.triggerRequest() == null || jobInstance == null || jobInstance.getId() == null;
         if (parentLaunchContextIncomplete) {
             return false;
         }
         TriggerRequestEntity triggerRequest = loaded.triggerRequest();
-        return EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())
-                && EmptyChecks.isNotNull(triggerRequest.getParentNodeCode());
+        return triggerRequest.getParentWorkflowRunId() != null && triggerRequest.getParentNodeCode() != null;
     }
 
     private void inNewTransaction(Runnable action) {
@@ -615,22 +610,21 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private ReplayExecutionGuard resolveReplayExecutionGuard(LaunchRequest request, LaunchLoadResult loaded) {
-        if (EmptyChecks.isNull(loaded.triggerRequest())
-                || EmptyChecks.isNull(loaded.triggerRequest().getParentWorkflowRunId())) {
+        if (loaded.triggerRequest() == null || loaded.triggerRequest().getParentWorkflowRunId() == null) {
             return null;
         }
         WorkflowRunEntity parentRun = workflowMappers.workflowRunMapper.selectById(
                 request.tenantId(), loaded.triggerRequest().getParentWorkflowRunId());
-        if (EmptyChecks.isNull(parentRun)) {
+        if (parentRun == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(parentRun);
-        if (EmptyChecks.isNull(snapshot) || EmptyChecks.isNull(snapshot.replayOperationId())) {
+        if (snapshot == null || snapshot.replayOperationId() == null) {
             return null;
         }
         ReplayExecutionGuard replayExecutionGuard =
                 snapshot.replayExecutionGuard(loaded.triggerRequest().getParentNodeCode());
-        if (EmptyChecks.isNull(replayExecutionGuard)
+        if (replayExecutionGuard == null
                 || !Objects.equals(replayExecutionGuard.replayOperationId(), snapshot.replayOperationId())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
@@ -671,7 +665,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
-        return (preferred != null && !preferred.isBlank()) ? preferred : fallback;
+        return (EmptyChecks.isNotBlank(preferred)) ? preferred : fallback;
     }
 
     /**

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -50,7 +49,7 @@ public class ProcessPluginExecutionFence {
             return true;
         }
         ProcessComputePlugin plugin = context.getResolvedPlugin();
-        boolean pluginDoesNotRequireFence = EmptyChecks.isNull(plugin) || isReplaySafe(plugin.idempotencyCapability());
+        boolean pluginDoesNotRequireFence = plugin == null || isReplaySafe(plugin.idempotencyCapability());
         if (pluginDoesNotRequireFence) {
             return true;
         }
@@ -64,7 +63,7 @@ public class ProcessPluginExecutionFence {
         Long taskId = parseTaskId(rawTaskId);
         Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
         String invocationId = invocationValue instanceof String value ? value : null;
-        boolean hasPersistedExecutionIdentity = EmptyChecks.isNotNull(taskId)
+        boolean hasPersistedExecutionIdentity = taskId != null
                 && Texts.hasText(context.getTenantId())
                 && Texts.hasText(context.getWorkerId())
                 && Texts.hasText(invocationId);
@@ -92,7 +91,7 @@ public class ProcessPluginExecutionFence {
     }
 
     private static Long parseTaskId(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {

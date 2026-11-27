@@ -53,7 +53,7 @@ public class CalendarBizDateResolver {
         Objects.requireNonNull(fireTime, "fireTime");
         ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
         ZonedDateTime zonedFireTime = fireTime.atZone(zoneId);
-        if (EmptyChecks.isNull(calendar)) {
+        if (calendar == null) {
             return zonedFireTime.toLocalDate();
         }
         LocalDate localDate = zonedFireTime.toLocalDate();
@@ -78,17 +78,17 @@ public class CalendarBizDateResolver {
     }
 
     private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
-        if (EmptyChecks.isNotNull(calendar)) {
+        if (calendar != null) {
             String timezone = calendar.timezone();
             if (EmptyChecks.isNotBlank(timezone)) {
                 return ZoneId.of(timezone);
             }
         }
-        return EmptyChecks.isNull(fallbackZoneId) ? timezoneProvider.defaultZone() : fallbackZoneId;
+        return fallbackZoneId == null ? timezoneProvider.defaultZone() : fallbackZoneId;
     }
 
     private LocalTime resolveCutoffTime(CalendarBizDateDefinition calendar) {
-        return EmptyChecks.isNull(calendar.cutoffTime()) ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
+        return calendar.cutoffTime() == null ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
     }
 
     private LocalDate adjustForHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
@@ -133,15 +133,15 @@ public class CalendarBizDateResolver {
 
     private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
         Set<LocalDate> workdayOverrides = calendar.workdayOverrides();
-        if (EmptyChecks.isNotNull(workdayOverrides) && workdayOverrides.contains(date)) {
+        if (workdayOverrides != null && workdayOverrides.contains(date)) {
             return false;
         }
         Set<LocalDate> holidays = calendar.holidays();
-        return EmptyChecks.isNotNull(holidays) && holidays.contains(date);
+        return holidays != null && holidays.contains(date);
     }
 
     private String normalize(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return "SKIP";
         }
         String trimmedValue = value.trim();

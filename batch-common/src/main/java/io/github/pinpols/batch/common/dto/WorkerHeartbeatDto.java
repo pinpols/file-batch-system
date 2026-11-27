@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
 import lombok.Builder;
@@ -65,16 +64,16 @@ public record WorkerHeartbeatDto(
             maxConcurrent = null;
         }
         // 端口只接受有效监听端口；0（随机端口未绑定）与负值一律 normalize 为 null，不落库。
-        if (EmptyChecks.isNotNull(port) && port <= 0) {
+        if (port != null && port <= 0) {
             port = null;
         }
-        if (EmptyChecks.isNotNull(taskCapabilities)) {
+        if (taskCapabilities != null) {
             if (taskCapabilities.size() > MAX_CAPABILITY_ENTRIES) {
                 throw new IllegalArgumentException("taskCapabilities must contain at most 128 entries");
             }
             taskCapabilities = List.copyOf(taskCapabilities);
         }
-        if (EmptyChecks.isNotNull(replayCapabilities)) {
+        if (replayCapabilities != null) {
             if (replayCapabilities.size() > MAX_CAPABILITY_ENTRIES) {
                 throw new IllegalArgumentException("replayCapabilities must contain at most 128 entries");
             }

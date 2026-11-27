@@ -167,9 +167,9 @@ public class ConsoleUserBatchProvisioningService {
         StoredSession stored = load(token);
         Session session = stored.session();
         if (session.version() != version) throw BizException.of(ResultCode.CONFLICT, "preview version changed");
-        if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
+        if (requestId == null) throw invalid("requestId is required");
         Operation existingApplication = findByRequestId(requestId, null);
-        if (EmptyChecks.isNotNull(existingApplication)) {
+        if (existingApplication != null) {
             throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
         }
         Preview checked = validate(token, session);
@@ -255,7 +255,7 @@ public class ConsoleUserBatchProvisioningService {
         ConsolePrincipal principal = actor();
         ConsoleUserBatchOperationView found = operationMapper.selectByOperationId(
                 operationId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
-        if (EmptyChecks.isNull(found)) throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
+        if (found == null) throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
         return toOperation(found);
     }
 
@@ -263,7 +263,7 @@ public class ConsoleUserBatchProvisioningService {
         ConsolePrincipal principal = actor();
         ConsoleUserBatchOperationView found = operationMapper.selectByRequestId(
                 requestId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
-        return EmptyChecks.isNull(found) ? null : toOperation(found);
+        return found == null ? null : toOperation(found);
     }
 
     public Operation findByRequestId(UUID requestId) {
@@ -288,7 +288,7 @@ public class ConsoleUserBatchProvisioningService {
             AccountRow row = normalize(raw, principal);
             normalized.add(row);
             String code = validateRow(row, principal, usernames);
-            if (EmptyChecks.isNotNull(code)) issues.add(new RowIssue(row.rowNo(), row.username(), code, code));
+            if (code != null) issues.add(new RowIssue(row.rowNo(), row.username(), code, code));
         }
         return new Preview(
                 token,
@@ -326,15 +326,15 @@ public class ConsoleUserBatchProvisioningService {
             if (!"system".equals(row.tenantId())) return "INVALID_TENANT";
         } else {
             TenantRow tenant = tenantMapper.selectByTenantId(row.tenantId());
-            boolean tenantIsMissingOrInactive = EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status());
+            boolean tenantIsMissingOrInactive = tenant == null || !"ACTIVE".equals(tenant.status());
             if (tenantIsMissingOrInactive) return "TENANT_NOT_ACTIVE";
         }
         ConsoleUserAccountRow existingAccount = accountMapper.selectByUsername(row.username());
-        return EmptyChecks.isNull(existingAccount) ? null : "USERNAME_EXISTS";
+        return existingAccount == null ? null : "USERNAME_EXISTS";
     }
 
     private static String trim(String value) {
-        return EmptyChecks.isNull(value) ? "" : value.trim();
+        return value == null ? "" : value.trim();
     }
 
     private static String effectiveTenantFilter(String requestedTenantId, ConsolePrincipal principal) {
@@ -357,7 +357,7 @@ public class ConsoleUserBatchProvisioningService {
 
     private StoredSession load(String token) {
         String json = store.loadPreview(PREFIX + token);
-        if (EmptyChecks.isNull(json)) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
+        if (json == null) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
         if (json.startsWith(APPLYING_PREFIX)) {
             throw BizException.of(ResultCode.CONFLICT, "Preview is being applied");
         }

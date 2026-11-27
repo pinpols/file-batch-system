@@ -59,11 +59,11 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     @Transactional
     public List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId, String initialStatus) {
         List<JobPartitionEntity> partitionEntities = new ArrayList<>();
-        if (EmptyChecks.isNull(plan) || EmptyChecks.isNull(plan.getPartitions())) {
+        if (plan == null || plan.getPartitions() == null) {
             return partitionEntities;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(plan.getTenantId(), jobInstanceId);
-        if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getBizDate())) {
+        if (jobInstance == null || jobInstance.getBizDate() == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
         }
         // 创建分区或批量写入前，先验证每个 bundle 来源，避免单个
@@ -81,7 +81,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             partitionEntity.setPartitionStatus(resolveInitialPartitionStatus(partitionPlan, initialStatus));
             partitionEntity.setWorkerGroup(plan.getWorkerGroup());
             partitionEntity.setWorkerCode(
-                    EmptyChecks.isNull(partitionPlan.getWorkerRoute())
+                    partitionPlan.getWorkerRoute() == null
                             ? null
                             : partitionPlan.getWorkerRoute().getWorkerCode());
             partitionEntity.setVersion(0L);
@@ -92,7 +92,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
             // 调用方始终设非空,此处显式 Guard 回退,任何后续 partitionPlan.partitionNo 为 null 的
             // 退化分支也会立刻 fail-fast,而不是悄悄写入数据库一行 NULL idempotency_key 绕过 UNIQUE。
-            Guard.require(EmptyChecks.isNotNull(partitionPlan.getPartitionNo()), "job_partition.partition_no");
+            Guard.require(partitionPlan.getPartitionNo() != null, "job_partition.partition_no");
             String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
             Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
             partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
@@ -130,7 +130,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     public JobPartitionEntity claimPartition(
             String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
         JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
-        if (EmptyChecks.isNull(existingPartition)) {
+        if (existingPartition == null) {
             return null;
         }
         ClaimPartitionParam claimPartitionParam = ClaimPartitionParam.builder()
@@ -143,14 +143,14 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
                 .expectedVersion(existingPartition.getVersion())
                 .build();
         JobPartitionEntity claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
-        return EmptyChecks.isNotNull(claimed) ? claimed : existingPartition;
+        return claimed != null ? claimed : existingPartition;
     }
 
     @Override
     @Transactional
     public JobPartitionEntity renewLease(String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt) {
         JobPartitionEntity existingPartition = jobPartitionMapper.selectById(tenantId, partitionId);
-        if (EmptyChecks.isNull(existingPartition)) {
+        if (existingPartition == null) {
             return null;
         }
         int updated = jobPartitionMapper.renewLease(RenewLeaseParam.builder()
@@ -194,7 +194,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     @Transactional
     public boolean releaseForDispatch(
             JobPartitionEntity partition, JobTaskEntity task, String fromPartitionStatus, String fromTaskStatus) {
-        if (EmptyChecks.isNull(partition) || EmptyChecks.isNull(task)) {
+        if (partition == null || task == null) {
             return false;
         }
         JobPartitionPromoteStatusParam jobPartitionPromoteStatusParam = JobPartitionPromoteStatusParam.builder()
@@ -227,14 +227,14 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             return false;
         }
         partition.setPartitionStatus(PartitionStatus.READY.code());
-        partition.setVersion(EmptyChecks.isNull(partition.getVersion()) ? 1L : partition.getVersion() + 1);
+        partition.setVersion(partition.getVersion() == null ? 1L : partition.getVersion() + 1);
         task.setTaskStatus(TaskStatus.READY.code());
-        task.setVersion(EmptyChecks.isNull(task.getVersion()) ? 1L : task.getVersion() + 1);
+        task.setVersion(task.getVersion() == null ? 1L : task.getVersion() + 1);
         return true;
     }
 
     private String resolveInitialPartitionStatus(SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
-        String recordedStatus = EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionStatus();
+        String recordedStatus = partitionPlan == null ? null : partitionPlan.getPartitionStatus();
         if (EmptyChecks.isNotBlank(recordedStatus)) {
             return recordedStatus;
         }
@@ -244,40 +244,35 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     private String buildInputSnapshot(SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan, Long jobInstanceId) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("jobInstanceId", jobInstanceId);
-        snapshot.put("tenantId", EmptyChecks.isNull(plan) ? null : plan.getTenantId());
-        snapshot.put("jobCode", EmptyChecks.isNull(plan) ? null : plan.getJobCode());
-        snapshot.put("bizDate", EmptyChecks.isNull(plan) ? null : plan.getBizDate());
-        snapshot.put("partitionNo", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionNo());
-        snapshot.put("partitionKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionKey());
-        snapshot.put("businessKey", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getBusinessKey());
+        snapshot.put("tenantId", plan == null ? null : plan.getTenantId());
+        snapshot.put("jobCode", plan == null ? null : plan.getJobCode());
+        snapshot.put("bizDate", plan == null ? null : plan.getBizDate());
+        snapshot.put("partitionNo", partitionPlan == null ? null : partitionPlan.getPartitionNo());
+        snapshot.put("partitionKey", partitionPlan == null ? null : partitionPlan.getPartitionKey());
+        snapshot.put("businessKey", partitionPlan == null ? null : partitionPlan.getBusinessKey());
         snapshot.put("partitionPlanVersion", 1);
-        snapshot.put("shardIndex", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardIndex());
-        snapshot.put("shardTotal", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getShardTotal());
-        snapshot.put(
-                "rangeStartInclusive",
-                EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeStartInclusive());
-        snapshot.put(
-                "rangeEndExclusive", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getRangeEndExclusive());
-        snapshot.put("expectedRows", EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getExpectedRows());
+        snapshot.put("shardIndex", partitionPlan == null ? null : partitionPlan.getShardIndex());
+        snapshot.put("shardTotal", partitionPlan == null ? null : partitionPlan.getShardTotal());
+        snapshot.put("rangeStartInclusive", partitionPlan == null ? null : partitionPlan.getRangeStartInclusive());
+        snapshot.put("rangeEndExclusive", partitionPlan == null ? null : partitionPlan.getRangeEndExclusive());
+        snapshot.put("expectedRows", partitionPlan == null ? null : partitionPlan.getExpectedRows());
         snapshot.put(
                 "workerRoute",
-                EmptyChecks.isNull(partitionPlan) || EmptyChecks.isNull(partitionPlan.getWorkerRoute())
+                partitionPlan == null || partitionPlan.getWorkerRoute() == null
                         ? Map.of()
                         : partitionPlan.getWorkerRoute());
-        snapshot.put("workerGroup", EmptyChecks.isNull(plan) ? null : plan.getWorkerGroup());
-        snapshot.put("queueCode", EmptyChecks.isNull(plan) ? null : plan.getQueueCode());
-        snapshot.put("resourceProfile", EmptyChecks.isNull(plan) ? null : plan.getResourceProfile());
+        snapshot.put("workerGroup", plan == null ? null : plan.getWorkerGroup());
+        snapshot.put("queueCode", plan == null ? null : plan.getQueueCode());
+        snapshot.put("resourceProfile", plan == null ? null : plan.getResourceProfile());
         snapshot.put("downstreamChannelCode", resolveDownstreamChannelCode(plan, partitionPlan));
-        snapshot.put("windowCode", EmptyChecks.isNull(plan) ? null : plan.getWindowCode());
+        snapshot.put("windowCode", plan == null ? null : plan.getWindowCode());
         return JsonUtils.toJson(snapshot);
     }
 
     /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
     private String resolveDownstreamChannelCode(SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
-        if (EmptyChecks.isNull(plan)
-                || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-                || EmptyChecks.isNull(partitionPlan)) {
-            return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
+        if (plan == null || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType()) || partitionPlan == null) {
+            return plan == null ? null : plan.getDownstreamChannelCode();
         }
         String targetRef = partitionPlan.getTargetRef();
         if (EmptyChecks.isNotBlank(targetRef)) {

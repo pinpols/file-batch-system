@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
@@ -220,7 +219,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
-            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+            boolean isConnectionShutdownMessage = message != null
                     && (message.contains("LettuceConnectionFactory is STOPPING")
                             || message.contains("LettuceConnectionFactory has been STOPPED")
                             || message.contains("has been closed")

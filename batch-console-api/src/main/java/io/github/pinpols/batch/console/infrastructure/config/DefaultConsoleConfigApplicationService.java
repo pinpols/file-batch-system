@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
@@ -177,7 +176,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
         Integer latestVersionNo =
                 configReleaseMapper.selectLatestVersionNo(tenantId, configType, request.getConfigKey());
-        int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
+        int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
         String safeConfigKey = ConsoleTextSanitizer.safeInput(request.getConfigKey(), CONFIG_KEY_MAX_LENGTH);
         String safeConfigName = ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
         String draftStatus = ConfigLifecycleStatus.DRAFT.code();
@@ -258,7 +257,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         String safeSecretRef = ConsoleTextSanitizer.safeInput(request.getSecretRef(), SECRET_REF_MAX_LENGTH);
         secretVersionMapper.acquireVersionLock(tenantId, safeSecretRef);
         Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(tenantId, safeSecretRef);
-        int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
+        int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
         boolean hasRequestedSecretStatus = Texts.hasText(request.getSecretStatus());
         String nextStatus;
         if (hasRequestedSecretStatus) {
@@ -338,7 +337,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
-        if (EmptyChecks.isNotNull(version.getRevokedAt())) {
+        if (version.getRevokedAt() != null) {
             return;
         }
         String operator = currentOperator();
@@ -416,7 +415,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     private void validateExpectedVersion(Integer expectedVersionNo, ConfigReleaseEntity release) {
-        if (EmptyChecks.isNotNull(expectedVersionNo) && !Objects.equals(expectedVersionNo, release.getVersionNo())) {
+        if (expectedVersionNo != null && !Objects.equals(expectedVersionNo, release.getVersionNo())) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     "error.config.release_version_stale",
@@ -428,7 +427,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
         Integer latestVersionNo =
                 configReleaseMapper.selectLatestVersionNo(tenantId, release.getConfigType(), release.getConfigKey());
-        if (EmptyChecks.isNotNull(latestVersionNo) && !Objects.equals(latestVersionNo, release.getVersionNo())) {
+        if (latestVersionNo != null && !Objects.equals(latestVersionNo, release.getVersionNo())) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     "error.config.release_not_latest",
@@ -476,7 +475,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             return;
         }
         Object parsedJson = safeParseJson(value);
-        if (EmptyChecks.isNull(parsedJson)) {
+        if (parsedJson == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
         }
     }
@@ -532,7 +531,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         if (Texts.hasText(request.getSecretPayloadJson())) {
             return request.getSecretPayloadJson();
         }
-        if (EmptyChecks.isNotNull(request.getSecretPayload())) {
+        if (request.getSecretPayload() != null) {
             Object secretPayload = request.getSecretPayload();
             return JsonUtils.toJson(secretPayload);
         }
@@ -677,12 +676,12 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         String canonicalType = canonicalDependencyType(configType);
         DependencyQuery dependencyQuery = dependencyQueryByType.get(canonicalType);
         List<ConfigDependentView> dependentJobs =
-                EmptyChecks.isNull(dependencyQuery) ? List.of() : dependencyQuery.find(resolved, configCode);
+                dependencyQuery == null ? List.of() : dependencyQuery.find(resolved, configCode);
         List<ConfigDependenciesResponse.DependentJobResponse> dependentJobResponses = dependentJobs.stream()
                 .map(job -> {
                     Long jobId = job.id();
                     String jobCode = job.code();
-                    String jobName = EmptyChecks.isNull(job.name()) ? "" : job.name();
+                    String jobName = job.name() == null ? "" : job.name();
                     return new ConfigDependenciesResponse.DependentJobResponse(jobId, jobCode, jobName);
                 })
                 .toList();

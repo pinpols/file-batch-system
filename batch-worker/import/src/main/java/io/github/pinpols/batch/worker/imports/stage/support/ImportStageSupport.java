@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -75,8 +74,8 @@ public final class ImportStageSupport {
      * 且不超过 {@link ImportWorkerConfiguration#maxChunkSize()}。
      */
     public static int resolveChunkSize(ImportJobContext context, ImportWorkerConfiguration config) {
-        int fallback = EmptyChecks.isNull(config) ? FALLBACK_CHUNK_SIZE : config.chunkSize();
-        int max = EmptyChecks.isNull(config) ? FALLBACK_MAX_CHUNK_SIZE : Math.max(1, config.maxChunkSize());
+        int fallback = config == null ? FALLBACK_CHUNK_SIZE : config.chunkSize();
+        int max = config == null ? FALLBACK_MAX_CHUNK_SIZE : Math.max(1, config.maxChunkSize());
         int chunkSize = fallback;
         Object templateConfigObject =
                 context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
@@ -128,8 +127,8 @@ public final class ImportStageSupport {
     }
 
     private static Path createStagingFile(ImportJobContext context, String prefix, String suffix) throws IOException {
-        ImportStagingFiles stagingFiles = EmptyChecks.isNull(context) ? null : context.getStagingFiles();
-        return EmptyChecks.isNull(stagingFiles)
+        ImportStagingFiles stagingFiles = context == null ? null : context.getStagingFiles();
+        return stagingFiles == null
                 ? PrivateTempFiles.createTempFile(prefix, suffix)
                 : stagingFiles.createTempFile(prefix, suffix);
     }

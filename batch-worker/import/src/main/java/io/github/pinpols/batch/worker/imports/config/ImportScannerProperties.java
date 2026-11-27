@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
@@ -53,19 +52,17 @@ public class ImportScannerProperties {
     public boolean isManifestBindingsValid() {
         Set<List<String>> seen = new HashSet<>();
         for (ManifestBinding binding : manifestBindings) {
-            if (EmptyChecks.isNull(binding)
-                    || EmptyChecks.isNull(binding.getTenantId())
-                    || EmptyChecks.isNull(binding.getObjectPrefix())) {
+            if (binding == null || binding.getTenantId() == null || binding.getObjectPrefix() == null) {
                 continue;
             }
-            if (EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix)) {
+            if (prefix != null && !binding.getObjectPrefix().startsWith(prefix)) {
                 return false;
             }
-            if (EmptyChecks.isNull(batchManifestSuffix)
+            if (batchManifestSuffix == null
                     || batchManifestSuffix.isBlank()) { // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
                 return false;
             }
-            if (EmptyChecks.isNull(binding.getManifestKeyTemplate())
+            if (binding.getManifestKeyTemplate() == null
                     || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)) {
                 return false;
             }
@@ -93,7 +90,7 @@ public class ImportScannerProperties {
 
         @AssertTrue(message = "manifest key must contain exactly one supported business date placeholder")
         public boolean isManifestKeyTemplateValid() {
-            if (EmptyChecks.isNull(manifestKeyTemplate)
+            if (manifestKeyTemplate == null
                     || manifestKeyTemplate.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
                     || manifestKeyTemplate.startsWith("/")
                     || List.of(manifestKeyTemplate.split("/", -1)).contains("..")) {
@@ -118,9 +115,9 @@ public class ImportScannerProperties {
     public boolean isChannelBindingsUnique() {
         Set<List<String>> seen = new HashSet<>();
         for (ChannelBinding binding : channelBindings) {
-            if (EmptyChecks.isNotNull(binding)
-                    && EmptyChecks.isNotNull(binding.getTenantId())
-                    && EmptyChecks.isNotNull(binding.getObjectPrefix())
+            if (binding != null
+                    && binding.getTenantId() != null
+                    && binding.getObjectPrefix() != null
                     && !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
                 return false;
             }

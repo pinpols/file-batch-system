@@ -56,7 +56,7 @@ public class PlatformProcessStagingGenerationCoordinator implements ProcessStagi
                                     .build();
             return mapper.rotateCurrentStagingGeneration(processInvocationFenceRotateCurrentStagingGenerationParam);
         });
-        if (EmptyChecks.isNull(updated) || updated != 1) {
+        if (updated == null || updated != 1) {
             throw stateConflict();
         }
         return generationId;

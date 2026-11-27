@@ -46,8 +46,7 @@ public class ExportKeysetRangePlanner {
         }
         try {
             BigDecimal[] mm = minMaxSupplier.get();
-            boolean minMaxBoundsAreIncomplete =
-                    EmptyChecks.isNull(mm) || mm.length != 2 || EmptyChecks.isNull(mm[0]) || EmptyChecks.isNull(mm[1]);
+            boolean minMaxBoundsAreIncomplete = mm == null || mm.length != 2 || (mm[0] == null) || (mm[1] == null);
             if (minMaxBoundsAreIncomplete) {
                 return ExportKeysetRange.inactiveFor(context.partitionCount(), context.partitionNo());
             }
@@ -60,7 +59,7 @@ public class ExportKeysetRangePlanner {
 
     private boolean optedIn(ExportDataContext context) {
         Map<String, Object> tc = context.templateConfig();
-        if (tc == null || tc.isEmpty()) {
+        if (EmptyChecks.isEmpty(tc)) {
             return false;
         }
         Object templateRangeSetting = firstNonNull(tc.get("partition_keyset_range"), tc.get("partitionKeysetRange"));

@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.job.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.util.Objects;
@@ -74,7 +73,7 @@ public class JobResourceAssignmentGuard {
     }
 
     private static boolean changes(String requested, String current, Function<String, String> normalize) {
-        if (EmptyChecks.isNull(requested)) {
+        if (requested == null) {
             return false;
         }
         String normalizedRequested = normalize.apply(requested);

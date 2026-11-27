@@ -32,7 +32,7 @@ public final class WorkflowFanOutSupport {
      */
     @SuppressWarnings("unchecked")
     public static FanOutSpec parseSpec(WorkflowNodeEntity workflowNode) {
-        if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
+        if (workflowNode == null || workflowNode.getNodeParams() == null) {
             return null;
         }
         Map<String, Object> params = WorkflowNodePayloadBuilder.parsePayloadMap(workflowNode.getNodeParams());
@@ -61,7 +61,7 @@ public final class WorkflowFanOutSupport {
         List<SchedulePlan.PartitionPlan> expanded = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             SchedulePlan.PartitionPlan p = new SchedulePlan.PartitionPlan();
-            p.setPartitionKey(EmptyChecks.isNull(template.getPartitionKey()) ? "fanout" : template.getPartitionKey());
+            p.setPartitionKey(template.getPartitionKey() == null ? "fanout" : template.getPartitionKey());
             p.setBusinessKey(template.getBusinessKey());
             p.setWorkerRoute(template.getWorkerRoute());
             p.setPartitionStatus(template.getPartitionStatus());
@@ -78,17 +78,17 @@ public final class WorkflowFanOutSupport {
      */
     public static void bindDispatchTargetRefs(
             SchedulePlan plan, List<Object> items, List<SchedulePlan.PartitionPlan> partitions) {
-        boolean dispatchPlanHasUnmatchedFanOutInputs = EmptyChecks.isNull(plan)
+        boolean dispatchPlanHasUnmatchedFanOutInputs = plan == null
                 || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-                || EmptyChecks.isNull(items)
-                || EmptyChecks.isNull(partitions)
+                || items == null
+                || partitions == null
                 || items.size() != partitions.size();
         if (dispatchPlanHasUnmatchedFanOutInputs) {
             return;
         }
         for (int index = 0; index < items.size(); index++) {
             String channelCode = resolveDispatchChannel(items.get(index));
-            if (EmptyChecks.isNotNull(channelCode)) {
+            if (channelCode != null) {
                 partitions.get(index).setTargetRef(channelCode);
             }
         }
@@ -100,7 +100,7 @@ public final class WorkflowFanOutSupport {
         }
         for (String key : List.of("channelCode", "dispatchChannelCode", "targetChannelCode")) {
             Object value = itemMap.get(key);
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 String checkedChannelCode = String.valueOf(value);
                 if (EmptyChecks.isNotBlank(checkedChannelCode)) {
                     String returnedChannelCode = String.valueOf(value);

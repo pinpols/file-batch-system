@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ActivePartitionView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.AlertTrendView;
@@ -182,13 +181,13 @@ public class ConsoleDashboardQueryService {
 
     private SlaComplianceView loadSlaCompliance(String resolved, int days) {
         SlaStatsView stats = repository.slaStats(resolved, days);
-        Long breachedCount = EmptyChecks.isNull(stats) ? null : stats.breached();
-        Long breached = EmptyChecks.isNull(breachedCount) ? 0L : breachedCount;
-        Long onTimeCount = EmptyChecks.isNull(stats) ? null : stats.onTime();
-        Long onTime = EmptyChecks.isNull(onTimeCount) ? 0L : onTimeCount;
-        Long totalWithSlaCount = EmptyChecks.isNull(stats) ? null : stats.totalWithSla();
-        Long totalWithSla = EmptyChecks.isNull(totalWithSlaCount) ? 0L : totalWithSlaCount;
-        BigDecimal avgDurationSeconds = EmptyChecks.isNull(stats) ? null : stats.avgDurationSeconds();
+        Long breachedCount = stats == null ? null : stats.breached();
+        Long breached = breachedCount == null ? 0L : breachedCount;
+        Long onTimeCount = stats == null ? null : stats.onTime();
+        Long onTime = onTimeCount == null ? 0L : onTimeCount;
+        Long totalWithSlaCount = stats == null ? null : stats.totalWithSla();
+        Long totalWithSla = totalWithSlaCount == null ? 0L : totalWithSlaCount;
+        BigDecimal avgDurationSeconds = stats == null ? null : stats.avgDurationSeconds();
         List<SlaDayView> dailyTrend = repository.slaDailyTrend(resolved, days);
         return new SlaComplianceView(breached, onTime, totalWithSla, avgDurationSeconds, dailyTrend);
     }

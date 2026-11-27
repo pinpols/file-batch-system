@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.support.excel;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -116,7 +115,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
             List<Map<String, String>> rows = new ArrayList<>();
             for (int rowIndex = headerRow.getRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                boolean rowIsAbsentOrBlank = EmptyChecks.isNull(row) || rowIsBlank(row, formatter);
+                boolean rowIsAbsentOrBlank = row == null || rowIsBlank(row, formatter);
                 if (rowIsAbsentOrBlank) {
                     continue;
                 }

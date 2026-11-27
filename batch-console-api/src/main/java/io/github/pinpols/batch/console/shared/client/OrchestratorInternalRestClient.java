@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
@@ -149,8 +148,8 @@ public class OrchestratorInternalRestClient {
     }
 
     private ApprovalDecision requireDecision(ApprovalDecisionResponse response, String tenantId, String approvalNo) {
-        ApprovalDecision decision = EmptyChecks.isNull(response) ? null : response.record();
-        if (EmptyChecks.isNull(decision) || !Texts.hasText(decision.approvalStatus())) {
+        ApprovalDecision decision = response == null ? null : response.record();
+        if (decision == null || !Texts.hasText(decision.approvalStatus())) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
         }
         if (!tenantId.equals(decision.tenantId()) || !approvalNo.equals(decision.approvalNo())) {

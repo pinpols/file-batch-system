@@ -90,7 +90,7 @@ public class AliyunSmsProvider implements SmsProvider {
 
     @Override
     public WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message) {
-        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+        if (EmptyChecks.isEmpty(phoneNumbers)) {
             return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
         String joinedPhoneNumbers = String.join(",", phoneNumbers);
@@ -111,15 +111,15 @@ public class AliyunSmsProvider implements SmsProvider {
             return WebhookDeliveryResult.failure(null, "invalid sms config");
         }
 
-        if (signName == null || signName.isBlank()) {
+        if (EmptyChecks.isBlank(signName)) {
             return WebhookDeliveryResult.failure(null, "missing sms signName");
         }
-        if (templateCode == null || templateCode.isBlank()) {
+        if (EmptyChecks.isBlank(templateCode)) {
             return WebhookDeliveryResult.failure(null, "missing sms templateCode");
         }
 
         String endpoint = properties.getAliyunEndpoint();
-        if (endpoint == null || endpoint.isBlank()) {
+        if (EmptyChecks.isBlank(endpoint)) {
             return WebhookDeliveryResult.failure(null, "missing sms endpoint");
         }
 

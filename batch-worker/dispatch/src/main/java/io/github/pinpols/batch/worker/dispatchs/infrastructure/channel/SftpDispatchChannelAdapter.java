@@ -313,7 +313,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
             return true;
         }
         // JSch 将等待 rename 响应时的 I/O 异常包装为带 cause 的 SSH_FX_FAILURE；远端可能已完成发布。
-        return (sftpFailure.id == ChannelSftp.SSH_FX_FAILURE && EmptyChecks.isNotNull(sftpFailure.getCause()))
+        return (sftpFailure.id == ChannelSftp.SSH_FX_FAILURE && sftpFailure.getCause() != null)
                 || sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
                 || sftpFailure.id == ChannelSftp.SSH_FX_CONNECTION_LOST;
     }

@@ -107,7 +107,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             return List.of();
         }
         Map<String, WorkflowNodeEntity> nodeByCode = new HashMap<>();
-        if (EmptyChecks.isNotNull(nodes)) {
+        if (nodes != null) {
             for (WorkflowNodeEntity node : nodes) {
                 nodeByCode.put(node.getNodeCode(), node);
             }
@@ -128,7 +128,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     @Override
     public List<DagNodeResolution> resolveNextNodes(
             Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson) {
-        if (workflowDefinitionId == null || currentNodeCode == null || currentNodeCode.isBlank()) {
+        if (workflowDefinitionId == null || EmptyChecks.isBlank(currentNodeCode)) {
             return List.of();
         }
         List<WorkflowEdgeEntity> outgoingEdges =
@@ -182,7 +182,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     public List<DagNodeResolution> resolveNextNodesForRun(
             WorkflowRunEntity run, String currentNodeCode, boolean success, String payloadJson) {
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             return WorkflowDagService.super.resolveNextNodesForRun(run, currentNodeCode, success, payloadJson);
         }
         List<WorkflowEdgeEntity> outgoing = snapshot.outgoing(currentNodeCode);
@@ -193,7 +193,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             }
             WorkflowNodeEntity target = snapshot.node(edge.getToNodeCode());
             DagNodeResolution nextNodeResolution;
-            if (EmptyChecks.isNull(target)) {
+            if (target == null) {
                 nextNodeResolution = new DagNodeResolution(edge.getToNodeCode(), WorkflowNodeType.END.code());
             } else {
                 nextNodeResolution = new DagNodeResolution(target.getNodeCode(), target.getNodeType());
@@ -211,7 +211,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             return isNodeReadyForDispatchInternal(workflowRunId, workflowDefinitionId, nodeCode, payloadJson, null);
         } finally {
             Timer timer = readyCheckTimer();
-            if (EmptyChecks.isNotNull(timer)) {
+            if (timer != null) {
                 timer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
             }
         }
@@ -219,7 +219,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
     @Override
     public boolean isNodeReadyForRunDispatch(WorkflowRunEntity run, String nodeCode, String payloadJson) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return false;
         }
         long t0 = System.nanoTime();
@@ -243,14 +243,14 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             String nodeCode,
             String payloadJson,
             WorkflowRunExecutionSnapshot snapshot) {
-        boolean nodeReadinessIdentityIsIncomplete = EmptyChecks.isNull(workflowRunId)
+        boolean nodeReadinessIdentityIsIncomplete = workflowRunId == null
                 || workflowDefinitionId == null
                 || nodeCode == null
                 || EmptyChecks.isBlank(nodeCode);
         if (nodeReadinessIdentityIsIncomplete) {
             return false;
         }
-        WorkflowNodeEntity currentNode = EmptyChecks.isNull(snapshot)
+        WorkflowNodeEntity currentNode = snapshot == null
                 ? workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(workflowDefinitionId, nodeCode)
                 : snapshot.node(nodeCode);
         // A-3.4: currentNode 为 null 说明节点被中途删除，若贸然继续会在 resolveJoinRule
@@ -265,10 +265,10 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
                     nodeCode);
             return false;
         }
-        List<WorkflowEdgeEntity> incomingEdges = EmptyChecks.isNull(snapshot)
+        List<WorkflowEdgeEntity> incomingEdges = snapshot == null
                 ? workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode)
                 : snapshot.incoming(nodeCode);
-        if (incomingEdges == null || incomingEdges.isEmpty()) {
+        if (EmptyChecks.isEmpty(incomingEdges)) {
             // A-3.4: 无入边的节点正常情况下只能是 START；出现非-START 无入边节点
             // 说明 workflow_edge 在 run 期间被改过（软删 / 定义变更），记 WARN 便于排查。
             // 保持"视为就绪"的现有语义以避免工作流死锁，但运维应能从日志发现异常。
@@ -322,7 +322,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
     @Override
     public List<String> cascadeSkipDownstream(Long workflowRunId, Long workflowDefinitionId, String fromNodeCode) {
-        boolean downstreamCascadeIdentityIsIncomplete = EmptyChecks.isNull(workflowRunId)
+        boolean downstreamCascadeIdentityIsIncomplete = workflowRunId == null
                 || workflowDefinitionId == null
                 || fromNodeCode == null
                 || EmptyChecks.isBlank(fromNodeCode);
@@ -380,10 +380,10 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     public List<String> cascadeSkipDownstreamForRun(
             WorkflowRunEntity run, String fromNodeCode, String sourcePayloadJson) {
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             return WorkflowDagService.super.cascadeSkipDownstreamForRun(run, fromNodeCode, sourcePayloadJson);
         }
-        if (EmptyChecks.isNull(run.getId()) || EmptyChecks.isBlank(fromNodeCode)) {
+        if (run.getId() == null || EmptyChecks.isBlank(fromNodeCode)) {
             return List.of();
         }
         Deque<String> queue = new ArrayDeque<>();
@@ -461,7 +461,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         }
         Set<String> predecessorCodes = new LinkedHashSet<>();
         for (WorkflowEdgeEntity edge : incoming) {
-            if (EmptyChecks.isNotNull(edge.getFromNodeCode())) {
+            if (edge.getFromNodeCode() != null) {
                 predecessorCodes.add(edge.getFromNodeCode());
             }
         }
@@ -476,15 +476,14 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         int matchedCount = 0;
         for (WorkflowEdgeEntity edge : incoming) {
             WorkflowNodeRunEntity predecessor = latestByCode.get(edge.getFromNodeCode());
-            if (EmptyChecks.isNull(predecessor)
-                    && WorkflowNodeCode.START.code().equalsIgnoreCase(edge.getFromNodeCode())) {
+            if (predecessor == null && WorkflowNodeCode.START.code().equalsIgnoreCase(edge.getFromNodeCode())) {
                 terminalCount++;
                 if (matchesIncomingEdge(edge, WorkflowNodeRunStatus.SUCCESS.code(), null, sourcePayloadJson)) {
                     matchedCount++;
                 }
                 continue;
             }
-            if (EmptyChecks.isNull(predecessor) || !isTerminal(predecessor.getNodeStatus())) {
+            if (predecessor == null || !isTerminal(predecessor.getNodeStatus())) {
                 return false;
             }
             terminalCount++;
@@ -512,14 +511,14 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             Long workflowRunId, String nodeCode, WorkflowRunExecutionSnapshot snapshot, SkipReason skipReason) {
         WorkflowNodeRunEntity existing =
                 workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return false;
         }
         WorkflowNodeEntity node = snapshot.node(nodeCode);
         WorkflowNodeRunEntity row = new WorkflowNodeRunEntity();
         row.setWorkflowRunId(workflowRunId);
         row.setNodeCode(nodeCode);
-        row.setNodeType(EmptyChecks.isNull(node) ? WorkflowNodeType.TASK.code() : node.getNodeType());
+        row.setNodeType(node == null ? WorkflowNodeType.TASK.code() : node.getNodeType());
         row.setRunSeq(1);
         row.setNodeStatus(WorkflowNodeRunStatus.SKIPPED.code());
         row.setSkipReasonCode(skipReason.code());
@@ -599,7 +598,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     private SkipReason resolveSkipReason(Long workflowRunId, List<WorkflowEdgeEntity> incomingEdges) {
         Set<String> predecessorCodes = new LinkedHashSet<>();
         for (WorkflowEdgeEntity edge : incomingEdges) {
-            if (EmptyChecks.isNotNull(edge.getFromNodeCode())) {
+            if (edge.getFromNodeCode() != null) {
                 predecessorCodes.add(edge.getFromNodeCode());
             }
         }
@@ -629,7 +628,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     }
 
     private static boolean isTerminal(WorkflowNodeRunStatus nodeStatus) {
-        return EmptyChecks.isNotNull(nodeStatus) && DAG_TERMINAL_STATUSES.contains(nodeStatus);
+        return nodeStatus != null && DAG_TERMINAL_STATUSES.contains(nodeStatus);
     }
 
     private static WorkflowNodeRunStatus nodeRunStatus(String nodeStatus) {
@@ -674,7 +673,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
     private int integerValue(Object value) {
         Integer threshold = WorkflowJoinThreshold.parse(value);
-        return EmptyChecks.isNull(threshold) ? 0 : threshold;
+        return threshold == null ? 0 : threshold;
     }
 
     private record JoinRule(WorkflowJoinMode joinMode, int joinThreshold) {}

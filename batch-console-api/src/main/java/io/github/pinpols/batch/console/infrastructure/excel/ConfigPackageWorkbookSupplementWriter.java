@@ -298,7 +298,7 @@ class ConfigPackageWorkbookSupplementWriter {
 
     private static void writeBodyCell(Row row, int columnIndex, String value, CellStyle style) {
         Cell cell = row.createCell(columnIndex);
-        cell.setCellValue(EmptyChecks.isNull(value) ? EMPTY : value);
+        cell.setCellValue(value == null ? EMPTY : value);
         cell.setCellStyle(style);
     }
 
@@ -306,7 +306,7 @@ class ConfigPackageWorkbookSupplementWriter {
         List<String> required = def.columns().stream()
                 .filter(column -> {
                     ConsoleExcelStyles.ColumnGuide guide = def.guides().get(column);
-                    return EmptyChecks.isNotNull(guide) && guide.required();
+                    return guide != null && guide.required();
                 })
                 .toList();
         return EmptyChecks.isEmpty(required) ? "无强制必填列，按业务需要填写。" : String.join(", ", required);
@@ -316,7 +316,7 @@ class ConfigPackageWorkbookSupplementWriter {
         long optionalCount = def.columns().stream()
                 .filter(column -> {
                     ConsoleExcelStyles.ColumnGuide guide = def.guides().get(column);
-                    return EmptyChecks.isNull(guide) || !guide.required();
+                    return guide == null || !guide.required();
                 })
                 .count();
         return optionalCount == 0 ? "本 sheet 列均为必填，留空会在预览阶段报错。" : "选填列可先留空；具体默认值/留空行为见『字段说明』sheet。";

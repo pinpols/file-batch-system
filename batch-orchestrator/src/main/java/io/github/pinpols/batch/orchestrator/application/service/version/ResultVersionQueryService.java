@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
@@ -76,7 +75,7 @@ public class ResultVersionQueryService {
     public Optional<ResultVersionEntity> findVersionByJob(
             String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
         boolean versionQueryIsInvalid =
-                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate) || versionNo <= 0;
+                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null || versionNo <= 0;
         if (versionQueryIsInvalid) {
             return Optional.empty();
         }
@@ -88,7 +87,7 @@ public class ResultVersionQueryService {
     /** 同一正式/试运行模式下，可供跨日依赖使用的最新版本。 */
     public Optional<ResultVersionEntity> findLatestCrossDayDependencyVersion(
             String tenantId, String jobCode, LocalDate bizDate, boolean dryRun) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate)) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
             return Optional.empty();
         }
         String businessKey = jobBusinessKey(jobCode, bizDate);
@@ -101,7 +100,7 @@ public class ResultVersionQueryService {
     public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
             String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
         boolean versionQueryIsInvalid =
-                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate) || versionNo <= 0;
+                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null || versionNo <= 0;
         if (versionQueryIsInvalid) {
             return Optional.empty();
         }
@@ -125,7 +124,7 @@ public class ResultVersionQueryService {
 
     /** 按精确租户身份查询重放快照；缺少版本时由调用方决定拒绝方式。 */
     public Optional<ResultVersionEntity> findById(String tenantId, Long id) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(id) || id <= 0) {
+        if (!Texts.hasText(tenantId) || id == null || id <= 0) {
             return Optional.empty();
         }
         return Optional.ofNullable(resultVersionMapper.selectById(tenantId, id));

@@ -18,8 +18,8 @@ public record WorkflowScheduleUpdateParam(
 
     public WorkflowScheduleUpdateParam {
         boolean scheduleUpdateIdentityIsIncomplete = EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isNull(id)
-                || EmptyChecks.isNull(expectedVersion)
+                || id == null
+                || expectedVersion == null
                 || EmptyChecks.isBlank(scheduleType);
         if (scheduleUpdateIdentityIsIncomplete) {
             throw new IllegalArgumentException(

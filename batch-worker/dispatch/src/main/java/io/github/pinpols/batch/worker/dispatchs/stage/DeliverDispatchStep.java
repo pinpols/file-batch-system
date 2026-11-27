@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -73,8 +72,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
 
     @Override
     public DispatchStageResult execute(DispatchJobContext context) {
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        Object payload = context == null ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
         if (!(payload instanceof DispatchPayload dispatchPayload)) {
             return DispatchStageResult.failure(
                     stage(),
@@ -137,7 +135,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
             Map<String, Object> fileRecord,
             Map<String, Object> channelConfig) {
         DispatchStageResult admissionFailure = prepareDeliveryAttempt(context, dispatchPayload, attrs, fileId);
-        if (EmptyChecks.isNotNull(admissionFailure)) {
+        if (admissionFailure != null) {
             return admissionFailure;
         }
         DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
@@ -293,7 +291,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
                     if (refreshed.isPresent()) {
                         DispatchStageResult recovered =
                                 resumePersistedDelivery(context, dispatchPayload, refreshed.get());
-                        if (EmptyChecks.isNotNull(recovered)) {
+                        if (recovered != null) {
                             return recovered;
                         }
                     }
@@ -306,7 +304,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
                         false);
             } else {
                 DispatchStageResult recovered = resumePersistedDelivery(context, dispatchPayload, snapshot);
-                if (EmptyChecks.isNotNull(recovered)) {
+                if (recovered != null) {
                     return recovered;
                 }
                 if (fileDispatchRepository.beginAttempt(context.getTenantId(), fileId, dispatchPayload.channelCode())

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.constants;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.UUID;
 
 public final class BatchFileConstants {
@@ -92,7 +93,7 @@ public final class BatchFileConstants {
     }
 
     public static String sanitize(String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return "unknown";
         }
         return value.replaceAll("[^a-zA-Z0-9._-]", "_");

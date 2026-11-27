@@ -93,8 +93,7 @@ public class PrepareStep implements ExportStageStep {
             String fileName = BatchFileConstants.insertPartitionTag(resolvedFileName, partitionNo, partitionCount);
             String finalObjectName = resolveObjectName(context, payload, fileName, partitionNo, partitionCount);
             Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
-            String temporaryFileName =
-                    EmptyChecks.isNull(jobInstanceId) ? fileName : "job-" + jobInstanceId + "-" + fileName;
+            String temporaryFileName = jobInstanceId == null ? fileName : "job-" + jobInstanceId + "-" + fileName;
             String tempObjectName =
                     BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, temporaryFileName);
             Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
@@ -194,7 +193,7 @@ public class PrepareStep implements ExportStageStep {
         String bizDate = resolveBizDate(context, payload);
         String batchNo = defaultText(payload.batchNo(), "batch");
         Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
-        String artifactVersion = EmptyChecks.isNull(jobInstanceId) ? "v1" : "job-" + jobInstanceId;
+        String artifactVersion = jobInstanceId == null ? "v1" : "job-" + jobInstanceId;
         return BatchFileConstants.outboundObjectName(bizType, bizDate, batchNo, artifactVersion, fileName);
     }
 
@@ -261,7 +260,7 @@ public class PrepareStep implements ExportStageStep {
 
     private Map<String, Object> extractTemplateSnapshotHints(Map<String, Object> template) {
         Map<String, Object> out = new LinkedHashMap<>();
-        if (template == null || template.isEmpty()) {
+        if (EmptyChecks.isEmpty(template)) {
             return out;
         }
         putIfHasText(out, KEY_SNAPSHOT_MODE, template.get("snapshot_mode"));
@@ -280,7 +279,7 @@ public class PrepareStep implements ExportStageStep {
     }
 
     private void putIfHasText(Map<String, Object> out, String key, Object value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             String presenceText = String.valueOf(value);
             if (Texts.hasText(presenceText)) {
                 String rawText = String.valueOf(value);

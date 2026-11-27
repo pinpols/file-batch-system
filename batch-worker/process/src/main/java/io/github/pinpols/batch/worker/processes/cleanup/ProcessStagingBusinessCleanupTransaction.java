@@ -60,8 +60,8 @@ public class ProcessStagingBusinessCleanupTransaction {
             for (ProcessStagingGenerationCandidate generation : generations) {
                 mapper.setGenerationRlsContext(generation.getGenerationId());
                 Instant generationOldest = mapper.selectOldestGenerationRow(generation);
-                boolean generationHasEarlierStagedRow = EmptyChecks.isNotNull(generationOldest)
-                        && (EmptyChecks.isNull(oldest) || generationOldest.isBefore(oldest));
+                boolean generationHasEarlierStagedRow =
+                        generationOldest != null && (oldest == null || generationOldest.isBefore(oldest));
                 if (generationHasEarlierStagedRow) {
                     oldest = generationOldest;
                 }
@@ -77,7 +77,7 @@ public class ProcessStagingBusinessCleanupTransaction {
     public int sealAndDelete(ProcessStagingGenerationCandidate candidate, int batchSize) {
         RlsTenantSessionSupport.applyIfPresent(dataSource);
         String status = mapper.selectGenerationStatusForUpdate(candidate);
-        if (EmptyChecks.isNull(status) || "RECLAIMED".equals(status)) {
+        if (status == null || "RECLAIMED".equals(status)) {
             return 0;
         }
         if ("OPEN".equals(status)) {

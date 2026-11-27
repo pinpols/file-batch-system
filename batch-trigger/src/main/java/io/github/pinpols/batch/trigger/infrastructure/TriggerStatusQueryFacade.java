@@ -38,14 +38,14 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
             List<TriggerStatusInfo> result = new ArrayList<>();
             for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP))) {
                 WorkflowIdentity identity = parseWorkflowIdentity(jobKey);
-                if (EmptyChecks.isNull(identity)) {
+                if (identity == null) {
                     continue;
                 }
-                if (EmptyChecks.isNotNull(tenantId) && !tenantId.equals(identity.tenantId())) {
+                if (tenantId != null && !tenantId.equals(identity.tenantId())) {
                     continue;
                 }
                 JobDetail detail = scheduler.getJobDetail(jobKey);
-                if (EmptyChecks.isNotNull(detail)) {
+                if (detail != null) {
                     result.add(toTriggerStatusInfo(jobKey, identity, detail));
                 }
             }
@@ -151,7 +151,7 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
     }
 
     private static Instant toInstant(Date fireTime) {
-        return EmptyChecks.isNull(fireTime) ? null : fireTime.toInstant();
+        return fireTime == null ? null : fireTime.toInstant();
     }
 
     private record WorkflowIdentity(String tenantId, String workflowCode) {}

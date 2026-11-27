@@ -87,7 +87,7 @@ public final class WorkflowDefinitionDagInspector {
                 continue;
             }
             JobDefinitionView jobDefinition = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-            if (EmptyChecks.isNull(jobDefinition)) {
+            if (jobDefinition == null) {
                 findings.add(DagValidationResult.Finding.error(
                         "JOB_REF_NOT_FOUND",
                         "JOB node " + node.getNodeCode() + " references non-existent job_definition: " + jobCode,

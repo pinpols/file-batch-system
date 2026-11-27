@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
@@ -59,6 +58,6 @@ public class AlertEscalationNotificationOutboxService {
     }
 
     private static int zeroIfNull(Integer value) {
-        return EmptyChecks.isNull(value) ? 0 : value;
+        return value == null ? 0 : value;
     }
 }

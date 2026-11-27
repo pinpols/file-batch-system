@@ -101,8 +101,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
     @Override
     public ExcelDownload exportSchedulerSnapshot(String tenantId) {
         ConsoleSchedulerSnapshotResponse snapshot = orchestratorPort.schedulerSnapshot(tenantId);
-        List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows =
-                EmptyChecks.isNull(snapshot) ? List.of() : snapshot.policies();
+        List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows = snapshot == null ? List.of() : snapshot.policies();
         return exportRows(
                 "scheduler_snapshot",
                 "scheduler-snapshot",
@@ -256,7 +255,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
             }
             for (String header : headers) {
                 PropertyDescriptor descriptor = descriptors.get(header);
-                Object propertyValue = EmptyChecks.isNull(descriptor) || EmptyChecks.isNull(descriptor.getReadMethod())
+                Object propertyValue = descriptor == null || descriptor.getReadMethod() == null
                         ? null
                         : descriptor.getReadMethod().invoke(row);
                 values.add(propertyValue);

@@ -36,8 +36,8 @@ public class UnknownExternalOutcomeCloser {
      */
     public boolean close(JobTaskEntity task) {
         JobPartitionEntity partition = jobPartitionMapper.selectById(task.getTenantId(), task.getJobPartitionId());
-        if (EmptyChecks.isNull(partition)
-                || EmptyChecks.isNull(partition.getCurrentInvocationId())
+        if (partition == null
+                || partition.getCurrentInvocationId() == null
                 || EmptyChecks.isBlank(partition.getCurrentInvocationId())) {
             return false;
         }
@@ -52,6 +52,6 @@ public class UnknownExternalOutcomeCloser {
                 .build();
         TaskOutcomeService taskOutcomeService = taskOutcomeServiceProvider.getObject();
         JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(command);
-        return EmptyChecks.isNotNull(outcome);
+        return outcome != null;
     }
 }

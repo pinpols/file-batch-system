@@ -49,16 +49,16 @@ public class JobExecutionQueryService {
         TenantScope.requireTenant(tenant);
         mapper.setTenantContext(tenant);
         JobExecutionView job = mapper.selectJob(tenant, id);
-        if (EmptyChecks.isNull(job)) throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
+        if (job == null) throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
         Optional<SystemPipelineDefinition> definition = SystemPipelineCatalog.definitions().stream()
                 .filter(d -> Objects.equals(d.code(), job.getSystemPipelineCode())
                         && Objects.equals(d.semanticVersion(), job.getSystemPipelineVersion()))
                 .findFirst();
         boolean terminal = JobInstanceStatus.terminalCodes().contains(job.getInstanceStatus());
-        List<Stage> persisted = EmptyChecks.isNull(job.getPipelineInstanceId())
+        List<Stage> persisted = job.getPipelineInstanceId() == null
                 ? List.<Stage>of()
                 : mapper.selectStages(tenant, job.getPipelineInstanceId());
-        List<Stage> runtime = terminal || EmptyChecks.isNull(job.getPipelineInstanceId())
+        List<Stage> runtime = terminal || job.getPipelineInstanceId() == null
                 ? persisted
                 : withLiveProgress(tenant, job.getPipelineInstanceId(), persisted);
         definition = definition.filter(
@@ -95,8 +95,8 @@ public class JobExecutionQueryService {
 
     private List<Stage> withLiveProgress(String tenant, Long pipelineId, List<Stage> stages) {
         if (stages.stream()
-                .noneMatch(s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus())
-                        && EmptyChecks.isNull(s.rowsProcessed()))) {
+                .noneMatch(
+                        s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus()) && s.rowsProcessed() == null)) {
             return stages;
         }
         List<PipelineStepProgressSnapshot> liveSteps = filePipelineProgress.stepsAuthorized(tenant, pipelineId);
@@ -106,13 +106,13 @@ public class JobExecutionQueryService {
         return stages.stream()
                 .map(stage -> {
                     PipelineStepProgressSnapshot sample = byId.get(stage.stepRunId());
-                    boolean sameAttempt = EmptyChecks.isNotNull(sample)
+                    boolean sameAttempt = sample != null
                             && Objects.equals(sample.runSeq(), stage.runSeq())
                             && PipelineRunStatus.RUNNING.code().equals(sample.stepStatus());
                     if (!PipelineRunStatus.RUNNING.code().equals(stage.stageStatus())
-                            || EmptyChecks.isNotNull(stage.rowsProcessed())
+                            || stage.rowsProcessed() != null
                             || !sameAttempt) return stage;
-                    Instant heartbeat = EmptyChecks.isNull(sample.lastHeartbeatAt())
+                    Instant heartbeat = sample.lastHeartbeatAt() == null
                             ? stage.lastHeartbeatAt()
                             : Instant.ofEpochMilli(sample.lastHeartbeatAt());
                     return new Stage(

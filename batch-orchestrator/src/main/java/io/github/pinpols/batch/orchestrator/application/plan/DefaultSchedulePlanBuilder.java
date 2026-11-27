@@ -144,7 +144,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private JobDefinitionView resolveExecutionDefinition(SchedulePlanCommand command) {
         JobDefinitionView jobDefinition = command.executionDefinition();
-        if (EmptyChecks.isNull(jobDefinition)) {
+        if (jobDefinition == null) {
             jobDefinition = configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
         } else {
             boolean executionDefinitionDoesNotMatchScheduleTarget =
@@ -319,7 +319,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private String firstText(Object... values) {
         for (Object value : values) {
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 String checkedText = String.valueOf(value);
                 if (EmptyChecks.isNotBlank(checkedText)) {
                     String returnedText = String.valueOf(value);

@@ -13,7 +13,6 @@ import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -182,7 +181,7 @@ public class LoadStep implements ImportStageStep {
             if (partitionStageSwapCopy) {
                 ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
             }
-            if (EmptyChecks.isNotNull(ckpt) && loadedCount == 0L) {
+            if (ckpt != null && loadedCount == 0L) {
                 advanceCheckpoint(ckpt, 0L, 0);
             }
             completeCheckpoint(ckpt);
@@ -252,10 +251,10 @@ public class LoadStep implements ImportStageStep {
     private long loadValidatedRecords(Path validatedRecordsPath, int chunkSize, LoadExecution loadExecution)
             throws Exception {
         CheckpointHandle checkpoint = loadExecution.checkpoint();
-        long skipLines = EmptyChecks.isNull(checkpoint) ? 0L : checkpoint.startLineNo();
+        long skipLines = checkpoint == null ? 0L : checkpoint.startLineNo();
         long currentLineNo = skipLines;
         // loaded_count 初值用已写库记录数,不能用 startLineNo(行号含空行 → 续跑后 loaded_count 虚增)。
-        long loadedCount = EmptyChecks.isNull(checkpoint) ? 0L : checkpoint.processedCount();
+        long loadedCount = checkpoint == null ? 0L : checkpoint.processedCount();
         try (BufferedReader reader = Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
             // 续跑:跳过上次已处理到的行号(空行也算行,保持与首跑一致的行号语义)
             for (long i = 0; i < skipLines; i++) {
@@ -288,7 +287,7 @@ public class LoadStep implements ImportStageStep {
             LoadExecution loadExecution, List<Map<String, Object>> chunk, long currentLineNo, long loadedCount)
             throws Exception {
         Object validatedCount = loadExecution.context().getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
-        if (EmptyChecks.isNotNull(validatedCount)) {
+        if (validatedCount != null) {
             long expected = ImportStageSupport.numberValue(validatedCount);
             if (loadedCount > expected || chunk.size() > expected - loadedCount) {
                 throw new IllegalStateException("Import LOAD chunk exceeds validated record count");
@@ -306,7 +305,7 @@ public class LoadStep implements ImportStageStep {
 
     private void requireValidatedRecordCount(Map<String, Object> attributes, long loadedCount) {
         Object validatedCount = attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
-        if (EmptyChecks.isNotNull(validatedCount) && ImportStageSupport.numberValue(validatedCount) != loadedCount) {
+        if (validatedCount != null && ImportStageSupport.numberValue(validatedCount) != loadedCount) {
             throw new IllegalStateException("Import LOAD record count does not match validation: expected="
                     + ImportStageSupport.numberValue(validatedCount)
                     + ", loaded="
@@ -475,10 +474,10 @@ public class LoadStep implements ImportStageStep {
 
     private static long parseLineNo(ProcessingPosition position, String fileDigest) {
         String marker = position.positionMarker();
-        if (EmptyChecks.isNull(marker) && position.processedCount() == 0L && !position.completed()) {
+        if (marker == null && position.processedCount() == 0L && !position.completed()) {
             return 0L;
         }
-        if (EmptyChecks.isNull(marker)) {
+        if (marker == null) {
             throw new IllegalStateException("Import LOAD checkpoint has no file identity");
         }
         int separator = marker.indexOf(':');
@@ -545,7 +544,7 @@ public class LoadStep implements ImportStageStep {
             if (replaySafe || confirmed) {
                 return true;
             }
-            boolean hasPersistedExecutionIdentity = EmptyChecks.isNotNull(taskId)
+            boolean hasPersistedExecutionIdentity = taskId != null
                     && Texts.hasText(tenantId)
                     && Texts.hasText(workerId)
                     && Texts.hasText(partitionInvocationId);
@@ -562,7 +561,7 @@ public class LoadStep implements ImportStageStep {
         }
 
         private static Long parseTaskId(Object value) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return null;
             }
             try {
@@ -660,7 +659,7 @@ public class LoadStep implements ImportStageStep {
 
     private static String metaString(Map<String, Object> meta, String key) {
         Object v = meta == null ? null : meta.get(key);
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             return null;
         }
         String rawText = String.valueOf(v);
@@ -678,10 +677,10 @@ public class LoadStep implements ImportStageStep {
     }
 
     private String resolveLoadTargetRef(Map<String, Object> templateConfig) {
-        Map<String, Object> resolvedConfig = EmptyChecks.isNull(templateConfig) ? Map.of() : templateConfig;
+        Map<String, Object> resolvedConfig = templateConfig == null ? Map.of() : templateConfig;
         Object v = resolvedConfig.get("load_target_ref");
-        String presenceText = EmptyChecks.isNull(v) ? null : String.valueOf(v);
-        if (EmptyChecks.isNotNull(v) && Texts.hasText(presenceText)) {
+        String presenceText = v == null ? null : String.valueOf(v);
+        if (v != null && Texts.hasText(presenceText)) {
             String rawLoadTarget = String.valueOf(v);
             return rawLoadTarget.trim();
         }

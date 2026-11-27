@@ -110,7 +110,7 @@ public final class BusinessDataSourceBuilder {
     private static void validateShardKeys(BusinessRoutingProperties routingProperties) {
         Set<String> keys = new HashSet<>();
         for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
-            if (EmptyChecks.isNull(shard) || !Texts.hasText(shard.getKey())) {
+            if (shard == null || !Texts.hasText(shard.getKey())) {
                 throw new IllegalArgumentException("business routing shard key must not be blank");
             }
             if (!keys.add(shard.getKey())) {

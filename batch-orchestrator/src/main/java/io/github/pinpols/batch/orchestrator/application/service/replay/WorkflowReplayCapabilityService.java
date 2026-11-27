@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -40,7 +41,7 @@ public class WorkflowReplayCapabilityService {
             if (!declaration.isFullyDeclared() || declaration.idempotencyCapability() == IdempotencyCapability.NONE) {
                 return new Assessment(Status.REPLAY_SAFETY_UNPROVEN, declaration, catalogues.size());
             }
-            if (EmptyChecks.isNotNull(agreed) && !agreed.equals(declaration)) {
+            if (agreed != null && !agreed.equals(declaration)) {
                 return new Assessment(Status.WORKER_DECLARATIONS_DIFFER, null, catalogues.size());
             }
             agreed = declaration;
@@ -55,11 +56,11 @@ public class WorkflowReplayCapabilityService {
         try {
             List<ReplayCapabilityDeclaration> declarations =
                     JsonUtils.fromJson(catalogue, new TypeReference<List<ReplayCapabilityDeclaration>>() {});
-            if (EmptyChecks.isNull(declarations)) {
+            if (declarations == null) {
                 return List.of();
             }
             return declarations.stream()
-                    .filter(EmptyChecks::isNotNull)
+                    .filter(Objects::nonNull)
                     .filter(declaration -> pluginId.equals(declaration.pluginId()))
                     .toList();
         } catch (IllegalArgumentException invalidCatalogue) {

@@ -93,7 +93,7 @@ public final class CodeNormalizer {
     @Nullable
     public static String toConfigFormOrNull(@Nullable String raw) {
         String trimmed = trimToNull(raw);
-        if (EmptyChecks.isNull(trimmed)) {
+        if (trimmed == null) {
             return null;
         }
         String lowercaseConfigCode = trimmed.toLowerCase(Locale.ROOT);

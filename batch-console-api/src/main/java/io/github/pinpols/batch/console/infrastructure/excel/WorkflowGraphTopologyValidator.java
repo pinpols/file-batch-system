@@ -256,7 +256,7 @@ final class WorkflowGraphTopologyValidator {
             Integer c = color.getOrDefault(next, 0);
             if (c == 1) {
                 Map<String, String> n = byCode.get(node);
-                int issueRowNo = EmptyChecks.isNull(n) ? fallback : excelRowNo(n, fallback);
+                int issueRowNo = n == null ? fallback : excelRowNo(n, fallback);
                 issues.add(new WorkbookIssue(
                         WF_EDGE_SHEET,
                         issueRowNo,

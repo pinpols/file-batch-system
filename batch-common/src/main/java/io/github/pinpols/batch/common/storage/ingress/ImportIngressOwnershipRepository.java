@@ -2,7 +2,6 @@ package io.github.pinpols.batch.common.storage.ingress;
 
 import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
 import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper.OwnershipRow;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,11 +35,11 @@ public class ImportIngressOwnershipRepository {
         for (OwnershipRow row : rows) {
             String scopeId = row.getScopeId();
             ScopeBuilder scope = scopes.get(scopeId);
-            if (EmptyChecks.isNull(scope)) {
+            if (scope == null) {
                 scope = new ScopeBuilder(row);
                 scopes.put(scopeId, scope);
             }
-            if (EmptyChecks.isNotNull(row.getBindingType())) {
+            if (row.getBindingType() != null) {
                 scope.bindings.add(new Binding(
                         row.getBindingType(),
                         row.getTenantId(),
@@ -77,7 +76,7 @@ public class ImportIngressOwnershipRepository {
 
         /** 清单可能位于扫描前缀外，按已声明模板的完整对象键识别。 */
         public boolean protects(String bucket, String objectKey) {
-            if (!bucketName.equals(bucket) || EmptyChecks.isNull(objectKey)) {
+            if (!bucketName.equals(bucket) || objectKey == null) {
                 return false;
             }
             if (objectKey.startsWith(objectPrefix)) {
@@ -89,7 +88,7 @@ public class ImportIngressOwnershipRepository {
         }
 
         private static boolean matchesManifestTemplate(String template, String key) {
-            if (EmptyChecks.isNull(template)) {
+            if (template == null) {
                 return false;
             }
             String placeholder = template.contains("{bizDateCompact}") ? "{bizDateCompact}" : "{bizDate}";

@@ -98,7 +98,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
 
     @Override
-    // S2259 无法识别 EmptyChecks.isNull(dispatchMessage) 对可空消息载荷的保护。
+    // S2259 无法识别 dispatchMessage == null 对可空消息载荷的保护。
     @SuppressWarnings("java:S2259")
     public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
         // P2-5: dispatch 消息按 routing.mode 走 (tenant|priority|single) 分流；非派发类 fallback 不变
@@ -123,7 +123,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
             String kafkaKey = dispatchKafkaKey(event, dispatchMessage);
             String payloadJson = event.getPayloadJson();
-            W3cTraceContext traceContext = EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext();
+            W3cTraceContext traceContext = dispatchMessage == null ? null : dispatchMessage.traceContext();
             CompletableFuture<MqPublishResult> publishFuture =
                     sendWithTraceContext(targetTopic, kafkaKey, payloadJson, traceContext);
             return trackDelivery(publishFuture, event, targetTopic, workerId);
@@ -132,8 +132,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         // R6 P0-4：ADR-030 §F verifier.failure.v1 走专用 topic，运维告警 / SLO 直接订阅，
         // 不再混入通用 outbox fallback 桶（之前会被 ops 默认 ACL 屏蔽，告警系统拿不到）。
         String resolvedDedicatedTopic = resolveDedicatedTopic(event.getEventType());
-        String dedicatedTopic =
-                EmptyChecks.isNull(resolvedDedicatedTopic) ? null : topicNamespace.topic(resolvedDedicatedTopic);
+        String dedicatedTopic = resolvedDedicatedTopic == null ? null : topicNamespace.topic(resolvedDedicatedTopic);
         if (dedicatedTopic != null) {
             MqMessage dedicatedMessage = MqMessage.of(dedicatedTopic, event.getEventKey(), event.getPayloadJson());
             CompletableFuture<MqPublishResult> publishFuture = mqMessagePublisher.publish(dedicatedMessage);
@@ -170,7 +169,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             CompletableFuture<MqPublishResult> publishFuture, OutboxEventEntity event, String topic, String workerId) {
         return publishFuture.handleAsync(
                 (result, ex) -> {
-                    if (EmptyChecks.isNull(ex)) {
+                    if (ex == null) {
                         recordDelivery(
                                 event, topic, workerId, OutboxPublishStatus.PUBLISHED.code(), LocalizedError.EMPTY);
                         return true;
@@ -205,7 +204,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             "WORKFLOW_TERMINAL", BatchTopics.WORKFLOW_TERMINAL_V1);
 
     private static String resolveDedicatedTopic(String eventType) {
-        return EmptyChecks.isNull(eventType) ? null : DEDICATED_TOPICS_BY_EVENT_TYPE.get(eventType);
+        return eventType == null ? null : DEDICATED_TOPICS_BY_EVENT_TYPE.get(eventType);
     }
 
     static String dispatchKafkaKey(OutboxEventEntity event, TaskDispatchMessage message) {
@@ -240,10 +239,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     private static String plannedPartitionKafkaKey(TaskDispatchMessage message) {
         Integer partitionNo = message.partitionNo();
         Integer partitionCount = message.partitionCount();
-        boolean partitionMetadataIsInvalid = EmptyChecks.isNull(partitionNo)
-                || EmptyChecks.isNull(partitionCount)
-                || partitionNo <= 0
-                || partitionCount <= 1;
+        boolean partitionMetadataIsInvalid =
+                partitionNo == null || partitionCount == null || partitionNo <= 0 || partitionCount <= 1;
         if (partitionMetadataIsInvalid) {
             return null;
         }
@@ -313,7 +310,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
 
     private static String safeDeliveryErrorText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
@@ -325,7 +322,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
 
     private static String safeDeliveryErrorArgs(String argsJson) {
-        if (EmptyChecks.isNull(argsJson) || argsJson.isBlank()) { // empty-check: allow - 保留 JDK 字符串空白判定
+        if (EmptyChecks.isBlank(argsJson)) { // empty-check: allow - 保留 JDK 字符串空白判定
             return argsJson;
         }
         try {
@@ -351,7 +348,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             entries.forEach((key, item) -> {
                 String name = String.valueOf(key);
                 String normalizedName = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(name));
-                Object safeItem = SecretMasking.isSensitive(normalizedName) && EmptyChecks.isNotNull(item)
+                Object safeItem = SecretMasking.isSensitive(normalizedName) && item != null
                         ? SecretMasking.MASKED_VALUE
                         : maskDeliveryErrorValue(item);
                 masked.put(name, safeItem);
@@ -363,7 +360,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
 
     @SuppressWarnings("unchecked")
     private static String sanitizePayload(String payloadJson) {
-        if (payloadJson == null || payloadJson.isBlank()) {
+        if (EmptyChecks.isBlank(payloadJson)) {
             return payloadJson;
         }
         try {

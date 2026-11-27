@@ -31,10 +31,10 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
     @Override
     public void append(ConsoleRealtimeStreamEnvelope envelope) {
-        boolean envelopeIsIncomplete = EmptyChecks.isNull(envelope)
+        boolean envelopeIsIncomplete = envelope == null
                 || envelope.tenantId() == null
                 || envelope.stream() == null
-                || EmptyChecks.isNull(envelope.cursor());
+                || envelope.cursor() == null;
         if (envelopeIsIncomplete) {
             return;
         }
@@ -62,7 +62,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
     @Override
     public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
-        boolean replayRequestIsIncomplete = EmptyChecks.isNull(tenantId)
+        boolean replayRequestIsIncomplete = tenantId == null
                 || tenantId.isBlank()
                 || stream == null
                 || stream.isBlank()
@@ -76,7 +76,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         long maxEntries = realtimeProperties.getReplayMaxEntries();
         long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
         List<String> rawEntries = redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
-        if (rawEntries == null || rawEntries.isEmpty()) {
+        if (EmptyChecks.isEmpty(rawEntries)) {
             return new ReplayBatch(List.of(), false);
         }
         List<ConsoleRealtimeStreamEnvelope> envelopes = new ArrayList<>(rawEntries.size());

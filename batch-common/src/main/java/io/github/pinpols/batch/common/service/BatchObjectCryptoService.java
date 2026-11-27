@@ -61,7 +61,7 @@ public class BatchObjectCryptoService {
         if (bypassMode) {
             return false;
         }
-        Object configuredEncryption = EmptyChecks.isNull(security) ? null : security.get("content_encryption_enabled");
+        Object configuredEncryption = security == null ? null : security.get("content_encryption_enabled");
         return truthy(configuredEncryption);
     }
 

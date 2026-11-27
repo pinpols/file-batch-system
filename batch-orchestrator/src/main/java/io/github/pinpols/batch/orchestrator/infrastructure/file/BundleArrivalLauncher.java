@@ -110,7 +110,7 @@ public class BundleArrivalLauncher {
     /** 到达组满足条件时调用;非束组(无 bundleWorkflowCode)直接返回,不发 launch。 */
     public LaunchOutcome launchIfBundle(
             String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-        if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
+        if (EmptyChecks.isEmpty(groupFiles) || !Texts.hasText(tenantId)) {
             return LaunchOutcome.NOT_BUNDLE;
         }
         return RlsTenantContextHolder.runWithTenant(
@@ -120,7 +120,7 @@ public class BundleArrivalLauncher {
     private LaunchOutcome launchIfBundleForTenant(
             String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
         BundleLaunchCandidate candidate = collectCandidate(tenantId, fileGroupCode, groupFiles);
-        if (EmptyChecks.isNull(candidate.bundleWorkflowCode())) {
+        if (candidate.bundleWorkflowCode() == null) {
             return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
         }
         validateCandidate(tenantId, fileGroupCode, candidate);
@@ -142,16 +142,14 @@ public class BundleArrivalLauncher {
             List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
             bundleWorkflowCode = mergeWorkflowCode(tenantId, fileGroupCode, bundleWorkflowCode, workflowCode);
             bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
-            boolean workflowIsMissingForExportTargets = EmptyChecks.isNull(workflowCode)
-                    && (!EmptyChecks.isEmpty(exportTemplates)
-                            || EmptyChecks.isNotNull(templateCode)
-                            || EmptyChecks.isNotNull(targetRef));
+            boolean workflowIsMissingForExportTargets = workflowCode == null
+                    && (!EmptyChecks.isEmpty(exportTemplates) || templateCode != null || targetRef != null);
             if (workflowIsMissingForExportTargets) {
                 bindingWithoutWorkflowCode = true;
             }
             boolean emittedBinding =
                     appendBundleBindings(bundleFiles, file.fileId(), templateCode, targetRef, exportTemplates);
-            if (EmptyChecks.isNotNull(workflowCode) && !emittedBinding) {
+            if (workflowCode != null && !emittedBinding) {
                 workflowCodedMemberWithoutBinding = true;
             }
         }
@@ -165,10 +163,10 @@ public class BundleArrivalLauncher {
 
     private static String mergeWorkflowCode(
             String tenantId, String fileGroupCode, String existingWorkflowCode, String workflowCode) {
-        if (EmptyChecks.isNull(workflowCode)) {
+        if (workflowCode == null) {
             return existingWorkflowCode;
         }
-        if (EmptyChecks.isNull(existingWorkflowCode)) {
+        if (existingWorkflowCode == null) {
             return workflowCode;
         }
         if (!existingWorkflowCode.equals(workflowCode)) {
@@ -209,8 +207,7 @@ public class BundleArrivalLauncher {
             }
             return true;
         }
-        boolean bundleBindingIsIncomplete =
-                EmptyChecks.isNull(fileId) || (EmptyChecks.isNull(templateCode) && EmptyChecks.isNull(targetRef));
+        boolean bundleBindingIsIncomplete = fileId == null || (templateCode == null && targetRef == null);
         if (bundleBindingIsIncomplete) {
             return false;
         }
@@ -259,7 +256,7 @@ public class BundleArrivalLauncher {
     private LaunchOutcome launchCandidate(String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
         WorkflowDefinitionView workflow = workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
                 tenantId, candidate.bundleWorkflowCode(), true);
-        if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
+        if (workflow == null || workflow.id() == null) {
             throw new IllegalStateException("bundle target has no enabled managed Workflow: tenantId="
                     + tenantId
                     + ", workflowCode="
@@ -285,7 +282,7 @@ public class BundleArrivalLauncher {
         // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
         String requestId = requestId(tenantId, workflow.id(), fileGroupCode, candidate.bizDate());
         LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
-        if (EmptyChecks.isNotNull(existingOutcome)) {
+        if (existingOutcome != null) {
             markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, existingOutcome);
             return existingOutcome;
         }
@@ -307,7 +304,7 @@ public class BundleArrivalLauncher {
 
         // 并发扫描可能已推进同一请求;等待载荷由批次日恢复流程负责,不能再次登记。
         existingOutcome = persistedOutcome(tenantId, requestId);
-        if (EmptyChecks.isNotNull(existingOutcome)) {
+        if (existingOutcome != null) {
             return existingOutcome;
         }
 
@@ -321,10 +318,10 @@ public class BundleArrivalLauncher {
                 .params(Map.of("bundleFiles", candidate.bundleFiles()))
                 .build();
         LaunchResponse response = workflowRunLaunchServiceProvider.getObject().launch(request);
-        LaunchOutcome outcome = EmptyChecks.isNotNull(response) && Texts.hasText(response.instanceNo())
+        LaunchOutcome outcome = response != null && Texts.hasText(response.instanceNo())
                 ? LaunchOutcome.LAUNCHED
                 : persistedOutcome(tenantId, requestId);
-        if (EmptyChecks.isNull(outcome)) {
+        if (outcome == null) {
             throw new IllegalStateException("bundle launch returned no instance or durable outcome");
         }
         markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, outcome);
@@ -385,7 +382,7 @@ public class BundleArrivalLauncher {
     }
 
     private static boolean isTerminal(BatchDayInstanceEntity batchDay) {
-        if (EmptyChecks.isNull(batchDay)) {
+        if (batchDay == null) {
             return false;
         }
         String status = batchDay.dayStatus();
@@ -432,7 +429,7 @@ public class BundleArrivalLauncher {
 
     private LaunchOutcome persistedOutcome(String tenantId, String requestId) {
         TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             return null;
         }
         TriggerRequestStatus status = TriggerRequestStatus.fromCodeOrNull(existing.getRequestStatus());

@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleCalendarApplicationService;
@@ -69,11 +68,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
                 .calendarCode(request.getCalendarCode())
                 .calendarName(request.getCalendarName())
                 .timezone(request.getTimezone())
-                .holidayRollRule(
-                        EmptyChecks.isNull(request.getHolidayRollRule()) ? "SKIP" : request.getHolidayRollRule())
-                .catchUpPolicy(EmptyChecks.isNull(request.getCatchUpPolicy()) ? "NONE" : request.getCatchUpPolicy())
-                .catchUpMaxDays(EmptyChecks.isNull(request.getCatchUpMaxDays()) ? 0 : request.getCatchUpMaxDays())
-                .enabled(EmptyChecks.isNotNull(request.getEnabled()) && request.getEnabled())
+                .holidayRollRule(request.getHolidayRollRule() == null ? "SKIP" : request.getHolidayRollRule())
+                .catchUpPolicy(request.getCatchUpPolicy() == null ? "NONE" : request.getCatchUpPolicy())
+                .catchUpMaxDays(request.getCatchUpMaxDays() == null ? 0 : request.getCatchUpMaxDays())
+                .enabled(request.getEnabled() != null && request.getEnabled())
                 .description(null)
                 .build();
         calendarMapper.insert(params);
@@ -94,10 +92,9 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
                 .tenantId(tenantId)
                 .calendarName(request.getCalendarName())
                 .timezone(request.getTimezone())
-                .holidayRollRule(
-                        EmptyChecks.isNull(request.getHolidayRollRule()) ? "SKIP" : request.getHolidayRollRule())
-                .catchUpPolicy(EmptyChecks.isNull(request.getCatchUpPolicy()) ? "NONE" : request.getCatchUpPolicy())
-                .catchUpMaxDays(EmptyChecks.isNull(request.getCatchUpMaxDays()) ? 0 : request.getCatchUpMaxDays())
+                .holidayRollRule(request.getHolidayRollRule() == null ? "SKIP" : request.getHolidayRollRule())
+                .catchUpPolicy(request.getCatchUpPolicy() == null ? "NONE" : request.getCatchUpPolicy())
+                .catchUpMaxDays(request.getCatchUpMaxDays() == null ? 0 : request.getCatchUpMaxDays())
                 .description(existing.description())
                 .build();
         calendarMapper.update(params);

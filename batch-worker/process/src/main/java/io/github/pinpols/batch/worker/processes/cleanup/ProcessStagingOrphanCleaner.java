@@ -79,7 +79,7 @@ public class ProcessStagingOrphanCleaner {
         this.businessCleanup = businessCleanup;
         this.cleanupFence = cleanupFence;
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        this.cleanedCounter = EmptyChecks.isNull(registry)
+        this.cleanedCounter = registry == null
                 ? null
                 // R7-A6-P2：dot-namespace 与全栈 (batch.worker.* / batch.outbox.*) 对齐；
                 // 原 snake_case 名 Prometheus 还能识别但与项目惯例脱节。
@@ -162,9 +162,8 @@ public class ProcessStagingOrphanCleaner {
         }
         int retentionHours = Math.max(1, properties.getRetentionHours());
         int batchSize = Math.max(MIN_BATCH_SIZE, properties.getBatchSize());
-        boolean stagingCleanupDependenciesAreUnavailable = EmptyChecks.isNull(platformMapper)
-                || EmptyChecks.isNull(businessCleanup)
-                || EmptyChecks.isNull(cleanupFence);
+        boolean stagingCleanupDependenciesAreUnavailable =
+                platformMapper == null || businessCleanup == null || cleanupFence == null;
         if (stagingCleanupDependenciesAreUnavailable) {
             throw new IllegalStateException("PROCESS generation cleanup dependencies are not configured");
         }
@@ -210,7 +209,7 @@ public class ProcessStagingOrphanCleaner {
                     deleted,
                     retentionHours,
                     batchSize);
-            if (EmptyChecks.isNotNull(cleanedCounter)) {
+            if (cleanedCounter != null) {
                 cleanedCounter.increment(deleted);
             }
         }
@@ -224,20 +223,20 @@ public class ProcessStagingOrphanCleaner {
 
     private void refreshOldestAgeGauge() {
         try {
-            if (EmptyChecks.isNull(platformMapper) || EmptyChecks.isNull(businessCleanup)) {
+            if (platformMapper == null || businessCleanup == null) {
                 oldestAgeSeconds = -1d;
                 return;
             }
             Instant oldest = null;
             for (String tenantId : platformMapper.listCleanupTenants()) {
                 Instant tenantOldest = businessCleanup.selectOldestStagedAt(tenantId, OLDEST_STAGED_SCAN_LIMIT);
-                boolean tenantHasEarlierStagedRow = EmptyChecks.isNotNull(tenantOldest)
-                        && (EmptyChecks.isNull(oldest) || tenantOldest.isBefore(oldest));
+                boolean tenantHasEarlierStagedRow =
+                        tenantOldest != null && (oldest == null || tenantOldest.isBefore(oldest));
                 if (tenantHasEarlierStagedRow) {
                     oldest = tenantOldest;
                 }
             }
-            if (EmptyChecks.isNull(oldest)) {
+            if (oldest == null) {
                 oldestAgeSeconds = 0d;
             } else {
                 Instant sampledAt = BatchDateTimeSupport.utcNow();

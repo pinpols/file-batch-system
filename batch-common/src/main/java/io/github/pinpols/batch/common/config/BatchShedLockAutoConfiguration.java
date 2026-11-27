@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
@@ -116,8 +115,6 @@ public class BatchShedLockAutoConfiguration {
     private static LockProvider observe(
             LockProvider provider, String providerType, ObjectProvider<MeterRegistry> meterRegistryProvider) {
         MeterRegistry meterRegistry = meterRegistryProvider.getIfAvailable();
-        return EmptyChecks.isNull(meterRegistry)
-                ? provider
-                : new MeteredLockProvider(provider, providerType, meterRegistry);
+        return meterRegistry == null ? provider : new MeteredLockProvider(provider, providerType, meterRegistry);
     }
 }

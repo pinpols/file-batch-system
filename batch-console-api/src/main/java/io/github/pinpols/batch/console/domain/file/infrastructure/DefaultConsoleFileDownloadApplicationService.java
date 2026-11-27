@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
@@ -99,8 +98,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
             InputStream inputStream = objectStore.get(bucket, objectName);
             InputStream payload =
                     batchSecurityProperties.isBypassMode() ? inputStream : cryptoService.decryptIfNeeded(inputStream);
-            return new FileDownloadArtifact(
-                    payload, EmptyChecks.isNull(fileName) ? objectName : fileName, contentType, true);
+            return new FileDownloadArtifact(payload, fileName == null ? objectName : fileName, contentType, true);
         } catch (ObjectNotFoundException exception) {
             // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
             // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
@@ -181,7 +179,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
     }
 
     private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
-        boolean downloadApprovalIsNotRequired = batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
+        boolean downloadApprovalIsNotRequired = batchSecurityProperties.isBypassMode() || security == null;
         if (downloadApprovalIsNotRequired) {
             return false;
         }

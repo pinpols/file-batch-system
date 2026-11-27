@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -125,7 +124,7 @@ class ConfigReleaseTypeRegistry {
     void applyToRequest(String configType, String configKey, String payload, TenantConfigBatchInitRequest request) {
         String type = canonicalType(configType);
         ConfigReleaseTypeHandler handler = handlersByCanonicalType.get(type);
-        if (EmptyChecks.isNull(handler)) {
+        if (handler == null) {
             throw invalid("unsupported configType: " + configType);
         }
         try {

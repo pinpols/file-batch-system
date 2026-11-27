@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
@@ -171,7 +170,7 @@ public class OutboxPollScheduler {
             return;
         }
         ScheduledFuture<?> future = pendingPoll.getAndSet(null);
-        if (EmptyChecks.isNotNull(future)) {
+        if (future != null) {
             future.cancel(false);
         }
     }
@@ -228,7 +227,7 @@ public class OutboxPollScheduler {
             // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
             // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
             Throwable mostSpecificCause = dae.getMostSpecificCause();
-            String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+            String failureSummary = mostSpecificCause == null
                     ? SwallowedExceptionLogger.summary(dae)
                     : SwallowedExceptionLogger.summary(mostSpecificCause);
             log.warn("Outbox poll transient database failure; retrying on the next cycle: {}", failureSummary);
@@ -295,7 +294,7 @@ public class OutboxPollScheduler {
         } catch (DataAccessException ex) {
             // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
             Throwable mostSpecificCause = ex.getMostSpecificCause();
-            String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+            String failureSummary = mostSpecificCause == null
                     ? SwallowedExceptionLogger.summary(ex)
                     : SwallowedExceptionLogger.summary(mostSpecificCause);
             log.warn(

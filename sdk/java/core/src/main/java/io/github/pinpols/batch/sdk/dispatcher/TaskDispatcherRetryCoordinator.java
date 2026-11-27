@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
@@ -62,7 +61,7 @@ final class TaskDispatcherRetryCoordinator {
                         httpClient.claim(message.taskId(), idempotencyKey, body);
                 resetClientErrorStreak();
                 PlatformHttpClient.TaskClaimResponse claimResponse =
-                        EmptyChecks.isNull(response) ? new PlatformHttpClient.TaskClaimResponse(null) : response;
+                        response == null ? new PlatformHttpClient.TaskClaimResponse(null) : response;
                 return new ClaimResult(true, true, claimResponse);
             } catch (PlatformHttpException httpEx) {
                 if (httpEx.isAuthError()) {

@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage.ReconcilePage;
@@ -39,7 +38,7 @@ final class FileGovernanceStorageMaintenance {
         List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> files = repository.selectArchivedFilesForCleanup(
                 cutoff, properties.getArchive().getCleanupBatchSize());
         for (FileGovernanceMaintenanceViews.ArchivedFileCleanupView file : files) {
-            if (EmptyChecks.isNotNull(file)) {
+            if (file != null) {
                 RlsTenantContextHolder.runWithTenant(file.tenantId(), () -> cleanupArchivedFile(file));
             }
         }
@@ -58,7 +57,7 @@ final class FileGovernanceStorageMaintenance {
         long cleaned = 0L;
         long skipped = 0L;
         for (FileGovernanceMaintenanceViews.OrphanUploadSessionView session : sessions) {
-            boolean didCleanup = EmptyChecks.isNotNull(session)
+            boolean didCleanup = session != null
                     && RlsTenantContextHolder.runWithTenant(
                             session.tenantId(), () -> cleanupOrphanUploadSession(session));
             if (didCleanup) {
@@ -211,8 +210,8 @@ final class FileGovernanceStorageMaintenance {
     }
 
     private void reconcileObject(StorageObjectView object) {
-        boolean objectIsMissingOrCompletionMarker = EmptyChecks.isNull(object)
-                || EmptyChecks.isNull(object.objectName())
+        boolean objectIsMissingOrCompletionMarker = object == null
+                || object.objectName() == null
                 || object.objectName().endsWith(".done");
         if (objectIsMissingOrCompletionMarker) {
             return;

@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -61,12 +60,10 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
                 .timezone(request.getTimezone())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .endStrategy(
-                        EmptyChecks.isNotNull(request.getEndStrategy()) ? request.getEndStrategy() : "FINISH_RUNNING")
-                .outOfWindowAction(
-                        EmptyChecks.isNotNull(request.getOutOfWindowAction()) ? request.getOutOfWindowAction() : "WAIT")
-                .allowCrossDay(EmptyChecks.isNotNull(request.getAllowCrossDay()) && request.getAllowCrossDay())
-                .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
+                .endStrategy(request.getEndStrategy() != null ? request.getEndStrategy() : "FINISH_RUNNING")
+                .outOfWindowAction(request.getOutOfWindowAction() != null ? request.getOutOfWindowAction() : "WAIT")
+                .allowCrossDay(request.getAllowCrossDay() != null && request.getAllowCrossDay())
+                .enabled(request.getEnabled() == null || request.getEnabled())
                 .description(request.getDescription())
                 .build();
         BatchWindowRules.validate(

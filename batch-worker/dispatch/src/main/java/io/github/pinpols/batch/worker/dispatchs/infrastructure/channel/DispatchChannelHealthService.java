@@ -357,7 +357,7 @@ public class DispatchChannelHealthService {
                 } catch (ExecutionException executionEx) {
                     probeFailureCount.incrementAndGet();
                     Throwable probeCause = executionEx.getCause();
-                    Throwable reportedFailure = EmptyChecks.isNull(probeCause) ? executionEx : probeCause;
+                    Throwable reportedFailure = probeCause == null ? executionEx : probeCause;
                     String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
                     log.warn(
                             "dispatch channel probe exception: error={}, channel={}",
@@ -391,7 +391,7 @@ public class DispatchChannelHealthService {
     }
 
     private static String probeLogIdentity(Map<String, Object> row) {
-        return EmptyChecks.isNull(row) ? "(null)" : LogSanitizer.value(ChannelIdentity.from(row));
+        return row == null ? "(null)" : LogSanitizer.value(ChannelIdentity.from(row));
     }
 
     @PreDestroy
@@ -426,7 +426,7 @@ public class DispatchChannelHealthService {
     }
 
     private void stopHttpProbeClient() {
-        if (EmptyChecks.isNull(httpProbeClient)) {
+        if (httpProbeClient == null) {
             return;
         }
         httpProbeClient.dispatcher().cancelAll();
@@ -448,7 +448,7 @@ public class DispatchChannelHealthService {
             return new DispatchChannelProbeResult(false, "probe target missing tenant/channel/type", null);
         }
         DispatchChannelHealthSnapshot snapshot = repository.findHealth(channel.tenantId(), channel.channelCode());
-        boolean channelProbeIsNotDue = EmptyChecks.isNotNull(snapshot)
+        boolean channelProbeIsNotDue = snapshot != null
                 && snapshot.nextProbeAt() != null
                 && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt());
         if (channelProbeIsNotDue) {

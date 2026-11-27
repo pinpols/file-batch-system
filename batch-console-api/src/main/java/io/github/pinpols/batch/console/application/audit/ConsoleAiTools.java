@@ -108,7 +108,7 @@ public class ConsoleAiTools {
                     + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
                     + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
     public String getClusterDiagnostics() {
-        if (EmptyChecks.isNull(diagnosticService)) {
+        if (diagnosticService == null) {
             return "集群诊断服务当前不可用(诊断能力未装配)。";
         }
         ConsoleClusterDiagnosticResponse diagnostics = diagnosticService.diagnose(tenantId);
@@ -158,11 +158,11 @@ public class ConsoleAiTools {
 
     @Tool(description = "深度诊断指定 job 实例的分区、任务、Outbox、Worker 容量和异常发现项。" + "用户询问某个实例卡住、长时间运行或失败根因时调用；只读，不执行重跑或修复。")
     public String diagnoseJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
-        if (EmptyChecks.isNull(diagnosticService)) {
+        if (diagnosticService == null) {
             return "实例诊断服务当前不可用。";
         }
         ConsoleInstanceDiagnosisResponse diagnosis = diagnosticService.instanceDiagnosis(tenantId, jobInstanceId);
-        if (EmptyChecks.isNull(diagnosis)) {
+        if (diagnosis == null) {
             return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
         }
         String findings = EmptyChecks.isEmpty(diagnosis.findings())
@@ -176,20 +176,17 @@ public class ConsoleAiTools {
                                 + " 建议="
                                 + String.join(";", finding.suggestedActions()))
                         .collect(Collectors.joining("\n"));
-        return "[实例诊断] jobInstanceId="
-                + diagnosis.jobInstanceId()
-                + " healthy="
-                + diagnosis.healthy()
-                + " status="
-                + (EmptyChecks.isNull(diagnosis.instance())
-                        ? "-"
-                        : diagnosis.instance().instanceStatus())
-                + " onlineWorkersForGroup="
-                + (EmptyChecks.isNull(diagnosis.summary())
-                        ? "-"
-                        : diagnosis.summary().onlineWorkersForGroup())
-                + "\n"
-                + findings;
+        String status = diagnosis.instance() == null
+                ? "-"
+                : String.valueOf(diagnosis.instance().instanceStatus());
+        String onlineWorkersForGroup = diagnosis.summary() == null
+                ? "-"
+                : String.valueOf(diagnosis.summary().onlineWorkersForGroup());
+        return """
+            [实例诊断] jobInstanceId=%s healthy=%s status=%s onlineWorkersForGroup=%s
+            %s
+            """.formatted(diagnosis.jobInstanceId(), diagnosis.healthy(), status, onlineWorkersForGroup, findings)
+                .stripTrailing();
     }
 
     @Tool(
@@ -298,7 +295,7 @@ public class ConsoleAiTools {
     }
 
     private static String nullToDash(String value) {
-        return value == null || value.isBlank() ? "-" : value;
+        return EmptyChecks.isBlank(value) ? "-" : value;
     }
 
     private static String truncate(String value, int maxLength) {

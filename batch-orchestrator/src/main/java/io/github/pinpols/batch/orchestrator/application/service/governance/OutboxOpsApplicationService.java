@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
@@ -87,7 +88,7 @@ public class OutboxOpsApplicationService {
 
     private OutboxRepublishResponse republishInternal(
             String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
-        if (ids == null || ids.isEmpty()) {
+        if (EmptyChecks.isEmpty(ids)) {
             return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
         }
         int affected;

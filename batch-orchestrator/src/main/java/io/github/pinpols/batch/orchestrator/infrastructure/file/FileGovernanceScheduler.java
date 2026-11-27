@@ -189,7 +189,7 @@ public class FileGovernanceScheduler {
         }
         for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
             ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
-            if (EmptyChecks.isNull(key)) {
+            if (key == null) {
                 continue;
             }
             grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
@@ -202,7 +202,7 @@ public class FileGovernanceScheduler {
             ArrivalGroupKey key = entry.getKey();
             ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
                     key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
-            if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
+            if (decision == null || decision.state() == null) {
                 continue;
             }
             switch (decision.state()) {
@@ -232,7 +232,7 @@ public class FileGovernanceScheduler {
     }
 
     private long valueOrZero(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : value;
+        return value == null ? 0L : value;
     }
 
     public void cleanupArchivedFiles() {
@@ -262,7 +262,7 @@ public class FileGovernanceScheduler {
         Set<String> arrivedFiles = new HashSet<>();
         for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
             String fileName = file.fileName();
-            if (EmptyChecks.isNotNull(fileName)) {
+            if (fileName != null) {
                 arrivedFiles.add(fileName);
             }
         }
@@ -277,7 +277,7 @@ public class FileGovernanceScheduler {
                 firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
         String timeoutAction = defaultText(
                 firstFile.arrivalTimeoutAction(), properties.getArrival().getDefaultTimeoutAction());
-        boolean timedOut = EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
+        boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
         if (timedOut) {
             if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
                 ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(
@@ -425,7 +425,7 @@ public class FileGovernanceScheduler {
                 context.files().groupFiles()) {
             Long fileId = file.fileId();
             String tenantId = file.tenantId();
-            if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
+            if (fileId == null || tenantId == null) {
                 continue;
             }
             int updated = fileGovernanceRepository.updateArrivalGroupMetadataIfNonTerminal(tenantId, fileId, metadata);
@@ -491,8 +491,7 @@ public class FileGovernanceScheduler {
         }
         try {
             Map<String, Object> metadata = JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
-            return EmptyChecks.isNotNull(metadata)
-                    && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+            return metadata != null && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
         } catch (RuntimeException exception) {
             return false;
         }
@@ -534,7 +533,7 @@ public class FileGovernanceScheduler {
         private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
 
         static ArrivalGroupKey from(FileGovernanceArrivalViews.ArrivalCandidateView candidate) {
-            if (EmptyChecks.isNull(candidate)) {
+            if (candidate == null) {
                 return null;
             }
             String tenantId = candidate.tenantId();

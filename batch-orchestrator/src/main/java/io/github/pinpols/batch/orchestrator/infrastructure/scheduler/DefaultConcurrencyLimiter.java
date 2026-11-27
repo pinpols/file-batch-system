@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
@@ -90,7 +89,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     }
 
     private ResourceCheck checkFairShareLimit(ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
-        if (!request.isNewJobAdmission() || EmptyChecks.isNull(quotaPolicy)) {
+        if (!request.isNewJobAdmission() || quotaPolicy == null) {
             return ResourceCheck.allow();
         }
         boolean fairShareGroupLimitIsConfigured = Texts.hasText(quotaPolicy.fairShareGroup())
@@ -109,19 +108,18 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     }
 
     private boolean hasResourceCaps(TenantQuotaPolicyEntity policy, ResourceQueueEntity queue) {
-        return (EmptyChecks.isNotNull(policy)
+        return (policy != null
                         && (isPositive(policy.maxRunningJobsPerTenant())
                                 || isPositive(policy.maxPartitionsPerTenant())))
-                || (EmptyChecks.isNotNull(queue)
-                        && (isPositive(queue.maxRunningJobs()) || isPositive(queue.maxRunningPartitions())));
+                || (queue != null && (isPositive(queue.maxRunningJobs()) || isPositive(queue.maxRunningPartitions())));
     }
 
     private static boolean isPositive(Integer value) {
-        return EmptyChecks.isNotNull(value) && value > 0;
+        return value != null && value > 0;
     }
 
     private ResourceCheck checkTenantLimit(ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
-        if (EmptyChecks.isNull(quotaPolicy)) {
+        if (quotaPolicy == null) {
             return ResourceCheck.allow();
         }
         QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
@@ -185,7 +183,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     }
 
     private ResourceCheck checkQueueLimit(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        boolean queueLimitUnavailable = EmptyChecks.isNull(queue)
+        boolean queueLimitUnavailable = queue == null
                 || !Texts.hasText(queue.queueCode())
                 || queue.maxRunningJobs() == null
                 || queue.maxRunningJobs() <= 0;

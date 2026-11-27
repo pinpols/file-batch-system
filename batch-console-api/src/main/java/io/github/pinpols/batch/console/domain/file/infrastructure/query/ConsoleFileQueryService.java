@@ -107,7 +107,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     private final BatchDateTimeSupport dateTimeSupport;
 
     public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -124,10 +124,10 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
             LocalDate today = dateTimeSupport.todayInDefaultBusinessZone();
             Instant dayStart = today.atStartOfDay(zone).toInstant();
             Instant dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(TIMESTAMP_RESOLUTION_NANOS);
-            if (EmptyChecks.isNull(fromTime) || fromTime.isBefore(dayStart)) {
+            if (fromTime == null || fromTime.isBefore(dayStart)) {
                 fromTime = dayStart;
             }
-            if (EmptyChecks.isNull(toTime) || toTime.isAfter(dayEnd)) {
+            if (toTime == null || toTime.isAfter(dayEnd)) {
                 toTime = dayEnd;
             }
         }
@@ -159,7 +159,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     public ConsoleFileSummaryResponse fileSummary(String requestTenantId) {
         String tenantId = resolveTenant(tenantGuard, requestTenantId);
         FileRecordSummaryView summary = fileMappers.fileRecordMapper.selectSummary(tenantId);
-        if (EmptyChecks.isNull(summary)) {
+        if (summary == null) {
             return new ConsoleFileSummaryResponse(0L, 0L, 0L, 0L);
         }
         long arrivedToday = summaryCount(summary.arrivedToday());
@@ -170,7 +170,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     private static long summaryCount(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : value;
+        return value == null ? 0L : value;
     }
 
     public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
@@ -212,11 +212,11 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
-        if (EmptyChecks.isNull(pipelineInstanceId) || pipelineInstanceId <= 0) {
+        if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", "pipelineInstanceId");
         }
         String tenantId = fileMappers.filePipelineStepRunMapper.selectTenantIdByPipelineInstanceId(pipelineInstanceId);
-        if (EmptyChecks.isNull(tenantId)) {
+        if (tenantId == null) {
             return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, null, null, List.of());
         }
         tenantGuard.assertTenantAllowed(tenantId);
@@ -230,7 +230,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         TenantScope.requireTenant(tenantId);
         FilePipelineExecutionView execution =
                 fileMappers.filePipelineStepRunMapper.selectExecution(tenantId, pipelineInstanceId);
-        if (EmptyChecks.isNull(execution))
+        if (execution == null)
             throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", pipelineInstanceId);
         List<FilePipelineProgressStepView> rawSteps =
                 fileMappers.filePipelineStepRunMapper.selectLatestProgressByPipelineInstance(
@@ -278,7 +278,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
 
     private ConsoleFilePipelineProgressResponse assemblePipelineProgress(
             String tenantId, Long pipelineInstanceId, List<FilePipelineProgressStepView> rawSteps, boolean allowLive) {
-        if (EmptyChecks.isNull(rawSteps)) {
+        if (rawSteps == null) {
             rawSteps = List.of();
         }
         // 运行中步骤尚无持久化处理行数时，从当前 Worker 的进度缓存补充实时值。
@@ -291,8 +291,8 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         // 文件名属于流水线响应级字段；一个流水线实例至多关联一条文件记录。
         FilePipelineInfoView fileInfo =
                 fileMappers.filePipelineStepRunMapper.selectFileInfoByPipelineInstance(tenantId, pipelineInstanceId);
-        Long fileId = EmptyChecks.isNull(fileInfo) ? null : fileInfo.fileId();
-        String fileName = EmptyChecks.isNull(fileInfo) ? null : display(fileInfo.fileName());
+        Long fileId = fileInfo == null ? null : fileInfo.fileId();
+        String fileName = fileInfo == null ? null : display(fileInfo.fileName());
         return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, fileId, fileName, steps);
     }
 
@@ -303,9 +303,9 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
             return Map.of();
         }
         boolean needsBridge = rawSteps.stream()
-                .anyMatch(row -> EmptyChecks.isNotNull(row)
+                .anyMatch(row -> row != null
                         && STEP_STATUS_RUNNING.equals(display(row.stepStatus()))
-                        && EmptyChecks.isNull(row.rowsProcessed()));
+                        && row.rowsProcessed() == null);
         if (!needsBridge) {
             return Map.of();
         }
@@ -315,8 +315,8 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
             return Map.of();
         }
         Map<String, ConsolePipelineProgressItemResponse> progressByStage = cache.stream()
-                .filter(EmptyChecks::isNotNull)
-                .filter(item -> EmptyChecks.isNotNull(item.stageCode()))
+                .filter(Objects::nonNull)
+                .filter(item -> item.stageCode() != null)
                 .collect(Collectors.toUnmodifiableMap(
                         ConsolePipelineProgressItemResponse::stageCode,
                         Function.identity(),
@@ -415,7 +415,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {
         String resolved = resolveTenant(tenantGuard, tenantId);
         FileChannelConfigQueryView row = fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             throw BizException.of(
                     ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "file channel not found: " + channelCode);
         }
@@ -424,10 +424,10 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
 
     public ConsoleFileTemplateResponse fileTemplateDetail(String tenantId, String templateCode, Integer version) {
         String resolved = resolveTenant(tenantGuard, tenantId);
-        Integer ver = EmptyChecks.isNotNull(version) ? version : 1;
+        Integer ver = version != null ? version : 1;
         FileTemplateConfigQueryView row =
                 fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             throw BizException.of(
                     ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "file template not found: " + templateCode);
         }
@@ -437,7 +437,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
         String resolved = resolveTenant(tenantGuard, tenantId);
         FileRecordStorageView fileRecord = fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
-        if (EmptyChecks.isNull(fileRecord)) {
+        if (fileRecord == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", fileId);
         }
         return ConsoleFileRecordDetailResponse.from(fileRecord);
@@ -448,7 +448,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         PageRequest pageSingle = new PageRequest(1, 1);
         FilePipelineQuery detailQuery = FilePipelineQuery.ofPipeline(resolved, id, pageSingle);
         List<FilePipelineQueryView> rows = fileMappers.filePipelineMapper.selectByQuery(detailQuery);
-        if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
+        if (EmptyChecks.isEmpty(rows) || rows.get(0) == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", id);
         }
         return toFilePipelineResponse(rows.get(0));
@@ -458,7 +458,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         if (value instanceof Boolean bool) {
             return bool;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         return "true".equalsIgnoreCase(String.valueOf(value));
@@ -467,7 +467,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     private FileTemplateSecurityFlagsView fileContentMaskingPolicy(
             String tenantId, Long fileId, Map<Long, Optional<FileTemplateSecurityFlagsView>> policies) {
         boolean fileMaskingRequestIsIneligible =
-                batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(fileId) || !Texts.hasText(tenantId);
+                batchSecurityProperties.isBypassMode() || fileId == null || !Texts.hasText(tenantId);
         if (fileMaskingRequestIsIneligible) {
             return null;
         }
@@ -518,7 +518,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     private ConsoleFilePipelineStepResponse toFilePipelineStepResponse(FilePipelineStepRunQueryView row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             ConsoleFilePipelineStepResponse emptyResponse = ConsoleFilePipelineStepResponse.builder()
                     .errorMessage(renderLocalizedError((Map<String, Object>) null))
                     .build();
@@ -560,12 +560,12 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     private String maskedJsonValue(Map<String, Object> row, String key) {
-        Object rawValue = EmptyChecks.isNull(row) ? null : row.get(key);
+        Object rawValue = row == null ? null : row.get(key);
         return maskedJsonValue(rawValue);
     }
 
     private String maskedJsonValue(Object rawValue) {
-        if (EmptyChecks.isNull(rawValue)) {
+        if (rawValue == null) {
             return null;
         }
         Object parsed = JsonUtils.fromJson(String.valueOf(rawValue), Object.class);
@@ -578,27 +578,21 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         Instant lastHeartbeatAt = row.lastHeartbeatAt();
         ConsolePipelineProgressItemResponse live = liveProgress.get(display(row.stageCode()));
         // 跨服务查询不共享数据库快照；必须再次核对缓存来源阶段ID，避免新尝试计数污染旧快照。
-        List<Long> stepRunIds = EmptyChecks.isNull(live) ? null : live.stepRunIds();
+        List<Long> stepRunIds = live == null ? null : live.stepRunIds();
         boolean sameAttempt = EmptyChecks.isNotEmpty(stepRunIds) && stepRunIds.contains(row.stepId());
         Long rowsProcessed = row.rowsProcessed();
         Long totalRowsHint = row.totalRowsHint();
         boolean running = STEP_STATUS_RUNNING.equals(display(row.stepStatus()));
-        boolean shouldBridgeLiveRowsProcessed = running
-                && sameAttempt
-                && EmptyChecks.isNull(rowsProcessed)
-                && EmptyChecks.isNotNull(live)
-                && EmptyChecks.isNotNull(live.rowsProcessed());
+        boolean shouldBridgeLiveRowsProcessed =
+                running && sameAttempt && rowsProcessed == null && live != null && live.rowsProcessed() != null;
         if (shouldBridgeLiveRowsProcessed) {
             rowsProcessed = live.rowsProcessed();
-            if (EmptyChecks.isNull(lastHeartbeatAt)) {
+            if (lastHeartbeatAt == null) {
                 lastHeartbeatAt = live.heartbeatAt();
             }
         }
-        boolean shouldBridgeLiveTotalRowsHint = running
-                && sameAttempt
-                && EmptyChecks.isNull(totalRowsHint)
-                && EmptyChecks.isNotNull(live)
-                && EmptyChecks.isNotNull(live.totalRowsHint());
+        boolean shouldBridgeLiveTotalRowsHint =
+                running && sameAttempt && totalRowsHint == null && live != null && live.totalRowsHint() != null;
         if (shouldBridgeLiveTotalRowsHint) {
             totalRowsHint = live.totalRowsHint();
         }
@@ -606,7 +600,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         Long pipelineInstanceId = row.pipelineInstanceId();
         String stepCode = display(row.stepCode());
         String stageCode = display(row.stageCode());
-        Long heartbeatEpochMillis = EmptyChecks.isNull(lastHeartbeatAt) ? null : lastHeartbeatAt.toEpochMilli();
+        Long heartbeatEpochMillis = lastHeartbeatAt == null ? null : lastHeartbeatAt.toEpochMilli();
         return new ConsoleFilePipelineStepProgressResponse(
                 stepId,
                 pipelineInstanceId,
@@ -621,7 +615,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(FileDispatchRecordQueryView row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             ConsoleFileDispatchRecordResponse emptyResponse = ConsoleFileDispatchRecordResponse.builder()
                     .errorMessage(renderLocalizedError((Map<String, Object>) null))
                     .build();
@@ -681,14 +675,14 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     }
 
     private String renderLocalizedError(String errorKey, Object errorArgs, String errorMessage) {
-        String rawErrorArgs = EmptyChecks.isNull(errorArgs) ? null : String.valueOf(errorArgs);
+        String rawErrorArgs = errorArgs == null ? null : String.valueOf(errorArgs);
         String maskedErrorArgs = SecretMasking.maskSensitiveJson(rawErrorArgs);
         return localizedErrorRenderer.render(errorKey, maskedErrorArgs, errorMessage);
     }
 
     private String rawValue(Map<String, Object> row, String key) {
-        Object value = EmptyChecks.isNull(row) ? null : row.get(key);
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        Object value = row == null ? null : row.get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(FileArrivalGroupView entity) {
@@ -726,12 +720,12 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
             FileErrorRecordEntity entity, FileTemplateSecurityFlagsView policy) {
         String errorMessage = localizedErrorRenderer.render(entity);
         String rawContent = entity.getRawRecord();
-        if (EmptyChecks.isNotNull(policy)) {
+        if (policy != null) {
             boolean maskErrors = truthy(policy.errorLineMaskingEnabled());
-            if (maskErrors && EmptyChecks.isNotNull(errorMessage)) {
+            if (maskErrors && errorMessage != null) {
                 errorMessage = ContentMaskingUtils.maskPlainText(errorMessage, policy.maskingRuleSet());
             }
-            if ((maskErrors || truthy(policy.previewMaskingEnabled())) && EmptyChecks.isNotNull(rawContent)) {
+            if ((maskErrors || truthy(policy.previewMaskingEnabled())) && rawContent != null) {
                 rawContent = ContentMaskingUtils.maskPlainText(rawContent, policy.maskingRuleSet());
             }
         }

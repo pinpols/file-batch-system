@@ -28,14 +28,14 @@ public record MaintenanceAlertWindow(Instant startsAt, Instant endsAt, Set<Strin
 
     /** 缺少 ETA 时使用有限默认窗口；轮询、重启和重试均不从当前时间延长窗口。 */
     public static MaintenanceAlertWindow from(MaintenanceState state, int defaultMinutes) {
-        Instant start = EmptyChecks.isNull(state.startsAt()) ? state.updatedAt() : state.startsAt();
-        if (EmptyChecks.isNull(start)) {
+        Instant start = state.startsAt() == null ? state.updatedAt() : state.startsAt();
+        if (start == null) {
             return new MaintenanceAlertWindow(Instant.EPOCH, Instant.EPOCH, Set.of());
         }
         long boundedMinutes = Math.max(1L, Math.min(MAX_WINDOW_MINUTES, defaultMinutes));
         Instant maximumEnd = start.plus(Duration.ofMinutes(MAX_WINDOW_MINUTES));
         Instant end = state.etaAt();
-        if (EmptyChecks.isNull(end)) {
+        if (end == null) {
             Duration defaultWindow = Duration.ofMinutes(boundedMinutes);
             end = start.plus(defaultWindow);
         }
@@ -48,7 +48,7 @@ public record MaintenanceAlertWindow(Instant startsAt, Instant endsAt, Set<Strin
             jobs.add("batch-console-api");
         } else {
             for (String service : services) {
-                if (EmptyChecks.isNull(service)) {
+                if (service == null) {
                     continue;
                 }
                 String job = service.startsWith("batch-") ? service : "batch-" + service;

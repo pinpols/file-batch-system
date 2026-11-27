@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -55,7 +54,7 @@ public interface RetryGovernanceService {
         boolean externalActionVerifiedNotExecuted = input.externalActionVerifiedNotExecuted();
         String externalOutcomeEvidenceReference = input.externalOutcomeEvidenceReference();
 
-        if (externalActionVerifiedNotExecuted || EmptyChecks.isNotNull(externalOutcomeEvidenceReference)) {
+        if (externalActionVerifiedNotExecuted || externalOutcomeEvidenceReference != null) {
             throw new UnsupportedOperationException(
                     "verified external outcome recovery is not supported by this implementation");
         }

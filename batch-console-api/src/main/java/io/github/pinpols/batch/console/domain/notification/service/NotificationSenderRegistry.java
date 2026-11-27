@@ -20,12 +20,12 @@ public class NotificationSenderRegistry {
         Map<String, NotificationSender> registered = new LinkedHashMap<>();
         for (NotificationSender sender : senders) {
             String channelType = normalize(sender.channelType());
-            if (EmptyChecks.isNull(channelType)) {
+            if (channelType == null) {
                 throw new IllegalStateException("NotificationSender channelType must not be blank: "
                         + sender.getClass().getName());
             }
             NotificationSender duplicate = registered.putIfAbsent(channelType, sender);
-            if (EmptyChecks.isNotNull(duplicate)) {
+            if (duplicate != null) {
                 throw new IllegalStateException("duplicate NotificationSender channelType: " + channelType);
             }
         }
@@ -35,7 +35,7 @@ public class NotificationSenderRegistry {
     /** 解析能处理 channelType 的 sender；无则 null。 */
     public NotificationSender resolve(String channelType) {
         String normalized = normalize(channelType);
-        return EmptyChecks.isNull(normalized) ? null : sendersByType.get(normalized);
+        return normalized == null ? null : sendersByType.get(normalized);
     }
 
     private static String normalize(String value) {

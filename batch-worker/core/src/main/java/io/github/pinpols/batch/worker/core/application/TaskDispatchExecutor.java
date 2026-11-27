@@ -40,7 +40,7 @@ public class TaskDispatchExecutor {
     /** Kafka 只负责把任务送到 worker，实际执行前仍然要回 Orchestrator 做 CLAIM。 */
     public WorkerExecutionResult execute(TaskDispatchMessage message, String workerId) {
         boolean executionRequestIsIncomplete =
-                EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId()) || EmptyChecks.isBlank(workerId);
+                message == null || message.taskId() == null || EmptyChecks.isBlank(workerId);
         if (executionRequestIsIncomplete) {
             return null;
         }
@@ -104,9 +104,8 @@ public class TaskDispatchExecutor {
         }
         Map<Long, PulledTask> claimedTasksById = new LinkedHashMap<>();
         for (TaskDispatchMessage message : messages) {
-            boolean dispatchMessageIsMissingOrAlreadyClaimed = EmptyChecks.isNull(message)
-                    || EmptyChecks.isNull(message.taskId())
-                    || claimedTasksById.containsKey(message.taskId());
+            boolean dispatchMessageIsMissingOrAlreadyClaimed =
+                    message == null || message.taskId() == null || claimedTasksById.containsKey(message.taskId());
             if (dispatchMessageIsMissingOrAlreadyClaimed) {
                 continue;
             }
@@ -125,7 +124,7 @@ public class TaskDispatchExecutor {
         try {
             for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
                 TaskDispatchMessage message = messages.get(messageIndex);
-                if (EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId())) {
+                if (message == null || message.taskId() == null) {
                     continue;
                 }
                 if (!executedTaskIds.add(message.taskId())) {
@@ -203,7 +202,7 @@ public class TaskDispatchExecutor {
     }
 
     private static boolean isClaimReadyForExecution(TaskClaimResult claim) {
-        return EmptyChecks.isNotNull(claim) && claim.claimed() && EmptyChecks.isNotNull(claim.config());
+        return claim != null && claim.claimed() && claim.config() != null;
     }
 
     private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {

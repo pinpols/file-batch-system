@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse.Status;
@@ -39,7 +38,7 @@ public class ConfigBatchOperationRecoveryService implements ConsoleConfigBatchOp
         mapper.setTenantContext(request.auditTenantId());
         String targetsJson = writeJson(request.targets());
         JsonNode metadata = request.responseMetadata();
-        String metadataJson = writeJson(EmptyChecks.isNull(metadata) ? objectMapper.createObjectNode() : metadata);
+        String metadataJson = writeJson(metadata == null ? objectMapper.createObjectNode() : metadata);
         ConfigBatchOperationInsertParam params = new ConfigBatchOperationInsertParam(
                 request.auditTenantId(),
                 request.operationId(),
@@ -59,7 +58,7 @@ public class ConfigBatchOperationRecoveryService implements ConsoleConfigBatchOp
             String auditTenantId, String requestIdentityHash, String operationKind) {
         mapper.setTenantContext(auditTenantId);
         ConfigBatchOperationRow operation = mapper.selectOperation(auditTenantId, requestIdentityHash);
-        if (EmptyChecks.isNull(operation) || !Objects.equals(operationKind, operation.operationKind())) {
+        if (operation == null || !Objects.equals(operationKind, operation.operationKind())) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
         }
         List<String> targetIds = readTargets(operation.targetsJson());
@@ -69,9 +68,9 @@ public class ConfigBatchOperationRecoveryService implements ConsoleConfigBatchOp
             String tenantId = targetIds.get(ordinal);
             mapper.setTenantContext(tenantId);
             String receiptJson = mapper.selectReceipt(auditTenantId, operation.operationId(), ordinal, tenantId);
-            TenantInitResult receipt = EmptyChecks.isNull(receiptJson) ? null : readReceipt(receiptJson);
+            TenantInitResult receipt = receiptJson == null ? null : readReceipt(receiptJson);
             Status targetStatus = Status.COMPLETE;
-            if (EmptyChecks.isNull(receipt) || !tenantId.equals(receipt.tenantId())) {
+            if (receipt == null || !tenantId.equals(receipt.tenantId())) {
                 receipt = null;
                 targetStatus = Status.UNKNOWN;
                 status = Status.UNKNOWN;

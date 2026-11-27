@@ -27,7 +27,7 @@ public final class OutboundTrailerRecord {
 
     /** {@code trailer_template.present=true} 时启用出站 trailer。 */
     public static boolean enabled(Map<String, Object> trailerTemplate) {
-        return trailerTemplate != null && !trailerTemplate.isEmpty() && boolOr(trailerTemplate.get("present"), false);
+        return EmptyChecks.isNotEmpty(trailerTemplate) && boolOr(trailerTemplate.get("present"), false);
     }
 
     /** 控制总额累加的明细列名(amountField / amount_field);未配则不累加金额。 */
@@ -40,7 +40,7 @@ public final class OutboundTrailerRecord {
             raw = trailerTemplate.get("amount_field");
         }
         String text = null;
-        if (EmptyChecks.isNotNull(raw)) {
+        if (raw != null) {
             String rawText = String.valueOf(raw);
             text = rawText.trim();
         }
@@ -113,7 +113,7 @@ public final class OutboundTrailerRecord {
         if (value instanceof Boolean bool) {
             return bool;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return fallback;
         }
         String textValue = String.valueOf(value);

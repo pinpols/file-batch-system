@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -43,12 +42,11 @@ public class CompleteDispatchStep implements DispatchStageStep {
     @Override
     public DispatchStageResult execute(DispatchJobContext context) {
         // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
             return DispatchStageResult.success(stage());
         }
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        Object payload = context == null ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
         if (!(payload instanceof DispatchPayload dispatchPayload)) {
             return DispatchStageResult.failure(
                     stage(),
@@ -66,7 +64,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
         if (FileReceiptStatus.SUCCESS.code().equalsIgnoreCase(receiptStatus)) {
             Map<String, Object> fileMetadata = new LinkedHashMap<>();
             fileMetadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
-            if (EmptyChecks.isNotNull(attrs.get(DispatchRuntimeKeys.RECEIPT_CODE))) {
+            if (attrs.get(DispatchRuntimeKeys.RECEIPT_CODE) != null) {
                 fileMetadata.put(DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
             }
             fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHED.code(), fileMetadata);

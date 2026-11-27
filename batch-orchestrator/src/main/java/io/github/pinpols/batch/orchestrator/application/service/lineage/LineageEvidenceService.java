@@ -48,11 +48,11 @@ public class LineageEvidenceService {
     public LineageEvidenceResponse evidenceForResultVersion(String tenantId, Long resultVersionId) {
         ResultVersionEntity version = resultVersionMapper.selectById(tenantId, resultVersionId);
         String resultVersionSource = HOT;
-        if (EmptyChecks.isNull(version)) {
+        if (version == null) {
             version = resultVersionMapper.selectArchivedById(tenantId, resultVersionId);
             resultVersionSource = ARCHIVE;
         }
-        if (EmptyChecks.isNull(version)) {
+        if (version == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
         }
         return buildEvidence(version, resultVersionSource);
@@ -69,7 +69,7 @@ public class LineageEvidenceService {
         Long payloadFileId = payloadFileId(version);
         JobInstance jobInstance = lineageEvidenceMapper.selectJobInstance(version.tenantId(), version.jobInstanceId());
         String jobInstanceSource = HOT;
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             jobInstance = lineageEvidenceMapper.selectArchivedJobInstance(version.tenantId(), version.jobInstanceId());
             jobInstanceSource = ARCHIVE;
         }
@@ -88,7 +88,7 @@ public class LineageEvidenceService {
                 version.tenantId(), version.jobInstanceId(), payloadFileId);
         List<FileRecord> archivedFiles = nullToEmpty(archivedFileRows);
         TreeMap<Long, FileRecord> filesById = new TreeMap<>();
-        boolean archivedJob = EmptyChecks.isNotNull(jobInstance) && ARCHIVE.equals(jobInstanceSource);
+        boolean archivedJob = jobInstance != null && ARCHIVE.equals(jobInstanceSource);
         List<FileRecord> preferredFiles = archivedJob ? archivedFiles : hotFiles;
         List<FileRecord> otherFiles = archivedJob ? hotFiles : archivedFiles;
         preferredFiles.forEach(file -> filesById.put(file.id(), file));
@@ -157,8 +157,8 @@ public class LineageEvidenceService {
 
     private static LineageCoverage coverage(EvidenceCoverageInput input) {
         List<String> knownGaps = new ArrayList<>();
-        boolean jobFound = EmptyChecks.isNotNull(input.jobInstance());
-        boolean payloadResolved = EmptyChecks.isNull(input.payloadFileId())
+        boolean jobFound = input.jobInstance() != null;
+        boolean payloadResolved = input.payloadFileId() == null
                 || input.fileRecords().stream()
                         .anyMatch(row -> input.payloadFileId().equals(row.id()));
         if (!jobFound) {
@@ -221,7 +221,7 @@ public class LineageEvidenceService {
     }
 
     private static Long payloadFileId(ResultVersionEntity version) {
-        boolean resultVersionHasNoFileRecordReference = EmptyChecks.isNull(version)
+        boolean resultVersionHasNoFileRecordReference = version == null
                 || !"FILE_RECORD".equals(version.payloadStorage())
                 || !Texts.hasText(version.payloadRef())
                 || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX);
@@ -238,7 +238,7 @@ public class LineageEvidenceService {
     }
 
     private static <T> List<T> nullToEmpty(List<T> rows) {
-        return EmptyChecks.isNull(rows) ? List.of() : rows;
+        return rows == null ? List.of() : rows;
     }
 
     @Builder

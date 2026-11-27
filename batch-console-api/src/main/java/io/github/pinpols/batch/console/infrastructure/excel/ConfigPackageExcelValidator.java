@@ -506,7 +506,7 @@ public class ConfigPackageExcelValidator {
                             && BatchWindowRules.WINDOW_RANGE_FIELD.equals(invalid.getMessageArgs()[0]);
             if (needsExistingCrossDay) {
                 BatchWindowRow existing = batchWindowMapper.selectByUniqueKey(window.tenantId(), window.windowCode());
-                if (EmptyChecks.isNotNull(existing) && Boolean.TRUE.equals(existing.allowCrossDay())) {
+                if (existing != null && Boolean.TRUE.equals(existing.allowCrossDay())) {
                     return;
                 }
             }
@@ -555,7 +555,7 @@ public class ConfigPackageExcelValidator {
             List<String> issues) {
         validatePolicyTenant(tenantId, row, issues);
         PolicyJobContext jobContext = resolvePolicyJob(tenantId, packageJobs, seen, row, issues);
-        if (EmptyChecks.isNotNull(jobContext)) {
+        if (jobContext != null) {
             validateMonitoringPolicyApplicability(row, jobContext, issues);
         }
         validateMonitoringPolicyValues(row, issues);
@@ -584,11 +584,11 @@ public class ConfigPackageExcelValidator {
             issues.add("duplicate job_code in excel: " + jobCode);
         }
         PolicyJobContext packageJob = packageJobs.get(key);
-        if (EmptyChecks.isNotNull(packageJob)) {
+        if (packageJob != null) {
             return packageJob;
         }
         JobDefinitionView existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-        if (EmptyChecks.isNull(existingJob)) {
+        if (existingJob == null) {
             issues.add("job_code does not exist for tenant: " + jobCode);
             return null;
         }
@@ -603,10 +603,9 @@ public class ConfigPackageExcelValidator {
         Integer dependencyWindow = parseIntegerWithoutIssue(row.get(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS));
         String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
         String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
-        boolean hasPositiveDependencyWindow = EmptyChecks.isNotNull(dependencyWindow) && dependencyWindow > 0;
+        boolean hasPositiveDependencyWindow = dependencyWindow != null && dependencyWindow > 0;
 
-        boolean startGraceConfiguredForUnsupportedJob =
-                !cron && !dependent && EmptyChecks.isNotNull(startGrace) && startGrace > 0;
+        boolean startGraceConfiguredForUnsupportedJob = !cron && !dependent && startGrace != null && startGrace > 0;
         if (startGraceConfiguredForUnsupportedJob) {
             issues.add(COL_START_GRACE_SECONDS + " is only supported for CRON or dependent jobs");
         }
@@ -756,18 +755,17 @@ public class ConfigPackageExcelValidator {
             issues.add(COL_WORKFLOW_CODE + " is required");
         }
         Integer version = parseIntegerWithoutIssue(versionText);
-        if (EmptyChecks.isNull(version) || version <= 0) {
+        if (version == null || version <= 0) {
             issues.add(COL_WORKFLOW_VERSION + " must be a positive integer");
         }
-        if (hasText(workflowCode) && EmptyChecks.isNotNull(version) && version > 0) {
+        if (hasText(workflowCode) && version != null && version > 0) {
             String key = workflowPolicyKey(workflowCode, versionText);
             if (!seen.add(key)) {
                 issues.add("duplicate workflow_code + workflow_version in excel: " + key);
             }
             if (!packageWorkflowKeys.contains(key)) {
-                boolean workflowExists = EmptyChecks.isNotNull(workflowDefinitionMapper)
-                        && EmptyChecks.isNotNull(
-                                workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, version));
+                boolean workflowExists = workflowDefinitionMapper != null
+                        && workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, version) != null;
                 if (!workflowExists) {
                     issues.add("workflow_code + workflow_version does not exist for tenant: " + key);
                 }
@@ -782,9 +780,7 @@ public class ConfigPackageExcelValidator {
         Integer parsedVersion = parseIntegerWithoutIssue(normalizedVersion);
         return Objects.toString(normalizedCode, "").toUpperCase(Locale.ROOT)
                 + KEY_SEP_COLON
-                + (EmptyChecks.isNull(parsedVersion)
-                        ? Objects.toString(normalizedVersion, "")
-                        : parsedVersion.toString());
+                + (parsedVersion == null ? Objects.toString(normalizedVersion, "") : parsedVersion.toString());
     }
 
     private SheetResult validateWfNodeRows(List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
@@ -842,7 +838,7 @@ public class ConfigPackageExcelValidator {
                 String jobCode = normalize(row.get(refColumn));
                 boolean referencedJobIsMissing = hasText(jobCode)
                         && !jobCodesInExcel.contains(jobCode)
-                        && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode));
+                        && jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode) == null;
                 if (referencedJobIsMissing) {
                     issues.add(new WorkbookIssue(
                             WF_DEF_SHEET,
@@ -873,7 +869,7 @@ public class ConfigPackageExcelValidator {
             String relatedJob = normalize(row.get(COL_RELATED_JOB_CODE));
             boolean relatedJobIsMissing = hasText(relatedJob)
                     && !jobCodesInExcel.contains(relatedJob)
-                    && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob));
+                    && jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob) == null;
             if (relatedJobIsMissing) {
                 issues.add(new WorkbookIssue(
                         WF_NODE_SHEET,
@@ -951,7 +947,7 @@ public class ConfigPackageExcelValidator {
                     issues.add(new WorkbookIssue(
                             JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job cannot depend on itself"));
                 } else if (!references.jobCodes().contains(dependsOnJobCode)
-                        && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode))) {
+                        && jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode) == null) {
                     issues.add(new WorkbookIssue(
                             JOB_SHEET,
                             rowNo,
@@ -994,7 +990,7 @@ public class ConfigPackageExcelValidator {
                 .collect(Collectors.toSet());
         List<JobDefinitionMapper.JobDependencyEdge> existingDependencies =
                 jobDefinitionMapper.selectAllDependencies(tenantId);
-        if (EmptyChecks.isNotNull(existingDependencies)) {
+        if (existingDependencies != null) {
             for (JobDefinitionMapper.JobDependencyEdge edge : existingDependencies) {
                 if (!replacedJobs.contains(edge.downstreamJobCode())) {
                     graph.computeIfAbsent(edge.downstreamJobCode(), ignored -> new HashSet<>())
@@ -1061,16 +1057,15 @@ public class ConfigPackageExcelValidator {
     }
 
     private boolean resourceQueueExists(String tenantId, String queueCode) {
-        return EmptyChecks.isNotNull(resourceQueueMapper.selectByUniqueKey(tenantId, queueCode));
+        return resourceQueueMapper.selectByUniqueKey(tenantId, queueCode) != null;
     }
 
     private boolean businessCalendarExists(String tenantId, String calendarCode) {
-        return EmptyChecks.isNotNull(
-                businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode));
+        return businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode) != null;
     }
 
     private boolean batchWindowExists(String tenantId, String windowCode) {
-        return EmptyChecks.isNotNull(batchWindowMapper.selectByUniqueKey(tenantId, windowCode));
+        return batchWindowMapper.selectByUniqueKey(tenantId, windowCode) != null;
     }
 
     private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {

@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -61,7 +60,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
         } catch (Exception t) {
             String executorName = this.getClass().getSimpleName();
             String currentTaskType = taskType();
-            String taskId = EmptyChecks.isNull(ctx) ? null : ctx.taskInstanceId();
+            String taskId = ctx == null ? null : ctx.taskInstanceId();
             String causeSummary = SwallowedExceptionLogger.summary(t);
             log.error(
                     "SPI executor {} failed (taskType={}, taskId={}): {}",
@@ -69,8 +68,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
                     LogSanitizer.value(currentTaskType),
                     LogSanitizer.value(taskId),
                     causeSummary);
-            String failureMessage =
-                    EmptyChecks.isNull(t.getMessage()) ? t.getClass().getSimpleName() : t.getMessage();
+            String failureMessage = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
             return TaskResult.fail(failureMessage, t);
         } finally {
             if (started) {

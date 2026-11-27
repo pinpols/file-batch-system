@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.shared.client;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import org.springframework.core.env.Environment;
 
@@ -18,13 +17,12 @@ public final class ConsoleInternalBaseUrlResolver {
     private ConsoleInternalBaseUrlResolver() {}
 
     public static String resolve(Environment environment, String raw, String propertyName) {
-        String resolved = EmptyChecks.isNull(raw)
-                ? null
-                : environment.resolvePlaceholders(raw).trim();
+        String resolved =
+                raw == null ? null : environment.resolvePlaceholders(raw).trim();
         if (Texts.hasText(resolved) && !resolved.contains("${")) {
             return resolved;
         }
-        if (EmptyChecks.isNotNull(raw) && raw.contains(LOCAL_SERVER_PORT_PLACEHOLDER)) {
+        if (raw != null && raw.contains(LOCAL_SERVER_PORT_PLACEHOLDER)) {
             String localPort = environment.getProperty(LOCAL_SERVER_PORT_KEY);
             if (Texts.hasText(localPort)) {
                 return "http://127.0.0.1:" + localPort.trim();

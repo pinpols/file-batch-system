@@ -36,7 +36,7 @@ public class PlatformFileRecordRepository {
             return Map.of();
         }
         PlatformFileRecordView row = mapper.selectFileRecord(tenantId, fileId);
-        return EmptyChecks.isNull(row) ? Map.of() : row.toPluginValues();
+        return row == null ? Map.of() : row.toPluginValues();
     }
 
     public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
@@ -52,7 +52,7 @@ public class PlatformFileRecordRepository {
             return Map.of();
         }
         PlatformFileRecordView row = mapper.selectFileRecordByStoragePath(tenantId, storageBucket, storagePath);
-        return EmptyChecks.isNull(row) ? Map.of() : row.toPluginValues();
+        return row == null ? Map.of() : row.toPluginValues();
     }
 
     @Transactional
@@ -131,9 +131,9 @@ public class PlatformFileRecordRepository {
         if (!Texts.hasText(checksumValue)) {
             PlatformFileRecordView existing =
                     mapper.selectFileRecordByStoragePath(tenantId, storageBucket, storagePath);
-            if (EmptyChecks.isNotNull(existing) && EmptyChecks.isNotNull(existing.id())) {
+            if (existing != null && existing.id() != null) {
                 String existingChecksum = existing.checksumValue();
-                if (existingChecksum == null || existingChecksum.isBlank()) {
+                if (EmptyChecks.isBlank(existingChecksum)) {
                     log.info(
                             "file_record dedup pre-check hit (tenant={} storage_path={}), reuse existing"
                                     + " fileId={}",
@@ -194,7 +194,7 @@ public class PlatformFileRecordRepository {
     }
 
     public String currentFileStatus(Long fileId) {
-        return EmptyChecks.isNull(fileId) ? null : mapper.selectFileStatus(fileId);
+        return fileId == null ? null : mapper.selectFileStatus(fileId);
     }
 
     public void updateFileMetadata(Long fileId, Object metadata) {
@@ -221,7 +221,7 @@ public class PlatformFileRecordRepository {
             return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
         }
         return switch (format) {

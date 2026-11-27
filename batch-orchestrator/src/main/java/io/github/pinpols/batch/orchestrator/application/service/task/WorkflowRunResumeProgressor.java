@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -39,7 +38,7 @@ public class WorkflowRunResumeProgressor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void resume(String tenantId, Long workflowRunId) {
         WorkflowRunEntity run = workflowRunMapper.selectById(tenantId, workflowRunId);
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return;
         }
         Map<String, WorkflowNodeRunEntity> latestRuns = new HashMap<>();
@@ -57,13 +56,13 @@ public class WorkflowRunResumeProgressor {
                 continue;
             }
             boolean success = followsSuccessEdge(sourceStatus);
-            String sourcePayload = EmptyChecks.isNull(source.getSourcePayloadProtected())
+            String sourcePayload = source.getSourcePayloadProtected() == null
                     ? null
                     : secretPayloadProtector.reveal(source.getSourcePayloadProtected());
             List<WorkflowDagService.DagNodeResolution> nextNodes =
                     workflowDagService.resolveNextNodesForRun(run, source.getNodeCode(), success, sourcePayload);
             for (WorkflowDagService.DagNodeResolution next : nextNodes) {
-                boolean nextNodeCannotBeDispatched = EmptyChecks.isNull(next)
+                boolean nextNodeCannotBeDispatched = next == null
                         || isTerminal(latestRuns.get(next.nodeCode()))
                         || !workflowDagService.isNodeReadyForRunDispatch(run, next.nodeCode(), sourcePayload);
                 if (nextNodeCannotBeDispatched) {
@@ -92,7 +91,7 @@ public class WorkflowRunResumeProgressor {
     }
 
     private boolean isTerminal(WorkflowNodeRunEntity nodeRun) {
-        if (EmptyChecks.isNull(nodeRun)) {
+        if (nodeRun == null) {
             return false;
         }
         String status = nodeRun.getNodeStatus();
@@ -106,7 +105,7 @@ public class WorkflowRunResumeProgressor {
             WorkflowDagService.DagNodeResolution end,
             Map<String, WorkflowNodeRunEntity> latestRuns) {
         WorkflowNodeRunEntity existing = latestRuns.get(end.nodeCode());
-        boolean endNodeAlreadyActivated = EmptyChecks.isNotNull(existing)
+        boolean endNodeAlreadyActivated = existing != null
                 && (WorkflowNodeRunStatus.READY.code().equals(existing.getNodeStatus())
                         || WorkflowNodeRunStatus.RUNNING.code().equals(existing.getNodeStatus())
                         || WorkflowNodeRunStatus.SUCCESS.code().equals(existing.getNodeStatus()));

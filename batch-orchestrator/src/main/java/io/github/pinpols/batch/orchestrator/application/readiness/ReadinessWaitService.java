@@ -48,13 +48,13 @@ public class ReadinessWaitService {
 
     /** 接管一条 readiness 等待；幂等（同一 fire 身份只登记一次）。 */
     public boolean handover(ReadinessWaitHandoverCommand command) {
-        boolean identityIsIncomplete = EmptyChecks.isNull(command)
+        boolean identityIsIncomplete = command == null
                 || !Texts.hasText(command.tenantId())
-                || EmptyChecks.isNull(command.workflowDefinitionId())
+                || command.workflowDefinitionId() == null
                 || EmptyChecks.isEmpty(command.dependsOnJobCodes())
-                || EmptyChecks.isNull(command.bizDate())
-                || EmptyChecks.isNull(command.scheduledFireTime())
-                || EmptyChecks.isNull(command.deadline());
+                || command.bizDate() == null
+                || command.scheduledFireTime() == null
+                || command.deadline() == null;
         if (identityIsIncomplete) {
             return false;
         }
@@ -70,10 +70,10 @@ public class ReadinessWaitService {
         wait.setDeferredSince(command.deferredSince());
         wait.setDeadline(command.deadline());
         wait.setTraceId(command.traceId());
-        if (EmptyChecks.isNull(wait.getDeferredSince())) {
+        if (wait.getDeferredSince() == null) {
             wait.setDeferredSince(wait.getScheduledFireTime());
         }
-        if (EmptyChecks.isNull(wait.getScheduleVersion())) {
+        if (wait.getScheduleVersion() == null) {
             wait.setScheduleVersion(0);
         }
         return readinessWaitMapper.insertIgnore(wait) == 1;
@@ -169,9 +169,7 @@ public class ReadinessWaitService {
 
     /** 正常 fire 成功后由 Trigger 回调取消等待，避免重复恢复启动。 */
     public boolean cancel(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-        if (!Texts.hasText(tenantId)
-                || EmptyChecks.isNull(workflowDefinitionId)
-                || EmptyChecks.isNull(scheduledFireTime)) {
+        if (!Texts.hasText(tenantId) || workflowDefinitionId == null || scheduledFireTime == null) {
             return false;
         }
         List<ReadinessWaitEntity> matches =

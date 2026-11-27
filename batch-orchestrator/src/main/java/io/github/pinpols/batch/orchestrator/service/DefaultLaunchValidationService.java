@@ -66,11 +66,9 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         boolean parentNodeLaunch = hasParentWorkflowNodeContext(triggerRequest);
         ParentWorkflowJobSnapshot parentJobSnapshot =
                 parentNodeLaunch ? loadJobDefinitionFromWorkflowSnapshot(request, triggerRequest) : null;
-        JobDefinitionView jobDefinition =
-                EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.jobDefinition();
-        String workflowCalendarCode =
-                EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.workflowCalendarCode();
-        if (EmptyChecks.isNull(jobDefinition)) {
+        JobDefinitionView jobDefinition = parentJobSnapshot == null ? null : parentJobSnapshot.jobDefinition();
+        String workflowCalendarCode = parentJobSnapshot == null ? null : parentJobSnapshot.workflowCalendarCode();
+        if (jobDefinition == null) {
             jobDefinition = configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
         }
         if (jobDefinition == null) {
@@ -96,9 +94,9 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
 
         if (parentNodeLaunch
                 && !isValidParentWorkflowNodeLaunch(
-                        request, triggerRequest, persistenceContext, EmptyChecks.isNotNull(parentJobSnapshot))) {
+                        request, triggerRequest, persistenceContext, parentJobSnapshot != null)) {
             JobInstanceEntity concurrentLaunch = findConcurrentLaunchOfSameRequest(request, triggerRequest);
-            if (EmptyChecks.isNotNull(concurrentLaunch)) {
+            if (concurrentLaunch != null) {
                 // 并发恢复器可能已用同一 trigger_request 落库实例但尚未回写 LAUNCHED；此时节点校验会因
                 // job_instance_id 已被抢占而失败。不能把请求覆盖为 REJECTED，否则胜者稍后的
                 // updateAcceptance(LAUNCHED) 会因终态保护写不进去，留下“实例已启动、请求 REJECTED”的不一致。
@@ -114,9 +112,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
                         null,
                         workflowCalendarCode,
                         concurrentLaunch,
-                        EmptyChecks.isNull(parentJobSnapshot)
-                                ? null
-                                : parentJobSnapshot.workflowReplayExecutionBinding());
+                        parentJobSnapshot == null ? null : parentJobSnapshot.workflowReplayExecutionBinding());
             }
             int updatedRows = triggerRequestMapper.updateAcceptance(
                     request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
@@ -132,7 +128,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
                 null,
                 workflowCalendarCode,
                 existingInstance,
-                EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.workflowReplayExecutionBinding());
+                parentJobSnapshot == null ? null : parentJobSnapshot.workflowReplayExecutionBinding());
     }
 
     /** 并发恢复场景下，同一 dedup_key 的实例可能已由原 trigger_request 创建但请求状态尚未回写。 */
@@ -143,25 +139,24 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         }
         JobInstanceEntity instance =
                 jobInstanceMapper.selectByTenantAndDedupKey(request.tenantId(), triggerRequest.getDedupKey());
-        boolean launchedBySameRequest = EmptyChecks.isNotNull(instance)
-                && Objects.equals(instance.getTriggerRequestId(), triggerRequest.getId());
+        boolean launchedBySameRequest =
+                instance != null && Objects.equals(instance.getTriggerRequestId(), triggerRequest.getId());
         return launchedBySameRequest ? instance : null;
     }
 
     private ParentWorkflowJobSnapshot loadJobDefinitionFromWorkflowSnapshot(
             LaunchRequest request, TriggerRequestEntity triggerRequest) {
-        if (EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
-                || EmptyChecks.isNull(triggerRequest.getParentNodeCode())) {
+        if (triggerRequest.getParentWorkflowRunId() == null || triggerRequest.getParentNodeCode() == null) {
             rejectInvalidExecutionSnapshot(request);
         }
         WorkflowRunEntity run =
                 workflowRunMapper.selectById(request.tenantId(), triggerRequest.getParentWorkflowRunId());
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             rejectInvalidExecutionSnapshot(request);
         }
         Integer schemaVersion = snapshot.schemaVersion();
-        if (EmptyChecks.isNull(schemaVersion) || schemaVersion < 2) {
+        if (schemaVersion == null || schemaVersion < 2) {
             rejectInvalidExecutionSnapshot(request);
         }
         boolean snapshotTenantMatches = request.tenantId().equals(run.getTenantId());
@@ -175,14 +170,14 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         }
         WorkflowNodeEntity node = snapshot.node(triggerRequest.getParentNodeCode());
         JobDefinitionView definition = snapshot.jobDefinition(triggerRequest.getParentNodeCode());
-        if (EmptyChecks.isNull(node)) {
+        if (node == null) {
             rejectInvalidExecutionSnapshot(request);
         }
         boolean nodeReferencesRequestedJob = Objects.equals(node.getRelatedJobCode(), request.jobCode());
         if (!nodeReferencesRequestedJob) {
             rejectInvalidExecutionSnapshot(request);
         }
-        if (EmptyChecks.isNull(definition)) {
+        if (definition == null) {
             rejectInvalidExecutionSnapshot(request);
         }
         boolean definitionTenantMatches = request.tenantId().equals(definition.tenantId());
@@ -194,7 +189,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
             rejectInvalidExecutionSnapshot(request);
         }
         WorkflowReplayExecutionBinding replayBinding = null;
-        if (EmptyChecks.isNotNull(snapshot.replayOperationId())) {
+        if (snapshot.replayOperationId() != null) {
             Long replayOperationId = snapshot.replayOperationId();
             Long workflowRunId = run.getId();
             String nodeCode = triggerRequest.getParentNodeCode();
@@ -230,8 +225,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     }
 
     private boolean hasParentWorkflowNodeContext(TriggerRequestEntity triggerRequest) {
-        return EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())
-                || EmptyChecks.isNotNull(triggerRequest.getParentNodeCode());
+        return triggerRequest.getParentWorkflowRunId() != null || triggerRequest.getParentNodeCode() != null;
     }
 
     private boolean isValidParentWorkflowNodeLaunch(
@@ -242,7 +236,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         Long parentWorkflowRunId = triggerRequest.getParentWorkflowRunId();
         String parentNodeCode = triggerRequest.getParentNodeCode();
         boolean parentWorkflowNodeIdentityIsIncomplete =
-                EmptyChecks.isNull(parentWorkflowRunId) || EmptyChecks.isBlank(parentNodeCode);
+                parentWorkflowRunId == null || EmptyChecks.isBlank(parentNodeCode);
         if (parentWorkflowNodeIdentityIsIncomplete) {
             return false;
         }
@@ -252,8 +246,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
                         .tenantId(request.tenantId())
                         .parentWorkflowRunId(parentWorkflowRunId)
                         .parentNodeCode(parentNodeCode)
-                        .existingChildJobInstanceId(
-                                EmptyChecks.isNull(existingInstance) ? null : existingInstance.getId())
+                        .existingChildJobInstanceId(existingInstance == null ? null : existingInstance.getId())
                         .frozenWorkflowSnapshot(frozenWorkflowSnapshot)
                         .build();
         return triggerRequestMapper.isValidParentWorkflowNodeLaunch(triggerRequestIsValidParentWorkflowNodeLaunchParam);

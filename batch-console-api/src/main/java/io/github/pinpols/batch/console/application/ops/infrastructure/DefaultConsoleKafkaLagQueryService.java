@@ -108,7 +108,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
             if (stopping.get()) {
                 throw new IllegalStateException("Kafka lag query service is stopping");
             }
-            if (EmptyChecks.isNull(adminClient)) {
+            if (adminClient == null) {
                 adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
             }
             return adminClient;
@@ -119,7 +119,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     void closeAdminClient() {
         stopping.set(true);
         synchronized (adminClientMonitor) {
-            if (EmptyChecks.isNotNull(adminClient)) {
+            if (adminClient != null) {
                 adminClient.close(Duration.ZERO);
                 adminClient = null;
             }
@@ -174,7 +174,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     }
 
     private static ConsoleKafkaConsumerLagResponse sanitizeError(ConsoleKafkaConsumerLagResponse response) {
-        if (EmptyChecks.isNull(response.error())) {
+        if (response.error() == null) {
             return response;
         }
         String safeError = SwallowedExceptionLogger.safeMessage(response.error());

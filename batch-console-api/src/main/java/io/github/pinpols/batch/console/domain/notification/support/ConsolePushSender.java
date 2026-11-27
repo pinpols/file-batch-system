@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.support;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
@@ -81,10 +80,10 @@ public class ConsolePushSender {
 
     /** 供拥有持久化投递状态的调用方执行的同步、有界单设备尝试。 */
     public DeliveryResult sendToSubscription(ConsolePushSubscriptionEntity sub, PushPayload payload) {
-        if (EmptyChecks.isNull(pushService.get())) {
+        if (pushService.get() == null) {
             return new DeliveryResult(DeliveryOutcome.NOT_READY, null);
         }
-        if (EmptyChecks.isNull(sub) || EmptyChecks.isNull(payload)) {
+        if (sub == null || payload == null) {
             return new DeliveryResult(DeliveryOutcome.PERMANENT_FAILURE, null);
         }
         try {
@@ -101,9 +100,8 @@ public class ConsolePushSender {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
         }
-        boolean pushSigningKeysAreConfigured = properties.isEnabled()
-                && properties.getPublicKey() != null
-                && EmptyChecks.isNotNull(properties.getPrivateKey());
+        boolean pushSigningKeysAreConfigured =
+                properties.isEnabled() && properties.getPublicKey() != null && properties.getPrivateKey() != null;
         if (pushSigningKeysAreConfigured) {
             try {
                 this.pushService.set(new ManagedWebPushClient(
@@ -124,7 +122,7 @@ public class ConsolePushSender {
     @PreDestroy
     void close() {
         ManagedWebPushClient service = pushService.getAndSet(null);
-        if (EmptyChecks.isNull(service)) return;
+        if (service == null) return;
         try {
             service.close();
         } catch (IOException failure) {
@@ -164,10 +162,10 @@ public class ConsolePushSender {
 
     private byte[] serializePayload(PushPayload payload) throws JsonProcessingException {
         Map<String, String> serializedPayload = Map.of(
-                "title", EmptyChecks.isNull(payload.title()) ? "" : payload.title(),
-                "body", EmptyChecks.isNull(payload.body()) ? "" : payload.body(),
-                "tag", EmptyChecks.isNull(payload.tag()) ? "" : payload.tag(),
-                "url", EmptyChecks.isNull(payload.url()) ? "/m/ops/summary" : payload.url());
+                "title", payload.title() == null ? "" : payload.title(),
+                "body", payload.body() == null ? "" : payload.body(),
+                "tag", payload.tag() == null ? "" : payload.tag(),
+                "url", payload.url() == null ? "/m/ops/summary" : payload.url());
         return objectMapper.writeValueAsBytes(serializedPayload);
     }
 
@@ -176,7 +174,7 @@ public class ConsolePushSender {
             return new DeliveryResult(DeliveryOutcome.UNKNOWN, null);
         }
         ManagedWebPushClient service = pushService.get();
-        if (EmptyChecks.isNull(service)) {
+        if (service == null) {
             return new DeliveryResult(DeliveryOutcome.NOT_READY, null);
         }
         Notification notification;

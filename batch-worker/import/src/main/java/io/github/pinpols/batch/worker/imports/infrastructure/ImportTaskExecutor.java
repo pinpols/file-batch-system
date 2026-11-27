@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -90,11 +89,11 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
         StepExecutionResponse resp = delegate.execute(req);
         if (resp.success()) {
             String responseMessage = resp.message();
-            String resultMessage = EmptyChecks.isNull(responseMessage) ? "ok" : resp.message();
+            String resultMessage = responseMessage == null ? "ok" : resp.message();
             return TaskResult.ok(resultMessage);
         }
         String responseMessage = resp.message();
-        String failureMessage = EmptyChecks.isNull(responseMessage) ? resp.code() : resp.message();
+        String failureMessage = responseMessage == null ? resp.code() : resp.message();
         return TaskResult.fail(failureMessage);
     }
 }

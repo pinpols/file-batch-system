@@ -71,7 +71,7 @@ public class ExcelExportFormat extends AbstractExportFormat {
                 return new GenerationResult(0, failure);
             }
         });
-        if (EmptyChecks.isNotNull(result.failure())) {
+        if (result.failure() != null) {
             throw result.failure();
         }
         return result.recordCount();
@@ -82,7 +82,7 @@ public class ExcelExportFormat extends AbstractExportFormat {
 
     private long generateWorkbook(ExportFormatContext ctx) throws Exception {
         Long batchIdLong;
-        if (EmptyChecks.isNull(ctx.batchId())) {
+        if (ctx.batchId() == null) {
             batchIdLong = null;
         } else {
             Object rawBatchId = ctx.batchId();
@@ -132,7 +132,7 @@ public class ExcelExportFormat extends AbstractExportFormat {
      * 行硬限,留一行给表头)。
      */
     private int resolveRowsPerSheet(Map<String, Object> templateConfig) {
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
             return 0;
         }
         Integer raw =

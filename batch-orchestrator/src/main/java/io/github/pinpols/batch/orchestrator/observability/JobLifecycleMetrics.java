@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG
 import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG_STATUS;
 import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG_TENANT;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -78,6 +79,6 @@ public class JobLifecycleMetrics {
 
     /** 防 NPE / 空串变 "unknown",保持 Grafana 维度可枚举,不会因稀疏 null 拆出无效 series。 */
     private String safe(String value) {
-        return value == null || value.isBlank() ? "unknown" : value;
+        return EmptyChecks.isBlank(value) ? "unknown" : value;
     }
 }

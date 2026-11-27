@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.micrometer.core.instrument.Counter;
@@ -108,7 +107,7 @@ public class OrchestratorKafkaConsumerConfiguration {
      */
     private void parkForRecovery(ConsumerRecord<?, ?> consumerRecord) {
         TriggerLaunchRecoveryService recoveryService = launchRecoveryServiceProvider.getIfAvailable();
-        if (EmptyChecks.isNull(recoveryService)) {
+        if (recoveryService == null) {
             throw new IllegalStateException(
                     "trigger launch recovery is unavailable; cannot safely skip exhausted record");
         }

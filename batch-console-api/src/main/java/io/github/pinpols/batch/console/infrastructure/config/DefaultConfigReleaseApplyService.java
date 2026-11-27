@@ -30,7 +30,7 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
 
     @Override
     public void apply(ConfigReleaseEntity release, String operatorId, String operationId) {
-        if (EmptyChecks.isNull(release) || !Texts.hasText(release.getTenantId())) {
+        if (release == null || !Texts.hasText(release.getTenantId())) {
             throw invalid("release tenant is required");
         }
         TenantConfigBatchInitRequest request = buildRequest(

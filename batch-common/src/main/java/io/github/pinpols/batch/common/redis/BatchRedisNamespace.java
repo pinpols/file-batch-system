@@ -12,7 +12,7 @@ public final class BatchRedisNamespace {
     private final String prefix;
 
     public BatchRedisNamespace(String namespace) {
-        String normalized = EmptyChecks.isNull(namespace) ? "" : namespace.trim();
+        String normalized = namespace == null ? "" : namespace.trim();
         if (!EmptyChecks.isEmpty(Objects.requireNonNull(normalized))
                 && !VALID_NAMESPACE.matcher(normalized).matches()) {
             throw new IllegalArgumentException("batch.kafka.namespace must match [a-z0-9][a-z0-9_-]{0,47}");
@@ -21,7 +21,7 @@ public final class BatchRedisNamespace {
     }
 
     public String key(String key) {
-        return EmptyChecks.isNull(key) ? null : prefix + key;
+        return key == null ? null : prefix + key;
     }
 
     public String scanPattern(String pattern) {
@@ -29,7 +29,7 @@ public final class BatchRedisNamespace {
     }
 
     public String channel(String channel) {
-        return EmptyChecks.isNull(channel) ? null : prefix + channel;
+        return channel == null ? null : prefix + channel;
     }
 
     public boolean isNamespaced() {

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.i18n;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -42,13 +43,13 @@ public class LocalizedErrorRenderer {
     }
 
     public String render(String errorKey, String errorArgsJson, String fallback, Locale locale) {
-        if (errorKey == null || errorKey.isBlank()) {
+        if (EmptyChecks.isBlank(errorKey)) {
             return fallback;
         }
         Object[] args = BizExceptionUtils.parseArgs(errorArgsJson, objectMapper);
         try {
             String rendered = messageSource.getMessage(errorKey, args, locale);
-            return (rendered == null || rendered.isBlank()) ? fallback : rendered;
+            return (EmptyChecks.isBlank(rendered)) ? fallback : rendered;
         } catch (NoSuchMessageException ignored) {
             SwallowedExceptionLogger.info(LocalizedErrorRenderer.class, "catch:NoSuchMessageException", ignored);
 

@@ -130,11 +130,11 @@ public class SecretPayloadFlywayCallback implements Callback {
     }
 
     private boolean isTargetMigration(MigrationInfo migrationInfo) {
-        if (EmptyChecks.isNull(migrationInfo)) {
+        if (migrationInfo == null) {
             return false;
         }
         MigrationVersion migrationVersion = migrationInfo.getVersion();
-        return !EmptyChecks.isNull(migrationVersion) && TARGET_VERSIONS.contains(migrationVersion.toString());
+        return migrationVersion != null && TARGET_VERSIONS.contains(migrationVersion.toString());
     }
 
     private record LegacySecretPayload(long id, String tenantId, String payload) {}

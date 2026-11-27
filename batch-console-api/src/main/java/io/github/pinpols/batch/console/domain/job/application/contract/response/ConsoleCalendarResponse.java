@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import java.time.Instant;
 import lombok.Builder;
@@ -28,7 +27,7 @@ public record ConsoleCalendarResponse(
         Instant updatedAt) {
 
     public static ConsoleCalendarResponse from(CalendarQueryRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return ConsoleCalendarResponse.builder()

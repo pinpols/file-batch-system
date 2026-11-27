@@ -130,10 +130,10 @@ public class TriggerLaunchConsumer {
             return;
         }
         LaunchRequest request = readRequestOrAcknowledgeInvalidEnvelope(consumerRecord, ack);
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             return;
         }
-        String tenantId = EmptyChecks.isNull(request.tenantId()) ? "unknown" : request.tenantId();
+        String tenantId = request.tenantId() == null ? "unknown" : request.tenantId();
         String tenantTag = normalizeTenantTag(tenantId);
         // R3-P1-2：Kafka listener 入口注入 MDC，让 launch 失败的 ERROR 日志可按 tenant/trace 过滤。
         BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
@@ -157,7 +157,7 @@ public class TriggerLaunchConsumer {
                     "TriggerLaunchConsumer launch succeeded: tenantId={} requestId={} instanceNo={}",
                     tenantId,
                     request.requestId(),
-                    EmptyChecks.isNull(response) ? null : response.instanceNo());
+                    response == null ? null : response.instanceNo());
             counter(METRIC_CONSUMED, TENANT_TAG, tenantTag, "outcome", "ok").increment();
             ack.acknowledge();
         } catch (OperationFailure ex) {
@@ -240,7 +240,7 @@ public class TriggerLaunchConsumer {
             ack.acknowledge();
             return null;
         }
-        if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
+        if (envelope == null || envelope.launchRequest() == null) {
             log.warn(
                     "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
                     consumerRecord.offset());

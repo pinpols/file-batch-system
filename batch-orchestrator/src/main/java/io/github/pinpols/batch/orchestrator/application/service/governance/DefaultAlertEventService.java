@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
@@ -59,7 +58,7 @@ public class DefaultAlertEventService implements AlertEventService {
 
         alertEventMapper.insertOrMerge(entity);
         AlertEventEntity persisted = alertEventMapper.selectByFingerprint(request.tenantId(), fingerprint);
-        if (EmptyChecks.isNull(persisted)) {
+        if (persisted == null) {
             throw new IllegalStateException("告警持久化后未能读取原始身份");
         }
 

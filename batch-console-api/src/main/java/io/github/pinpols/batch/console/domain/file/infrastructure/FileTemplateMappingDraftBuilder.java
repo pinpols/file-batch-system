@@ -24,7 +24,7 @@ final class FileTemplateMappingDraftBuilder {
         List<Map<String, Object>> fieldMappings = new ArrayList<>();
         List<Map<String, Object>> columnMappings = new ArrayList<>();
         for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-            if (EmptyChecks.isNull(field)) {
+            if (field == null) {
                 warnings.add("存在空字段配置,已跳过");
                 continue;
             }
@@ -83,7 +83,7 @@ final class FileTemplateMappingDraftBuilder {
         List<Map<String, Object>> csvColumns = new ArrayList<>();
         List<String> selectedColumns = new ArrayList<>();
         for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-            if (EmptyChecks.isNull(field)) {
+            if (field == null) {
                 warnings.add("存在空字段配置,已跳过");
                 continue;
             }
@@ -121,7 +121,7 @@ final class FileTemplateMappingDraftBuilder {
         }
 
         String defaultQuerySql = blankToNull(command.defaultQuerySql());
-        if (EmptyChecks.isNull(defaultQuerySql)) {
+        if (defaultQuerySql == null) {
             warnings.add("请填写实际业务导出 SQL，按 :tenantId 和 :batchNo 过滤租户及批次，并返回分页游标列");
         }
         String fieldMappingsJson = writeJson(objectMapper, fieldMappings);
@@ -140,7 +140,7 @@ final class FileTemplateMappingDraftBuilder {
     }
 
     private static List<FileTemplateMappingDraftCommand.Field> fieldsOf(FileTemplateMappingDraftCommand command) {
-        return EmptyChecks.isNull(command.fields()) ? List.of() : command.fields();
+        return command.fields() == null ? List.of() : command.fields();
     }
 
     private static void putIfText(Map<String, Object> map, String key, String value) {
@@ -150,7 +150,7 @@ final class FileTemplateMappingDraftBuilder {
     }
 
     private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             map.put(key, value);
         }
     }

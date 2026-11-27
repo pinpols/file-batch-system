@@ -94,7 +94,7 @@ public final class RetryRequeueCoordinator {
         }
         JobInstanceEntity jobInstance = requireExecutableInstance(tenantId, partition.getJobInstanceId());
         String traceId = jobInstance.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
+        boolean injectMdc = EmptyChecks.isNotBlank(traceId);
         if (injectMdc) {
             BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
             BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
@@ -207,7 +207,7 @@ public final class RetryRequeueCoordinator {
         // 与 REPORT 使用相同锁序；锁后重读，不用扫描时的父实例快照决定能否复位。
         jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, instanceId);
         JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, instanceId);
-        if (EmptyChecks.isNull(instance)) {
+        if (instance == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_instance_not_found");
         }
         if (EmptyChecks.isBlank(instance.getInstanceStatus())
@@ -215,15 +215,14 @@ public final class RetryRequeueCoordinator {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.partition.retry_execution_closed");
         }
         WorkflowRunEntity workflow = workflowRunMapper.selectByNodeJobInstanceId(tenantId, instanceId);
-        boolean workflowIsNotActive = EmptyChecks.isNotNull(workflow)
+        boolean workflowIsNotActive = workflow != null
                 && (EmptyChecks.isBlank(workflow.getRunStatus())
                         || !WorkflowRunStatus.activeCodes().contains(workflow.getRunStatus()));
         if (workflowIsNotActive) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.partition.retry_execution_closed");
         }
         boolean retryTargetIsPaused = JobInstanceStatus.PAUSED.code().equals(instance.getInstanceStatus())
-                || (EmptyChecks.isNotNull(workflow)
-                        && WorkflowRunStatus.PAUSED.code().equals(workflow.getRunStatus()));
+                || (workflow != null && WorkflowRunStatus.PAUSED.code().equals(workflow.getRunStatus()));
         if (retryTargetIsPaused) {
             throw new ExecutionPausedException();
         }

@@ -36,13 +36,13 @@ public class WorkflowReplayJobDefinitionResolver {
 
     private JobDefinitionView resolveSpecified(
             String tenantId, String jobCode, JobDefinitionView sourceDefinition, Integer version) {
-        if (EmptyChecks.isNull(version) || version <= 0) {
+        if (version == null || version <= 0) {
             throw invalidPolicy();
         }
         WorkflowRunEntity historicalRun =
                 workflowRunMapper.selectLatestJobDefinitionSnapshot(tenantId, sourceDefinition.id(), jobCode, version);
         WorkflowRunExecutionSnapshot historicalSnapshot = WorkflowRunExecutionSnapshot.from(historicalRun);
-        if (EmptyChecks.isNull(historicalSnapshot) || !tenantId.equals(historicalRun.getTenantId())) {
+        if (historicalSnapshot == null || !tenantId.equals(historicalRun.getTenantId())) {
             throw unavailableVersion();
         }
         List<JobDefinitionView> matches = historicalSnapshot.jobDefinitions().values().stream()
@@ -58,16 +58,16 @@ public class WorkflowReplayJobDefinitionResolver {
     }
 
     private void validateRequest(WorkflowReplayJobDefinitionRequest request) {
-        boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+        boolean requestHasRequiredFields = request != null
                 && EmptyChecks.isNotBlank(request.tenantId())
                 && EmptyChecks.isNotBlank(request.nodeCode())
                 && EmptyChecks.isNotBlank(request.jobCode())
-                && EmptyChecks.isNotNull(request.sourceSnapshot())
-                && EmptyChecks.isNotNull(request.policy());
+                && request.sourceSnapshot() != null
+                && request.policy() != null;
         boolean requestPolicyIsValid = requestHasRequiredFields
                 && (request.policy() == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-                        ? EmptyChecks.isNotNull(request.specifiedVersion()) && request.specifiedVersion() > 0
-                        : EmptyChecks.isNull(request.specifiedVersion()));
+                        ? request.specifiedVersion() != null && request.specifiedVersion() > 0
+                        : request.specifiedVersion() == null);
         if (!requestPolicyIsValid) {
             throw invalidPolicy();
         }
@@ -83,11 +83,11 @@ public class WorkflowReplayJobDefinitionResolver {
     }
 
     private void validateDefinition(JobDefinitionView definition, String tenantId, String jobCode) {
-        boolean definitionMatchesReplayRequest = EmptyChecks.isNotNull(definition)
+        boolean definitionMatchesReplayRequest = definition != null
                 && tenantId.equals(definition.tenantId())
                 && jobCode.equals(definition.jobCode())
-                && EmptyChecks.isNotNull(definition.id())
-                && EmptyChecks.isNotNull(definition.version());
+                && definition.id() != null
+                && definition.version() != null;
         if (!definitionMatchesReplayRequest) {
             throw unavailableVersion();
         }

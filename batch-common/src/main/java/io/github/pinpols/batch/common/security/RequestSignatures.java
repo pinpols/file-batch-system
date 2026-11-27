@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.security;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,7 +33,7 @@ public final class RequestSignatures {
     public static String bodySha256Hex(byte[] body) {
         try {
             MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] bodyDigest = md.digest(EmptyChecks.isNull(body) ? new byte[0] : body);
+            byte[] bodyDigest = md.digest(body == null ? new byte[0] : body);
             return toHex(bodyDigest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 unavailable", e);

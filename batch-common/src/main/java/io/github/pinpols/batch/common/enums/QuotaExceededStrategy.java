@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.enums;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -29,7 +30,7 @@ public enum QuotaExceededStrategy implements DictEnum {
     private final String label;
 
     public static QuotaExceededStrategy from(String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             throw new IllegalArgumentException("quota exceeded strategy must not be blank");
         }
         QuotaExceededStrategy hit = DictEnum.fromCode(QuotaExceededStrategy.class, value.trim());

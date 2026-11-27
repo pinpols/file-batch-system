@@ -16,8 +16,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     private final String prefix;
 
     public NamespacedObjectStore(BatchObjectStore delegate, String namespace) {
-        if (EmptyChecks.isNull(namespace)
-                || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
+        if (namespace == null || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
             throw new IllegalArgumentException("object storage namespace is invalid");
         }
         this.delegate = delegate;
@@ -41,7 +40,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
 
     @Override
     public void deleteMany(String bucket, Collection<String> keys) {
-        if (EmptyChecks.isNull(keys)) {
+        if (keys == null) {
             return;
         }
         delegate.deleteMany(
@@ -80,10 +79,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     @Override
     public ObjectListing list(String bucket, String keyPrefix, String afterMarker, int maxKeys) {
         ObjectListing listing = delegate.list(
-                bucket,
-                EmptyChecks.isNull(keyPrefix) ? prefix : physicalKey(keyPrefix),
-                physicalMarker(afterMarker),
-                maxKeys);
+                bucket, keyPrefix == null ? prefix : physicalKey(keyPrefix), physicalMarker(afterMarker), maxKeys);
         List<ObjectSummary> objects = listing.objects().stream()
                 .filter(summary -> {
                     String physicalKey = summary.key();
@@ -115,7 +111,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     }
 
     private String physicalKey(String key) {
-        if (EmptyChecks.isNull(key)) {
+        if (key == null) {
             return key;
         }
         return prefix + key;

@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -34,7 +33,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     public String submit(ApprovalSubmitCommand command) {
         if (Texts.hasText(command.sourceIdempotencyKey())) {
             ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 ensureSameSubmission(command, existing);
                 return existing.getApprovalNo();
             }
@@ -60,7 +59,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         int inserted = approvalCommandMapper.insert(entity);
         if (inserted == 0 && Texts.hasText(command.sourceIdempotencyKey())) {
             ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 ensureSameSubmission(command, existing);
                 return existing.getApprovalNo();
             }
@@ -186,7 +185,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         }
         ApprovalCommandEntity entity =
                 approvalCommandMapper.selectByTenantAndSourceIdempotencyKey(tenantId, sourceIdempotencyKey);
-        if (EmptyChecks.isNull(entity)) {
+        if (entity == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found");
         }
         return toRecord(entity);

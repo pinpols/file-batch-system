@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.mq;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -9,7 +8,7 @@ import java.util.Map;
 public record MqMessage(String topic, String key, String payload, Map<String, String> headers) {
 
     public MqMessage {
-        headers = EmptyChecks.isNull(headers) ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+        headers = headers == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
     }
 
     public static MqMessage of(String topic, String key, String payload) {

@@ -11,7 +11,7 @@ import org.springframework.core.NestedExceptionUtils;
 public record PostgresConstraintViolation(String sqlState, String schema, String table, String constraint) {
 
     public static Optional<PostgresConstraintViolation> from(Throwable failure) {
-        if (EmptyChecks.isNull(failure)) {
+        if (failure == null) {
             return Optional.empty();
         }
         Throwable root = NestedExceptionUtils.getMostSpecificCause(failure);
@@ -23,7 +23,7 @@ public record PostgresConstraintViolation(String sqlState, String schema, String
         try {
             Object serverError =
                     root.getClass().getMethod("getServerErrorMessage").invoke(root);
-            if (EmptyChecks.isNull(serverError)) {
+            if (serverError == null) {
                 return Optional.empty();
             }
             String sqlState = sql.getSQLState();

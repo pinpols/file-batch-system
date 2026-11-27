@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.progress;
 
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
@@ -50,7 +49,7 @@ public class PipelineStageProgressCache {
             return;
         }
         WorkerKey workerKey = new WorkerKey(tenantId, workerCode);
-        if (EmptyChecks.isNull(pipelineProgress)) {
+        if (pipelineProgress == null) {
             pipelineProgress = List.of();
         }
 
@@ -78,8 +77,8 @@ public class PipelineStageProgressCache {
                     Snapshot snapshot = new Snapshot(item.rowsProcessed(), item.totalRowsHint(), heartbeatAt);
                     taskStore.compute(
                             key,
-                            (ignored, old) -> EmptyChecks.isNotNull(old)
-                                            && EmptyChecks.isNotNull(key.stepRunId())
+                            (ignored, old) -> old != null
+                                            && key.stepRunId() != null
                                             && old.rowsProcessed() > snapshot.rowsProcessed()
                                     ? old
                                     : snapshot);
@@ -88,18 +87,17 @@ public class PipelineStageProgressCache {
                 })
                 .collect(Collectors.toUnmodifiableSet());
         Set<TaskKey> previousKeys = workerTasks.put(workerKey, currentKeys);
-        if (EmptyChecks.isNotNull(previousKeys)) {
+        if (previousKeys != null) {
             previousKeys.stream()
                     .filter(previous -> !currentKeys.contains(previous))
-                    .filter(previous ->
-                            EmptyChecks.isNull(previous.stepRunId()) || !Texts.hasText(previous.invocationId()))
+                    .filter(previous -> previous.stepRunId() == null || !Texts.hasText(previous.invocationId()))
                     .forEach(previous -> removeIfOwnedBy(previous, workerKey));
         }
     }
 
     /** 旧协议缓存行为的包内测试入口；生产查询必须传入数据库有效认领和阶段。 */
     synchronized List<PipelineSnapshot> snapshotByPipeline(String tenantId, Long pipelineInstanceId) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(pipelineInstanceId)) {
+        if (!Texts.hasText(tenantId) || pipelineInstanceId == null) {
             return List.of();
         }
         Instant cutoff = clock.instant().minus(TTL);
@@ -143,7 +141,7 @@ public class PipelineStageProgressCache {
                     || !Objects.equals(pipelineInstanceId, key.pipelineInstanceId())
                     || entry.getValue().heartbeatAt().isBefore(cutoff)
                     || !Texts.hasText(key.invocationId())
-                    || EmptyChecks.isNull(key.stepRunId())) {
+                    || key.stepRunId() == null) {
                 continue;
             }
             boolean claimed = claims.stream()
@@ -196,20 +194,20 @@ public class PipelineStageProgressCache {
             return;
         }
         WorkerKey owner = taskOwners.remove(taskKey);
-        if (EmptyChecks.isNull(owner)) {
+        if (owner == null) {
             return;
         }
         Set<TaskKey> indexedTasks = workerTasks.get(owner);
-        if (EmptyChecks.isNotNull(indexedTasks) && indexedTasks.stream().noneMatch(taskStore::containsKey)) {
+        if (indexedTasks != null && indexedTasks.stream().noneMatch(taskStore::containsKey)) {
             workerTasks.remove(owner, indexedTasks);
         }
     }
 
     private static boolean isValid(WorkerPipelineProgressDto item) {
-        return EmptyChecks.isNotNull(item.taskId())
-                && EmptyChecks.isNotNull(item.pipelineInstanceId())
+        return item.taskId() != null
+                && item.pipelineInstanceId() != null
                 && Texts.hasText(item.stageCode())
-                && EmptyChecks.isNotNull(item.rowsProcessed());
+                && item.rowsProcessed() != null;
     }
 
     private static PipelineSnapshot aggregate(String stageCode, List<Snapshot> snapshots) {
@@ -224,7 +222,7 @@ public class PipelineStageProgressCache {
                 .filter(Objects::nonNull)
                 .mapToLong(Long::longValue)
                 .sum();
-        boolean allTotalsKnown = snapshots.stream().allMatch(item -> EmptyChecks.isNotNull(item.totalRowsHint()));
+        boolean allTotalsKnown = snapshots.stream().allMatch(item -> item.totalRowsHint() != null);
         Long totalRowsHint = allTotalsKnown
                 ? snapshots.stream().mapToLong(Snapshot::totalRowsHint).sum()
                 : null;

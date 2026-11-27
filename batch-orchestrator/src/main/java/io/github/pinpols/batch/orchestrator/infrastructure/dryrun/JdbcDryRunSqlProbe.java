@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dryrun;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunSqlProbe;
@@ -92,8 +91,7 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
             return SingleSelectCheck.UNPARSEABLE;
         }
         List<Statement> list = statements;
-        boolean containsExactlyOneSelect =
-                EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select;
+        boolean containsExactlyOneSelect = list != null && list.size() == 1 && list.get(0) instanceof Select;
         if (containsExactlyOneSelect) {
             return SingleSelectCheck.SINGLE_SELECT;
         }

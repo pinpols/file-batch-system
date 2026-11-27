@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mybatis;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
@@ -49,7 +50,7 @@ public class MapJsonbTypeHandler extends BaseTypeHandler<Map<String, Object>> {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parse(String json) {
-        if (json == null || json.isBlank()) {
+        if (EmptyChecks.isBlank(json)) {
             return null;
         }
         try {

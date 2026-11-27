@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.diagnostics;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import org.springframework.boot.diagnostics.AbstractFailureAnalyzer;
 import org.springframework.boot.diagnostics.FailureAnalysis;
 
@@ -13,7 +14,7 @@ public class BatchStartupFailureAnalyzer extends AbstractFailureAnalyzer<Illegal
     @Override
     protected FailureAnalysis analyze(Throwable rootFailure, IllegalStateException cause) {
         String message = cause.getMessage();
-        if (message == null || message.isBlank()) {
+        if (EmptyChecks.isBlank(message)) {
             return null;
         }
         if (message.contains("batch.security.bypass-mode=true")) {

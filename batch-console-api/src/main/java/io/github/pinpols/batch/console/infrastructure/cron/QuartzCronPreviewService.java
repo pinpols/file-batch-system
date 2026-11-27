@@ -29,13 +29,13 @@ public class QuartzCronPreviewService implements CronPreviewService {
     @Override
     public CronPreviewResponse preview(String expression, Integer count) {
         int previewCount;
-        if (EmptyChecks.isNull(count)) {
+        if (count == null) {
             previewCount = DEFAULT_COUNT;
         } else {
             int countAtMaximum = Math.min(count, MAX_COUNT);
             previewCount = Math.max(1, countAtMaximum);
         }
-        String trimmed = EmptyChecks.isNull(expression) ? "" : expression.trim();
+        String trimmed = expression == null ? "" : expression.trim();
         if (EmptyChecks.isEmpty(trimmed)) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "expr is required");
@@ -55,7 +55,7 @@ public class QuartzCronPreviewService implements CronPreviewService {
         Date cursor = Date.from(dateTimeSupport.nowInstant());
         for (int i = 0; i < previewCount; i++) {
             Date fireTime = cron.getNextValidTimeAfter(cursor);
-            if (EmptyChecks.isNull(fireTime)) break;
+            if (fireTime == null) break;
             next.add(fireTime.toInstant().toString());
             cursor = fireTime;
         }

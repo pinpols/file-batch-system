@@ -45,7 +45,7 @@ public final class ContentMaskingUtils {
     }
 
     private static String maskText(@Nullable String text, @Nullable String ruleSetCode, int depth) {
-        if (text == null || text.isEmpty()) {
+        if (EmptyChecks.isEmpty(text)) {
             return text;
         }
         String trimmed = text.stripLeading();
@@ -56,7 +56,7 @@ public final class ContentMaskingUtils {
         if (maybeJson) {
             try {
                 JsonNode json = JsonUtils.fromJson(text, JsonNode.class);
-                if (EmptyChecks.isNotNull(json) && (json.isContainerNode() || json.isTextual())) {
+                if (json != null && (json.isContainerNode() || json.isTextual())) {
                     return JsonUtils.toJson(maskJsonNode(json, ruleSetCode, depth + 1));
                 }
             } catch (IllegalArgumentException exception) {
@@ -103,7 +103,7 @@ public final class ContentMaskingUtils {
     }
 
     private static boolean requiresNamedMasking(@Nullable String ruleSetCode) {
-        if (EmptyChecks.isNull(ruleSetCode)) {
+        if (ruleSetCode == null) {
             return false;
         }
         String code = ruleSetCode.toUpperCase(Locale.ROOT);

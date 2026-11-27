@@ -154,7 +154,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
      * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
      */
     public void dispatch(TaskDispatchMessage msg) {
-        if (EmptyChecks.isNull(msg) || EmptyChecks.isNull(msg.taskId()) || EmptyChecks.isBlank(msg.tenantId())) {
+        if (msg == null || msg.taskId() == null || EmptyChecks.isBlank(msg.tenantId())) {
             throw new IllegalArgumentException("taskId and tenantId are required");
         }
         awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
@@ -181,7 +181,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
 
     /** 将已完成的任务显式重置为可认领状态；保留最后一次派单快照，不自动发送新消息。 */
     public void requeue(Long taskId) {
-        if (EmptyChecks.isNull(taskId)) {
+        if (taskId == null) {
             throw new IllegalArgumentException("taskId is required");
         }
         AtomicBoolean reset = new AtomicBoolean();
@@ -275,7 +275,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
                 Long taskId = taskIdFromPath(path);
                 Map<String, Object> claimBody = readBody(exchange);
                 ClaimedExecution claimed = claimExecution(taskId, claimBody);
-                if (EmptyChecks.isNull(claimed)) {
+                if (claimed == null) {
                     respond(exchange, 409);
                     return;
                 }
@@ -306,17 +306,15 @@ public final class FakeBatchPlatform implements AutoCloseable {
     private ClaimedExecution claimExecution(Long taskId, Map<String, Object> body) {
         String tenantId = asString(body.get("tenantId"));
         String workerId = asString(body.get("workerId"));
-        DispatchedTask dispatched = EmptyChecks.isNull(taskId) ? null : dispatchedTasks.get(taskId);
-        if (EmptyChecks.isNull(dispatched)
-                || !dispatched.tenantId().equals(tenantId)
-                || EmptyChecks.isBlank(workerId)) {
+        DispatchedTask dispatched = taskId == null ? null : dispatchedTasks.get(taskId);
+        if (dispatched == null || !dispatched.tenantId().equals(tenantId) || EmptyChecks.isBlank(workerId)) {
             return null;
         }
         ClaimedExecution candidate =
                 new ClaimedExecution(tenantId, workerId, UUID.randomUUID().toString(), dispatched.payload(), false);
         AtomicReference<ClaimedExecution> accepted = new AtomicReference<>();
         claimedExecutions.compute(taskId, (id, existing) -> {
-            ClaimedExecution current = EmptyChecks.isNull(existing) ? candidate : existing;
+            ClaimedExecution current = existing == null ? candidate : existing;
             if (!current.completed()
                     && current.tenantId().equals(tenantId)
                     && current.workerId().equals(workerId)) {
@@ -329,7 +327,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
 
     private boolean hasCurrentClaimOwner(String path, Map<String, Object> body, boolean requireRunning) {
         Long taskId = taskIdFromPath(path);
-        if (EmptyChecks.isNull(taskId)) {
+        if (taskId == null) {
             return false;
         }
         ClaimedExecution current = claimedExecutions.get(taskId);
@@ -340,7 +338,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
         String bodyTenantId = asString(body.get("tenantId"));
         String bodyWorkerId = asString(body.get("workerId"));
         String bodyInvocationId = asString(body.get("partitionInvocationId"));
-        return EmptyChecks.isNotNull(current)
+        return current != null
                 && (!requireRunning || !current.completed())
                 && current.tenantId().equals(bodyTenantId)
                 && current.workerId().equals(bodyWorkerId)
@@ -348,7 +346,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
     }
 
     private boolean recordStart(Long taskId, Map<String, Object> body) {
-        if (EmptyChecks.isNull(taskId)) return false;
+        if (taskId == null) return false;
         AtomicBoolean accepted = new AtomicBoolean();
         claimedExecutions.computeIfPresent(taskId, (id, current) -> {
             if (isCurrentClaimOwner(current, body, true)) {
@@ -361,7 +359,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
     }
 
     private boolean recordReport(Long taskId, Map<String, Object> body) {
-        if (EmptyChecks.isNull(taskId)) return false;
+        if (taskId == null) return false;
         boolean success = Boolean.TRUE.equals(body.get("success"));
         String message = asString(body.get("message"));
         Map<String, Object> outputs = asMap(body.get("outputs"));
@@ -410,7 +408,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
     private void respondWithClaimPayload(HttpExchange exchange, String payload, String invocationId)
             throws IOException {
         Map<String, Object> body =
-                Map.of("payload", EmptyChecks.isNull(payload) ? "{}" : payload, "partitionInvocationId", invocationId);
+                Map.of("payload", payload == null ? "{}" : payload, "partitionInvocationId", invocationId);
         byte[] response = objectMapper.writeValueAsBytes(body);
         exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
         exchange.sendResponseHeaders(200, response.length);

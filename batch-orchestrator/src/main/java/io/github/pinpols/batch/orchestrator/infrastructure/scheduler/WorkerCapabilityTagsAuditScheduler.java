@@ -75,7 +75,7 @@ public class WorkerCapabilityTagsAuditScheduler {
         int logged = 0;
         for (InvalidCapabilityTagsParam row : rows) {
             String tenantId = row == null ? null : row.getTenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyChecks.isBlank(tenantId)) {
                 // 没 tenantId 直接判脏（原 looksValidStringArray 逻辑保留）。
                 if (!looksValidStringArray(row == null ? null : row.getRawValue())) {
                     confirmed++;
@@ -119,7 +119,7 @@ public class WorkerCapabilityTagsAuditScheduler {
      * [1,2]} 不会报错），这恰恰就是要审计的"异常数据"。
      */
     private boolean looksValidStringArray(String raw) {
-        if (raw == null || raw.isBlank()) {
+        if (EmptyChecks.isBlank(raw)) {
             return true;
         }
         try {

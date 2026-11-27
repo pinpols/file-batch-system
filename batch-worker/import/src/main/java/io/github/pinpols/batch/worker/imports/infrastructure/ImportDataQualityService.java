@@ -64,11 +64,10 @@ public class ImportDataQualityService {
                                 instanceof ImportPayload payload
                 ? payload
                 : null;
-        Object rawNormalizedPayload = EmptyChecks.isNull(context)
-                ? null
-                : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        Object rawNormalizedPayload =
+                context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
         String normalizedPayload = Objects.toString(rawNormalizedPayload, null);
-        List<String> schemaFieldSnapshot = EmptyChecks.isNull(schemaFields) ? List.of() : List.copyOf(schemaFields);
+        List<String> schemaFieldSnapshot = schemaFields == null ? List.of() : List.copyOf(schemaFields);
         return new ValidationSession(
                 context,
                 ruleSet,
@@ -91,7 +90,7 @@ public class ImportDataQualityService {
 
     public Map<Long, ValidationIssue> validateChunk(
             ValidationSession session, List<CustomerImportPayload> payloads, long recordBase) {
-        if (session == null || payloads == null || payloads.isEmpty()) {
+        if (session == null || EmptyChecks.isEmpty(payloads)) {
             return Map.of();
         }
         List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
@@ -104,7 +103,7 @@ public class ImportDataQualityService {
 
     public Map<Long, ValidationIssue> validateChunkRows(
             ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
-        if (session == null || rows == null || rows.isEmpty()) {
+        if (session == null || EmptyChecks.isEmpty(rows)) {
             return Map.of();
         }
         return recordEvaluator.evaluate(session, rows, recordBase);
@@ -122,7 +121,7 @@ public class ImportDataQualityService {
         if (value instanceof List<?> list) {
             return list.stream()
                     .filter(item -> {
-                        if (EmptyChecks.isNull(item)) {
+                        if (item == null) {
                             return false;
                         }
                         String itemText = String.valueOf(item);

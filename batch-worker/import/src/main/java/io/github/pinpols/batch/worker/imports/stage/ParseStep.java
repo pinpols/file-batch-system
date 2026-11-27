@@ -297,7 +297,7 @@ public class ParseStep implements ImportStageStep {
             String rawMarker = String.valueOf(marker);
             expected = rawMarker.trim();
         }
-        if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(expected)) {
             return true;
         }
         String delimiter = strOr(template.get("delimiter"), ",");
@@ -342,7 +342,7 @@ public class ParseStep implements ImportStageStep {
             return number.intValue();
         }
         try {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return fallback;
             }
             String rawText = String.valueOf(value);
@@ -426,7 +426,7 @@ public class ParseStep implements ImportStageStep {
             throws Exception {
         Path spoolPath = resolveSpoolPath(context);
         Charset spoolCharset = resolveSpoolCharset(context);
-        String format = !EmptyChecks.isNull(spoolPath)
+        String format = spoolPath != null
                 ? resolveFormat(importPayload, templateConfig, "")
                 : resolveFormat(importPayload, templateConfig, payloadText);
         if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
@@ -436,7 +436,7 @@ public class ParseStep implements ImportStageStep {
             FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
             return parser.parse(context, request, writer);
         }
-        FormatParseRequest request = EmptyChecks.isNull(spoolPath)
+        FormatParseRequest request = spoolPath == null
                 ? FormatParseRequest.fromText(payloadText, importPayload, templateConfig, preserveLogicalRow)
                 : FormatParseRequest.fromSpool(
                         importPayload, templateConfig, preserveLogicalRow, spoolPath, spoolCharset);
@@ -507,7 +507,7 @@ public class ParseStep implements ImportStageStep {
         if (direct == null) {
             direct = templateConfig.get("loadTargetRef");
         }
-        if (EmptyChecks.isNotNull(direct)) {
+        if (direct != null) {
             String rawLoadTarget = String.valueOf(direct);
             String loadTarget = rawLoadTarget.trim();
             if (WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(loadTarget)) {
@@ -540,13 +540,12 @@ public class ParseStep implements ImportStageStep {
     private long applyPartitionFilter(
             ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig) throws Exception {
         // 文件束已经按来源文件分区，再对每个独立文件取模会漏掉其他分区不会读取的记录。
-        if (EmptyChecks.isNotNull(context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))) {
+        if (context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID) != null) {
             return totalCount;
         }
         Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
         Integer partitionCount = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-        boolean inputIsNotPartitioned =
-                EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionCount <= 1;
+        boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
         if (inputIsNotPartitioned) {
             return totalCount;
         }
@@ -560,7 +559,7 @@ public class ParseStep implements ImportStageStep {
             if (switchVal == null) {
                 switchVal = tc.get("partitionAwareParse");
             }
-            if (EmptyChecks.isNotNull(switchVal)) {
+            if (switchVal != null) {
                 String rawSwitchValue = String.valueOf(switchVal);
                 String partitionAwareParse = rawSwitchValue.trim();
                 if ("false".equalsIgnoreCase(partitionAwareParse)) {

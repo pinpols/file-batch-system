@@ -212,7 +212,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
         NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
         NotificationChannelRow existing = Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
         requireKnownChannelType(request.getChannelType());
-        String configJson = EmptyChecks.isNotNull(request.getConfigJson())
+        String configJson = request.getConfigJson() != null
                 ? preserveMaskedChannelConfig(request.getConfigJson(), existing.configJson())
                 : null;
         validateWebhookChannelUrl(request.getChannelType(), configJson);
@@ -232,7 +232,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     }
 
     private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
-        boolean storedConfigIsMissing = EmptyChecks.isNull(storedValue);
+        boolean storedConfigIsMissing = storedValue == null;
         if (storedConfigIsMissing) {
             return submittedJson;
         }
@@ -255,7 +255,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
         }
         String url = WebhookDeliverySupport.configText(
                 configJson, "url", DefaultConsoleNotificationApplicationService.class);
-        if (url != null && !url.isBlank()) {
+        if (EmptyChecks.isNotBlank(url)) {
             callbackUrlValidator.validate(url);
         }
     }
@@ -442,7 +442,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     }
 
     private static String safeTestError(String errorSummary) {
-        if (EmptyChecks.isNull(errorSummary)) {
+        if (errorSummary == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(errorSummary));

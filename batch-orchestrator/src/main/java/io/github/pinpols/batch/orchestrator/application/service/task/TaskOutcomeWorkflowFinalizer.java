@@ -89,7 +89,7 @@ final class TaskOutcomeWorkflowFinalizer {
     private void diagnoseRejectedTransition(Context context, String candidateStatus) {
         WorkflowRunEntity current = workflowMappers.workflowRunMapper.selectById(
                 context.command().tenantId(), context.workflowRun().getId());
-        String observed = EmptyChecks.isNull(current) ? "MISSING" : current.getRunStatus();
+        String observed = current == null ? "MISSING" : current.getRunStatus();
         if (candidateStatus.equals(observed) || WorkflowRunStatus.PAUSED.code().equals(observed)) {
             // DAG 的 END 可在同一 REPORT 事务中先完成根运行；相同终态是幂等收口。
             // PAUSED 仍保留人工暂停，在途结果不能把它当成取消/终止竞争，也不能自动恢复。

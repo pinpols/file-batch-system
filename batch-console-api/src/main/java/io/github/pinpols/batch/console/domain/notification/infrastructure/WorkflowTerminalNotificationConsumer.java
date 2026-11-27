@@ -31,9 +31,7 @@ public class WorkflowTerminalNotificationConsumer {
     public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
         try {
             Map<?, ?> data = JsonUtils.fromJson(record.value(), Map.class);
-            if (EmptyChecks.isNull(data)
-                    || !(data.get("tenantId") instanceof String tenant)
-                    || EmptyChecks.isBlank(tenant)) {
+            if (data == null || !(data.get("tenantId") instanceof String tenant) || EmptyChecks.isBlank(tenant)) {
                 throw new IllegalArgumentException("missing terminal notification tenant");
             }
             RlsTenantContextHolder.runWithTenant(tenant, () -> {

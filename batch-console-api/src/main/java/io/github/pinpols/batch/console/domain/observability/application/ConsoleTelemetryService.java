@@ -13,8 +13,7 @@ public class ConsoleTelemetryService {
 
     public void receive(FrontendTelemetryRequest request) {
         for (Event event : request.events()) {
-            int propsKeys =
-                    EmptyChecks.isNull(event.props()) ? 0 : event.props().size();
+            int propsKeys = event.props() == null ? 0 : event.props().size();
             if ("error".equals(event.type())) {
                 log.error(
                         "[frontend:error] telemetry event received nameLength={} pagePresent={} propsKeys={}",

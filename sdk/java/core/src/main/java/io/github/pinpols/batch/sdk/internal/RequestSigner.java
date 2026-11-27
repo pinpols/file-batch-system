@@ -26,7 +26,7 @@ public final class RequestSigner {
     public static String bodySha256Hex(byte[] body) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] bodyBytes = EmptyChecks.isNull(body) ? new byte[0] : body;
+            byte[] bodyBytes = body == null ? new byte[0] : body;
             byte[] digest = md.digest(bodyBytes);
             return toHex(digest);
         } catch (Exception e) {

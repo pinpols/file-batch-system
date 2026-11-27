@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -105,7 +104,7 @@ public class AlertmanagerEmitPublisher {
 
     /** 推一条 firing 告警（disabled / null → no-op）。 */
     public void publishFiring(AlertEventEntity entity) {
-        if (EmptyChecks.isNotNull(entity) && "CLOSED".equals(entity.getStatus())) {
+        if (entity != null && "CLOSED".equals(entity.getStatus())) {
             return;
         }
         publish(entity, false);
@@ -113,9 +112,7 @@ public class AlertmanagerEmitPublisher {
 
     /** 重发已持久化的关闭意图；最终渠道回执另行确认，不把入队当作送达。 */
     public void publishResolved(AlertEventEntity entity) {
-        if (EmptyChecks.isNull(entity)
-                || EmptyChecks.isNull(entity.getClosedAt())
-                || !"CLOSED".equals(entity.getStatus())) {
+        if (entity == null || entity.getClosedAt() == null || !"CLOSED".equals(entity.getStatus())) {
             return;
         }
         publish(entity, true);

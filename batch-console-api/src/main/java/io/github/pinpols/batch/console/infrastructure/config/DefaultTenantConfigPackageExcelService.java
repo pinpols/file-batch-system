@@ -244,23 +244,19 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
                     }
                     row.put(COL_WORKFLOW_CODE, definition.getWorkflowCode());
                     row.put(COL_WORKFLOW_VERSION, definition.getVersion());
-                    row.put(COL_SOFT_RUNTIME_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getSoftRuntimeSeconds());
-                    row.put(
-                            COL_SOFT_RUNTIME_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getSoftRuntimeSeverity());
-                    row.put(COL_START_GRACE_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getStartGraceSeconds());
-                    row.put(
-                            COL_START_GRACE_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getStartGraceSeverity());
+                    row.put(COL_SOFT_RUNTIME_SECONDS, policy == null ? 0 : policy.getSoftRuntimeSeconds());
+                    row.put(COL_SOFT_RUNTIME_SEVERITY, policy == null ? "WARN" : policy.getSoftRuntimeSeverity());
+                    row.put(COL_START_GRACE_SECONDS, policy == null ? 0 : policy.getStartGraceSeconds());
+                    row.put(COL_START_GRACE_SEVERITY, policy == null ? "WARN" : policy.getStartGraceSeverity());
                     row.put(
                             COL_COMPLETION_DEADLINE_LOCAL_TIME,
-                            EmptyChecks.isNull(policy) ? null : policy.getCompletionDeadlineLocalTime());
+                            policy == null ? null : policy.getCompletionDeadlineLocalTime());
                     row.put(
                             COL_COMPLETION_DEADLINE_DAY_OFFSET,
-                            EmptyChecks.isNull(policy) ? 0 : policy.getCompletionDeadlineDayOffset());
+                            policy == null ? 0 : policy.getCompletionDeadlineDayOffset());
                     row.put(
                             COL_COMPLETION_DEADLINE_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getCompletionDeadlineSeverity());
+                            policy == null ? "WARN" : policy.getCompletionDeadlineSeverity());
                     return row;
                 })
                 .toList();
@@ -308,17 +304,17 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             String sheetAppliesTo = appliesToFor(sheet.name(), "");
             for (String column : sheet.columns()) {
                 ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
-                boolean required = EmptyChecks.isNotNull(guide) && guide.required();
+                boolean required = guide != null && guide.required();
                 TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
                         TenantConfigPackageExcelGuideResponse.ColumnGuide.builder()
                                 .columnName(column)
                                 .required(required)
-                                .readOnly(EmptyChecks.isNotNull(guide) && guide.readOnly())
+                                .readOnly(guide != null && guide.readOnly())
                                 .guideLevel(guideLevelFor(sheet.name(), column, required))
-                                .format(EmptyChecks.isNull(guide) ? "" : guide.formatHint())
-                                .allowedValues(EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues())
-                                .description(EmptyChecks.isNull(guide) ? "" : guide.description())
-                                .example(EmptyChecks.isNull(guide) ? "" : guide.example())
+                                .format(guide == null ? "" : guide.formatHint())
+                                .allowedValues(guide == null ? List.of() : guide.allowedValues())
+                                .description(guide == null ? "" : guide.description())
+                                .example(guide == null ? "" : guide.example())
                                 .fillExample(fillExampleFor(sheet.name(), column, guide))
                                 .defaultBehavior(defaultBehaviorFor(column, guide))
                                 .appliesTo(appliesToFor(sheet.name(), column))
@@ -343,7 +339,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     }
 
     private String calendarHolidaysText(Long calendarId) {
-        if (EmptyChecks.isNull(calendarId)) {
+        if (calendarId == null) {
             return null;
         }
         List<CalendarHolidayRow> holidayRows = calendarHolidayMapper.selectByCalendarId(calendarId);
@@ -399,7 +395,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         PackageExcelSession currentSession = loadSession(uploadToken);
         long configurationRevision = currentConfigurationRevision(currentSession.tenantId());
         PreviewSnapshot snapshot = importStore.issuePreviewSnapshot(uploadToken, configurationRevision);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.apply_in_progress");
         }
         PackageExcelSession session = snapshot.session();
@@ -508,10 +504,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             String uploadToken, TenantConfigPackageExcelApplyRequest request) {
         PackageExcelSession session = loadSession(uploadToken);
         String previewToken = request.getPreviewToken();
-        if (EmptyChecks.isNull(previewToken)) {
+        if (previewToken == null) {
             PreviewSnapshot currentPreview =
                     importStore.issuePreviewSnapshot(uploadToken, currentConfigurationRevision(session.tenantId()));
-            if (EmptyChecks.isNull(currentPreview)) {
+            if (currentPreview == null) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
             }
             previewToken = currentPreview.previewToken();
@@ -576,7 +572,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private long currentConfigurationRevision(String tenantId) {
         Long revision = tenantConfigRevisionMapper.currentConfigurationRevision(tenantId);
-        if (EmptyChecks.isNull(revision)) {
+        if (revision == null) {
             throw new IllegalStateException("tenant configuration revision is missing");
         }
         return revision;
@@ -584,7 +580,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private long lockConfigurationRevision(String tenantId) {
         Long revision = tenantConfigRevisionMapper.lockConfigurationRevision(tenantId);
-        if (EmptyChecks.isNull(revision)) {
+        if (revision == null) {
             throw new IllegalStateException("tenant configuration revision is missing");
         }
         return revision;
@@ -633,7 +629,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             List<Map<String, String>> channelRows = parseOptionalSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId);
             List<Map<String, String>> fileTemplateRows =
                     parseOptionalSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId);
-            if (EmptyChecks.isNotNull(wb.getSheet(PIPELINE_SHEET)) || EmptyChecks.isNotNull(wb.getSheet(STEP_SHEET))) {
+            if (wb.getSheet(PIPELINE_SHEET) != null || wb.getSheet(STEP_SHEET) != null) {
                 throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.package.retired_sheet");
             }
             List<Map<String, String>> pipelineRows = List.of();
@@ -870,7 +866,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     }
 
     private void assertSessionOwner(PackageExcelSession session) {
-        if (EmptyChecks.isNull(session.uploadedBy())) {
+        if (session.uploadedBy() == null) {
             return;
         }
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
@@ -882,7 +878,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private static Set<String> currentPermissionScope() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return Set.of();
         }
         return authentication.getAuthorities().stream()
@@ -895,7 +891,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
             String header = TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
             if (Texts.hasText(header)) {
-                if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
+                if (index.putIfAbsent(header, c) != null) {
                     throw BizException.of(
                             ResultCode.INVALID_ARGUMENT,
                             ResultCode.INVALID_ARGUMENT.detailKey(),

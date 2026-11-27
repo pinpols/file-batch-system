@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.validation;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import java.net.Inet4Address;
@@ -17,7 +18,7 @@ public class ValidIpValidator implements ConstraintValidator<ValidIp, String> {
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return true;
         }
         String trimmed = value.trim();

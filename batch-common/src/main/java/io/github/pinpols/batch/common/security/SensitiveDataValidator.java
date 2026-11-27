@@ -58,10 +58,10 @@ public final class SensitiveDataValidator {
      *     不回显调用方提供的字段名
      */
     public static void rejectIfContainsSensitiveKeys(Map<String, ?> data, String contextLabel) {
-        if (data == null || data.isEmpty()) {
+        if (EmptyChecks.isEmpty(data)) {
             return;
         }
-        if (EmptyChecks.isNotNull(findFirstSensitiveKey(data))) {
+        if (findFirstSensitiveKey(data) != null) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     "error.security.sensitive_in_payload",
@@ -72,10 +72,10 @@ public final class SensitiveDataValidator {
 
     /** boolean 版:dry-run / 警示路径使用,不阻断。 */
     public static boolean containsSensitiveKey(Map<String, ?> data) {
-        if (data == null || data.isEmpty()) {
+        if (EmptyChecks.isEmpty(data)) {
             return false;
         }
-        return EmptyChecks.isNotNull(findFirstSensitiveKey(data));
+        return findFirstSensitiveKey(data) != null;
     }
 
     /** 拒绝命令行参数或 URI 字符串中具有明确凭据语法的值；不在异常中回显原文。 */
@@ -105,7 +105,7 @@ public final class SensitiveDataValidator {
 
     /** 只检查传入的参数列表；其它普通业务文本不做全量递归猜测。 */
     public static void rejectIfContainsInlineCredentials(Iterable<?> values, String contextLabel) {
-        if (EmptyChecks.isNull(values)) {
+        if (values == null) {
             return;
         }
         for (Object value : values) {
@@ -140,13 +140,13 @@ public final class SensitiveDataValidator {
             return null;
         }
         Boolean previousVisit = seen.put(data, Boolean.TRUE);
-        if (EmptyChecks.isNotNull(previousVisit)) {
+        if (previousVisit != null) {
             return null;
         }
         if (data instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 Object rawKey = entry.getKey();
-                if (EmptyChecks.isNotNull(rawKey)) {
+                if (rawKey != null) {
                     String key = rawKey.toString();
                     // 大小写不敏感 + 分隔符无关:把 `-` / `_` 都 strip 掉再 contains。
                     if (isSensitiveKey(key)) {
@@ -154,7 +154,7 @@ public final class SensitiveDataValidator {
                     }
                 }
                 String found = scan(entry.getValue(), seen);
-                if (EmptyChecks.isNotNull(found)) {
+                if (found != null) {
                     return found;
                 }
             }

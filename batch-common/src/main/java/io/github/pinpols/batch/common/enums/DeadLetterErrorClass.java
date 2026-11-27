@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.enums;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -24,7 +25,7 @@ public enum DeadLetterErrorClass implements DictEnum {
     private final String label;
 
     public static DeadLetterErrorClass from(String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyChecks.isBlank(value)) {
             return SYSTEM;
         }
         DeadLetterErrorClass hit = DictEnum.fromCode(DeadLetterErrorClass.class, value.trim());

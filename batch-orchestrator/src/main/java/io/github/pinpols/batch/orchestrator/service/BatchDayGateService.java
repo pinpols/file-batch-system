@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -55,15 +54,15 @@ public class BatchDayGateService {
             LaunchValidationService.LaunchLoadResult loaded,
             Map<String, Object> effectiveParams,
             String traceId) {
-        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {
+        if (request == null || loaded == null) {
             return GateDecision.allow();
         }
         JobDefinitionView job = loaded.jobDefinition();
-        if (EmptyChecks.isNull(job)) {
+        if (job == null) {
             return GateDecision.allow();
         }
         String calendarCode = loaded.effectiveCalendarCode();
-        if (!Texts.hasText(calendarCode) || EmptyChecks.isNull(request.bizDate())) {
+        if (!Texts.hasText(calendarCode) || request.bizDate() == null) {
             return GateDecision.allow();
         }
         // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
@@ -85,7 +84,7 @@ public class BatchDayGateService {
                 configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
         String policy;
         if ("INHERIT".equals(scope)) {
-            String configuredRolloverPolicy = EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
+            String configuredRolloverPolicy = calendar == null ? null : calendar.dayRolloverPolicy();
             policy = normalize(configuredRolloverPolicy, POLICY_ALLOW_OVERLAP);
         } else {
             policy = POLICY_WAIT_PREVIOUS_DAY;

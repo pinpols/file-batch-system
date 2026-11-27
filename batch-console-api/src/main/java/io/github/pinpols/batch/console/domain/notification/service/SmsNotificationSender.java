@@ -50,7 +50,7 @@ public class SmsNotificationSender implements NotificationSender {
             return WebhookDeliveryResult.failure(null, "sms provider not configured");
         }
         SmsProvider provider = resolve(providerName);
-        if (EmptyChecks.isNull(provider)) {
+        if (provider == null) {
             String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
             log.warn(
                     "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
@@ -78,7 +78,7 @@ public class SmsNotificationSender implements NotificationSender {
             String trimmedCode = code.trim();
             String normalized = trimmedCode.toLowerCase(Locale.ROOT);
             SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
-            if (EmptyChecks.isNotNull(duplicate)) {
+            if (duplicate != null) {
                 throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);
             }
         }
@@ -92,7 +92,7 @@ public class SmsNotificationSender implements NotificationSender {
         }
         try {
             JsonNode node = objectMapper.readTree(configJson).get("phoneNumbers");
-            if (EmptyChecks.isNull(node) || node.isNull()) {
+            if (node == null || node.isNull()) {
                 return result;
             }
             for (String raw : node.asText().split(",")) {

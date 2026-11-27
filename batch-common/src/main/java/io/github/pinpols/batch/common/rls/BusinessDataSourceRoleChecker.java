@@ -49,7 +49,7 @@ public final class BusinessDataSourceRoleChecker {
             boolean superuser = resultSet.getBoolean(2);
             boolean bypassRls = resultSet.getBoolean(3);
             if (superuser || bypassRls) {
-                String prefix = EmptyChecks.isNull(shard) ? "" : shard + ":";
+                String prefix = shard == null ? "" : shard + ":";
                 unsafeRoles.add(prefix + role + "(superuser=" + superuser + ",bypassrls=" + bypassRls + ")");
             }
         }
@@ -61,7 +61,7 @@ public final class BusinessDataSourceRoleChecker {
                 .forEach((key, dataSource) ->
                         shards.merge(dataSource, String.valueOf(key), (left, right) -> left + "," + right));
         DataSource defaultDataSource = routing.getResolvedDefaultDataSource();
-        if (!EmptyChecks.isNull(defaultDataSource)) {
+        if (defaultDataSource != null) {
             shards.putIfAbsent(defaultDataSource, "default");
         }
         return shards;

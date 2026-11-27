@@ -67,8 +67,7 @@ public class ConsoleSelfServiceJobService {
                             return Objects.equals(instanceBizDate, requestedBizDate);
                         })
                         .toList();
-        if (matchingInstances.size() != 1
-                || EmptyChecks.isNull(matchingInstances.getFirst().getId())) {
+        if (matchingInstances.size() != 1 || matchingInstances.getFirst().getId() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         JobInstanceEntity target = matchingInstances.getFirst();

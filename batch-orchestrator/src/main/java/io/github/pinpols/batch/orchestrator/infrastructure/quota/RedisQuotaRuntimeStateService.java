@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
@@ -219,7 +220,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
             return waitForCapacity(unavailableBackendRequest);
         }
 
-        if (result == null || result.isEmpty()) {
+        if (EmptyChecks.isEmpty(result)) {
             return ResourceCheck.allow();
         }
         long allowed = parseLong(asString(result.get(0)));
@@ -276,7 +277,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
                     causeSummary);
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
-        if (entries == null || entries.isEmpty()) {
+        if (EmptyChecks.isEmpty(entries)) {
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
 
@@ -318,7 +319,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     }
 
     private static long parseLong(String s) {
-        if (s == null || s.isBlank()) {
+        if (EmptyChecks.isBlank(s)) {
             return 0L;
         }
         try {

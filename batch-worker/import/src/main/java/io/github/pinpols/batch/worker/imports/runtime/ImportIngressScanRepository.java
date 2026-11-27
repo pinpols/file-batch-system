@@ -121,7 +121,7 @@ public class ImportIngressScanRepository {
                     .build();
             return Optional.of(lease);
         });
-        return EmptyChecks.isNull(claimed) ? Optional.empty() : claimed;
+        return claimed == null ? Optional.empty() : claimed;
     }
 
     public void release(Lease lease) {

@@ -41,7 +41,7 @@ final class TaskOutcomeStatePolicy {
     static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
         Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
         for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
-            if (EmptyChecks.isNull(nodeRun) || EmptyChecks.isNull(nodeRun.getNodeCode())) {
+            if (nodeRun == null || nodeRun.getNodeCode() == null) {
                 continue;
             }
             latestByNode.merge(
@@ -127,7 +127,7 @@ final class TaskOutcomeStatePolicy {
     }
 
     static boolean isDryRun(JobInstanceEntity instance) {
-        return EmptyChecks.isNotNull(instance) && Boolean.TRUE.equals(instance.getDryRun());
+        return instance != null && Boolean.TRUE.equals(instance.getDryRun());
     }
 
     static String resolveWorkflowEvent(

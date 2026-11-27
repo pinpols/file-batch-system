@@ -104,7 +104,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
                 log.warn("restore autoCommit failed: {}", ExceptionLogSummary.of(restoreEx));
             }
         }
-        if (EmptyChecks.isNotNull(totals.lastResultSet)) {
+        if (totals.lastResultSet != null) {
             totals.lastResultSet.put("statementCount", statements.size());
             totals.lastResultSet.put("totalAffectedRows", totals.totalAffected);
             return totals.lastResultSet;
@@ -154,7 +154,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         while (i < sql.length()) {
             char current = sql.charAt(i);
             String dollarTag = current == '$' && state.atCode() ? matchDollarTag(sql, i) : null;
-            if (EmptyChecks.isNotNull(dollarTag)) {
+            if (dollarTag != null) {
                 i = state.appendDollarQuoted(sql, i, dollarTag);
                 continue;
             }

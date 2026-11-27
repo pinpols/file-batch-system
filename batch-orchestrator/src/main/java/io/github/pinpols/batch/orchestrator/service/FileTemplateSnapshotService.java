@@ -44,7 +44,7 @@ public class FileTemplateSnapshotService {
         pinned.remove(FrozenFileTemplateSnapshot.PAYLOAD_KEY);
         pinned.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
         JobType type = DictEnum.fromCode(JobType.class, definition.jobType());
-        if (EmptyChecks.isNull(type)
+        if (type == null
                 || !Set.of(JobType.IMPORT, JobType.EXPORT, JobType.BUNDLE_IMPORT, JobType.BUNDLE_EXPORT)
                         .contains(type)) {
             return pinned;
@@ -70,7 +70,7 @@ public class FileTemplateSnapshotService {
             String protectedSnapshot = policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                     ? originalSnapshot(request.tenantId(), code, type.workerTypeCode(), original)
                     : captureLatest(request.tenantId(), code, type.workerTypeCode());
-            if (EmptyChecks.isNotNull(protectedSnapshot)) {
+            if (protectedSnapshot != null) {
                 snapshots.put(code, protectedSnapshot);
             }
         }
@@ -96,7 +96,7 @@ public class FileTemplateSnapshotService {
         pinned.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
         validateReplayBinding(request, definition, pinned, binding);
         JobType type = DictEnum.fromCode(JobType.class, definition.jobType());
-        if (EmptyChecks.isNull(type)
+        if (type == null
                 || !Set.of(JobType.IMPORT, JobType.EXPORT, JobType.BUNDLE_IMPORT, JobType.BUNDLE_EXPORT)
                         .contains(type)) {
             if (EmptyChecks.isNotEmpty(binding.protectedFileTemplateSnapshots())) {
@@ -137,7 +137,7 @@ public class FileTemplateSnapshotService {
             ConfigVersionPolicy policy,
             Map<?, ?> originalEffectiveParams) {
         JobType type = DictEnum.fromCode(JobType.class, definition.jobType());
-        if (EmptyChecks.isNull(type)
+        if (type == null
                 || !Set.of(JobType.IMPORT, JobType.EXPORT, JobType.BUNDLE_IMPORT, JobType.BUNDLE_EXPORT)
                         .contains(type)) {
             return new ReplayTemplateSelection(Map.of(), null);
@@ -180,13 +180,13 @@ public class FileTemplateSnapshotService {
 
     private ConfigVersionPolicy configPolicy(Map<String, Object> parameters) {
         Object explicit = parameters.get("_rerunConfigVersionPolicy");
-        if (EmptyChecks.isNull(explicit)) {
+        if (explicit == null) {
             return "JOB_RERUN".equals(parameters.get("operationType"))
                     ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                     : ConfigVersionPolicy.USE_LATEST_CONFIG;
         }
         ConfigVersionPolicy policy = ConfigVersionPolicy.fromCodeOrNull(String.valueOf(explicit));
-        if (EmptyChecks.isNull(policy)) {
+        if (policy == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_policy_invalid");
         }
         return policy;
@@ -235,7 +235,7 @@ public class FileTemplateSnapshotService {
         } catch (NumberFormatException | ArithmeticException invalidIdentity) {
             throw invalidSnapshot();
         }
-        boolean sourceSnapshotMatchesDispatch = EmptyChecks.isNotNull(source)
+        boolean sourceSnapshotMatchesDispatch = source != null
                 && request.tenantId().equals(source.getTenantId())
                 && definition.jobCode().equals(source.getJobCode())
                 && definition.id().equals(source.getJobDefinitionId())
@@ -321,14 +321,14 @@ public class FileTemplateSnapshotService {
             JobDefinitionView definition,
             Map<String, Object> parameters,
             WorkflowReplayExecutionBinding binding) {
-        ReplayExecutionGuard guard = EmptyChecks.isNull(binding) ? null : binding.executionGuard();
-        boolean bindingIsIncomplete = EmptyChecks.isNull(binding)
-                || EmptyChecks.isNull(binding.replayOperationId())
+        ReplayExecutionGuard guard = binding == null ? null : binding.executionGuard();
+        boolean bindingIsIncomplete = binding == null
+                || binding.replayOperationId() == null
                 || binding.replayOperationId() <= 0
-                || EmptyChecks.isNull(binding.workflowRunId())
+                || binding.workflowRunId() == null
                 || binding.workflowRunId() <= 0
                 || EmptyChecks.isBlank(binding.nodeCode())
-                || EmptyChecks.isNull(guard);
+                || guard == null;
         if (bindingIsIncomplete) {
             throw invalidSnapshot();
         }
@@ -336,8 +336,8 @@ public class FileTemplateSnapshotService {
         if (replayGuardDoesNotMatchBinding) {
             throw invalidSnapshot();
         }
-        boolean requestDoesNotMatchReplayIdentity = EmptyChecks.isNull(request)
-                || EmptyChecks.isNull(definition)
+        boolean requestDoesNotMatchReplayIdentity = request == null
+                || definition == null
                 || EmptyChecks.isBlank(request.tenantId())
                 || EmptyChecks.isBlank(request.jobCode())
                 || !request.tenantId().equals(definition.tenantId())

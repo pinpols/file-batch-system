@@ -106,8 +106,8 @@ public class ConsoleApiExceptionHandler {
     }
 
     private String bizExceptionMessage(BizException exception) {
-        if (EmptyChecks.isNull(bizMessageResolver)) {
-            if (EmptyChecks.isNull(exception.getMessageKey())) {
+        if (bizMessageResolver == null) {
+            if (exception.getMessageKey() == null) {
                 return exception.getMessage();
             }
             return exception.getCode().label();
@@ -208,7 +208,7 @@ public class ConsoleApiExceptionHandler {
         log.warn(
                 "console downstream rest error: status={}, responseBodyLength={}",
                 exception.getStatusCode().value(),
-                EmptyChecks.isNull(body) ? 0 : body.length());
+                body == null ? 0 : body.length());
         try {
             CommonResponse<Object> downstream =
                     JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
@@ -368,9 +368,7 @@ public class ConsoleApiExceptionHandler {
         } else if (kind == PgConstraintViolation.WORKFLOW_CALENDAR_EXPECTATION) {
             BizException conflict =
                     BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.calendar_has_expectations");
-            message = EmptyChecks.isNull(bizMessageResolver)
-                    ? conflict.getCode().label()
-                    : bizMessageResolver.resolve(conflict);
+            message = bizMessageResolver == null ? conflict.getCode().label() : bizMessageResolver.resolve(conflict);
         } else {
             message = resolveCommonCode(kind.resultCode());
         }
@@ -380,7 +378,7 @@ public class ConsoleApiExceptionHandler {
     }
 
     private String resolveCommonCode(ResultCode code) {
-        return EmptyChecks.isNull(bizMessageResolver) ? code.label() : bizMessageResolver.resolve(code);
+        return bizMessageResolver == null ? code.label() : bizMessageResolver.resolve(code);
     }
 
     /**
@@ -410,7 +408,7 @@ public class ConsoleApiExceptionHandler {
         }
 
         static PgConstraintViolation classify(String rawMsg, PostgresConstraintViolation violation) {
-            if (EmptyChecks.isNotNull(violation)) {
+            if (violation != null) {
                 if (violation.matches("23514", "batch", "job_dependency", "ck_job_dependency_acyclic")) {
                     return JOB_DEPENDENCY_CYCLE;
                 }

@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
@@ -96,10 +95,10 @@ public class ForensicExportService {
     /** 校验导出已完成且文件存在，返回 HTTP 下载适配所需的文件元数据。 */
     public FileDownloadArtifact loadDownloadArtifact(String tenantId, String exportId) throws IOException {
         ForensicExportLogEntity exportLog = forensicExportLogMapper.selectByExportId(tenantId, exportId);
-        if (EmptyChecks.isNull(exportLog)) {
+        if (exportLog == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
         }
-        if (!"COMPLETED".equals(exportLog.status()) || EmptyChecks.isNull(exportLog.storagePath())) {
+        if (!"COMPLETED".equals(exportLog.status()) || exportLog.storagePath() == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.forensic.export_not_ready");
         }
         Path file = Path.of(exportLog.storagePath());
@@ -162,10 +161,10 @@ public class ForensicExportService {
     }
 
     private void validate(ForensicExportRequest request) {
-        boolean exportRequestIsIncomplete = EmptyChecks.isNull(request)
+        boolean exportRequestIsIncomplete = request == null
                 || !Texts.hasText(request.tenantId())
                 || request.bizDateFrom() == null
-                || EmptyChecks.isNull(request.bizDateTo());
+                || request.bizDateTo() == null;
         if (exportRequestIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.forensic.invalid_argument");
         }

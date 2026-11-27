@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.redis;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import org.springframework.data.redis.serializer.RedisSerializer;
 
@@ -15,7 +14,7 @@ public final class BatchRedisNamespaceSerializer implements RedisSerializer<Stri
 
     @Override
     public byte[] serialize(String key) {
-        if (EmptyChecks.isNull(key)) {
+        if (key == null) {
             return null;
         }
         String physicalKey = namespace.key(key);
@@ -24,7 +23,7 @@ public final class BatchRedisNamespaceSerializer implements RedisSerializer<Stri
 
     @Override
     public String deserialize(byte[] bytes) {
-        if (EmptyChecks.isNull(bytes)) {
+        if (bytes == null) {
             return null;
         }
         String decodedPhysicalKey = new String(bytes, StandardCharsets.UTF_8);

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
@@ -52,7 +51,7 @@ class ConfigSyncImportExecutor {
             Target target = new Target(auditTenantId, logId, tenantId);
             TenantInitResult result =
                     RlsTenantContextHolder.runWithTenant(tenantId, () -> targetExecutor.findReceipt(target));
-            if (EmptyChecks.isNotNull(result)) {
+            if (result != null) {
                 results.add(result);
             }
         }

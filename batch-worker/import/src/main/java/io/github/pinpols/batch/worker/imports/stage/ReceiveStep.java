@@ -145,10 +145,9 @@ public class ReceiveStep implements ImportStageStep {
                     stage(), TaskErrorCodes.FROZEN_FILE_TEMPLATE_INVALID, invalidTemplate, objectMapper);
         }
         Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-        if (EmptyChecks.isNull(existingFileId)
-                && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
+        if (existingFileId == null && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
             createAndBindReceivedFile(context, importPayload, templateConfig, payloadLength, attrs);
-        } else if (EmptyChecks.isNotNull(existingFileId)) {
+        } else if (existingFileId != null) {
             // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
             // 落进 task payload 的 sourceFileId,worker-core 据此设了 FILE_ID,基类已加载 FILE_RECORD)。
             // 束的 task payload 只带 sourceFileId/templateCode,不带存储坐标——从 file_record 回填
@@ -275,7 +274,7 @@ public class ReceiveStep implements ImportStageStep {
                     parser.skipChildren();
                 }
             }
-            if (EmptyChecks.isNotNull(parser.nextToken())) {
+            if (parser.nextToken() != null) {
                 throw new IllegalArgumentException("Import replay payload contains trailing content");
             }
             return templateCode;
@@ -425,7 +424,7 @@ public class ReceiveStep implements ImportStageStep {
             return payload.fileName();
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return "import-" + traceId + BatchFileConstants.DAT_SUFFIX;
         }
         return "import-"
@@ -475,7 +474,7 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyChecks.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {
@@ -487,7 +486,7 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> security) {
-        if (security == null || security.isEmpty()) {
+        if (EmptyChecks.isEmpty(security)) {
             return;
         }
         target.putAll(security);

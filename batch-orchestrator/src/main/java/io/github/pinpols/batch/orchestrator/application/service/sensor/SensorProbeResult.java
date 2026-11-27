@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +20,7 @@ public record SensorProbeResult(
 
     public SensorProbeResult {
         // 错误参数最终持久化并可能经 Console 回显,统一净化所有策略及直接构造的结果。
-        if (status == SensorProbeStatus.ERROR && EmptyChecks.isNotNull(errorArgs)) {
+        if (status == SensorProbeStatus.ERROR && errorArgs != null) {
             errorArgs = errorArgs.stream()
                     .map(SwallowedExceptionLogger::safeMessage)
                     .toList();

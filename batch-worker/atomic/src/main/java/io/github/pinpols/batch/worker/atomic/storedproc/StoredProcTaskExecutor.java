@@ -170,8 +170,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
                     LogSanitizer.value(ctx.jobCode()),
                     SwallowedExceptionLogger.summary(ex));
             String exceptionMessage = ex.getMessage();
-            String failureMessage =
-                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : exceptionMessage;
+            String failureMessage = exceptionMessage == null ? ex.getClass().getSimpleName() : exceptionMessage;
             return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
     }
@@ -198,9 +197,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         // timeout(只能缩短)
         int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
         Object t = params.get(PARAM_TIMEOUT);
-        if (EmptyChecks.isNotNull(t)) {
+        if (t != null) {
             Long requested = AtomicParameterNumbers.positiveLong(t);
-            if (EmptyChecks.isNull(requested)) {
+            if (requested == null) {
                 throw new StoredProcValidationException("statementTimeoutSeconds must be positive integer");
             }
             if (requested < timeoutSec) {
@@ -348,9 +347,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         try {
             return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
                 // 授权与实际执行必须使用同一 schema；自动提交下 SET LOCAL 不跨语句生效。
-                String targetProcName = EmptyChecks.isNull(schemaOf(inv.procName))
-                        ? props.getDefaultSchema() + "." + inv.procName
-                        : inv.procName;
+                String targetProcName =
+                        schemaOf(inv.procName) == null ? props.getDefaultSchema() + "." + inv.procName : inv.procName;
                 String call = buildCallSql(conn, targetProcName, totalParams);
                 // 事务模式下固定过程内部的 search_path；调用目标始终使用限定名。
                 pinSearchPath(conn, targetProcName);

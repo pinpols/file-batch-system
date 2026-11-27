@@ -47,11 +47,11 @@ public class CountContinuityOutboxService {
     /** 必须在节点输出写入后、同一事务中执行。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public void checkContinuity(Long workflowRunId, String nodeCode, String currentOutputJson) {
-        if (EmptyChecks.isNull(workflowRunId) || EmptyChecks.isBlank(nodeCode)) {
+        if (workflowRunId == null || EmptyChecks.isBlank(nodeCode)) {
             return;
         }
         WorkflowRunEntity run = workflowRunMapper.selectByIdAnyTenant(workflowRunId);
-        if (EmptyChecks.isNull(run) || EmptyChecks.isBlank(run.getTenantId())) {
+        if (run == null || EmptyChecks.isBlank(run.getTenantId())) {
             return;
         }
         WorkflowNodeRunEntity current =
@@ -64,12 +64,12 @@ public class CountContinuityOutboxService {
             writeResult(inspection, Decision.unverified("SNAPSHOT_INVALID"));
             return;
         }
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             writeResult(inspection, Decision.unverified("SNAPSHOT_UNAVAILABLE"));
             return;
         }
         WorkflowNodeEntity definition = snapshot.node(nodeCode);
-        if (EmptyChecks.isNull(definition)) {
+        if (definition == null) {
             writeResult(inspection, Decision.unverified("NODE_DEFINITION_MISSING"));
             return;
         }
@@ -81,21 +81,21 @@ public class CountContinuityOutboxService {
             return;
         }
         Object raw = params.get("countContinuity");
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return;
         }
         if (raw instanceof Map<?, ?> declaration && Boolean.FALSE.equals(declaration.get("enabled"))) {
             return;
         }
         Declaration declaration = readDeclaration(raw);
-        if (EmptyChecks.isNull(declaration) || nodeCode.equals(declaration.upstreamNodeCode())) {
+        if (declaration == null || nodeCode.equals(declaration.upstreamNodeCode())) {
             writeResult(inspection, Decision.unverified("DECLARATION_INVALID"));
             return;
         }
         inspection = new Inspection(run, nodeCode, current, null, declaration);
         WorkflowNodeEntity upstreamDefinition = snapshot.node(declaration.upstreamNodeCode());
         boolean upstreamDefinitionIsUnavailableOrDisconnected = !Boolean.TRUE.equals(definition.getEnabled())
-                || EmptyChecks.isNull(upstreamDefinition)
+                || upstreamDefinition == null
                 || !Boolean.TRUE.equals(upstreamDefinition.getEnabled())
                 || snapshot.incoming(nodeCode).stream()
                         .noneMatch(edge -> declaration.upstreamNodeCode().equals(edge.getFromNodeCode()));
@@ -131,8 +131,8 @@ public class CountContinuityOutboxService {
     }
 
     private boolean successfulExecution(WorkflowNodeRunEntity node, Long runId, String nodeCode) {
-        return EmptyChecks.isNotNull(node)
-                && EmptyChecks.isNotNull(node.getId())
+        return node != null
+                && node.getId() != null
                 && Objects.equals(runId, node.getWorkflowRunId())
                 && Objects.equals(nodeCode, node.getNodeCode())
                 && WorkflowNodeRunStatus.SUCCESS.code().equals(node.getNodeStatus());
@@ -149,7 +149,7 @@ public class CountContinuityOutboxService {
         }
         String reason = nonblankString(value.get("deltaReason"));
         boolean countContinuityDeclarationIsIncomplete =
-                EmptyChecks.isNull(upstream) || EmptyChecks.isNull(delta) || (delta > 0 && EmptyChecks.isNull(reason));
+                upstream == null || delta == null || (delta > 0 && reason == null);
         if (countContinuityDeclarationIsIncomplete) {
             return null;
         }
@@ -161,11 +161,11 @@ public class CountContinuityOutboxService {
         Long inputCount = nonnegativeLong(current.get(NodeOutputKeys.INPUT_COUNT));
         CountContext outputContext = readContext(upstream.get(NodeOutputKeys.OUTPUT_COUNT_CONTEXT));
         CountContext inputContext = readContext(current.get(NodeOutputKeys.INPUT_COUNT_CONTEXT));
-        if (EmptyChecks.isNull(outputCount) || EmptyChecks.isNull(inputCount)) {
+        if (outputCount == null || inputCount == null) {
             return new Decision(
                     Status.UNVERIFIED, "COUNT_INVALID", outputCount, inputCount, outputContext, inputContext);
         }
-        if (EmptyChecks.isNull(outputContext) || EmptyChecks.isNull(inputContext)) {
+        if (outputContext == null || inputContext == null) {
             return new Decision(
                     Status.UNVERIFIED, "COUNT_CONTEXT_MISSING", outputCount, inputCount, outputContext, inputContext);
         }
@@ -178,14 +178,13 @@ public class CountContinuityOutboxService {
                     Status.UNVERIFIED, "UNIT_MISMATCH", outputCount, inputCount, outputContext, inputContext);
         }
         boolean hasMissingDeltaEvidence = declaration.expectedDelta() > 0
-                && (EmptyChecks.isNull(inputContext.excludedCount())
-                        || EmptyChecks.isBlank(inputContext.exclusionEvidenceRef()));
+                && (inputContext.excludedCount() == null || EmptyChecks.isBlank(inputContext.exclusionEvidenceRef()));
         if (hasMissingDeltaEvidence) {
             return new Decision(
                     Status.UNVERIFIED, "DELTA_EVIDENCE_MISSING", outputCount, inputCount, outputContext, inputContext);
         }
-        boolean excludedCountDoesNotMatchExpectedDelta = EmptyChecks.isNotNull(inputContext.excludedCount())
-                && inputContext.excludedCount() != declaration.expectedDelta();
+        boolean excludedCountDoesNotMatchExpectedDelta =
+                inputContext.excludedCount() != null && inputContext.excludedCount() != declaration.expectedDelta();
         if (excludedCountDoesNotMatchExpectedDelta) {
             return new Decision(
                     Status.UNVERIFIED, "DELTA_EVIDENCE_MISMATCH", outputCount, inputCount, outputContext, inputContext);
@@ -217,9 +216,9 @@ public class CountContinuityOutboxService {
         payload.put("upstreamCountContext", decision.upstreamContext());
         payload.put("currentCountContext", decision.currentContext());
         Declaration declaration = inspection.declaration();
-        payload.put("upstreamNodeCode", EmptyChecks.isNull(declaration) ? null : declaration.upstreamNodeCode());
-        payload.put("expectedDelta", EmptyChecks.isNull(declaration) ? null : declaration.expectedDelta());
-        payload.put("deltaReason", EmptyChecks.isNull(declaration) ? null : declaration.deltaReason());
+        payload.put("upstreamNodeCode", declaration == null ? null : declaration.upstreamNodeCode());
+        payload.put("expectedDelta", declaration == null ? null : declaration.expectedDelta());
+        payload.put("deltaReason", declaration == null ? null : declaration.deltaReason());
         String eventKey = run.getTenantId() + ":continuity:" + run.getId() + ":" + nodeRunId(inspection.current()) + ":"
                 + nodeRunId(inspection.upstream()) + ":" + inspection.nodeCode();
         boolean mismatch = decision.status() == Status.MISMATCH;
@@ -230,7 +229,7 @@ public class CountContinuityOutboxService {
                 .payload(payload)
                 .build();
         Long eventId = domainEventPublisher.publish(event);
-        if (EmptyChecks.isNull(eventId) || decision.status() == Status.MATCHED) {
+        if (eventId == null || decision.status() == Status.MATCHED) {
             return;
         }
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -265,7 +264,7 @@ public class CountContinuityOutboxService {
     }
 
     private Long nodeRunId(WorkflowNodeRunEntity node) {
-        return EmptyChecks.isNull(node) ? null : node.getId();
+        return node == null ? null : node.getId();
     }
 
     private CountContext readContext(Object raw) {
@@ -276,12 +275,10 @@ public class CountContinuityOutboxService {
         if (value.containsKey("excludedCount")) {
             Object excludedCountValue = value.get("excludedCount");
             excluded = nonnegativeLong(excludedCountValue);
-            if (EmptyChecks.isNull(excluded)) return null;
+            if (excluded == null) return null;
         }
         String evidenceRef = nonblankString(value.get("exclusionEvidenceRef"));
-        return EmptyChecks.isNull(scope) || EmptyChecks.isNull(unit)
-                ? null
-                : new CountContext(scope, unit, excluded, evidenceRef);
+        return scope == null || unit == null ? null : new CountContext(scope, unit, excluded, evidenceRef);
     }
 
     private String nonblankString(Object value) {
@@ -307,7 +304,7 @@ public class CountContinuityOutboxService {
     private Map<String, Object> readObject(String json) throws JsonProcessingException {
         if (EmptyChecks.isBlank(json)) return Map.of();
         Map<String, Object> result = objectMapper.readValue(json, MAP_TYPE);
-        return EmptyChecks.isNull(result) ? Map.of() : result;
+        return result == null ? Map.of() : result;
     }
 
     private record Declaration(String upstreamNodeCode, long expectedDelta, String deltaReason) {}

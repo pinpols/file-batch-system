@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.view;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -104,7 +103,7 @@ public final class ConsoleJobConfigViews {
             Instant updatedAt) {}
 
     private static void put(Map<String, Object> map, String key, Object value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             map.put(key, value);
         }
     }

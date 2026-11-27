@@ -50,12 +50,12 @@ public class ExportFormatStrategyRegistry {
      */
     public ExportFormatStrategy require(String fileFormatType) {
         String normalizedFileFormatType = "";
-        if (EmptyChecks.isNotNull(fileFormatType)) {
+        if (fileFormatType != null) {
             String trimmedFileFormatType = fileFormatType.trim();
             normalizedFileFormatType = trimmedFileFormatType.toUpperCase(Locale.ROOT);
         }
         ExportFormatStrategy strategy = strategiesByType.get(normalizedFileFormatType);
-        if (EmptyChecks.isNull(strategy)) {
+        if (strategy == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
         }
         return strategy;

@@ -87,7 +87,7 @@ public class ConsoleJobQueryService {
      * 双轨分页。大表 + 时间序,优先 cursor 模式(传 cursor 即生效,不查 count)。
      */
     public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(JobExecutionLogQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -139,7 +139,7 @@ public class ConsoleJobQueryService {
     }
 
     public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         // ADR-031:cursor 模式 cursor key 是 id,与 sortBy=duration 互斥(duration 排序 cursor key 应该是 duration)
         // 不静默忽略 sortBy,直接拒绝,避免「客户端以为按 duration 翻页实际按 id」的隐性 bug
         if (cursorMode && "duration".equals(request.getSortBy())) {
@@ -209,7 +209,7 @@ public class ConsoleJobQueryService {
     }
 
     public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -238,7 +238,7 @@ public class ConsoleJobQueryService {
     }
 
     public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
-        boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
+        boolean cursorMode = request.getCursor() != null;
         PageRequest pageRequest = cursorMode
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -299,10 +299,9 @@ public class ConsoleJobQueryService {
                 .tenantId(display(entity.getTenantId()))
                 .jobCode(display(entity.getJobCode()))
                 .dependsOnJobCode(display(entity.getDependsOnJobCode()))
-                .dependsOnJobCodes(
-                        EmptyChecks.isNull(entity.getDependsOnJobCodes()) ? List.of() : entity.getDependsOnJobCodes())
+                .dependsOnJobCodes(entity.getDependsOnJobCodes() == null ? List.of() : entity.getDependsOnJobCodes())
                 .jobDependencyRules(
-                        EmptyChecks.isNull(entity.getJobDependencyRules())
+                        entity.getJobDependencyRules() == null
                                 ? List.of()
                                 : entity.getJobDependencyRules().stream()
                                         .map(rule -> new JobDependencyRuleResponse(
@@ -494,7 +493,7 @@ public class ConsoleJobQueryService {
 
     /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */
     private static List<String> parseCsv(String csv) {
-        if (csv == null || csv.isBlank()) return null;
+        if (EmptyChecks.isBlank(csv)) return null;
         List<String> out = Arrays.stream(csv.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())

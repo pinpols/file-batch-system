@@ -53,7 +53,7 @@ public class JobDependencyWaitMetricsScheduler {
                 }
                 JobDependencyWaitBacklog backlog =
                         RlsTenantContextHolder.runWithTenant(tenantId, () -> metricsQuery.selectForTenant(tenantId));
-                if (EmptyChecks.isNull(backlog)) {
+                if (backlog == null) {
                     throw new IllegalStateException("job dependency wait metrics query returned no row");
                 }
                 totalWaiting = Math.addExact(totalWaiting, Math.max(0, backlog.waitingCount()));

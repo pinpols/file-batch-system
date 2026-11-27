@@ -69,12 +69,12 @@ public class ShardingConfiguration {
 
     private String resolveMemberId(OutboxProperties props) {
         String configured = props.getSharding().getMemberId();
-        if (configured != null && !configured.isBlank()) {
+        if (EmptyChecks.isNotBlank(configured)) {
             return configured;
         }
         // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 回退
         String pod = System.getenv("POD_NAME");
-        if (pod != null && !pod.isBlank()) {
+        if (EmptyChecks.isNotBlank(pod)) {
             return pod;
         }
         try {

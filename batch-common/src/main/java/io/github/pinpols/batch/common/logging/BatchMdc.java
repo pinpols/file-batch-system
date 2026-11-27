@@ -10,14 +10,14 @@ public final class BatchMdc {
     private BatchMdc() {}
 
     public static void put(String key, String value) {
-        if (key == null || value == null || value.isBlank()) {
+        if (key == null || EmptyChecks.isBlank(value)) {
             return;
         }
         MDC.put(key, value);
     }
 
     public static void putIfAbsent(String key, String value) {
-        if (key == null || value == null || value.isBlank()) {
+        if (key == null || EmptyChecks.isBlank(value)) {
             return;
         }
         if (MDC.get(key) == null) {
@@ -26,7 +26,7 @@ public final class BatchMdc {
     }
 
     public static String get(String key) {
-        return EmptyChecks.isNull(key) ? null : MDC.get(key);
+        return key == null ? null : MDC.get(key);
     }
 
     public static void remove(String key) {

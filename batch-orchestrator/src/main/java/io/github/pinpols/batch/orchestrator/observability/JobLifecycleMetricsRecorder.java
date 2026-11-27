@@ -65,7 +65,7 @@ public class JobLifecycleMetricsRecorder {
             String terminalStatus,
             Instant finishedAt,
             String failureClass) {
-        if (EmptyChecks.isNull(instance) || EmptyChecks.isNull(instance.getCreatedAt())) {
+        if (instance == null || instance.getCreatedAt() == null) {
             return;
         }
         CompletionSnapshot snapshot = new CompletionSnapshot(
@@ -131,7 +131,7 @@ public class JobLifecycleMetricsRecorder {
     }
 
     private void recordSnapshot(CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
-        Instant resolvedFinished = EmptyChecks.isNotNull(finishedAt) ? finishedAt : BatchDateTimeSupport.utcNow();
+        Instant resolvedFinished = finishedAt != null ? finishedAt : BatchDateTimeSupport.utcNow();
         Duration duration = Duration.between(snapshot.createdAt(), resolvedFinished);
         String jobType = resolveJobType(snapshot.jobDefinitionId());
         jobLifecycleMetrics.recordCompletion(snapshot.tenantId(), jobType, terminalStatus, snapshot.dryRun(), duration);
@@ -162,7 +162,7 @@ public class JobLifecycleMetricsRecorder {
     }
 
     private String resolveJobType(Long jobDefinitionId) {
-        if (EmptyChecks.isNull(jobDefinitionId)) {
+        if (jobDefinitionId == null) {
             return "unknown";
         }
         JobDefinitionView definition = jobDefinitionMapper.selectById(jobDefinitionId);

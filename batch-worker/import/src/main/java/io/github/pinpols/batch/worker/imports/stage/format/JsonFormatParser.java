@@ -6,7 +6,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -78,7 +77,7 @@ public class JsonFormatParser implements FormatParser {
     /** 流式跳过 envelope 内 records 之后的兄弟字段（metadata/version 等），不再消耗内存。 */
     private void skipEnvelopeTail(JsonParser parser) throws IOException {
         JsonToken tail = parser.nextToken();
-        while (EmptyChecks.isNotNull(tail) && tail != JsonToken.END_OBJECT) {
+        while (tail != null && tail != JsonToken.END_OBJECT) {
             if (tail == JsonToken.FIELD_NAME) {
                 parser.nextToken(); // 移到 value start
             }
@@ -91,8 +90,8 @@ public class JsonFormatParser implements FormatParser {
             ImportJobContext context, JsonParser parser, BufferedWriter writer, boolean preserveLogicalRow)
             throws IOException {
         JsonNode rootObj = support.objectMapper().readTree(parser);
-        JsonNode recordsNode = EmptyChecks.isNull(rootObj) ? null : rootObj.get(KEY_RECORDS);
-        if (EmptyChecks.isNotNull(recordsNode) && recordsNode.isArray()) {
+        JsonNode recordsNode = rootObj == null ? null : rootObj.get(KEY_RECORDS);
+        if (recordsNode != null && recordsNode.isArray()) {
             return writeRecordsNode(context, writer, recordsNode, preserveLogicalRow);
         }
         return writeSingleRecord(context, writer, rootObj, preserveLogicalRow);
@@ -103,7 +102,7 @@ public class JsonFormatParser implements FormatParser {
             throws IOException {
         long recordNo = 0L;
         for (JsonNode item : recordsNode) {
-            if (EmptyChecks.isNull(item) || item.isNull()) {
+            if (item == null || item.isNull()) {
                 continue;
             }
             recordNo++;
@@ -124,7 +123,7 @@ public class JsonFormatParser implements FormatParser {
     private long writeSingleRecord(
             ImportJobContext context, BufferedWriter writer, JsonNode node, boolean preserveLogicalRow)
             throws IOException {
-        if (EmptyChecks.isNull(node) || node.isNull()) {
+        if (node == null || node.isNull()) {
             return 0L;
         }
         support.collectSchemaFields(context, node);
@@ -139,7 +138,7 @@ public class JsonFormatParser implements FormatParser {
         long recordNo = 0L;
         while (parser.nextToken() != JsonToken.END_ARRAY) {
             JsonNode node = mapper.readTree(parser);
-            if (EmptyChecks.isNull(node) || node.isNull()) {
+            if (node == null || node.isNull()) {
                 continue;
             }
             recordNo++;

@@ -62,7 +62,7 @@ public class WorkflowDefinitionSaveRequest {
                 return false;
             }
         }
-        if (EmptyChecks.isNull(scheduleType)) {
+        if (scheduleType == null) {
             return true;
         }
         if ("CRON".equals(scheduleType)) {

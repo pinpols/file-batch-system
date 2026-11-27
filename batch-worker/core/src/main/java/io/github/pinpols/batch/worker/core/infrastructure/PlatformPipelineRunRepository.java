@@ -55,12 +55,11 @@ public class PlatformPipelineRunRepository {
                 .runStatus(PipelineRunStatus.RUNNING.name())
                 .build();
         PlatformPipelineRunKeyView created = mapper.insertPipelineInstance(values);
-        return EmptyChecks.isNull(created) ? null : new PipelineRunFence(created.id(), created.startedAt());
+        return created == null ? null : new PipelineRunFence(created.id(), created.startedAt());
     }
 
     public boolean bindFileToPipelineInstance(String tenantId, PipelineRunFence run, Long fileId) {
-        boolean pipelineFileAssociationIsComplete =
-                EmptyChecks.isNotNull(tenantId) && EmptyChecks.isNotNull(run) && EmptyChecks.isNotNull(fileId);
+        boolean pipelineFileAssociationIsComplete = tenantId != null && run != null && fileId != null;
         if (!pipelineFileAssociationIsComplete) {
             return false;
         }
@@ -74,7 +73,7 @@ public class PlatformPipelineRunRepository {
      */
 
     public boolean updatePipelineStage(PipelineRunFence run, String currentStage, String lastSuccessStage) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return false;
         }
         int updated =
@@ -83,7 +82,7 @@ public class PlatformPipelineRunRepository {
     }
 
     public boolean markPipelineSuccess(PipelineRunFence run, String currentStage, String lastSuccessStage) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return false;
         }
         PlatformPipelineFinishParam values =
@@ -92,7 +91,7 @@ public class PlatformPipelineRunRepository {
     }
 
     public boolean markPipelineCompensating(PipelineRunFence run) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return false;
         }
         int updated = mapper.markPipelineCompensating(
@@ -101,7 +100,7 @@ public class PlatformPipelineRunRepository {
     }
 
     public boolean markPipelineFailed(PipelineRunFence run, String currentStage, String lastSuccessStage) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return false;
         }
         PlatformPipelineFinishParam values = finishParam(run, currentStage, lastSuccessStage, PipelineRunStatus.FAILED);
@@ -136,7 +135,7 @@ public class PlatformPipelineRunRepository {
             return Set.of();
         }
         List<String> stepCodes = mapper.selectSucceededStepCodes(pipelineInstanceId);
-        return stepCodes == null || stepCodes.isEmpty() ? Set.of() : new HashSet<>(stepCodes);
+        return EmptyChecks.isEmpty(stepCodes) ? Set.of() : new HashSet<>(stepCodes);
     }
 
     public Map<String, Object> loadLatestSucceededStepOutputSummary(Long pipelineInstanceId, String stepCode) {

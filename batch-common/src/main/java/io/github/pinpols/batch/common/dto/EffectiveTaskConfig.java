@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
 import lombok.Builder;
@@ -104,8 +103,7 @@ public record EffectiveTaskConfig(
         ReplayExecutionGuard replayExecutionGuard) {
 
     public EffectiveTaskConfig {
-        dependencyResultSnapshot =
-                EmptyChecks.isNull(dependencyResultSnapshot) ? List.of() : List.copyOf(dependencyResultSnapshot);
+        dependencyResultSnapshot = dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
     }
 
     /** 旧 orchestrator 领取成功但未返回实时配置时使用的兼容占位。 */

@@ -91,7 +91,7 @@ public record JdbcMappedImportSpec(
         // 地区维度(per-run):defaultRegion 触发未传 region 时回退;allowedRegions 非空时作字典校验。
         Object dr = root.get("defaultRegion");
         String defaultRegion = null;
-        if (EmptyChecks.isNotNull(dr)) {
+        if (dr != null) {
             String rawDefaultRegion = String.valueOf(dr);
             defaultRegion = rawDefaultRegion.trim();
         }
@@ -119,7 +119,7 @@ public record JdbcMappedImportSpec(
 
     private static String required(Map<String, Object> root, String key) {
         Object v = root.get(key);
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
         }
         String presenceText = String.valueOf(v);
@@ -231,7 +231,7 @@ public record JdbcMappedImportSpec(
             String name = rawName.trim();
             Object target = fm.get("targetColumn");
             String to;
-            if (EmptyChecks.isNotNull(target)) {
+            if (target != null) {
                 String targetPresenceText = String.valueOf(target);
                 if (Texts.hasText(targetPresenceText)) {
                     String rawTarget = String.valueOf(target);
@@ -448,12 +448,12 @@ public record JdbcMappedImportSpec(
             return null;
         }
         String normalizedPartitionTable = null;
-        if (EmptyChecks.isNotNull(partitionTable)) {
+        if (partitionTable != null) {
             String rawPartitionTable = String.valueOf(partitionTable);
             normalizedPartitionTable = rawPartitionTable.trim();
         }
         String normalizedAttachClause = null;
-        if (EmptyChecks.isNotNull(attachClause)) {
+        if (attachClause != null) {
             String rawAttachClause = String.valueOf(attachClause);
             normalizedAttachClause = rawAttachClause.trim();
         }
@@ -530,7 +530,7 @@ public record JdbcMappedImportSpec(
     }
 
     private void validatePartitionReplaceColumns(Set<String> allCols) {
-        if (replacePartitionColumns == null || replacePartitionColumns.isEmpty()) {
+        if (EmptyChecks.isEmpty(replacePartitionColumns)) {
             throw new WorkerConfigException(
                     "jdbc_mapped_import.replacePartitionColumns is required for PARTITION_REPLACE_COPY");
         }

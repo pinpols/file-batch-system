@@ -5,7 +5,6 @@ import com.univocity.parsers.csv.CsvParserSettings;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -193,7 +192,7 @@ public class DelimitedFormatParser implements FormatParser {
         if (value instanceof Boolean b) {
             return b;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         String rawText = String.valueOf(value);

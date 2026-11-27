@@ -66,9 +66,8 @@ public final class ImportPreprocessObjectSource {
     }
 
     void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
-        boolean hasRequiredObjectOwnershipContext = EmptyChecks.isNotNull(context)
-                && EmptyChecks.isNotNull(importPayload)
-                && Texts.hasText(importPayload.storagePath());
+        boolean hasRequiredObjectOwnershipContext =
+                context != null && importPayload != null && Texts.hasText(importPayload.storagePath());
         if (!hasRequiredObjectOwnershipContext) {
             throw new ImportPreprocessException(
                     "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
@@ -76,7 +75,7 @@ public final class ImportPreprocessObjectSource {
         }
         Long fileId = PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
         Map<String, Object> fileRecord =
-                EmptyChecks.isNull(fileId) ? Map.of() : fileRecords.loadFileRecord(context.getTenantId(), fileId);
+                fileId == null ? Map.of() : fileRecords.loadFileRecord(context.getTenantId(), fileId);
         Object registeredPath = fileRecord.get("storage_path");
         if (registeredPath == null || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
             throw new ImportPreprocessException(
@@ -247,7 +246,7 @@ public final class ImportPreprocessObjectSource {
             return false;
         }
         Object pipeline = config.get("preprocess_pipeline");
-        if (EmptyChecks.isNotNull(pipeline)) {
+        if (pipeline != null) {
             String presenceText = String.valueOf(pipeline);
             if (Texts.hasText(presenceText)) {
                 String rawPipelineConfig = String.valueOf(pipeline);
@@ -266,8 +265,7 @@ public final class ImportPreprocessObjectSource {
             Integer partitionNo,
             Integer partitionCount,
             Charset charset) {
-        boolean inputIsNotPartitioned =
-                EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionCount <= 1;
+        boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
         if (inputIsNotPartitioned) {
             return false;
         }
@@ -278,7 +276,7 @@ public final class ImportPreprocessObjectSource {
             return false;
         }
         String formatType = resolveFileFormatType(importPayload, templateConfig);
-        if (formatType == null || formatType.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyChecks.isBlank(formatType)) {
             return false;
         }
         return isRangeSliceableFormat(formatType, templateConfig);
@@ -441,7 +439,7 @@ public final class ImportPreprocessObjectSource {
                 || "TSV".equals(normalized);
         if (isDelimitedFileFormat) {
             Object optIn = templateConfig == null ? null : templateConfig.get("partition_range_slice");
-            if (EmptyChecks.isNull(optIn)) {
+            if (optIn == null) {
                 return false;
             }
             String rawOptIn = String.valueOf(optIn);

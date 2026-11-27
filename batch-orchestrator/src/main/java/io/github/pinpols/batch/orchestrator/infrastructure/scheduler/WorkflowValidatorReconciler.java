@@ -54,7 +54,7 @@ public class WorkflowValidatorReconciler {
         for (WorkflowDefinitionView wf : enabled) {
             if (wf == null || wf.id() == null) continue;
             String tenantId = wf.tenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyChecks.isBlank(tenantId)) {
                 continue;
             }
             try {

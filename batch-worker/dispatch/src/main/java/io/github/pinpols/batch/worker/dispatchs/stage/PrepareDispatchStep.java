@@ -78,7 +78,7 @@ public class PrepareDispatchStep implements DispatchStageStep {
             }
             if (rawPayload != null) { // empty-check: allow - Sonar S2259
                 JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
-                if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
+                if (secretBindings != null && secretBindings.isObject()) {
                     Map<String, Object> secretBindingValues =
                             objectMapper.convertValue(secretBindings, new TypeReference<Map<String, Object>>() {});
                     attrs.put(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, secretBindingValues);
@@ -182,9 +182,7 @@ public class PrepareDispatchStep implements DispatchStageStep {
             return payload;
         }
         Object pipelineInstanceId = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
-        if (EmptyChecks.isNull(pipelineInstanceId)
-                || EmptyChecks.isNull(payload.fileId())
-                || EmptyChecks.isNull(payload.channelCode())) {
+        if (pipelineInstanceId == null || payload.fileId() == null || payload.channelCode() == null) {
             return payload;
         }
         String requestIdentity = String.join(

@@ -16,16 +16,16 @@ public record SdkCrossDayResult(
         Map<String, Object> output) {
 
     public SdkCrossDayResult {
-        if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
+        if (resultVersionId == null || resultVersionId <= 0) {
             throw new IllegalArgumentException("cross-day resultVersionId must be positive");
         }
         if (EmptyChecks.isBlank(businessKey)) {
             throw new IllegalArgumentException("cross-day businessKey is required");
         }
-        if (EmptyChecks.isNull(versionNo) || versionNo <= 0) {
+        if (versionNo == null || versionNo <= 0) {
             throw new IllegalArgumentException("cross-day versionNo must be positive");
         }
-        if (EmptyChecks.isNull(output)) {
+        if (output == null) {
             throw new IllegalArgumentException("cross-day inline output must be an object");
         }
         output = freezeMap(output);

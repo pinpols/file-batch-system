@@ -320,7 +320,7 @@ public abstract class AbstractTaskConsumer
      * @return true=提交整批 offset;false=不提交(Kafka 重投整批,靠 partition 幂等去重已成功项)
      */
     protected boolean doConsumeBatch(List<String> payloads) {
-        if (payloads == null || payloads.isEmpty()) {
+        if (EmptyChecks.isEmpty(payloads)) {
             return true;
         }
         if (backpressure.isPlatformDraining()) {
@@ -424,8 +424,7 @@ public abstract class AbstractTaskConsumer
         String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
         BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
         BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
-        BatchMdc.put(
-                StructuredLogField.WORKER_ID, EmptyChecks.isNull(registration) ? null : registration.getWorkerId());
+        BatchMdc.put(StructuredLogField.WORKER_ID, registration == null ? null : registration.getWorkerId());
         // P1-2.2:RUN_MODE 不再注入到 pre-claim MDC(payload 已从 message 移除);
         // worker 业务 pipeline 通过 ExecutionContext.attributes 拿 run_mode(由
         // DefaultTaskExecutionWrapper 在 claim 后注入),业务日志依然能看到。
@@ -497,7 +496,7 @@ public abstract class AbstractTaskConsumer
      */
     protected boolean acceptsConfiguredTenantScope(WorkerConfiguration cfg, TaskDispatchMessage message) {
         String configuredTenant = cfg.tenantId();
-        boolean configuredTenantConflictsWithMessage = EmptyChecks.isNotNull(configuredTenant)
+        boolean configuredTenantConflictsWithMessage = configuredTenant != null
                 && !configuredTenant.isBlank()
                 && !SHARED_TENANT_WILDCARD.equalsIgnoreCase(configuredTenant)
                 && !configuredTenant.equalsIgnoreCase(message.tenantId());

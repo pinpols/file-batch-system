@@ -182,7 +182,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
                 dryRunForLog,
                 batchOperationIdForLog);
 
-        if (EmptyChecks.isNull(requestHash) || request.isDryRun()) {
+        if (requestHash == null || request.isDryRun()) {
             return initService.batchInit(initRequest, operator, batchOperationId);
         }
         List<String> targets = request.getTargetTenantIds();
@@ -250,7 +250,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         }
 
         JobDefinitionSpec job = jobs.get(0);
-        Predicate<WorkflowDefinitionSpec> workflowIncludesJob = workflow -> EmptyChecks.isNotNull(workflow.getNodes())
+        Predicate<WorkflowDefinitionSpec> workflowIncludesJob = workflow -> workflow.getNodes() != null
                 && workflow.getNodes().stream().anyMatch(node -> jobCode.equals(node.getRelatedJobCode()));
         List<WorkflowDefinitionSpec> relatedWorkflows = filter(all.getWorkflowDefinitions(), workflowIncludesJob);
         TenantConfigReferenceResolver.References refs = referenceResolver.resolve(job, relatedWorkflows);
@@ -565,9 +565,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             s.setTriggerMode(e.getTriggerMode());
             s.setCalendarCode(e.getCalendarCode());
             s.setDependsOnJobCode(e.getDependsOnJobCode());
-            if (EmptyChecks.isNotNull(e.getSingleJobDefinitionId())) {
+            if (e.getSingleJobDefinitionId() != null) {
                 JobDefinitionView singleJob = jobDefinitionMapper.selectById(tenantId, e.getSingleJobDefinitionId());
-                if (EmptyChecks.isNull(singleJob)) {
+                if (singleJob == null) {
                     throw new IllegalStateException(
                             "Managed single-job Workflow references a missing tenant Job definition");
                 }
@@ -637,8 +637,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             s.setChannelType(e.channelType());
             s.setTargetEndpoint(e.targetEndpoint());
             s.setAuthType(e.authType());
-            s.setConfigJson(
-                    EmptyChecks.isNull(e.configJson()) ? null : e.configJson().toString());
+            s.setConfigJson(e.configJson() == null ? null : e.configJson().toString());
             s.setReceiptPolicy(e.receiptPolicy());
             s.setTimeoutSeconds(e.timeoutSeconds());
             s.setEnabled(e.enabled());
@@ -759,7 +758,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
                 if (EmptyChecks.isNotEmpty(holidays)) {
                     List<String> dates = new ArrayList<>(holidays.size());
                     for (CalendarHolidayRow h : holidays) {
-                        if (EmptyChecks.isNotNull(h.bizDate())) {
+                        if (h.bizDate() != null) {
                             dates.add(h.bizDate().toString());
                         }
                     }
@@ -824,7 +823,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static String str(Object value) {
-        return EmptyChecks.isNull(value) ? null : value.toString();
+        return value == null ? null : value.toString();
     }
 
     private ConfigSyncBundlePayload filterBundle(ConfigSyncBundlePayload bundle, Set<ConfigType> configTypes) {
@@ -1020,7 +1019,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static boolean equalsNullable(String left, String right) {
-        return left != null && !left.isBlank() && left.equals(right);
+        return EmptyChecks.isNotBlank(left) && left.equals(right);
     }
 
     private static boolean hasReference(List<String> references, String code) {
@@ -1028,7 +1027,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static <T> List<T> filter(List<T> source, Predicate<T> predicate) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyChecks.isEmpty(source)) {
             return List.of();
         }
         return source.stream().filter(predicate).toList();

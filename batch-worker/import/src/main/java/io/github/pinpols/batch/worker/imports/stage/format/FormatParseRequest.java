@@ -97,12 +97,12 @@ public record FormatParseRequest(
                 throw failure;
             }
         }
-        StringReader payloadReader = new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
+        StringReader payloadReader = new StringReader(payloadText == null ? "" : payloadText);
         return new BufferedReader(payloadReader);
     }
 
     /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
     public boolean hasText() {
-        return spoolPath != null || (payloadText != null && !payloadText.isEmpty());
+        return spoolPath != null || (EmptyChecks.isNotEmpty(payloadText));
     }
 }

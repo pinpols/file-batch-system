@@ -9,7 +9,7 @@ final class FileGovernanceMaintenanceViews {
     private FileGovernanceMaintenanceViews() {}
 
     static ArchivedFileCleanupView archivedFile(FileGovernanceViews.ArchivedFileCleanupRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return ArchivedFileCleanupView.absent();
         }
         return new ArchivedFileCleanupView(
@@ -17,7 +17,7 @@ final class FileGovernanceMaintenanceViews {
     }
 
     static OrphanUploadSessionView orphanUploadSession(FileGovernanceViews.OrphanUploadSessionRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return OrphanUploadSessionView.absent();
         }
         return new OrphanUploadSessionView(row.id(), row.tenantId(), row.storageBucket(), row.storagePath());
@@ -27,7 +27,7 @@ final class FileGovernanceMaintenanceViews {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String presenceText = String.valueOf(value);

@@ -26,7 +26,7 @@ public record WorkflowDefinitionVersionUpdateParam(
         String description) {
 
     public WorkflowDefinitionVersionUpdateParam {
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(id) || EmptyChecks.isNull(expectedVersion)) {
+        if (EmptyChecks.isBlank(tenantId) || id == null || expectedVersion == null) {
             throw new IllegalArgumentException(
                     "tenantId, id and expectedVersion are required for Workflow replacement");
         }

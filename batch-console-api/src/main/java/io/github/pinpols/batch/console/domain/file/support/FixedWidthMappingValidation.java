@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 
@@ -30,15 +29,13 @@ public final class FixedWidthMappingValidation {
                     ResultCode.INVALID_ARGUMENT.detailKey(),
                     "invalid FIXED_WIDTH field mappings JSON");
         }
-        if (EmptyChecks.isNotNull(mappings)
+        if (mappings != null
                 && (mappings.isNull()
                         || (mappings.isObject() && mappings.isEmpty()))) { // empty-check: allow - Jackson 对象节点判空
             return;
         }
         Guard.require(
-                EmptyChecks.isNotNull(mappings)
-                        && mappings.isArray()
-                        && !mappings.isEmpty(), // empty-check: allow - Jackson 数组节点判空
+                mappings != null && mappings.isArray() && !mappings.isEmpty(), // empty-check: allow - Jackson 数组节点判空
                 "FIXED_WIDTH field mappings must be a non-empty array");
         for (JsonNode entry : mappings) {
             JsonNode target = entry.path("target");

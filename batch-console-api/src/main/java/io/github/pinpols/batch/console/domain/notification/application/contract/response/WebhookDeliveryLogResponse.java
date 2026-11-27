@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import java.time.Instant;
@@ -36,8 +35,7 @@ public record WebhookDeliveryLogResponse(
         String safePayloadJson = SecretMasking.maskSensitiveJson(payloadJson);
         Integer httpStatus = entity.getHttpStatus();
         String storedResponseBody = entity.getResponseBody();
-        String decodedResponseBody =
-                EmptyChecks.isNull(storedResponseBody) ? null : HtmlUtils.htmlUnescape(storedResponseBody);
+        String decodedResponseBody = storedResponseBody == null ? null : HtmlUtils.htmlUnescape(storedResponseBody);
         String normalizedResponseBody = ConsoleTextSanitizer.normalize(decodedResponseBody);
         String maskedResponseBody =
                 SwallowedExceptionLogger.safeMessage(normalizedResponseBody, RESPONSE_BODY_MAX_LENGTH);

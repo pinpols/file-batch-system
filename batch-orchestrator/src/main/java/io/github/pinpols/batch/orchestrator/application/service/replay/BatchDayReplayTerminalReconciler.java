@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
@@ -42,8 +41,8 @@ public class BatchDayReplayTerminalReconciler {
     public void reconcileOnTerminal(
             String tenantId, Long replaySessionId, String jobCode, Long jobInstanceId, String instanceStatus) {
         boolean terminalReplayIdentityIsIncomplete = !Texts.hasText(tenantId)
-                || EmptyChecks.isNull(replaySessionId)
-                || EmptyChecks.isNull(jobInstanceId)
+                || replaySessionId == null
+                || jobInstanceId == null
                 || !Texts.hasText(jobCode)
                 || !Texts.hasText(instanceStatus);
         if (terminalReplayIdentityIsIncomplete) {
@@ -51,7 +50,7 @@ public class BatchDayReplayTerminalReconciler {
         }
         replayOperationMapper.setTenantContext(tenantId);
         BatchDayReplaySessionEntity session = loadForUpdateWithOperationLock(tenantId, replaySessionId);
-        if (EmptyChecks.isNull(session)) {
+        if (session == null) {
             log.warn(
                     "replay terminal reconcile: session not found; tenantId={}, sessionId={}, jobCode={}",
                     tenantId,
@@ -61,7 +60,7 @@ public class BatchDayReplayTerminalReconciler {
         }
         BatchDayReplayEntryEntity entry =
                 entryMapper.selectByCurrentExecution(tenantId, replaySessionId, jobCode, jobInstanceId);
-        if (EmptyChecks.isNull(entry)) {
+        if (entry == null) {
             log.warn(
                     "replay terminal reconcile: entry not found; sessionId={}, tenantId={}, jobCode={},"
                             + " jobInstanceId={}",
@@ -73,7 +72,7 @@ public class BatchDayReplayTerminalReconciler {
         }
         Instant now = dateTimeSupport.nowInstant();
         String entryStatus = mapInstanceTerminalToEntryStatus(session, instanceStatus);
-        if (EmptyChecks.isNull(entryStatus)) return;
+        if (entryStatus == null) return;
         UpdateBatchDayReplayEntryStatusParam statusUpdate =
                 UpdateBatchDayReplayEntryStatusParam.completedRerun(entry.id(), entryStatus, jobInstanceId, now, now);
         entryMapper.updateStatus(statusUpdate);
@@ -85,7 +84,7 @@ public class BatchDayReplayTerminalReconciler {
     public void reconcileAdmissions(String tenantId, Long sessionId) {
         replayOperationMapper.setTenantContext(tenantId);
         BatchDayReplaySessionEntity session = loadForUpdateWithOperationLock(tenantId, sessionId);
-        if (EmptyChecks.isNull(session)) return;
+        if (session == null) return;
         Instant now = dateTimeSupport.nowInstant();
         entryMapper.bindCurrentExecutions(tenantId, sessionId, now);
         BatchDayReplayEntryFailRejectedLaunchesParam batchDayReplayEntryFailRejectedLaunchesParam =
@@ -185,24 +184,24 @@ public class BatchDayReplayTerminalReconciler {
                         failed);
             }
         }
-        if (EmptyChecks.isNotNull(session.replayOperationId())) {
+        if (session.replayOperationId() != null) {
             replayOperationMapper.refreshFromChildSessions(session.tenantId(), session.replayOperationId(), now);
         }
     }
 
     private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(String tenantId, Long sessionId) {
         BatchDayReplaySessionEntity candidate = sessionMapper.selectById(tenantId, sessionId);
-        if (EmptyChecks.isNull(candidate)) return null;
-        if (EmptyChecks.isNotNull(candidate.replayOperationId())) {
+        if (candidate == null) return null;
+        if (candidate.replayOperationId() != null) {
             Long lockedOperationId =
                     replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId());
-            if (EmptyChecks.isNull(lockedOperationId)) {
+            if (lockedOperationId == null) {
                 throw new IllegalStateException(
                         "replay operation not found while reconciling child session " + sessionId);
             }
         }
         BatchDayReplaySessionEntity locked = sessionMapper.selectForUpdate(tenantId, sessionId);
-        if (EmptyChecks.isNull(locked)) return null;
+        if (locked == null) return null;
         if (!Objects.equals(candidate.replayOperationId(), locked.replayOperationId())) {
             throw new IllegalStateException("replay operation changed while reconciling child session " + sessionId);
         }

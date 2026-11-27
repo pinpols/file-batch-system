@@ -64,7 +64,7 @@ public class SqlTransformComputeSqlValidator {
     }
 
     private String validate(String raw, boolean enforceSchemaAllowlist) {
-        String sql = EmptyChecks.isNull(raw) ? "" : raw.trim();
+        String sql = raw == null ? "" : raw.trim();
         if (!Texts.hasText(sql)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
         }
@@ -77,25 +77,24 @@ public class SqlTransformComputeSqlValidator {
                     "sqlTransformCompute only allows SELECT/WITH queries, got: "
                             + statement.getClass().getSimpleName());
         }
-        boolean selectStarMustBeRejected = EmptyChecks.isNull(security) || security.isForbidSelectStar();
+        boolean selectStarMustBeRejected = security == null || security.isForbidSelectStar();
         if (selectStarMustBeRejected) {
             checkNoSelectStar(select);
         }
         List<String> allowedSchemas = null;
-        if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security)) {
+        if (enforceSchemaAllowlist && security != null) {
             allowedSchemas = security.getAllowedSchemas();
         }
         boolean schemaAllowlistMustBeEnforced = EmptyChecks.isNotEmpty(allowedSchemas);
         if (schemaAllowlistMustBeEnforced) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
-        List<String> forbiddenFunctions = EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
+        List<String> forbiddenFunctions = security == null ? null : security.getForbiddenFunctions();
         if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }
         // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
-        boolean mainSourceRequiresLimit =
-                enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit();
+        boolean mainSourceRequiresLimit = enforceSchemaAllowlist && security != null && security.isRequireLimit();
         if (mainSourceRequiresLimit) {
             checkTopLevelLimit(select, security.getMaxLimitRows());
         }
@@ -110,7 +109,7 @@ public class SqlTransformComputeSqlValidator {
      */
     private static void checkNoForbiddenFunctions(Statement statement, List<String> forbidden) {
         String hit = SelectSqlAstValidator.findForbiddenFunctionCall(statement, forbidden);
-        if (EmptyChecks.isNotNull(hit)) {
+        if (hit != null) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     ERR_KEY,
@@ -138,14 +137,14 @@ public class SqlTransformComputeSqlValidator {
     private static Long topLimitOf(Select body) {
         if (body instanceof PlainSelect ps) {
             Limit limit = ps.getLimit();
-            if (EmptyChecks.isNotNull(limit)) {
+            if (limit != null) {
                 Object rowCount = limit.getRowCount();
                 return numericLimit(rowCount);
             }
         }
         if (body instanceof SetOperationList sol) {
             Limit limit = sol.getLimit();
-            if (EmptyChecks.isNotNull(limit)) {
+            if (limit != null) {
                 Object rowCount = limit.getRowCount();
                 return numericLimit(rowCount);
             }
@@ -161,7 +160,7 @@ public class SqlTransformComputeSqlValidator {
      * requireLimit 的目的就是给结果集封顶,非数值 LIMIT 无法在解析期证明 ≤ 上限,一律拒。
      */
     private static Long numericLimit(Object rowCount) {
-        if (EmptyChecks.isNull(rowCount)) {
+        if (rowCount == null) {
             return null;
         }
         try {
@@ -198,7 +197,7 @@ public class SqlTransformComputeSqlValidator {
 
     private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
         SchemaViolation violation = SelectSqlAstValidator.findSchemaViolation(statement, allowedSchemas);
-        if (EmptyChecks.isNull(violation)) {
+        if (violation == null) {
             return;
         }
         if (violation.unqualified()) {

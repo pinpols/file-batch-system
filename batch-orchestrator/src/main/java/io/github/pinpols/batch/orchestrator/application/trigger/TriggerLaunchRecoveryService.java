@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
@@ -70,7 +69,7 @@ public class TriggerLaunchRecoveryService {
                     SwallowedExceptionLogger.summary(ex));
             return false;
         }
-        if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
+        if (envelope == null || envelope.launchRequest() == null) {
             return false;
         }
         LaunchRequest request = envelope.launchRequest();
@@ -98,7 +97,7 @@ public class TriggerLaunchRecoveryService {
 
     private ParkOutcome handleExistingAnchor(LaunchRequest request, LaunchEnvelope incoming) {
         TriggerLaunchRecoveryView existing = mapper.selectByIdentityForUpdate(request.tenantId(), request.requestId());
-        if (EmptyChecks.isNull(existing)) {
+        if (existing == null) {
             return ParkOutcome.UNSAFE;
         }
         LaunchEnvelope stored;

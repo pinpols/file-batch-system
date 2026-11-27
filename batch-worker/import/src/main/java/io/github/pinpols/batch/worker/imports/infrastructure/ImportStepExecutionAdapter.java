@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -71,12 +70,12 @@ public class ImportStepExecutionAdapter
 
     @Override
     public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+        if (request == null || !pipelineType().equalsIgnoreCase(request.stepCode())) {
             return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
         }
         Map<String, Object> requestContext = request.context();
         Map<String, Object> attributes =
-                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+                requestContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
         resolveSystemPipelineSteps(attributes);
         Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         ImportJobContext context = buildContext(request, attributes, fileId);

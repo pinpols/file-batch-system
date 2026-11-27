@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
 import io.github.pinpols.batch.console.domain.governance.command.AssetFreshnessPolicyUpsertCommand;
@@ -96,7 +95,7 @@ public class ConsoleAssetFreshnessPolicyService {
 
     private void requireJobDefinition(String tenantId, String jobCode) {
         Long jobDefinitionId = mapper.lockJobDefinitionForPolicyWrite(tenantId, jobCode);
-        if (EmptyChecks.isNull(jobDefinitionId)) {
+        if (jobDefinitionId == null) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     ResultCode.INVALID_ARGUMENT.detailKey(),

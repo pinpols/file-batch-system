@@ -227,9 +227,9 @@ final class ConfigPackageExcelRowValidators {
             @Override
             public <S> Void visit(PlainSelect plainSelect, S context) {
                 boolean selectHasWriteOrLockClause = EmptyChecks.isNotEmpty(plainSelect.getIntoTables())
-                        || EmptyChecks.isNotNull(plainSelect.getIntoTempTable())
-                        || EmptyChecks.isNotNull(plainSelect.getMySqlSelectIntoClause())
-                        || EmptyChecks.isNotNull(plainSelect.getForUpdate())
+                        || plainSelect.getIntoTempTable() != null
+                        || plainSelect.getMySqlSelectIntoClause() != null
+                        || plainSelect.getForUpdate() != null
                         || EmptyChecks.isNotEmpty(plainSelect.getForUpdateTables());
                 if (selectHasWriteOrLockClause) {
                     found = true;
@@ -451,7 +451,7 @@ final class ConfigPackageExcelRowValidators {
     private static String firstText(JsonNode root, String... names) {
         for (String name : names) {
             JsonNode node = root.get(name);
-            boolean nodeHasTextValue = EmptyChecks.isNotNull(node) && !node.isNull() && hasText(node.asText());
+            boolean nodeHasTextValue = node != null && !node.isNull() && hasText(node.asText());
             if (nodeHasTextValue) {
                 return normalize(node.asText());
             }
@@ -480,11 +480,11 @@ final class ConfigPackageExcelRowValidators {
         if (ref.version() != null) {
             FileTemplateConfigQueryView found =
                     fileTemplateConfigMapper.selectByUniqueKey(tenantId, ref.templateCode(), ref.version());
-            return EmptyChecks.isNotNull(found);
+            return found != null;
         }
         FileTemplateSecurityFlagsView found =
                 fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, ref.templateCode());
-        return EmptyChecks.isNotNull(found);
+        return found != null;
     }
 
     static String templateKey(String templateCode, Integer version) {

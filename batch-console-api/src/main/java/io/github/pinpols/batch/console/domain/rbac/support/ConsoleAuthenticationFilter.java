@@ -143,13 +143,13 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
             SseTicketService.TicketPayload payload =
                     (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
-            if (EmptyChecks.isNull(payload)) {
+            if (payload == null) {
                 payload = sseTicketService.validate(sseTicket);
-                if (EmptyChecks.isNotNull(payload)) {
+                if (payload != null) {
                     request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
                 }
             }
-            if (EmptyChecks.isNotNull(payload)) {
+            if (payload != null) {
                 if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
                     responseWriter.write(
                             response,

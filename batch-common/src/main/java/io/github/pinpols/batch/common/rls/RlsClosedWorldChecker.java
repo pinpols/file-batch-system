@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -87,7 +86,7 @@ public class RlsClosedWorldChecker {
 
     public RlsClosedWorldChecker(DataSource businessDataSource, List<String> exemptBizTables) {
         this.businessDataSource = businessDataSource;
-        if (EmptyChecks.isNull(exemptBizTables)) {
+        if (exemptBizTables == null) {
             this.exemptBizTables = Set.of();
         } else {
             List<String> schemaFreeTables = stripSchemaPrefix(exemptBizTables);

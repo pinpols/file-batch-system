@@ -42,28 +42,28 @@ public class WorkflowRunReplaySourceResolver {
     @Transactional(readOnly = true)
     public Source resolve(String tenantId, Long workflowRunId) {
         boolean replaySourceIdentityIsInvalid =
-                EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowRunId) || workflowRunId <= 0;
+                EmptyChecks.isBlank(tenantId) || workflowRunId == null || workflowRunId <= 0;
         if (replaySourceIdentityIsInvalid) {
             throw invalidSource();
         }
         WorkflowRunEntity sourceRun = workflowRunMapper.selectById(tenantId, workflowRunId);
-        boolean sourceRunIsNotEligibleForReplay = EmptyChecks.isNull(sourceRun)
+        boolean sourceRunIsNotEligibleForReplay = sourceRun == null
                 || !tenantId.equals(sourceRun.getTenantId())
                 || !WorkflowRunStatus.terminalCodes().contains(sourceRun.getRunStatus());
         if (sourceRunIsNotEligibleForReplay) {
             throw invalidSource();
         }
         WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(sourceRun);
-        if (EmptyChecks.isNull(executionSnapshot)) {
+        if (executionSnapshot == null) {
             throw invalidSource();
         }
         WorkflowNodeRunEntity startNode = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 workflowRunId, WorkflowNodeType.START.code());
-        boolean startNodeIsNotValidReplaySource = EmptyChecks.isNull(startNode)
+        boolean startNodeIsNotValidReplaySource = startNode == null
                 || !workflowRunId.equals(startNode.getWorkflowRunId())
                 || !WorkflowNodeType.START.code().equals(startNode.getNodeType())
                 || !WorkflowNodeRunStatus.SUCCESS.code().equals(startNode.getNodeStatus())
-                || EmptyChecks.isNull(startNode.getSourcePayloadProtected())
+                || startNode.getSourcePayloadProtected() == null
                 || EmptyChecks.isBlank(Objects.requireNonNull(startNode.getSourcePayloadProtected()));
         if (startNodeIsNotValidReplaySource) {
             throw invalidSource();
