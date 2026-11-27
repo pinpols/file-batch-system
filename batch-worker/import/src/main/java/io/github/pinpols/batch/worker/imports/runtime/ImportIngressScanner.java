@@ -236,7 +236,7 @@ public class ImportIngressScanner {
                 String suffix = scannerProperties.getBatchManifestSuffix();
                 boolean manifest =
                         EmptyChecks.isNotBlank(suffix) && object.key().endsWith(suffix);
-                scanRepository.observe(next, Hashes.sha256Hex(object.key()), object, manifest);
+                scanRepository.observe(next, sha256(object.key()), object, manifest);
             }
             scanRepository.saveProgress(next);
         });
@@ -289,7 +289,7 @@ public class ImportIngressScanner {
                 return null;
             }
             if (invalidChanged.get()) {
-                log.warn("批次清单暂不可用，等待处理: objectDigest={}, reason={}", Hashes.sha256Hex(observed.key()), invalidReason);
+                log.warn("批次清单暂不可用，等待处理: objectDigest={}, reason={}", sha256(observed.key()), invalidReason);
             }
             current = current.toBuilder().afterObjectId(observed.id()).build();
         }
@@ -309,7 +309,7 @@ public class ImportIngressScanner {
         }
         if (!sameVersion(observed, decision.verified())) {
             ImportIngressScanRepository repository = scanRepository;
-            String objectDigest = Hashes.sha256Hex(decision.verified().key());
+            String objectDigest = sha256(decision.verified().key());
             repository.observe(objectLease, objectDigest, decision.verified(), true);
             return;
         }
@@ -419,7 +419,7 @@ public class ImportIngressScanner {
                     "导入扫描等待权威批次清单: tenantId={}, bizDate={}, objectDigest={}, reason={}",
                     prepared.resolvedTenant(),
                     prepared.fileDate(),
-                    Hashes.sha256Hex(observed.key()),
+                    sha256(observed.key()),
                     prepared.changedWaitReason().get());
         }
         return committed;
@@ -502,7 +502,7 @@ public class ImportIngressScanner {
             scanRepository.removeObject(lease, resolution.previousId());
         } else if (EmptyChecks.isNotNull(verifiedAuthority)) {
             ImportIngressScanRepository repository = scanRepository;
-            String authorityDigest = Hashes.sha256Hex(verifiedAuthority.key());
+            String authorityDigest = sha256(verifiedAuthority.key());
             repository.observe(lease, authorityDigest, verifiedAuthority, true);
         }
         if (prepared.eligible() && scannerProperties.isBatchManifestEnabled()) {
@@ -517,7 +517,7 @@ public class ImportIngressScanner {
             scanRepository.removeObject(lease, observed.id());
         } else if (!prepared.verifiedVersion()) {
             ImportIngressScanRepository repository = scanRepository;
-            String objectDigest = Hashes.sha256Hex(verified.key());
+            String objectDigest = sha256(verified.key());
             repository.observe(lease, objectDigest, verified, prepared.batchManifestObject());
         } else {
             boolean readyToRegister = prepared.eligible()
@@ -551,7 +551,7 @@ public class ImportIngressScanner {
                 .replace("{bizDate}", bizDate.toString())
                 .replace("{bizDateCompact}", bizDate.format(DateTimeFormatter.BASIC_ISO_DATE));
         ObjectSummary latest = findExactObject(key);
-        Optional<Observed> previous = scanRepository.findObject(lease, Hashes.sha256Hex(key));
+        Optional<Observed> previous = scanRepository.findObject(lease, sha256(key));
         if (previous.isPresent() && !key.equals(previous.get().key())) {
             throw new IllegalStateException("扫描清单摘要冲突，无法安全匹配对象");
         }
@@ -727,7 +727,12 @@ public class ImportIngressScanner {
                         .thenComparing(ImportScannerProperties.ManifestBinding::getManifestKeyTemplate))
                 .toList();
         rules.put("manifestBindings", manifestBindings);
-        return Hashes.sha256Hex(writeJson(rules));
+        return sha256(writeJson(rules));
+    }
+
+    /** 扫描身份摘要：算法与输出统一由 {@link Hashes} 提供，这里只保留本类原有方法名。 */
+    private String sha256(String value) {
+        return Hashes.sha256Hex(value);
     }
 
     private record EffectiveBindings(
